@@ -27,25 +27,29 @@ namespace FrameDetail{
     switch(key){
     case Key::LeftShift:
     case Key::RightShift:
-        return action == InputAction::Release
+        return
+            action == InputAction::Release
             ? (mods & ~InputModifier::Shift)
             : (mods | InputModifier::Shift)
         ;
     case Key::LeftControl:
     case Key::RightControl:
-        return action == InputAction::Release
+        return
+            action == InputAction::Release
             ? (mods & ~InputModifier::Control)
             : (mods | InputModifier::Control)
         ;
     case Key::LeftAlt:
     case Key::RightAlt:
-        return action == InputAction::Release
+        return
+            action == InputAction::Release
             ? (mods & ~InputModifier::Alt)
             : (mods | InputModifier::Alt)
         ;
     case Key::LeftSuper:
     case Key::RightSuper:
-        return action == InputAction::Release
+        return
+            action == InputAction::Release
             ? (mods & ~InputModifier::Super)
             : (mods | InputModifier::Super)
         ;

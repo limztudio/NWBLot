@@ -47,6 +47,20 @@ Updated: 2026-04-19
 41. Do not use project/runtime naming for scene data. The active scene camera entity is `SceneComponent::mainCamera` in `core/scene`, not a `ProjectComponent`.
 42. Ray-tracing affine transforms and deformable runtime picking/hit/preview payloads are vec4-lane data. Store them as aligned SIMD lanes, while preserving exact GPU byte sizes and keeping serialized AABB/source/edit records in their compact scalar layouts.
 43. Keep tests domain-owned too: `tests/ecs` validates generic ECS infrastructure with test-local components, while scene/content component coverage belongs in `tests/scene`.
+44. `VK_EXT_mesh_shader` support for the default ECS renderer requires the Vulkan `meshShader` feature only. Enable `taskShader` opportunistically when supported, but do not require it for the `MS + PS` path.
+45. Required or user-requested Vulkan extensions that have known feature structs must preserve their `DeviceExtensionFeature` metadata when moved between optional, required, and enabled extension maps; otherwise `vkCreateDevice` can enable an extension without enabling its required feature bits.
+46. `vkGetRayTracingShaderGroupHandlesKHR` writes shader group handles tightly packed by `shaderGroupHandleSize`. Only SBT buffer records use `shaderGroupHandleAlignment`; do not index the cached handle blob with the aligned stride.
+47. Shader binding table buffers must be created with `VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR` and device-address usage; the SBT descriptor bit is not implied by CPU write access or by later `vkCmdTraceRaysKHR` use.
+48. Vulkan `queryFeatureSupport()` answers must reflect enabled feature structs, not extension names alone. Advanced ray-tracing extensions such as opacity micromap, cluster acceleration structure, and invocation reorder require their feature structs in the `vkCreateDevice` pNext chain.
+49. Optional Vulkan feature paths must also require the loaded Volk entry points used by that path. Do not report ray tracing, opacity micromap, cluster acceleration, cooperative vector, or mesh shader support when the required function pointers are unavailable.
+50. Vulkan tracked command buffers own deferred acceleration-structure destruction while command work is in flight. Any path that returns a tracked command buffer to the pool must release those tracked references, including skipped or failed submissions.
+51. Vulkan BLAS compaction is a cross-submission state machine: keep pending compactions across command-list state clears, poll query results without blocking, and retain the compacted acceleration structure until the copy submission finishes.
+52. Vulkan BLAS triangle `RayTracingGeometryDesc::useTransform` requires a GPU-visible transform build-input buffer. Do not silently ignore the transform and build identity geometry.
+53. Vulkan ray tracing shader tables own GPU SBT buffers and must retain their parent pipeline; command buffers must retain the shader table while ray dispatch commands are in flight.
+54. Generic integer alignment helpers belong in `global/algorithm.h`; Vulkan code should use `AlignUp`, `AlignUpChecked`, or the typed wrappers instead of keeping local duplicate align-up helpers.
+55. Vulkan ray tracing arbitrary procedural primitives are represented by AABB build geometry plus an intersection shader. Native spheres/LSS are a separate `VK_NV_ray_tracing_linear_swept_spheres` path and must stay feature-gated through the device feature struct and pipeline create flag.
+56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `NWB_DEBUG` / optimization-mode checks.
+57. `Graphics` owns a required backend for its full object lifetime through `NotNullUniquePtr`; lifecycle `destroy()` tears down backend runtime state, not the backend object itself.
 
 ## Scheduler Architecture
 

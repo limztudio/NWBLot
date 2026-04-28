@@ -122,10 +122,9 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
         if(cacheSize == 0)
             return true;
         if(cacheSize > static_cast<size_t>(Limit<usize>::s_Max)){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}."),
-                static_cast<u64>(cacheSize),
-                static_cast<u64>(Limit<usize>::s_Max)
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}.")
+                , static_cast<u64>(cacheSize)
+                , static_cast<u64>(Limit<usize>::s_Max)
             );
             return false;
         }
@@ -290,6 +289,20 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_fragment_shading_rate = true;
         else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
             m_context.extensions.NV_ray_tracing_invocation_reorder = true;
+        else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) == 0)
+            m_context.extensions.NV_ray_tracing_linear_swept_spheres = true;
+    }
+
+    m_context.meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+    if(m_context.extensions.EXT_mesh_shader){
+        m_context.meshShaderFeatures.meshShader = VK_TRUE;
+        m_context.meshShaderFeatures.taskShader = desc.meshTaskShaderSupported ? VK_TRUE : VK_FALSE;
+    }
+
+    m_context.rayTracingLinearSweptSpheresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV;
+    if(m_context.extensions.NV_ray_tracing_linear_swept_spheres){
+        m_context.rayTracingLinearSweptSpheresFeatures.spheres = desc.rayTracingSpheresSupported ? VK_TRUE : VK_FALSE;
+        m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres = desc.rayTracingLinearSweptSpheresSupported ? VK_TRUE : VK_FALSE;
     }
 
     if(m_context.extensions.EXT_debug_utils && (!vkCmdBeginDebugUtilsLabelEXT || !vkCmdEndDebugUtilsLabelEXT)){
@@ -312,8 +325,79 @@ Device::Device(const DeviceDesc& desc)
         m_aftermathEnabled = false;
     }
 
+    if(
+        m_context.extensions.KHR_acceleration_structure
+        && (
+            !vkCreateAccelerationStructureKHR
+            || !vkDestroyAccelerationStructureKHR
+            || !vkGetAccelerationStructureBuildSizesKHR
+            || !vkGetAccelerationStructureDeviceAddressKHR
+            || !vkCmdBuildAccelerationStructuresKHR
+            || !vkCmdCopyAccelerationStructureKHR
+            || !vkCmdWriteAccelerationStructuresPropertiesKHR
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
+        m_context.extensions.KHR_acceleration_structure = false;
+    }
+
+    if(
+        m_context.extensions.KHR_ray_tracing_pipeline
+        && (
+            !vkCreateRayTracingPipelinesKHR
+            || !vkGetRayTracingShaderGroupHandlesKHR
+            || !vkCmdTraceRaysKHR
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ray tracing pipeline entry points are unavailable."));
+        m_context.extensions.KHR_ray_tracing_pipeline = false;
+    }
+
+    if(
+        m_context.extensions.EXT_opacity_micromap
+        && (
+            !vkCreateMicromapEXT
+            || !vkDestroyMicromapEXT
+            || !vkGetMicromapBuildSizesEXT
+            || !vkCmdBuildMicromapsEXT
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
+        m_context.extensions.EXT_opacity_micromap = false;
+    }
+
+    if(
+        m_context.extensions.NV_cluster_acceleration_structure
+        && (
+            !vkGetClusterAccelerationStructureBuildSizesNV
+            || !vkCmdBuildClusterAccelerationStructureIndirectNV
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
+        m_context.extensions.NV_cluster_acceleration_structure = false;
+    }
+
+    if(
+        m_context.extensions.NV_cooperative_vector
+        && (
+            !vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+            || !vkConvertCooperativeVectorMatrixNV
+            || !vkCmdConvertCooperativeVectorMatrixNV
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
+        m_context.extensions.NV_cooperative_vector = false;
+    }
+
+    if(m_context.extensions.EXT_mesh_shader && !vkCmdDrawMeshTasksEXT){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Mesh shader draw entry point is unavailable."));
+        m_context.extensions.EXT_mesh_shader = false;
+        m_context.meshShaderFeatures.meshShader = VK_FALSE;
+        m_context.meshShaderFeatures.taskShader = VK_FALSE;
+    }
+
     {
-        VkPhysicalDeviceProperties2 props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
+        auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         void* pNext = nullptr;
 
         if(m_context.extensions.KHR_ray_tracing_pipeline){
@@ -347,7 +431,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.NV_cooperative_vector){
-        VkPhysicalDeviceFeatures2 features2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+        auto features2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
         m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
         features2.pNext = &m_context.coopVecFeatures;
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
@@ -368,7 +452,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(m_context.extensions.EXT_descriptor_heap){
-        VkPhysicalDeviceProperties2 props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
+        auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         m_context.descriptorHeapProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
         props2.pNext = &m_context.descriptorHeapProperties;
         vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
@@ -382,17 +466,16 @@ Device::Device(const DeviceDesc& desc)
     Vector<u8> pipelineCacheInitialData;
     static_cast<void>(loadPipelineCacheData(pipelineCacheInitialData));
 
-    VkPipelineCacheCreateInfo cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
+    auto cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
     if(!pipelineCacheInitialData.empty()){
         cacheInfo.initialDataSize = pipelineCacheInitialData.size();
         cacheInfo.pInitialData = pipelineCacheInitialData.data();
     }
     res = vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
     if(res != VK_SUCCESS && !pipelineCacheInitialData.empty()){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to create pipeline cache from runtime volume '{}'. Retrying empty cache. {}"),
-            StringConvert(m_pipelineCacheVolumeName),
-            ResultToString(res)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache from runtime volume '{}'. Retrying empty cache. {}")
+            , StringConvert(m_pipelineCacheVolumeName)
+            , ResultToString(res)
         );
         cacheInfo.initialDataSize = 0;
         cacheInfo.pInitialData = nullptr;
@@ -403,7 +486,7 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
     }
 
-    VkDescriptorSetLayoutCreateInfo emptyLayoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    auto emptyLayoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     emptyLayoutInfo.bindingCount = 0;
     emptyLayoutInfo.pBindings = nullptr;
     res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
@@ -484,10 +567,9 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
         volume
         )
     ){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'."),
-            StringConvert(m_pipelineCacheVolumeName),
-            PathToString<tchar>(m_pipelineCacheDirectory)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'.")
+            , StringConvert(m_pipelineCacheVolumeName)
+            , PathToString<tchar>(m_pipelineCacheDirectory)
         );
         return false;
     }
@@ -497,25 +579,18 @@ bool Device::loadPipelineCacheData(Vector<u8>& outData){
         return false;
     if(!volume.readFile(cachePath, outData)){
         outData.clear();
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."),
-            StringConvert(m_pipelineCacheVolumeName)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
     }
     if(!VulkanDetail::ValidatePipelineCacheData(outData, m_context.physicalDeviceProperties)){
         outData.clear();
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'."),
-            StringConvert(m_pipelineCacheVolumeName)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring incompatible pipeline cache data in runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
     }
 
-    NWB_LOGGER_INFO(
-        NWB_TEXT("Vulkan: Loaded pipeline cache runtime volume '{}' ({} bytes)."),
-        StringConvert(m_pipelineCacheVolumeName),
-        outData.size()
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Loaded pipeline cache runtime volume '{}' ({} bytes).")
+        , StringConvert(m_pipelineCacheVolumeName)
+        , outData.size()
     );
     return true;
 }
@@ -536,71 +611,51 @@ void Device::savePipelineCacheData(){
     }
 
     Filesystem::VolumeFileSystem volume(m_context.objectArena);
-    if(
-        !VulkanDetail::MountPipelineCacheVolume(
+    if(!VulkanDetail::MountPipelineCacheVolume(
         m_pipelineCacheDirectory,
         m_pipelineCacheVolumeName,
         true,
         Filesystem::VolumeUsage::RuntimeReadWrite,
         volume
-        )
-    ){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'."),
-            StringConvert(m_pipelineCacheVolumeName),
-            PathToString<tchar>(m_pipelineCacheDirectory)
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'.")
+            , StringConvert(m_pipelineCacheVolumeName)
+            , PathToString<tchar>(m_pipelineCacheDirectory)
         );
         if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName)){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."),
-                StringConvert(m_pipelineCacheVolumeName)
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
         }
-        if(
-            !VulkanDetail::MountPipelineCacheVolume(
+        if(!VulkanDetail::MountPipelineCacheVolume(
             m_pipelineCacheDirectory,
             m_pipelineCacheVolumeName,
             true,
             Filesystem::VolumeUsage::RuntimeReadWrite,
             volume
-            )
-        ){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."),
-                StringConvert(m_pipelineCacheVolumeName)
-            );
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
         }
     }
 
     const Name cachePath(VulkanDetail::s_PipelineCacheVirtualPath);
     if(!volume.writeFile(cachePath, cacheData)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to write pipeline cache data to runtime volume '{}'."),
-            StringConvert(m_pipelineCacheVolumeName)
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to write pipeline cache data to runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }
-    if(!volume.compact(true)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to compact pipeline cache runtime volume '{}'."),
-            StringConvert(m_pipelineCacheVolumeName)
-        );
-    }
+    if(!volume.compact(true))
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to compact pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
 
-    NWB_LOGGER_INFO(
-        NWB_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes)."),
-        StringConvert(m_pipelineCacheVolumeName),
-        cacheData.size()
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes).")
+        , StringConvert(m_pipelineCacheVolumeName)
+        , cacheData.size()
     );
 }
 
 Queue* Device::getQueue(CommandQueue::Enum queueType)const{
     auto index = static_cast<u32>(queueType);
-    if(index < static_cast<u32>(CommandQueue::kCount)){
+    if(index < static_cast<u32>(CommandQueue::kCount))
         return m_queues[index].get();
-    }
     return nullptr;
 }
 
@@ -712,6 +767,16 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
         return m_context.extensions.KHR_ray_query;
     case Feature::ShaderExecutionReordering:
         return m_context.extensions.NV_ray_tracing_invocation_reorder;
+    case Feature::Spheres:
+        return
+            m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE
+        ;
+    case Feature::LinearSweptSpheres:
+        return
+            m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE
+        ;
     case Feature::RayTracingOpacityMicromap:
         return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
     case Feature::RayTracingClusters:
@@ -721,7 +786,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::CooperativeVectorTraining:
         return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
     case Feature::Meshlets:
-        return m_context.extensions.EXT_mesh_shader && vkCmdDrawMeshTasksEXT;
+        return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::SamplerFeedback:
@@ -818,20 +883,20 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     VkMemoryPropertyFlags memoryProperties = 0;
     bool isReadbackHeap = false;
     switch(d.type){
-        case HeapType::DeviceLocal:
-            memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-            break;
-        case HeapType::Upload:
-            memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-            break;
-        case HeapType::Readback:
-            memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-            isReadbackHeap = true;
-            break;
-        default:
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-            return nullptr;
+    case HeapType::DeviceLocal:
+        memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+        break;
+    case HeapType::Upload:
+        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        break;
+    case HeapType::Readback:
+        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+        isReadbackHeap = true;
+        break;
+    default:
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+        return nullptr;
     }
 
     u32 memoryTypeIndex = UINT32_MAX;
@@ -933,10 +998,14 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
             fillMatMulFormat(i);
     }
 
-    output.trainingFloat16 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
-        && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE;
-    output.trainingFloat32 = m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
-        && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE;
+    output.trainingFloat16 =
+        m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
+        && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE
+    ;
+    output.trainingFloat32 =
+        m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
+        && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE
+    ;
 
     return output;
 }
@@ -960,7 +1029,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     if(dataTypeSize > (Limit<usize>::s_Max / elementCount))
         return 0;
 
-    VkConvertCooperativeVectorMatrixInfoNV convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
+    auto convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
     convertInfo.srcSize = dataTypeSize * elementCount;
     convertInfo.srcData.hostAddress = nullptr;
     convertInfo.pDstSize = &dstSize;

@@ -57,20 +57,17 @@ static T MakeVkFeatureStruct(VkStructureType sType){
 }
 
 struct OptionalDeviceFeatureSet{
-    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructure =
-        MakeVkFeatureStruct<VkPhysicalDeviceAccelerationStructureFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
-    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipeline =
-        MakeVkFeatureStruct<VkPhysicalDeviceRayTracingPipelineFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR);
-    VkPhysicalDeviceRayQueryFeaturesKHR rayQuery =
-        MakeVkFeatureStruct<VkPhysicalDeviceRayQueryFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR);
-    VkPhysicalDeviceMeshShaderFeaturesEXT meshShader =
-        MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
-    VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate =
-        MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
-    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType =
-        MakeVkFeatureStruct<VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT);
-    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeap =
-        MakeVkFeatureStruct<VkPhysicalDeviceDescriptorHeapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT);
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructure = MakeVkFeatureStruct<VkPhysicalDeviceAccelerationStructureFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipeline = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingPipelineFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR);
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQuery = MakeVkFeatureStruct<VkPhysicalDeviceRayQueryFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR);
+    VkPhysicalDeviceOpacityMicromapFeaturesEXT opacityMicromap = MakeVkFeatureStruct<VkPhysicalDeviceOpacityMicromapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT);
+    VkPhysicalDeviceClusterAccelerationStructureFeaturesNV clusterAccelerationStructure = MakeVkFeatureStruct<VkPhysicalDeviceClusterAccelerationStructureFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_FEATURES_NV);
+    VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV rayTracingInvocationReorder = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV);
+    VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheres = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV);
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
+    VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
+    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType = MakeVkFeatureStruct<VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT);
+    VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeap = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorHeapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT);
 };
 
 static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
@@ -83,7 +80,15 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
 
     features.rayQuery.rayQuery = VK_TRUE;
 
-    features.meshShader.taskShader = VK_TRUE;
+    features.opacityMicromap.micromap = VK_TRUE;
+
+    features.clusterAccelerationStructure.clusterAccelerationStructure = VK_TRUE;
+
+    features.rayTracingInvocationReorder.rayTracingInvocationReorder = VK_TRUE;
+
+    features.rayTracingLinearSweptSpheres.spheres = VK_FALSE;
+    features.rayTracingLinearSweptSpheres.linearSweptSpheres = VK_FALSE;
+
     features.meshShader.meshShader = VK_TRUE;
 
     features.fragmentShadingRate.pipelineFragmentShadingRate = VK_TRUE;
@@ -102,6 +107,10 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     case DeviceExtensionFeature::AccelerationStructure: return &features.accelerationStructure;
     case DeviceExtensionFeature::RayTracingPipeline: return &features.rayTracingPipeline;
     case DeviceExtensionFeature::RayQuery: return &features.rayQuery;
+    case DeviceExtensionFeature::OpacityMicromap: return &features.opacityMicromap;
+    case DeviceExtensionFeature::ClusterAccelerationStructure: return &features.clusterAccelerationStructure;
+    case DeviceExtensionFeature::RayTracingInvocationReorder: return &features.rayTracingInvocationReorder;
+    case DeviceExtensionFeature::RayTracingLinearSweptSpheres: return &features.rayTracingLinearSweptSpheres;
     case DeviceExtensionFeature::MeshShader: return &features.meshShader;
     case DeviceExtensionFeature::FragmentShadingRate: return &features.fragmentShadingRate;
     case DeviceExtensionFeature::MutableDescriptorType: return &features.mutableDescriptorType;
@@ -138,7 +147,8 @@ static AString VulkanVersionToString(u32 version){
        << "."
        << VK_API_VERSION_MINOR(version)
        << "."
-       << VK_API_VERSION_PATCH(version);
+       << VK_API_VERSION_PATCH(version)
+    ;
     if(VK_API_VERSION_VARIANT(version) != 0)
         ss << " variant " << VK_API_VERSION_VARIANT(version);
     return ss.str();
@@ -205,7 +215,8 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
     case DeviceExtensionFeature::AccelerationStructure:
         return SupportsRequestedValue(requested.accelerationStructure.accelerationStructure, supported.accelerationStructure.accelerationStructure);
     case DeviceExtensionFeature::RayTracingPipeline:
-        return SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipeline, supported.rayTracingPipeline.rayTracingPipeline)
+        return
+            SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipeline, supported.rayTracingPipeline.rayTracingPipeline)
             && SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplay, supported.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplay)
             && SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplayMixed, supported.rayTracingPipeline.rayTracingPipelineShaderGroupHandleCaptureReplayMixed)
             && SupportsRequestedValue(requested.rayTracingPipeline.rayTracingPipelineTraceRaysIndirect, supported.rayTracingPipeline.rayTracingPipelineTraceRaysIndirect)
@@ -213,12 +224,25 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
         ;
     case DeviceExtensionFeature::RayQuery:
         return SupportsRequestedValue(requested.rayQuery.rayQuery, supported.rayQuery.rayQuery);
+    case DeviceExtensionFeature::OpacityMicromap:
+        return SupportsRequestedValue(requested.opacityMicromap.micromap, supported.opacityMicromap.micromap);
+    case DeviceExtensionFeature::ClusterAccelerationStructure:
+        return SupportsRequestedValue(requested.clusterAccelerationStructure.clusterAccelerationStructure, supported.clusterAccelerationStructure.clusterAccelerationStructure);
+    case DeviceExtensionFeature::RayTracingInvocationReorder:
+        return SupportsRequestedValue(requested.rayTracingInvocationReorder.rayTracingInvocationReorder, supported.rayTracingInvocationReorder.rayTracingInvocationReorder);
+    case DeviceExtensionFeature::RayTracingLinearSweptSpheres:
+        return
+            supported.rayTracingLinearSweptSpheres.spheres == VK_TRUE
+            || supported.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
+        ;
     case DeviceExtensionFeature::MeshShader:
-        return SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader)
+        return
+            SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader)
             && SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader)
         ;
     case DeviceExtensionFeature::FragmentShadingRate:
-        return SupportsRequestedValue(requested.fragmentShadingRate.pipelineFragmentShadingRate, supported.fragmentShadingRate.pipelineFragmentShadingRate)
+        return
+            SupportsRequestedValue(requested.fragmentShadingRate.pipelineFragmentShadingRate, supported.fragmentShadingRate.pipelineFragmentShadingRate)
             && SupportsRequestedValue(requested.fragmentShadingRate.primitiveFragmentShadingRate, supported.fragmentShadingRate.primitiveFragmentShadingRate)
             && SupportsRequestedValue(requested.fragmentShadingRate.attachmentFragmentShadingRate, supported.fragmentShadingRate.attachmentFragmentShadingRate)
         ;
@@ -235,6 +259,9 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
 
 static void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported){
     enabled.descriptorHeap.descriptorHeapCaptureReplay = supported.descriptorHeap.descriptorHeapCaptureReplay;
+    enabled.meshShader.taskShader = supported.meshShader.taskShader;
+    enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
+    enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
 }
 
 static void AppendFeatureStruct(void*& pNext, void* feature){
@@ -411,6 +438,8 @@ void BackendContext::clearSemaphores(SemaphoreVector& semaphores){
 }
 
 bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize count, const AStringView operationName){
+    VkResult res = VK_SUCCESS;
+
     clearSemaphores(semaphores);
     semaphores.reserve(count);
 
@@ -419,7 +448,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
 
     for(usize i = 0; i < count; ++i){
         VkSemaphore sem = VK_NULL_HANDLE;
-        const VkResult res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
+        res = vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("Vulkan: Failed to {}. {}"),
@@ -481,6 +510,16 @@ void BackendContext::resizeSwapChain(){
 
 
 void BackendContext::initDefaultExtensions(){
+    m_enabledExtensions.instance.clear();
+    m_enabledExtensions.layers.clear();
+    m_enabledExtensions.device.clear();
+
+    m_optionalExtensions.instance.clear();
+    m_optionalExtensions.layers.clear();
+    m_optionalExtensions.device.clear();
+
+    m_rayTracingExtensions.clear();
+
     for(const auto* name : s_EnabledInstanceExts)
         m_enabledExtensions.instance.insert(name);
     for(const auto& e : s_EnabledDeviceExts)
@@ -606,9 +645,7 @@ bool BackendContext::createVulkanInstance(){
 
     for(const auto& layer : availableLayers){
         AString name = layer.layerName;
-        const bool enableOptionalLayer =
-            m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end()
-        ;
+        const bool enableOptionalLayer = m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end();
         requiredLayers.erase(name);
         if(enableOptionalLayer)
             m_enabledExtensions.layers.insert(Move(name));
@@ -648,14 +685,14 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(applicationInfo.apiVersion < s_MinimumVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: API version {}.{}.{} is too low, at least {}.{}.{} is required."),
-            VK_API_VERSION_MAJOR(applicationInfo.apiVersion),
-            VK_API_VERSION_MINOR(applicationInfo.apiVersion),
-            VK_API_VERSION_PATCH(applicationInfo.apiVersion),
-            VK_API_VERSION_MAJOR(s_MinimumVersion),
-            VK_API_VERSION_MINOR(s_MinimumVersion),
-            VK_API_VERSION_PATCH(s_MinimumVersion)
-            );
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: API version {}.{}.{} is too low, at least {}.{}.{} is required.")
+            , VK_API_VERSION_MAJOR(applicationInfo.apiVersion)
+            , VK_API_VERSION_MINOR(applicationInfo.apiVersion)
+            , VK_API_VERSION_PATCH(applicationInfo.apiVersion)
+            , VK_API_VERSION_MAJOR(s_MinimumVersion)
+            , VK_API_VERSION_MINOR(s_MinimumVersion)
+            , VK_API_VERSION_PATCH(s_MinimumVersion)
+        );
         return false;
     }
 
@@ -672,7 +709,8 @@ bool BackendContext::createVulkanInstance(){
            << "\n    debug report extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
            << "\n    debug utils extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
            << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
-           << "\n    enabled layers: " << m_enabledExtensions.layers.size();
+           << "\n    enabled layers: " << m_enabledExtensions.layers.size()
+        ;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
@@ -720,9 +758,8 @@ void BackendContext::installDebugCallback(){
         m_debugReportCallback = VK_NULL_HANDLE;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug callback. {}"), ResultToString(res));
     }
-    else{
+    else
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan GPU debug: debug report callback installed."));
-    }
 }
 
 
@@ -748,7 +785,10 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         const auto& queueFamily = props[i];
 
         if(m_graphicsQueueFamily == -1){
-            if(queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+            if(
+                queueFamily.queueCount > 0
+                && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            )
                 m_graphicsQueueFamily = i;
         }
 
@@ -780,11 +820,12 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             }
         }
 #elif defined(NWB_PLATFORM_LINUX)
+        VkResult res = VK_SUCCESS;
         if(m_presentQueueFamily == -1 && m_windowSurface){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = VK_FALSE;
-                const VkResult result = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
-                if(result == VK_SUCCESS && supported)
+                res = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
+                if(res == VK_SUCCESS && supported)
                     m_presentQueueFamily = i;
             }
         }
@@ -796,9 +837,8 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         || (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice)
         || (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue)
         || (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
-    ){
+    )
         return false;
-    }
 
     return true;
 }
@@ -1017,6 +1057,9 @@ bool BackendContext::createVulkanDevice(){
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
+    m_meshTaskShaderSupported = false;
+    m_rayTracingSpheresSupported = false;
+    m_rayTracingLinearSweptSpheresSupported = false;
 
     uint32_t extCount = 0;
     res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
@@ -1052,8 +1095,11 @@ bool BackendContext::createVulkanDevice(){
             }
         }
 
-        if(enableExtension)
-            m_enabledExtensions.device.emplace(Move(name), enabledFeature);
+        if(enableExtension){
+            auto [it, inserted] = m_enabledExtensions.device.emplace(Move(name), enabledFeature);
+            if(!inserted && it.value() == DeviceExtensionFeature::None && enabledFeature != DeviceExtensionFeature::None)
+                it.value() = enabledFeature;
+        }
     }
 
     VkPhysicalDeviceProperties physicalDeviceProperties;
@@ -1083,7 +1129,7 @@ bool BackendContext::createVulkanDevice(){
 
     void* pNext = nullptr;
 
-    VkPhysicalDeviceFeatures2 physicalDeviceFeatures2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+    auto physicalDeviceFeatures2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
 
     VulkanDetail::OptionalDeviceFeatureSet requestedOptionalFeatures = VulkanDetail::MakeRequestedOptionalDeviceFeatures();
     VulkanDetail::OptionalDeviceFeatureSet supportedOptionalFeatures;
@@ -1094,27 +1140,22 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceVulkan12Features supportedVulkan12Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
     VulkanDetail::AppendFeatureStruct(pNext, &supportedVulkan12Features);
 
-    VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures =
-        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceBufferDeviceAddressFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
+    VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceBufferDeviceAddressFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
     VulkanDetail::AppendFeatureStruct(pNext, &bufferDeviceAddressFeatures);
 
-    VkPhysicalDeviceSynchronization2Features synchronization2Features =
-        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceSynchronization2Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
+    VkPhysicalDeviceSynchronization2Features synchronization2Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceSynchronization2Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
     if(apiSupportsVulkan13 || synchronization2ExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &synchronization2Features);
 
-    VkPhysicalDeviceMaintenance4Features maintenance4Features =
-        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceMaintenance4Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
+    VkPhysicalDeviceMaintenance4Features maintenance4Features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceMaintenance4Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_FEATURES);
     if(apiSupportsVulkan13 || maintenance4ExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
 
-    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures =
-        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
     if(apiSupportsVulkan13 || dynamicRenderingExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
 
-    VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures =
-        VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
+    VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
     if(coopVecExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
@@ -1136,10 +1177,7 @@ bool BackendContext::createVulkanDevice(){
     }
 
     for(const auto& name : unsupportedFeatureExtensions){
-        NWB_LOGGER_INFO(
-            NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."),
-            StringConvert(name)
-        );
+        NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), StringConvert(name));
         m_enabledExtensions.device.erase(name);
     }
 
@@ -1147,10 +1185,7 @@ bool BackendContext::createVulkanDevice(){
         const AString samplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
         const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(samplerFilterMinmaxExtensionName);
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
-            NWB_LOGGER_INFO(
-                NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."),
-                StringConvert(samplerFilterMinmaxExtensionName)
-            );
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(samplerFilterMinmaxExtensionName));
             m_enabledExtensions.device.erase(samplerFilterMinmaxExtensionName);
         }
     }
@@ -1203,13 +1238,24 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
         || !requireFeature(dynamicRenderingEnabled ? dynamicRenderingFeatures.dynamicRendering : VK_FALSE, "dynamicRendering")
         || !requireFeature(synchronization2Enabled ? synchronization2Features.synchronization2 : VK_FALSE, "synchronization2")
-    ){
+    )
         return false;
-    }
 
     m_dynamicRenderingSupported = true;
     m_synchronization2Supported = true;
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
+    m_meshTaskShaderSupported =
+        isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
+        && requestedOptionalFeatures.meshShader.taskShader == VK_TRUE
+    ;
+    m_rayTracingSpheresSupported =
+        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
+        && requestedOptionalFeatures.rayTracingLinearSweptSpheres.spheres == VK_TRUE
+    ;
+    m_rayTracingLinearSweptSpheresSupported =
+        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
+        && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
+    ;
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchAllocator<i32>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), Alloc::ScratchAllocator<i32>(scratchArena));
     uniqueQueueFamilies.reserve(4u);
@@ -1336,7 +1382,8 @@ bool BackendContext::createVulkanDevice(){
            << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(physicalDeviceProperties.apiVersion)
            << "\n    driver version: " << physicalDeviceProperties.driverVersion
            << "\n    device-local memory: " << deviceLocalMemoryMiB << " MiB"
-           << "\n    queue families: graphics=" << m_graphicsQueueFamily;
+           << "\n    queue families: graphics=" << m_graphicsQueueFamily
+        ;
 
         if(m_deviceParams.headlessDevice)
             ss << " present=headless";
@@ -1356,14 +1403,18 @@ bool BackendContext::createVulkanDevice(){
         ss << "\n    key features: dynamicRendering=" << VulkanDetail::BoolToString(m_dynamicRenderingSupported)
            << " synchronization2=" << VulkanDetail::BoolToString(m_synchronization2Supported)
            << " bufferDeviceAddress=" << VulkanDetail::BoolToString(m_bufferDeviceAddressSupported)
+           << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
            << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
            << "\n    optional paths: debugMarker=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
            << " descriptorHeap=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME))
            << " meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
            << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
+           << " spheres=" << VulkanDetail::BoolToString(m_rayTracingSpheresSupported)
+           << " linearSweptSpheres=" << VulkanDetail::BoolToString(m_rayTracingLinearSweptSpheresSupported)
            << " cooperativeVector=" << VulkanDetail::BoolToString(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE)
-           << "\n    enabled device extensions: " << m_enabledExtensions.device.size();
+           << "\n    enabled device extensions: " << m_enabledExtensions.device.size()
+        ;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
@@ -1470,7 +1521,7 @@ bool BackendContext::createVulkanSwapChain(){
     }
     m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-    VkSurfaceCapabilitiesKHR surfaceCaps{};
+    VkSurfaceCapabilitiesKHR surfaceCaps = {};
     res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query surface capabilities. {}"), ResultToString(res));
@@ -1510,24 +1561,19 @@ bool BackendContext::createVulkanSwapChain(){
     }
 
     const VkPresentModeKHR requestedPresentMode = m_swapChainState.vsyncEnabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
-    VkPresentModeKHR selectedPresentMode = requestedPresentMode;
-    bool presentModeFound = false;
+    VkPresentModeKHR selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    bool requestedPresentModeFound = false;
+    bool fifoPresentModeFound = false;
     for(const auto& mode : presentModes){
         if(mode == requestedPresentMode){
-            presentModeFound = true;
+            selectedPresentMode = requestedPresentMode;
+            requestedPresentModeFound = true;
             break;
         }
+        if(mode == VK_PRESENT_MODE_FIFO_KHR)
+            fifoPresentModeFound = true;
     }
-    if(!presentModeFound){
-        selectedPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-        for(const auto& mode : presentModes){
-            if(mode == selectedPresentMode){
-                presentModeFound = true;
-                break;
-            }
-        }
-    }
-    if(!presentModeFound){
+    if(!requestedPresentModeFound && !fifoPresentModeFound){
         if(presentModes.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes no present modes."));
             return false;
@@ -1539,10 +1585,9 @@ bool BackendContext::createVulkanSwapChain(){
     if(surfaceCaps.maxImageCount > 0)
         selectedImageCount = Min(selectedImageCount, surfaceCaps.maxImageCount);
 
-    const VkSurfaceTransformFlagBitsKHR selectedPreTransform =
-        (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
-            ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
-            : surfaceCaps.currentTransform
+    const VkSurfaceTransformFlagBitsKHR selectedPreTransform = (surfaceCaps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+        ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+        : surfaceCaps.currentTransform
     ;
 
     VkCompositeAlphaFlagBitsKHR selectedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -1565,16 +1610,13 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    HashSet<uint32_t, Hasher<uint32_t>, EqualTo<uint32_t>, Alloc::ScratchAllocator<uint32_t>> uniqueQueues(0, Hasher<uint32_t>(), EqualTo<uint32_t>(), Alloc::ScratchAllocator<uint32_t>(scratchArena));
-    uniqueQueues.reserve(2u);
-    uniqueQueues.insert(static_cast<uint32_t>(m_graphicsQueueFamily));
-    uniqueQueues.insert(static_cast<uint32_t>(m_presentQueueFamily));
-
-    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> queues{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
-    queues.reserve(uniqueQueues.size());
-    for(const auto& q : uniqueQueues)
-        queues.push_back(q);
-    const bool enableSwapChainSharing = queues.size() > 1;
+    uint32_t queueFamilyIndices[2] = { static_cast<uint32_t>(m_graphicsQueueFamily), static_cast<uint32_t>(m_presentQueueFamily) };
+    uint32_t queueFamilyIndexCount = 1;
+    if(m_presentQueueFamily != m_graphicsQueueFamily){
+        queueFamilyIndices[queueFamilyIndexCount] = static_cast<uint32_t>(m_presentQueueFamily);
+        ++queueFamilyIndexCount;
+    }
+    const bool enableSwapChainSharing = queueFamilyIndexCount > 1;
 
     VkSwapchainCreateInfoKHR desc = {};
     desc.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -1586,8 +1628,8 @@ bool BackendContext::createVulkanSwapChain(){
     desc.imageArrayLayers = 1;
     desc.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     desc.imageSharingMode = enableSwapChainSharing ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
-    desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<uint32_t>(queues.size()) : 0;
-    desc.pQueueFamilyIndices = enableSwapChainSharing ? queues.data() : nullptr;
+    desc.queueFamilyIndexCount = enableSwapChainSharing ? queueFamilyIndexCount : 0;
+    desc.pQueueFamilyIndices = enableSwapChainSharing ? queueFamilyIndices : nullptr;
     desc.preTransform = selectedPreTransform;
     desc.compositeAlpha = selectedCompositeAlpha;
     desc.presentMode = selectedPresentMode;
@@ -1690,7 +1732,8 @@ bool BackendContext::createVulkanSwapChain(){
            << "\n    requested images: " << m_deviceParams.swapChainBufferCount
            << "\n    created images: " << imageCount
            << "\n    mutable format: " << VulkanDetail::BoolToString(m_swapChainMutableFormatSupported)
-           << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive");
+           << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive")
+        ;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
     }
 
@@ -1703,6 +1746,8 @@ bool BackendContext::createVulkanSwapChain(){
 
 
 bool BackendContext::createInstance(){
+    initDefaultExtensions();
+
     if(m_deviceParams.enableDebugRuntime){
         m_enabledExtensions.instance.insert(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
         m_enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
@@ -1721,10 +1766,28 @@ bool BackendContext::createDevice(){
         m_maxFramesInFlight = 1;
     }
 
+    auto resolveDeviceExtensionFeature = [this](const AString& name)->DeviceExtensionFeature::Enum{
+        const auto optionalIt = m_optionalExtensions.device.find(name);
+        if(optionalIt != m_optionalExtensions.device.end() && optionalIt.value() != DeviceExtensionFeature::None)
+            return optionalIt.value();
+
+        const auto rayTracingIt = m_rayTracingExtensions.find(name);
+        if(rayTracingIt != m_rayTracingExtensions.end())
+            return rayTracingIt.value();
+
+        return DeviceExtensionFeature::None;
+    };
+
+    auto registerDeviceExtension = [](DeviceExtensionMap& extensions, const AString& name, const DeviceExtensionFeature::Enum feature){
+        auto [it, inserted] = extensions.emplace(name, feature);
+        if(!inserted && it.value() == DeviceExtensionFeature::None && feature != DeviceExtensionFeature::None)
+            it.value() = feature;
+    };
+
     for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
-        m_enabledExtensions.device.emplace(name, DeviceExtensionFeature::None);
+        registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
-        m_optionalExtensions.device.emplace(name, DeviceExtensionFeature::None);
+        registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
     if(m_deviceParams.enableAftermath)
         m_optionalExtensions.device.emplace(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None);
 
@@ -1771,6 +1834,9 @@ bool BackendContext::createDevice(){
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
     deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.synchronization2Supported = m_synchronization2Supported;
+    deviceDesc.meshTaskShaderSupported = m_meshTaskShaderSupported;
+    deviceDesc.rayTracingSpheresSupported = m_rayTracingSpheresSupported;
+    deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
     deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath && aftermathCheckpointsEnabled;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
@@ -1881,16 +1947,16 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
             semaphore,
             VK_NULL_HANDLE,
             &m_swapChainIndex
-            );
+        );
 
         if((res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) && attempt < s_MaxRetryCountAcquireNextImage - 1){
             if(callbacks.beforeResize)
                 callbacks.beforeResize(callbacks.userData);
 
             VkSurfaceCapabilitiesKHR surfaceCaps;
-            const VkResult surfaceResult = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
-            if(surfaceResult != VK_SUCCESS){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities during resize. {}"), ResultToString(surfaceResult));
+            res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
+            if(res != VK_SUCCESS){
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities during resize. {}"), ResultToString(res));
                 return false;
             }
 
@@ -2058,9 +2124,8 @@ bool BackendContext::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
         outAdapters[i] = Move(adapterInfo);
     };
 
-    if(m_threadPool.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold){
+    if(m_threadPool.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
         m_threadPool.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
-    }
     else{
         for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)
             fillAdapterInfo(i);

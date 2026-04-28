@@ -22,6 +22,31 @@ private:
     static void verifyRendererSystemOrDie(NWB::Core::ECS::World& world);
 
 private:
+    struct SurfaceEditClickAction{
+        enum Enum : u8{
+            PreviewHole,
+            MoveLatest,
+            PatchLatest
+        };
+    };
+
+    struct SurfaceEditUiAction{
+        enum Enum : u32{
+            None = 0u,
+            RefreshPreview = 1u << 0u,
+            CommitPreview = 1u << 1u,
+            CancelPreview = 1u << 2u,
+            ReplaySavedState = 1u << 3u,
+            Undo = 1u << 4u,
+            Redo = 1u << 5u,
+            HealLatest = 1u << 6u,
+            ResizeLatest = 1u << 7u,
+            AddLoopCut = 1u << 8u,
+            ToggleDebug = 1u << 9u,
+            LogDebugSnapshot = 1u << 10u
+        };
+    };
+
     struct SurfaceEditMutationContext{
         NWB::Core::ECSGraphics::RendererSystem* rendererSystem = nullptr;
         NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh;
@@ -30,6 +55,8 @@ private:
     };
 
     NWB::Core::ECSGraphics::RendererSystem& rendererSystem();
+    void drawUiControls();
+    void processPendingUiActions();
     void registerInputHandler();
     void unregisterInputHandler();
     void clearInputState();
@@ -115,6 +142,9 @@ private:
     f32 m_surfaceEditRadius = 0.24f;
     f32 m_surfaceEditEllipseRatio = 1.0f;
     f32 m_surfaceEditDepth = 0.18f;
+    SurfaceEditClickAction::Enum m_surfaceEditClickAction = SurfaceEditClickAction::PreviewHole;
+    u32 m_pendingSurfaceEditUiActions = SurfaceEditUiAction::None;
+    usize m_pendingSurfaceEditTargetIndex = 0u;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;
@@ -130,6 +160,8 @@ private:
     bool m_pendingSurfaceEditAccessory = false;
     bool m_pendingSurfaceEditReplay = false;
     bool m_surfaceEditDebugEnabled = false;
+    bool m_surfaceEditDisplacementEnabled = true;
+    bool m_pendingSurfaceEditTargetSelection = false;
 };
 
 

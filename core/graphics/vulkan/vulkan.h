@@ -63,6 +63,12 @@ struct DeviceDesc{
     bool dynamicRenderingSupported = false;
     // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool synchronization2Supported = false;
+    // Indicates if VK_EXT_mesh_shader taskShader was enabled at device creation time
+    bool meshTaskShaderSupported = false;
+    // Indicates if VK_NV_ray_tracing_linear_swept_spheres spheres was enabled at device creation time
+    bool rayTracingSpheresSupported = false;
+    // Indicates if VK_NV_ray_tracing_linear_swept_spheres linearSweptSpheres was enabled at device creation time
+    bool rayTracingLinearSweptSpheresSupported = false;
     bool aftermathEnabled = false;
     bool logBufferLifetime = false;
 

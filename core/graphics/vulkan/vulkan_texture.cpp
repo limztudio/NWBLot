@@ -24,50 +24,50 @@ namespace VulkanDetail{
 
 VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
     switch(dimension){
-        case TextureDimension::Texture1D:
-        case TextureDimension::Texture1DArray:
-            return VK_IMAGE_TYPE_1D;
-        case TextureDimension::Texture2D:
-        case TextureDimension::Texture2DArray:
-        case TextureDimension::TextureCube:
-        case TextureDimension::TextureCubeArray:
-        case TextureDimension::Texture2DMS:
-        case TextureDimension::Texture2DMSArray:
-            return VK_IMAGE_TYPE_2D;
-        case TextureDimension::Texture3D:
-            return VK_IMAGE_TYPE_3D;
-        default:
-            return VK_IMAGE_TYPE_2D;
+    case TextureDimension::Texture1D:
+    case TextureDimension::Texture1DArray:
+        return VK_IMAGE_TYPE_1D;
+    case TextureDimension::Texture2D:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::TextureCube:
+    case TextureDimension::TextureCubeArray:
+    case TextureDimension::Texture2DMS:
+    case TextureDimension::Texture2DMSArray:
+        return VK_IMAGE_TYPE_2D;
+    case TextureDimension::Texture3D:
+        return VK_IMAGE_TYPE_3D;
+    default:
+        return VK_IMAGE_TYPE_2D;
     }
 }
 
 VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
     switch(dimension){
-        case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
-        case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
-        case TextureDimension::Texture2D: return VK_IMAGE_VIEW_TYPE_2D;
-        case TextureDimension::Texture2DArray: return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        case TextureDimension::TextureCube: return VK_IMAGE_VIEW_TYPE_CUBE;
-        case TextureDimension::TextureCubeArray: return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-        case TextureDimension::Texture2DMS: return VK_IMAGE_VIEW_TYPE_2D;
-        case TextureDimension::Texture2DMSArray: return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        case TextureDimension::Texture3D: return VK_IMAGE_VIEW_TYPE_3D;
-        default: return VK_IMAGE_VIEW_TYPE_2D;
+    case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
+    case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+    case TextureDimension::Texture2D: return VK_IMAGE_VIEW_TYPE_2D;
+    case TextureDimension::Texture2DArray: return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    case TextureDimension::TextureCube: return VK_IMAGE_VIEW_TYPE_CUBE;
+    case TextureDimension::TextureCubeArray: return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    case TextureDimension::Texture2DMS: return VK_IMAGE_VIEW_TYPE_2D;
+    case TextureDimension::Texture2DMSArray: return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    case TextureDimension::Texture3D: return VK_IMAGE_VIEW_TYPE_3D;
+    default: return VK_IMAGE_VIEW_TYPE_2D;
     }
 }
 
 bool IsSupportedSampleCount(u32 sampleCount){
     switch(sampleCount){
-        case 1:
-        case 2:
-        case 4:
-        case 8:
-        case 16:
-        case 32:
-        case 64:
-            return true;
-        default:
-            return false;
+    case 1:
+    case 2:
+    case 4:
+    case 8:
+    case 16:
+    case 32:
+    case 64:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -200,8 +200,8 @@ VkBufferImageCopy BuildStagingTextureCopyRegion(
     const TextureDesc& stagingDesc,
     const TextureSlice& stagingSlice,
     const TextureSlice& imageSlice,
-    const VkImageAspectFlags aspectMask)
-{
+    const VkImageAspectFlags aspectMask
+){
     u32 bufferRowLength = 0;
     u32 bufferImageHeight = 0;
     const u64 bufferOffset = ComputeStagingTextureOffset(stagingDesc, stagingSlice, nullptr, &bufferRowLength, &bufferImageHeight);
@@ -255,8 +255,8 @@ bool PrepareStagingTextureCopy(
     const tchar* singleSampleRequirement,
     StagingTexture*& outStaging,
     Texture*& outTexture,
-    VkBufferImageCopy& outRegion)
-{
+    VkBufferImageCopy& outRegion
+){
     outStaging = checked_cast<StagingTexture*>(stagingResource);
     outTexture = checked_cast<Texture*>(textureResource);
     if(!outStaging || !outTexture){
@@ -815,8 +815,7 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(
-        !VulkanDetail::PrepareStagingTextureCopy(
+    if(!VulkanDetail::PrepareStagingTextureCopy(
         dest,
         destSlice,
         src,
@@ -826,10 +825,8 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
         staging,
         texture,
         region
-        )
-    ){
+    ))
         return;
-    }
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->m_buffer, 1, &region);
 
@@ -841,8 +838,7 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(
-        !VulkanDetail::PrepareStagingTextureCopy(
+    if(!VulkanDetail::PrepareStagingTextureCopy(
         src,
         srcSlice,
         dest,
@@ -852,10 +848,8 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
         staging,
         texture,
         region
-        )
-    ){
+    ))
         return;
-    }
 
     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, staging->m_buffer, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -970,7 +964,7 @@ void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLe
     if(!prepareUploadStaging(data, uploadSize, NWB_TEXT("writeTexture"), stagingBuffer, stagingOffset))
         return;
 
-    VkImageMemoryBarrier2 barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
+    auto barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
     barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
@@ -985,7 +979,7 @@ void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLe
     barrier.subresourceRange.baseArrayLayer = arraySlice;
     barrier.subresourceRange.layerCount = 1;
 
-    VkDependencyInfo depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
     depInfo.imageMemoryBarrierCount = 1;
     depInfo.pImageMemoryBarriers = &barrier;
     executePipelineBarrier(depInfo);
@@ -1086,7 +1080,8 @@ void CommandList::resolveTexture(ITexture* destResource, const TextureSubresourc
             dest->m_image,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             static_cast<u32>(regions.size()),
-            regions.data());
+            regions.data()
+        );
     }
 
     m_currentCmdBuf->m_referencedResources.push_back(srcResource);

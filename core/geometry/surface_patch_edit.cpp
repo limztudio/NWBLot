@@ -53,8 +53,8 @@ bool BuildSurfacePatchLoopDistancesWithNormalImpl(
     const SIMDVector normal,
     f32* outLoopDistances,
     const usize loopDistanceCount,
-    f32& outLoopLength)
-{
+    f32& outLoopLength
+){
     outLoopLength = 0.0f;
     if(
         !outLoopDistances
@@ -98,8 +98,8 @@ bool BuildSurfacePatchLoopDistancesImpl(
     const Float3U& frameNormal,
     f32* outLoopDistances,
     const usize loopDistanceCount,
-    f32& outLoopLength)
-{
+    f32& outLoopLength
+){
     outLoopLength = 0.0f;
     SIMDVector normal;
     if(!NormalizeFrameNormal(LoadFloat(frameNormal), normal))
@@ -119,8 +119,8 @@ template<typename EdgeAllocator>
 bool BuildSurfacePatchRingEdgesImpl(
     const u32* ringVertices,
     const usize ringVertexCount,
-    Vector<MeshTopologyEdge, EdgeAllocator>& outEdges)
-{
+    Vector<MeshTopologyEdge, EdgeAllocator>& outEdges
+){
     outEdges.clear();
     if(!ringVertices || ringVertexCount < 3u || ringVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
@@ -153,8 +153,8 @@ bool BuildSurfacePatchWallVerticesImpl(
     const f32 depth,
     const usize wallBandCount,
     SurfacePatchWallVertex* outVertices,
-    const usize outVertexCount)
-{
+    const usize outVertexCount
+){
     if(
         orderedBoundaryEdges.size() < 3u
         || positions.empty()
@@ -268,7 +268,7 @@ bool BuildSurfacePatchWallVerticesImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}; // namespace __hidden_geometry_surface_patch_edit
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

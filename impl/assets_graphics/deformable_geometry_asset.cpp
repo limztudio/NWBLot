@@ -31,6 +31,7 @@ static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
 static constexpr u32 s_DeformableGeometryVersion = 7u;
 static constexpr u32 s_DeformableDisplacementTextureMagic = 0x44445431u; // DDT1
 static constexpr u32 s_DeformableDisplacementTextureVersion = 1u;
+static constexpr u32 s_DeformableSkeletonJointLimit = static_cast<u32>(Limit<u16>::s_Max) + 1u;
 #if defined(NWB_COOK)
 static constexpr usize s_DeformableGeometryHeaderBytes =
     sizeof(u32) + // magic
@@ -182,20 +183,27 @@ template<typename T>
 
 template<typename T, typename Allocator>
 [[nodiscard]] bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<T, Allocator>& values, const tchar* label){
+    static_assert(IsTriviallyCopyable_V<T>, "AppendVectorPayload requires trivially-copyable payload elements");
     if(values.size() > Limit<usize>::s_Max / sizeof(T)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
         return false;
     }
 
+    const usize beginOffset = outBinary.size();
     const usize payloadBytes = values.size() * sizeof(T);
-    if(payloadBytes > Limit<usize>::s_Max - outBinary.size()){
+    if(payloadBytes > Limit<usize>::s_Max - beginOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry serialize failed: '{}' payload overflows"), label);
         return false;
     }
 
     if(payloadBytes > 0){
-        const u8* bytes = reinterpret_cast<const u8*>(values.data());
-        outBinary.insert(outBinary.end(), bytes, bytes + payloadBytes);
+        outBinary.resize(beginOffset + payloadBytes);
+        NWB_MEMCPY(
+            outBinary.data() + beginOffset,
+            payloadBytes,
+            reinterpret_cast<const u8*>(values.data()),
+            payloadBytes
+        );
     }
     return true;
 }
@@ -393,6 +401,8 @@ bool DeformableGeometry::validatePayload()const{
         ;
     };
 
+    const usize vertexCount = m_restVertices.size();
+    const usize indexCount = m_indices.size();
     if(m_restVertices.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has incomplete rest/index payload"),
@@ -401,8 +411,8 @@ bool DeformableGeometry::validatePayload()const{
         return false;
     }
     if(
-        m_restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || m_indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        vertexCount > static_cast<usize>(Limit<u32>::s_Max)
+        || indexCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits"),
@@ -410,18 +420,21 @@ bool DeformableGeometry::validatePayload()const{
         );
         return false;
     }
-    if((m_indices.size() % 3u) != 0u){
+    if((indexCount % 3u) != 0u){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3"),
             geometryPathText(),
-            m_indices.size()
+            indexCount
         );
         return false;
     }
 
-    for(usize i = 0; i < m_restVertices.size(); ++i){
+    for(usize i = 0; i < vertexCount; ++i){
         const DeformableVertexRest& vertex = m_restVertices[i];
-        if(!DeformableValidation::ValidRestVertex(vertex)){
+        const DeformableValidation::RestVertexPayloadFailure::Enum restVertexFailure =
+            DeformableValidation::FindRestVertexPayloadFailure(vertex)
+        ;
+        if(restVertexFailure == DeformableValidation::RestVertexPayloadFailure::NonFiniteData){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} contains non-finite data"),
                 geometryPathText(),
@@ -429,7 +442,7 @@ bool DeformableGeometry::validatePayload()const{
             );
             return false;
         }
-        if(!DeformableValidation::ValidRestVertexFrameBasis(vertex)){
+        if(restVertexFailure == DeformableValidation::RestVertexPayloadFailure::DegenerateFrame){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has a degenerate normal/tangent frame"),
                 geometryPathText(),
@@ -437,7 +450,7 @@ bool DeformableGeometry::validatePayload()const{
             );
             return false;
         }
-        if(!DeformableValidation::ValidRestVertexFrame(vertex)){
+        if(restVertexFailure == DeformableValidation::RestVertexPayloadFailure::InvalidFrame){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has an invalid normal/tangent frame"),
                 geometryPathText(),
@@ -447,21 +460,22 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
-    for(const u32 index : m_indices){
-        if(index >= m_restVertices.size()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' index {} exceeds {} vertices"),
-                geometryPathText(),
-                index,
-                m_restVertices.size()
-            );
-            return false;
-        }
-    }
-    for(usize indexBase = 0; indexBase < m_indices.size(); indexBase += 3u){
+    for(usize indexBase = 0; indexBase < indexCount; indexBase += 3u){
         const u32 a = m_indices[indexBase + 0u];
         const u32 b = m_indices[indexBase + 1u];
         const u32 c = m_indices[indexBase + 2u];
+        if(a >= vertexCount || b >= vertexCount || c >= vertexCount){
+            u32 invalidIndex = a;
+            if(a < vertexCount)
+                invalidIndex = b >= vertexCount ? b : c;
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' index {} exceeds {} vertices"),
+                geometryPathText(),
+                invalidIndex,
+                vertexCount
+            );
+            return false;
+        }
         if(a == b || a == c || b == c){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} is degenerate"),
@@ -471,7 +485,7 @@ bool DeformableGeometry::validatePayload()const{
             return false;
         }
 
-        if(!DeformableValidation::ValidTriangle(m_restVertices, a, b, c)){
+        if(!DeformableValidation::ValidTriangleArea(m_restVertices, a, b, c)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} has zero area"),
                 geometryPathText(),
@@ -481,12 +495,12 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
-    if(!m_skin.empty() && m_skin.size() != m_restVertices.size()){
+    if(!m_skin.empty() && m_skin.size() != vertexCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skin count {} does not match vertex count {}"),
             geometryPathText(),
             m_skin.size(),
-            m_restVertices.size()
+            vertexCount
         );
         return false;
     }
@@ -497,7 +511,7 @@ bool DeformableGeometry::validatePayload()const{
         );
         return false;
     }
-    if(m_skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
+    if(m_skeletonJointCount > __hidden_deformable_geometry_asset::s_DeformableSkeletonJointLimit){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skeleton joint count {} exceeds skin stream limits"),
             geometryPathText(),
@@ -536,13 +550,13 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
-    const usize triangleCount = m_indices.size() / 3u;
-    if(!m_sourceSamples.empty() && m_sourceSamples.size() != m_restVertices.size()){
+    const usize triangleCount = indexCount / 3u;
+    if(!m_sourceSamples.empty() && m_sourceSamples.size() != vertexCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' source samples {} do not match vertices {}"),
             geometryPathText(),
             m_sourceSamples.size(),
-            m_restVertices.size()
+            vertexCount
         );
         return false;
     }
@@ -600,7 +614,7 @@ bool DeformableGeometry::validatePayload()const{
     }
 
     const DeformableValidation::MorphPayloadFailureInfo morphFailure =
-        DeformableValidation::FindMorphPayloadFailure(m_morphs, m_restVertices.size())
+        DeformableValidation::FindMorphPayloadFailure(m_morphs, vertexCount)
     ;
     if(morphFailure.reason != DeformableValidation::MorphPayloadFailure::None){
         __hidden_deformable_geometry_asset::LogGeometryMorphPayloadFailure(geometryPathText(), m_morphs, morphFailure);
@@ -703,6 +717,10 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: skeleton joint count is required when skin is present"));
         return false;
     }
+    if(skeletonJointCount > __hidden_deformable_geometry_asset::s_DeformableSkeletonJointLimit){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: skeleton joint count exceeds skin stream limits"));
+        return false;
+    }
     if(inverseBindMatrixCount != 0u && inverseBindMatrixCount != skeletonJointCount){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformableGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count")
@@ -761,6 +779,10 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed morph header"));
             return false;
         }
+        if(morphHeader.reserved != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported morph header reserved data"));
+            return false;
+        }
         if(morphHeader.deltaCount > static_cast<u64>(Limit<u32>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: morph delta count exceeds u32 limits"));
             return false;
@@ -775,6 +797,10 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     __hidden_deformable_geometry_asset::DeformableDisplacementBinary displacementBinary;
     if(!ReadPOD(binary, cursor, displacementBinary)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed displacement descriptor"));
+        return false;
+    }
+    if(displacementBinary.reserved != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported displacement reserved data"));
         return false;
     }
     m_displacement = __hidden_deformable_geometry_asset::BuildDisplacement(displacementBinary);
@@ -906,14 +932,6 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, sizeof(__hidden_deformable_geometry_asset::DeformableDisplacementBinary))
     ;
 
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
     usize stringTableReserveBytes = 0u;
     bool canReserveStringTable = true;
     for(const DeformableMorph& morph : geometry.morphs())
@@ -923,6 +941,17 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
             && ::AddStringTableTextReserveBytes(stringTableReserveBytes, geometry.displacementTextureVirtualPathText())
         ;
     }
+    if(canReserve && canReserveStringTable)
+        canReserve = __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, stringTableReserveBytes);
+
+    outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
     if(canReserveStringTable)
         stringTable.reserve(stringTableReserveBytes);
 

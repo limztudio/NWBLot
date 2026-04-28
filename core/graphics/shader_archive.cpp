@@ -60,7 +60,8 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
 
 
 bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
-    return lhs.shaderName == rhs.shaderName
+    return
+        lhs.shaderName == rhs.shaderName
         && lhs.variantName == rhs.variantName
         && lhs.stage == rhs.stage
     ;
@@ -213,11 +214,10 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
             continue;
 
         if(__hidden_shader_archive::SameShaderVariantStage(sortedRecords[i - 1], record)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("ShaderArchive::serializeIndex failed: duplicate shader+variant+stage key detected (shader='{}', variant='{}', stage='{}')"),
-                StringConvert(record.shaderName.c_str()),
-                StringConvert(AStringView(record.variantName)),
-                StringConvert(record.stage.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: duplicate shader+variant+stage key detected (shader='{}', variant='{}', stage='{}')")
+                , StringConvert(record.shaderName.c_str())
+                , StringConvert(AStringView(record.variantName))
+                , StringConvert(record.stage.c_str())
             );
             return false;
         }

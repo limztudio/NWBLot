@@ -2745,6 +2745,8 @@ struct RayTracingPipelineDesc{
     u32 maxRecursionDepth = 1;
     i32 hlslExtensionsUAV = -1;
     bool allowOpacityMicromaps = false;
+    bool allowSpheres = false;
+    bool allowLinearSweptSpheres = false;
 
     constexpr RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
     constexpr RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
@@ -2754,6 +2756,8 @@ struct RayTracingPipelineDesc{
     constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value){ maxRecursionDepth = value; return *this; }
     constexpr RayTracingPipelineDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr RayTracingPipelineDesc& setAllowOpacityMicromaps(bool value){ allowOpacityMicromaps = value; return *this; }
+    constexpr RayTracingPipelineDesc& setAllowSpheres(bool value){ allowSpheres = value; return *this; }
+    constexpr RayTracingPipelineDesc& setAllowLinearSweptSpheres(bool value){ allowLinearSweptSpheres = value; return *this; }
 };
 
 class IRayTracingPipeline;

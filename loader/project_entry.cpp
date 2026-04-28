@@ -7,6 +7,7 @@
 
 #include <core/ecs/ecs.h>
 #include <impl/ecs_graphics/ecs_graphics.h>
+#include <impl/ecs_ui/ecs_ui.h>
 #include <logger/client/logger.h>
 
 
@@ -56,8 +57,21 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core deformer system was not created"));
         return false;
     }
+    auto& uiSystem = world->addSystem<Core::ECSUI::UiSystem>(
+        context.objectArena,
+        *world,
+        context.graphics,
+        context.input,
+        context.assetManager,
+        context.shaderPathResolver
+    );
+    if(!world->getSystem<Core::ECSUI::UiSystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core UI system was not created"));
+        return false;
+    }
     context.graphics.addRenderPassToBack(deformerSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
+    context.graphics.addRenderPassToBack(uiSystem);
 
     outWorld = Move(world);
 
@@ -82,8 +96,15 @@ void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::
         return;
     }
 
+    auto* uiSystem = world->getSystem<Core::ECSUI::UiSystem>();
+    if(!uiSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core UI system is null"));
+        return;
+    }
+
     context.graphics.removeRenderPass(*deformerSystem);
     context.graphics.removeRenderPass(*rendererSystem);
+    context.graphics.removeRenderPass(*uiSystem);
     world->clear();
     world.reset();
 }

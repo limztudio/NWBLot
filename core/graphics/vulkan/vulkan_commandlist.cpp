@@ -80,7 +80,7 @@ void CommandList::open(){
         return;
     }
 
-    VkCommandBufferBeginInfo beginInfo = VulkanDetail::MakeVkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
+    auto beginInfo = VulkanDetail::MakeVkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
@@ -135,7 +135,6 @@ void CommandList::clearState(){
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
-    m_pendingCompactions.clear();
 }
 
 bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
@@ -174,8 +173,8 @@ bool CommandList::prepareDrawIndirect(
     const tchar* operationLabel,
     const tchar* commandName,
     const bool requireIndexBuffer,
-    Buffer*& outIndirectBuffer)const
-{
+    Buffer*& outIndirectBuffer
+)const{
     outIndirectBuffer = nullptr;
     if(drawCount == 0)
         return false;

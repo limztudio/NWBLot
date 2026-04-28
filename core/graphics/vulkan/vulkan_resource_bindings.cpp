@@ -71,8 +71,12 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
     if(stages & ShaderType::Mesh)
         flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
     if(stages & ShaderType::AllRayTracing)
-        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR |
-                 VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+        flags |=
+            VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            | VK_SHADER_STAGE_MISS_BIT_KHR
+            | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            | VK_SHADER_STAGE_ANY_HIT_BIT_KHR
+        ;
 
     if(flags == 0)
         flags = VK_SHADER_STAGE_ALL;
@@ -84,8 +88,8 @@ bool ConfigurePipelineMultisampleState(
     const u32 sampleCount,
     const bool alphaToCoverageEnable,
     VkPipelineMultisampleStateCreateInfo& outState,
-    const tchar* operationName)
-{
+    const tchar* operationName
+){
     outState = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     if(!IsSupportedSampleCount(sampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
@@ -100,8 +104,8 @@ bool ConfigurePipelineMultisampleState(
 void ConfigurePipelineDepthStencilState(
     const DepthStencilState& state,
     const bool includeStencilFaces,
-    VkPipelineDepthStencilStateCreateInfo& outState)
-{
+    VkPipelineDepthStencilStateCreateInfo& outState
+){
     outState = MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
     outState.depthTestEnable = state.depthTestEnable ? VK_TRUE : VK_FALSE;
     outState.depthWriteEnable = state.depthWriteEnable ? VK_TRUE : VK_FALSE;
@@ -118,8 +122,8 @@ bool BuildPipelineRenderingInfo(
     const FramebufferInfo& fbinfo,
     const tchar* operationName,
     VkPipelineRenderingCreateInfo& outRenderingInfo,
-    PipelineRenderingFormatVector& outColorFormats)
-{
+    PipelineRenderingFormatVector& outColorFormats
+){
     outColorFormats.clear();
     outColorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
@@ -159,8 +163,8 @@ void DestroyPipelineAndOwnedLayout(
     const VkAllocationCallbacks* allocationCallbacks,
     VkPipeline& pipeline,
     VkPipelineLayout& pipelineLayout,
-    bool& ownsPipelineLayout)
-{
+    bool& ownsPipelineLayout
+){
     if(pipeline){
         vkDestroyPipeline(device, pipeline, allocationCallbacks);
         pipeline = VK_NULL_HANDLE;
@@ -213,32 +217,6 @@ constexpr bool UsesDescriptorBufferInfo(ResourceType::Enum type){
 
 constexpr bool IsDescriptorHeapCompatibleType(ResourceType::Enum type){
     return type != ResourceType::RayTracingAccelStruct && IsSupportedDescriptorBindingType(type);
-}
-
-constexpr u32 AlignUpU32(const u32 value, const u32 alignment){
-    if(alignment == 0)
-        return value;
-    return value + (alignment - (value % alignment)) % alignment;
-}
-
-bool AlignUpU32Checked(const u32 value, const u32 alignment, u32& outValue){
-    if(alignment == 0){
-        outValue = value;
-        return true;
-    }
-
-    const u32 remainder = value % alignment;
-    if(remainder == 0){
-        outValue = value;
-        return true;
-    }
-
-    const u32 addend = alignment - remainder;
-    if(value > UINT32_MAX - addend)
-        return false;
-
-    outValue = value + addend;
-    return true;
 }
 
 template<typename PoolSizeVector>
@@ -311,8 +289,10 @@ bool CreatePipelineLayout(
     const u32 setLayoutCount,
     const u32 pushConstantByteSize,
     VkPipelineLayout& outLayout,
-    const tchar* operationName)
-{
+    const tchar* operationName
+){
+    VkResult res = VK_SUCCESS;
+
     outLayout = VK_NULL_HANDLE;
 
     VkPushConstantRange pushConstantRange = {};
@@ -325,13 +305,13 @@ bool CreatePipelineLayout(
         pushConstantRange.size = pushConstantByteSize;
     }
 
-    VkPipelineLayoutCreateInfo layoutInfo = MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
+    auto layoutInfo = MakeVkStruct<VkPipelineLayoutCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO);
     layoutInfo.setLayoutCount = setLayoutCount;
     layoutInfo.pSetLayouts = setLayoutCount > 0 ? setLayouts : nullptr;
     layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
     layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
 
-    const VkResult res = vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &outLayout);
+    res = vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &outLayout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for {}: {}"), operationName, ResultToString(res));
         outLayout = VK_NULL_HANDLE;
@@ -452,8 +432,8 @@ bool Device::createPipelineLayoutForBindingLayouts(
     VkPipelineLayout& outPipelineLayout,
     u32& outPushConstantByteSize,
     bool& outOwnsPipelineLayout,
-    Alloc::ScratchArena<>& scratchArena)const
-{
+    Alloc::ScratchArena<>& scratchArena
+)const{
     outPipelineLayout = VK_NULL_HANDLE;
     outPushConstantByteSize = 0;
     outOwnsPipelineLayout = false;
@@ -478,9 +458,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         return true;
     }
 
-    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{
-        Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena)
-    };
+    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
     u32 pushConstantByteSize = 0;
     usize descriptorSetLayoutCount = 0;
 
@@ -513,18 +491,15 @@ bool Device::createPipelineLayoutForBindingLayouts(
             descriptorSetLayouts.push_back(descriptorSetLayout);
     }
 
-    if(
-        !VulkanDetail::CreatePipelineLayout(
+    if(!VulkanDetail::CreatePipelineLayout(
         m_context,
         descriptorSetLayouts.data(),
         static_cast<u32>(descriptorSetLayouts.size()),
         pushConstantByteSize,
         outPipelineLayout,
         operationName
-        )
-    ){
+    ))
         return false;
-    }
 
     outPushConstantByteSize = pushConstantByteSize;
     outOwnsPipelineLayout = true;
@@ -537,8 +512,8 @@ bool Device::configurePipelineBindings(
     PipelineShaderStageVector& shaderStages,
     PipelineDescriptorHeapScratch& descriptorHeapScratch,
     PipelineBindingState& outBindings,
-    Alloc::ScratchArena<>& scratchArena)const
-{
+    Alloc::ScratchArena<>& scratchArena
+)const{
     outBindings.m_pipelineLayout = VK_NULL_HANDLE;
     outBindings.m_ownsPipelineLayout = false;
     outBindings.m_pushConstantByteSize = 0;
@@ -569,10 +544,10 @@ void Device::appendPipelineShaderStage(
     IShader* shader,
     const VkShaderStageFlagBits stage,
     PipelineSpecializationInfoVector& specializationInfos,
-    PipelineShaderStageVector& shaderStages)const
-{
+    PipelineShaderStageVector& shaderStages
+)const{
     auto* s = checked_cast<Shader*>(shader);
-    VkPipelineShaderStageCreateInfo stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;
     stageInfo.module = s->m_shaderModule;
     stageInfo.pName = s->m_entryPointName.c_str();
@@ -713,7 +688,8 @@ bool DescriptorHeapManager::tryEnablePipeline(
         outPushDataSize,
         scratch.flags2,
         scratch.mappings,
-        scratch.stageMappings);
+        scratch.stageMappings
+    );
 }
 
 
@@ -725,7 +701,6 @@ DescriptorHeapManager::DescriptorHeapManager(const VulkanContext& context)
     , m_resourceHeap(context.objectArena)
     , m_samplerHeap(context.objectArena)
 {}
-
 DescriptorHeapManager::~DescriptorHeapManager(){
     shutdown();
 }
@@ -761,8 +736,8 @@ bool DescriptorHeapManager::initialize(){
     if(
         resourceReservedBytes > UINT32_MAX - s_TargetResourceHeapBytes
         || samplerReservedBytes > UINT32_MAX - s_TargetSamplerHeapBytes
-        || !VulkanDetail::AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
-        || !VulkanDetail::AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes)
+        || !AlignUpU32Checked(resourceReservedBytes + s_TargetResourceHeapBytes, resourceAlignment, resourceRequestedBytes)
+        || !AlignUpU32Checked(samplerReservedBytes + s_TargetSamplerHeapBytes, samplerAlignment, samplerRequestedBytes)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap requested capacity overflows 32-bit heap offsets."));
         return false;
@@ -831,7 +806,7 @@ u32 DescriptorHeapManager::getDescriptorStride(const VkDescriptorType descriptor
         return 0;
 
     u32 stride = 0;
-    if(!VulkanDetail::AlignUpU32Checked(descriptorSize, static_cast<u32>(alignmentValue), stride))
+    if(!AlignUpU32Checked(descriptorSize, static_cast<u32>(alignmentValue), stride))
         return 0;
 
     return stride;
@@ -856,7 +831,7 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
             continue;
 
         u32 alignedOffset = 0;
-        if(!VulkanDetail::AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
+        if(!AlignUpU32Checked(range.offsetBytes, alignmentBytes, alignedOffset))
             continue;
 
         const u32 rangeEnd = range.offsetBytes + range.sizeBytes;
@@ -888,7 +863,7 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
     }
 
     u32 alignedOffset = 0;
-    if(!VulkanDetail::AlignUpU32Checked(heap.writableOffsetBytes, alignmentBytes, alignedOffset)){
+    if(!AlignUpU32Checked(heap.writableOffsetBytes, alignmentBytes, alignedOffset)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap alignment overflows 32-bit offsets."));
         return result;
     }
@@ -913,6 +888,7 @@ void DescriptorHeapManager::free(const DescriptorHeapAllocation& allocation){
         return;
 
     HeapStorage& heap = allocation.kind == DescriptorHeapKind::Sampler ? m_samplerHeap : m_resourceHeap;
+
     ScopedLock lock(heap.mutex);
 
     FreeRange released{ allocation.offsetBytes, allocation.sizeBytes };
@@ -981,10 +957,10 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         return vkWriteSamplerDescriptorsEXT(m_context.device, 1, &samplerInfo, &dstRange) == VK_SUCCESS;
     }
 
-    VkResourceDescriptorInfoEXT resourceInfo = VulkanDetail::MakeVkStruct<VkResourceDescriptorInfoEXT>(VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT);
-    VkImageDescriptorInfoEXT imageInfo = VulkanDetail::MakeVkStruct<VkImageDescriptorInfoEXT>(VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT);
+    auto resourceInfo = VulkanDetail::MakeVkStruct<VkResourceDescriptorInfoEXT>(VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT);
+    auto imageInfo = VulkanDetail::MakeVkStruct<VkImageDescriptorInfoEXT>(VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT);
     VkImageViewCreateInfo imageViewInfo{};
-    VkTexelBufferDescriptorInfoEXT texelInfo = VulkanDetail::MakeVkStruct<VkTexelBufferDescriptorInfoEXT>(VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT);
+    auto texelInfo = VulkanDetail::MakeVkStruct<VkTexelBufferDescriptorInfoEXT>(VK_STRUCTURE_TYPE_TEXEL_BUFFER_DESCRIPTOR_INFO_EXT);
     VkDeviceAddressRangeEXT addressRange{};
 
     resourceInfo.type = meta.descriptorType;
@@ -1290,7 +1266,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
@@ -1420,11 +1396,11 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     if(!bindingFlags.empty())
         bindingFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
 
-    VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
+    auto bindingFlagsInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
     bindingFlagsInfo.bindingCount = static_cast<u32>(bindingFlags.size());
     bindingFlagsInfo.pBindingFlags = bindingFlags.data();
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
+    auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.pNext = &bindingFlagsInfo;
     layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
@@ -1517,7 +1493,7 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResour
         poolSizes.push_back(fallback);
     }
 
-    VkDescriptorPoolCreateInfo poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+    auto poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     if(layout->m_isBindless)
         poolInfo.flags |= VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
@@ -1534,13 +1510,12 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResour
     }
 
     if(!layout->m_descriptorSetLayouts.empty()){
-        VkDescriptorSetAllocateInfo allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        auto allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = pool;
         allocInfo.descriptorSetCount = static_cast<u32>(layout->m_descriptorSetLayouts.size());
         allocInfo.pSetLayouts = layout->m_descriptorSetLayouts.data();
 
-        VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorInfo =
-            VulkanDetail::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
+        auto variableDescriptorInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
         u32 variableDescriptorCount = descriptorTableCapacity;
         if(useVariableDescriptorCount){
             variableDescriptorInfo.descriptorSetCount = 1;
@@ -1662,7 +1637,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         VkDescriptorPool newPool = VK_NULL_HANDLE;
         DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
 
-        VkDescriptorPoolCreateInfo poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+        auto poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
         poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
         poolInfo.maxSets = 1;
         poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
@@ -1675,13 +1650,12 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
             return;
         }
 
-        VkDescriptorSetAllocateInfo allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        auto allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = newPool;
         allocInfo.descriptorSetCount = 1;
         allocInfo.pSetLayouts = table->m_layout->m_descriptorSetLayouts.data();
 
-        VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescriptorInfo =
-            VulkanDetail::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
+        auto variableDescriptorInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetVariableDescriptorCountAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO);
         if(!table->m_layout->m_bindlessDesc.registerSpaces.empty()){
             variableDescriptorInfo.descriptorSetCount = 1;
             variableDescriptorInfo.pDescriptorCounts = &newSize;
@@ -1721,7 +1695,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     VkDescriptorPool newPool = VK_NULL_HANDLE;
     DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
 
-    VkDescriptorPoolCreateInfo poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
+    auto poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolInfo.maxSets = newSize;
     poolInfo.poolSizeCount = static_cast<u32>(poolSizes.size());
@@ -1736,7 +1710,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     if(!table->m_layout->m_descriptorSetLayouts.empty()){
         Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> layouts(newSize, table->m_layout->m_descriptorSetLayouts[0], Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena));
 
-        VkDescriptorSetAllocateInfo allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
+        auto allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = newPool;
         allocInfo.descriptorSetCount = newSize;
         allocInfo.pSetLayouts = layouts.data();
@@ -1812,7 +1786,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
         return false;
     }
 
-    VkWriteDescriptorSet write = VulkanDetail::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
+    auto write = VulkanDetail::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
     write.dstSet = table->m_descriptorSets[0];
     write.dstBinding = item.slot;
     write.dstArrayElement = item.arrayElement;
@@ -1822,7 +1796,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
     VkDescriptorBufferInfo bufferInfo = {};
     VkDescriptorImageInfo imageInfo = {};
     VkBufferView texelBufferView = VK_NULL_HANDLE;
-    VkWriteDescriptorSetAccelerationStructureKHR asInfo = VulkanDetail::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
+    auto asInfo = VulkanDetail::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
 
     if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
@@ -2005,7 +1979,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
             continue;
         }
 
-        VkWriteDescriptorSet write = VulkanDetail::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
+        auto write = VulkanDetail::MakeVkStruct<VkWriteDescriptorSet>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET);
         write.dstSet = bindingSet->m_descriptorSets[0];
         write.dstBinding = item.slot;
         write.dstArrayElement = item.arrayElement;
@@ -2089,7 +2063,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
                     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: acceleration structure resource is invalid"), item.slot);
                     continue;
                 }
-                VkWriteDescriptorSetAccelerationStructureKHR asWrite = VulkanDetail::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
+                auto asWrite = VulkanDetail::MakeVkStruct<VkWriteDescriptorSetAccelerationStructureKHR>(VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR);
                 asWrite.accelerationStructureCount = 1;
                 asWrite.pAccelerationStructures = &as->m_accelStruct;
                 asInfos.push_back(asWrite);

@@ -19,221 +19,215 @@ NWB_VULKAN_BEGIN
 
 struct VulkanContext;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>>;
-using PipelineColorBlendAttachmentVector = Vector<
-    VkPipelineColorBlendAttachmentState,
-    Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>
->;
+using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace VulkanDetail{
-    VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
-    VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
-    VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
-    VkFormat ConvertFormat(Format::Enum format);
-    VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
-    extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset = 0);
-    VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
-    VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
-    bool IsSupportedSampleCount(u32 sampleCount);
-    VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
-    bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask);
-    VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
-    VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
-    u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);
-    bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice);
-    bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
-    bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
-    u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
-    bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
-    bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
-    void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-    VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, bool allowCompaction);
-    bool BuildClusterOperationInputInfo(
-        const RayTracingClusterOperationParams& params,
-        VkClusterAccelerationStructureInputInfoNV& outInputInfo,
-        VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
-        VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
-        VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
-        const tchar* operationName);
-    VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
-    VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
-    VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
-    CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
-    VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
-    bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
 
-    template<typename T>
-    constexpr T MakeVkStruct(VkStructureType sType){
-        T output{};
-        output.sType = sType;
-        return output;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
+VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
+VkFormat ConvertFormat(Format::Enum format);
+VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
+extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset = 0);
+VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
+VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
+bool IsSupportedSampleCount(u32 sampleCount);
+VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
+bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask);
+VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
+VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
+u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);
+bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice);
+bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
+bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
+u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
+bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
+bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
+void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, bool allowCompaction);
+bool BuildClusterOperationInputInfo(
+    const RayTracingClusterOperationParams& params,
+    VkClusterAccelerationStructureInputInfoNV& outInputInfo,
+    VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
+    VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
+    VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
+    const tchar* operationName
+);
+VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
+VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
+VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
+CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
+VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
+bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
+
+template<typename T>
+constexpr T MakeVkStruct(VkStructureType sType){
+    T output{};
+    output.sType = sType;
+    return output;
+}
+
+constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
+    switch(cullMode){
+    case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
+    case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
+    case RasterCullMode::None:  return VK_CULL_MODE_NONE;
+    default: return VK_CULL_MODE_BACK_BIT;
+    }
+}
+
+constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
+    switch(compareFunc){
+    case ComparisonFunc::Never:          return VK_COMPARE_OP_NEVER;
+    case ComparisonFunc::Less:           return VK_COMPARE_OP_LESS;
+    case ComparisonFunc::Equal:          return VK_COMPARE_OP_EQUAL;
+    case ComparisonFunc::LessOrEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
+    case ComparisonFunc::Greater:        return VK_COMPARE_OP_GREATER;
+    case ComparisonFunc::NotEqual:       return VK_COMPARE_OP_NOT_EQUAL;
+    case ComparisonFunc::GreaterOrEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
+    case ComparisonFunc::Always:         return VK_COMPARE_OP_ALWAYS;
+    default: return VK_COMPARE_OP_ALWAYS;
+    }
+}
+
+constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
+    switch(stencilOp){
+    case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
+    case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
+    case StencilOp::Replace:           return VK_STENCIL_OP_REPLACE;
+    case StencilOp::IncrementAndClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+    case StencilOp::DecrementAndClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+    case StencilOp::Invert:            return VK_STENCIL_OP_INVERT;
+    case StencilOp::IncrementAndWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+    case StencilOp::DecrementAndWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+    default: return VK_STENCIL_OP_KEEP;
+    }
+}
+
+constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
+    VkStencilOpState state = {};
+    state.failOp = ConvertStencilOp(stencilDesc.failOp);
+    state.passOp = ConvertStencilOp(stencilDesc.passOp);
+    state.depthFailOp = ConvertStencilOp(stencilDesc.depthFailOp);
+    state.compareOp = ConvertCompareOp(stencilDesc.stencilFunc);
+    state.compareMask = dsState.stencilReadMask;
+    state.writeMask = dsState.stencilWriteMask;
+    state.reference = dsState.stencilRefValue;
+    return state;
+}
+
+constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
+    switch(blendFactor){
+    case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
+    case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
+    case BlendFactor::SrcColor:         return VK_BLEND_FACTOR_SRC_COLOR;
+    case BlendFactor::InvSrcColor:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+    case BlendFactor::SrcAlpha:         return VK_BLEND_FACTOR_SRC_ALPHA;
+    case BlendFactor::InvSrcAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    case BlendFactor::DstAlpha:         return VK_BLEND_FACTOR_DST_ALPHA;
+    case BlendFactor::InvDstAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+    case BlendFactor::DstColor:         return VK_BLEND_FACTOR_DST_COLOR;
+    case BlendFactor::InvDstColor:      return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+    case BlendFactor::SrcAlphaSaturate: return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+    case BlendFactor::ConstantColor:    return VK_BLEND_FACTOR_CONSTANT_COLOR;
+    case BlendFactor::InvConstantColor: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+    case BlendFactor::Src1Color:        return VK_BLEND_FACTOR_SRC1_COLOR;
+    case BlendFactor::InvSrc1Color:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+    case BlendFactor::Src1Alpha:        return VK_BLEND_FACTOR_SRC1_ALPHA;
+    case BlendFactor::InvSrc1Alpha:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+    default: return VK_BLEND_FACTOR_ZERO;
+    }
+}
+
+constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp){
+    switch(blendOp){
+    case BlendOp::Add:             return VK_BLEND_OP_ADD;
+    case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
+    case BlendOp::ReverseSubtract: return VK_BLEND_OP_REVERSE_SUBTRACT;
+    case BlendOp::Min:             return VK_BLEND_OP_MIN;
+    case BlendOp::Max:             return VK_BLEND_OP_MAX;
+    default: return VK_BLEND_OP_ADD;
+    }
+}
+
+constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState::RenderTarget& target){
+    VkPipelineColorBlendAttachmentState state = {};
+    state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
+    state.srcColorBlendFactor = ConvertBlendFactor(target.srcBlend);
+    state.dstColorBlendFactor = ConvertBlendFactor(target.destBlend);
+    state.colorBlendOp = ConvertBlendOp(target.blendOp);
+    state.srcAlphaBlendFactor = ConvertBlendFactor(target.srcBlendAlpha);
+    state.dstAlphaBlendFactor = ConvertBlendFactor(target.destBlendAlpha);
+    state.alphaBlendOp = ConvertBlendOp(target.blendOpAlpha);
+    state.colorWriteMask = 0;
+    if(target.colorWriteMask & ColorMask::Red)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+    if(target.colorWriteMask & ColorMask::Green)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+    if(target.colorWriteMask & ColorMask::Blue)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+    if(target.colorWriteMask & ColorMask::Alpha)
+        state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+    return state;
+}
+
+inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const FramebufferInfo& fbinfo, const BlendState& blendState, PipelineColorBlendAttachmentVector& outBlendAttachments){
+    outBlendAttachments.resize(fbinfo.colorFormats.size());
+    for(usize i = 0; i < fbinfo.colorFormats.size(); ++i)
+        outBlendAttachments[i] = ConvertBlendState(blendState.targets[i]);
+
+    auto colorBlending = MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
+    colorBlending.logicOpEnable = VK_FALSE;
+    colorBlending.attachmentCount = static_cast<u32>(outBlendAttachments.size());
+    colorBlending.pAttachments = outBlendAttachments.data();
+    return colorBlending;
+}
+
+bool ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, VkPipelineMultisampleStateCreateInfo& outState, const tchar* operationName);
+void ConfigurePipelineDepthStencilState(const DepthStencilState& state, bool includeStencilFaces, VkPipelineDepthStencilStateCreateInfo& outState);
+VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
+
+inline void CopyHostMemory(
+    Alloc::ThreadPool& workerPool,
+    void* dst,
+    const void* src,
+    usize size,
+    usize parallelThreshold = s_CopyHostMemoryParallelThreshold,
+    usize chunkSize = s_CopyHostMemoryChunkSize
+){
+    if(!dst || !src || size == 0)
+        return;
+
+    const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
+    const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
+
+    if(workerPool.isParallelEnabled() && size >= effectiveParallelThreshold){
+        auto* dstBytes = static_cast<u8*>(dst);
+        auto* srcBytes = static_cast<const u8*>(src);
+        const usize chunkCount = 1 + ((size - 1) / effectiveChunkSize);
+        workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
+            const usize chunkOffset = chunkIndex * effectiveChunkSize;
+            const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
+            NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
+        });
+        return;
     }
 
-    constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
-        switch(cullMode){
-        case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
-        case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
-        case RasterCullMode::None:  return VK_CULL_MODE_NONE;
-        default: return VK_CULL_MODE_BACK_BIT;
-        }
-    }
+    NWB_MEMCPY(dst, size, src, size);
+}
 
-    constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
-        switch(compareFunc){
-        case ComparisonFunc::Never:          return VK_COMPARE_OP_NEVER;
-        case ComparisonFunc::Less:           return VK_COMPARE_OP_LESS;
-        case ComparisonFunc::Equal:          return VK_COMPARE_OP_EQUAL;
-        case ComparisonFunc::LessOrEqual:    return VK_COMPARE_OP_LESS_OR_EQUAL;
-        case ComparisonFunc::Greater:        return VK_COMPARE_OP_GREATER;
-        case ComparisonFunc::NotEqual:       return VK_COMPARE_OP_NOT_EQUAL;
-        case ComparisonFunc::GreaterOrEqual: return VK_COMPARE_OP_GREATER_OR_EQUAL;
-        case ComparisonFunc::Always:         return VK_COMPARE_OP_ALWAYS;
-        default: return VK_COMPARE_OP_ALWAYS;
-        }
-    }
 
-    constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
-        switch(stencilOp){
-        case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
-        case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
-        case StencilOp::Replace:           return VK_STENCIL_OP_REPLACE;
-        case StencilOp::IncrementAndClamp: return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-        case StencilOp::DecrementAndClamp: return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-        case StencilOp::Invert:            return VK_STENCIL_OP_INVERT;
-        case StencilOp::IncrementAndWrap:  return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-        case StencilOp::DecrementAndWrap:  return VK_STENCIL_OP_DECREMENT_AND_WRAP;
-        default: return VK_STENCIL_OP_KEEP;
-        }
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
-        VkStencilOpState state = {};
-        state.failOp = ConvertStencilOp(stencilDesc.failOp);
-        state.passOp = ConvertStencilOp(stencilDesc.passOp);
-        state.depthFailOp = ConvertStencilOp(stencilDesc.depthFailOp);
-        state.compareOp = ConvertCompareOp(stencilDesc.stencilFunc);
-        state.compareMask = dsState.stencilReadMask;
-        state.writeMask = dsState.stencilWriteMask;
-        state.reference = dsState.stencilRefValue;
-        return state;
-    }
 
-    constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
-        switch(blendFactor){
-        case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
-        case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
-        case BlendFactor::SrcColor:         return VK_BLEND_FACTOR_SRC_COLOR;
-        case BlendFactor::InvSrcColor:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-        case BlendFactor::SrcAlpha:         return VK_BLEND_FACTOR_SRC_ALPHA;
-        case BlendFactor::InvSrcAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        case BlendFactor::DstAlpha:         return VK_BLEND_FACTOR_DST_ALPHA;
-        case BlendFactor::InvDstAlpha:      return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-        case BlendFactor::DstColor:         return VK_BLEND_FACTOR_DST_COLOR;
-        case BlendFactor::InvDstColor:      return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-        case BlendFactor::SrcAlphaSaturate: return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
-        case BlendFactor::ConstantColor:    return VK_BLEND_FACTOR_CONSTANT_COLOR;
-        case BlendFactor::InvConstantColor: return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-        case BlendFactor::Src1Color:        return VK_BLEND_FACTOR_SRC1_COLOR;
-        case BlendFactor::InvSrc1Color:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
-        case BlendFactor::Src1Alpha:        return VK_BLEND_FACTOR_SRC1_ALPHA;
-        case BlendFactor::InvSrc1Alpha:     return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
-        default: return VK_BLEND_FACTOR_ZERO;
-        }
-    }
-
-    constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp){
-        switch(blendOp){
-        case BlendOp::Add:             return VK_BLEND_OP_ADD;
-        case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
-        case BlendOp::ReverseSubtract: return VK_BLEND_OP_REVERSE_SUBTRACT;
-        case BlendOp::Min:             return VK_BLEND_OP_MIN;
-        case BlendOp::Max:             return VK_BLEND_OP_MAX;
-        default: return VK_BLEND_OP_ADD;
-        }
-    }
-
-    constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState::RenderTarget& target){
-        VkPipelineColorBlendAttachmentState state = {};
-        state.blendEnable = target.blendEnable ? VK_TRUE : VK_FALSE;
-        state.srcColorBlendFactor = ConvertBlendFactor(target.srcBlend);
-        state.dstColorBlendFactor = ConvertBlendFactor(target.destBlend);
-        state.colorBlendOp = ConvertBlendOp(target.blendOp);
-        state.srcAlphaBlendFactor = ConvertBlendFactor(target.srcBlendAlpha);
-        state.dstAlphaBlendFactor = ConvertBlendFactor(target.destBlendAlpha);
-        state.alphaBlendOp = ConvertBlendOp(target.blendOpAlpha);
-        state.colorWriteMask = 0;
-        if(target.colorWriteMask & ColorMask::Red)
-            state.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
-        if(target.colorWriteMask & ColorMask::Green)
-            state.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-        if(target.colorWriteMask & ColorMask::Blue)
-            state.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-        if(target.colorWriteMask & ColorMask::Alpha)
-            state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-        return state;
-    }
-
-    inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(
-        const FramebufferInfo& fbinfo,
-        const BlendState& blendState,
-        PipelineColorBlendAttachmentVector& outBlendAttachments)
-    {
-        outBlendAttachments.clear();
-        outBlendAttachments.reserve(fbinfo.colorFormats.size());
-        for(usize i = 0; i < fbinfo.colorFormats.size(); ++i)
-            outBlendAttachments.push_back(ConvertBlendState(blendState.targets[i]));
-
-        VkPipelineColorBlendStateCreateInfo colorBlending =
-            MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO)
-        ;
-        colorBlending.logicOpEnable = VK_FALSE;
-        colorBlending.attachmentCount = static_cast<u32>(outBlendAttachments.size());
-        colorBlending.pAttachments = outBlendAttachments.data();
-        return colorBlending;
-    }
-
-    bool ConfigurePipelineMultisampleState(
-        const u32 sampleCount,
-        const bool alphaToCoverageEnable,
-        VkPipelineMultisampleStateCreateInfo& outState,
-        const tchar* operationName);
-    void ConfigurePipelineDepthStencilState(
-        const DepthStencilState& state,
-        bool includeStencilFaces,
-        VkPipelineDepthStencilStateCreateInfo& outState);
-    VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
-
-    inline void CopyHostMemory(
-        Alloc::ThreadPool& workerPool,
-        void* dst,
-        const void* src,
-        usize size,
-        usize parallelThreshold = s_CopyHostMemoryParallelThreshold,
-        usize chunkSize = s_CopyHostMemoryChunkSize)
-    {
-        if(!dst || !src || size == 0)
-            return;
-
-        const usize effectiveParallelThreshold = parallelThreshold > 0 ? parallelThreshold : 1;
-        const usize effectiveChunkSize = chunkSize > 0 ? chunkSize : 1;
-
-        if(workerPool.isParallelEnabled() && size >= effectiveParallelThreshold){
-            auto* dstBytes = static_cast<u8*>(dst);
-            auto* srcBytes = static_cast<const u8*>(src);
-            const usize chunkCount = 1 + ((size - 1) / effectiveChunkSize);
-            workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
-                const usize chunkOffset = chunkIndex * effectiveChunkSize;
-                const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
-                NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
-            });
-            return;
-        }
-
-        NWB_MEMCPY(dst, size, src, size);
-    }
 };
 
 
@@ -289,12 +283,15 @@ struct VulkanContext{
         bool EXT_mesh_shader = false;
         bool KHR_fragment_shading_rate = false;
         bool NV_ray_tracing_invocation_reorder = false;
+        bool NV_ray_tracing_linear_swept_spheres = false;
     } extensions;
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+    VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
     DescriptorHeapManager* descriptorHeapManager = nullptr;
 
@@ -334,6 +331,10 @@ class TrackedCommandBuffer final : public RefCounter<IResource>, NoCopy{
 public:
     TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex);
     virtual ~TrackedCommandBuffer()override;
+
+
+private:
+    void clearTrackedReferences();
 
 
 private:
@@ -478,6 +479,7 @@ private:
         u64 allocated;
         u64 version;
 
+
         BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, CommandQueue::Enum queue, u64 sz)
             : RefCounter<IResource>(pool)
             , buffer(Move(buf))
@@ -507,7 +509,8 @@ public:
         TrackedCommandBuffer* owner,
         CommandQueue::Enum queueID,
         u64 completedVersion,
-        u32 alignment = s_DefaultUploadSuballocationAlignment);
+        u32 alignment = s_DefaultUploadSuballocationAlignment
+    );
     void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount);
     void discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion);
 
@@ -544,6 +547,15 @@ class Buffer final : public RefCounter<IBuffer>, NoCopy{
     friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset);
 
 
+private:
+    struct BufferViewEntry{
+        Format::Enum format = Format::UNKNOWN;
+        u64 byteOffset = 0;
+        u64 byteSize = 0;
+        VkBufferView view = VK_NULL_HANDLE;
+    };
+
+
 public:
     // For volatile buffers - version tracking per frame
     struct VolatileBufferState{
@@ -563,14 +575,6 @@ public:
     [[nodiscard]] virtual const BufferDesc& getDescription()const override{ return m_desc; }
     [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const override{ return m_deviceAddress; }
 
-
-private:
-    struct BufferViewEntry{
-        Format::Enum format = Format::UNKNOWN;
-        u64 byteOffset = 0;
-        u64 byteSize = 0;
-        VkBufferView view = VK_NULL_HANDLE;
-    };
 
 private:
     [[nodiscard]] VkBufferView getView(Format::Enum format, u64 byteOffset, u64 byteSize);
@@ -607,7 +611,8 @@ struct TextureViewKey{
 };
 
 inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noexcept{
-    return lhs.subresources == rhs.subresources
+    return
+        lhs.subresources == rhs.subresources
         && lhs.dimension == rhs.dimension
         && lhs.format == rhs.format
         && lhs.isReadOnlyDSV == rhs.isReadOnlyDSV
@@ -769,9 +774,10 @@ struct ShaderLibraryKey{
 };
 
 inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)noexcept{
-    return lhs.entryName == rhs.entryName
+    return
+        lhs.entryName == rhs.entryName
         && lhs.shaderType == rhs.shaderType
-        ;
+    ;
 }
 
 struct ShaderLibraryKeyHasher{
@@ -913,6 +919,7 @@ struct PipelineDescriptorHeapScratch{
     Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>> stageMappings;
     VkPipelineCreateFlags2CreateInfo flags2{};
 
+
     explicit PipelineDescriptorHeapScratch(Alloc::ScratchArena<>& scratchArena)
         : mappings(Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>(scratchArena))
         , stageMappings(Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>(scratchArena))
@@ -951,6 +958,7 @@ private:
         Futex mutex;
         Vector<FreeRange, Alloc::CustomAllocator<FreeRange>> freeRanges;
 
+
         explicit HeapStorage(Alloc::CustomArena& arena)
             : freeRanges(Alloc::CustomAllocator<FreeRange>(arena))
         {}
@@ -966,14 +974,16 @@ public:
         u32& outPushDataSize,
         VkPipelineCreateFlags2CreateInfo& outFlags2,
         Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>>& outMappings,
-        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings);
+        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings
+    );
     static bool tryEnablePipeline(
         const VulkanContext& context,
         const BindingLayoutVector& bindingLayouts,
         PipelineShaderStageVector& shaderStages,
         FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
         u32& outPushDataSize,
-        PipelineDescriptorHeapScratch& scratch);
+        PipelineDescriptorHeapScratch& scratch
+    );
 
 
 public:
@@ -1119,6 +1129,7 @@ public:
 private:
     RayTracingPipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
+    // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
     Vector<u8, Alloc::CustomAllocator<u8>> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
@@ -1148,7 +1159,7 @@ public:
     virtual void clearMissShaders()override;
     virtual void clearHitShaders()override;
     virtual void clearCallableShaders()override;
-    virtual IRayTracingPipeline* getPipeline()override{ return m_pipeline; }
+    virtual IRayTracingPipeline* getPipeline()override{ return m_pipeline.get(); }
     virtual Object getNativeHandle(ObjectType objectType)override;
 
 
@@ -1167,7 +1178,7 @@ private:
 
 
 private:
-    RayTracingPipeline* m_pipeline = nullptr;
+    RefCountPtr<RayTracingPipeline, ArenaRefDeleter<RayTracingPipeline>> m_pipeline;
 
     BufferHandle m_raygenBuffer;
     u64 m_raygenOffset = 0;
@@ -1382,10 +1393,11 @@ struct TextureSubresourceStateKeyHasher{
 
 struct TextureSubresourceStateKeyEqualTo{
     [[nodiscard]] bool operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
-        return lhs.texture == rhs.texture
+        return
+            lhs.texture == rhs.texture
             && lhs.mipLevel == rhs.mipLevel
             && lhs.arraySlice == rhs.arraySlice
-            ;
+        ;
     }
 };
 
@@ -1412,7 +1424,8 @@ public:
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
     void appendKeepInitialStateBarriers(
         Vector<VkImageMemoryBarrier2, Alloc::CustomAllocator<VkImageMemoryBarrier2>>& imageBarriers,
-        Vector<VkBufferMemoryBarrier2, Alloc::CustomAllocator<VkBufferMemoryBarrier2>>& bufferBarriers);
+        Vector<VkBufferMemoryBarrier2, Alloc::CustomAllocator<VkBufferMemoryBarrier2>>& bufferBarriers
+    );
 
     [[nodiscard]] bool isUavBarrierEnabledForTexture(ITexture* texture)const;
     [[nodiscard]] bool isUavBarrierEnabledForBuffer(IBuffer* buffer)const;
@@ -1562,13 +1575,15 @@ private:
         bool usesDescriptorHeap,
         const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
         u32 pushDataSize,
-        const BindingSetVector& bindings);
+        const BindingSetVector& bindings
+    );
 
     void bindDescriptorHeapState(
         bool usesDescriptorHeap,
         const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
         u32 pushDataSize,
-        const BindingSetVector& bindings);
+        const BindingSetVector& bindings
+    );
     void setViewportState(const ViewportState& viewport);
 
     bool beginDynamicRendering(IFramebuffer* framebuffer, const RenderPassParameters& params);
@@ -1585,7 +1600,8 @@ private:
         VkDeviceAddress instanceDataAddress,
         usize numInstances,
         RayTracingAccelStructBuildFlags::Mask buildFlags,
-        const tchar* operationName);
+        const tchar* operationName
+    );
     [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
     void discardUnsubmittedUploadChunks();
 
@@ -1736,9 +1752,7 @@ public:
     [[nodiscard]] virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures()override;
     virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)override;
     [[nodiscard]] virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)override;
-    virtual bool isAftermathEnabled()override{
-        return m_aftermathEnabled && m_context.extensions.NV_device_diagnostic_checkpoints;
-    }
+    virtual bool isAftermathEnabled()override{ return m_aftermathEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
     [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override;
 
     [[nodiscard]] virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue)override;
@@ -1759,26 +1773,30 @@ private:
         VkPipelineLayout& outPipelineLayout,
         u32& outPushConstantByteSize,
         bool& outOwnsPipelineLayout,
-        Alloc::ScratchArena<>& scratchArena)const;
+        Alloc::ScratchArena<>& scratchArena
+    )const;
     [[nodiscard]] bool validateHeapMemoryBinding(
         IHeap* heap,
         const VkMemoryRequirements& memoryRequirements,
         u64 offset,
         const tchar* operationName,
         const tchar* resourceName,
-        Heap*& outHeap)const;
+        Heap*& outHeap
+    )const;
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,
         PipelineShaderStageVector& shaderStages,
         PipelineDescriptorHeapScratch& descriptorHeapScratch,
         PipelineBindingState& outBindings,
-        Alloc::ScratchArena<>& scratchArena)const;
+        Alloc::ScratchArena<>& scratchArena
+    )const;
     void appendPipelineShaderStage(
         IShader* shader,
         VkShaderStageFlagBits stage,
         PipelineSpecializationInfoVector& specializationInfos,
-        PipelineShaderStageVector& shaderStages)const;
+        PipelineShaderStageVector& shaderStages
+    )const;
 
 
 private:

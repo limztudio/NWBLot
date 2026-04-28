@@ -22,18 +22,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u64 AlignBufferOffset(u64 off){
-    return ((off + (s_BufferAlignmentBytes - 1)) / s_BufferAlignmentBytes) * s_BufferAlignmentBytes;
-}
-
-bool AlignBufferOffsetChecked(u64 offset, u64& alignedOffset){
-    if(offset > UINT64_MAX - (s_BufferAlignmentBytes - 1))
-        return false;
-
-    alignedOffset = AlignBufferOffset(offset);
-    return true;
-}
-
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
         return false;
@@ -103,7 +91,7 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
             const u64 blocksY = Max<u64>((static_cast<u64>(mipHeight) + formatBlockHeight - 1) / formatBlockHeight, 1ull);
 
             const u64 sliceSize = blocksX * blocksY * formatInfo.bytesPerBlock;
-            offset = AlignBufferOffset(offset + sliceSize * mipDepth);
+            offset = AlignUp(offset + sliceSize * mipDepth, s_BufferAlignmentBytes);
         }
     }
 
@@ -123,9 +111,10 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
     if(outBufferImageHeight)
         *outBufferImageHeight = static_cast<u32>(blocksY * formatBlockHeight);
 
-    offset += static_cast<u64>(resolved.z) * slicePitch
-            + static_cast<u64>(resolved.y / formatBlockHeight) * rowPitch
-            + static_cast<u64>(resolved.x / formatBlockWidth) * formatInfo.bytesPerBlock
+    offset +=
+        static_cast<u64>(resolved.z) * slicePitch
+        + static_cast<u64>(resolved.y / formatBlockHeight) * rowPitch
+        + static_cast<u64>(resolved.x / formatBlockWidth) * formatInfo.bytesPerBlock
     ;
 
     return offset;
@@ -219,7 +208,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
                 return nullptr;
             }
             const u64 mipSize = sliceSize * mipDepth;
-            if(!VulkanDetail::AlignBufferOffsetChecked(totalSize + mipSize, totalSize)){
+            if(!AlignUpU64Checked(totalSize + mipSize, s_BufferAlignmentBytes, totalSize)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: total size alignment overflows"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: total size alignment overflows"));
                 DestroyArenaObject(m_context.objectArena, staging);

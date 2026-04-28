@@ -26,6 +26,13 @@ class InputDispatcher;
 
 
 class Graphics{
+private:
+    using BackendOwner = CustomUniquePtr<IGraphicsBackend>;
+    using BackendPtr = NotNullUniquePtr<IGraphicsBackend, BackendOwner::deleter_type>;
+    using RenderPassListAllocator = Alloc::CustomAllocator<IRenderPass*>;
+    using SwapChainFramebufferVectorAllocator = Alloc::CustomAllocator<FramebufferHandle>;
+
+
 public:
     struct BufferSetupDesc{
         BufferDesc bufferDesc;
@@ -83,6 +90,11 @@ public:
     };
 
     using JobHandle = Alloc::JobSystem::JobHandle;
+
+
+private:
+    static void BackBufferResizingCallback(void* userData);
+    static void BackBufferResizedCallback(void* userData);
 
 
 public:
@@ -154,8 +166,6 @@ public:
 
 
 private:
-    [[nodiscard]] IGraphicsBackend& ensureBackend();
-    [[nodiscard]] IGraphicsBackend& requireBackend()const noexcept;
     [[nodiscard]] bool shouldRenderUnfocused()const;
 
     void backBufferResizing();
@@ -167,8 +177,7 @@ private:
     void updateAverageFrameTime(f64 elapsedTime);
     void syncInputMousePositionScale();
     bool animateRenderPresent();
-    static void BackBufferResizingCallback(void* userData);
-    static void BackBufferResizedCallback(void* userData);
+
 
 private:
     GraphicsAllocator& m_allocator;
@@ -179,10 +188,6 @@ private:
     SwapChainRuntimeState m_swapChainState;
 
 private:
-    using BackendPtr = CustomUniquePtr<IGraphicsBackend>;
-    using RenderPassListAllocator = Alloc::CustomAllocator<IRenderPass*>;
-    using SwapChainFramebufferVectorAllocator = Alloc::CustomAllocator<FramebufferHandle>;
-
     BackendPtr m_backend;
 
     bool m_skipRenderOnFirstFrame = false;

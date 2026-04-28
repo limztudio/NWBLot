@@ -6,7 +6,10 @@
 
 #include <global/simplemath.h>
 #include <impl/assets_graphics/deformable_geometry_asset.h>
+#include <impl/ecs_ui/ecs_ui.h>
 #include <logger/client/logger.h>
+
+#include <imgui.h>
 
 
 namespace __hidden_project_testbed_runtime{
@@ -79,6 +82,13 @@ static const SurfaceEditTargetDesc s_SurfaceEditTargets[] = {
 };
 static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) / sizeof(s_SurfaceEditTargets[0]);
 
+
+[[nodiscard]] static const char* SurfaceEditTargetLabel(const usize targetIndex){
+    return targetIndex < s_SurfaceEditTargetCount
+        ? s_SurfaceEditTargets[targetIndex].label.data()
+        : "invalid"
+    ;
+}
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
     return (positive ? 1.0f : 0.0f) - (negative ? 1.0f : 0.0f);
@@ -166,24 +176,22 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
     return { clientSize.width, clientSize.height };
 }
 
-[[nodiscard]] static bool ResolveSurfaceEditTargetIndexFromKey(const i32 key, usize& outIndex){
-    if(key < NWB::Core::Key::Number1 || key > NWB::Core::Key::Number9)
-        return false;
-
-    const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Number1);
-    if(targetIndex >= s_SurfaceEditTargetCount)
-        return false;
-
-    outIndex = targetIndex;
-    return true;
-}
-
 [[nodiscard]] static bool FiniteVector3(SIMDVector value){
     return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
 }
 
 [[nodiscard]] static bool FiniteFloat3(const Float4& value){
     return FiniteVector3(LoadFloat(value));
+}
+
+[[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
+    auto* uiSystem = world.getSystem<NWB::Core::ECSUI::UiSystem>();
+    return uiSystem && uiSystem->wantsKeyboardCapture();
+}
+
+[[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
+    auto* uiSystem = world.getSystem<NWB::Core::ECSUI::UiSystem>();
+    return uiSystem && uiSystem->wantsMouseCapture();
 }
 
 [[nodiscard]] static EditorVec3 NormalizeVec3(SIMDVector valueVector, const EditorVec3& fallback){
@@ -571,6 +579,172 @@ NWB::Core::ECSGraphics::RendererSystem& ProjectTestbed::rendererSystem(){
     return *system;
 }
 
+void ProjectTestbed::drawUiControls(){
+    ImGui::SetNextWindowPos(ImVec2(18.0f, 18.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(420.0f, 0.0f), ImGuiCond_FirstUseEver);
+    if(!ImGui::Begin("NWB Testbed")){
+        ImGui::End();
+        return;
+    }
+
+    ImGui::TextUnformatted("Renderer: mesh shader path with compute emulation fallback");
+    ImGui::Separator();
+
+    const char* currentTargetLabel =
+        __hidden_project_testbed_runtime::SurfaceEditTargetLabel(m_surfaceEditTargetIndex)
+    ;
+    if(ImGui::BeginCombo("Surface target", currentTargetLabel)){
+        for(usize i = 0u; i < __hidden_project_testbed_runtime::s_SurfaceEditTargetCount; ++i){
+            const bool selected = i == m_surfaceEditTargetIndex;
+            if(ImGui::Selectable(__hidden_project_testbed_runtime::SurfaceEditTargetLabel(i), selected)){
+                m_pendingSurfaceEditTargetIndex = i;
+                m_pendingSurfaceEditTargetSelection = true;
+            }
+            if(selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    bool previewParamsChanged = false;
+    f32 radius = m_surfaceEditRadius;
+    if(ImGui::SliderFloat("Radius", &radius, 0.08f, 0.5f, "%.2f") && IsFinite(radius)){
+        m_surfaceEditRadius = __hidden_project_testbed_runtime::ClampSurfaceEditRadius(radius);
+        previewParamsChanged = true;
+    }
+    f32 ellipseRatio = m_surfaceEditEllipseRatio;
+    if(ImGui::SliderFloat("Ellipse", &ellipseRatio, 0.5f, 2.0f, "%.2f") && IsFinite(ellipseRatio)){
+        m_surfaceEditEllipseRatio =
+            __hidden_project_testbed_runtime::ClampSurfaceEditEllipseRatio(ellipseRatio)
+        ;
+        previewParamsChanged = true;
+    }
+    f32 depth = m_surfaceEditDepth;
+    if(ImGui::SliderFloat("Depth", &depth, 0.04f, 0.45f, "%.2f") && IsFinite(depth)){
+        m_surfaceEditDepth = __hidden_project_testbed_runtime::ClampSurfaceEditDepth(depth);
+        previewParamsChanged = true;
+    }
+    if(previewParamsChanged)
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::RefreshPreview;
+
+    ImGui::Text(
+        "Edits %zu  Accessories %zu  Redo %zu",
+        m_surfaceEditState.edits.size(),
+        m_surfaceEditState.accessories.size(),
+        m_surfaceEditHistory.redoStack.size()
+    );
+    ImGui::Text("Preview: %s", m_surfaceEditPreviewActive ? "active" : "none");
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Viewport left click");
+    i32 clickAction = static_cast<i32>(m_surfaceEditClickAction);
+    bool clickActionChanged = ImGui::RadioButton(
+        "Preview hole",
+        &clickAction,
+        static_cast<i32>(SurfaceEditClickAction::PreviewHole)
+    );
+    clickActionChanged |= ImGui::RadioButton(
+        "Move latest edit",
+        &clickAction,
+        static_cast<i32>(SurfaceEditClickAction::MoveLatest)
+    );
+    clickActionChanged |= ImGui::RadioButton(
+        "Patch latest edit",
+        &clickAction,
+        static_cast<i32>(SurfaceEditClickAction::PatchLatest)
+    );
+    if(clickActionChanged)
+        m_surfaceEditClickAction = static_cast<SurfaceEditClickAction::Enum>(clickAction);
+
+    ImGui::Separator();
+    if(ImGui::Button("Commit Preview"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::CommitPreview;
+    ImGui::SameLine();
+    if(ImGui::Button("Cancel Preview"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::CancelPreview;
+
+    if(ImGui::Button("Replay Saved State"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::ReplaySavedState;
+    ImGui::SameLine();
+    if(ImGui::Button("Undo"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::Undo;
+    ImGui::SameLine();
+    if(ImGui::Button("Redo"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::Redo;
+
+    if(ImGui::Button("Heal Latest"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::HealLatest;
+    ImGui::SameLine();
+    if(ImGui::Button("Resize Latest"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::ResizeLatest;
+    ImGui::SameLine();
+    if(ImGui::Button("Add Loop Cut"))
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::AddLoopCut;
+
+    bool debugEnabled = m_surfaceEditDebugEnabled;
+    if(ImGui::Checkbox("Surface edit debug", &debugEnabled) && debugEnabled != m_surfaceEditDebugEnabled)
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::ToggleDebug;
+    if(m_surfaceEditDebugEnabled){
+        ImGui::SameLine();
+        if(ImGui::Button("Log Debug Now"))
+            m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::LogDebugSnapshot;
+    }
+
+    ImGui::Separator();
+    const bool hasDisplacement =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_surfaceEditTargetEntity)
+        != nullptr
+    ;
+    ImGui::BeginDisabled(!hasDisplacement);
+    ImGui::Checkbox("Displacement enabled", &m_surfaceEditDisplacementEnabled);
+    f32 displacementScale = IsFinite(m_surfaceEditDisplacementScale) ? m_surfaceEditDisplacementScale : 1.0f;
+    if(ImGui::SliderFloat("Displacement scale", &displacementScale, 0.0f, 4.0f, "%.2f") && IsFinite(displacementScale))
+        m_surfaceEditDisplacementScale = Max(0.0f, displacementScale);
+    ImGui::EndDisabled();
+    if(!hasDisplacement)
+        ImGui::TextDisabled("Current target has no animated displacement component.");
+
+    ImGui::Separator();
+    ImGui::TextUnformatted("Camera: hold RMB, move with WASD, Shift boost");
+    ImGui::TextUnformatted("Edit point: choose the left-click action above, then click the active deformable target.");
+    ImGui::End();
+}
+
+void ProjectTestbed::processPendingUiActions(){
+    u32 actions = m_pendingSurfaceEditUiActions;
+    m_pendingSurfaceEditUiActions = SurfaceEditUiAction::None;
+
+    if(m_pendingSurfaceEditTargetSelection){
+        m_pendingSurfaceEditTargetSelection = false;
+        if(!selectSurfaceEditTarget(m_pendingSurfaceEditTargetIndex))
+            logSurfaceEditControls();
+        actions &= ~SurfaceEditUiAction::RefreshPreview;
+    }
+
+    if((actions & SurfaceEditUiAction::RefreshPreview) != 0u)
+        refreshSurfaceEditPreview();
+    if((actions & SurfaceEditUiAction::CommitPreview) != 0u)
+        commitSurfaceEditPreview();
+    if((actions & SurfaceEditUiAction::CancelPreview) != 0u)
+        cancelSurfaceEditPreview();
+    if((actions & SurfaceEditUiAction::ReplaySavedState) != 0u)
+        queueSurfaceEditReplay();
+    if((actions & SurfaceEditUiAction::Undo) != 0u)
+        undoSurfaceEdit();
+    if((actions & SurfaceEditUiAction::Redo) != 0u)
+        redoSurfaceEdit();
+    if((actions & SurfaceEditUiAction::HealLatest) != 0u)
+        healLatestSurfaceEdit();
+    if((actions & SurfaceEditUiAction::ResizeLatest) != 0u)
+        resizeLatestSurfaceEdit();
+    if((actions & SurfaceEditUiAction::AddLoopCut) != 0u)
+        addLoopCutToLatestSurfaceEdit();
+    if((actions & SurfaceEditUiAction::ToggleDebug) != 0u)
+        toggleSurfaceEditDebug();
+    if((actions & SurfaceEditUiAction::LogDebugSnapshot) != 0u)
+        logSurfaceEditDebugSnapshot();
+}
+
 
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
@@ -638,6 +812,14 @@ bool ProjectTestbed::onStartup(){
         Float4(1.05f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
         0.4f
     );
+
+    auto uiEntity = m_world->createEntity();
+    auto& ui = uiEntity.addComponent<NWB::Core::ECSUI::UiComponent>();
+    ui.draw = [this](NWB::Core::ECSUI::UiDrawContext& context){
+        static_cast<void>(context);
+        drawUiControls();
+    };
+
     if(!selectSurfaceEditTarget(0u))
         return false;
 
@@ -665,6 +847,7 @@ bool ProjectTestbed::onUpdate(f32 delta){
     updateMainCamera(safeDelta);
     updateSurfaceEditTarget(safeDelta);
     m_world->tick(safeDelta);
+    processPendingUiActions();
     applyPendingSurfaceEditReplay();
     attachPendingSurfaceEditAccessory();
     updateSurfaceEditAccessories();
@@ -749,6 +932,7 @@ bool ProjectTestbed::selectSurfaceEditTarget(const usize targetIndex){
     m_surfaceEditDebugRuntimeMesh.reset();
     m_surfaceEditTargetTime = 0.0f;
     m_surfaceEditDisplacementScale = 1.0f;
+    m_surfaceEditDisplacementEnabled = true;
     m_surfaceEditRadius = target.editRadius;
     m_surfaceEditTargetIndex = targetIndex;
     m_surfaceEditTargetEntity = __hidden_project_testbed_runtime::CreateSurfaceEditTargetEntity(*m_world, target);
@@ -768,15 +952,25 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
     m_pendingMouseDeltaX = 0.0f;
     m_pendingMouseDeltaY = 0.0f;
 
-    const f32 rightAxis = __hidden_project_testbed_runtime::KeyAxis(
-        keyPressed(NWB::Core::Key::A),
-        keyPressed(NWB::Core::Key::D)
-    );
-    const f32 forwardAxis = __hidden_project_testbed_runtime::KeyAxis(
-        keyPressed(NWB::Core::Key::S),
-        keyPressed(NWB::Core::Key::W)
-    );
-    const bool boosted = keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift);
+    const bool keyboardCaptured = __hidden_project_testbed_runtime::UiWantsKeyboardCapture(*m_world);
+    const f32 rightAxis = keyboardCaptured
+        ? 0.0f
+        : __hidden_project_testbed_runtime::KeyAxis(
+            keyPressed(NWB::Core::Key::A),
+            keyPressed(NWB::Core::Key::D)
+        )
+    ;
+    const f32 forwardAxis = keyboardCaptured
+        ? 0.0f
+        : __hidden_project_testbed_runtime::KeyAxis(
+            keyPressed(NWB::Core::Key::S),
+            keyPressed(NWB::Core::Key::W)
+        )
+    ;
+    const bool boosted =
+        !keyboardCaptured
+        && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift))
+    ;
 
     __hidden_project_testbed_runtime::ApplyFlyCameraInputToMainCamera(
         *m_world,
@@ -824,17 +1018,8 @@ void ProjectTestbed::updateSurfaceEditTarget(const f32 delta){
         if(!IsFinite(m_surfaceEditDisplacementScale))
             m_surfaceEditDisplacementScale = 1.0f;
 
-        const f32 displacementAxis = __hidden_project_testbed_runtime::KeyAxis(
-            keyPressed(NWB::Core::Key::Z),
-            keyPressed(NWB::Core::Key::X)
-        );
-        if(displacementAxis != 0.0f){
-            const f32 displacementScale = m_surfaceEditDisplacementScale + displacementAxis * safeDelta;
-            if(IsFinite(displacementScale))
-                m_surfaceEditDisplacementScale = Max(0.0f, displacementScale);
-        }
-
-        displacement->enabled = !keyPressed(NWB::Core::Key::C);
+        m_surfaceEditDisplacementScale = Max(0.0f, m_surfaceEditDisplacementScale);
+        displacement->enabled = m_surfaceEditDisplacementEnabled;
         displacement->amplitudeScale = m_surfaceEditDisplacementScale;
     }
 }
@@ -1005,7 +1190,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     m_surfaceEditDebugRuntimeMesh = session.runtimeMesh;
     m_surfaceEditPreviewActive = true;
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: selected preview radius={} ellipse={} depth={} rev={} permission={}, press Enter to commit"),
+        NWB_TEXT("Surface edit: selected preview radius={} ellipse={} depth={} rev={} permission={}, use the UI to commit"),
         m_surfaceEditPreview.radius,
         m_surfaceEditPreview.ellipseRatio,
         m_surfaceEditPreview.depth,
@@ -1021,7 +1206,7 @@ void ProjectTestbed::commitSurfaceEditPreview(){
     }
 
     if(!m_surfaceEditPreviewActive){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: click a deformable surface before committing"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: preview a deformable surface before committing"));
         return;
     }
 
@@ -1758,10 +1943,10 @@ void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
 
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit targets: 1 plane, 2 box, 3 cube, 4 sphere, 5 tetrahedron")
+        NWB_TEXT("Surface edit controls are available in the NWB Testbed UI panel")
     );
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, F7 resize latest, F8 move latest, F9 patch latest, F10 loop cut latest, Esc cancel"),
+        NWB_TEXT("Surface edit: radius={} ellipse={} depth={}, choose a left-click viewport action in UI and use UI buttons for commit/replay/history/debug"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
         m_surfaceEditDepth
@@ -1827,73 +2012,14 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
     static_cast<void>(scancode);
     static_cast<void>(mods);
 
-    if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
-        setKeyState(key, true);
-    else if(action == NWB::Core::InputAction::Release)
+    if(action == NWB::Core::InputAction::Release)
         setKeyState(key, false);
 
-    if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat){
-        usize targetIndex = 0u;
-        if(__hidden_project_testbed_runtime::ResolveSurfaceEditTargetIndexFromKey(key, targetIndex)){
-            if(!selectSurfaceEditTarget(targetIndex))
-                logSurfaceEditControls();
-        }
-        else if(key == NWB::Core::Key::LeftBracket || key == NWB::Core::Key::RightBracket){
-            const f32 delta = key == NWB::Core::Key::RightBracket ? 0.02f : -0.02f;
-            m_surfaceEditRadius = __hidden_project_testbed_runtime::ClampSurfaceEditRadius(
-                m_surfaceEditRadius + delta
-            );
-            if(!refreshSurfaceEditPreview())
-                logSurfaceEditControls();
-        }
-        else if(key == NWB::Core::Key::Comma || key == NWB::Core::Key::Period){
-            const f32 delta = key == NWB::Core::Key::Period ? 0.05f : -0.05f;
-            m_surfaceEditEllipseRatio = __hidden_project_testbed_runtime::ClampSurfaceEditEllipseRatio(
-                m_surfaceEditEllipseRatio + delta
-            );
-            if(!refreshSurfaceEditPreview())
-                logSurfaceEditControls();
-        }
-        else if(key == NWB::Core::Key::Minus || key == NWB::Core::Key::Equal){
-            const f32 delta = key == NWB::Core::Key::Equal ? 0.02f : -0.02f;
-            m_surfaceEditDepth = __hidden_project_testbed_runtime::ClampSurfaceEditDepth(m_surfaceEditDepth + delta);
-            if(!refreshSurfaceEditPreview())
-                logSurfaceEditControls();
-        }
-        else if(key == NWB::Core::Key::Enter || key == NWB::Core::Key::KeypadEnter){
-            commitSurfaceEditPreview();
-        }
-        else if(key == NWB::Core::Key::F2){
-            toggleSurfaceEditDebug();
-        }
-        else if(key == NWB::Core::Key::F3){
-            queueSurfaceEditReplay();
-        }
-        else if(key == NWB::Core::Key::F4){
-            undoSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::F5){
-            redoSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::F6){
-            healLatestSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::F7){
-            resizeLatestSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::F8){
-            moveLatestSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::F9){
-            patchLatestSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::F10){
-            addLoopCutToLatestSurfaceEdit();
-        }
-        else if(key == NWB::Core::Key::Escape){
-            cancelSurfaceEditPreview();
-        }
-    }
+    if(__hidden_project_testbed_runtime::UiWantsKeyboardCapture(*m_world))
+        return false;
+
+    if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat)
+        setKeyState(key, true);
 
     return false;
 }
@@ -1908,6 +2034,11 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
     m_cursorX = xpos;
     m_cursorY = ypos;
     m_cursorPositionValid = true;
+
+    if(__hidden_project_testbed_runtime::UiWantsMouseCapture(*m_world)){
+        m_mousePositionValid = false;
+        return false;
+    }
 
     if(!m_mouseLookActive){
         m_mousePositionValid = false;
@@ -1942,9 +2073,29 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
 bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
     static_cast<void>(mods);
 
+    if(__hidden_project_testbed_runtime::UiWantsMouseCapture(*m_world)){
+        if(button == NWB::Core::MouseButton::Right && action == NWB::Core::InputAction::Release){
+            m_mouseLookActive = false;
+            m_mousePositionValid = false;
+        }
+        return false;
+    }
+
     if(button == NWB::Core::MouseButton::Left){
-        if(action == NWB::Core::InputAction::Press)
-            previewSurfaceEditAtCursor();
+        if(action == NWB::Core::InputAction::Press){
+            switch(m_surfaceEditClickAction){
+            case SurfaceEditClickAction::MoveLatest:
+                moveLatestSurfaceEdit();
+                break;
+            case SurfaceEditClickAction::PatchLatest:
+                patchLatestSurfaceEdit();
+                break;
+            case SurfaceEditClickAction::PreviewHole:
+            default:
+                previewSurfaceEditAtCursor();
+                break;
+            }
+        }
         return false;
     }
 

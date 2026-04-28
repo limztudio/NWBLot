@@ -15,6 +15,7 @@ target_link_libraries(testbed PRIVATE
     nwb_loader
     nwb_scene
     nwb_ecs_graphics
+    nwb_ecs_ui
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics>"
     nwb_logclient
 )

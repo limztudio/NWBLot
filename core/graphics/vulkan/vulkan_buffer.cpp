@@ -92,6 +92,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
 
     if(byteOffset >= m_desc.byteSize)
         return VK_NULL_HANDLE;
+
     const u64 maxRange = m_desc.byteSize - byteOffset;
     const u64 offsetAlignment = Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
     if((byteOffset % offsetAlignment) != 0)
@@ -100,9 +101,8 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
         return VK_NULL_HANDLE;
 
     u64 resolvedSize = byteSize;
-    if(resolvedSize == 0 || resolvedSize == VK_WHOLE_SIZE){
+    if(resolvedSize == 0 || resolvedSize == VK_WHOLE_SIZE)
         resolvedSize = maxRange;
-    }
     else if(resolvedSize > maxRange)
         resolvedSize = maxRange;
     if(resolvedSize == 0)
@@ -118,7 +118,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
             return viewEntry.view;
     }
 
-    VkBufferViewCreateInfo viewInfo = VulkanDetail::MakeVkStruct<VkBufferViewCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO);
+    auto viewInfo = VulkanDetail::MakeVkStruct<VkBufferViewCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO);
     viewInfo.buffer = m_buffer;
     viewInfo.format = vkFormat;
     viewInfo.offset = byteOffset;
@@ -163,10 +163,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     buffer->m_desc = d;
 
     VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-        VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT |
-        VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
+        | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
+    ;
 
     if(d.isVertexBuffer)
         usageFlags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
@@ -187,6 +188,16 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
             usageFlags |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
         if(d.isAccelStructStorage)
             usageFlags |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
+    }
+    if(d.isShaderBindingTable){
+        if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.buffer_device_address){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
+            DestroyArenaObject(m_context.objectArena, buffer);
+            return nullptr;
+        }
+
+        usageFlags |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
     if(m_context.extensions.buffer_device_address)
         usageFlags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -273,7 +284,7 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
         if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
             return true;
 
-        VkMappedMemoryRange range = VulkanDetail::MakeVkStruct<VkMappedMemoryRange>(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
+        auto range = VulkanDetail::MakeVkStruct<VkMappedMemoryRange>(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
         range.memory = buffer->m_memory;
         range.offset = 0;
         range.size = VK_WHOLE_SIZE;
@@ -342,8 +353,8 @@ bool Device::validateHeapMemoryBinding(
     const u64 offset,
     const tchar* operationName,
     const tchar* resourceName,
-    Heap*& outHeap)const
-{
+    Heap*& outHeap
+)const{
     outHeap = checked_cast<Heap*>(heap);
 
     if(!outHeap || outHeap->m_memory == VK_NULL_HANDLE){
@@ -476,11 +487,10 @@ void CommandList::writeBuffer(IBuffer* bufferResource, const void* data, usize d
     auto* buffer = checked_cast<Buffer*>(bufferResource);
     const BufferDesc& desc = buffer->getDescription();
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to write buffer: destination offset {} size {} is outside buffer size {}"),
-            destOffsetBytes,
-            static_cast<u64>(dataSize),
-            desc.byteSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write buffer: destination offset {} size {} is outside buffer size {}")
+            , destOffsetBytes
+            , static_cast<u64>(dataSize)
+            , desc.byteSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write buffer: destination range is outside the buffer"));
         return;
@@ -529,22 +539,20 @@ void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer
     const BufferDesc& srcDesc = src->getDescription();
 
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to copy buffer: destination offset {} size {} is outside buffer size {}"),
-            destOffsetBytes,
-            dataSizeBytes,
-            destDesc.byteSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: destination offset {} size {} is outside buffer size {}")
+            , destOffsetBytes
+            , dataSizeBytes
+            , destDesc.byteSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: destination range is outside the buffer"));
         return;
     }
 
     if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to copy buffer: source offset {} size {} is outside buffer size {}"),
-            srcOffsetBytes,
-            dataSizeBytes,
-            srcDesc.byteSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: source offset {} size {} is outside buffer size {}")
+            , srcOffsetBytes
+            , dataSizeBytes
+            , srcDesc.byteSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source range is outside the buffer"));
         return;

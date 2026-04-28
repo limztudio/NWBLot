@@ -20,27 +20,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool AlignUploadOffsetChecked(const u64 value, const u32 alignment, u64& outAligned){
-    if(alignment <= 1u){
-        outAligned = value;
-        return true;
-    }
-
-    const u64 alignmentValue = static_cast<u64>(alignment);
-    const u64 remainder = value % alignmentValue;
-    if(remainder == 0){
-        outAligned = value;
-        return true;
-    }
-
-    const u64 addend = alignmentValue - remainder;
-    if(value > Limit<u64>::s_Max - addend)
-        return false;
-
-    outAligned = value + addend;
-    return true;
-}
-
 struct SubmittedOwnersContext{
     TrackedCommandBuffer* const* owners = nullptr;
     usize count = 0;
@@ -133,8 +112,8 @@ void UploadManager::recycleMatchingActiveChunks(
     const bool resetAllocated,
     const u64* completedVersions,
     const ChunkRecyclePredicate predicate,
-    const void* predicateContext)
-{
+    const void* predicateContext
+){
     ScopedLock lock(m_mutex);
     auto& activeChunks = m_activeChunks[queueIndex];
 
@@ -168,7 +147,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
         u64 alignedOffset = 0;
-        if(!VulkanDetail::AlignUploadOffsetChecked(chunk.allocated, alignment, alignedOffset))
+        if(!AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment), alignedOffset))
             return false;
         if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
             return false;

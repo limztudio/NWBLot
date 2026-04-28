@@ -70,10 +70,7 @@ static_assert(IsStandardLayout_V<IndirectInstanceDesc>, "IndirectInstanceDesc mu
 static_assert(IsTriviallyCopyable_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
 static_assert(sizeof(IndirectInstanceDesc) == 64u, "IndirectInstanceDesc GPU layout drifted");
 static_assert(alignof(IndirectInstanceDesc) >= alignof(Float4), "IndirectInstanceDesc must stay SIMD-aligned");
-static_assert(
-    (offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == 0,
-    "IndirectInstanceDesc::transform must stay SIMD-aligned"
-);
+static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == 0, "IndirectInstanceDesc::transform must stay SIMD-aligned");
 #endif
 
 inline constexpr u32 s_ClasByteAlignment = 128;

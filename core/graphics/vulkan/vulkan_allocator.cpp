@@ -27,8 +27,8 @@ inline void ChainDedicatedAllocation(
     const VkBuffer buffer,
     const VkImage image,
     VkMemoryDedicatedAllocateInfo& outDedicatedInfo,
-    void*& inOutPNext)
-{
+    void*& inOutPNext
+){
     if(allocationSize < s_LargeBufferThreshold)
         return;
 

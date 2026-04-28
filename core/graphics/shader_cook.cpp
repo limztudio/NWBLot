@@ -44,13 +44,27 @@ static AString CanonicalAssetType(const Metascript::Document& doc){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// HLSL source parsing - #include extraction and resolution
+// Shader source parsing - #include extraction and resolution
 
 
-static constexpr AStringView s_HlslIncludeDirective = "include";
+static constexpr AStringView s_ShaderIncludeDirective = "include";
 
-static bool ExtractIncludeName(const AStringView line, AStringView& outIncludeName){
+enum class IncludeDirectiveKind : u8{
+    Relative,
+    Standard
+};
+
+static bool IsIncludeDirectiveBoundary(const AStringView line, const usize cursor){
+    return cursor >= line.size()
+        || IsAsciiSpace(line[cursor])
+        || line[cursor] == '"'
+        || line[cursor] == '<'
+    ;
+}
+
+static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, IncludeDirectiveKind& outKind){
     outIncludeName = {};
+    outKind = IncludeDirectiveKind::Relative;
 
     usize cursor = 0;
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
@@ -63,41 +77,57 @@ static bool ExtractIncludeName(const AStringView line, AStringView& outIncludeNa
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
 
-    if(line.substr(cursor, s_HlslIncludeDirective.size()) != s_HlslIncludeDirective)
+    if(line.substr(cursor, s_ShaderIncludeDirective.size()) != s_ShaderIncludeDirective)
         return false;
-    cursor += s_HlslIncludeDirective.size();
+    cursor += s_ShaderIncludeDirective.size();
+    if(!IsIncludeDirectiveBoundary(line, cursor))
+        return false;
 
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
 
-    if(cursor >= line.size() || line[cursor] != '"')
+    if(cursor >= line.size())
         return false;
+
+    char closingDelimiter = '"';
+    if(line[cursor] == '"'){
+        outKind = IncludeDirectiveKind::Relative;
+        closingDelimiter = '"';
+    }
+    else if(line[cursor] == '<'){
+        outKind = IncludeDirectiveKind::Standard;
+        closingDelimiter = '>';
+    }
+    else{
+        return false;
+    }
     ++cursor;
 
-    const usize closingQuote = line.find('"', cursor);
-    if(closingQuote == AStringView::npos || closingQuote <= cursor)
+    const usize closingDelimiterPos = line.find(closingDelimiter, cursor);
+    if(closingDelimiterPos == AStringView::npos || closingDelimiterPos <= cursor)
         return false;
 
-    outIncludeName = line.substr(cursor, closingQuote - cursor);
+    outIncludeName = line.substr(cursor, closingDelimiterPos - cursor);
     return !outIncludeName.empty();
 }
 
-static bool ResolveIncludeFile(const AStringView includeName, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
+static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirectiveKind kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
     ErrorCode errorCode;
 
-    const Path localCandidate = (sourceDirectory / Path(includeName)).lexically_normal();
-    errorCode.clear();
-    if(IsRegularFile(localCandidate, errorCode)){
-        outPath = localCandidate;
-        return true;
-    }
-    if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Failed to query include candidate '{}': {}"),
-            PathToString<tchar>(localCandidate),
-            StringConvert(errorCode.message())
-        );
-        return false;
+    if(kind == IncludeDirectiveKind::Relative){
+        const Path localCandidate = (sourceDirectory / Path(includeName)).lexically_normal();
+        errorCode.clear();
+        if(IsRegularFile(localCandidate, errorCode)){
+            outPath = localCandidate;
+            return true;
+        }
+        if(errorCode && !IsMissingPathError(errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
+                , PathToString<tchar>(localCandidate)
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
     }
 
     for(const Path& includeDirectory : includeDirectories){
@@ -108,10 +138,9 @@ static bool ResolveIncludeFile(const AStringView includeName, const Path& source
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to query include candidate '{}': {}"),
-                PathToString<tchar>(includeCandidate),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
+                , PathToString<tchar>(includeCandidate)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
@@ -140,10 +169,9 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         const Path absolutePath = AbsolutePath(dependencyPath, errorCode).lexically_normal();
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to resolve dependency path '{}' : {}"),
-                PathToString<tchar>(dependencyPath),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}")
+                , PathToString<tchar>(dependencyPath)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
@@ -155,10 +183,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         sourceText.clear();
         if(!ReadTextFile(absolutePath, sourceText)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to read dependency '{}'"),
-                PathToString<tchar>(absolutePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency '{}'"), PathToString<tchar>(absolutePath));
             return false;
         }
         StripUtf8Bom(sourceText);
@@ -177,12 +202,12 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
                 line.remove_suffix(1);
 
             AStringView includeName;
-            if(ExtractIncludeName(line, includeName)){
-                if(!ResolveIncludeFile(includeName, absolutePath.parent_path(), includeDirectories, includePath)){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("Unable to resolve include '{}' from '{}'"),
-                        StringConvert(includeName),
-                        PathToString<tchar>(absolutePath)
+            IncludeDirectiveKind includeKind = IncludeDirectiveKind::Relative;
+            if(ExtractIncludeDirective(line, includeName, includeKind)){
+                if(!ResolveIncludeFile(includeName, includeKind, absolutePath.parent_path(), includeDirectories, includePath)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'")
+                        , StringConvert(includeName)
+                        , PathToString<tchar>(absolutePath)
                     );
                     return false;
                 }
@@ -211,18 +236,14 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         if(defineValues.empty())
             return true;
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': default variant 'default' is only valid when no defines are specified"),
-            StringConvert(contextLabel)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant 'default' is only valid when no defines are specified"), StringConvert(contextLabel));
         return false;
     }
 
     if(defineValues.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': default variant '{}' requires defines to be specified"),
-            StringConvert(contextLabel),
-            StringConvert(defaultVariant)
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' requires defines to be specified")
+            , StringConvert(contextLabel)
+            , StringConvert(defaultVariant)
         );
         return false;
     }
@@ -231,11 +252,10 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AStringView segment){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'"),
-            StringConvert(contextLabel),
-            StringConvert(defaultVariant),
-            StringConvert(segment)
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'")
+            , StringConvert(contextLabel)
+            , StringConvert(defaultVariant)
+            , StringConvert(segment)
         );
     };
     while(begin < defaultVariant.size()){
@@ -245,10 +265,9 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 
         const AStringView segment = TrimView(defaultVariant.substr(begin, segmentEnd - begin));
         if(segment.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': default variant '{}' has invalid empty segment"),
-                StringConvert(contextLabel),
-                StringConvert(defaultVariant)
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' has invalid empty segment")
+                , StringConvert(contextLabel)
+                , StringConvert(defaultVariant)
             );
             return false;
         }
@@ -268,11 +287,10 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 
         const auto defineIt = defineValues.find(defineName);
         if(defineIt == defineValues.end()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': default variant '{}' references unknown define '{}'"),
-                StringConvert(contextLabel),
-                StringConvert(defaultVariant),
-                StringConvert(defineName)
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' references unknown define '{}'")
+                , StringConvert(contextLabel)
+                , StringConvert(defaultVariant)
+                , StringConvert(defineName)
             );
             return false;
         }
@@ -285,22 +303,20 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
             }
         }
         if(!valueFound){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': default variant '{}' has unsupported value '{}' for define '{}'"),
-                StringConvert(contextLabel),
-                StringConvert(defaultVariant),
-                StringConvert(defineValue),
-                StringConvert(defineName)
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' has unsupported value '{}' for define '{}'")
+                , StringConvert(contextLabel)
+                , StringConvert(defaultVariant)
+                , StringConvert(defineValue)
+                , StringConvert(defineName)
             );
             return false;
         }
 
         if(!seenDefines.insert(defineName).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': default variant '{}' assigns define '{}' more than once"),
-                StringConvert(contextLabel),
-                StringConvert(defaultVariant),
-                StringConvert(defineName)
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' assigns define '{}' more than once")
+                , StringConvert(contextLabel)
+                , StringConvert(defaultVariant)
+                , StringConvert(defineName)
             );
             return false;
         }
@@ -309,19 +325,15 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     }
 
     if(seenDefines.size() != defineValues.size()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': default variant '{}' must assign all defines"),
-            StringConvert(contextLabel),
-            StringConvert(defaultVariant)
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' must assign all defines")
+            , StringConvert(contextLabel)
+            , StringConvert(defaultVariant)
         );
         return false;
     }
 
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -338,17 +350,39 @@ static bool ParseNwbDocument(const Path& nwbFilePath, Metascript::Document& outD
 
     if(!outDoc.parse(AStringView(metaText))){
         for(const Metascript::ParseError& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}' parse error at {}:{}: {}"),
-                PathToString<tchar>(nwbFilePath),
-                err.line,
-                err.column,
-                StringConvert(AStringView(err.message.data(), err.message.size()))
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}' parse error at {}:{}: {}")
+                , PathToString<tchar>(nwbFilePath)
+                , err.line
+                , err.column
+                , StringConvert(AStringView(err.message.data(), err.message.size()))
             );
         }
         return false;
     }
     return true;
+}
+
+static const Metascript::Value* FindAssetMapValue(const Path& nwbFilePath, const Metascript::Document& doc, const AStringView metaKind){
+    const Metascript::MStringView assetVariable = doc.assetVariable();
+    const Metascript::Value* asset = doc.findVariable(assetVariable);
+    if(!asset){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': asset variable '{}' has no assignments")
+            , StringConvert(metaKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(AStringView(assetVariable.data(), assetVariable.size()))
+        );
+        return nullptr;
+    }
+
+    if(!asset->isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': asset is not a map")
+            , StringConvert(metaKind)
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return nullptr;
+    }
+
+    return asset;
 }
 
 static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value& asset, AString& outDefaultVariant){
@@ -399,10 +433,9 @@ static bool FindOptionalStringField(
         return true;
 
     if(!outFieldValue->isString()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': field '{}' must be a string"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be a string")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
         );
         return false;
     }
@@ -445,10 +478,9 @@ static bool ParseCompactStringField(
 
     const AStringView fieldText(fieldValue->asString().data(), fieldValue->asString().size());
     if(!outValue.assign(fieldText)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Meta '{}': field '{}' exceeds CompactString capacity"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' exceeds CompactString capacity")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
         );
         return false;
     }
@@ -484,10 +516,9 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             return false;
         }
         if(defineValues.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': define '{}' must provide at least one value"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(defineName)
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must provide at least one value")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(defineName)
             );
             return false;
         }
@@ -495,10 +526,9 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             if(!defineValue.empty())
                 continue;
 
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Meta '{}': define '{}' values must not be empty"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(defineName)
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must not be empty")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(defineName)
             );
             return false;
         }
@@ -544,11 +574,10 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
     if(__hidden_shader_cook::CanonicalAssetType(doc) != __hidden_shader_cook::s_AssetTypeShader)
         return true;
 
-    const Metascript::Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+    const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Shader");
+    if(!assetValue)
         return false;
-    }
+    const Metascript::Value& asset = *assetValue;
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
@@ -621,9 +650,10 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
 
-    const Metascript::Value& asset = doc.asset();
-    if(!asset.isMap())
-        return true;
+    const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Include");
+    if(!assetValue)
+        return false;
+    const Metascript::Value& asset = *assetValue;
 
     if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
         return false;
@@ -673,11 +703,9 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
             else{
                 const usize includeVariantSize = includeEntry.defaultVariant.size();
                 const usize currentVariantSize = inOutEntry.defaultVariant.size();
+
                 AString mergedDefaultVariant;
-                if(
-                    includeVariantSize < Limit<usize>::s_Max
-                    && includeVariantSize + 1u <= Limit<usize>::s_Max - currentVariantSize
-                )
+                if(includeVariantSize < Limit<usize>::s_Max && includeVariantSize + 1u <= Limit<usize>::s_Max - currentVariantSize)
                     mergedDefaultVariant.reserve(includeVariantSize + 1u + currentVariantSize);
                 mergedDefaultVariant += includeEntry.defaultVariant;
                 mergedDefaultVariant += ';';
@@ -804,6 +832,7 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
     };
 
     Alloc::ScratchArena<> scratchArena;
+
     using ScratchDefineComboPair = Pair<const AString, AString>;
     using ScratchDefineCombo = HashMap<
         AString,
@@ -898,11 +927,7 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
         sortedDependencies.push_back(Move(item));
     }
 
-    Sort(sortedDependencies.begin(), sortedDependencies.end(),
-        [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){
-            return lhs.canonicalPath < rhs.canonicalPath;
-        }
-    );
+    Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){ return lhs.canonicalPath < rhs.canonicalPath; });
 
     Vector<u8, Alloc::ScratchAllocator<u8>> dependencyBytes{Alloc::ScratchAllocator<u8>(scratchArena)};
     for(const SortedDependencyItem& item : sortedDependencies){

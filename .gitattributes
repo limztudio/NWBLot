@@ -8,4 +8,4 @@
 *.glsl text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.glsli text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 
-3rd_parties/** -text
+3rd_parties/** -text whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof

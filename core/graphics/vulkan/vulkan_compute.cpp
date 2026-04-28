@@ -55,7 +55,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     auto* cs = checked_cast<Shader*>(desc.CS.get());
 
-    VkPipelineShaderStageCreateInfo shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
+    auto shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     shaderStage.module = cs->m_shaderModule;
     shaderStage.pName = cs->m_entryPointName.c_str();
@@ -87,7 +87,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         return nullptr;
     }
 
-    VkComputePipelineCreateInfo pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
+    auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
         pipelineInfo.pNext = descriptorHeapScratch.pNext();
     pipelineInfo.stage = shaderStages[0];
@@ -133,14 +133,13 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
     }
     const auto& limits = m_context.physicalDeviceProperties.limits;
     if(groupsX > limits.maxComputeWorkGroupCount[0] || groupsY > limits.maxComputeWorkGroupCount[1] || groupsZ > limits.maxComputeWorkGroupCount[2]){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to dispatch compute: group counts ({}, {}, {}) exceed device limits ({}, {}, {})"),
-            groupsX,
-            groupsY,
-            groupsZ,
-            limits.maxComputeWorkGroupCount[0],
-            limits.maxComputeWorkGroupCount[1],
-            limits.maxComputeWorkGroupCount[2]
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute: group counts ({}, {}, {}) exceed device limits ({}, {}, {})")
+            , groupsX
+            , groupsY
+            , groupsZ
+            , limits.maxComputeWorkGroupCount[0]
+            , limits.maxComputeWorkGroupCount[1]
+            , limits.maxComputeWorkGroupCount[2]
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: group counts exceed device limits"));
         return;

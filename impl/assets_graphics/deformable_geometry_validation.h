@@ -59,6 +59,15 @@ struct MorphPayloadFailureInfo{
     u32 vertexId = 0;
 };
 
+namespace RestVertexPayloadFailure{
+    enum Enum : u8{
+        None,
+        NonFiniteData,
+        DegenerateFrame,
+        InvalidFrame,
+    };
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +167,46 @@ struct MorphPayloadFailureInfo{
 
 [[nodiscard]] inline bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
     return ValidRestVertexFrameImpl(vertex, true);
+}
+
+[[nodiscard]] inline RestVertexPayloadFailure::Enum FindRestVertexPayloadFailure(const DeformableVertexRest& vertex){
+    const SIMDVector position = LoadRestVertexPosition(vertex);
+    const SIMDVector normal = LoadRestVertexNormal(vertex);
+    const SIMDVector tangent = LoadRestVertexTangent(vertex);
+    const SIMDVector uv0 = LoadRestVertexUv0(vertex);
+    const SIMDVector color0 = LoadRestVertexColor0(vertex);
+    if(
+        !FiniteVector(position, 0x7u)
+        || !FiniteVector(normal, 0x7u)
+        || !FiniteVector(tangent, 0xFu)
+        || !FiniteVector(uv0, 0x3u)
+        || !FiniteVector(color0, 0xFu)
+    )
+        return RestVertexPayloadFailure::NonFiniteData;
+
+    const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
+    const f32 tangentLengthSquared = VectorGetX(Vector3LengthSq(tangent));
+    const f32 tangentHandedness = Abs(VectorGetW(tangent));
+    const SIMDVector frameCross = Vector3Cross(normal, tangent);
+    const f32 frameCrossLengthSquared = VectorGetX(Vector3LengthSq(frameCross));
+    if(
+        normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
+        || tangentHandedness <= s_TangentHandednessEpsilon
+        || Abs(tangentHandedness - 1.0f) > s_TangentHandednessUnitEpsilon
+        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
+    )
+        return RestVertexPayloadFailure::DegenerateFrame;
+
+    const f32 frameDot = VectorGetX(Vector3Dot(normal, tangent));
+    if(
+        Abs(normalLengthSquared - 1.0f) > s_RestFrameUnitLengthSquaredEpsilon
+        || Abs(tangentLengthSquared - 1.0f) > s_RestFrameUnitLengthSquaredEpsilon
+        || Abs(frameDot) > s_RestFrameOrthogonalityEpsilon
+    )
+        return RestVertexPayloadFailure::InvalidFrame;
+
+    return RestVertexPayloadFailure::None;
 }
 
 [[nodiscard]] inline bool RebuildRestVertexTangentFrames(
@@ -413,17 +462,21 @@ struct MorphPayloadFailureInfo{
     return true;
 }
 
+[[nodiscard]] inline bool ValidTriangleArea(const Vector<DeformableVertexRest>& restVertices, const u32 a, const u32 b, const u32 c){
+    const SIMDVector aPosition = LoadRestVertexPosition(restVertices[a]);
+    const SIMDVector ab = VectorSubtract(LoadRestVertexPosition(restVertices[b]), aPosition);
+    const SIMDVector ac = VectorSubtract(LoadRestVertexPosition(restVertices[c]), aPosition);
+    const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
+    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
+}
+
 [[nodiscard]] inline bool ValidTriangle(const Vector<DeformableVertexRest>& restVertices, const u32 a, const u32 b, const u32 c){
     if(a >= restVertices.size() || b >= restVertices.size() || c >= restVertices.size())
         return false;
     if(a == b || a == c || b == c)
         return false;
 
-    const SIMDVector aPosition = LoadRestVertexPosition(restVertices[a]);
-    const SIMDVector ab = VectorSubtract(LoadRestVertexPosition(restVertices[b]), aPosition);
-    const SIMDVector ac = VectorSubtract(LoadRestVertexPosition(restVertices[c]), aPosition);
-    const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
-    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
+    return ValidTriangleArea(restVertices, a, b, c);
 }
 
 [[nodiscard]] inline bool ValidRuntimePayloadArrays(

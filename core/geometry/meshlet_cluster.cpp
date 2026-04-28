@@ -27,13 +27,15 @@ static constexpr f32 s_TriangleAreaEpsilon = 0.000000000001f;
 struct PendingMeshlet{
     using ScratchIndexVector = Vector<u32, Core::Alloc::ScratchAllocator<u32>>;
 
+
+    ScratchIndexVector vertices;
+    ScratchIndexVector indices;
+
+
     explicit PendingMeshlet(Core::Alloc::ScratchArena<>& scratchArena)
         : vertices(Core::Alloc::ScratchAllocator<u32>(scratchArena))
         , indices(Core::Alloc::ScratchAllocator<u32>(scratchArena))
     {}
-
-    ScratchIndexVector vertices;
-    ScratchIndexVector indices;
 };
 
 struct TriangleVertices{
@@ -94,9 +96,7 @@ template<typename VertexAllocator>
     return false;
 }
 
-[[nodiscard]] TriangleLocalIndices ResolveTriangleLocalIndices(
-    const PendingMeshlet& meshlet,
-    const TriangleVertices& triangle){
+[[nodiscard]] TriangleLocalIndices ResolveTriangleLocalIndices(const PendingMeshlet& meshlet, const TriangleVertices& triangle){
     TriangleLocalIndices output;
     for(u32 corner = 0u; corner < 3u; ++corner){
         const u32 vertex = triangle.values[corner];
@@ -109,10 +109,7 @@ template<typename VertexAllocator>
     return output;
 }
 
-[[nodiscard]] bool TriangleFitsMeshlet(
-    const PendingMeshlet& meshlet,
-    const TriangleLocalIndices& localIndices,
-    const MeshletBuildConfig& config){
+[[nodiscard]] bool TriangleFitsMeshlet(const PendingMeshlet& meshlet, const TriangleLocalIndices& localIndices, const MeshletBuildConfig& config){
     const usize triangleCount = meshlet.indices.size() / 3u;
     if(triangleCount >= config.maxTriangles)
         return false;
@@ -120,10 +117,7 @@ template<typename VertexAllocator>
     return meshlet.vertices.size() + localIndices.missingVertexCount <= config.maxVertices;
 }
 
-[[nodiscard]] bool AppendTriangle(
-    PendingMeshlet& meshlet,
-    const TriangleVertices& triangle,
-    const TriangleLocalIndices& localIndices){
+[[nodiscard]] bool AppendTriangle(PendingMeshlet& meshlet, const TriangleVertices& triangle, const TriangleLocalIndices& localIndices){
     for(u32 corner = 0u; corner < 3u; ++corner){
         u32 localIndex = localIndices.values[corner];
         if(localIndex == Limit<u32>::s_Max){
@@ -203,7 +197,8 @@ template<typename MeshletAllocator, typename VertexIndexAllocator, typename Loca
     PendingMeshlet& pending,
     Vector<MeshletCluster, MeshletAllocator>& outMeshlets,
     Vector<u32, VertexIndexAllocator>& outVertexIndices,
-    Vector<u32, LocalIndexAllocator>& outLocalIndices){
+    Vector<u32, LocalIndexAllocator>& outLocalIndices
+){
     if(pending.vertices.empty())
         return true;
     if(
@@ -249,7 +244,8 @@ bool BuildMeshlets(
     const MeshletBuildConfig& config,
     Vector<MeshletCluster>& outMeshlets,
     Vector<u32>& outVertexIndices,
-    Vector<u32>& outLocalIndices){
+    Vector<u32>& outLocalIndices
+){
     using namespace __hidden_geometry_meshlet_cluster;
 
     outMeshlets.clear();
@@ -312,7 +308,8 @@ bool ComputeMeshletDeformationBounds(
     const MeshletCluster& meshlet,
     const Vector<f32>& vertexExpansionRadii,
     const f32 uniformExpansionRadius,
-    MeshletBounds& outBounds){
+    MeshletBounds& outBounds
+){
     using namespace __hidden_geometry_meshlet_cluster;
 
     outBounds = MeshletBounds{};

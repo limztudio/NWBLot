@@ -228,8 +228,8 @@ static Graphics::JobHandle SubmitSetupUploadJob(
     Output& output,
     Validate&& validate,
     ConfigurePayload&& configurePayload,
-    ExecutePayload&& executePayload)
-{
+    ExecutePayload&& executePayload
+){
     if(!validate(desc)){
         output = nullptr;
         return {};
@@ -275,14 +275,6 @@ static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char
     extensions.push_back(extensionName);
 }
 
-static constexpr bool CanEnableDebugRuntime(){
-#if defined(NWB_DEBUG)
-    return true;
-#else
-    return false;
-#endif
-}
-
 static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
     if(src.enableDebugRuntime && !CanEnableDebugRuntime())
         return false;
@@ -300,15 +292,16 @@ static CustomUniquePtr<IGraphicsBackend> CreateDefaultBackend(
     return MakeCustomUnique<Vulkan::BackendContext>(allocator.getObjectArena(), deviceParams, swapChainState, allocator, threadPool);
 }
 
-static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend* backend){
-    if(!backend || backend->getGraphicsAPI() != GraphicsAPI::VULKAN)
+static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend& backend){
+    if(backend.getGraphicsAPI() != GraphicsAPI::VULKAN)
         return nullptr;
 
-    return static_cast<const Vulkan::IBackendQueries*>(backend->queryInterface(Vulkan::s_BackendQueriesInterfaceID));
+    return static_cast<const Vulkan::IBackendQueries*>(backend.queryInterface(Vulkan::s_BackendQueriesInterfaceID));
 }
 
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
-    return combo.inputType == CooperativeVectorDataType::Float16
+    return
+        combo.inputType == CooperativeVectorDataType::Float16
         && combo.inputInterpretation == CooperativeVectorDataType::Float16
         && combo.matrixInterpretation == CooperativeVectorDataType::Float16
         && combo.outputType == CooperativeVectorDataType::Float16
@@ -325,35 +318,32 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Graphics::BackBufferResizingCallback(void* userData){
+    if(auto* graphics = static_cast<Graphics*>(userData))
+        graphics->backBufferResizing();
+}
+
+void Graphics::BackBufferResizedCallback(void* userData){
+    if(auto* graphics = static_cast<Graphics*>(userData))
+        graphics->backBufferResized();
+}
+
+
 Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem, InputDispatcher& input)
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_input(input)
+    , m_backend(__hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool))
     , m_renderPasses(RenderPassListAllocator(m_allocator.getObjectArena()))
     , m_swapChainFramebuffers(SwapChainFramebufferVectorAllocator(m_allocator.getObjectArena()))
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
     syncInputMousePositionScale();
     __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
-    m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
-    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
 }
 Graphics::~Graphics(){
     destroy();
-}
-
-IGraphicsBackend& Graphics::ensureBackend(){
-    if(!m_backend)
-        m_backend = __hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool);
-
-    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics: Vulkan backend creation failed."));
-    return *m_backend;
-}
-
-IGraphicsBackend& Graphics::requireBackend()const noexcept{
-    NWB_FATAL_ASSERT_MSG(m_backend != nullptr, NWB_TEXT("Graphics requires a valid backend."));
-    return *m_backend;
 }
 
 bool Graphics::init(const Common::FrameData& data){
@@ -364,7 +354,7 @@ bool Graphics::init(const Common::FrameData& data){
     m_swapChainState.backBufferHeight = data.height();
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 
-    IGraphicsBackend& backend = ensureBackend();
+    IGraphicsBackend& backend = *m_backend;
     backend.setPlatformFrameParam(data.frameParam());
 
     if(!m_instanceCreated){
@@ -384,10 +374,9 @@ bool Graphics::init(const Common::FrameData& data){
     updateWindowState(data.width(), data.height(), true, true);
     m_previousFrameTimestamp = TimerNow();
 
-    NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Graphics: window device and swap chain created ({}x{})"),
-        data.width(),
-        data.height()
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: window device and swap chain created ({}x{})")
+        , data.width()
+        , data.height()
     );
     return true;
 }
@@ -396,7 +385,7 @@ bool Graphics::createHeadlessDevice(){
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
-    IGraphicsBackend& backend = ensureBackend();
+    IGraphicsBackend& backend = *m_backend;
     if(!m_instanceCreated){
         if(!backend.createInstance())
             return false;
@@ -418,7 +407,7 @@ bool Graphics::createInstance(const InstanceParameters& params){
         return false;
     }
 
-    if(!ensureBackend().createInstance())
+    if(!m_backend->createInstance())
         return false;
 
     m_instanceCreated = true;
@@ -426,7 +415,7 @@ bool Graphics::createInstance(const InstanceParameters& params){
 }
 
 bool Graphics::setDebugRuntimeEnabled(bool enabled){
-    if(enabled && !__hidden_graphics::CanEnableDebugRuntime())
+    if(enabled && !CanEnableDebugRuntime())
         return false;
     if(m_instanceCreated && m_deviceCreationParams.enableDebugRuntime != enabled)
         return false;
@@ -466,7 +455,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
         m_swapChainState.backBufferHeight = height;
         m_swapChainState.vsyncEnabled = m_requestedVSync;
 
-        requireBackend().resizeSwapChain();
+        m_backend->resizeSwapChain();
         backBufferResized();
     }
 
@@ -478,22 +467,16 @@ void Graphics::destroy(){
 
     m_renderPasses.clear();
 
-    if(m_backend){
-        m_swapChainFramebuffers.clear();
-        m_backend->destroy();
-        m_instanceCreated = false;
-        m_backend.reset();
-    }
+    m_swapChainFramebuffers.clear();
+    m_backend->destroy();
+    m_instanceCreated = false;
 }
 
 IDevice* Graphics::getDevice()const noexcept{
-    return requireBackend().getDevice();
+    return m_backend->getDevice();
 }
 
 bool Graphics::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
-    if(!m_backend)
-        return false;
-
     return m_backend->enumerateAdapters(outAdapters);
 }
 
@@ -518,11 +501,11 @@ void Graphics::removeRenderPass(IRenderPass& pass){
 }
 
 const tchar* Graphics::getRendererString()const{
-    return requireBackend().getRendererString();
+    return m_backend->getRendererString();
 }
 
 GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
-    return requireBackend().getGraphicsAPI();
+    return m_backend->getGraphicsAPI();
 }
 
 f64 Graphics::getPreviousFrameTimestamp()const{
@@ -538,8 +521,7 @@ void Graphics::setVSyncEnabled(bool enabled){
 }
 
 void Graphics::reportLiveObjects()const{
-    if(m_backend)
-        m_backend->reportLiveObjects();
+    m_backend->reportLiveObjects();
 }
 
 void Graphics::getWindowDimensions(i32& width, i32& height)const{
@@ -564,19 +546,19 @@ void Graphics::setWindowTitle(NotNull<const tchar*> title){
 }
 
 ITexture* Graphics::getCurrentBackBuffer()const{
-    return requireBackend().getCurrentBackBuffer();
+    return m_backend->getCurrentBackBuffer();
 }
 
 ITexture* Graphics::getBackBuffer(u32 index)const{
-    return requireBackend().getBackBuffer(index);
+    return m_backend->getBackBuffer(index);
 }
 
 u32 Graphics::getCurrentBackBufferIndex()const{
-    return requireBackend().getCurrentBackBufferIndex();
+    return m_backend->getCurrentBackBufferIndex();
 }
 
 u32 Graphics::getBackBufferCount()const{
-    return requireBackend().getBackBufferCount();
+    return m_backend->getBackBufferCount();
 }
 
 IFramebuffer* Graphics::getCurrentFramebuffer()const{
@@ -590,22 +572,22 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 bool Graphics::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
-    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend);
     return queries && queries->isInstanceExtensionEnabled(extensionName);
 }
 
 bool Graphics::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
-    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend);
     return queries && queries->isDeviceExtensionEnabled(extensionName);
 }
 
 bool Graphics::isVulkanLayerEnabled(const char* layerName)const{
-    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get());
+    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend);
     return queries && queries->isLayerEnabled(layerName);
 }
 
 void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
-    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend)){
         queries->getEnabledInstanceExtensions(extensions);
         return;
     }
@@ -614,7 +596,7 @@ void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)co
 }
 
 void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
-    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend)){
         queries->getEnabledDeviceExtensions(extensions);
         return;
     }
@@ -623,7 +605,7 @@ void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)cons
 }
 
 void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
-    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(m_backend.get())){
+    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend)){
         queries->getEnabledLayers(layers);
         return;
     }
@@ -697,16 +679,6 @@ bool Graphics::shouldRenderUnfocused()const{
     return false;
 }
 
-void Graphics::BackBufferResizingCallback(void* userData){
-    if(auto* graphics = static_cast<Graphics*>(userData))
-        graphics->backBufferResizing();
-}
-
-void Graphics::BackBufferResizedCallback(void* userData){
-    if(auto* graphics = static_cast<Graphics*>(userData))
-        graphics->backBufferResized();
-}
-
 bool Graphics::animateRenderPresent(){
     Timer now = TimerNow();
     const f64 elapsedTime = DurationInSeconds<f64>(now, m_previousFrameTimestamp);
@@ -727,10 +699,10 @@ bool Graphics::animateRenderPresent(){
                 &Graphics::BackBufferResizingCallback,
                 &Graphics::BackBufferResizedCallback,
             };
-            if(requireBackend().beginFrame(resizeCallbacks)){
+            if(m_backend->beginFrame(resizeCallbacks)){
                 render();
 
-                if(!requireBackend().present())
+                if(!m_backend->present())
                     return false;
 
                 m_hasPresentedFrame = true;
@@ -765,10 +737,7 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
 
     BufferHandle buffer = device->createBuffer(desc.bufferDesc);
     if(!buffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to create setup buffer '{}'"),
-            StringConvert(desc.bufferDesc.debugName.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
         return {};
     }
 
@@ -779,10 +748,7 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     cmdParams.setQueueType(desc.queue);
     CommandListHandle commandList = device->createCommandList(cmdParams);
     if(!commandList){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"),
-            StringConvert(desc.bufferDesc.debugName.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
         return {};
     }
 
@@ -802,10 +768,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
 
     TextureHandle texture = device->createTexture(desc.textureDesc);
     if(!texture){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to create setup texture '{}'"),
-            StringConvert(desc.textureDesc.name.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
         return {};
     }
 
@@ -816,10 +779,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     cmdParams.setQueueType(desc.queue);
     CommandListHandle commandList = device->createCommandList(cmdParams);
     if(!commandList){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"),
-            StringConvert(desc.textureDesc.name.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
         return {};
     }
 
@@ -854,10 +814,7 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
 
         output.vertexBuffer = setupBuffer(vertexSetup);
         if(!output.vertexBuffer){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Graphics: failed to set up mesh vertex buffer '{}'"),
-                StringConvert(desc.vertexBufferName.c_str())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.c_str()));
             return MeshResource{};
         }
     }
@@ -877,10 +834,7 @@ Graphics::MeshResource Graphics::setupMesh(const MeshSetupDesc& desc)const{
 
         output.indexBuffer = setupBuffer(indexSetup);
         if(!output.indexBuffer){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Graphics: failed to set up mesh index buffer '{}'"),
-                StringConvert(desc.indexBufferName.c_str())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up mesh index buffer '{}'"), StringConvert(desc.indexBufferName.c_str()));
             return MeshResource{};
         }
     }

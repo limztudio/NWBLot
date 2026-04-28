@@ -99,10 +99,9 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
     }
     if(pushConstantByteSize > pipelinePushConstantByteSize){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size {} exceeds active pipeline push constant range {}"),
-            pushConstantByteSize,
-            pipelinePushConstantByteSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size {} exceeds active pipeline push constant range {}")
+            , pushConstantByteSize
+            , pipelinePushConstantByteSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds active pipeline push constant range"));
         return;
@@ -136,15 +135,15 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     const VkDeviceAddress instanceDataAddress,
     const usize numInstances,
     const RayTracingAccelStructBuildFlags::Mask buildFlags,
-    const tchar* operationName)
-{
-    VkAccelerationStructureGeometryKHR geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    const tchar* operationName
+){
+    auto geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
     geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
     geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
     geometry.geometry.instances.arrayOfPointers = VK_FALSE;
     geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
 
-    VkAccelerationStructureBuildGeometryInfoKHR buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
     buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, false);
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
@@ -153,7 +152,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     buildInfo.pGeometries = &geometry;
 
     auto primitiveCount = static_cast<uint32_t>(numInstances);
-    VkAccelerationStructureBuildSizesInfoKHR sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
 
     auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
@@ -311,7 +310,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         scratchBuffer = checked_cast<Buffer*>(scratchBufferHandle.get());
     }
 
-    VkClusterAccelerationStructureCommandsInfoNV commandsInfo = VulkanDetail::MakeVkStruct<VkClusterAccelerationStructureCommandsInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV);
+    auto commandsInfo = VulkanDetail::MakeVkStruct<VkClusterAccelerationStructureCommandsInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV);
     commandsInfo.input = inputInfo;
     commandsInfo.scratchData = scratchBuffer ? scratchBuffer->m_deviceAddress : 0;
     commandsInfo.dstImplicitData = outAccelerationStructuresBuffer ? outAccelerationStructuresBuffer->m_deviceAddress + opDesc.outAccelerationStructuresOffsetInBytes : 0;
@@ -398,7 +397,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = *validDescs[i];
         dstSizes[i] = convertDesc.dst.size;
 
-        VkConvertCooperativeVectorMatrixInfoNV vkDesc = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
+        auto vkDesc = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
         vkDesc.srcSize = convertDesc.src.size;
         vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(convertDesc.src.buffer)->m_deviceAddress + convertDesc.src.offset;
         vkDesc.pDstSize = &dstSizes[i];
@@ -409,13 +408,15 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         vkDesc.numColumns = convertDesc.numColumns;
 
         vkDesc.srcLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.src.layout);
-        vkDesc.srcStride = convertDesc.src.stride != 0
+        vkDesc.srcStride =
+            convertDesc.src.stride != 0
             ? convertDesc.src.stride
             : GetCooperativeVectorOptimalMatrixStride(convertDesc.src.type, convertDesc.src.layout, convertDesc.numRows, convertDesc.numColumns)
         ;
 
         vkDesc.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.dst.layout);
-        vkDesc.dstStride = convertDesc.dst.stride != 0
+        vkDesc.dstStride =
+            convertDesc.dst.stride != 0
             ? convertDesc.dst.stride
             : GetCooperativeVectorOptimalMatrixStride(convertDesc.dst.type, convertDesc.dst.layout, convertDesc.numRows, convertDesc.numColumns)
         ;
@@ -665,15 +666,13 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
             height = Max(height / 2, tileHeight);
             depth = Max(depth / 2, tileDepth);
 
-            if(
-                !addTileCount(
+            if(!addTileCount(
                 startTileIndex,
                 subresourceTilings[i].widthInTiles,
                 subresourceTilings[i].heightInTiles,
                 subresourceTilings[i].depthInTiles,
                 startTileIndex
-                )
-            ){
+            )){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile count exceeds u32 limits"));
                 clearOutputs();
                 return;

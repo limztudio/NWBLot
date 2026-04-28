@@ -278,23 +278,20 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
-        if(
-            HandleWin32FrameLifecycleMessage(
+        if(HandleWin32FrameLifecycleMessage(
             hwnd,
             uMsg,
             wParam,
             [](){},
             [&](const bool isActive){ frame->data<Common::WinFrame>().setActive(isActive); },
             lifecycleResult
-            )
-        )
+        ))
             return lifecycleResult;
 
         PAINTSTRUCT ps;
 
         switch(uMsg){
-        case WM_PAINT:
-        {
+        case WM_PAINT: {
             bool ret = false;
             if(auto hdc = BeginPaint(hwnd, &ps)){
                 static_cast<void>(hdc);
@@ -306,8 +303,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         return 0;
 
-        case WM_KEYDOWN:
-        {
+        case WM_KEYDOWN: {
             const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << 30))
                 ? InputAction::Repeat
                 : InputAction::Press
@@ -316,8 +312,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         return 0;
 
-        case WM_SYSKEYDOWN:
-        {
+        case WM_SYSKEYDOWN: {
             const i32 action = (static_cast<usize>(lParam) & (static_cast<usize>(1) << 30))
                 ? InputAction::Repeat
                 : InputAction::Press
@@ -326,40 +321,34 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
-        case WM_KEYUP:
-        {
+        case WM_KEYUP: {
             DispatchKeyEvent(*frame, wParam, lParam, InputAction::Release);
         }
         return 0;
 
-        case WM_SYSKEYUP:
-        {
+        case WM_SYSKEYUP: {
             DispatchKeyEvent(*frame, wParam, lParam, InputAction::Release);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
-        case WM_CHAR:
-        {
+        case WM_CHAR: {
             DispatchCharInput(*frame, wParam);
         }
         return 0;
 
-        case WM_SYSCHAR:
-        {
+        case WM_SYSCHAR: {
             DispatchCharInput(*frame, wParam);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
-        case WM_UNICHAR:
-        {
+        case WM_UNICHAR: {
             if(wParam == UNICODE_NOCHAR)
                 return TRUE;
             DispatchUnicodeInput(*frame, static_cast<u32>(wParam));
         }
         return 0;
 
-        case WM_MOUSEMOVE:
-        {
+        case WM_MOUSEMOVE: {
             DispatchMousePosition(*frame, lParam);
         }
         return 0;
@@ -386,15 +375,13 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         return (uMsg == WM_XBUTTONUP) ? TRUE : 0;
 
-        case WM_MOUSEWHEEL:
-        {
+        case WM_MOUSEWHEEL: {
             DispatchScreenMousePosition(hwnd, *frame, lParam);
             frame->input().mouseScrollUpdate(0.0, static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA));
         }
         return 0;
 
-        case WM_MOUSEHWHEEL:
-        {
+        case WM_MOUSEHWHEEL: {
             DispatchScreenMousePosition(hwnd, *frame, lParam);
             frame->input().mouseScrollUpdate(static_cast<f64>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<f64>(WHEEL_DELTA), 0.0);
         }
@@ -543,7 +530,7 @@ NWB_CORE_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#endif //NWB_PLATFORM_WINDOWS
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

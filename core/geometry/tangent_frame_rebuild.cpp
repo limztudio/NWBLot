@@ -71,7 +71,8 @@ void AccumulateVector(Float4& accumulator, const SIMDVector value){
     SIMDVector edge01,
     SIMDVector edge02,
     SIMDVector& outTangent,
-    SIMDVector& outBitangent){
+    SIMDVector& outBitangent
+){
     const f32 du1 = vertex1.uv0.x - vertex0.uv0.x;
     const f32 dv1 = vertex1.uv0.y - vertex0.uv0.y;
     const f32 du2 = vertex2.uv0.x - vertex0.uv0.x;
@@ -107,7 +108,8 @@ bool RebuildTangentFrames(
     const usize vertexCount,
     const u32* indices,
     const usize indexCount,
-    TangentFrameRebuildResult* outResult){
+    TangentFrameRebuildResult* outResult
+){
     using namespace __hidden_geometry_tangent_frame_rebuild;
 
     if(outResult)

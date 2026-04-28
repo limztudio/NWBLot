@@ -264,7 +264,7 @@ static i32 DecodeUtf8CodePoint(const char* bytes, i32 length, u32& unicode){
             (static_cast<u32>(c0 & 0x0fu) << 12)
             | (static_cast<u32>(c1 & 0x3fu) << 6)
             | static_cast<u32>(c2 & 0x3fu)
-            ;
+        ;
         return unicode >= 0x800u ? 3 : 0;
     }
 
@@ -283,7 +283,7 @@ static i32 DecodeUtf8CodePoint(const char* bytes, i32 length, u32& unicode){
             | (static_cast<u32>(c1 & 0x3fu) << 12)
             | (static_cast<u32>(c2 & 0x3fu) << 6)
             | static_cast<u32>(c3 & 0x3fu)
-            ;
+        ;
         return unicode >= 0x10000u && unicode <= 0x10ffffu ? 4 : 0;
     }
 
@@ -329,8 +329,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     auto& frameData = frame.data<Common::LinuxFrame>();
 
     switch(event.type){
-    case ClientMessage:
-    {
+    case ClientMessage: {
         const Atom message = static_cast<Atom>(event.xclient.data.l[0]);
         if(message == GetDeleteWindowMessage(frameData))
             return false;
@@ -350,8 +349,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         ResetKeyStates();
         break;
 
-    case KeyPress:
-    {
+    case KeyPress: {
         const u32 keycode = static_cast<u32>(event.xkey.keycode);
         i32 action = InputAction::Press;
         if(keycode < s_KeyStateCount){
@@ -363,8 +361,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     }
     break;
 
-    case KeyRelease:
-    {
+    case KeyRelease: {
         if(!s_DetectableAutoRepeat && XEventsQueued(GetX11Display(frameData), QueuedAfterReading) > 0){
             XEvent nextEvent = {};
             XPeekEvent(GetX11Display(frameData), &nextEvent);
@@ -384,8 +381,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     }
     break;
 
-    case ButtonPress:
-    {
+    case ButtonPress: {
         f64 xoffset = 0.0;
         f64 yoffset = 0.0;
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
@@ -401,8 +397,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     }
     break;
 
-    case ButtonRelease:
-    {
+    case ButtonRelease: {
         f64 xoffset = 0.0;
         f64 yoffset = 0.0;
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset))
@@ -424,8 +419,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         frame.input().mousePosUpdate(static_cast<f64>(event.xcrossing.x), static_cast<f64>(event.xcrossing.y));
         break;
 
-    case MappingNotify:
-    {
+    case MappingNotify: {
         XMappingEvent mappingEvent = event.xmapping;
         XRefreshKeyboardMapping(&mappingEvent);
     }

@@ -60,7 +60,8 @@ struct BoundaryVertexEdges{
     const SIMDVector center = LoadFloat(frame.center);
     const SIMDVector tangent = LoadFloat(frame.tangent);
     const SIMDVector bitangent = LoadFloat(frame.bitangent);
-    return FrameFiniteVector(center, 0x7u)
+    return
+        FrameFiniteVector(center, 0x7u)
         && FrameValidDirection(tangent)
         && FrameValidDirection(bitangent)
         && Abs(VectorGetX(Vector3Dot(tangent, bitangent))) <= 0.001f
@@ -68,7 +69,8 @@ struct BoundaryVertexEdges{
 }
 
 [[nodiscard]] bool ValidEdge(const MeshTopologyEdge& edge, const usize vertexCount){
-    return edge.a < vertexCount
+    return
+        edge.a < vertexCount
         && edge.b < vertexCount
         && edge.a != edge.b
     ;
@@ -185,7 +187,8 @@ template<typename PositionAllocator>
     const Vector<Float3U, PositionAllocator>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const SIMDVector frameNormal,
-    const MeshTopologyEdge& edge){
+    const MeshTopologyEdge& edge
+){
     return FrameResolveTangent(
         frameNormal,
         VectorSubtract(LoadFloat(positions[edge.b]), LoadFloat(positions[edge.a])),
@@ -306,7 +309,8 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
     const Vector<u32, IndexAllocator>& indices,
     const Vector<u8, RemovedTriangleAllocator>& removedTriangles,
     Vector<MeshTopologyEdge, EdgeAllocator>& outBoundaryEdges,
-    u32* outRemovedTriangleCount){
+    u32* outRemovedTriangleCount
+){
     if(outRemovedTriangleCount)
         *outRemovedTriangleCount = 0u;
     outBoundaryEdges.clear();
@@ -410,7 +414,8 @@ bool BuildBoundaryLoopVertexFrameImpl(
     const MeshTopologyBoundaryLoopFrame& frame,
     const MeshTopologyEdge& previousEdge,
     const MeshTopologyEdge& currentEdge,
-    MeshTopologyLoopVertexFrame& outFrame){
+    MeshTopologyLoopVertexFrame& outFrame
+){
     outFrame = MeshTopologyLoopVertexFrame{};
     if(
         positions.empty()
@@ -518,7 +523,7 @@ bool AppendWallTrianglePairsImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-}; // namespace __hidden_geometry_mesh_topology
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

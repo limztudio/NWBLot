@@ -19,6 +19,9 @@ NWB_VULKAN_BEGIN
 namespace __hidden_vulkan_shader{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace EntryPointLookupResult{
     enum Enum : u8{
         Found,
@@ -94,8 +97,8 @@ inline EntryPointLookupResult::Enum ResolveEntryPointName(
     const usize wordCount,
     const AStringView entryName,
     const ShaderType::Mask shaderType,
-    AString& outEntryPointName)
-{
+    AString& outEntryPointName
+){
     outEntryPointName.clear();
 
     if(entryName.empty() || shaderType == ShaderType::None)
@@ -154,8 +157,8 @@ inline bool ResolveShaderEntryPoint(
     const AStringView entryName,
     const ShaderType::Mask shaderType,
     const char* errorContext,
-    AString& outEntryPointName)
-{
+    AString& outEntryPointName
+){
     const EntryPointLookupResult::Enum lookupResult = ResolveEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
     switch(lookupResult){
     case EntryPointLookupResult::Found:
@@ -183,6 +186,9 @@ inline bool ResolveShaderEntryPoint(
 
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -470,20 +476,18 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
         if(attr.bufferIndex >= limits.maxVertexInputBindings){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}"),
-                i,
-                attr.bufferIndex,
-                limits.maxVertexInputBindings
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}")
+                , i
+                , attr.bufferIndex
+                , limits.maxVertexInputBindings
             );
             return nullptr;
         }
         if(attr.offset > limits.maxVertexInputAttributeOffset){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}"),
-                i,
-                attr.offset,
-                limits.maxVertexInputAttributeOffset
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}")
+                , i
+                , attr.offset
+                , limits.maxVertexInputAttributeOffset
             );
             return nullptr;
         }
@@ -498,11 +502,10 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
         const u64 attributeEnd = static_cast<u64>(attr.offset) + attributeBytes;
         if(attr.elementStride != 0 && attributeEnd > static_cast<u64>(attr.elementStride)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}"),
-                i,
-                attributeEnd,
-                attr.elementStride
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}")
+                , i
+                , attributeEnd
+                , attr.elementStride
             );
             return nullptr;
         }
@@ -512,21 +515,17 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         if(bindingInfoInsert.second)
             bindingInfo.isInstanced = attr.isInstanced;
         if(bindingInfo.isInstanced != attr.isInstanced){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"),
-                attr.bufferIndex
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"), attr.bufferIndex);
             return nullptr;
         }
 
         bindingInfo.requiredStride = Max(bindingInfo.requiredStride, attributeEnd);
         if(attr.elementStride != 0){
             if(bindingInfo.hasExplicitStride && bindingInfo.explicitStride != attr.elementStride){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}"),
-                    attr.bufferIndex,
-                    bindingInfo.explicitStride,
-                    attr.elementStride
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}")
+                    , attr.bufferIndex
+                    , bindingInfo.explicitStride
+                    , attr.elementStride
                 );
                 return nullptr;
             }
@@ -537,25 +536,24 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     }
 
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
-        const u64 stride = bindingInfo.hasExplicitStride
+        const u64 stride =
+            bindingInfo.hasExplicitStride
             ? static_cast<u64>(bindingInfo.explicitStride)
             : bindingInfo.requiredStride
         ;
         if(stride == 0 || stride > limits.maxVertexInputBindingStride){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}"),
-                bufferIndex,
-                stride,
-                limits.maxVertexInputBindingStride
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}")
+                , bufferIndex
+                , stride
+                , limits.maxVertexInputBindingStride
             );
             return nullptr;
         }
         if(bindingInfo.requiredStride > stride){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}"),
-                bufferIndex,
-                bindingInfo.requiredStride,
-                stride
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}")
+                , bufferIndex
+                , bindingInfo.requiredStride
+                , stride
             );
             return nullptr;
         }
@@ -569,7 +567,8 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         VkVertexInputBindingDescription binding{};
         binding.binding = bufferIndex;
-        binding.stride = bindingInfo.hasExplicitStride
+        binding.stride =
+            bindingInfo.hasExplicitStride
             ? bindingInfo.explicitStride
             : static_cast<u32>(bindingInfo.requiredStride)
         ;

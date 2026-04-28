@@ -49,8 +49,8 @@ struct SkinWeightSample{
     SkinWeightSample (&samples)[s_MaxAccumulatedSkinWeights],
     u32& sampleCount,
     const u16 joint,
-    const f32 weight)
-{
+    const f32 weight
+){
     if(!IsFinite(weight) || weight < 0.0f)
         return false;
     if(!ActiveWeight(weight))
@@ -77,8 +77,8 @@ struct SkinWeightSample{
 [[nodiscard]] bool ExtractStrongestSkinWeight(
     SkinWeightSample (&samples)[s_MaxAccumulatedSkinWeights],
     const u32 sampleCount,
-    SkinWeightSample& outSample)
-{
+    SkinWeightSample& outSample
+){
     u32 bestIndex = Limit<u32>::s_Max;
     for(u32 sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
         const SkinWeightSample& sample = samples[sampleIndex];
@@ -105,8 +105,8 @@ struct SkinWeightSample{
 void AccumulateMorphDelta(
     AttributeTransferMorphDelta& target,
     const AttributeTransferMorphDelta& source,
-    const f32 weight)
-{
+    const f32 weight
+){
     const SIMDVector weightVector = VectorReplicate(weight);
     StoreFloat(
         VectorMultiplyAdd(LoadFloat(source.deltaPosition), weightVector, LoadFloat(target.deltaPosition)),
@@ -149,8 +149,8 @@ bool ValidSkinInfluence4(const AttributeTransferSkinInfluence4& influence){
 bool BlendSkinInfluence4(
     const AttributeTransferSkinBlendSource* sources,
     const usize sourceCount,
-    AttributeTransferSkinInfluence4& outInfluence)
-{
+    AttributeTransferSkinInfluence4& outInfluence
+){
     using namespace __hidden_geometry_attribute_transfer;
 
     outInfluence = AttributeTransferSkinInfluence4{};
@@ -206,7 +206,8 @@ bool BlendSkinInfluence4(
 
 bool ActiveMorphDelta(const AttributeTransferMorphDelta& delta){
     const SIMDVector epsilon = VectorReplicate(__hidden_geometry_attribute_transfer::s_WeightEpsilon);
-    return !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaPosition)), epsilon)
+    return
+        !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaPosition)), epsilon)
         || !Vector3LessOrEqual(VectorAbs(LoadFloat(delta.deltaNormal)), epsilon)
         || !Vector4LessOrEqual(VectorAbs(LoadFloat(delta.deltaTangent)), epsilon)
     ;
@@ -217,8 +218,8 @@ bool BlendMorphDelta(
     const usize sourceCount,
     const u32 outputVertex,
     AttributeTransferMorphDelta& outDelta,
-    bool& outHasDelta)
-{
+    bool& outHasDelta
+){
     using namespace __hidden_geometry_attribute_transfer;
 
     outDelta = AttributeTransferMorphDelta{};
@@ -255,8 +256,8 @@ bool BlendMorphDelta(
 bool BlendFloat4(
     const AttributeTransferFloat4BlendSource* sources,
     const usize sourceCount,
-    Float4U& outValue)
-{
+    Float4U& outValue
+){
     using namespace __hidden_geometry_attribute_transfer;
 
     outValue = Float4U(0.0f, 0.0f, 0.0f, 0.0f);

@@ -11,6 +11,7 @@ target_link_libraries(nwb_loader PRIVATE
     nwb_common
     nwb_alloc
     nwb_ecs_graphics
+    nwb_ecs_ui
     nwb_filesystem
     nwb_frame
     nwb_graphics

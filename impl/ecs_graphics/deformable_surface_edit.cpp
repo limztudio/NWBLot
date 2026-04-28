@@ -1534,6 +1534,158 @@ template<usize sourceCount>
     return ((x * x) + (y * y)) <= 1.0f;
 }
 
+[[nodiscard]] u64 MakeTriangleEdgeKey(const u32 a, const u32 b){
+    const u32 lo = a < b ? a : b;
+    const u32 hi = a < b ? b : a;
+    return (static_cast<u64>(lo) << 32u) | static_cast<u64>(hi);
+}
+
+struct TriangleCandidateEdge{
+    u32 triangle = Limit<u32>::s_Max;
+    bool paired = false;
+};
+
+[[nodiscard]] bool AppendTriangleNeighbor(
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>>& neighbors,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& neighborCounts,
+    const u32 triangle,
+    const u32 neighbor)
+{
+    if(
+        triangle >= neighborCounts.size()
+        || neighbor >= neighborCounts.size()
+        || neighborCounts[triangle] >= 3u
+        || triangle > (Limit<u32>::s_Max / 3u)
+    )
+        return false;
+
+    const usize offset = static_cast<usize>(triangle) * 3u + neighborCounts[triangle];
+    if(offset >= neighbors.size())
+        return false;
+
+    neighbors[offset] = neighbor;
+    ++neighborCounts[triangle];
+    return true;
+}
+
+[[nodiscard]] bool BuildCandidateTriangleAdjacency(
+    const Vector<u32>& indices,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& candidateTriangle,
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>>& neighbors,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& neighborCounts,
+    Core::Alloc::ScratchArena<>& scratchArena)
+{
+    const usize triangleCount = candidateTriangle.size();
+    if(indices.size() / 3u != triangleCount || triangleCount > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    neighbors.assign(triangleCount * 3u, Limit<u32>::s_Max);
+    neighborCounts.assign(triangleCount, 0u);
+
+    using CandidateEdgeMap = HashMap<
+        u64,
+        TriangleCandidateEdge,
+        Hasher<u64>,
+        EqualTo<u64>,
+        Core::Alloc::ScratchAllocator<Pair<const u64, TriangleCandidateEdge>>
+    >;
+    CandidateEdgeMap candidateEdges(
+        0,
+        Hasher<u64>(),
+        EqualTo<u64>(),
+        Core::Alloc::ScratchAllocator<Pair<const u64, TriangleCandidateEdge>>(scratchArena)
+    );
+    candidateEdges.reserve(triangleCount * 3u);
+
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        if(candidateTriangle[triangle] == 0u)
+            continue;
+
+        const usize indexBase = triangle * 3u;
+        const u32 triangleVertices[3] = {
+            indices[indexBase + 0u],
+            indices[indexBase + 1u],
+            indices[indexBase + 2u],
+        };
+        if(
+            triangleVertices[0] == triangleVertices[1]
+            || triangleVertices[0] == triangleVertices[2]
+            || triangleVertices[1] == triangleVertices[2]
+        )
+            return false;
+
+        for(usize edgeIndex = 0u; edgeIndex < 3u; ++edgeIndex){
+            const u32 a = triangleVertices[edgeIndex];
+            const u32 b = triangleVertices[(edgeIndex + 1u) % 3u];
+            auto [it, inserted] = candidateEdges.emplace(MakeTriangleEdgeKey(a, b), TriangleCandidateEdge{});
+            TriangleCandidateEdge& edge = it.value();
+            if(inserted){
+                edge.triangle = static_cast<u32>(triangle);
+                continue;
+            }
+            if(edge.paired || edge.triangle == Limit<u32>::s_Max)
+                return false;
+
+            const u32 currentTriangle = static_cast<u32>(triangle);
+            if(
+                !AppendTriangleNeighbor(neighbors, neighborCounts, currentTriangle, edge.triangle)
+                || !AppendTriangleNeighbor(neighbors, neighborCounts, edge.triangle, currentTriangle)
+            )
+                return false;
+
+            edge.paired = true;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool KeepConnectedCandidateTriangles(
+    const Vector<u32>& indices,
+    const u32 hitTriangle,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& candidateTriangle,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removeTriangle,
+    Core::Alloc::ScratchArena<>& scratchArena)
+{
+    removeTriangle.assign(candidateTriangle.size(), 0u);
+    if(hitTriangle >= candidateTriangle.size() || candidateTriangle[hitTriangle] == 0u)
+        return false;
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> neighbors{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> neighborCounts{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    if(!BuildCandidateTriangleAdjacency(indices, candidateTriangle, neighbors, neighborCounts, scratchArena))
+        return false;
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> pendingTriangles{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    pendingTriangles.reserve(candidateTriangle.size());
+    removeTriangle[hitTriangle] = 1u;
+    pendingTriangles.push_back(hitTriangle);
+
+    for(usize pendingIndex = 0u; pendingIndex < pendingTriangles.size(); ++pendingIndex){
+        const u32 triangle = pendingTriangles[pendingIndex];
+        if(triangle >= neighborCounts.size())
+            return false;
+
+        const usize neighborOffset = static_cast<usize>(triangle) * 3u;
+        for(u8 neighborIndex = 0u; neighborIndex < neighborCounts[triangle]; ++neighborIndex){
+            const u32 neighbor = neighbors[neighborOffset + neighborIndex];
+            if(neighbor >= candidateTriangle.size())
+                return false;
+            if(candidateTriangle[neighbor] == 0u || removeTriangle[neighbor] != 0u)
+                continue;
+
+            removeTriangle[neighbor] = 1u;
+            pendingTriangles.push_back(neighbor);
+        }
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2183,13 +2335,14 @@ namespace __hidden_deformable_surface_edit{
     const f32 radiusX = params.radius;
     const f32 radiusY = params.radius * params.ellipseRatio;
     Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> candidateTriangle{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    candidateTriangle.resize(triangleCount, 0u);
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> removeTriangle{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
     };
     removeTriangle.resize(triangleCount, 0u);
-    DeformableEditMaskFlags removedEditMaskFlags = 0u;
-    u32 selectedTriangleCount = 0u;
-
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
         if(!DeformableRuntime::ValidateTriangleIndex(instance, static_cast<u32>(triangle), indices))
@@ -2200,16 +2353,35 @@ namespace __hidden_deformable_surface_edit{
             selectedTriangle
             || TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
         ){
-            const DeformableEditMaskFlags editMaskFlags =
-                ResolveDeformableTriangleEditMask(instance, static_cast<u32>(triangle))
-            ;
-            if(!DeformableEditMaskAllowsCommit(editMaskFlags))
-                return false;
-
-            removedEditMaskFlags = static_cast<DeformableEditMaskFlags>(removedEditMaskFlags | editMaskFlags);
-            removeTriangle[triangle] = 1u;
-            ++selectedTriangleCount;
+            candidateTriangle[triangle] = 1u;
         }
+    }
+
+    if(
+        !KeepConnectedCandidateTriangles(
+            instance.indices,
+            params.posedHit.triangle,
+            candidateTriangle,
+            removeTriangle,
+            scratchArena
+        )
+    )
+        return false;
+
+    DeformableEditMaskFlags removedEditMaskFlags = 0u;
+    u32 selectedTriangleCount = 0u;
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        if(removeTriangle[triangle] == 0u)
+            continue;
+
+        const DeformableEditMaskFlags editMaskFlags =
+            ResolveDeformableTriangleEditMask(instance, static_cast<u32>(triangle))
+        ;
+        if(!DeformableEditMaskAllowsCommit(editMaskFlags))
+            return false;
+
+        removedEditMaskFlags = static_cast<DeformableEditMaskFlags>(removedEditMaskFlags | editMaskFlags);
+        ++selectedTriangleCount;
     }
 
     if(removedEditMaskFlags == 0u)

@@ -43,11 +43,41 @@ static constexpr f32 s_DeformableSkinPivotY = -0.5f;
 static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
 static constexpr f32 s_AccessoryNormalOffset = 0.08f;
 static constexpr f32 s_AccessoryUniformScale = 0.16f;
+static constexpr f32 s_SurfaceEditTargetY = 0.35f;
+static constexpr f32 s_StaticPrimitiveY = -0.75f;
 static constexpr AStringView s_DeformableProxyPath = "project/characters/proxy_deformable";
 static constexpr AStringView s_DeformableImportedPath = "project/characters/imported_deformable";
+static constexpr AStringView s_DeformableCsgCubePath = "project/characters/csg_cube";
+static constexpr AStringView s_DeformableCsgSpherePath = "project/characters/csg_sphere";
+static constexpr AStringView s_DeformableCsgTetrahedronPath = "project/characters/csg_tetrahedron";
 static constexpr AStringView s_DeformableMaterialPath = "project/materials/mat_deformable_uv";
 static constexpr AStringView s_AccessoryGeometryPath = "project/meshes/mock_earring";
 static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_accessory_gold";
+
+
+struct SurfaceEditTargetDesc{
+    AStringView label;
+    AStringView geometryPath;
+    Float4 position;
+    f32 uniformScale = 1.0f;
+    f32 editRadius = 0.24f;
+    f32 yawRadians = 0.0f;
+    bool animated = false;
+};
+
+struct EditorClientSize{
+    u32 width = 0u;
+    u32 height = 0u;
+};
+
+static const SurfaceEditTargetDesc s_SurfaceEditTargets[] = {
+    { "plane", s_DeformableImportedPath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.82f, 0.24f, s_PI, true },
+    { "box", s_DeformableProxyPath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.62f, 0.20f, 0.0f, true },
+    { "cube", s_DeformableCsgCubePath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.72f, 0.20f, 0.0f, false },
+    { "sphere", s_DeformableCsgSpherePath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.72f, 0.24f, 0.0f, false },
+    { "tetrahedron", s_DeformableCsgTetrahedronPath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.74f, 0.08f, 0.0f, false },
+};
+static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) / sizeof(s_SurfaceEditTargets[0]);
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -121,6 +151,33 @@ static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_ac
     return true;
 }
 
+[[nodiscard]] static EditorClientSize ResolveEditorClientSize(const NWB::Core::Graphics& graphics){
+    i32 windowWidth = 0;
+    i32 windowHeight = 0;
+    graphics.getWindowDimensions(windowWidth, windowHeight);
+    if(windowWidth > 0 && windowHeight > 0){
+        return {
+            static_cast<u32>(windowWidth),
+            static_cast<u32>(windowHeight)
+        };
+    }
+
+    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    return { clientSize.width, clientSize.height };
+}
+
+[[nodiscard]] static bool ResolveSurfaceEditTargetIndexFromKey(const i32 key, usize& outIndex){
+    if(key < NWB::Core::Key::Number1 || key > NWB::Core::Key::Number9)
+        return false;
+
+    const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Number1);
+    if(targetIndex >= s_SurfaceEditTargetCount)
+        return false;
+
+    outIndex = targetIndex;
+    return true;
+}
+
 [[nodiscard]] static bool FiniteVector3(SIMDVector value){
     return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
 }
@@ -171,10 +228,10 @@ static void ResolveFlyCameraAnglesFromTransform(
 
 [[nodiscard]] static bool BuildEditorPickRay(
     NWB::Core::ECS::World& world,
+    const EditorClientSize clientSize,
     const f64 cursorX,
     const f64 cursorY,
     NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
-    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
     if(clientSize.width == 0u || clientSize.height == 0u || !IsFinite(cursorX) || !IsFinite(cursorY))
         return false;
 
@@ -398,7 +455,8 @@ static void UpdateProxySkeletonPose(
     const TestbedDeformableGeometryRef& geometry,
     const TestbedMaterialRef& material,
     const Float4& position,
-    const f32 uniformScale
+    const f32 uniformScale,
+    const bool animated
 ){
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
@@ -408,6 +466,9 @@ static void UpdateProxySkeletonPose(
     auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>();
     renderer.deformableGeometry = geometry;
     renderer.material = material;
+
+    if(!animated)
+        return entity.id();
 
     auto& morphWeights = entity.addComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>();
     morphWeights.weights.resize(1u);
@@ -421,6 +482,28 @@ static void UpdateProxySkeletonPose(
     displacement.amplitudeScale = 1.0f;
     displacement.enabled = true;
     return entity.id();
+}
+
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateSurfaceEditTargetEntity(
+    NWB::Core::ECS::World& world,
+    const SurfaceEditTargetDesc& target)
+{
+    TestbedDeformableGeometryRef geometry;
+    geometry.virtualPath = Name(target.geometryPath);
+    TestbedMaterialRef material;
+    material.virtualPath = Name(s_DeformableMaterialPath);
+
+    const NWB::Core::ECS::EntityID entity = CreateDeformableRendererEntity(
+        world,
+        geometry,
+        material,
+        target.position,
+        target.uniformScale,
+        target.animated
+    );
+    if(auto* transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity))
+        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, target.yawRadians, 0.0f), &transform->rotation);
+    return entity;
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateAccessoryRendererEntity(
@@ -504,7 +587,6 @@ ProjectTestbed::~ProjectTestbed(){
 
 bool ProjectTestbed::onStartup(){
     using TestbedGeometryRef = __hidden_project_testbed_runtime::TestbedGeometryRef;
-    using TestbedDeformableGeometryRef = __hidden_project_testbed_runtime::TestbedDeformableGeometryRef;
     using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
 
     auto sceneEntity = m_world->createEntity();
@@ -520,8 +602,6 @@ bool ProjectTestbed::onStartup(){
     transparentSphereMaterial.virtualPath = Name("project/materials/mat_transparent_sphere");
     TestbedMaterialRef transparentTetrahedronMaterial;
     transparentTetrahedronMaterial.virtualPath = Name("project/materials/mat_transparent_tetrahedron");
-    TestbedMaterialRef deformableUvMaterial;
-    deformableUvMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableMaterialPath);
 
     TestbedGeometryRef cubeGeometry;
     cubeGeometry.virtualPath = Name("project/meshes/cube");
@@ -529,72 +609,41 @@ bool ProjectTestbed::onStartup(){
     sphereGeometry.virtualPath = Name("project/meshes/sphere");
     TestbedGeometryRef tetrahedronGeometry;
     tetrahedronGeometry.virtualPath = Name("project/meshes/tetrahedron");
-    TestbedDeformableGeometryRef deformableProxyGeometry;
-    deformableProxyGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableProxyPath);
-    TestbedDeformableGeometryRef importedDeformableGeometry;
-    importedDeformableGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableImportedPath);
 
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         cubeGeometry,
         cubeWarmMaterial,
-        Float4(-0.55f, 0.0f, 0.0f),
-        0.65f
+        Float4(-1.05f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
+        0.36f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         cubeGeometry,
         cubeCoolMaterial,
-        Float4(0.55f, 0.0f, 0.0f),
-        0.9f
+        Float4(-0.35f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
+        0.42f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         sphereGeometry,
         transparentSphereMaterial,
-        Float4(1.45f, 0.0f, 0.0f),
-        0.75f
+        Float4(0.4f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
+        0.38f
     );
     __hidden_project_testbed_runtime::CreateRendererEntity(
         *m_world,
         tetrahedronGeometry,
         transparentTetrahedronMaterial,
-        Float4(-1.45f, 0.0f, 0.0f),
-        0.8f
+        Float4(1.05f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
+        0.4f
     );
-    m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
-        *m_world,
-        importedDeformableGeometry,
-        deformableUvMaterial,
-        Float4(0.0f, 0.85f, 0.0f),
-        0.8f
-    );
-    if(auto* editTargetTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_deformableMorphEntity))
-        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), &editTargetTransform->rotation);
-    const NWB::Core::ECS::EntityID proxyDeformableEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
-        *m_world,
-        deformableProxyGeometry,
-        deformableUvMaterial,
-        Float4(0.0f, -0.85f, 0.0f),
-        0.7f
-    );
-    if(
-        auto* morphWeights =
-            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(proxyDeformableEntity)
-    ){
-        if(!morphWeights->weights.empty())
-            morphWeights->weights[0].weight = 0.65f;
-    }
-    if(
-        auto* skeletonPose =
-            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(proxyDeformableEntity)
-    ){
-        __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, 1.0f);
-    }
+    if(!selectSurfaceEditTarget(0u))
+        return false;
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light, shared primitives, animated proxy, mock native .nwb deformable")
+        NWB_TEXT("directional light, shared primitives, selectable deformable CSG targets")
     );
     logSurfaceEditControls();
     registerInputHandler();
@@ -614,7 +663,7 @@ bool ProjectTestbed::onUpdate(f32 delta){
     const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
 
     updateMainCamera(safeDelta);
-    updateDeformableMorph(safeDelta);
+    updateSurfaceEditTarget(safeDelta);
     m_world->tick(safeDelta);
     applyPendingSurfaceEditReplay();
     attachPendingSurfaceEditAccessory();
@@ -668,6 +717,51 @@ bool ProjectTestbed::keyPressed(const i32 key)const{
     return m_keyPressed[keyIndex];
 }
 
+bool ProjectTestbed::selectSurfaceEditTarget(const usize targetIndex){
+    if(targetIndex >= __hidden_project_testbed_runtime::s_SurfaceEditTargetCount)
+        return false;
+
+    if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit target: waiting for pending replay/accessory work"));
+        return false;
+    }
+
+    const auto& target = __hidden_project_testbed_runtime::s_SurfaceEditTargets[targetIndex];
+    if(m_surfaceEditTargetEntity.valid() && m_surfaceEditTargetIndex == targetIndex){
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("Surface edit target: {} already active"),
+            StringConvert(target.label)
+        );
+        return true;
+    }
+
+    clearSurfaceEditPreview();
+    clearPendingSurfaceEditAccessory();
+    hideSurfaceEditAccessoriesForTarget(m_surfaceEditTargetEntity);
+    auto* oldRenderer =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_surfaceEditTargetEntity)
+    ;
+    if(oldRenderer)
+        oldRenderer->visible = false;
+
+    m_surfaceEditState = NWB::Core::ECSGraphics::DeformableSurfaceEditState{};
+    m_surfaceEditHistory = NWB::Core::ECSGraphics::DeformableSurfaceEditHistory{};
+    m_surfaceEditDebugRuntimeMesh.reset();
+    m_surfaceEditTargetTime = 0.0f;
+    m_surfaceEditDisplacementScale = 1.0f;
+    m_surfaceEditRadius = target.editRadius;
+    m_surfaceEditTargetIndex = targetIndex;
+    m_surfaceEditTargetEntity = __hidden_project_testbed_runtime::CreateSurfaceEditTargetEntity(*m_world, target);
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit target: {} ({}/{})"),
+        StringConvert(target.label),
+        targetIndex + 1u,
+        __hidden_project_testbed_runtime::s_SurfaceEditTargetCount
+    );
+    return true;
+}
+
 void ProjectTestbed::updateMainCamera(const f32 delta){
     const f32 mouseDeltaX = m_pendingMouseDeltaX;
     const f32 mouseDeltaY = m_pendingMouseDeltaY;
@@ -695,53 +789,53 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
     );
 }
 
-void ProjectTestbed::updateDeformableMorph(const f32 delta){
-    if(!m_deformableMorphEntity.valid())
+void ProjectTestbed::updateSurfaceEditTarget(const f32 delta){
+    if(!m_surfaceEditTargetEntity.valid())
         return;
 
     const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
-    if(!IsFinite(m_deformableMorphTime))
-        m_deformableMorphTime = 0.0f;
+    if(!IsFinite(m_surfaceEditTargetTime))
+        m_surfaceEditTargetTime = 0.0f;
 
-    m_deformableMorphTime += safeDelta;
-    if(!IsFinite(m_deformableMorphTime))
-        m_deformableMorphTime = 0.0f;
+    m_surfaceEditTargetTime += safeDelta;
+    if(!IsFinite(m_surfaceEditTargetTime))
+        m_surfaceEditTargetTime = 0.0f;
 
     auto* morphWeights =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_deformableMorphEntity)
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_surfaceEditTargetEntity)
     ;
     if(morphWeights && !morphWeights->weights.empty()){
         const f32 morphWeight =
-            0.5f + 0.5f * VectorGetX(VectorSin(VectorReplicate(m_deformableMorphTime * 1.35f)))
+            0.5f + 0.5f * VectorGetX(VectorSin(VectorReplicate(m_surfaceEditTargetTime * 1.35f)))
         ;
         morphWeights->weights[0].weight = IsFinite(morphWeight) ? morphWeight : 0.5f;
     }
 
     auto* skeletonPose =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(m_deformableMorphEntity)
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(m_surfaceEditTargetEntity)
     ;
     if(skeletonPose)
-        __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, m_deformableMorphTime);
+        __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, m_surfaceEditTargetTime);
 
     auto* displacement =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_deformableMorphEntity)
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_surfaceEditTargetEntity)
     ;
     if(displacement){
-        if(!IsFinite(m_deformableDisplacementScale))
-            m_deformableDisplacementScale = 1.0f;
+        if(!IsFinite(m_surfaceEditDisplacementScale))
+            m_surfaceEditDisplacementScale = 1.0f;
 
         const f32 displacementAxis = __hidden_project_testbed_runtime::KeyAxis(
             keyPressed(NWB::Core::Key::Z),
             keyPressed(NWB::Core::Key::X)
         );
         if(displacementAxis != 0.0f){
-            const f32 displacementScale = m_deformableDisplacementScale + displacementAxis * safeDelta;
+            const f32 displacementScale = m_surfaceEditDisplacementScale + displacementAxis * safeDelta;
             if(IsFinite(displacementScale))
-                m_deformableDisplacementScale = Max(0.0f, displacementScale);
+                m_surfaceEditDisplacementScale = Max(0.0f, displacementScale);
         }
 
         displacement->enabled = !keyPressed(NWB::Core::Key::C);
-        displacement->amplitudeScale = m_deformableDisplacementScale;
+        displacement->amplitudeScale = m_surfaceEditDisplacementScale;
     }
 }
 
@@ -848,13 +942,15 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     auto& renderSystem = rendererSystem();
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;
-    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    const __hidden_project_testbed_runtime::EditorClientSize clientSize =
+        __hidden_project_testbed_runtime::ResolveEditorClientSize(m_context.graphics)
+    ;
     const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
     const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
     const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
     const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
     const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
-    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
+    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, clientSize, cursorX, cursorY, ray)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not build editor pick ray"));
         return;
     }
@@ -870,6 +966,14 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
         )
     ){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: no deformable surface under cursor"));
+        return;
+    }
+
+    const NWB::Core::ECSGraphics::RuntimeMeshHandle targetRuntimeMesh =
+        renderSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
+    ;
+    if(!targetRuntimeMesh.valid() || hit.runtimeMesh != targetRuntimeMesh){
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: cursor hit is not on the active target"));
         return;
     }
 
@@ -1100,31 +1204,35 @@ void ProjectTestbed::queueSurfaceEditReplay(){
         return;
     }
 
-    Float4 replayPosition(0.0f, 0.85f, 0.0f);
+    if(m_surfaceEditTargetIndex >= __hidden_project_testbed_runtime::s_SurfaceEditTargetCount){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit replay: active target index is invalid"));
+        return;
+    }
+
+    const auto& selectedTarget =
+        __hidden_project_testbed_runtime::s_SurfaceEditTargets[m_surfaceEditTargetIndex]
+    ;
+    Float4 replayPosition(0.0f, __hidden_project_testbed_runtime::s_SurfaceEditTargetY, 0.0f);
     f32 replayScale = 0.8f;
-    if(const auto* oldTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_deformableMorphEntity)){
+    const auto* oldTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(
+        m_surfaceEditTargetEntity
+    );
+    if(oldTransform){
         replayPosition = oldTransform->position;
         replayScale = oldTransform->scale.x;
     }
-    if(
-        auto* oldRenderer =
-            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_deformableMorphEntity)
-    )
+    auto* oldRenderer =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_surfaceEditTargetEntity)
+    ;
+    if(oldRenderer)
         oldRenderer->visible = false;
 
-    __hidden_project_testbed_runtime::TestbedDeformableGeometryRef deformableEditGeometry;
-    deformableEditGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableImportedPath);
-    __hidden_project_testbed_runtime::TestbedMaterialRef deformableUvMaterial;
-    deformableUvMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableMaterialPath);
-    m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
-        *m_world,
-        deformableEditGeometry,
-        deformableUvMaterial,
-        replayPosition,
-        replayScale
-    );
-    if(auto* replayTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_deformableMorphEntity))
-        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), &replayTransform->rotation);
+    __hidden_project_testbed_runtime::SurfaceEditTargetDesc replayTarget = selectedTarget;
+    replayTarget.position = replayPosition;
+    replayTarget.uniformScale = replayScale;
+    m_surfaceEditTargetEntity =
+        __hidden_project_testbed_runtime::CreateSurfaceEditTargetEntity(*m_world, replayTarget)
+    ;
     m_surfaceEditState = Move(loadedState);
     m_surfaceEditHistory.redoStack.clear();
     m_pendingSurfaceEditReplay = true;
@@ -1144,7 +1252,7 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
         return;
 
     const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+        rendererSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
     if(!runtimeMesh.valid() || !instance)
@@ -1153,7 +1261,7 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
     NWB::Core::ECSGraphics::DeformableSurfaceEditReplayContext replayContext;
     replayContext.assetManager = &m_context.assetManager;
     replayContext.world = m_world.get();
-    replayContext.targetEntity = m_deformableMorphEntity;
+    replayContext.targetEntity = m_surfaceEditTargetEntity;
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditReplayResult replayResult;
     if(
@@ -1220,6 +1328,9 @@ bool ProjectTestbed::buildSurfaceEditCleanBase(
 }
 
 void ProjectTestbed::hideSurfaceEditAccessoriesForTarget(const NWB::Core::ECS::EntityID targetEntity){
+    if(!targetEntity.valid())
+        return;
+
     auto accessoryView = m_world->view<
         NWB::Core::ECSGraphics::RendererComponent,
         NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent
@@ -1236,12 +1347,12 @@ void ProjectTestbed::hideSurfaceEditAccessoriesForTarget(const NWB::Core::ECS::E
 
 bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
     const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_deformableMorphEntity)
+        rendererSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     if(!runtimeMesh.valid())
         return false;
 
-    hideSurfaceEditAccessoriesForTarget(m_deformableMorphEntity);
+    hideSurfaceEditAccessoriesForTarget(m_surfaceEditTargetEntity);
     for(const auto& accessory : m_surfaceEditState.accessories){
         if(!accessory.geometry.valid() || !accessory.material.valid())
             return false;
@@ -1259,7 +1370,7 @@ bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
         if(!attachment)
             return false;
 
-        attachment->targetEntity = m_deformableMorphEntity;
+        attachment->targetEntity = m_surfaceEditTargetEntity;
         attachment->runtimeMesh = runtimeMesh;
         attachment->anchorEditId = accessory.anchorEditId;
         attachment->firstWallVertex = accessory.firstWallVertex;
@@ -1283,7 +1394,7 @@ bool ProjectTestbed::prepareSurfaceEditMutation(
 
     auto& renderSystem = rendererSystem();
     outContext.rendererSystem = &renderSystem;
-    outContext.runtimeMesh = renderSystem.deformableRuntimeMeshHandle(m_deformableMorphEntity);
+    outContext.runtimeMesh = renderSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity);
     outContext.instance = renderSystem.findDeformableRuntimeMesh(outContext.runtimeMesh);
     if(!outContext.runtimeMesh.valid() || !outContext.instance){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: active runtime mesh is unavailable"), action);
@@ -1319,13 +1430,15 @@ bool ProjectTestbed::pickSurfaceEditMutationTarget(
     outTargetHit = NWB::Core::ECSGraphics::DeformablePosedHit{};
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;
-    const NWB::ProjectFrameClientSize clientSize = NWB::QueryProjectFrameClientSize();
+    const __hidden_project_testbed_runtime::EditorClientSize clientSize =
+        __hidden_project_testbed_runtime::ResolveEditorClientSize(m_context.graphics)
+    ;
     const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
     const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
     const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
     const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
     const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
-    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, cursorX, cursorY, ray)){
+    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, clientSize, cursorX, cursorY, ray)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: could not build editor pick ray"), action);
         return false;
     }
@@ -1645,6 +1758,9 @@ void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
 
 void ProjectTestbed::logSurfaceEditControls()const{
     NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit targets: 1 plane, 2 box, 3 cube, 4 sphere, 5 tetrahedron")
+    );
+    NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit: left click preview, [/] radius={}, comma/period ellipse={}, -/= depth={}, Enter commit, F2 debug, F3 replay, F4 undo, F5 redo, F6 heal latest, F7 resize latest, F8 move latest, F9 patch latest, F10 loop cut latest, Esc cancel"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
@@ -1717,7 +1833,12 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         setKeyState(key, false);
 
     if(action == NWB::Core::InputAction::Press || action == NWB::Core::InputAction::Repeat){
-        if(key == NWB::Core::Key::LeftBracket || key == NWB::Core::Key::RightBracket){
+        usize targetIndex = 0u;
+        if(__hidden_project_testbed_runtime::ResolveSurfaceEditTargetIndexFromKey(key, targetIndex)){
+            if(!selectSurfaceEditTarget(targetIndex))
+                logSurfaceEditControls();
+        }
+        else if(key == NWB::Core::Key::LeftBracket || key == NWB::Core::Key::RightBracket){
             const f32 delta = key == NWB::Core::Key::RightBracket ? 0.02f : -0.02f;
             m_surfaceEditRadius = __hidden_project_testbed_runtime::ClampSurfaceEditRadius(
                 m_surfaceEditRadius + delta

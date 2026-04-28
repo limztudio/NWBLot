@@ -36,8 +36,9 @@ private:
     void setKeyState(i32 key, bool pressed);
     [[nodiscard]] bool keyPressed(i32 key)const;
     void updateMainCamera(f32 delta);
-    void updateDeformableMorph(f32 delta);
+    void updateSurfaceEditTarget(f32 delta);
     void updateSurfaceEditAccessories();
+    [[nodiscard]] bool selectSurfaceEditTarget(usize targetIndex);
     void clearSurfaceEditPreview();
     void clearPendingSurfaceEditAccessory();
     bool refreshSurfaceEditPreview();
@@ -98,7 +99,7 @@ private:
 
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECS::EntityID m_deformableMorphEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_surfaceEditTargetEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECSGraphics::DeformableSurfaceEditState m_surfaceEditState;
     NWB::Core::ECSGraphics::DeformableSurfaceEditHistory m_surfaceEditHistory;
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession m_surfaceEditSession;
@@ -108,8 +109,9 @@ private:
     NWB::Core::ECSGraphics::RuntimeMeshHandle m_surfaceEditDebugRuntimeMesh;
     NWB::Core::ECSGraphics::DeformableHoleEditResult m_pendingSurfaceEditResult;
     NWB::Core::ECSGraphics::DeformableSurfaceEditRecord m_pendingSurfaceEditRecord;
-    f32 m_deformableMorphTime = 0.0f;
-    f32 m_deformableDisplacementScale = 1.0f;
+    usize m_surfaceEditTargetIndex = 0u;
+    f32 m_surfaceEditTargetTime = 0.0f;
+    f32 m_surfaceEditDisplacementScale = 1.0f;
     f32 m_surfaceEditRadius = 0.24f;
     f32 m_surfaceEditEllipseRatio = 1.0f;
     f32 m_surfaceEditDepth = 0.18f;

@@ -76,6 +76,14 @@ static void ResetKeyStates(){
     NWB_MEMSET(s_KeyStates, 0, sizeof(s_KeyStates));
 }
 
+static u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 displayDimension){
+    if(displayDimension <= 0)
+        return requestedDimension;
+
+    const u32 clampedDimension = Min<u32>(static_cast<u32>(requestedDimension), static_cast<u32>(displayDimension));
+    return static_cast<u16>(Min<u32>(clampedDimension, s_MaxU16));
+}
+
 static i32 TranslateModifiers(u32 state){
     i32 mods = 0;
 
@@ -484,8 +492,31 @@ bool InitX11Frame(Frame& frame){
     const i32 screen = DefaultScreen(GetX11Display(frameData));
     const i32 displayWidth = DisplayWidth(GetX11Display(frameData), screen);
     const i32 displayHeight = DisplayHeight(GetX11Display(frameData), screen);
-    const i32 centeredX = (displayWidth - static_cast<i32>(frameData.width())) >> 1;
-    const i32 centeredY = (displayHeight - static_cast<i32>(frameData.height())) >> 1;
+    const u16 requestedWidth = frameData.width();
+    const u16 requestedHeight = frameData.height();
+    const u16 windowWidth = ClampInitialWindowDimension(requestedWidth, displayWidth);
+    const u16 windowHeight = ClampInitialWindowDimension(requestedHeight, displayHeight);
+    if(windowWidth == 0u || windowHeight == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
+        CleanupX11Frame(frame);
+        return false;
+    }
+    if(windowWidth != requestedWidth || windowHeight != requestedHeight){
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"),
+            requestedWidth,
+            requestedHeight,
+            windowWidth,
+            windowHeight,
+            displayWidth,
+            displayHeight
+        );
+    }
+    frameData.width() = windowWidth;
+    frameData.height() = windowHeight;
+
+    const i32 centeredX = (displayWidth - static_cast<i32>(windowWidth)) >> 1;
+    const i32 centeredY = (displayHeight - static_cast<i32>(windowHeight)) >> 1;
     const i32 x = centeredX > 0 ? centeredX : 0;
     const i32 y = centeredY > 0 ? centeredY : 0;
 
@@ -494,8 +525,8 @@ bool InitX11Frame(Frame& frame){
         RootWindow(GetX11Display(frameData), screen),
         x,
         y,
-        frameData.width(),
-        frameData.height(),
+        windowWidth,
+        windowHeight,
         0,
         BlackPixel(GetX11Display(frameData), screen),
         WhitePixel(GetX11Display(frameData), screen)

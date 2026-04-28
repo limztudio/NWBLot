@@ -635,6 +635,19 @@ class LinuxX11Capture:
             raise SmokeFailure("failed to send CSG key event")
         self.x11.XFlush(self.display)
 
+    def select_surface_edit_target(self, window, target_key):
+        keycode = self.x11.XKeysymToKeycode(self.display, ord(str(target_key)))
+        if keycode == 0:
+            raise SmokeFailure(f"could not resolve target keycode '{target_key}'")
+
+        self.x11.XRaiseWindow(self.display, window)
+        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
+        self.x11.XFlush(self.display)
+        time.sleep(0.1)
+        self.send_key_event(window, self.KEY_PRESS, keycode)
+        time.sleep(0.05)
+        self.send_key_event(window, self.KEY_RELEASE, keycode)
+
     def exercise_surface_edit(self, window, relative_x, relative_y):
         attributes = self.get_attributes(window)
         if not attributes:
@@ -901,6 +914,13 @@ class WindowsCapture:
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, self.VK_RETURN, 0)
 
+    def select_surface_edit_target(self, hwnd, target_key):
+        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+        virtual_key = 0x30 + target_key
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYDOWN, virtual_key, 0)
+        time.sleep(0.05)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)
+
     def capture_window(self, hwnd, output_path):
         rect = self._window_rect(hwnd)
         if not rect:
@@ -1016,6 +1036,10 @@ def launch_testbed(args, executable, env, log_port):
 
 
 def capture_existing_handle(args, backend):
+    if args.surface_edit_target_key is not None:
+        backend.select_surface_edit_target(args.window_handle, args.surface_edit_target_key)
+        time.sleep(args.target_settle_seconds)
+
     if args.exercise_csg:
         backend.exercise_surface_edit(args.window_handle, args.csg_click_x, args.csg_click_y)
         time.sleep(args.csg_settle_seconds)
@@ -1050,6 +1074,13 @@ def launch_and_capture(args, backend):
         if testbed_process.poll() is not None:
             tail = read_process_tail(testbed_process)
             raise SmokeFailure(f"testbed exited before capture (exit {testbed_process.returncode})\n{tail}")
+
+        if args.surface_edit_target_key is not None:
+            backend.select_surface_edit_target(handle, args.surface_edit_target_key)
+            time.sleep(args.target_settle_seconds)
+            if testbed_process.poll() is not None:
+                tail = read_process_tail(testbed_process)
+                raise SmokeFailure(f"testbed exited after target selection (exit {testbed_process.returncode})\n{tail}")
 
         if args.exercise_csg:
             backend.exercise_surface_edit(handle, args.csg_click_x, args.csg_click_y)
@@ -1087,9 +1118,11 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
+    parser.add_argument("--surface-edit-target-key", type=int, choices=range(1, 10), help="Number key to press before capture/CSG.")
+    parser.add_argument("--target-settle-seconds", type=float, default=0.3, help="Seconds to wait after target selection.")
     parser.add_argument("--exercise-csg", action="store_true", help="Click the editable deformable surface and press Enter before capture.")
     parser.add_argument("--csg-click-x", type=float, default=0.5, help="Relative window X coordinate for the CSG smoke click.")
-    parser.add_argument("--csg-click-y", type=float, default=0.10, help="Relative window Y coordinate for the CSG smoke click.")
+    parser.add_argument("--csg-click-y", type=float, default=0.42, help="Relative window Y coordinate for the CSG smoke click.")
     parser.add_argument("--csg-settle-seconds", type=float, default=1.0, help="Seconds to wait after CSG input before capture.")
     parser.add_argument("--csg-log-timeout", type=float, default=10.0, help="Seconds to wait for the committed CSG log message.")
     parser.add_argument(

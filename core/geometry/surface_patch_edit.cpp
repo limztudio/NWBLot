@@ -197,26 +197,49 @@ bool BuildSurfacePatchWallVerticesImpl(
     )
         return false;
 
+    const bool cacheLoopVertexFrames = wallBandCount > 1u;
+    Vector<MeshTopologyLoopVertexFrame, Core::Alloc::ScratchAllocator<MeshTopologyLoopVertexFrame>> cachedLoopVertexFrames{
+        Core::Alloc::ScratchAllocator<MeshTopologyLoopVertexFrame>(scratchArena)
+    };
+    if(cacheLoopVertexFrames){
+        cachedLoopVertexFrames.resize(boundaryVertexCount);
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
+            if(
+                !BuildBoundaryLoopVertexFrame(
+                    positions,
+                    frame,
+                    orderedBoundaryEdges[previousEdgeIndex],
+                    orderedBoundaryEdges[edgeIndex],
+                    cachedLoopVertexFrames[edgeIndex]
+                )
+            )
+                return false;
+        }
+    }
+
     for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
         const f32 wallV = static_cast<f32>(ringIndex + 1u) / static_cast<f32>(wallBandCount);
         const usize vertexBase = ringIndex * boundaryVertexCount;
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
             const MeshTopologyEdge& edge = orderedBoundaryEdges[edgeIndex];
-            if(!__hidden_geometry_surface_patch_edit::ValidEdge(edge, positions.size()))
-                return false;
-
-            MeshTopologyLoopVertexFrame vertexFrame;
+            MeshTopologyLoopVertexFrame singleLoopVertexFrame{};
             if(
-                !BuildBoundaryLoopVertexFrame(
+                !cacheLoopVertexFrames
+                && !BuildBoundaryLoopVertexFrame(
                     positions,
                     frame,
                     orderedBoundaryEdges[previousEdgeIndex],
                     edge,
-                    vertexFrame
+                    singleLoopVertexFrame
                 )
             )
                 return false;
+            const MeshTopologyLoopVertexFrame& vertexFrame = cacheLoopVertexFrames
+                ? cachedLoopVertexFrames[edgeIndex]
+                : singleLoopVertexFrame
+            ;
 
             SurfacePatchWallVertex vertex;
             vertex.sourceVertex = edge.a;

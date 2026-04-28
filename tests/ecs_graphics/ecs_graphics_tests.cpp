@@ -738,6 +738,45 @@ static Float3U RestHitPosition(
     return BarycentricPosition(a, b, c, params.posedHit.bary);
 }
 
+static bool FindNearestUpFacingRestTriangle(
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const Float3U& target,
+    u32& outTriangle)
+{
+    outTriangle = Limit<u32>::s_Max;
+    f32 bestDistanceSquared = Limit<f32>::s_Max;
+    const usize triangleCount = instance.indices.size() / 3u;
+    if(triangleCount > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        const usize indexBase = triangle * 3u;
+        const u32 i0 = instance.indices[indexBase + 0u];
+        const u32 i1 = instance.indices[indexBase + 1u];
+        const u32 i2 = instance.indices[indexBase + 2u];
+        if(i0 >= instance.restVertices.size() || i1 >= instance.restVertices.size() || i2 >= instance.restVertices.size())
+            return false;
+
+        const SIMDVector p0 = LoadFloat(instance.restVertices[i0].position);
+        const SIMDVector p1 = LoadFloat(instance.restVertices[i1].position);
+        const SIMDVector p2 = LoadFloat(instance.restVertices[i2].position);
+        const SIMDVector areaVector = Vector3Cross(VectorSubtract(p1, p0), VectorSubtract(p2, p0));
+        if(VectorGetZ(areaVector) <= 0.0001f)
+            continue;
+
+        const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
+        const SIMDVector delta = VectorSubtract(centroid, LoadFloat(target));
+        const f32 distanceSquared = VectorGetX(Vector3LengthSq(delta));
+        if(!IsFinite(distanceSquared) || distanceSquared >= bestDistanceSquared)
+            continue;
+
+        bestDistanceSquared = distanceSquared;
+        outTriangle = static_cast<u32>(triangle);
+    }
+
+    return outTriangle != Limit<u32>::s_Max;
+}
+
 static void CheckHoleEditUnchanged(
     TestContext& context,
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
@@ -4351,6 +4390,83 @@ static void TestSurfaceEditStateReplayTwoHoles(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.indices.size() == editedInstance.indices.size());
 }
 
+static void TestSurfaceEditStateReplayOverlappingHoles(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(8u, 6u);
+    cleanBase.editRevision = 0u;
+
+    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
+    NWB::Impl::DeformableSurfaceEditState state;
+
+    u32 firstTriangle = Limit<u32>::s_Max;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        FindNearestUpFacingRestTriangle(editedInstance, Float3U(-0.75f, 0.0f, 0.0f), firstTriangle)
+    );
+
+    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(
+            editedInstance,
+            firstTriangle,
+            1.0f / 3.0f,
+            1.0f / 3.0f,
+            1.0f / 3.0f,
+            0.55f,
+            0.25f,
+            state,
+            &firstHoleResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstHoleResult.wallVertexCount >= 3u);
+
+    u32 overlappingTriangle = Limit<u32>::s_Max;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        FindNearestUpFacingRestTriangle(editedInstance, Float3U(0.25f, 0.0f, 0.0f), overlappingTriangle)
+    );
+
+    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHole(
+            editedInstance,
+            overlappingTriangle,
+            1.0f / 3.0f,
+            1.0f / 3.0f,
+            1.0f / 3.0f,
+            0.55f,
+            0.25f,
+            state,
+            &secondHoleResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondHoleResult.removedTriangleCount != 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondHoleResult.wallVertexCount >= 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 2u);
+    CheckRuntimeMeshPayloadValid(context, editedInstance);
+
+    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = cleanBase;
+    replayInstance.handle.value = 364u;
+
+    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ApplySurfaceEditState(
+            replayInstance,
+            state,
+            NWB::Impl::DeformableSurfaceEditReplayContext{},
+            &replayResult
+        )
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.restVertices.size() == editedInstance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.indices.size() == editedInstance.indices.size());
+    CheckRuntimeMeshPayloadValid(context, replayInstance);
+}
+
 static void TestSurfaceEditUndoLastReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance cleanBase = MakeGridHoleInstance(6u, 4u);
     cleanBase.editRevision = 0u;
@@ -5562,6 +5678,15 @@ static void TestRestSpaceHoleEditRejectsOpenBoundaryPatch(TestContext& context){
 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(instance, params));
     CheckHoleEditUnchanged(context, instance, oldVertexCount, oldIndexCount, oldRevision);
+
+    NWB::Impl::DeformableRuntimeMeshInstance borderGrid = MakeGridHoleInstance();
+    const usize oldGridVertexCount = borderGrid.restVertices.size();
+    const usize oldGridIndexCount = borderGrid.indices.size();
+    const u32 oldGridRevision = borderGrid.editRevision;
+    const NWB::Impl::DeformableHoleEditParams borderParams = MakeHoleEditParams(borderGrid, 0u, 0.55f, 0.25f);
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitDeformableRestSpaceHole(borderGrid, borderParams));
+    CheckHoleEditUnchanged(context, borderGrid, oldGridVertexCount, oldGridIndexCount, oldGridRevision);
 }
 
 static void TestRestSpaceHoleEditRejectsDegenerateHitFrame(TestContext& context){
@@ -5855,6 +5980,9 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         return -1;
     }
 
+    __hidden_ecs_graphics_tests::CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
     __hidden_ecs_graphics_tests::TestContext context;
     __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
     __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsAmbiguousRestTriangle(context);
@@ -5924,6 +6052,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRestoresMultipleAccessories(context);
     __hidden_ecs_graphics_tests::TestMinimalMilestoneReplayPreservesAnimatedPayload(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayTwoHoles(context);
+    __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayOverlappingHoles(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditUndoLastReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditRedoLastReplaysFromCleanBase(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditHealReplaysSurvivingEdits(context);

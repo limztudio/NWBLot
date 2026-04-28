@@ -1545,6 +1545,41 @@ struct TriangleCandidateEdge{
     bool paired = false;
 };
 
+[[nodiscard]] bool EdgeTouchesRemovedVertex(
+    const EdgeRecord& edge,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedVertices)
+{
+    return edge.a < removedVertices.size()
+        && edge.b < removedVertices.size()
+        && (removedVertices[edge.a] != 0u || removedVertices[edge.b] != 0u)
+    ;
+}
+
+[[nodiscard]] bool EdgesShareVertex(const EdgeRecord& a, const EdgeRecord& b){
+    return a.a == b.a || a.a == b.b || a.b == b.a || a.b == b.b;
+}
+
+[[nodiscard]] bool EdgeLooksLikeExistingCsgWallBoundary(
+    const EdgeRecord& edge,
+    const Vector<DeformableVertexRest>& restVertices,
+    const SIMDVector frameNormal)
+{
+    if(
+        edge.fullCount != 1u
+        || edge.removedCount != 0u
+        || edge.a >= restVertices.size()
+        || edge.b >= restVertices.size()
+    )
+        return false;
+
+    const f32 aNormalDot = Abs(VectorGetX(Vector3Dot(LoadFloat(restVertices[edge.a].normal), frameNormal)));
+    const f32 bNormalDot = Abs(VectorGetX(Vector3Dot(LoadFloat(restVertices[edge.b].normal), frameNormal)));
+    return IsFinite(aNormalDot)
+        && IsFinite(bNormalDot)
+        && (aNormalDot < 0.5f || bNormalDot < 0.5f)
+    ;
+}
+
 [[nodiscard]] bool AppendTriangleNeighbor(
     Vector<u32, Core::Alloc::ScratchAllocator<u32>>& neighbors,
     Vector<u8, Core::Alloc::ScratchAllocator<u8>>& neighborCounts,
@@ -1684,6 +1719,201 @@ struct TriangleCandidateEdge{
         }
     }
     return true;
+}
+
+[[nodiscard]] bool BuildOpenBoundaryComponentFromRemovedTriangles(
+    const Vector<u32>& indices,
+    const Vector<DeformableVertexRest>& restVertices,
+    const SIMDVector frameNormal,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedTriangles,
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outBoundaryEdges,
+    u32* outRemovedTriangleCount,
+    Core::Alloc::ScratchArena<>& scratchArena)
+{
+    if(outRemovedTriangleCount)
+        *outRemovedTriangleCount = 0u;
+    outBoundaryEdges.clear();
+
+    if(
+        indices.empty()
+        || (indices.size() % 3u) != 0u
+        || indices.size() / 3u != removedTriangles.size()
+        || restVertices.empty()
+        || !FiniteVec3(frameNormal)
+    )
+        return false;
+
+    const usize vertexCount = restVertices.size();
+    using EdgeRecordMap = HashMap<
+        u64,
+        EdgeRecord,
+        Hasher<u64>,
+        EqualTo<u64>,
+        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>
+    >;
+    EdgeRecordMap edgeRecords(
+        0,
+        Hasher<u64>(),
+        EqualTo<u64>(),
+        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
+    );
+    edgeRecords.reserve(indices.size());
+
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> removedVertices{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    removedVertices.resize(vertexCount, 0u);
+
+    const usize triangleCount = indices.size() / 3u;
+    u32 removedTriangleCount = 0u;
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        const usize indexBase = triangle * 3u;
+        const u32 triangleVertices[3] = {
+            indices[indexBase + 0u],
+            indices[indexBase + 1u],
+            indices[indexBase + 2u],
+        };
+        if(
+            triangleVertices[0u] >= vertexCount
+            || triangleVertices[1u] >= vertexCount
+            || triangleVertices[2u] >= vertexCount
+            || triangleVertices[0u] == triangleVertices[1u]
+            || triangleVertices[0u] == triangleVertices[2u]
+            || triangleVertices[1u] == triangleVertices[2u]
+        )
+            return false;
+
+        const bool removedTriangle = removedTriangles[triangle] != 0u;
+        if(removedTriangle){
+            ++removedTriangleCount;
+            removedVertices[triangleVertices[0u]] = 1u;
+            removedVertices[triangleVertices[1u]] = 1u;
+            removedVertices[triangleVertices[2u]] = 1u;
+        }
+
+        for(usize edgeIndex = 0u; edgeIndex < 3u; ++edgeIndex){
+            const u32 a = triangleVertices[edgeIndex];
+            const u32 b = triangleVertices[(edgeIndex + 1u) % 3u];
+            auto [it, inserted] = edgeRecords.emplace(MakeTriangleEdgeKey(a, b), EdgeRecord{});
+            EdgeRecord& edge = it.value();
+            if(inserted){
+                edge.a = a;
+                edge.b = b;
+            }
+            ++edge.fullCount;
+            if(removedTriangle)
+                ++edge.removedCount;
+        }
+    }
+    if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
+        return false;
+
+    auto fail = [&outBoundaryEdges](){
+        outBoundaryEdges.clear();
+        return false;
+    };
+
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> finalBoundaryEdges{
+        Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
+    };
+    finalBoundaryEdges.reserve(edgeRecords.size());
+    for(const auto& [edgeKey, edge] : edgeRecords){
+        static_cast<void>(edgeKey);
+        if(edge.fullCount == 0u || edge.fullCount > 2u || edge.removedCount > edge.fullCount)
+            return fail();
+
+        const u32 keptCount = edge.fullCount - edge.removedCount;
+        if(keptCount == 1u)
+            finalBoundaryEdges.push_back(edge);
+    }
+    if(finalBoundaryEdges.empty())
+        return fail();
+
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedEdges{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    visitedEdges.resize(finalBoundaryEdges.size(), 0u);
+
+    Vector<usize, Core::Alloc::ScratchAllocator<usize>> pendingEdges{
+        Core::Alloc::ScratchAllocator<usize>(scratchArena)
+    };
+    pendingEdges.reserve(finalBoundaryEdges.size());
+
+    bool foundTouchedComponent = false;
+    bool foundExistingCsgWallBoundary = false;
+    for(usize edgeIndex = 0u; edgeIndex < finalBoundaryEdges.size(); ++edgeIndex){
+        if(
+            visitedEdges[edgeIndex] != 0u
+            || !EdgeTouchesRemovedVertex(finalBoundaryEdges[edgeIndex], removedVertices)
+        )
+            continue;
+        if(foundTouchedComponent)
+            return fail();
+
+        foundTouchedComponent = true;
+        visitedEdges[edgeIndex] = 1u;
+        pendingEdges.clear();
+        pendingEdges.push_back(edgeIndex);
+
+        for(usize pendingIndex = 0u; pendingIndex < pendingEdges.size(); ++pendingIndex){
+            const usize currentEdgeIndex = pendingEdges[pendingIndex];
+            if(currentEdgeIndex >= finalBoundaryEdges.size())
+                return fail();
+
+            const EdgeRecord& currentEdge = finalBoundaryEdges[currentEdgeIndex];
+            outBoundaryEdges.push_back(currentEdge);
+            foundExistingCsgWallBoundary = foundExistingCsgWallBoundary
+                || EdgeLooksLikeExistingCsgWallBoundary(currentEdge, restVertices, frameNormal)
+            ;
+            for(usize candidateEdgeIndex = 0u; candidateEdgeIndex < finalBoundaryEdges.size(); ++candidateEdgeIndex){
+                if(visitedEdges[candidateEdgeIndex] != 0u)
+                    continue;
+
+                const EdgeRecord& candidateEdge = finalBoundaryEdges[candidateEdgeIndex];
+                if(!EdgesShareVertex(currentEdge, candidateEdge))
+                    continue;
+
+                visitedEdges[candidateEdgeIndex] = 1u;
+                pendingEdges.push_back(candidateEdgeIndex);
+            }
+        }
+    }
+    if(!foundTouchedComponent || !foundExistingCsgWallBoundary || outBoundaryEdges.empty())
+        return fail();
+
+    if(outRemovedTriangleCount)
+        *outRemovedTriangleCount = removedTriangleCount;
+    return true;
+}
+
+[[nodiscard]] bool BuildHoleBoundaryEdgesFromRemovedTriangles(
+    const Vector<u32>& indices,
+    const Vector<DeformableVertexRest>& restVertices,
+    const SIMDVector frameNormal,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedTriangles,
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outBoundaryEdges,
+    u32* outRemovedTriangleCount,
+    Core::Alloc::ScratchArena<>& scratchArena)
+{
+    if(
+        Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+            indices,
+            removedTriangles,
+            outBoundaryEdges,
+            outRemovedTriangleCount
+        )
+    )
+        return true;
+
+    return BuildOpenBoundaryComponentFromRemovedTriangles(
+        indices,
+        restVertices,
+        frameNormal,
+        removedTriangles,
+        outBoundaryEdges,
+        outRemovedTriangleCount,
+        scratchArena
+    );
 }
 
 
@@ -2393,11 +2623,14 @@ namespace __hidden_deformable_surface_edit{
     };
     u32 removedTriangleCount = 0u;
     if(
-        !Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+        !BuildHoleBoundaryEdgesFromRemovedTriangles(
             instance.indices,
+            instance.restVertices,
+            frame.normal,
             removeTriangle,
             boundaryEdges,
-            &removedTriangleCount
+            &removedTriangleCount,
+            scratchArena
         )
     ){
         NWB_LOGGER_WARNING(

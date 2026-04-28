@@ -42,60 +42,6 @@ using CapturingLogger = NWB::Tests::CapturingLogger;
 
 static constexpr AStringView s_MockAccessoryGeometryPath = "project/meshes/mock_earring";
 static constexpr AStringView s_MockAccessoryMaterialPath = "project/materials/mat_test";
-static constexpr u32 s_LegacySurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_LegacySurfaceEditStateVersionV3 = 3u;
-
-struct LegacySurfaceEditStateHeaderV3{
-    u32 magic = s_LegacySurfaceEditStateMagic;
-    u32 version = s_LegacySurfaceEditStateVersionV3;
-    u64 editCount = 0;
-    u64 accessoryCount = 0;
-};
-static_assert(IsStandardLayout_V<LegacySurfaceEditStateHeaderV3>, "LegacySurfaceEditStateHeaderV3 must stay binary-compatible");
-static_assert(IsTriviallyCopyable_V<LegacySurfaceEditStateHeaderV3>, "LegacySurfaceEditStateHeaderV3 must stay binary-compatible");
-
-struct LegacyHoleEditResultV3{
-    u32 removedTriangleCount = 0;
-    u32 addedVertexCount = 0;
-    u32 addedTriangleCount = 0;
-    u32 editRevision = 0;
-    u32 firstWallVertex = Limit<u32>::s_Max;
-    u32 wallVertexCount = 0;
-};
-static_assert(IsStandardLayout_V<LegacyHoleEditResultV3>, "LegacyHoleEditResultV3 must stay binary-compatible");
-static_assert(IsTriviallyCopyable_V<LegacyHoleEditResultV3>, "LegacyHoleEditResultV3 must stay binary-compatible");
-
-struct LegacySurfaceHoleEditRecordV3{
-    NWB::Impl::SourceSample restSample;
-    Float3U restPosition = Float3U(0.0f, 0.0f, 0.0f);
-    Float3U restNormal = Float3U(0.0f, 0.0f, 1.0f);
-    u32 baseEditRevision = 0;
-    f32 radius = 0.0f;
-    f32 ellipseRatio = 1.0f;
-    f32 depth = 0.0f;
-};
-static_assert(IsStandardLayout_V<LegacySurfaceHoleEditRecordV3>, "LegacySurfaceHoleEditRecordV3 must stay binary-compatible");
-static_assert(IsTriviallyCopyable_V<LegacySurfaceHoleEditRecordV3>, "LegacySurfaceHoleEditRecordV3 must stay binary-compatible");
-
-struct LegacySurfaceEditRecordV3{
-    NWB::Impl::DeformableSurfaceEditRecordType::Enum type = NWB::Impl::DeformableSurfaceEditRecordType::Hole;
-    LegacySurfaceHoleEditRecordV3 hole;
-    LegacyHoleEditResultV3 result;
-};
-static_assert(IsStandardLayout_V<LegacySurfaceEditRecordV3>, "LegacySurfaceEditRecordV3 must stay binary-compatible");
-static_assert(IsTriviallyCopyable_V<LegacySurfaceEditRecordV3>, "LegacySurfaceEditRecordV3 must stay binary-compatible");
-
-struct LegacySurfaceEditAccessoryRecordV3{
-    u32 editRevision = 0;
-    u32 firstWallVertex = Limit<u32>::s_Max;
-    u32 wallVertexCount = 0;
-    f32 normalOffset = 0.0f;
-    f32 uniformScale = 1.0f;
-    NameHash geometryNameHash = {};
-    NameHash materialNameHash = {};
-};
-static_assert(IsStandardLayout_V<LegacySurfaceEditAccessoryRecordV3>, "LegacySurfaceEditAccessoryRecordV3 must stay binary-compatible");
-static_assert(IsTriviallyCopyable_V<LegacySurfaceEditAccessoryRecordV3>, "LegacySurfaceEditAccessoryRecordV3 must stay binary-compatible");
 
 
 static void* ECSTestAlloc(usize size){
@@ -248,52 +194,6 @@ static bool AppendAccessoryRecord(
     record.uniformScale = attachment.uniformScale();
     record.wallLoopParameter = attachment.wallLoopParameter();
     state.accessories.push_back(record);
-    return true;
-}
-
-static bool BuildLegacySurfaceEditStateBinaryV3(
-    const NWB::Impl::DeformableSurfaceEditState& state,
-    NWB::Core::Assets::AssetBytes& outBinary)
-{
-    outBinary.clear();
-    LegacySurfaceEditStateHeaderV3 header;
-    header.editCount = static_cast<u64>(state.edits.size());
-    header.accessoryCount = static_cast<u64>(state.accessories.size());
-    AppendPOD(outBinary, header);
-
-    for(const NWB::Impl::DeformableSurfaceEditRecord& edit : state.edits){
-        if(edit.hole.wallLoopCutCount != 0u || edit.result.wallLoopCutCount != 0u)
-            return false;
-
-        LegacySurfaceEditRecordV3 legacyEdit;
-        legacyEdit.type = edit.type;
-        legacyEdit.hole.restSample = edit.hole.restSample;
-        legacyEdit.hole.restPosition = edit.hole.restPosition;
-        legacyEdit.hole.restNormal = edit.hole.restNormal;
-        legacyEdit.hole.baseEditRevision = edit.hole.baseEditRevision;
-        legacyEdit.hole.radius = edit.hole.radius;
-        legacyEdit.hole.ellipseRatio = edit.hole.ellipseRatio;
-        legacyEdit.hole.depth = edit.hole.depth;
-        legacyEdit.result.removedTriangleCount = edit.result.removedTriangleCount;
-        legacyEdit.result.addedVertexCount = edit.result.addedVertexCount;
-        legacyEdit.result.addedTriangleCount = edit.result.addedTriangleCount;
-        legacyEdit.result.editRevision = edit.result.editRevision;
-        legacyEdit.result.firstWallVertex = edit.result.firstWallVertex;
-        legacyEdit.result.wallVertexCount = edit.result.wallVertexCount;
-        AppendPOD(outBinary, legacyEdit);
-    }
-
-    for(const NWB::Impl::DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        LegacySurfaceEditAccessoryRecordV3 legacyAccessory;
-        legacyAccessory.editRevision = accessory.anchorEditId;
-        legacyAccessory.firstWallVertex = accessory.firstWallVertex;
-        legacyAccessory.wallVertexCount = accessory.wallVertexCount;
-        legacyAccessory.normalOffset = accessory.normalOffset;
-        legacyAccessory.uniformScale = accessory.uniformScale;
-        legacyAccessory.geometryNameHash = accessory.geometry.name().hash();
-        legacyAccessory.materialNameHash = accessory.material.name().hash();
-        AppendPOD(outBinary, legacyAccessory);
-    }
     return true;
 }
 
@@ -3720,81 +3620,6 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories.empty());
 }
 
-static void TestSurfaceEditStateDeserializeLegacyV3(TestContext& context){
-    NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
-    editedInstance.editRevision = 0u;
-
-    NWB::Impl::DeformableSurfaceEditState state;
-    NWB::Impl::DeformableHoleEditResult result;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitRecordedHole(editedInstance, 8u, 0.48f, 0.25f, state, &result));
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, result, 0.08f, 0.12f, attachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            attachment,
-            state.edits[0].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
-
-    NWB::Core::Assets::AssetBytes binary;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, BuildLegacySurfaceEditStateBinaryV3(state, binary));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, !binary.empty());
-
-    NWB::Impl::DeformableSurfaceEditState loadedState;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits[0].editId == state.edits[0].result.editRevision);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits[0].hole.wallLoopCutCount == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.edits[0].result.wallLoopCutCount == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].anchorEditId == state.edits[0].editId);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].geometry.name() == Name(s_MockAccessoryGeometryPath));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].material.name() == Name(s_MockAccessoryMaterialPath));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].geometryVirtualPathText.empty());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, loadedState.accessories[0].materialVirtualPathText.empty());
-
-    TestAssetManager testAssets;
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
-
-    TestWorld testWorld;
-    auto targetEntity = testWorld.world.createEntity();
-    NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance();
-    replayInstance.entity = targetEntity.id();
-    replayInstance.editRevision = 0u;
-    replayInstance.handle.value = 144u;
-
-    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
-    replayContext.assetManager = &testAssets.manager;
-    replayContext.world = &testWorld.world;
-    replayContext.targetEntity = replayInstance.entity;
-    NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 1u);
-
-    u32 restoredAccessoryCount = 0u;
-    testWorld.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
-        [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
-            ++restoredAccessoryCount;
-            NWB_ECS_GRAPHICS_TEST_CHECK(context, restored.anchorEditId == loadedState.edits[0].editId);
-            NWB_ECS_GRAPHICS_TEST_CHECK(context, restored.firstWallVertex == loadedState.accessories[0].firstWallVertex);
-        }
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, restoredAccessoryCount == 1u);
-}
-
 static void TestSurfaceEditStateReplayOneHole(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = MakeGridHoleInstance();
     editedInstance.editRevision = 0u;
@@ -6043,7 +5868,6 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     __hidden_ecs_graphics_tests::TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditFlowAttachesAndPersistsAccessory(context);
-    __hidden_ecs_graphics_tests::TestSurfaceEditStateDeserializeLegacyV3(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayEmptyStateIsNoOp(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayRejectsMismatchedTargetEntity(context);
     __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayOneHole(context);

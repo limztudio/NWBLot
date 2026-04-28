@@ -98,6 +98,17 @@ inline void AccumulateWeightedMorphDelta(
     AccumulateWeightedVector(target.deltaTangent, LoadFloat(source.deltaTangent), weightVector);
 }
 
+[[nodiscard]] inline bool ValidateRuntimeMeshVertexCount(const DeformableRuntimeMeshInstance& instance){
+    if(instance.restVertices.size() <= static_cast<usize>(Limit<u32>::s_Max))
+        return true;
+
+    NWB_LOGGER_ERROR(
+        NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex count exceeds u32 limits"),
+        instance.handle.value
+    );
+    return false;
+}
+
 template<typename MorphRangeVector, typename MorphDeltaVector>
 [[nodiscard]] bool BuildBlendedMorphPayload(
     const DeformableRuntimeMeshInstance& instance,
@@ -113,13 +124,8 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
     if(!DeformableRuntime::HasMorphWeights(morphWeights))
         return true;
 
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex count exceeds u32 limits"),
-            instance.handle.value
-        );
+    if(!ValidateRuntimeMeshVertexCount(instance))
         return false;
-    }
 
     Core::Alloc::ScratchArena<> scratchArena;
     MorphWeightLookup resolvedWeights(

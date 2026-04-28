@@ -2871,6 +2871,22 @@ NWB_INLINE SIMDVector SIMDCALL ClampLengthV(SIMDVector value, SIMDVector lengthS
     return VectorSelect(result, value, VectorEqualInt(controlMax, controlMin));
 }
 
+NWB_INLINE SIMDVector SIMDCALL RefractV(
+    SIMDVector incident,
+    SIMDVector normal,
+    SIMDVector refractionIndex,
+    SIMDVector dot)noexcept
+{
+    SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
+    const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
+    r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
+    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
+    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
+    SIMDVector result = VectorMultiply(refractionIndex, incident);
+    result = VectorNegativeMultiplySubtract(r, normal, result);
+    return VectorSelect(result, VectorZero(), totalInternalReflection);
+}
+
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
@@ -2895,15 +2911,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Reflect(SIMDVector incident, SIMDVector no
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2RefractV(SIMDVector incident, SIMDVector normal, SIMDVector refractionIndex)noexcept{
-    const SIMDVector dot = Vector2Dot(incident, normal);
-    SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
-    const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
-    r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
-    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
-    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
-    SIMDVector result = VectorMultiply(refractionIndex, incident);
-    result = VectorNegativeMultiplySubtract(r, normal, result);
-    return VectorSelect(result, VectorZero(), totalInternalReflection);
+    return SIMDVectorDetail::RefractV(incident, normal, refractionIndex, Vector2Dot(incident, normal));
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector2Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{
@@ -3090,15 +3098,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector3Reflect(SIMDVector incident, SIMDVector no
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3RefractV(SIMDVector incident, SIMDVector normal, SIMDVector refractionIndex)noexcept{
-    const SIMDVector dot = Vector3Dot(incident, normal);
-    SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
-    const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
-    r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
-    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
-    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
-    SIMDVector result = VectorMultiply(refractionIndex, incident);
-    result = VectorNegativeMultiplySubtract(r, normal, result);
-    return VectorSelect(result, VectorZero(), totalInternalReflection);
+    return SIMDVectorDetail::RefractV(incident, normal, refractionIndex, Vector3Dot(incident, normal));
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{ return Vector3RefractV(incident, normal, VectorReplicate(refractionIndex)); }
@@ -3285,15 +3285,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector4Reflect(SIMDVector incident, SIMDVector no
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector4RefractV(SIMDVector incident, SIMDVector normal, SIMDVector refractionIndex)noexcept{
-    const SIMDVector dot = Vector4Dot(incident, normal);
-    SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
-    const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
-    r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);
-    const SIMDVector totalInternalReflection = VectorLess(r, s_SIMDZero);
-    r = VectorMultiplyAdd(refractionIndex, dot, VectorSqrt(VectorMax(r, s_SIMDZero)));
-    SIMDVector result = VectorMultiply(refractionIndex, incident);
-    result = VectorNegativeMultiplySubtract(r, normal, result);
-    return VectorSelect(result, VectorZero(), totalInternalReflection);
+    return SIMDVectorDetail::RefractV(incident, normal, refractionIndex, Vector4Dot(incident, normal));
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector4Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{ return Vector4RefractV(incident, normal, VectorReplicate(refractionIndex)); }

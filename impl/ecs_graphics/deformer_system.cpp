@@ -447,13 +447,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     const DeformableSkeletonPoseComponent* skeletonPose,
     const DeformableDisplacementComponent* displacement)
 {
-    if(instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex count exceeds u32 limits"),
-            instance.handle.value
-        );
+    if(!DeformerMorphPayload::ValidateRuntimeMeshVertexCount(instance))
         return false;
-    }
 
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<DeformerVertexMorphRangeGpu, Core::Alloc::ScratchAllocator<DeformerVertexMorphRangeGpu>> morphRanges{

@@ -627,6 +627,97 @@ static bool CommitRecordedHole(
     return CommitRecordedHole(instance, triangle, 0.25f, 0.25f, 0.5f, radius, depth, state, outResult);
 }
 
+struct RecordedHoleAccessory{
+    NWB::Impl::DeformableHoleEditResult hole;
+    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
+    NWB::Impl::DeformableSurfaceEditId editId = 0u;
+};
+
+static bool CommitRecordedHoleAccessory(
+    NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const u32 triangle,
+    const f32 radius,
+    const f32 depth,
+    const f32 normalOffset,
+    const f32 uniformScale,
+    NWB::Impl::DeformableSurfaceEditState& state,
+    RecordedHoleAccessory& outRecorded)
+{
+    outRecorded = RecordedHoleAccessory{};
+    const usize oldEditCount = state.edits.size();
+    if(!CommitRecordedHole(instance, triangle, radius, depth, state, &outRecorded.hole))
+        return false;
+    if(state.edits.size() != oldEditCount + 1u)
+        return false;
+
+    outRecorded.editId = state.edits[oldEditCount].editId;
+    if(!NWB::Impl::AttachAccessory(instance, outRecorded.hole, normalOffset, uniformScale, outRecorded.attachment))
+        return false;
+
+    return AppendAccessoryRecord(
+        state,
+        outRecorded.attachment,
+        outRecorded.editId,
+        s_MockAccessoryGeometryPath,
+        s_MockAccessoryMaterialPath
+    );
+}
+
+struct SurfaceEditReplayFixture{
+    NWB::Impl::DeformableSurfaceEditState loadedState;
+    TestAssetManager assets;
+    TestWorld world;
+    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
+};
+
+static bool PrepareSurfaceEditReplayFixture(
+    TestContext& context,
+    const NWB::Impl::DeformableSurfaceEditState& state,
+    NWB::Impl::DeformableRuntimeMeshInstance& replayInstance,
+    SurfaceEditReplayFixture& outFixture)
+{
+    NWB::Core::Assets::AssetBytes binary;
+    const bool serialized = NWB::Impl::SerializeSurfaceEditState(state, binary);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, serialized);
+    if(!serialized)
+        return false;
+
+    const bool deserialized = NWB::Impl::DeserializeSurfaceEditState(binary, outFixture.loadedState);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, deserialized);
+    if(!deserialized)
+        return false;
+
+    outFixture.assets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
+    outFixture.assets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
+
+    auto targetEntity = outFixture.world.world.createEntity();
+    replayInstance.entity = targetEntity.id();
+    outFixture.replayContext.assetManager = &outFixture.assets.manager;
+    outFixture.replayContext.world = &outFixture.world.world;
+    outFixture.replayContext.targetEntity = replayInstance.entity;
+    return true;
+}
+
+static bool ApplySurfaceEditReplayFixture(
+    TestContext& context,
+    const NWB::Impl::DeformableSurfaceEditState& state,
+    NWB::Impl::DeformableRuntimeMeshInstance& replayInstance,
+    SurfaceEditReplayFixture& outFixture,
+    NWB::Impl::DeformableSurfaceEditReplayResult& outResult)
+{
+    if(!PrepareSurfaceEditReplayFixture(context, state, replayInstance, outFixture))
+        return false;
+
+    const bool applied = NWB::Impl::ApplySurfaceEditState(
+        replayInstance,
+        outFixture.loadedState,
+        outFixture.replayContext,
+        &outResult
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, applied);
+    return applied;
+}
+
 static Float3U RestHitPosition(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const NWB::Impl::DeformableHoleEditParams& params)
@@ -3944,62 +4035,32 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
     editedInstance.editRevision = 0u;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    RecordedHoleAccessory firstAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
-    );
-    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            firstAttachment,
-            state.edits[0].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
     );
 
     NWB::Impl::DeformableAccessoryAttachmentComponent secondFirstHoleAttachment;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.11f, 0.14f, secondFirstHoleAttachment)
+        NWB::Impl::AttachAccessory(editedInstance, firstAccessory.hole, 0.11f, 0.14f, secondFirstHoleAttachment)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         AppendAccessoryRecord(
             state,
             secondFirstHoleAttachment,
-            state.edits[0].editId,
+            firstAccessory.editId,
             s_MockAccessoryGeometryPath,
             s_MockAccessoryMaterialPath
         )
     );
 
-    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    RecordedHoleAccessory secondAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
-    );
-    NWB::Impl::DeformableAccessoryAttachmentComponent secondHoleAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondHoleAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            secondHoleAttachment,
-            state.edits[1].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
+        CommitRecordedHoleAccessory(editedInstance, 14u, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 3u);
@@ -4010,37 +4071,19 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
         NWB::Impl::ResolveAccessoryAttachmentTransform(
             editedInstance,
             NWB::Impl::DeformablePickingInputs{},
-            firstAttachment,
+            firstAccessory.attachment,
             oldHoleTransform
         )
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(oldHoleTransform.position.z, 0.08f));
 
-    NWB::Core::Assets::AssetBytes binary;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
-    NWB::Impl::DeformableSurfaceEditState loadedState;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
-
-    TestAssetManager testAssets;
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
-
-    TestWorld testWorld;
-    auto targetEntity = testWorld.world.createEntity();
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance(6u, 4u);
-    replayInstance.entity = targetEntity.id();
     replayInstance.editRevision = 0u;
     replayInstance.handle.value = 544u;
-
-    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
-    replayContext.assetManager = &testAssets.manager;
-    replayContext.world = &testWorld.world;
-    replayContext.targetEntity = replayInstance.entity;
+    SurfaceEditReplayFixture replayFixture;
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
-    );
+    if(!ApplySurfaceEditReplayFixture(context, state, replayInstance, replayFixture, replayResult))
+        return;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 3u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 2u);
@@ -4049,12 +4092,12 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
     u32 accessoryCount = 0u;
     u32 firstEditAccessoryCount = 0u;
     u32 secondEditAccessoryCount = 0u;
-    testWorld.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
+    replayFixture.world.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
         [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
             ++accessoryCount;
-            if(restored.anchorEditId == loadedState.edits[0].editId)
+            if(restored.anchorEditId == replayFixture.loadedState.edits[0].editId)
                 ++firstEditAccessoryCount;
-            if(restored.anchorEditId == loadedState.edits[1].editId)
+            if(restored.anchorEditId == replayFixture.loadedState.edits[1].editId)
                 ++secondEditAccessoryCount;
 
             NWB::Core::Scene::TransformComponent resolvedTransform;
@@ -4076,10 +4119,11 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
 
     NWB::Impl::DeformableSurfaceEditState malformedState = state;
     malformedState.accessories[0].anchorEditId = 99u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+    NWB::Core::Assets::AssetBytes malformedBinary;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, malformedBinary));
     malformedState = state;
     malformedState.edits[1].editId = malformedState.edits[0].editId;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, binary));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::SerializeSurfaceEditState(malformedState, malformedBinary));
 }
 
 static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& context){
@@ -4088,76 +4132,28 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
     ConfigureMinimalMilestonePayload(editedInstance);
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    RecordedHoleAccessory firstAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
-    );
-    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            firstAttachment,
-            state.edits[0u].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
     );
 
-    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    RecordedHoleAccessory secondAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
-    );
-    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            secondAttachment,
-            state.edits[1u].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
+        CommitRecordedHoleAccessory(editedInstance, 14u, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 2u);
 
-    NWB::Core::Assets::AssetBytes binary;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
-    NWB::Impl::DeformableSurfaceEditState loadedState;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
-
-    TestAssetManager testAssets;
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
-
-    TestWorld testWorld;
-    auto targetEntity = testWorld.world.createEntity();
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance(6u, 4u);
-    replayInstance.entity = targetEntity.id();
     replayInstance.editRevision = 0u;
     replayInstance.handle.value = 644u;
     ConfigureMinimalMilestonePayload(replayInstance);
-
-    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
-    replayContext.assetManager = &testAssets.manager;
-    replayContext.world = &testWorld.world;
-    replayContext.targetEntity = replayInstance.entity;
+    SurfaceEditReplayFixture replayFixture;
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
-    );
+    if(!ApplySurfaceEditReplayFixture(context, state, replayInstance, replayFixture, replayResult))
+        return;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 2u);
@@ -4233,7 +4229,7 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
     NWB_ECS_GRAPHICS_TEST_CHECK(context, sawAnimatedOffset);
 
     u32 accessoryCount = 0u;
-    testWorld.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
+    replayFixture.world.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
         [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
             ++accessoryCount;
 
@@ -4394,28 +4390,12 @@ static void TestSurfaceEditUndoLastReplaysFromCleanBase(TestContext& context){
         )
     );
 
-    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    RecordedHoleAccessory secondAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
+        CommitRecordedHoleAccessory(editedInstance, 14u, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId secondEditId = state.edits[1].editId;
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            secondAttachment,
-            secondEditId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
+    const NWB::Impl::DeformableSurfaceEditId secondEditId = secondAccessory.editId;
 
     NWB::Impl::DeformableSurfaceEditUndoResult undoResult;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -4456,58 +4436,26 @@ static void TestSurfaceEditRedoLastReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    RecordedHoleAccessory firstAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId firstEditId = state.edits[0].editId;
+    const NWB::Impl::DeformableSurfaceEditId firstEditId = firstAccessory.editId;
 
-    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
+    RecordedHoleAccessory secondAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
+        CommitRecordedHoleAccessory(editedInstance, 14u, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            firstAttachment,
-            firstEditId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
-
-    NWB::Impl::DeformableHoleEditResult secondHoleResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
-    );
-    const NWB::Impl::DeformableSurfaceEditId secondEditId = state.edits[1].editId;
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            secondAttachment,
-            secondEditId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
+    const NWB::Impl::DeformableSurfaceEditId secondEditId = secondAccessory.editId;
     NWB::Core::Scene::TransformComponent expectedSecondTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
             editedInstance,
             NWB::Impl::DeformablePickingInputs{},
-            secondAttachment,
+            secondAccessory.attachment,
             expectedSecondTransform
         )
     );
@@ -4572,51 +4520,19 @@ static void TestSurfaceEditHealReplaysSurvivingEdits(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    RecordedHoleAccessory firstAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId firstEditId = state.edits[0].editId;
+    const NWB::Impl::DeformableSurfaceEditId firstEditId = firstAccessory.editId;
 
-    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
+    RecordedHoleAccessory secondAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
+        CommitRecordedHoleAccessory(editedInstance, 14u, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            firstAttachment,
-            firstEditId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
-
-    NWB::Impl::DeformableHoleEditResult secondHoleResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
-    );
-    const NWB::Impl::DeformableSurfaceEditId secondEditId = state.edits[1].editId;
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            secondAttachment,
-            secondEditId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
+    const NWB::Impl::DeformableSurfaceEditId secondEditId = secondAccessory.editId;
     const u32 oldSecondFirstWallVertex = state.accessories[1].firstWallVertex;
 
     NWB::Impl::DeformableSurfaceEditHealResult healResult;
@@ -4662,30 +4578,14 @@ static void TestSurfaceEditResizeReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult holeResult;
+    RecordedHoleAccessory accessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.38f, 0.25f, state, &holeResult)
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.38f, 0.25f, 0.09f, 0.13f, state, accessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId editId = state.edits[0].editId;
+    const NWB::Impl::DeformableSurfaceEditId editId = accessory.editId;
     const f32 oldRadius = state.edits[0].hole.radius;
     const f32 oldDepth = state.edits[0].hole.depth;
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.09f, 0.13f, attachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            attachment,
-            editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
 
     NWB::Impl::DeformableSurfaceEditResizeResult resizeResult;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -4742,29 +4642,13 @@ static void TestSurfaceEditMoveReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult holeResult;
+    RecordedHoleAccessory accessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.38f, 0.25f, state, &holeResult)
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.38f, 0.25f, 0.11f, 0.14f, state, accessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId editId = state.edits[0].editId;
+    const NWB::Impl::DeformableSurfaceEditId editId = accessory.editId;
     const Float3U oldRestPosition = state.edits[0].hole.restPosition;
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.11f, 0.14f, attachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            attachment,
-            editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
 
     const NWB::Impl::DeformableHoleEditParams moveParams =
         MakeHoleEditParams(editedInstance, 14u, 0.25f, 0.25f, 0.5f, 0.38f, 0.25f)
@@ -4833,31 +4717,15 @@ static void TestSurfaceEditPatchReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult holeResult;
+    RecordedHoleAccessory accessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.38f, 0.25f, state, &holeResult)
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.38f, 0.25f, 0.12f, 0.15f, state, accessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId editId = state.edits[0].editId;
+    const NWB::Impl::DeformableSurfaceEditId editId = accessory.editId;
     const Float3U oldRestPosition = state.edits[0].hole.restPosition;
     const f32 oldRadius = state.edits[0].hole.radius;
     const f32 oldDepth = state.edits[0].hole.depth;
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.12f, 0.15f, attachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            attachment,
-            editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
 
     const NWB::Impl::DeformableHoleEditParams patchParams =
         MakeHoleEditParams(editedInstance, 14u, 0.25f, 0.25f, 0.5f, 0.48f, 0.31f)
@@ -4930,30 +4798,14 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult holeResult;
+    RecordedHoleAccessory accessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.38f, 0.25f, state, &holeResult)
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.38f, 0.25f, 0.12f, 0.15f, state, accessory)
     );
-    const NWB::Impl::DeformableSurfaceEditId editId = state.edits[0].editId;
+    const NWB::Impl::DeformableSurfaceEditId editId = accessory.editId;
     const u32 wallVertexCount = state.edits[0].result.wallVertexCount;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, wallVertexCount >= 3u);
-
-    NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.12f, 0.15f, attachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            attachment,
-            editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
-    );
 
     NWB::Impl::DeformableSurfaceEditLoopCutResult loopCutResult;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -5173,75 +5025,26 @@ static void TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(TestContext& c
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    NWB::Impl::DeformableHoleEditResult firstHoleResult;
+    RecordedHoleAccessory firstAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 12u, 0.48f, 0.25f, state, &firstHoleResult)
-    );
-    NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            firstAttachment,
-            state.edits[0].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
+        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
     );
 
-    NWB::Impl::DeformableHoleEditResult secondHoleResult;
+    RecordedHoleAccessory secondAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHole(editedInstance, 14u, 0.48f, 0.25f, state, &secondHoleResult)
-    );
-    NWB::Impl::DeformableAccessoryAttachmentComponent secondAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, secondHoleResult, 0.16f, 0.18f, secondAttachment)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        AppendAccessoryRecord(
-            state,
-            secondAttachment,
-            state.edits[1].editId,
-            s_MockAccessoryGeometryPath,
-            s_MockAccessoryMaterialPath
-        )
+        CommitRecordedHoleAccessory(editedInstance, 14u, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 2u);
 
-    NWB::Core::Assets::AssetBytes binary;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SerializeSurfaceEditState(state, binary));
-    NWB::Impl::DeformableSurfaceEditState loadedState;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::DeserializeSurfaceEditState(binary, loadedState));
-
-    TestAssetManager testAssets;
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryGeometryPath);
-    testAssets.binarySource.addAvailablePath(s_MockAccessoryMaterialPath);
-
-    TestWorld testWorld;
-    auto targetEntity = testWorld.world.createEntity();
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = cleanBase;
-    replayInstance.entity = targetEntity.id();
     replayInstance.handle.value = 744u;
-
-    NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
-    replayContext.assetManager = &testAssets.manager;
-    replayContext.world = &testWorld.world;
-    replayContext.targetEntity = replayInstance.entity;
-
+    SurfaceEditReplayFixture replayFixture;
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
-    );
+    if(!ApplySurfaceEditReplayFixture(context, state, replayInstance, replayFixture, replayResult))
+        return;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 2u);
@@ -5258,7 +5061,7 @@ static void TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(TestContext& c
     accessoryInputs.displacementTexture = &texture;
 
     u32 restoredAccessoryCount = 0u;
-    testWorld.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
+    replayFixture.world.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
         [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
             ++restoredAccessoryCount;
             NWB::Core::Scene::TransformComponent resolvedTransform;

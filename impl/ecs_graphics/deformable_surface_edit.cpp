@@ -650,32 +650,9 @@ using SurfaceEditRecordLookup = HashMap<
     return true;
 }
 
-[[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
-    Core::Alloc::ScratchArena<> scratchArena;
-    SurfaceEditRecordLookup editRecords(
-        0,
-        Hasher<DeformableSurfaceEditId>(),
-        EqualTo<DeformableSurfaceEditId>(),
-        Core::Alloc::ScratchAllocator<SurfaceEditRecordLookupPair>(scratchArena)
-    );
-    if(!BuildSurfaceEditRecordLookup(state, editRecords))
-        return false;
-
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(editRecords, accessory.anchorEditId);
-        if(
-            !ValidAccessoryRecord(accessory)
-            || !anchorEdit
-            || !EditRecordMatchesAccessory(*anchorEdit, accessory)
-        )
-            return false;
-    }
-    return true;
-}
-
-[[nodiscard]] bool ValidateReplayAccessoryAnchors(
-    const DeformableRuntimeMeshInstance& instance,
-    const DeformableSurfaceEditState& state)
+[[nodiscard]] bool ValidateSurfaceEditAccessoryAnchors(
+    const DeformableSurfaceEditState& state,
+    const DeformableRuntimeMeshInstance* runtimeInstance)
 {
     Core::Alloc::ScratchArena<> scratchArena;
     SurfaceEditRecordLookup editRecords(
@@ -693,11 +670,25 @@ using SurfaceEditRecordLookup = HashMap<
             !ValidAccessoryRecord(accessory)
             || !anchorEdit
             || !EditRecordMatchesAccessory(*anchorEdit, accessory)
-            || !RuntimeMeshHasWallTrianglePairs(instance, accessory.firstWallVertex, accessory.wallVertexCount)
+            || (
+                runtimeInstance
+                && !RuntimeMeshHasWallTrianglePairs(*runtimeInstance, accessory.firstWallVertex, accessory.wallVertexCount)
+            )
         )
             return false;
     }
     return true;
+}
+
+[[nodiscard]] bool ValidSurfaceEditState(const DeformableSurfaceEditState& state){
+    return ValidateSurfaceEditAccessoryAnchors(state, nullptr);
+}
+
+[[nodiscard]] bool ValidateReplayAccessoryAnchors(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableSurfaceEditState& state)
+{
+    return ValidateSurfaceEditAccessoryAnchors(state, &instance);
 }
 
 [[nodiscard]] bool ReplayContextTargetsInstance(

@@ -1127,15 +1127,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     auto& renderSystem = rendererSystem();
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;
-    const __hidden_project_testbed_runtime::EditorClientSize clientSize =
-        __hidden_project_testbed_runtime::ResolveEditorClientSize(m_context.graphics)
-    ;
-    const bool clientSizeValid = clientSize.width != 0u && clientSize.height != 0u;
-    const f64 fallbackCursorX = static_cast<f64>(clientSizeValid ? clientSize.width : 1u) * 0.5;
-    const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
-    const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
-    const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
-    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, clientSize, cursorX, cursorY, ray)){
+    if(!buildSurfaceEditPickRay(ray)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not build editor pick ray"));
         return;
     }
@@ -1607,14 +1599,7 @@ void ProjectTestbed::finishSurfaceEditMutation(
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: failed to restore accessory entities"), action);
 }
 
-bool ProjectTestbed::pickSurfaceEditMutationTarget(
-    const tchar* action,
-    const SurfaceEditMutationContext& editContext,
-    NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit)
-{
-    outTargetHit = NWB::Core::ECSGraphics::DeformablePosedHit{};
-
-    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+bool ProjectTestbed::buildSurfaceEditPickRay(NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
     const __hidden_project_testbed_runtime::EditorClientSize clientSize =
         __hidden_project_testbed_runtime::ResolveEditorClientSize(m_context.graphics)
     ;
@@ -1623,7 +1608,18 @@ bool ProjectTestbed::pickSurfaceEditMutationTarget(
     const f64 fallbackCursorY = static_cast<f64>(clientSizeValid ? clientSize.height : 1u) * 0.5;
     const f64 cursorX = clientSizeValid && m_cursorPositionValid ? m_cursorX : fallbackCursorX;
     const f64 cursorY = clientSizeValid && m_cursorPositionValid ? m_cursorY : fallbackCursorY;
-    if(!__hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, clientSize, cursorX, cursorY, ray)){
+    return __hidden_project_testbed_runtime::BuildEditorPickRay(*m_world, clientSize, cursorX, cursorY, outRay);
+}
+
+bool ProjectTestbed::pickSurfaceEditMutationTarget(
+    const tchar* action,
+    const SurfaceEditMutationContext& editContext,
+    NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit)
+{
+    outTargetHit = NWB::Core::ECSGraphics::DeformablePosedHit{};
+
+    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+    if(!buildSurfaceEditPickRay(ray)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: could not build editor pick ray"), action);
         return false;
     }

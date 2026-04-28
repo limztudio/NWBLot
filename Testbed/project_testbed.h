@@ -75,6 +75,7 @@ private:
     void cancelSurfaceEditPreview();
     void queueSurfaceEditReplay();
     void applyPendingSurfaceEditReplay();
+    [[nodiscard]] bool buildSurfaceEditPickRay(NWB::Core::ECSGraphics::DeformablePickingRay& outRay);
     void undoSurfaceEdit();
     void redoSurfaceEdit();
     void healLatestSurfaceEdit();

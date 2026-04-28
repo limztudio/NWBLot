@@ -1796,8 +1796,7 @@ bool BackendContext::createSwapChain(){
         return false;
     }
 
-    usize const numAcquireSemaphores = (m_maxFramesInFlight > m_swapChainImages.size())
-        ? m_maxFramesInFlight : m_swapChainImages.size();
+    usize const numAcquireSemaphores = Max(static_cast<usize>(m_maxFramesInFlight), m_swapChainImages.size());
     if(!recreateSemaphores(m_acquireSemaphores, numAcquireSemaphores, "create acquire semaphores")){
         clearSemaphores(m_presentSemaphores);
         destroySwapChain();

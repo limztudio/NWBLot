@@ -71,10 +71,11 @@ static_assert(IsTriviallyCopyable_V<DeformableDisplacementBinary>, "DeformableDi
     return !text.empty() && Name(text.view()) == name;
 }
 
+template<typename StringTable>
 [[nodiscard]] bool BuildDisplacementBinary(
     const DeformableDisplacement& displacement,
     const CompactString& texturePathText,
-    Core::Assets::AssetBytes& stringTable,
+    StringTable& stringTable,
     DeformableDisplacementBinary& outBinary)
 {
     outBinary = DeformableDisplacementBinary{};
@@ -179,8 +180,8 @@ template<typename T>
     return true;
 }
 
-template<typename T>
-[[nodiscard]] bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<T>& values, const tchar* label){
+template<typename T, typename Allocator>
+[[nodiscard]] bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<T, Allocator>& values, const tchar* label){
     if(values.size() > Limit<usize>::s_Max / sizeof(T)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
         return false;
@@ -908,7 +909,22 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     outBinary.clear();
     if(canReserve)
         outBinary.reserve(reserveBytes);
-    Core::Assets::AssetBytes stringTable;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    usize stringTableReserveBytes = 0u;
+    bool canReserveStringTable = true;
+    for(const DeformableMorph& morph : geometry.morphs())
+        canReserveStringTable = canReserveStringTable && ::AddStringTableTextReserveBytes(stringTableReserveBytes, morph.nameText);
+    if(DeformableDisplacementModeUsesTexture(geometry.displacement().mode)){
+        canReserveStringTable = canReserveStringTable
+            && ::AddStringTableTextReserveBytes(stringTableReserveBytes, geometry.displacementTextureVirtualPathText())
+        ;
+    }
+    if(canReserveStringTable)
+        stringTable.reserve(stringTableReserveBytes);
 
     AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryMagic);
     AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryVersion);

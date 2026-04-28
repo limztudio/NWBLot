@@ -951,10 +951,11 @@ void RestoreReplayAccessories(
     return true;
 }
 
+template<typename StringTable>
 [[nodiscard]] bool BuildAccessoryBinaryRecord(
     const DeformableAccessoryAttachmentRecord& record,
     SurfaceEditAccessoryRecordBinary& outRecord,
-    Core::Assets::AssetBytes& stringTable)
+    StringTable& stringTable)
 {
     outRecord = SurfaceEditAccessoryRecordBinary{};
     if(!ValidAccessoryRecord(record) || !AccessoryRecordHasStableAssetPaths(record))
@@ -2256,7 +2257,21 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
     accessoryRecords.reserve(state.accessories.size());
-    Core::Assets::AssetBytes stringTable;
+
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    usize stringTableReserveBytes = 0u;
+    bool canReserveStringTable = true;
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+        canReserveStringTable = canReserveStringTable
+            && ::AddStringTableTextReserveBytes(stringTableReserveBytes, accessory.geometryVirtualPathText)
+            && ::AddStringTableTextReserveBytes(stringTableReserveBytes, accessory.materialVirtualPathText)
+        ;
+    }
+    if(canReserveStringTable)
+        stringTable.reserve(stringTableReserveBytes);
+
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
         if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecord(accessory, binaryRecord, stringTable)){

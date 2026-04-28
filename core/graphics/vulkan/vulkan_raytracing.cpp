@@ -499,7 +499,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context);
     as->m_desc = desc;
 
-    VkAccelerationStructureTypeKHR asType = desc.isTopLevel ?  VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR :  VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    VkAccelerationStructureTypeKHR asType = desc.isTopLevel ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 
     u64 accelStructSize = s_DefaultTopLevelASBufferSize;
     if(desc.isTopLevel && desc.topLevelMaxInstances > 0){

@@ -110,25 +110,41 @@ template<typename Container>
     return true;
 }
 
-template<typename Container>
-[[nodiscard]] inline bool AppendStringTableText(Container& outStringTable, const AStringView text, u32& outOffset){
-    outOffset = Limit<u32>::s_Max;
-    if(text.empty() || outStringTable.size() >= Limit<u32>::s_Max)
+[[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const AStringView text){
+    if(text.empty())
         return false;
     if(text.size() > Limit<usize>::s_Max - 1u)
         return false;
 
-    const usize beginOffset = outStringTable.size();
     const usize byteCount = text.size() + 1u;
-    if(beginOffset > Limit<usize>::s_Max - byteCount)
+    constexpr usize s_U32Max = static_cast<usize>(Limit<u32>::s_Max);
+    if(byteCount > s_U32Max)
         return false;
-    if(byteCount > static_cast<usize>(Limit<u32>::s_Max) - beginOffset)
+    if(inOutBytes > Limit<usize>::s_Max - byteCount)
+        return false;
+    if(inOutBytes > s_U32Max - byteCount)
         return false;
 
+    inOutBytes += byteCount;
+    return true;
+}
+
+[[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const CompactString& text){
+    return AddStringTableTextReserveBytes(inOutBytes, text.view());
+}
+
+template<typename Container>
+[[nodiscard]] inline bool AppendStringTableText(Container& outStringTable, const AStringView text, u32& outOffset){
+    outOffset = Limit<u32>::s_Max;
+    usize reserveBytes = outStringTable.size();
+    if(!AddStringTableTextReserveBytes(reserveBytes, text))
+        return false;
+
+    const usize beginOffset = outStringTable.size();
     outOffset = static_cast<u32>(beginOffset);
     using ByteType = typename Container::value_type;
     static_assert(sizeof(ByteType) == 1u, "AppendStringTableText requires a byte-sized output container");
-    outStringTable.reserve(beginOffset + byteCount);
+    outStringTable.reserve(reserveBytes);
     const ByteType* textBytes = reinterpret_cast<const ByteType*>(text.data());
     outStringTable.insert(outStringTable.end(), textBytes, textBytes + text.size());
     outStringTable.push_back(ByteType{});

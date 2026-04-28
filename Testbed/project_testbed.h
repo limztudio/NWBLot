@@ -103,6 +103,7 @@ private:
     void toggleSurfaceEditDebug();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;
+    void destroyWorld();
 
 
 public:

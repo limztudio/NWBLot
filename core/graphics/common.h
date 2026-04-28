@@ -2472,18 +2472,18 @@ struct GraphicsPipelineDesc{
 
     constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
     constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value){ patchControlPoints = value; return *this; }
-    GraphicsPipelineDesc& setInputLayout(IInputLayout* value){ inputLayout = value; return *this; }
-    GraphicsPipelineDesc& setVertexShader(IShader* value){ VS = value; return *this; }
-    GraphicsPipelineDesc& setHullShader(IShader* value){ HS = value; return *this; }
-    GraphicsPipelineDesc& setTessellationControlShader(IShader* value){ HS = value; return *this; }
-    GraphicsPipelineDesc& setDomainShader(IShader* value){ DS = value; return *this; }
-    GraphicsPipelineDesc& setTessellationEvaluationShader(IShader* value){ DS = value; return *this; }
-    GraphicsPipelineDesc& setGeometryShader(IShader* value){ GS = value; return *this; }
-    GraphicsPipelineDesc& setPixelShader(IShader* value){ PS = value; return *this; }
-    GraphicsPipelineDesc& setFragmentShader(IShader* value){ PS = value; return *this; }
+    GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value){ inputLayout = value; return *this; }
+    GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value){ VS = value; return *this; }
+    GraphicsPipelineDesc& setHullShader(const ShaderHandle& value){ HS = value; return *this; }
+    GraphicsPipelineDesc& setTessellationControlShader(const ShaderHandle& value){ HS = value; return *this; }
+    GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value){ DS = value; return *this; }
+    GraphicsPipelineDesc& setTessellationEvaluationShader(const ShaderHandle& value){ DS = value; return *this; }
+    GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value){ GS = value; return *this; }
+    GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
+    GraphicsPipelineDesc& setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
     constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
     constexpr GraphicsPipelineDesc& setVariableRateShadingState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
-    GraphicsPipelineDesc& addBindingLayout(IBindingLayout* layout){ bindingLayouts.push_back(layout); return *this; }
+    GraphicsPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 };
 
 class IGraphicsPipeline : public IResource{
@@ -2501,8 +2501,8 @@ struct ComputePipelineDesc{
 
     BindingLayoutVector bindingLayouts;
 
-    ComputePipelineDesc& setComputeShader(IShader* value){ CS = value; return *this; }
-    ComputePipelineDesc& addBindingLayout(IBindingLayout* layout){ bindingLayouts.push_back(layout); return *this; }
+    ComputePipelineDesc& setComputeShader(const ShaderHandle& value){ CS = value; return *this; }
+    ComputePipelineDesc& addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 };
 
 class IComputePipeline : public IResource{
@@ -2526,13 +2526,13 @@ struct MeshletPipelineDesc{
     BindingLayoutVector bindingLayouts;
 
     constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
-    MeshletPipelineDesc& setTaskShader(IShader* value){ AS = value; return *this; }
-    MeshletPipelineDesc& setAmplificationShader(IShader* value){ AS = value; return *this; }
-    MeshletPipelineDesc& setMeshShader(IShader* value){ MS = value; return *this; }
-    MeshletPipelineDesc& setPixelShader(IShader* value){ PS = value; return *this; }
-    MeshletPipelineDesc& setFragmentShader(IShader* value){ PS = value; return *this; }
+    MeshletPipelineDesc& setTaskShader(const ShaderHandle& value){ AS = value; return *this; }
+    MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value){ AS = value; return *this; }
+    MeshletPipelineDesc& setMeshShader(const ShaderHandle& value){ MS = value; return *this; }
+    MeshletPipelineDesc& setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
+    MeshletPipelineDesc& setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
     constexpr MeshletPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
-    MeshletPipelineDesc& addBindingLayout(IBindingLayout* layout){ bindingLayouts.push_back(layout); return *this; }
+    MeshletPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 };
 
 class IMeshletPipeline : public IResource{
@@ -2715,8 +2715,8 @@ struct RayTracingPipelineShaderDesc{
     BindingLayoutHandle bindingLayout;
     AString exportName;
 
-    RayTracingPipelineShaderDesc& setShader(IShader* value){ shader = value; return *this; }
-    RayTracingPipelineShaderDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+    RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value){ shader = value; return *this; }
+    RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
     RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
 };
 
@@ -2728,10 +2728,10 @@ struct RayTracingPipelineHitGroupDesc{
     AString exportName;
     bool isProceduralPrimitive = false;
 
-    RayTracingPipelineHitGroupDesc& setClosestHitShader(IShader* value){ closestHitShader = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setAnyHitShader(IShader* value){ anyHitShader = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setIntersectionShader(IShader* value){ intersectionShader = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setBindingLayout(IBindingLayout* value){ bindingLayout = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value){ intersectionShader = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
     RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
@@ -2750,7 +2750,7 @@ struct RayTracingPipelineDesc{
 
     constexpr RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
     constexpr RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
-    RayTracingPipelineDesc& addBindingLayout(IBindingLayout* value){ globalBindingLayouts.push_back(value); return *this; }
+    RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value){ globalBindingLayouts.push_back(value); return *this; }
     constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value){ maxPayloadSize = value; return *this; }
     constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value){ maxAttributeSize = value; return *this; }
     constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value){ maxRecursionDepth = value; return *this; }
@@ -3584,8 +3584,8 @@ public:
     virtual BindingLayoutHandle createBindingLayout(const BindingLayoutDesc& desc) = 0;
     virtual BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc) = 0;
 
-    virtual BindingSetHandle createBindingSet(const BindingSetDesc& desc, IBindingLayout* layout) = 0;
-    virtual DescriptorTableHandle createDescriptorTable(IBindingLayout* layout) = 0;
+    virtual BindingSetHandle createBindingSet(const BindingSetDesc& desc, const BindingLayoutHandle& layout) = 0;
+    virtual DescriptorTableHandle createDescriptorTable(const BindingLayoutHandle& layout) = 0;
 
     virtual void resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSize, bool keepContents = true) = 0;
     virtual bool writeDescriptorTable(IDescriptorTable* descriptorTable, const BindingSetItem& item) = 0;

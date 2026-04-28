@@ -501,6 +501,8 @@ void CommandList::writeBuffer(IBuffer* bufferResource, const void* data, usize d
     if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset))
         return;
 
+    setBufferState(bufferResource, ResourceStates::CopyDest);
+
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;
     region.dstOffset = destOffsetBytes;
@@ -508,8 +510,8 @@ void CommandList::writeBuffer(IBuffer* bufferResource, const void* data, usize d
 
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(bufferResource);
-    m_currentCmdBuf->m_referencedStagingBuffers.push_back(stagingBuffer);
+    retainResource(bufferResource);
+    retainStagingBuffer(stagingBuffer);
 }
 
 void CommandList::clearBufferUInt(IBuffer* bufferResource, u32 clearValue){
@@ -525,8 +527,9 @@ void CommandList::clearBufferUInt(IBuffer* bufferResource, u32 clearValue){
         return;
     }
 
+    setBufferState(bufferResource, ResourceStates::CopyDest);
     vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, 0, VK_WHOLE_SIZE, clearValue);
-    m_currentCmdBuf->m_referencedResources.push_back(bufferResource);
+    retainResource(bufferResource);
 }
 
 void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer* srcResource, u64 srcOffsetBytes, u64 dataSizeBytes){
@@ -564,6 +567,9 @@ void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer
         return;
     }
 
+    setBufferState(srcResource, ResourceStates::CopySource);
+    setBufferState(destResource, ResourceStates::CopyDest);
+
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;
     region.dstOffset = destOffsetBytes;
@@ -571,8 +577,8 @@ void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer
 
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src->m_buffer, dest->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
-    m_currentCmdBuf->m_referencedResources.push_back(destResource);
+    retainResource(srcResource);
+    retainResource(destResource);
 }
 
 

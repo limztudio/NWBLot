@@ -336,7 +336,6 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
-
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 

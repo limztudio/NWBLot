@@ -1568,6 +1568,10 @@ public:
 
 
 private:
+    void setResourceStatesForBindingSets(const BindingSetVector& bindings);
+    void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    void retainResource(IResource* resource);
+    void retainStagingBuffer(IBuffer* buffer);
     void retainBindingSets(const BindingSetVector& bindings);
     void bindPipelineBindingSets(
         VkPipelineBindPoint bindPoint,
@@ -1733,8 +1737,8 @@ public:
     [[nodiscard]] virtual RayTracingPipelineHandle createRayTracingPipeline(const RayTracingPipelineDesc& desc)override;
     [[nodiscard]] virtual BindingLayoutHandle createBindingLayout(const BindingLayoutDesc& desc)override;
     [[nodiscard]] virtual BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc)override;
-    [[nodiscard]] virtual BindingSetHandle createBindingSet(const BindingSetDesc& desc, IBindingLayout* layout)override;
-    [[nodiscard]] virtual DescriptorTableHandle createDescriptorTable(IBindingLayout* layout)override;
+    [[nodiscard]] virtual BindingSetHandle createBindingSet(const BindingSetDesc& desc, const BindingLayoutHandle& layout)override;
+    [[nodiscard]] virtual DescriptorTableHandle createDescriptorTable(const BindingLayoutHandle& layout)override;
     virtual void resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSize, bool keepContents = true)override;
     virtual bool writeDescriptorTable(IDescriptorTable* descriptorTable, const BindingSetItem& item)override;
     [[nodiscard]] virtual RayTracingOpacityMicromapHandle createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc)override;

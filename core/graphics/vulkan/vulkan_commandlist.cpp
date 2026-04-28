@@ -137,6 +137,16 @@ void CommandList::clearState(){
     m_pendingBufferBarriers.clear();
 }
 
+void CommandList::retainResource(IResource* resource){
+    if(resource)
+        m_currentCmdBuf->m_referencedResources.emplace_back(resource, ArenaRefDeleter<IResource>(&m_context.objectArena));
+}
+
+void CommandList::retainStagingBuffer(IBuffer* buffer){
+    if(buffer)
+        m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(buffer, ArenaRefDeleter<IBuffer>(&m_context.objectArena));
+}
+
 bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
     if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for {}"), commandName);
@@ -305,10 +315,13 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
     region.imageOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
     region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
 
+    setTextureState(srcResource, TextureSubresourceSet(resolvedSrc.mipLevel, 1u, resolvedSrc.arraySlice, 1u), ResourceStates::CopySource);
+    setBufferState(destResource, ResourceStates::CopyDest);
+
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_buffer, 1, &region);
 
-    m_currentCmdBuf->m_referencedResources.push_back(srcResource);
-    m_currentCmdBuf->m_referencedResources.push_back(destResource);
+    retainResource(srcResource);
+    retainResource(destResource);
 }
 
 

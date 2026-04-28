@@ -740,10 +740,8 @@ bool Device::waitForIdle(){
     }
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i){
-        if(m_queues[i]){
-            ScopedLock lock(m_queues[i]->m_mutex);
-            m_queues[i]->updateLastFinishedID();
-        }
+        if(m_queues[i])
+            m_queues[i]->waitForIdle();
     }
 
     return true;

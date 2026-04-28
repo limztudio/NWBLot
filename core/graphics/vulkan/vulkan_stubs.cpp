@@ -121,7 +121,7 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
         return;
 
     vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
-    m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);
+    retainResource(m_currentGraphicsState.indirectParams);
 }
 
 
@@ -170,7 +170,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
     vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
 
-    m_currentCmdBuf->m_referencedResources.push_back(asInterface);
+    retainResource(asInterface);
     return true;
 }
 
@@ -225,7 +225,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
     if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
         return;
 
-    m_currentCmdBuf->m_referencedResources.push_back(instanceBuffer);
+    retainResource(instanceBuffer);
 }
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
@@ -280,15 +280,15 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     if(indirectArgCountBuffer)
-        m_currentCmdBuf->m_referencedResources.push_back(opDesc.inIndirectArgCountBuffer);
+        retainResource(opDesc.inIndirectArgCountBuffer);
     if(indirectArgsBuffer)
-        m_currentCmdBuf->m_referencedResources.push_back(opDesc.inIndirectArgsBuffer);
+        retainResource(opDesc.inIndirectArgsBuffer);
     if(inOutAddressesBuffer)
-        m_currentCmdBuf->m_referencedResources.push_back(opDesc.inOutAddressesBuffer);
+        retainResource(opDesc.inOutAddressesBuffer);
     if(outSizesBuffer)
-        m_currentCmdBuf->m_referencedResources.push_back(opDesc.outSizesBuffer);
+        retainResource(opDesc.outSizesBuffer);
     if(outAccelerationStructuresBuffer)
-        m_currentCmdBuf->m_referencedResources.push_back(opDesc.outAccelerationStructuresBuffer);
+        retainResource(opDesc.outAccelerationStructuresBuffer);
 
     commitBarriers();
 

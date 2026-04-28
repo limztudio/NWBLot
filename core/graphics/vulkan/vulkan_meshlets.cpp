@@ -179,6 +179,11 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
+    setResourceStatesForBindingSets(state.bindings);
+    if(state.indirectParams)
+        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
+    commitBarriers();
+
     if(!ensureGraphicsRenderPass(state.framebuffer))
         return;
     commitBarriers();

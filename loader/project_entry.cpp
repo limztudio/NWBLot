@@ -105,6 +105,12 @@ void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::
     context.graphics.removeRenderPass(*deformerSystem);
     context.graphics.removeRenderPass(*rendererSystem);
     context.graphics.removeRenderPass(*uiSystem);
+
+    context.graphics.waitAllJobs();
+
+    if(auto* device = context.graphics.getDevice())
+        device->waitForIdle();
+
     world->clear();
     world.reset();
 }

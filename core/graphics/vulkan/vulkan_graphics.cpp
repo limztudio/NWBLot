@@ -516,6 +516,10 @@ void CommandList::endActiveRenderPass(){
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
+    setResourceStatesForBindingSets(state.bindings);
+    setResourceStatesForGraphicsBuffers(state);
+    commitBarriers();
+
     if(!ensureGraphicsRenderPass(state.framebuffer))
         return;
 
@@ -679,7 +683,7 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
         return;
 
     vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
-    m_currentCmdBuf->m_referencedResources.push_back(m_currentGraphicsState.indirectParams);
+    retainResource(m_currentGraphicsState.indirectParams);
 }
 
 

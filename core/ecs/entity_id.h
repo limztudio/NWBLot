@@ -42,6 +42,7 @@ inline constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
 struct EntityID{
     u32 id;
 
+
     inline constexpr EntityID() : id(~0u){}
     inline constexpr explicit EntityID(u32 idValue) : id(idValue){}
     inline constexpr EntityID(u32 index, u32 generation)

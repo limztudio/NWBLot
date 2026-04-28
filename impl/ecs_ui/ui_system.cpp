@@ -561,11 +561,11 @@ bool UiSystem::ensureRenderResources(Core::IFramebuffer* framebuffer){
 
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setInputLayout(m_inputLayout.get())
-        .setVertexShader(m_vertexShader.get())
-        .setPixelShader(m_pixelShader.get())
+        .setInputLayout(m_inputLayout)
+        .setVertexShader(m_vertexShader)
+        .setPixelShader(m_pixelShader)
         .setRenderState(__hidden_ecs_ui::BuildUiRenderState())
-        .addBindingLayout(m_bindingLayout.get())
+        .addBindingLayout(m_bindingLayout)
     ;
 
     m_pipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
@@ -760,6 +760,8 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
             .setWidth(textureWidth)
             .setHeight(textureHeight)
             .setFormat(Core::Format::RGBA8_UNORM)
+            .setInitialState(Core::ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
             .setName(Name(StringFormat("ecs_ui/imgui_texture_{}", textureData.UniqueID)))
         ;
 
@@ -779,7 +781,7 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
         ));
         bindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_sampler.get()));
 
-        createdResource->bindingSet = m_graphics.getDevice()->createBindingSet(bindingSetDesc, m_bindingLayout.get());
+        createdResource->bindingSet = m_graphics.getDevice()->createBindingSet(bindingSetDesc, m_bindingLayout);
         if(!createdResource->bindingSet){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create ImGui texture binding set"));
             return false;

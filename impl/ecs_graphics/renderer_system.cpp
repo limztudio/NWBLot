@@ -1410,7 +1410,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     ));
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.coverageBuffer.get()));
-    avboitTargets.occupancyBindingSet = device->createBindingSet(occupancyBindingSetDesc, m_avboitOccupancyBindingLayout.get());
+    avboitTargets.occupancyBindingSet = device->createBindingSet(occupancyBindingSetDesc, m_avboitOccupancyBindingLayout);
     if(!avboitTargets.occupancyBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding set"));
         return false;
@@ -1420,7 +1420,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.coverageBuffer.get()));
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.depthWarpBuffer.get()));
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.controlBuffer.get()));
-    avboitTargets.depthWarpBindingSet = device->createBindingSet(depthWarpBindingSetDesc, m_avboitDepthWarpBindingLayout.get());
+    avboitTargets.depthWarpBindingSet = device->createBindingSet(depthWarpBindingSetDesc, m_avboitDepthWarpBindingLayout);
     if(!avboitTargets.depthWarpBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding set"));
         return false;
@@ -1438,7 +1438,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.depthWarpBuffer.get()));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, avboitTargets.controlBuffer.get()));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(4, avboitTargets.extinctionBuffer.get()));
-    avboitTargets.extinctionBindingSet = device->createBindingSet(extinctionBindingSetDesc, m_avboitExtinctionBindingLayout.get());
+    avboitTargets.extinctionBindingSet = device->createBindingSet(extinctionBindingSetDesc, m_avboitExtinctionBindingLayout);
     if(!avboitTargets.extinctionBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding set"));
         return false;
@@ -1448,7 +1448,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.extinctionBuffer.get()));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.transmittanceBuffer.get()));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
-    avboitTargets.integrateBindingSet = device->createBindingSet(integrateBindingSetDesc, m_avboitIntegrateBindingLayout.get());
+    avboitTargets.integrateBindingSet = device->createBindingSet(integrateBindingSetDesc, m_avboitIntegrateBindingLayout);
     if(!avboitTargets.integrateBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding set"));
         return false;
@@ -1458,7 +1458,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.depthWarpBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, avboitTargets.transmittanceBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
-    avboitTargets.accumulateBindingSet = device->createBindingSet(accumulateBindingSetDesc, m_avboitAccumulateBindingLayout.get());
+    avboitTargets.accumulateBindingSet = device->createBindingSet(accumulateBindingSetDesc, m_avboitAccumulateBindingLayout);
     if(!avboitTargets.accumulateBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding set"));
         return false;
@@ -1489,7 +1489,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_deferredSampler.get()));
-    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredCompositeBindingLayout.get());
+    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredCompositeBindingLayout);
     if(!createdTargets.compositeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
         return false;
@@ -1569,10 +1569,10 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
 
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setVertexShader(m_deferredCompositeVertexShader.get())
-        .setPixelShader(m_deferredCompositePixelShader.get())
+        .setVertexShader(m_deferredCompositeVertexShader)
+        .setPixelShader(m_deferredCompositePixelShader)
         .setRenderState(__hidden_ecs_graphics::BuildCompositeRenderState())
-        .addBindingLayout(m_deferredCompositeBindingLayout.get())
+        .addBindingLayout(m_deferredCompositeBindingLayout)
     ;
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -1746,8 +1746,8 @@ bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
     if(!m_avboitDepthWarpPipeline){
         Core::ComputePipelineDesc pipelineDesc;
         pipelineDesc
-            .setComputeShader(m_avboitDepthWarpComputeShader.get())
-            .addBindingLayout(m_avboitDepthWarpBindingLayout.get())
+            .setComputeShader(m_avboitDepthWarpComputeShader)
+            .addBindingLayout(m_avboitDepthWarpBindingLayout)
         ;
         m_avboitDepthWarpPipeline = device->createComputePipeline(pipelineDesc);
         if(!m_avboitDepthWarpPipeline){
@@ -1759,8 +1759,8 @@ bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
     if(!m_avboitIntegratePipeline){
         Core::ComputePipelineDesc pipelineDesc;
         pipelineDesc
-            .setComputeShader(m_avboitIntegrateComputeShader.get())
-            .addBindingLayout(m_avboitIntegrateBindingLayout.get())
+            .setComputeShader(m_avboitIntegrateComputeShader)
+            .addBindingLayout(m_avboitIntegrateBindingLayout)
         ;
         m_avboitIntegratePipeline = device->createComputePipeline(pipelineDesc);
         if(!m_avboitIntegratePipeline){
@@ -2960,7 +2960,7 @@ bool RendererSystem::ensureEmulationViewResources(){
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
 
-    m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_emulationViewBindingLayout.get());
+    m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_emulationViewBindingLayout);
     if(!m_emulationViewBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding set"));
         return false;
@@ -3001,7 +3001,7 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, m_materialParameterBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
-    geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout.get());
+    geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
     if(!geometry.meshBindingSet){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: failed to create mesh shader binding set for geometry '{}'"),
@@ -3074,7 +3074,7 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, m_materialParameterBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
-    geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout.get());
+    geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);
     if(!geometry.computeBindingSet){
         NWB_LOGGER_ERROR(
             NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for geometry '{}'"),
@@ -3188,19 +3188,19 @@ bool RendererSystem::ensureRendererPipeline(
         }
 
         Core::MeshletPipelineDesc pipelineDesc;
-        pipelineDesc.setMeshShader(resources.meshShader.get());
-        pipelineDesc.setPixelShader(resources.pixelShader.get());
+        pipelineDesc.setMeshShader(resources.meshShader);
+        pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
-        pipelineDesc.addBindingLayout(m_meshBindingLayout.get());
+        pipelineDesc.addBindingLayout(m_meshBindingLayout);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            pipelineDesc.addBindingLayout(m_avboitOccupancyBindingLayout.get());
+            pipelineDesc.addBindingLayout(m_avboitOccupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            pipelineDesc.addBindingLayout(m_avboitExtinctionBindingLayout.get());
+            pipelineDesc.addBindingLayout(m_avboitExtinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            pipelineDesc.addBindingLayout(m_avboitAccumulateBindingLayout.get());
+            pipelineDesc.addBindingLayout(m_avboitAccumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
         default:
@@ -3251,8 +3251,8 @@ bool RendererSystem::ensureRendererPipeline(
             return false;
 
         Core::ComputePipelineDesc computeDesc;
-        computeDesc.setComputeShader(resources.computeShader.get());
-        computeDesc.addBindingLayout(m_computeBindingLayout.get());
+        computeDesc.setComputeShader(resources.computeShader);
+        computeDesc.addBindingLayout(m_computeBindingLayout);
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
             NWB_LOGGER_ERROR(
@@ -3263,23 +3263,23 @@ bool RendererSystem::ensureRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(m_emulationInputLayout.get());
-        emulationDesc.setVertexShader(m_emulationVertexShader.get());
-        emulationDesc.setPixelShader(resources.pixelShader.get());
+        emulationDesc.setInputLayout(m_emulationInputLayout);
+        emulationDesc.setVertexShader(m_emulationVertexShader);
+        emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
-        emulationDesc.addBindingLayout(m_emulationViewBindingLayout.get());
+        emulationDesc.addBindingLayout(m_emulationViewBindingLayout);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());
-            emulationDesc.addBindingLayout(m_avboitOccupancyBindingLayout.get());
+            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitOccupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());
-            emulationDesc.addBindingLayout(m_avboitExtinctionBindingLayout.get());
+            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitExtinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout.get());
-            emulationDesc.addBindingLayout(m_avboitAccumulateBindingLayout.get());
+            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitAccumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
         default:

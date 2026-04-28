@@ -133,6 +133,24 @@ void CommandList::setResourceStatesForBindingSet(IBindingSet* bindingSet){
     }
 }
 
+void CommandList::setResourceStatesForBindingSets(const BindingSetVector& bindings){
+    for(IBindingSet* bindingSet : bindings)
+        setResourceStatesForBindingSet(bindingSet);
+}
+
+void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state){
+    for(const VertexBufferBinding& binding : state.vertexBuffers){
+        if(binding.buffer)
+            setBufferState(binding.buffer, ResourceStates::VertexBuffer);
+    }
+
+    if(state.indexBuffer.buffer)
+        setBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer);
+
+    if(state.indirectParams)
+        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
+}
+
 void CommandList::setEnableAutomaticBarriers(bool enable){
     m_enableAutomaticBarriers = enable;
 }

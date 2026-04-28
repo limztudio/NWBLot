@@ -109,6 +109,9 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
 void CommandList::setComputeState(const ComputeState& state){
     endActiveRenderPass();
+    setResourceStatesForBindingSets(state.bindings);
+    if(state.indirectParams)
+        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
     commitBarriers();
     m_currentGraphicsState = {};
     m_currentMeshletState = {};
@@ -158,7 +161,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         return;
     auto* buffer = checked_cast<Buffer*>(m_currentComputeState.indirectParams);
     vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
-    m_currentCmdBuf->m_referencedResources.push_back(m_currentComputeState.indirectParams);
+    retainResource(m_currentComputeState.indirectParams);
 }
 
 

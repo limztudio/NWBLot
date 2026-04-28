@@ -1430,7 +1430,6 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
-
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
@@ -1438,12 +1437,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResource){
+DescriptorTableHandle Device::createDescriptorTable(const BindingLayoutHandle& layoutResource){
     VkResult res = VK_SUCCESS;
 
     Alloc::ScratchArena<> scratchArena;
 
-    auto* layout = checked_cast<BindingLayout*>(layoutResource);
+    auto* layout = checked_cast<BindingLayout*>(layoutResource.get());
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: binding layout is invalid"));
         return nullptr;
@@ -1454,7 +1453,10 @@ DescriptorTableHandle Device::createDescriptorTable(IBindingLayout* layoutResour
     }
 
     auto* table = NewArenaObject<DescriptorTable>(m_context.objectArena, m_context);
-    table->m_layout = layout;
+    table->m_layout = RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>>(
+        layout,
+        ArenaRefDeleter<BindingLayout>(&m_context.objectArena)
+    );
     const u32 descriptorTableCapacity = layout->m_isBindless
         ? VulkanDetail::NormalizeDescriptorTableCapacity(layout->m_bindlessDesc.maxCapacity)
         : 1u
@@ -1893,8 +1895,8 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 }
 
 
-BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLayout* layoutResource){
-    auto* layout = checked_cast<BindingLayout*>(layoutResource);
+BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const BindingLayoutHandle& layoutResource){
+    auto* layout = checked_cast<BindingLayout*>(layoutResource.get());
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: binding layout is invalid"));
         return nullptr;
@@ -1910,7 +1912,10 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         return nullptr;
     }
 
-    bindingSet->m_descriptorTable = checked_cast<DescriptorTable*>(tableHandle.get());
+    bindingSet->m_descriptorTable = RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>>(
+        checked_cast<DescriptorTable*>(tableHandle.get()),
+        ArenaRefDeleter<DescriptorTable>(&m_context.objectArena)
+    );
     if(!bindingSet->m_descriptorTable){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: descriptor table type is invalid"));
         DestroyArenaObject(m_context.objectArena, bindingSet);
@@ -1923,7 +1928,10 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
         DestroyArenaObject(m_context.objectArena, bindingSet);
         return nullptr;
     }
-    bindingSet->m_layout = layout;
+    bindingSet->m_layout = RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>>(
+        layout,
+        ArenaRefDeleter<BindingLayout>(&m_context.objectArena)
+    );
 
     if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
         bindingSet->m_descriptorHeapPushIndices.resize(layout->m_descriptorHeapBindings.size(), 0u);
@@ -2107,7 +2115,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, IBindingLa
 void CommandList::retainBindingSets(const BindingSetVector& bindings){
     for(const auto& binding : bindings){
         if(binding)
-            m_currentCmdBuf->m_referencedResources.push_back(binding);
+            retainResource(binding);
     }
 }
 

@@ -755,6 +755,13 @@ ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
 
 ProjectTestbed::~ProjectTestbed(){
     unregisterInputHandler();
+    destroyWorld();
+}
+
+void ProjectTestbed::destroyWorld(){
+    if(!m_world.owner())
+        return;
+
     NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
 }
 
@@ -837,6 +844,7 @@ void ProjectTestbed::onShutdown(){
     clearInputState();
     clearSurfaceEditPreview();
     clearPendingSurfaceEditAccessory();
+    destroyWorld();
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
 }
 

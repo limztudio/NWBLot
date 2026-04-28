@@ -408,8 +408,8 @@ bool DeformerSystem::ensurePipeline(){
         return true;
 
     Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc.setComputeShader(m_computeShader.get());
-    pipelineDesc.addBindingLayout(m_bindingLayout.get());
+    pipelineDesc.setComputeShader(m_computeShader);
+    pipelineDesc.addBindingLayout(m_bindingLayout);
     m_computePipeline = device->createComputePipeline(pipelineDesc);
     if(!m_computePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create compute pipeline"));
@@ -919,7 +919,7 @@ bool DeformerSystem::ensureRuntimeResources(
     bindingSetDesc.addItem(Core::BindingSetItem::Sampler(7, m_displacementSampler.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
-    rebuilt.bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout.get());
+    rebuilt.bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout);
     if(!rebuilt.bindingSet){
         NWB_LOGGER_ERROR(
             NWB_TEXT("DeformerSystem: failed to create binding set for runtime mesh '{}'"),

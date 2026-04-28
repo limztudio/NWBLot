@@ -1510,6 +1510,7 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
 
 void CommandList::setRayTracingState(const RayTracingState& state){
     endActiveRenderPass();
+    setResourceStatesForBindingSets(state.bindings);
     commitBarriers();
     m_currentGraphicsState = {};
     m_currentComputeState = {};
@@ -1523,7 +1524,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     if(!sbt)
         return;
 
-    m_currentCmdBuf->m_referencedResources.push_back(state.shaderTable);
+    retainResource(state.shaderTable);
 
     RayTracingPipeline* pipeline = sbt->m_pipeline.get();
 
@@ -1784,32 +1785,32 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
             if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
                 const RayTracingGeometryTriangles& triangles = geomDesc.geometryData.triangles;
                 if(triangles.vertexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(triangles.vertexBuffer);
+                    retainResource(triangles.vertexBuffer);
                 if(triangles.indexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(triangles.indexBuffer);
+                    retainResource(triangles.indexBuffer);
                 if(triangles.opacityMicromap)
-                    m_currentCmdBuf->m_referencedResources.push_back(triangles.opacityMicromap);
+                    retainResource(triangles.opacityMicromap);
                 if(triangles.ommIndexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(triangles.ommIndexBuffer);
+                    retainResource(triangles.ommIndexBuffer);
             }
             else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
                 const RayTracingGeometryAABBs& aabbs = geomDesc.geometryData.aabbs;
                 if(aabbs.buffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(aabbs.buffer);
+                    retainResource(aabbs.buffer);
             }
             else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
                 const RayTracingGeometrySpheres& spheres = geomDesc.geometryData.spheres;
                 if(spheres.vertexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(spheres.vertexBuffer);
+                    retainResource(spheres.vertexBuffer);
                 if(spheres.indexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(spheres.indexBuffer);
+                    retainResource(spheres.indexBuffer);
             }
             else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
                 const RayTracingGeometryLss& lss = geomDesc.geometryData.lss;
                 if(lss.vertexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(lss.vertexBuffer);
+                    retainResource(lss.vertexBuffer);
                 if(lss.indexBuffer)
-                    m_currentCmdBuf->m_referencedResources.push_back(lss.indexBuffer);
+                    retainResource(lss.indexBuffer);
             }
         }
     }
@@ -1817,7 +1818,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
         m_pendingCompactions.push_back(as);
 
-    m_currentCmdBuf->m_referencedResources.push_back(accelStructResource);
+    retainResource(accelStructResource);
 }
 
 void CommandList::compactBottomLevelAccelStructs(){
@@ -1887,7 +1888,7 @@ void CommandList::compactBottomLevelAccelStructs(){
 
         m_currentCmdBuf->m_referencedAccelStructHandles.push_back(as->m_accelStruct);
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(as->m_buffer);
-        m_currentCmdBuf->m_referencedResources.push_back(as.get());
+        retainResource(as.get());
 
         as->m_accelStruct = newAS;
         as->m_buffer = Move(compactBuffer);
@@ -2048,7 +2049,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructRe
 
     if(as->m_desc.trackLiveness){
         for(usize i = 0; i < numInstances; ++i)
-            m_currentCmdBuf->m_referencedResources.push_back(pInstances[i].bottomLevelAS);
+            retainResource(pInstances[i].bottomLevelAS);
     }
 
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
@@ -2114,11 +2115,11 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicrom
 
     if(ommDesc.trackLiveness){
         if(ommDesc.inputBuffer)
-            m_currentCmdBuf->m_referencedResources.push_back(ommDesc.inputBuffer);
+            retainResource(ommDesc.inputBuffer);
         if(ommDesc.perOmmDescs)
-            m_currentCmdBuf->m_referencedResources.push_back(ommDesc.perOmmDescs);
+            retainResource(ommDesc.perOmmDescs);
         if(omm->m_dataBuffer)
-            m_currentCmdBuf->m_referencedResources.push_back(omm->m_dataBuffer.get());
+            retainResource(omm->m_dataBuffer.get());
     }
 
     commitBarriers();

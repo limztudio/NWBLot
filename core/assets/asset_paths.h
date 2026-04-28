@@ -38,7 +38,8 @@ namespace AssetPathsDetail{
 [[nodiscard]] inline bool ResolveAssetRootVirtualRootText(const Path& assetRoot, AStringView& outVirtualRootText){
     outVirtualRootText = {};
 
-    const AString assetRootName = CanonicalizeText(PathToString(assetRoot.filename()));
+    AString assetRootName = PathToString(assetRoot.filename());
+    CanonicalizeTextInPlace(assetRootName);
     if(assetRootName != s_AssetsDirectoryName){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Assets: asset root must point to an 'assets' directory: '{}'"),
@@ -47,7 +48,8 @@ namespace AssetPathsDetail{
         return false;
     }
 
-    const AString parentDirectoryName = CanonicalizeText(PathToString(assetRoot.parent_path().filename()));
+    AString parentDirectoryName = PathToString(assetRoot.parent_path().filename());
+    CanonicalizeTextInPlace(parentDirectoryName);
     outVirtualRootText = parentDirectoryName == s_ImplDirectoryName
         ? s_EngineVirtualRoot
         : s_ProjectVirtualRoot
@@ -60,7 +62,8 @@ namespace AssetPathsDetail{
 
     bool hasComponent = false;
     for(const Path& component : relativePath){
-        const AString componentText = CanonicalizeText(PathToString(component));
+        AString componentText = PathToString(component);
+        CanonicalizeTextInPlace(componentText);
         if(componentText.empty() || componentText == ".")
             continue;
         if(componentText == ".." || componentText.find('/') != AString::npos)
@@ -213,7 +216,8 @@ template<typename AssetRootVector>
         outResolvedPath = assetRoot;
         ++componentIt;
         for(; componentIt != virtualPathPath.end(); ++componentIt){
-            const AString componentText = CanonicalizeText(PathToString(*componentIt));
+            AString componentText = PathToString(*componentIt);
+            CanonicalizeTextInPlace(componentText);
             if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString::npos){
                 NWB_LOGGER_ERROR(
                     NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators"),
@@ -244,7 +248,8 @@ template<typename AssetRootVector>
         return false;
     }
 
-    const AString nwbStem = CanonicalizeText(PathToString(nwbFilePath.stem()));
+    AString nwbStem = PathToString(nwbFilePath.stem());
+    CanonicalizeTextInPlace(nwbStem);
     if(nwbStem.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty"),
@@ -285,9 +290,13 @@ template<typename AssetRootVector>
             continue;
 
         const Path& candidatePath = dirEntry.path();
-        if(CanonicalizeText(PathToString(candidatePath.extension())) == s_NwbExtension)
+        AString candidateExtension = PathToString(candidatePath.extension());
+        CanonicalizeTextInPlace(candidateExtension);
+        if(candidateExtension == s_NwbExtension)
             continue;
-        if(CanonicalizeText(PathToString(candidatePath.stem())) != nwbStem)
+        AString candidateStem = PathToString(candidatePath.stem());
+        CanonicalizeTextInPlace(candidateStem);
+        if(candidateStem != nwbStem)
             continue;
 
         matchedSourcePath = candidatePath.lexically_normal();

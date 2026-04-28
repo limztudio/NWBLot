@@ -148,7 +148,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             return false;
         }
 
-        AString canonicalPathKey = CanonicalizeText(PathToString(absolutePath));
+        AString canonicalPathKey = PathToString(absolutePath);
+        CanonicalizeTextInPlace(canonicalPathKey);
         if(!inOutVisitedPaths.insert(Move(canonicalPathKey)).second)
             continue;
 
@@ -424,10 +425,9 @@ static bool ParseStringField(
 
     const Metascript::MStringView text = fieldValue->asString();
     const AStringView textView(text.data(), text.size());
-    outValue = canonicalize
-        ? CanonicalizeText(textView)
-        : AString(textView)
-    ;
+    outValue.assign(textView.data(), textView.size());
+    if(canonicalize)
+        CanonicalizeTextInPlace(outValue);
     return true;
 }
 
@@ -650,7 +650,8 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntr
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<AString, IncludeEntry>& includeMetadata){
     for(const Path& dep : dependencies){
-        const AString depKey = CanonicalizeText(PathToString(dep));
+        AString depKey = PathToString(dep);
+        CanonicalizeTextInPlace(depKey);
         const auto found = includeMetadata.find(depKey);
         if(found == includeMetadata.end())
             continue;
@@ -891,7 +892,8 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item;
-        item.canonicalPath = CanonicalizeText(PathToString(dependency));
+        item.canonicalPath = PathToString(dependency);
+        CanonicalizeTextInPlace(item.canonicalPath);
         item.path = dependency;
         sortedDependencies.push_back(Move(item));
     }

@@ -267,7 +267,7 @@ static bool AppendUniquePropertyAssetEntry(EntryT& entry, PathHashSetT& seenPath
 using StagedVolumePaths = StagedDirectoryPaths;
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName){
-    const AString volumeSafeName = BuildSafeCacheName(CanonicalizeText(volumeName));
+    const AString volumeSafeName = BuildCanonicalSafeCacheName(volumeName);
     AString stageToken;
     stageToken.reserve(volumeSafeName.size() + 1u + configurationSafeName.size() + 1u + 16u);
     stageToken += volumeSafeName;
@@ -442,11 +442,13 @@ static bool DiscoverNwbFiles(const Core::ShaderCook::CookVector<Path>& assetRoot
                 continue;
 
             const Path& filePath = dirEntry.path();
-            const AString extension = CanonicalizeText(PathToString(filePath.extension()));
+            AString extension = PathToString(filePath.extension());
+            CanonicalizeTextInPlace(extension);
             if(extension != Core::Assets::s_NwbExtension)
                 continue;
 
-            const AString normalizedPath = CanonicalizeText(PathToString(filePath.lexically_normal()));
+            AString normalizedPath = PathToString(filePath.lexically_normal());
+            CanonicalizeTextInPlace(normalizedPath);
             if(!seenNwbPaths.insert(normalizedPath).second)
                 continue;
 
@@ -1697,7 +1699,8 @@ static bool ParseRequiredStringField(
     }
 
     const Core::Metascript::MStringView text = field->asString();
-    outText = CanonicalizeText(AStringView(text.data(), text.size()));
+    outText.assign(text.data(), text.size());
+    CanonicalizeTextInPlace(outText);
     if(outText.empty()){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
@@ -2206,7 +2209,8 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
             return false;
         }
 
-        AString normalizedIncludeDirectory = CanonicalizeText(PathToString(includeDirectory.lexically_normal()));
+        AString normalizedIncludeDirectory = PathToString(includeDirectory.lexically_normal());
+        CanonicalizeTextInPlace(normalizedIncludeDirectory);
         if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
             continue;
 
@@ -2694,7 +2698,8 @@ static bool ParseAssetMetadata(
                     return false;
                 }
 
-                AString key = CanonicalizeText(PathToString(absSource));
+                AString key = PathToString(absSource);
+                CanonicalizeTextInPlace(key);
                 if(!outMetadata.includeMetadata.emplace(Move(key), Move(includeEntry)).second){
                     NWB_LOGGER_ERROR(
                         NWB_TEXT("GraphicsAssetCooker: duplicate include metadata for source '{}'"),
@@ -3278,10 +3283,9 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     if(!__hidden_graphics_asset_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, parsedMetadata))
         return false;
 
-    AString normalizedConfiguration = CanonicalizeText(environment.configuration.view());
-    if(normalizedConfiguration.empty())
-        normalizedConfiguration = "default";
-    const AString configurationSafeName = BuildSafeCacheName(normalizedConfiguration);
+    AString configurationSafeName = BuildCanonicalSafeCacheName(environment.configuration.view());
+    if(configurationSafeName.empty())
+        configurationSafeName = "default";
 
     __hidden_graphics_asset_cooker::PreparedShaderPlan preparedPlan(m_arena);
     if(

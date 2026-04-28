@@ -187,6 +187,12 @@ inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const Sr
 }
 
 template<typename CharT>
+inline void CanonicalizeTextInPlace(BasicString<CharT>& inOutText){
+    for(CharT& ch : inOutText)
+        ch = Canonicalize(ch);
+}
+
+template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> CanonicalizeText(const BasicStringView<CharT> text){
     BasicString<CharT> output;
     output.resize(text.size());
@@ -198,6 +204,30 @@ template<typename CharT>
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> CanonicalizeText(const BasicString<CharT>& text){
     return CanonicalizeText<CharT>(BasicStringView<CharT>{text});
+}
+
+template<typename CharT>
+[[nodiscard]] inline BasicString<CharT> BuildCanonicalSafeCacheName(const BasicStringView<CharT> text){
+    BasicString<CharT> output;
+    output.resize(text.size());
+
+    for(usize i = 0; i < text.size(); ++i){
+        const CharT ch = Canonicalize(text[i]);
+        const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z'))
+            || (ch >= CharT('0') && ch <= CharT('9'));
+        const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
+
+        if(alphaNum || safePunctuation)
+            output[i] = ch;
+        else
+            output[i] = CharT('_');
+    }
+
+    return output;
+}
+template<typename CharT>
+[[nodiscard]] inline BasicString<CharT> BuildCanonicalSafeCacheName(const BasicString<CharT>& text){
+    return BuildCanonicalSafeCacheName<CharT>(BasicStringView<CharT>{text});
 }
 
 

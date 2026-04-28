@@ -304,15 +304,10 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     VulkanDetail::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, true, depthStencil);
 
     // Step 8: Color blend state
-    VkPipelineColorBlendStateCreateInfo colorBlending = VulkanDetail::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
-    colorBlending.logicOpEnable = VK_FALSE;
-    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
-    blendAttachments.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
-        blendAttachments.push_back(VulkanDetail::ConvertBlendState(desc.renderState.blendState.targets[i]));
-    }
-    colorBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
-    colorBlending.pAttachments = blendAttachments.data();
+    PipelineColorBlendAttachmentVector blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
+    VkPipelineColorBlendStateCreateInfo colorBlending =
+        VulkanDetail::BuildPipelineColorBlendState(fbinfo, desc.renderState.blendState, blendAttachments)
+    ;
 
     // Step 9: Dynamic state
     VkDynamicState dynamicStates[] = {

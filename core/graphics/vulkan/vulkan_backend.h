@@ -19,6 +19,10 @@ NWB_VULKAN_BEGIN
 
 struct VulkanContext;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>>;
+using PipelineColorBlendAttachmentVector = Vector<
+    VkPipelineColorBlendAttachmentState,
+    Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>
+>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,6 +174,25 @@ namespace VulkanDetail{
         if(target.colorWriteMask & ColorMask::Alpha)
             state.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
         return state;
+    }
+
+    inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(
+        const FramebufferInfo& fbinfo,
+        const BlendState& blendState,
+        PipelineColorBlendAttachmentVector& outBlendAttachments)
+    {
+        outBlendAttachments.clear();
+        outBlendAttachments.reserve(fbinfo.colorFormats.size());
+        for(usize i = 0; i < fbinfo.colorFormats.size(); ++i)
+            outBlendAttachments.push_back(ConvertBlendState(blendState.targets[i]));
+
+        VkPipelineColorBlendStateCreateInfo colorBlending =
+            MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO)
+        ;
+        colorBlending.logicOpEnable = VK_FALSE;
+        colorBlending.attachmentCount = static_cast<u32>(outBlendAttachments.size());
+        colorBlending.pAttachments = outBlendAttachments.data();
+        return colorBlending;
     }
 
     bool ConfigurePipelineMultisampleState(

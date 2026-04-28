@@ -4,6 +4,8 @@
 
 #include "client.h"
 
+#include <global/binary.h>
+
 #include <curl/curl.h>
 
 
@@ -33,26 +35,17 @@ static bool BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
     const usize strBytes = str.size() * sizeof(tchar);
     const usize payloadSize = fixedPayloadBytes + strBytes;
 
-    outPayload.resize(payloadSize);
-
-    u8* ptr = outPayload.data();
-    {
-        NWB_MEMCPY(ptr, sizeof(decltype(time)), &time, sizeof(decltype(time)));
-        ptr += static_cast<isize>(sizeof(decltype(time)));
+    outPayload.clear();
+    outPayload.reserve(payloadSize);
+    AppendPOD(outPayload, time);
+    AppendPOD(outPayload, type);
+    if(strBytes > 0){
+        const u8* textBytes = reinterpret_cast<const u8*>(str.c_str());
+        outPayload.insert(outPayload.end(), textBytes, textBytes + strBytes);
     }
-    {
-        NWB_MEMCPY(ptr, sizeof(decltype(type)), &type, sizeof(decltype(type)));
-        ptr += static_cast<isize>(sizeof(decltype(type)));
-    }
-    {
-        if(strBytes){
-            NWB_MEMCPY(ptr, strBytes, str.c_str(), strBytes);
-            ptr += static_cast<isize>(strBytes);
-        }
-
-        constexpr tchar nullTerminator = 0;
-        NWB_MEMCPY(ptr, sizeof(nullTerminator), &nullTerminator, sizeof(nullTerminator));
-    }
+    constexpr tchar nullTerminator = 0;
+    AppendPOD(outPayload, nullTerminator);
+    NWB_ASSERT(outPayload.size() == payloadSize);
 
     return true;
 }

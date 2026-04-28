@@ -353,7 +353,7 @@ private:
     template<typename Func>
     inline void dispatchParallelFor(usize begin, usize, const Func& func, usize numChunks, usize chunkSize, usize remainder){
         Latch done(static_cast<isize>(numChunks));
-        UniqueLock parallelLock(m_pfMutex);
+        ScopedLock parallelLock(m_pfMutex);
 
         ParallelForDesc desc;
         desc.invoke = [](const void* ctx, usize cb, usize ce){

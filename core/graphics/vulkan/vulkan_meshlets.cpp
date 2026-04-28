@@ -122,15 +122,10 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     VkPipelineDepthStencilStateCreateInfo depthStencil;
     VulkanDetail::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, false, depthStencil);
 
-    Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>> blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
-    blendAttachments.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < fbinfo.colorFormats.size(); ++i){
-        blendAttachments.push_back(VulkanDetail::ConvertBlendState(desc.renderState.blendState.targets[i]));
-    }
-
-    VkPipelineColorBlendStateCreateInfo colorBlending = VulkanDetail::MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);
-    colorBlending.attachmentCount = static_cast<u32>(blendAttachments.size());
-    colorBlending.pAttachments = blendAttachments.data();
+    PipelineColorBlendAttachmentVector blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
+    VkPipelineColorBlendStateCreateInfo colorBlending =
+        VulkanDetail::BuildPipelineColorBlendState(fbinfo, desc.renderState.blendState, blendAttachments)
+    ;
 
     VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,

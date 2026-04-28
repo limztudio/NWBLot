@@ -846,22 +846,32 @@ bool DeformerSystem::ensureRuntimeResources(
         return true;
     }
 
-    const Name rangeBufferName = DeriveName(
-        instance.source.name(),
-        StringFormat(":runtime_{}_revision_{}_deformer_ranges", instance.handle.value, instance.editRevision)
-    );
-    const Name deltaBufferName = DeriveName(
-        instance.source.name(),
-        StringFormat(":runtime_{}_revision_{}_deformer_deltas", instance.handle.value, instance.editRevision)
-    );
-    const Name skinBufferName = DeriveName(
-        instance.source.name(),
-        StringFormat(":runtime_{}_revision_{}_deformer_skin", instance.handle.value, instance.editRevision)
-    );
-    const Name jointPaletteBufferName = DeriveName(
-        instance.source.name(),
-        StringFormat(":runtime_{}_revision_{}_deformer_joints", instance.handle.value, instance.editRevision)
-    );
+    Name rangeBufferName = NAME_NONE;
+    Name deltaBufferName = NAME_NONE;
+    if(hasActiveMorphs){
+        rangeBufferName = DeriveName(
+            instance.source.name(),
+            StringFormat(":runtime_{}_revision_{}_deformer_ranges", instance.handle.value, instance.editRevision)
+        );
+        deltaBufferName = DeriveName(
+            instance.source.name(),
+            StringFormat(":runtime_{}_revision_{}_deformer_deltas", instance.handle.value, instance.editRevision)
+        );
+    }
+
+    Name skinBufferName = NAME_NONE;
+    Name jointPaletteBufferName = NAME_NONE;
+    if(hasActiveSkin){
+        skinBufferName = DeriveName(
+            instance.source.name(),
+            StringFormat(":runtime_{}_revision_{}_deformer_skin", instance.handle.value, instance.editRevision)
+        );
+        jointPaletteBufferName = DeriveName(
+            instance.source.name(),
+            StringFormat(":runtime_{}_revision_{}_deformer_joints", instance.handle.value, instance.editRevision)
+        );
+    }
+
     if(
         (hasActiveMorphs && (!rangeBufferName || !deltaBufferName))
         || (hasActiveSkin && (!skinBufferName || !jointPaletteBufferName))

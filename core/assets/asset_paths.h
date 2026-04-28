@@ -115,7 +115,22 @@ namespace AssetPathsDetail{
         return false;
     }
 
-    outVirtualPath = StringFormat("{}/{}", virtualRoot, relativePathText);
+    if(
+        virtualRoot.size() > Limit<usize>::s_Max - 1u
+        || relativePathText.size() > Limit<usize>::s_Max - virtualRoot.size() - 1u
+    ){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Assets: derived asset virtual path size overflows for '{}'"),
+            PathToString<tchar>(sourceOrMetaPath)
+        );
+        return false;
+    }
+
+    const usize virtualPathSize = virtualRoot.size() + 1u + relativePathText.size();
+    outVirtualPath.reserve(virtualPathSize);
+    outVirtualPath.append(virtualRoot.data(), virtualRoot.size());
+    outVirtualPath += '/';
+    outVirtualPath += relativePathText;
     return true;
 }
 
@@ -203,7 +218,7 @@ template<typename AssetRootVector>
         return false;
 
     CompactString requestedVirtualRoot;
-    if(!AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, requestedVirtualRoot))
+    if(!requestedVirtualRoot.assign(PathToString(*componentIt)) || requestedVirtualRoot.empty())
         return false;
 
     for(const Path& assetRoot : assetRoots){

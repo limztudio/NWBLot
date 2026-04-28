@@ -8,6 +8,7 @@
 
 #include <tests/test_context.h>
 
+#include <core/alloc/scratch.h>
 #include <core/common/common.h>
 #include <core/filesystem/filesystem.h>
 #include <core/graphics/common.h>
@@ -1055,6 +1056,63 @@ static bool CookAndLoadMinimalGeometry(
     ErrorCode errorCode;
     static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
     return false;
+}
+
+static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
+    TestArena testArena;
+    const Path root = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / "volume_scratch_bytes";
+    const bool prepared = PrepareCleanDirectory(root);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, prepared);
+
+    if(prepared){
+        NWB::Core::Filesystem::VolumeBuildConfig config;
+        config.volumeName = "scratch_test";
+        config.segmentSize = 64ull * 1024ull;
+        config.metadataSize = 4ull * 1024ull;
+
+        NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
+        const bool created = volumeSession.create(root / "volume", config);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, created);
+        if(created){
+            NWB::Core::Alloc::ScratchArena<> scratchArena;
+            Vector<u8, NWB::Core::Alloc::ScratchAllocator<u8>> payload{
+                NWB::Core::Alloc::ScratchAllocator<u8>(scratchArena)
+            };
+            payload.reserve(4u);
+            payload.push_back(1u);
+            payload.push_back(2u);
+            payload.push_back(3u);
+            payload.push_back(4u);
+
+            const Name virtualPath("project/tests/scratch_payload");
+            const bool pushed = volumeSession.pushDataDeferred(virtualPath, payload);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, pushed);
+            if(pushed){
+                payload[0] = 99u;
+
+                const bool flushed = volumeSession.flush();
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, flushed);
+                if(flushed){
+                    NWB::Core::Assets::AssetBytes readback;
+                    const bool loaded = volumeSession.loadData(virtualPath, readback);
+                    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loaded);
+                    if(loaded){
+                        NWB_ASSETS_GRAPHICS_TEST_CHECK(
+                            context,
+                            readback.size() == 4u
+                                && readback[0] == 1u
+                                && readback[1] == 2u
+                                && readback[2] == 3u
+                                && readback[3] == 4u
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
 }
 
 static NWB::Impl::DeformableVertexRest MakeRestVertex(const f32 x, const f32 y, const f32 u, const f32 v){
@@ -2281,6 +2339,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     }
 
     __hidden_assets_graphics_tests::TestContext context;
+    __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
     __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestGeometryCodecRejectsOldBinaryVersion(context);

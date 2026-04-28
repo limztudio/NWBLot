@@ -151,9 +151,18 @@ public:
 
 public:
     bool writeFile(const Name& virtualPath, const void* data, usize bytes);
-    bool writeFile(const Name& virtualPath, const Vector<u8>& data);
     bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes);
-    bool writeFileDeferred(const Name& virtualPath, const Vector<u8>& data);
+
+    template<typename Alloc>
+    bool writeFile(const Name& virtualPath, const Vector<u8, Alloc>& data){
+        return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+    }
+
+    template<typename Alloc>
+    bool writeFileDeferred(const Name& virtualPath, const Vector<u8, Alloc>& data){
+        return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+    }
+
     bool flushMetadata();
 
     bool readFile(const Name& virtualPath, Vector<u8>& outData)const;
@@ -216,10 +225,31 @@ public:
     bool create(const Path& outputDirectory, const VolumeBuildConfig& config);
     bool load(AStringView volumeName, const Path& mountDirectory);
 
-    bool pushData(const Name& virtualPath, const Vector<u8>& data);
-    bool pushData(AStringView virtualPath, const Vector<u8>& data);
-    bool pushDataDeferred(const Name& virtualPath, const Vector<u8>& data);
-    bool pushDataDeferred(AStringView virtualPath, const Vector<u8>& data);
+    bool pushData(const Name& virtualPath, const void* data, usize bytes);
+    bool pushData(AStringView virtualPath, const void* data, usize bytes);
+    bool pushDataDeferred(const Name& virtualPath, const void* data, usize bytes);
+    bool pushDataDeferred(AStringView virtualPath, const void* data, usize bytes);
+
+    template<typename Alloc>
+    bool pushData(const Name& virtualPath, const Vector<u8, Alloc>& data){
+        return pushData(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+    }
+
+    template<typename Alloc>
+    bool pushData(const AStringView virtualPath, const Vector<u8, Alloc>& data){
+        return pushData(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+    }
+
+    template<typename Alloc>
+    bool pushDataDeferred(const Name& virtualPath, const Vector<u8, Alloc>& data){
+        return pushDataDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+    }
+
+    template<typename Alloc>
+    bool pushDataDeferred(const AStringView virtualPath, const Vector<u8, Alloc>& data){
+        return pushDataDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
+    }
+
     bool flush();
     bool loadData(AStringView virtualPath, Vector<u8>& outData)const;
     bool loadData(const Name& virtualPath, Vector<u8>& outData)const;

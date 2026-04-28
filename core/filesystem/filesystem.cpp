@@ -1115,17 +1115,9 @@ bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, cons
     return writeFileLocked(virtualPath, data, bytes, true);
 }
 
-bool VolumeFileSystem::writeFile(const Name& virtualPath, const Vector<u8>& data){
-    return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
-}
-
 bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
     ScopedLock lock(m_mutex);
     return writeFileLocked(virtualPath, data, bytes, false);
-}
-
-bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const Vector<u8>& data){
-    return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
 }
 
 bool VolumeFileSystem::flushMetadata(){
@@ -2032,7 +2024,7 @@ bool VolumeSession::load(const AStringView volumeName, const Path& mountDirector
     return false;
 }
 
-bool VolumeSession::pushData(const Name& virtualPath, const Vector<u8>& data){
+bool VolumeSession::pushData(const Name& virtualPath, const void* data, const usize bytes){
     if(!m_volumeFileSystem.mounted()){
         NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushData failed: volume is not mounted"));
         return false;
@@ -2046,7 +2038,7 @@ bool VolumeSession::pushData(const Name& virtualPath, const Vector<u8>& data){
         return false;
     }
 
-    if(m_volumeFileSystem.writeFile(virtualPath, data))
+    if(m_volumeFileSystem.writeFile(virtualPath, data, bytes))
         return true;
 
     NWB_LOGGER_ERROR(
@@ -2056,7 +2048,7 @@ bool VolumeSession::pushData(const Name& virtualPath, const Vector<u8>& data){
     return false;
 }
 
-bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& data){
+bool VolumeSession::pushData(const AStringView virtualPath, const void* data, const usize bytes){
     if(virtualPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushData failed: virtual path is empty"));
         return false;
@@ -2068,10 +2060,10 @@ bool VolumeSession::pushData(const AStringView virtualPath, const Vector<u8>& da
         return false;
     }
 
-    return pushData(virtualPathName, data);
+    return pushData(virtualPathName, data, bytes);
 }
 
-bool VolumeSession::pushDataDeferred(const Name& virtualPath, const Vector<u8>& data){
+bool VolumeSession::pushDataDeferred(const Name& virtualPath, const void* data, const usize bytes){
     if(!m_volumeFileSystem.mounted()){
         NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushDataDeferred failed: volume is not mounted"));
         return false;
@@ -2085,7 +2077,7 @@ bool VolumeSession::pushDataDeferred(const Name& virtualPath, const Vector<u8>& 
         return false;
     }
 
-    if(m_volumeFileSystem.writeFileDeferred(virtualPath, data))
+    if(m_volumeFileSystem.writeFileDeferred(virtualPath, data, bytes))
         return true;
 
     NWB_LOGGER_ERROR(
@@ -2095,7 +2087,7 @@ bool VolumeSession::pushDataDeferred(const Name& virtualPath, const Vector<u8>& 
     return false;
 }
 
-bool VolumeSession::pushDataDeferred(const AStringView virtualPath, const Vector<u8>& data){
+bool VolumeSession::pushDataDeferred(const AStringView virtualPath, const void* data, const usize bytes){
     if(virtualPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushDataDeferred failed: virtual path is empty"));
         return false;
@@ -2107,7 +2099,7 @@ bool VolumeSession::pushDataDeferred(const AStringView virtualPath, const Vector
         return false;
     }
 
-    return pushDataDeferred(virtualPathName, data);
+    return pushDataDeferred(virtualPathName, data, bytes);
 }
 
 bool VolumeSession::flush(){

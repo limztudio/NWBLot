@@ -180,9 +180,11 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
         return false;
     }
 
+    const usize pixelCount = width * height;
+    const usize rowPitch = width * 4u;
     if(textureData.Format == ImTextureFormat_RGBA32){
         outPixels = textureData.Pixels;
-        outRowPitch = width * 4u;
+        outRowPitch = rowPitch;
         return true;
     }
     if(textureData.Format != ImTextureFormat_Alpha8){
@@ -190,17 +192,20 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
         return false;
     }
 
-    scratch.resize(width * height * 4u);
-    for(usize i = 0; i < width * height; ++i){
-        const u8 alpha = textureData.Pixels[i];
-        scratch[i * 4u + 0u] = 255u;
-        scratch[i * 4u + 1u] = 255u;
-        scratch[i * 4u + 2u] = 255u;
-        scratch[i * 4u + 3u] = alpha;
+    scratch.resize(pixelCount * 4u);
+    const u8* src = textureData.Pixels;
+    u8* dst = scratch.data();
+    for(usize i = 0; i < pixelCount; ++i){
+        const u8 alpha = src[i];
+        dst[0] = 255u;
+        dst[1] = 255u;
+        dst[2] = 255u;
+        dst[3] = alpha;
+        dst += 4u;
     }
 
     outPixels = scratch.data();
-    outRowPitch = width * 4u;
+    outRowPitch = rowPitch;
     return true;
 }
 
@@ -733,7 +738,14 @@ bool UiSystem::processTextureRequests(Core::ICommandList& commandList, ImDrawDat
 
 bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTextureData& textureData){
     UiTextureResource* resource = static_cast<UiTextureResource*>(textureData.BackendUserData);
-    if(!resource || resource->width != static_cast<u32>(textureData.Width) || resource->height != static_cast<u32>(textureData.Height)){
+    const void* uploadPixels = nullptr;
+    usize uploadRowPitch = 0u;
+    if(!__hidden_ecs_ui::BuildUploadPixels(textureData, m_textureUploadScratch, uploadPixels, uploadRowPitch))
+        return false;
+
+    const u32 textureWidth = static_cast<u32>(textureData.Width);
+    const u32 textureHeight = static_cast<u32>(textureData.Height);
+    if(!resource || resource->width != textureWidth || resource->height != textureHeight){
         if(resource)
             destroyTexture(textureData);
 
@@ -745,8 +757,8 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
 
         Core::TextureDesc textureDesc;
         textureDesc
-            .setWidth(static_cast<u32>(textureData.Width))
-            .setHeight(static_cast<u32>(textureData.Height))
+            .setWidth(textureWidth)
+            .setHeight(textureHeight)
             .setFormat(Core::Format::RGBA8_UNORM)
             .setName(Name(StringFormat("ecs_ui/imgui_texture_{}", textureData.UniqueID)))
         ;
@@ -773,18 +785,13 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
             return false;
         }
 
-        createdResource->width = static_cast<u32>(textureData.Width);
-        createdResource->height = static_cast<u32>(textureData.Height);
+        createdResource->width = textureWidth;
+        createdResource->height = textureHeight;
         resource = createdResource.get();
         m_textures.push_back(Move(createdResource));
         textureData.BackendUserData = resource;
         textureData.SetTexID(__hidden_ecs_ui::TextureIdFromResource(resource));
     }
-
-    const void* uploadPixels = nullptr;
-    usize uploadRowPitch = 0u;
-    if(!__hidden_ecs_ui::BuildUploadPixels(textureData, m_textureUploadScratch, uploadPixels, uploadRowPitch))
-        return false;
 
     commandList.writeTexture(resource->texture.get(), 0u, 0u, uploadPixels, uploadRowPitch);
     textureData.SetStatus(ImTextureStatus_OK);

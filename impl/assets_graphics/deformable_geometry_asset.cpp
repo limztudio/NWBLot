@@ -192,10 +192,10 @@ template<typename T>
         return false;
     }
 
-    const usize begin = outBinary.size();
-    outBinary.resize(begin + payloadBytes);
-    if(payloadBytes > 0)
-        NWB_MEMCPY(outBinary.data() + begin, payloadBytes, values.data(), payloadBytes);
+    if(payloadBytes > 0){
+        const u8* bytes = reinterpret_cast<const u8*>(values.data());
+        outBinary.insert(outBinary.end(), bytes, bytes + payloadBytes);
+    }
     return true;
 }
 

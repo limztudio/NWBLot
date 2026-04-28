@@ -83,10 +83,10 @@ bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<Value
         return false;
     }
 
-    const usize payloadBegin = outBinary.size();
-    outBinary.resize(payloadBegin + byteCount);
-    if(byteCount > 0u)
-        NWB_MEMCPY(outBinary.data() + payloadBegin, byteCount, values.data(), byteCount);
+    if(byteCount > 0u){
+        const u8* bytes = reinterpret_cast<const u8*>(values.data());
+        outBinary.insert(outBinary.end(), bytes, bytes + byteCount);
+    }
     return true;
 }
 

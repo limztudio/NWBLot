@@ -815,17 +815,19 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(!VulkanDetail::PrepareStagingTextureCopy(
-        dest,
-        destSlice,
-        src,
-        srcSlice,
-        NWB_TEXT("copy texture to staging texture"),
-        NWB_TEXT("source texture must be single-sampled"),
-        staging,
-        texture,
-        region
-    ))
+    if(
+        !VulkanDetail::PrepareStagingTextureCopy(
+            dest,
+            destSlice,
+            src,
+            srcSlice,
+            NWB_TEXT("copy texture to staging texture"),
+            NWB_TEXT("source texture must be single-sampled"),
+            staging,
+            texture,
+            region
+        )
+    )
         return;
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, staging->m_buffer, 1, &region);
@@ -838,17 +840,19 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(!VulkanDetail::PrepareStagingTextureCopy(
-        src,
-        srcSlice,
-        dest,
-        destSlice,
-        NWB_TEXT("copy staging texture to texture"),
-        NWB_TEXT("destination texture must be single-sampled"),
-        staging,
-        texture,
-        region
-    ))
+    if(
+        !VulkanDetail::PrepareStagingTextureCopy(
+            src,
+            srcSlice,
+            dest,
+            destSlice,
+            NWB_TEXT("copy staging texture to texture"),
+            NWB_TEXT("destination texture must be single-sampled"),
+            staging,
+            texture,
+            region
+        )
+    )
         return;
 
     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, staging->m_buffer, texture->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);

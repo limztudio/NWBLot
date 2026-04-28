@@ -666,13 +666,15 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
             height = Max(height / 2, tileHeight);
             depth = Max(depth / 2, tileDepth);
 
-            if(!addTileCount(
-                startTileIndex,
-                subresourceTilings[i].widthInTiles,
-                subresourceTilings[i].heightInTiles,
-                subresourceTilings[i].depthInTiles,
-                startTileIndex
-            )){
+            if(
+                !addTileCount(
+                    startTileIndex,
+                    subresourceTilings[i].widthInTiles,
+                    subresourceTilings[i].heightInTiles,
+                    subresourceTilings[i].depthInTiles,
+                    startTileIndex
+                )
+            ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile count exceeds u32 limits"));
                 clearOutputs();
                 return;

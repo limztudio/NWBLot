@@ -49,9 +49,11 @@ static AString CanonicalAssetType(const Metascript::Document& doc){
 
 static constexpr AStringView s_ShaderIncludeDirective = "include";
 
-enum class IncludeDirectiveKind : u8{
-    Relative,
-    Standard
+namespace IncludeDirectiveKind{
+    enum Enum : u8{
+        Relative,
+        Standard
+    };
 };
 
 static bool IsIncludeDirectiveBoundary(const AStringView line, const usize cursor){
@@ -62,7 +64,7 @@ static bool IsIncludeDirectiveBoundary(const AStringView line, const usize curso
     ;
 }
 
-static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, IncludeDirectiveKind& outKind){
+static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, IncludeDirectiveKind::Enum& outKind){
     outIncludeName = {};
     outKind = IncludeDirectiveKind::Relative;
 
@@ -111,7 +113,7 @@ static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncl
     return !outIncludeName.empty();
 }
 
-static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirectiveKind kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
+static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirectiveKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
     ErrorCode errorCode;
 
     if(kind == IncludeDirectiveKind::Relative){
@@ -202,7 +204,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
                 line.remove_suffix(1);
 
             AStringView includeName;
-            IncludeDirectiveKind includeKind = IncludeDirectiveKind::Relative;
+            IncludeDirectiveKind::Enum includeKind = IncludeDirectiveKind::Relative;
             if(ExtractIncludeDirective(line, includeName, includeKind)){
                 if(!ResolveIncludeFile(includeName, includeKind, absolutePath.parent_path(), includeDirectories, includePath)){
                     NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'")

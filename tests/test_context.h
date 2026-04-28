@@ -33,7 +33,7 @@ struct TestContext{
     u32 passed = 0;
     u32 failed = 0;
 
-    void checkTrue(const bool condition, const char* expression, const char* file, const int line){
+    void checkTrue(const bool condition, const AStringView expression, const AStringView file, const i32 line){
         if(condition){
             ++passed;
             return;
@@ -54,7 +54,7 @@ public:
     }
 
     [[nodiscard]] u32 errorCount()const{ return m_errorCount; }
-    [[nodiscard]] bool sawErrorContaining(const tchar* text)const{
+    [[nodiscard]] bool sawErrorContaining(const TStringView text)const{
         for(const TString& error : m_errors){
             if(error.find(text) != TString::npos)
                 return true;

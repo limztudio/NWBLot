@@ -1219,14 +1219,16 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    if(!configurePipelineBindings(
-        desc.globalBindingLayouts,
-        NWB_TEXT("ray tracing pipeline"),
-        stages,
-        descriptorHeapScratch,
-        *pso,
-        scratchArena
-    )){
+    if(
+        !configurePipelineBindings(
+            desc.globalBindingLayouts,
+            NWB_TEXT("ray tracing pipeline"),
+            stages,
+            descriptorHeapScratch,
+            *pso,
+            scratchArena
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

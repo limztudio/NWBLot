@@ -491,14 +491,16 @@ bool Device::createPipelineLayoutForBindingLayouts(
             descriptorSetLayouts.push_back(descriptorSetLayout);
     }
 
-    if(!VulkanDetail::CreatePipelineLayout(
-        m_context,
-        descriptorSetLayouts.data(),
-        static_cast<u32>(descriptorSetLayouts.size()),
-        pushConstantByteSize,
-        outPipelineLayout,
-        operationName
-    ))
+    if(
+        !VulkanDetail::CreatePipelineLayout(
+            m_context,
+            descriptorSetLayouts.data(),
+            static_cast<u32>(descriptorSetLayouts.size()),
+            pushConstantByteSize,
+            outPipelineLayout,
+            operationName
+        )
+    )
         return false;
 
     outPushConstantByteSize = pushConstantByteSize;

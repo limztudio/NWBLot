@@ -86,8 +86,11 @@ public:
             return m_errors.empty();
         }
         catch(const GeneralException& e){
-            error(m_current.line, m_current.column,
-                MStringView(e.what(), MString::traits_type::length(e.what())));
+            error(
+                m_current.line,
+                m_current.column,
+                MStringView(e.what(), MString::traits_type::length(e.what()))
+            );
             return false;
         }
     }

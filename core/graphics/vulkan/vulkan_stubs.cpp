@@ -175,9 +175,13 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     return true;
 }
 
-void CommandList::buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* accelStructResource, IBuffer* instanceBuffer,
-    u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags)
-{
+void CommandList::buildTopLevelAccelStructFromBuffer(
+    IRayTracingAccelStruct* accelStructResource,
+    IBuffer* instanceBuffer,
+    u64 instanceBufferOffset,
+    usize numInstances,
+    RayTracingAccelStructBuildFlags::Mask buildFlags
+){
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
         return;

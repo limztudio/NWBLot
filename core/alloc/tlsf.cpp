@@ -942,20 +942,26 @@ pool_t tlsf_add_pool(tlsf_t tlsf, void* mem, size_t bytes){
     const size_t pool_bytes = align_down(bytes - pool_overhead, ALIGN_SIZE);
 
     if((reinterpret_cast<ptrdiff_t>(mem) % ALIGN_SIZE) != 0){
-        tlsf_report("tlsf_add_pool: Memory must be aligned by %u bytes.\n",
-            static_cast<unsigned int>(ALIGN_SIZE));
+        tlsf_report(
+            "tlsf_add_pool: Memory must be aligned by %u bytes.\n",
+            static_cast<unsigned int>(ALIGN_SIZE)
+        );
         return 0;
     }
 
     if(pool_bytes < block_size_min || pool_bytes > block_size_max){
 #if defined (TLSF_64BIT)
-        tlsf_report("tlsf_add_pool: Memory size must be between 0x%x and 0x%x00 bytes.\n",
+        tlsf_report(
+            "tlsf_add_pool: Memory size must be between 0x%x and 0x%x00 bytes.\n",
             static_cast<unsigned int>(pool_overhead + block_size_min),
-            static_cast<unsigned int>((pool_overhead + block_size_max) / 256));
+            static_cast<unsigned int>((pool_overhead + block_size_max) / 256)
+        );
 #else
-        tlsf_report("tlsf_add_pool: Memory size must be between %u and %u bytes.\n",
+        tlsf_report(
+            "tlsf_add_pool: Memory size must be between %u and %u bytes.\n",
             static_cast<unsigned int>(pool_overhead + block_size_min),
-            static_cast<unsigned int>(pool_overhead + block_size_max));
+            static_cast<unsigned int>(pool_overhead + block_size_max)
+        );
 #endif
         return 0;
     }
@@ -1032,8 +1038,10 @@ tlsf_t tlsf_create(void* mem){
 #endif
 
     if((reinterpret_cast<tlsfptr_t>(mem) % ALIGN_SIZE) != 0){
-        tlsf_report("tlsf_create: Memory must be aligned to %u bytes.\n",
-            static_cast<unsigned int>(ALIGN_SIZE));
+        tlsf_report(
+            "tlsf_create: Memory must be aligned to %u bytes.\n",
+            static_cast<unsigned int>(ALIGN_SIZE)
+        );
         return 0;
     }
 

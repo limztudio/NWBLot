@@ -792,10 +792,10 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     }
 
     if(
-        m_graphicsQueueFamily == -1 ||
-        (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice) ||
-        (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue) ||
-        (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
+        m_graphicsQueueFamily == -1
+        || (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice)
+        || (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue)
+        || (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
     ){
         return false;
     }

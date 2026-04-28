@@ -308,10 +308,10 @@ static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBac
 }
 
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
-    return combo.inputType == CooperativeVectorDataType::Float16 &&
-           combo.inputInterpretation == CooperativeVectorDataType::Float16 &&
-           combo.matrixInterpretation == CooperativeVectorDataType::Float16 &&
-           combo.outputType == CooperativeVectorDataType::Float16
+    return combo.inputType == CooperativeVectorDataType::Float16
+        && combo.inputInterpretation == CooperativeVectorDataType::Float16
+        && combo.matrixInterpretation == CooperativeVectorDataType::Float16
+        && combo.outputType == CooperativeVectorDataType::Float16
     ;
 }
 

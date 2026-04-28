@@ -5,15 +5,13 @@
 #pragma once
 
 
-#include <impl/global.h>
-
-#include <core/graphics/common.h>
+#include "common.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +38,7 @@ inline AStringView MeshComputeImplicitDefineText(){
     return s_DefineText;
 }
 
-inline const Name& ArchiveStageNameFromShaderType(const Core::ShaderType::Mask shaderType){
+inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Mask shaderType){
     switch(shaderType){
         case Core::ShaderType::Vertex: { static const Name s("vs"); return s; }
         case Core::ShaderType::Hull: { static const Name s("hs"); return s; }
@@ -70,7 +68,7 @@ inline const Name& ArchiveStageNameFromShaderType(const Core::ShaderType::Mask s
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

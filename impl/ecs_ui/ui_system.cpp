@@ -6,8 +6,8 @@
 
 #include <core/ecs/world.h>
 #include <core/graphics/shader_archive.h>
+#include <core/graphics/shader_stage_names.h>
 #include <impl/assets_graphics/shader_asset.h>
-#include <impl/assets_graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 
 #include <cstddef>
@@ -222,7 +222,7 @@ static Core::ShaderHandle CreateShaderFromAsset(
         return nullptr;
     }
 
-    const Name& stageName = ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
+    const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: unsupported shader stage {}"), static_cast<u32>(shaderType));
         return nullptr;

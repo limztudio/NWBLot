@@ -9,11 +9,11 @@
 #include <core/ecs/world.h>
 #include <core/scene/scene.h>
 #include <core/graphics/shader_archive.h>
+#include <core/graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
-#include <impl/assets_graphics/shader_stage_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -345,7 +345,7 @@ static Core::RenderState BuildCompositeRenderState(){
 static bool TryFindShaderForStage(const Material& material, const Core::ShaderType::Mask shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset){
     outShaderAsset.reset();
 
-    const Name& stageName = ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
+    const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
     if(!stageName)
         return false;
 
@@ -3227,7 +3227,7 @@ bool RendererSystem::ensureRendererPipeline(
             return false;
         if(!ensureComputeEmulationResources())
             return false;
-        const Name& meshComputeArchiveStageName = ShaderStageNames::MeshComputeArchiveStageName();
+        const Name& meshComputeArchiveStageName = Core::ShaderStageNames::MeshComputeArchiveStageName();
         if(
             !ensureShaderLoaded(
             resources.computeShader,

@@ -10,8 +10,8 @@
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
+#include <core/graphics/shader_stage_names.h>
 #include <impl/assets_graphics/shader_asset.h>
-#include <impl/assets_graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 
 
@@ -52,7 +52,7 @@ template<typename ShaderPathResolver>
 
     const Name& stageName = archiveStageName
         ? *archiveStageName
-        : ShaderStageNames::ArchiveStageNameFromShaderType(shaderType)
+        : Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType)
     ;
     if(!stageName){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: unsupported shader stage {}"), ownerName, static_cast<u32>(shaderType));

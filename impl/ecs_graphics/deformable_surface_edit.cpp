@@ -41,9 +41,10 @@ using EdgeRecord = Core::Geometry::MeshTopologyEdge;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersion = 4u;
+static constexpr u32 s_SurfaceEditStateVersion = 5u;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
 static constexpr u32 s_MaxWallLoopCutCount = 8u;
+static constexpr f32 s_MinHoleBoundaryKeptFaceNormalDot = 0.5f;
 
 struct HoleFrame{
     SIMDVector center = VectorZero();
@@ -125,6 +126,39 @@ using MorphDeltaLookup = HashMap<
         LoadRestVertexPosition(instance.restVertices[indices[2]])
     );
     return VectorScale(centroid, 1.0f / 3.0f);
+}
+
+[[nodiscard]] bool TriangleContainsEdge(const u32 (&indices)[3], const u32 a, const u32 b){
+    bool foundA = false;
+    bool foundB = false;
+    for(const u32 index : indices){
+        foundA = foundA || index == a;
+        foundB = foundB || index == b;
+    }
+    return foundA && foundB;
+}
+
+[[nodiscard]] bool BuildTriangleNormal(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 (&indices)[3],
+    SIMDVector& outNormal)
+{
+    if(
+        indices[0u] >= instance.restVertices.size()
+        || indices[1u] >= instance.restVertices.size()
+        || indices[2u] >= instance.restVertices.size()
+    )
+        return false;
+
+    const SIMDVector a = LoadRestVertexPosition(instance.restVertices[indices[0u]]);
+    const SIMDVector b = LoadRestVertexPosition(instance.restVertices[indices[1u]]);
+    const SIMDVector c = LoadRestVertexPosition(instance.restVertices[indices[2u]]);
+    const SIMDVector rawNormal = Vector3Cross(VectorSubtract(b, a), VectorSubtract(c, a));
+    if(VectorGetX(Vector3LengthSq(rawNormal)) <= Core::Geometry::s_FrameDirectionEpsilon)
+        return false;
+
+    outNormal = Core::Geometry::FrameNormalizeDirection(rawNormal, s_SIMDIdentityR2);
+    return FiniteVec3(outNormal);
 }
 
 [[nodiscard]] bool BuildHoleFrame(
@@ -405,14 +439,22 @@ using MorphDeltaLookup = HashMap<
             && result.wallLoopCutCount == 0u
         ;
     const u32 wallBandCount = result.wallLoopCutCount + 1u;
-    if(result.wallVertexCount > Limit<u32>::s_Max / wallBandCount)
+    const u32 addedRingCount = wallBandCount + 1u;
+    if(result.wallVertexCount > Limit<u32>::s_Max / addedRingCount)
         return false;
-    const u32 expectedAddedVertexCount = result.wallVertexCount * wallBandCount;
+    const u32 expectedAddedVertexCount = result.wallVertexCount * addedRingCount;
     if(result.addedVertexCount != expectedAddedVertexCount)
         return false;
     if(result.wallVertexCount > Limit<u32>::s_Max / (2u * wallBandCount))
         return false;
-    if(result.addedTriangleCount != result.wallVertexCount * 2u * wallBandCount)
+    const u32 wallTriangleCount = result.wallVertexCount * 2u * wallBandCount;
+    const u32 maxCapTriangleCount = result.wallVertexCount - 2u;
+    if(wallTriangleCount > Limit<u32>::s_Max - maxCapTriangleCount)
+        return false;
+    if(
+        result.addedTriangleCount <= wallTriangleCount
+        || result.addedTriangleCount > wallTriangleCount + maxCapTriangleCount
+    )
         return false;
     return true;
 }
@@ -1386,6 +1428,232 @@ template<usize sourceCount>
     return true;
 }
 
+struct BottomCapPolygonVertex{
+    u32 vertex = 0u;
+    f32 x = 0.0f;
+    f32 y = 0.0f;
+};
+
+[[nodiscard]] f32 Cross2D(
+    const BottomCapPolygonVertex& a,
+    const BottomCapPolygonVertex& b,
+    const BottomCapPolygonVertex& c)
+{
+    return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
+}
+
+[[nodiscard]] f32 DistanceSq2D(const BottomCapPolygonVertex& a, const BottomCapPolygonVertex& b){
+    const f32 dx = b.x - a.x;
+    const f32 dy = b.y - a.y;
+    return (dx * dx) + (dy * dy);
+}
+
+template<typename PolygonAllocator>
+[[nodiscard]] f32 SignedArea2D(const Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon){
+    f32 area = 0.0f;
+    for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
+        const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+        area +=
+            (polygon[vertexIndex].x * polygon[nextVertexIndex].y)
+            - (polygon[vertexIndex].y * polygon[nextVertexIndex].x)
+        ;
+    }
+    return area * 0.5f;
+}
+
+[[nodiscard]] bool PointInsideTriangle2D(
+    const BottomCapPolygonVertex& point,
+    const BottomCapPolygonVertex& a,
+    const BottomCapPolygonVertex& b,
+    const BottomCapPolygonVertex& c,
+    const bool counterClockwise)
+{
+    constexpr f32 epsilon = 0.0000001f;
+    const f32 ab = Cross2D(a, b, point);
+    const f32 bc = Cross2D(b, c, point);
+    const f32 ca = Cross2D(c, a, point);
+    return counterClockwise
+        ? ab >= -epsilon && bc >= -epsilon && ca >= -epsilon
+        : ab <= epsilon && bc <= epsilon && ca <= epsilon
+    ;
+}
+
+template<typename PolygonAllocator>
+[[nodiscard]] bool RemoveCollinearCapVertices(Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon){
+    constexpr f32 distanceEpsilonSq = 0.000000000001f;
+    constexpr f32 areaEpsilon = 0.0000001f;
+    bool removed = true;
+    while(removed && polygon.size() >= 3u){
+        removed = false;
+        for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
+            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
+            const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+            const BottomCapPolygonVertex& previous = polygon[previousVertexIndex];
+            const BottomCapPolygonVertex& current = polygon[vertexIndex];
+            const BottomCapPolygonVertex& next = polygon[nextVertexIndex];
+            if(
+                DistanceSq2D(previous, current) <= distanceEpsilonSq
+                || DistanceSq2D(current, next) <= distanceEpsilonSq
+                || Abs(Cross2D(previous, current, next)) <= areaEpsilon
+            ){
+                polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
+                removed = true;
+                break;
+            }
+        }
+    }
+    return polygon.size() >= 3u;
+}
+
+template<typename IndexAllocator>
+[[nodiscard]] bool AppendBottomCapTriangle(
+    const BottomCapPolygonVertex& a,
+    const BottomCapPolygonVertex& b,
+    const BottomCapPolygonVertex& c,
+    const bool counterClockwise,
+    Vector<u32, IndexAllocator>& outIndices)
+{
+    if(a.vertex == b.vertex || a.vertex == c.vertex || b.vertex == c.vertex)
+        return false;
+
+    outIndices.push_back(a.vertex);
+    outIndices.push_back(counterClockwise ? b.vertex : c.vertex);
+    outIndices.push_back(counterClockwise ? c.vertex : b.vertex);
+    return true;
+}
+
+template<typename PolygonAllocator>
+[[nodiscard]] bool IsBottomCapEar(
+    const Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon,
+    const usize vertexIndex,
+    const bool counterClockwise)
+{
+    constexpr f32 areaEpsilon = 0.0000001f;
+    const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
+    const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+    const BottomCapPolygonVertex& previous = polygon[previousVertexIndex];
+    const BottomCapPolygonVertex& current = polygon[vertexIndex];
+    const BottomCapPolygonVertex& next = polygon[nextVertexIndex];
+    const f32 cross = Cross2D(previous, current, next);
+    if(counterClockwise ? cross <= areaEpsilon : cross >= -areaEpsilon)
+        return false;
+
+    for(usize testVertexIndex = 0u; testVertexIndex < polygon.size(); ++testVertexIndex){
+        if(
+            testVertexIndex == previousVertexIndex
+            || testVertexIndex == vertexIndex
+            || testVertexIndex == nextVertexIndex
+        )
+            continue;
+
+        if(PointInsideTriangle2D(polygon[testVertexIndex], previous, current, next, counterClockwise))
+            return false;
+    }
+    return true;
+}
+
+template<typename VertexAllocator, typename RestVertexAllocator, typename IndexAllocator>
+[[nodiscard]] bool AppendBottomCapTriangles(
+    const Vector<u32, VertexAllocator>& capVertices,
+    const Vector<DeformableVertexRest, RestVertexAllocator>& restVertices,
+    const SIMDVector tangent,
+    const SIMDVector bitangent,
+    Vector<u32, IndexAllocator>& outIndices,
+    u32* outAddedTriangleCount)
+{
+    if(outAddedTriangleCount)
+        *outAddedTriangleCount = 0u;
+    if(
+        capVertices.size() < 3u
+        || capVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || capVertices.size() - 2u > static_cast<usize>(Limit<u32>::s_Max)
+        || ((capVertices.size() - 2u) * 3u) > Limit<usize>::s_Max - outIndices.size()
+    )
+        return false;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<BottomCapPolygonVertex, Core::Alloc::ScratchAllocator<BottomCapPolygonVertex>> polygon{
+        Core::Alloc::ScratchAllocator<BottomCapPolygonVertex>(scratchArena)
+    };
+    polygon.reserve(capVertices.size());
+    const SIMDVector origin = LoadRestVertexPosition(restVertices[capVertices[0u]]);
+    for(const u32 capVertex : capVertices){
+        if(capVertex >= restVertices.size())
+            return false;
+
+        const SIMDVector offset = VectorSubtract(LoadRestVertexPosition(restVertices[capVertex]), origin);
+        BottomCapPolygonVertex polygonVertex;
+        polygonVertex.vertex = capVertex;
+        polygonVertex.x = VectorGetX(Vector3Dot(offset, tangent));
+        polygonVertex.y = VectorGetX(Vector3Dot(offset, bitangent));
+        if(!IsFinite(polygonVertex.x) || !IsFinite(polygonVertex.y))
+            return false;
+
+        polygon.push_back(polygonVertex);
+    }
+
+    if(!RemoveCollinearCapVertices(polygon))
+        return false;
+
+    const f32 signedArea = SignedArea2D(polygon);
+    constexpr f32 areaEpsilon = 0.0000001f;
+    if(!IsFinite(signedArea) || Abs(signedArea) <= areaEpsilon)
+        return false;
+
+    const bool counterClockwise = signedArea > 0.0f;
+    const usize capTriangleCount = polygon.size() - 2u;
+    outIndices.reserve(outIndices.size() + capTriangleCount * 3u);
+
+    u32 addedTriangleCount = 0u;
+    while(polygon.size() > 3u){
+        bool clippedEar = false;
+        for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
+            if(!IsBottomCapEar(polygon, vertexIndex, counterClockwise))
+                continue;
+
+            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
+            const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+            if(
+                !AppendBottomCapTriangle(
+                    polygon[previousVertexIndex],
+                    polygon[vertexIndex],
+                    polygon[nextVertexIndex],
+                    counterClockwise,
+                    outIndices
+                )
+            )
+                return false;
+
+            polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
+            addedTriangleCount += 1u;
+            clippedEar = true;
+            break;
+        }
+
+        if(!clippedEar)
+            return false;
+    }
+
+    if(
+        !AppendBottomCapTriangle(
+            polygon[0u],
+            polygon[1u],
+            polygon[2u],
+            counterClockwise,
+            outIndices
+        )
+    )
+        return false;
+    addedTriangleCount += 1u;
+
+    if(addedTriangleCount != capTriangleCount || addedTriangleCount > static_cast<u32>(Limit<u32>::s_Max))
+        return false;
+
+    if(outAddedTriangleCount)
+        *outAddedTriangleCount = addedTriangleCount;
+    return true;
+}
+
 [[nodiscard]] bool TriangleInsideFootprint(
     const DeformableRuntimeMeshInstance& instance,
     const HoleFrame& frame,
@@ -1398,6 +1666,56 @@ template<usize sourceCount>
     const f32 x = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
     const f32 y = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
     return ((x * x) + (y * y)) <= 1.0f;
+}
+
+[[nodiscard]] bool BoundaryKeptFacesSupportHoleExtrusion(
+    const DeformableRuntimeMeshInstance& instance,
+    const SIMDVector frameNormal,
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removeTriangle,
+    const Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& orderedBoundaryEdges)
+{
+    const usize triangleCount = instance.indices.size() / 3u;
+    if(
+        instance.indices.empty()
+        || (instance.indices.size() % 3u) != 0u
+        || removeTriangle.size() != triangleCount
+        || orderedBoundaryEdges.empty()
+        || !FiniteVec3(frameNormal)
+    )
+        return false;
+
+    usize keptBoundaryEdgeCount = 0u;
+    usize compatibleKeptBoundaryEdgeCount = 0u;
+    for(const EdgeRecord& boundaryEdge : orderedBoundaryEdges){
+        for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+            if(removeTriangle[triangle] != 0u)
+                continue;
+
+            const usize indexBase = triangle * 3u;
+            const u32 triangleIndices[3] = {
+                instance.indices[indexBase + 0u],
+                instance.indices[indexBase + 1u],
+                instance.indices[indexBase + 2u],
+            };
+            if(!TriangleContainsEdge(triangleIndices, boundaryEdge.a, boundaryEdge.b))
+                continue;
+
+            SIMDVector keptNormal;
+            if(!BuildTriangleNormal(instance, triangleIndices, keptNormal))
+                return false;
+
+            const f32 normalDot = Abs(VectorGetX(Vector3Dot(frameNormal, keptNormal)));
+            if(!IsFinite(normalDot))
+                return false;
+            ++keptBoundaryEdgeCount;
+            if(normalDot >= s_MinHoleBoundaryKeptFaceNormalDot)
+                ++compatibleKeptBoundaryEdgeCount;
+
+            break;
+        }
+    }
+    // A boundary made only of hard kept faces is a coarse whole-face cut, not a usable inset hole.
+    return keptBoundaryEdgeCount == 0u || compatibleKeptBoundaryEdgeCount != 0u;
 }
 
 [[nodiscard]] u64 MakeTriangleEdgeKey(const u32 a, const u32 b){
@@ -2638,6 +2956,20 @@ namespace __hidden_deformable_surface_edit{
         return false;
     }
 
+    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
+    if(addWall && !BoundaryKeptFacesSupportHoleExtrusion(instance, frame.normal, removeTriangle, orderedBoundaryEdges)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: rest-space hole boundary intersects a hard kept face (entity={} runtime_mesh={} hit_triangle={} boundary_edges={} removed_triangles={} depth={})"),
+            instance.entity.id,
+            instance.handle.value,
+            params.posedHit.triangle,
+            orderedBoundaryEdges.size(),
+            removedTriangleCount,
+            params.depth
+        );
+        return false;
+    }
+
     Vector<u32> newIndices;
     u32 newSourceTriangleCount = instance.sourceTriangleCount;
     if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u){
@@ -2652,10 +2984,11 @@ namespace __hidden_deformable_surface_edit{
         return false;
     }
 
-    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
     const usize wallBandCount = addWall ? static_cast<usize>(wallLoopCutCount) + 1u : 0u;
     usize wallVertexCount = 0u;
     usize totalWallVertexCount = 0u;
+    usize capVertexCount = 0u;
+    usize capTriangleCount = 0u;
     if(addWall){
         if(
             wallBandCount == 0u
@@ -2665,13 +2998,15 @@ namespace __hidden_deformable_surface_edit{
             return false;
 
         wallVertexCount = orderedBoundaryEdges.size();
-        if(wallVertexCount > Limit<usize>::s_Max / wallBandCount)
+        if(wallVertexCount < 3u || wallVertexCount > Limit<usize>::s_Max / wallBandCount)
             return false;
         totalWallVertexCount = wallVertexCount * wallBandCount;
         if(totalWallVertexCount > Limit<usize>::s_Max - instance.restVertices.size())
             return false;
         if(instance.restVertices.size() + totalWallVertexCount > static_cast<usize>(Limit<u32>::s_Max))
             return false;
+        capVertexCount = wallVertexCount;
+        capTriangleCount = wallVertexCount - 2u;
     }
 
     const usize removedIndexCount = static_cast<usize>(removedTriangleCount) * 3u;
@@ -2679,10 +3014,12 @@ namespace __hidden_deformable_surface_edit{
         ? wallVertexCount * 6u * wallBandCount
         : 0u
     ;
+    const usize capIndexCount = capTriangleCount * 3u;
     const usize keptIndexCount = instance.indices.size() - removedIndexCount;
     if(
-        wallIndexCount > Limit<usize>::s_Max - keptIndexCount
-        || keptIndexCount + wallIndexCount > static_cast<usize>(Limit<u32>::s_Max)
+        wallIndexCount > Limit<usize>::s_Max - capIndexCount
+        || wallIndexCount + capIndexCount > Limit<usize>::s_Max - keptIndexCount
+        || keptIndexCount + wallIndexCount + capIndexCount > static_cast<usize>(Limit<u32>::s_Max)
     )
         return false;
 
@@ -2690,6 +3027,9 @@ namespace __hidden_deformable_surface_edit{
     if(totalWallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
         return false;
     reservedVertexCount += totalWallVertexCount;
+    if(capVertexCount > Limit<usize>::s_Max - reservedVertexCount)
+        return false;
+    reservedVertexCount += capVertexCount;
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
@@ -2701,7 +3041,7 @@ namespace __hidden_deformable_surface_edit{
     newRestVertices.reserve(reservedVertexCount);
     newRestVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
     if(hasEditMaskPerTriangle)
-        newEditMaskPerTriangle.reserve((keptIndexCount + wallIndexCount) / 3u);
+        newEditMaskPerTriangle.reserve((keptIndexCount + wallIndexCount + capIndexCount) / 3u);
     if(addWall){
         if(!instance.skin.empty()){
             newSkin.reserve(reservedVertexCount);
@@ -2714,7 +3054,7 @@ namespace __hidden_deformable_surface_edit{
         newMorphs = instance.morphs;
     }
 
-    newIndices.reserve(keptIndexCount + wallIndexCount);
+    newIndices.reserve(keptIndexCount + wallIndexCount + capIndexCount);
     u32 addedTriangleCount = 0;
     u32 addedVertexCount = 0;
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
@@ -2761,61 +3101,81 @@ namespace __hidden_deformable_surface_edit{
         };
         wallVertices.resize(totalWallVertexCount, 0u);
 
+        auto appendPlannedVertex = [&](
+            const Core::Geometry::SurfacePatchWallVertex& plannedVertex,
+            const SIMDVector normal,
+            const SIMDVector tangent,
+            const Float2U& uv0,
+            u32& outVertex)
+        {
+            if(!newSourceSamples.empty())
+                newSourceSamples[plannedVertex.sourceVertex] = wallSourceSample;
+
+            Float4U innerColor;
+            if(
+                !BuildBlendedVertexColor(
+                    newRestVertices,
+                    plannedVertex.attributeVertices,
+                    s_WallInnerInpaintWeights,
+                    innerColor
+                )
+            )
+                return false;
+
+            SkinInfluence4 innerSkin;
+            const SkinInfluence4* innerSkinPtr = nullptr;
+            if(!newSkin.empty()){
+                if(
+                    !BuildBlendedSkinInfluence(
+                        newSkin,
+                        plannedVertex.attributeVertices,
+                        s_WallInnerInpaintWeights,
+                        innerSkin
+                    )
+                )
+                    return false;
+
+                innerSkinPtr = &innerSkin;
+            }
+
+            if(
+                !AppendWallVertex(
+                    newRestVertices,
+                    newSkin,
+                    newSourceSamples,
+                    plannedVertex.sourceVertex,
+                    innerSkinPtr,
+                    wallSourceSample,
+                    innerColor,
+                    LoadFloat(plannedVertex.position),
+                    normal,
+                    tangent,
+                    uv0.x,
+                    uv0.y,
+                    outVertex
+                )
+            )
+                return false;
+
+            addedVertexCount += 1u;
+            return true;
+        };
+
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
             const usize wallVertexBase = ringIndex * boundaryVertexCount;
 
             for(usize edgeIndex = 0; edgeIndex < boundaryVertexCount; ++edgeIndex){
                 const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[wallVertexBase + edgeIndex];
-                if(!newSourceSamples.empty())
-                    newSourceSamples[plannedVertex.sourceVertex] = wallSourceSample;
-
-                Float4U innerColor;
                 if(
-                    !BuildBlendedVertexColor(
-                        newRestVertices,
-                        plannedVertex.attributeVertices,
-                        s_WallInnerInpaintWeights,
-                        innerColor
-                    )
-                )
-                    return false;
-
-                SkinInfluence4 innerSkin;
-                const SkinInfluence4* innerSkinPtr = nullptr;
-                if(!newSkin.empty()){
-                    if(
-                        !BuildBlendedSkinInfluence(
-                            newSkin,
-                            plannedVertex.attributeVertices,
-                            s_WallInnerInpaintWeights,
-                            innerSkin
-                        )
-                    )
-                        return false;
-
-                    innerSkinPtr = &innerSkin;
-                }
-
-                if(
-                    !AppendWallVertex(
-                        newRestVertices,
-                        newSkin,
-                        newSourceSamples,
-                        plannedVertex.sourceVertex,
-                        innerSkinPtr,
-                        wallSourceSample,
-                        innerColor,
-                        LoadFloat(plannedVertex.position),
+                    !appendPlannedVertex(
+                        plannedVertex,
                         LoadFloat(plannedVertex.normal),
                         LoadFloat(plannedVertex.tangent),
-                        plannedVertex.uv0.x,
-                        plannedVertex.uv0.y,
+                        plannedVertex.uv0,
                         wallVertices[wallVertexBase + edgeIndex]
                     )
                 )
                     return false;
-
-                addedVertexCount += 1u;
             }
         }
 
@@ -2866,6 +3226,46 @@ namespace __hidden_deformable_surface_edit{
                     return false;
             }
         }
+
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        capVertices.resize(boundaryVertexCount, 0u);
+        const usize capSourceVertexBase = (wallBandCount - 1u) * boundaryVertexCount;
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[capSourceVertexBase + edgeIndex];
+            if(plannedVertex.sourceVertex >= newRestVertices.size())
+                return false;
+
+            if(
+                !appendPlannedVertex(
+                    plannedVertex,
+                    frame.normal,
+                    frame.tangent,
+                    newRestVertices[plannedVertex.sourceVertex].uv0,
+                    capVertices[edgeIndex]
+                )
+            )
+                return false;
+        }
+
+        u32 capAddedTriangleCount = 0u;
+        if(
+            !AppendBottomCapTriangles(
+                capVertices,
+                newRestVertices,
+                frame.tangent,
+                frame.bitangent,
+                newIndices,
+                &capAddedTriangleCount
+            )
+        )
+            return false;
+        if(hasEditMaskPerTriangle){
+            for(u32 triangleOffset = 0u; triangleOffset < capAddedTriangleCount; ++triangleOffset)
+                newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+        }
+        addedTriangleCount += capAddedTriangleCount;
     }
 
     if(!DeformableValidation::RebuildRestVertexTangentFrames(newRestVertices, newIndices))

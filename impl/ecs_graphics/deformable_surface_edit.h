@@ -29,7 +29,9 @@ struct DeformableHoleEditParams{
 
 struct DeformableHoleEditResult{
     u32 removedTriangleCount = 0;
+    // Total vertices added by the edit, including wall rings and the duplicated bottom cap ring.
     u32 addedVertexCount = 0;
+    // Total triangles added by the edit, including wall side faces and the bottom cap.
     u32 addedTriangleCount = 0;
     u32 editRevision = 0;
     // First newly-added inner wall-loop vertex; rim vertices are shared with the edited mesh boundary.

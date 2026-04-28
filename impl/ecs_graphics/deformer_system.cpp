@@ -589,8 +589,6 @@ bool DeformerSystem::dispatchRuntimeMesh(
         if(foundResources == m_runtimeResources.end() && !deformerInputDirty)
             return false;
 
-        if(foundResources != m_runtimeResources.end())
-            m_runtimeResources.erase(foundResources);
         return copyRestToDeformed(commandList, instance);
     }
     if(!ensurePipeline())
@@ -633,19 +631,53 @@ bool DeformerSystem::dispatchRuntimeMesh(
     )
         return false;
 
+    const bool morphPayloadDirty =
+        hasActiveMorphs
+        && !resourcesRebuilt
+        && resources->morphSignature != morphSignature
+    ;
+    usize morphRangeBytes = 0;
+    usize morphDeltaBytes = 0;
+    if(morphPayloadDirty){
+        if(
+            !__hidden_deformer_system::BufferPayloadBytes(
+                morphRanges.size(),
+                sizeof(DeformerVertexMorphRangeGpu),
+                morphRangeBytes,
+                NWB_TEXT("morph range")
+            )
+            || !__hidden_deformer_system::BufferPayloadBytes(
+                morphDeltas.size(),
+                sizeof(DeformerBlendedMorphDeltaGpu),
+                morphDeltaBytes,
+                NWB_TEXT("morph delta")
+            )
+        )
+            return false;
+
+        commandList.setBufferState(resources->morphRangeBuffer.get(), Core::ResourceStates::CopyDest);
+        commandList.setBufferState(resources->morphDeltaBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+
     usize jointPaletteBytes = 0;
     if(hasActiveSkin && !resourcesRebuilt){
         if(
             !__hidden_deformer_system::BufferPayloadBytes(
-            jointMatrices.size(),
-            sizeof(DeformableJointMatrix),
-            jointPaletteBytes,
-            NWB_TEXT("joint palette")
+                jointMatrices.size(),
+                sizeof(DeformableJointMatrix),
+                jointPaletteBytes,
+                NWB_TEXT("joint palette")
             )
         )
             return false;
 
         commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
+    }
+    if(morphPayloadDirty){
+        commandList.commitBarriers();
+        commandList.writeBuffer(resources->morphRangeBuffer.get(), morphRanges.data(), morphRangeBytes);
+        commandList.writeBuffer(resources->morphDeltaBuffer.get(), morphDeltas.data(), morphDeltaBytes);
+        resources->morphSignature = morphSignature;
     }
     if(hasActiveSkin && !resourcesRebuilt){
         commandList.commitBarriers();
@@ -801,7 +833,6 @@ bool DeformerSystem::ensureRuntimeResources(
         || resources.deltaCount != static_cast<u32>(payloadViews.morphDeltaCount)
         || resources.skinCount != static_cast<u32>(payloadViews.skinInfluenceCount)
         || resources.jointCount != static_cast<u32>(payloadViews.jointPaletteCount)
-        || resources.morphSignature != morphSignature
         || resources.displacementTextureName != displacementTextureName
         || !resources.morphRangeBuffer
         || !resources.morphDeltaBuffer

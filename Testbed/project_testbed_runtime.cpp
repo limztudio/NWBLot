@@ -564,28 +564,30 @@ bool ProjectTestbed::onStartup(){
     );
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
-        deformableProxyGeometry,
+        importedDeformableGeometry,
         deformableUvMaterial,
         Float4(0.0f, 0.85f, 0.0f),
         0.8f
     );
-    const NWB::Core::ECS::EntityID importedDeformableEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
+    if(auto* editTargetTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_deformableMorphEntity))
+        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), &editTargetTransform->rotation);
+    const NWB::Core::ECS::EntityID proxyDeformableEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
-        importedDeformableGeometry,
+        deformableProxyGeometry,
         deformableUvMaterial,
         Float4(0.0f, -0.85f, 0.0f),
         0.7f
     );
     if(
         auto* morphWeights =
-            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(importedDeformableEntity)
+            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(proxyDeformableEntity)
     ){
         if(!morphWeights->weights.empty())
             morphWeights->weights[0].weight = 0.65f;
     }
     if(
         auto* skeletonPose =
-            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(importedDeformableEntity)
+            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(proxyDeformableEntity)
     ){
         __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, 1.0f);
     }
@@ -1110,17 +1112,19 @@ void ProjectTestbed::queueSurfaceEditReplay(){
     )
         oldRenderer->visible = false;
 
-    __hidden_project_testbed_runtime::TestbedDeformableGeometryRef deformableProxyGeometry;
-    deformableProxyGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableProxyPath);
+    __hidden_project_testbed_runtime::TestbedDeformableGeometryRef deformableEditGeometry;
+    deformableEditGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableImportedPath);
     __hidden_project_testbed_runtime::TestbedMaterialRef deformableUvMaterial;
     deformableUvMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_DeformableMaterialPath);
     m_deformableMorphEntity = __hidden_project_testbed_runtime::CreateDeformableRendererEntity(
         *m_world,
-        deformableProxyGeometry,
+        deformableEditGeometry,
         deformableUvMaterial,
         replayPosition,
         replayScale
     );
+    if(auto* replayTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_deformableMorphEntity))
+        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), &replayTransform->rotation);
     m_surfaceEditState = Move(loadedState);
     m_surfaceEditHistory.redoStack.clear();
     m_pendingSurfaceEditReplay = true;

@@ -19,6 +19,7 @@
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <global/binary.h>
+#include <logger/client/logger.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1611,19 +1612,55 @@ bool CommitHole(
         *outResult = DeformableHoleEditResult{};
     if(outRecord)
         *outRecord = DeformableSurfaceEditRecord{};
-    if(
-        !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
-        || !__hidden_deformable_surface_edit::ValidatePreviewedSurfaceEditSessionParams(instance, session, params)
-    )
+
+    const bool validRuntimePayload = __hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance);
+    if(!validRuntimePayload){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, runtime payload is invalid or not uploaded (entity={} runtime_mesh={} dirty_flags={} vertices={} triangles={})"),
+            instance.entity.id,
+            instance.handle.value,
+            static_cast<u32>(instance.dirtyFlags),
+            instance.restVertices.size(),
+            instance.indices.size() / 3u
+        );
         return false;
+    }
+    if(!__hidden_deformable_surface_edit::ValidatePreviewedSurfaceEditSessionParams(instance, session, params)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, preview session no longer matches (entity={} runtime_mesh={} revision={} session_revision={} previewed={})"),
+            instance.entity.id,
+            instance.handle.value,
+            instance.editRevision,
+            session.editRevision,
+            session.previewed ? 1u : 0u
+        );
+        return false;
+    }
 
     __hidden_deformable_surface_edit::HoleFrame recordFrame;
-    if(outRecord && !__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, recordFrame))
+    if(outRecord && !__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, recordFrame)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, preview frame could not be rebuilt (entity={} runtime_mesh={} triangle={})"),
+            instance.entity.id,
+            instance.handle.value,
+            params.posedHit.triangle
+        );
         return false;
+    }
 
     DeformableHoleEditResult result;
-    if(!CommitDeformableRestSpaceHole(instance, params, &result))
+    if(!CommitDeformableRestSpaceHole(instance, params, &result)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: commit failed while applying rest-space hole (entity={} runtime_mesh={} triangle={} radius={} ellipse={} depth={})"),
+            instance.entity.id,
+            instance.handle.value,
+            params.posedHit.triangle,
+            params.radius,
+            params.ellipseRatio,
+            params.depth
+        );
         return false;
+    }
 
     if(outResult)
         *outResult = result;
@@ -2106,13 +2143,25 @@ namespace __hidden_deformable_surface_edit{
         ? ValidateUploadedRuntimePayload(instance)
         : ValidateRuntimePayload(instance)
     ;
-    if(
-        !validPayload
-        || !ValidateParams(instance, params)
-        || !ValidWallLoopCutCount(wallLoopCutCount)
-        || (wallLoopCutCount != 0u && params.depth <= DeformableRuntime::s_Epsilon)
-    )
+    const bool validParams = ValidateParams(instance, params);
+    const bool validWallLoopCutCount = ValidWallLoopCutCount(wallLoopCutCount);
+    const bool validWallLoopDepth = wallLoopCutCount == 0u || params.depth > DeformableRuntime::s_Epsilon;
+    if(!validPayload || !validParams || !validWallLoopCutCount || !validWallLoopDepth){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: rest-space hole validation failed (entity={} runtime_mesh={} uploaded_required={} valid_payload={} valid_params={} valid_loop_cuts={} valid_loop_depth={} dirty_flags={} revision={} triangle={})"),
+            instance.entity.id,
+            instance.handle.value,
+            requireUploadedRuntimePayload ? 1u : 0u,
+            validPayload ? 1u : 0u,
+            validParams ? 1u : 0u,
+            validWallLoopCutCount ? 1u : 0u,
+            validWallLoopDepth ? 1u : 0u,
+            static_cast<u32>(instance.dirtyFlags),
+            instance.editRevision,
+            params.posedHit.triangle
+        );
         return false;
+    }
 
     const usize triangleCount = instance.indices.size() / 3u;
     u32 hitTriangleIndices[3] = {};
@@ -2139,6 +2188,7 @@ namespace __hidden_deformable_surface_edit{
     };
     removeTriangle.resize(triangleCount, 0u);
     DeformableEditMaskFlags removedEditMaskFlags = 0u;
+    u32 selectedTriangleCount = 0u;
 
     for(usize triangle = 0; triangle < triangleCount; ++triangle){
         u32 indices[3] = {};
@@ -2158,6 +2208,7 @@ namespace __hidden_deformable_surface_edit{
 
             removedEditMaskFlags = static_cast<DeformableEditMaskFlags>(removedEditMaskFlags | editMaskFlags);
             removeTriangle[triangle] = 1u;
+            ++selectedTriangleCount;
         }
     }
 
@@ -2176,8 +2227,19 @@ namespace __hidden_deformable_surface_edit{
             boundaryEdges,
             &removedTriangleCount
         )
-    )
+    ){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: rest-space hole boundary build failed (entity={} runtime_mesh={} hit_triangle={} triangles={} selected_triangles={} radius={} ellipse={})"),
+            instance.entity.id,
+            instance.handle.value,
+            params.posedHit.triangle,
+            triangleCount,
+            selectedTriangleCount,
+            params.radius,
+            params.ellipseRatio
+        );
         return false;
+    }
 
     Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
         Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
@@ -2201,13 +2263,31 @@ namespace __hidden_deformable_surface_edit{
             topologyFrame,
             orderedBoundaryEdges
         )
-    )
+    ){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: rest-space hole ordered boundary loop failed (entity={} runtime_mesh={} hit_triangle={} boundary_edges={} removed_triangles={})"),
+            instance.entity.id,
+            instance.handle.value,
+            params.posedHit.triangle,
+            boundaryEdges.size(),
+            removedTriangleCount
+        );
         return false;
+    }
 
     Vector<u32> newIndices;
     u32 newSourceTriangleCount = instance.sourceTriangleCount;
-    if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u)
+    if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("DeformableSurfaceEdit: rest-space hole source samples are invalid (entity={} runtime_mesh={} vertices={} source_samples={} source_triangles={})"),
+            instance.entity.id,
+            instance.handle.value,
+            instance.restVertices.size(),
+            instance.sourceSamples.size(),
+            newSourceTriangleCount
+        );
         return false;
+    }
 
     const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
     const usize wallBandCount = addWall ? static_cast<usize>(wallLoopCutCount) + 1u : 0u;

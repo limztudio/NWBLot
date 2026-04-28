@@ -1087,9 +1087,9 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
-    parser.add_argument("--exercise-csg", action="store_true", help="Click the deformable proxy and press Enter before capture.")
+    parser.add_argument("--exercise-csg", action="store_true", help="Click the editable deformable surface and press Enter before capture.")
     parser.add_argument("--csg-click-x", type=float, default=0.5, help="Relative window X coordinate for the CSG smoke click.")
-    parser.add_argument("--csg-click-y", type=float, default=0.24, help="Relative window Y coordinate for the CSG smoke click.")
+    parser.add_argument("--csg-click-y", type=float, default=0.10, help="Relative window Y coordinate for the CSG smoke click.")
     parser.add_argument("--csg-settle-seconds", type=float, default=1.0, help="Seconds to wait after CSG input before capture.")
     parser.add_argument("--csg-log-timeout", type=float, default=10.0, help="Seconds to wait for the committed CSG log message.")
     parser.add_argument(

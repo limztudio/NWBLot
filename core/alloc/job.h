@@ -7,6 +7,7 @@
 
 #include "memory.h"
 #include "arena_object.h"
+#include "scratch.h"
 #include "thread.h"
 
 
@@ -39,7 +40,7 @@ private:
 
 private:
     using JobFunction = InplaceFunction<s_JobInlineStorageBytes>;
-    using ReadyBatch = Vector<JobHandle>;
+    using ReadyBatch = Vector<JobHandle, ScratchAllocator<JobHandle>>;
 
 
 private:
@@ -381,7 +382,8 @@ private:
     }
 
     inline JobHandle complete(JobHandle handle, bool allowInline){
-        ReadyBatch readyJobs;
+        ScratchArena<> scratchArena;
+        ReadyBatch readyJobs{ScratchAllocator<JobHandle>(scratchArena)};
         JobSignal* completionSignal = nullptr;
         JobHandle inlineContinuation;
 

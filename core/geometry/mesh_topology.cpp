@@ -81,7 +81,7 @@ struct BoundaryVertexEdges{
 }
 
 template<typename EdgeMap>
-void RegisterFullEdge(EdgeMap& edges, const u32 a, const u32 b){
+void RegisterTriangleEdge(EdgeMap& edges, const u32 a, const u32 b, const bool removed){
     auto [it, inserted] = edges.emplace(MakeEdgeKey(a, b), MeshTopologyEdge{});
     MeshTopologyEdge& record = it.value();
     if(inserted){
@@ -89,21 +89,15 @@ void RegisterFullEdge(EdgeMap& edges, const u32 a, const u32 b){
         record.b = b;
     }
     ++record.fullCount;
-}
 
-template<typename EdgeMap>
-[[nodiscard]] bool RegisterRemovedEdge(EdgeMap& edges, const u32 a, const u32 b){
-    const auto found = edges.find(MakeEdgeKey(a, b));
-    if(found == edges.end())
-        return false;
+    if(!removed)
+        return;
 
-    MeshTopologyEdge& record = found.value();
     if(record.removedCount == 0u){
         record.a = a;
         record.b = b;
     }
     ++record.removedCount;
-    return true;
 }
 
 template<typename VertexDegreeMap>
@@ -358,20 +352,13 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
         if(a == b || a == c || b == c)
             return false;
 
-        RegisterFullEdge(edges, a, b);
-        RegisterFullEdge(edges, b, c);
-        RegisterFullEdge(edges, c, a);
+        const bool removed = removedTriangles[triangle] != 0u;
+        RegisterTriangleEdge(edges, a, b, removed);
+        RegisterTriangleEdge(edges, b, c, removed);
+        RegisterTriangleEdge(edges, c, a, removed);
 
-        if(removedTriangles[triangle] == 0u)
-            continue;
-
-        ++removedTriangleCount;
-        if(
-            !RegisterRemovedEdge(edges, a, b)
-            || !RegisterRemovedEdge(edges, b, c)
-            || !RegisterRemovedEdge(edges, c, a)
-        )
-            return false;
+        if(removed)
+            ++removedTriangleCount;
     }
     if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
         return false;

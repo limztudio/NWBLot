@@ -135,6 +135,9 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
     Vector<BlendedMorphDeltaAccumulator, Core::Alloc::ScratchAllocator<BlendedMorphDeltaAccumulator>> blendedDeltas{
         Core::Alloc::ScratchAllocator<BlendedMorphDeltaAccumulator>(scratchArena)
     };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> touchedVertices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
 
     u32 activeMorphCount = 0u;
     usize activeInputDeltaCount = 0u;
@@ -180,16 +183,20 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
                 return false;
             }
 
-            AccumulateWeightedMorphDelta(blendedDeltas[delta.vertexId], delta, weight);
+            BlendedMorphDeltaAccumulator& blendedDelta = blendedDeltas[delta.vertexId];
+            if(!blendedDelta.active)
+                touchedVertices.push_back(delta.vertexId);
+            AccumulateWeightedMorphDelta(blendedDelta, delta, weight);
         }
     }
 
     if(activeMorphCount == 0u)
         return true;
 
+    Sort(touchedVertices.begin(), touchedVertices.end());
     outRanges.resize(vertexCount);
-    outDeltas.reserve(Min(vertexCount, activeInputDeltaCount));
-    for(u32 vertexIndex = 0u; vertexIndex < static_cast<u32>(vertexCount); ++vertexIndex){
+    outDeltas.reserve(Min(touchedVertices.size(), activeInputDeltaCount));
+    for(const u32 vertexIndex : touchedVertices){
         const BlendedMorphDeltaAccumulator& blendedDelta = blendedDeltas[vertexIndex];
         if(!ActiveBlendedMorphDelta(blendedDelta))
             continue;

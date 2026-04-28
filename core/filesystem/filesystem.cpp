@@ -1650,14 +1650,25 @@ bool VolumeFileSystem::flushMetadataLocked(){
     header.fileCount = static_cast<u64>(m_files.size());
     header.nextFreeOffset = m_nextFreeOffset;
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Name, Core::Alloc::ScratchAllocator<Name>> sortedPaths{
-        Core::Alloc::ScratchAllocator<Name>(scratchArena)
+    struct MetadataIndexRecord{
+        Name path;
+        FileRecord file;
     };
-    sortedPaths.reserve(m_files.size());
-    for(const auto& [path, _] : m_files)
-        sortedPaths.push_back(path);
-    Sort(sortedPaths.begin(), sortedPaths.end(), __hidden_filesystem::LessName);
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<MetadataIndexRecord, Core::Alloc::ScratchAllocator<MetadataIndexRecord>> sortedRecords{
+        Core::Alloc::ScratchAllocator<MetadataIndexRecord>(scratchArena)
+    };
+    sortedRecords.reserve(m_files.size());
+    for(const auto& [path, record] : m_files)
+        sortedRecords.push_back(MetadataIndexRecord{ path, record });
+    Sort(
+        sortedRecords.begin(),
+        sortedRecords.end(),
+        [](const MetadataIndexRecord& lhs, const MetadataIndexRecord& rhs){
+            return __hidden_filesystem::LessName(lhs.path, rhs.path);
+        }
+    );
 
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexBytes{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
@@ -1673,16 +1684,10 @@ bool VolumeFileSystem::flushMetadataLocked(){
     }
     indexBytes.reserve(static_cast<usize>(expectedIndexBytes));
 
-    for(const Name& pathName : sortedPaths){
-        const auto itr = m_files.find(pathName);
-        if(itr == m_files.end()){
-            __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file map changed during metadata build");
-            return false;
-        }
-
-        const FileRecord& record = itr.value();
+    for(const MetadataIndexRecord& recordInfo : sortedRecords){
+        const FileRecord& record = recordInfo.file;
         VolumeIndexEntryDisk entry{};
-        entry.hash = pathName.hash();
+        entry.hash = recordInfo.path.hash();
         entry.offset = record.offset;
         entry.size = record.size;
 

@@ -61,7 +61,7 @@ public:
 
 public:
     virtual bool has(EntityID entityId)const = 0;
-    virtual void remove(EntityID entityId) = 0;
+    virtual bool remove(EntityID entityId) = 0;
     virtual void clear() = 0;
     virtual usize size()const = 0;
 };
@@ -156,10 +156,10 @@ public:
         return findDenseIndex(entityId, denseIndex);
     }
 
-    virtual void remove(EntityID entityId)override{
+    virtual bool remove(EntityID entityId)override{
         u32 denseIndex = 0;
         if(!findDenseIndex(entityId, denseIndex))
-            return;
+            return false;
 
         const u32 index = entityId.index();
         const u32 lastDense = static_cast<u32>(m_dense.size()) - 1;
@@ -175,6 +175,7 @@ public:
         m_dense.pop_back();
         m_components.pop_back();
         m_sparse[index] = ~0u;
+        return true;
     }
 
     inline virtual void clear()override{

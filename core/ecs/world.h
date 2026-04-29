@@ -31,6 +31,9 @@ class World : NoCopy, public Alloc::ITaskScheduler{
 private:
     using ComponentPoolPtr = CustomUniquePtr<IComponentPool>;
     using SystemPtr = CustomUniquePtr<ISystem>;
+    using EntityComponentTypeAllocator = Alloc::CustomAllocator<ComponentTypeId>;
+    using EntityComponentTypeVector = Vector<ComponentTypeId, EntityComponentTypeAllocator>;
+    using EntityComponentTypeVectorAllocator = Alloc::CustomAllocator<EntityComponentTypeVector>;
     using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, ComponentPoolPtr>>;
     using PoolMap = HashMap<
         ComponentTypeId,
@@ -154,7 +157,9 @@ private:
     T& addComponent(EntityID entityId, Args&&... args){
         NWB_ASSERT(m_entityManager.alive(entityId));
         auto* pool = assurePool<T>();
-        return pool->add(entityId, Forward<Args>(args)...);
+        T& component = pool->add(entityId, Forward<Args>(args)...);
+        addEntityComponentType(entityId, ComponentType<T>());
+        return component;
     }
 
     template<typename T>
@@ -163,8 +168,8 @@ private:
             return;
 
         auto* pool = getPool<T>();
-        if(pool)
-            pool->remove(entityId);
+        if(pool && pool->remove(entityId))
+            removeEntityComponentType(entityId, ComponentType<T>());
     }
 
     template<typename T>
@@ -230,12 +235,15 @@ private:
     }
 
     void destroyEntityComponents(EntityID entityId);
+    void addEntityComponentType(EntityID entityId, ComponentTypeId typeId);
+    void removeEntityComponentType(EntityID entityId, ComponentTypeId typeId);
 
 
 private:
     Alloc::CustomArena& m_arena;
 
     EntityManager m_entityManager;
+    Vector<EntityComponentTypeVector, EntityComponentTypeVectorAllocator> m_entityComponentTypes;
     PoolMap m_pools;
     Vector<SystemEntry, SystemVectorAllocator> m_systems;
     SystemScheduler m_scheduler;

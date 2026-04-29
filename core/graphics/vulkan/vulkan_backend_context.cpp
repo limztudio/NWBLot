@@ -1076,10 +1076,8 @@ bool BackendContext::createVulkanDevice(){
 #ifdef NWB_UNICODE
     {
         const char* deviceName = physicalDeviceProperties.deviceName;
-        usize len = NWB_STRNLEN(deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
-        m_rendererString.resize(len);
-        for(usize i = 0; i < len; ++i)
-            m_rendererString[i] = static_cast<tchar>(deviceName[i]);
+        const usize len = NWB_STRNLEN(deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
+        m_rendererString = StringConvert(AStringView(deviceName, len));
     }
 #else
     m_rendererString = physicalDeviceProperties.deviceName;

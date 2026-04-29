@@ -17,7 +17,7 @@ NWB_GEOMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct TangentFrameRebuildVertex{
+struct alignas(Float4) TangentFrameRebuildVertex{
     Float3U position;
     Float2U uv0;
     Float3U normal;
@@ -25,6 +25,9 @@ struct TangentFrameRebuildVertex{
 };
 static_assert(IsStandardLayout_V<TangentFrameRebuildVertex>, "TangentFrameRebuildVertex must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<TangentFrameRebuildVertex>, "TangentFrameRebuildVertex must stay cheap to copy");
+static_assert(sizeof(TangentFrameRebuildVertex) == sizeof(f32) * 12u, "TangentFrameRebuildVertex layout drifted");
+static_assert(alignof(TangentFrameRebuildVertex) >= alignof(Float4), "TangentFrameRebuildVertex must stay SIMD-aligned");
+static_assert((offsetof(TangentFrameRebuildVertex, tangent) % alignof(Float4)) == 0, "TangentFrameRebuildVertex::tangent must stay SIMD-aligned");
 
 struct TangentFrameRebuildResult{
     u32 rebuiltVertexCount = 0;

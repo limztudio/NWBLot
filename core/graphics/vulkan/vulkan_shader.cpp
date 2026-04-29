@@ -65,6 +65,12 @@ inline bool CopySpirvWords(const void* binary, const usize binarySize, SpirvWord
         return false;
 
     const usize wordCount = binarySize / sizeof(u32);
+    if((reinterpret_cast<usize>(binary) & (alignof(u32) - 1u)) == 0u){
+        const auto* words = static_cast<const u32*>(binary);
+        outWords.assign(words, words + wordCount);
+        return true;
+    }
+
     outWords.resize(wordCount);
     NWB_MEMCPY(outWords.data(), binarySize, binary, binarySize);
     return true;

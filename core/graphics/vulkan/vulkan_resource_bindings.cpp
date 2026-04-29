@@ -1928,10 +1928,11 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
     );
 
     if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
-        bindingSet->m_descriptorHeapPushIndices.resize(layout->m_descriptorHeapBindings.size(), 0u);
-        bindingSet->m_descriptorHeapAllocations.resize(layout->m_descriptorHeapBindings.size());
+        const usize descriptorHeapBindingCount = layout->m_descriptorHeapBindings.size();
+        bindingSet->m_descriptorHeapPushIndices.reserve(descriptorHeapBindingCount);
+        bindingSet->m_descriptorHeapAllocations.reserve(descriptorHeapBindingCount);
 
-        for(usize i = 0; i < layout->m_descriptorHeapBindings.size(); ++i){
+        for(usize i = 0; i < descriptorHeapBindingCount; ++i){
             const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[i];
             if(meta.arraySize > UINT32_MAX / meta.descriptorStride){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor heap storage for binding slot {}: descriptor array size overflows"), meta.slot);
@@ -1946,8 +1947,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                 return nullptr;
             }
 
-            bindingSet->m_descriptorHeapAllocations[i] = allocation;
-            bindingSet->m_descriptorHeapPushIndices[i] = allocation.offsetBytes / meta.descriptorStride;
+            bindingSet->m_descriptorHeapAllocations.push_back(allocation);
+            bindingSet->m_descriptorHeapPushIndices.push_back(allocation.offsetBytes / meta.descriptorStride);
         }
     }
 

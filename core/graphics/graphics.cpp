@@ -607,9 +607,10 @@ void Graphics::backBufferResized(){
         renderPass->backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
 
     const u32 backBufferCount = getBackBufferCount();
-    m_swapChainFramebuffers.resize(backBufferCount);
+    m_swapChainFramebuffers.clear();
+    m_swapChainFramebuffers.reserve(backBufferCount);
     for(u32 index = 0; index < backBufferCount; ++index)
-        m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
+        m_swapChainFramebuffers.push_back(getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index))));
 
     NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
 }

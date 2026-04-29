@@ -203,19 +203,21 @@ bool BuildSurfacePatchWallVerticesImpl(
         Core::Alloc::ScratchAllocator<MeshTopologyLoopVertexFrame>(scratchArena)
     };
     if(cacheLoopVertexFrames){
-        cachedLoopVertexFrames.resize(boundaryVertexCount);
+        cachedLoopVertexFrames.reserve(boundaryVertexCount);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
+            MeshTopologyLoopVertexFrame loopVertexFrame;
             if(
                 !BuildBoundaryLoopVertexFrame(
                     positions,
                     frame,
                     orderedBoundaryEdges[previousEdgeIndex],
                     orderedBoundaryEdges[edgeIndex],
-                    cachedLoopVertexFrames[edgeIndex]
+                    loopVertexFrame
                 )
             )
                 return false;
+            cachedLoopVertexFrames.push_back(loopVertexFrame);
         }
     }
 

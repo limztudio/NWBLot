@@ -218,14 +218,15 @@ namespace RestVertexPayloadFailure{
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
     using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
     Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
-    rebuildVertices.resize(vertices.size());
+    rebuildVertices.reserve(vertices.size());
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         const DeformableVertexRest& vertex = vertices[vertexIndex];
-        RebuildVertex& rebuildVertex = rebuildVertices[vertexIndex];
-        rebuildVertex.position = vertex.position;
-        rebuildVertex.uv0 = vertex.uv0;
-        rebuildVertex.normal = vertex.normal;
-        rebuildVertex.tangent = vertex.tangent;
+        rebuildVertices.push_back(RebuildVertex{
+            vertex.position,
+            vertex.uv0,
+            vertex.normal,
+            vertex.tangent,
+        });
     }
 
     if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, outResult))

@@ -2674,42 +2674,52 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     )
         return false;
 
-    outState.edits.resize(static_cast<usize>(editCount));
-    for(DeformableSurfaceEditRecord& record : outState.edits){
+    const usize editRecordCount = static_cast<usize>(editCount);
+    outState.edits.clear();
+    outState.edits.reserve(editRecordCount);
+    for(usize i = 0u; i < editRecordCount; ++i){
+        DeformableSurfaceEditRecord record;
         if(!ReadPOD(binary, cursor, record) || !__hidden_deformable_surface_edit::ValidEditRecord(record)){
             outState = DeformableSurfaceEditState{};
             return false;
         }
+        outState.edits.push_back(record);
     }
 
-    outState.accessories.resize(static_cast<usize>(accessoryCount));
+    const usize accessoryRecordCount = static_cast<usize>(accessoryCount);
     using AccessoryRecord = __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary;
     Core::Alloc::ScratchArena<> scratchArena;
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
-    accessoryRecords.resize(static_cast<usize>(accessoryCount));
-    for(__hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary& binaryRecord : accessoryRecords){
+    accessoryRecords.reserve(accessoryRecordCount);
+    for(usize i = 0u; i < accessoryRecordCount; ++i){
+        AccessoryRecord binaryRecord;
         if(!ReadPOD(binary, cursor, binaryRecord)){
             outState = DeformableSurfaceEditState{};
             return false;
         }
+        accessoryRecords.push_back(binaryRecord);
     }
 
     const usize stringTableOffset = cursor;
-    for(usize i = 0u; i < outState.accessories.size(); ++i){
+    outState.accessories.clear();
+    outState.accessories.reserve(accessoryRecordCount);
+    for(usize i = 0u; i < accessoryRecords.size(); ++i){
+        DeformableAccessoryAttachmentRecord accessory;
         if(
             !__hidden_deformable_surface_edit::BuildAccessoryRecord(
                 accessoryRecords[i],
                 binary,
                 stringTableOffset,
                 static_cast<usize>(stringTableByteCount),
-                outState.accessories[i]
+                accessory
             )
         ){
             outState = DeformableSurfaceEditState{};
             return false;
         }
+        outState.accessories.push_back(Move(accessory));
     }
     cursor += static_cast<usize>(stringTableByteCount);
 

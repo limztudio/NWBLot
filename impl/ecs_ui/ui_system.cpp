@@ -192,16 +192,15 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
         return false;
     }
 
-    scratch.resize(pixelCount * 4u);
+    scratch.clear();
+    scratch.reserve(pixelCount * 4u);
     const u8* src = textureData.Pixels;
-    u8* dst = scratch.data();
     for(usize i = 0; i < pixelCount; ++i){
         const u8 alpha = src[i];
-        dst[0] = 255u;
-        dst[1] = 255u;
-        dst[2] = 255u;
-        dst[3] = alpha;
-        dst += 4u;
+        scratch.push_back(255u);
+        scratch.push_back(255u);
+        scratch.push_back(255u);
+        scratch.push_back(alpha);
     }
 
     outPixels = scratch.data();

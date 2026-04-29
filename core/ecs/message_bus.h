@@ -55,7 +55,45 @@ private:
     template<typename T>
     class MessageChannel final : public IMessageChannel{
     private:
-        using PendingMessage = std::optional<T>;
+        class PendingMessage{
+        public:
+            PendingMessage() = default;
+            PendingMessage(const PendingMessage&) = delete;
+            PendingMessage(PendingMessage&& rhs){
+                moveFrom(Move(rhs));
+            }
+            template<typename... Args>
+            explicit PendingMessage(std::in_place_t, Args&&... args)
+                : m_value(std::in_place, Forward<Args>(args)...)
+            {}
+            ~PendingMessage() = default;
+
+            PendingMessage& operator=(const PendingMessage&) = delete;
+            PendingMessage& operator=(PendingMessage&& rhs){
+                if(this != &rhs){
+                    m_value.reset();
+                    moveFrom(Move(rhs));
+                }
+                return *this;
+            }
+
+            T& value(){
+                NWB_ASSERT(m_value.has_value());
+                return *m_value;
+            }
+
+
+        private:
+            void moveFrom(PendingMessage&& rhs){
+                if(rhs.m_value)
+                    m_value.emplace(Move(*rhs.m_value));
+            }
+
+
+        private:
+            std::optional<T> m_value;
+        };
+
         using PendingAllocator = Alloc::CustomCacheAlignedAllocator<PendingMessage>;
 
 
@@ -95,7 +133,7 @@ private:
             PendingMessage message;
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
-                m_readBuffer.push_back(Move(*message));
+                m_readBuffer.push_back(Move(message.value()));
                 hasMessage = m_pending.try_pop(message);
             }
         }

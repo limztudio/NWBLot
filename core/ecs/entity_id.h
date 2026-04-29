@@ -39,6 +39,12 @@ inline constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class World;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct EntityID{
     u32 id;
 
@@ -66,6 +72,8 @@ inline constexpr EntityID ENTITY_ID_INVALID = EntityID{};
 
 
 class EntityManager{
+    friend class World;
+
 private:
     using GenerationAllocator = Alloc::CustomAllocator<u16>;
     using FreeIndexAllocator = Alloc::CustomAllocator<u32>;
@@ -78,10 +86,13 @@ public:
 public:
     EntityID create();
     void destroy(EntityID entityId);
-    void destroyAlive(EntityID entityId);
     bool alive(EntityID entityId)const;
     usize count()const{ return m_aliveCount; }
     void clear();
+
+
+private:
+    void destroyAlive(EntityID entityId);
 
 
 private:

@@ -38,7 +38,6 @@ class MessageBus : NoCopy{
 private:
     class IMessageChannel;
     using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
-    using ChannelPointerAllocator = Alloc::CustomAllocator<IMessageChannel*>;
     using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, MessageChannelPtr>>;
     using ChannelMapLock = SharedMutex::scoped_lock;
 
@@ -169,7 +168,6 @@ public:
     explicit MessageBus(Alloc::CustomArena& arena)
         : m_arena(arena)
         , m_channels(0, Hasher<MessageTypeId>(), EqualTo<MessageTypeId>(), ChannelMapAllocator(arena))
-        , m_channelIterationScratch(ChannelPointerAllocator(arena))
     {}
     ~MessageBus() = default;
 
@@ -215,33 +213,26 @@ public:
     }
 
     void swapBuffers(){
-        forEachChannelUnlocked([](IMessageChannel* ch){ ch->swapBuffers(); });
+        forEachChannel([](IMessageChannel& ch){ ch.swapBuffers(); });
     }
 
     void clear(){
-        forEachChannelUnlocked([](IMessageChannel* ch){ ch->clear(); });
+        forEachChannel([](IMessageChannel& ch){ ch.clear(); });
     }
 
 
 private:
     template<typename Func>
-    void forEachChannelUnlocked(Func&& func){
+    void forEachChannel(Func&& func){
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return;
 
-        m_channelIterationScratch.clear();
+        ChannelMapLock lock(m_channelsMutex, false);
 
-        {
-            ChannelMapLock lock(m_channelsMutex, false);
-            m_channelIterationScratch.reserve(m_channels.size());
-            for(auto& [typeId, channel] : m_channels){
-                static_cast<void>(typeId);
-                m_channelIterationScratch.push_back(channel.get());
-            }
+        for(auto& [typeId, channel] : m_channels){
+            static_cast<void>(typeId);
+            func(*channel);
         }
-
-        for(auto* channel : m_channelIterationScratch)
-            func(channel);
     }
 
     template<typename T>
@@ -285,7 +276,6 @@ private:
     mutable SharedMutex m_channelsMutex;
     Atomic<bool> m_hasChannels{ false };
     ChannelMap m_channels;
-    Vector<IMessageChannel*, ChannelPointerAllocator> m_channelIterationScratch;
 };
 
 

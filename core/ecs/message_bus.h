@@ -7,6 +7,8 @@
 
 #include "type_id.h"
 
+#include <optional>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,29 +55,28 @@ private:
     template<typename T>
     class MessageChannel final : public IMessageChannel{
     private:
-        using MessagePtr = CustomUniquePtr<T>;
-        using PendingAllocator = Alloc::CustomCacheAlignedAllocator<MessagePtr>;
+        using PendingMessage = std::optional<T>;
+        using PendingAllocator = Alloc::CustomCacheAlignedAllocator<PendingMessage>;
 
 
     public:
         explicit MessageChannel(Alloc::CustomArena& arena)
-            : m_arena(arena)
-            , m_pending(PendingAllocator(arena))
+            : m_pending(PendingAllocator(arena))
             , m_readBuffer(Alloc::CustomAllocator<T>(arena))
         {}
 
     public:
         void post(const T& message){
-            m_pending.push(MakeCustomUnique<T>(m_arena, message));
+            m_pending.emplace(std::in_place, message);
         }
 
         void post(T&& message){
-            m_pending.push(MakeCustomUnique<T>(m_arena, Move(message)));
+            m_pending.emplace(std::in_place, Move(message));
         }
 
         template<typename... Args>
         void emplace(Args&&... args){
-            m_pending.push(MakeCustomUnique<T>(m_arena, Forward<Args>(args)...));
+            m_pending.emplace(std::in_place, Forward<Args>(args)...);
         }
 
         template<typename Func>
@@ -91,10 +92,11 @@ private:
         virtual void swapBuffers()override{
             m_readBuffer.clear();
 
-            MessagePtr message;
+            PendingMessage message;
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
                 m_readBuffer.push_back(Move(*message));
+                message.reset();
                 hasMessage = m_pending.try_pop(message);
             }
         }
@@ -102,17 +104,17 @@ private:
         virtual void clear()override{
             m_readBuffer.clear();
 
-            MessagePtr message;
+            PendingMessage message;
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
+                message.reset();
                 hasMessage = m_pending.try_pop(message);
             }
         }
 
 
     private:
-        Alloc::CustomArena& m_arena;
-        ParallelQueue<MessagePtr, PendingAllocator> m_pending;
+        ParallelQueue<PendingMessage, PendingAllocator> m_pending;
         Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
     };
 

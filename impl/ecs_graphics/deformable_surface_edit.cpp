@@ -62,8 +62,8 @@ void ResolveTangentBitangentVectors(
     const SIMDVector tangentVector,
     const SIMDVector fallbackTangent,
     SIMDVector& outTangentVector,
-    SIMDVector& outBitangentVector)
-{
+    SIMDVector& outBitangentVector
+){
     outTangentVector = Core::Geometry::FrameResolveTangent(normalVector, tangentVector, fallbackTangent);
     outBitangentVector = Core::Geometry::FrameResolveBitangent(normalVector, outTangentVector, s_SIMDIdentityR1);
 }
@@ -112,8 +112,8 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] SIMDVector BarycentricPoint(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
-    const f32 (&bary)[3])
-{
+    const f32 (&bary)[3]
+){
     SIMDVector position = VectorScale(LoadRestVertexPosition(instance.restVertices[indices[0]]), bary[0]);
     position = VectorMultiplyAdd(LoadRestVertexPosition(instance.restVertices[indices[1]]), VectorReplicate(bary[1]), position);
     position = VectorMultiplyAdd(LoadRestVertexPosition(instance.restVertices[indices[2]]), VectorReplicate(bary[2]), position);
@@ -141,8 +141,8 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool BuildTriangleNormal(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
-    SIMDVector& outNormal)
-{
+    SIMDVector& outNormal
+){
     if(
         indices[0u] >= instance.restVertices.size()
         || indices[1u] >= instance.restVertices.size()
@@ -165,8 +165,8 @@ using MorphDeltaLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&triangleIndices)[3],
     const f32 (&bary)[3],
-    HoleFrame& outFrame)
-{
+    HoleFrame& outFrame
+){
     const SIMDVector a = LoadRestVertexPosition(instance.restVertices[triangleIndices[0]]);
     const SIMDVector b = LoadRestVertexPosition(instance.restVertices[triangleIndices[1]]);
     const SIMDVector c = LoadRestVertexPosition(instance.restVertices[triangleIndices[2]]);
@@ -195,7 +195,8 @@ using MorphDeltaLookup = HashMap<
         tangentVector
     );
     ResolveTangentBitangentVectors(outFrame.normal, tangentVector, edge0, outFrame.tangent, outFrame.bitangent);
-    return VectorGetX(Vector3LengthSq(outFrame.normal)) > Core::Geometry::s_FrameDirectionEpsilon
+    return
+        VectorGetX(Vector3LengthSq(outFrame.normal)) > Core::Geometry::s_FrameDirectionEpsilon
         && VectorGetX(Vector3LengthSq(outFrame.tangent)) > Core::Geometry::s_FrameDirectionEpsilon
         && VectorGetX(Vector3LengthSq(outFrame.bitangent)) > Core::Geometry::s_FrameDirectionEpsilon
         && Abs(VectorGetX(Vector3Dot(outFrame.normal, outFrame.tangent))) <= 0.001f
@@ -219,7 +220,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool MatchingSourceSample(const SourceSample& lhs, const SourceSample& rhs){
-    return lhs.sourceTri == rhs.sourceTri
+    return
+        lhs.sourceTri == rhs.sourceTri
         && Abs(lhs.bary[0] - rhs.bary[0]) <= DeformableValidation::s_BarycentricSumEpsilon
         && Abs(lhs.bary[1] - rhs.bary[1]) <= DeformableValidation::s_BarycentricSumEpsilon
         && Abs(lhs.bary[2] - rhs.bary[2]) <= DeformableValidation::s_BarycentricSumEpsilon
@@ -231,21 +233,24 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ExactFloat3(const Float3U& lhs, const Float3U& rhs){
-    return ExactF32(lhs.x, rhs.x)
+    return
+        ExactF32(lhs.x, rhs.x)
         && ExactF32(lhs.y, rhs.y)
         && ExactF32(lhs.z, rhs.z)
     ;
 }
 
 [[nodiscard]] bool ExactFloat3(const Float4& lhs, const Float4& rhs){
-    return ExactF32(lhs.x, rhs.x)
+    return
+        ExactF32(lhs.x, rhs.x)
         && ExactF32(lhs.y, rhs.y)
         && ExactF32(lhs.z, rhs.z)
     ;
 }
 
 [[nodiscard]] bool ExactSourceSample(const SourceSample& lhs, const SourceSample& rhs){
-    return lhs.sourceTri == rhs.sourceTri
+    return
+        lhs.sourceTri == rhs.sourceTri
         && ExactF32(lhs.bary[0], rhs.bary[0])
         && ExactF32(lhs.bary[1], rhs.bary[1])
         && ExactF32(lhs.bary[2], rhs.bary[2])
@@ -253,7 +258,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ExactPosedHit(const DeformablePosedHit& lhs, const DeformablePosedHit& rhs){
-    return lhs.entity == rhs.entity
+    return
+        lhs.entity == rhs.entity
         && lhs.runtimeMesh == rhs.runtimeMesh
         && lhs.editRevision == rhs.editRevision
         && lhs.triangle == rhs.triangle
@@ -269,7 +275,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ExactHoleEditParams(const DeformableHoleEditParams& lhs, const DeformableHoleEditParams& rhs){
-    return ExactPosedHit(lhs.posedHit, rhs.posedHit)
+    return
+        ExactPosedHit(lhs.posedHit, rhs.posedHit)
         && ExactF32(lhs.radius, rhs.radius)
         && ExactF32(lhs.ellipseRatio, rhs.ellipseRatio)
         && ExactF32(lhs.depth, rhs.depth)
@@ -288,7 +295,8 @@ using MorphDeltaLookup = HashMap<
     const SIMDVector position = hit.positionVector();
     const SIMDVector normal = hit.normalVector();
     const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
-    return IsFinite(hit.distance())
+    return
+        IsFinite(hit.distance())
         && hit.distance() >= 0.0f
         && DeformableValidation::FiniteVector(position, 0x7u)
         && DeformableValidation::FiniteVector(normal, 0x7u)
@@ -315,7 +323,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidateHoleShapeValues(const f32 radius, const f32 ellipseRatio, const f32 depth){
-    return IsFinite(radius)
+    return
+        IsFinite(radius)
         && IsFinite(ellipseRatio)
         && IsFinite(depth)
         && IsFinite(radius * ellipseRatio)
@@ -330,7 +339,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
-    return ValidateHitIdentity(instance, params.posedHit)
+    return
+        ValidateHitIdentity(instance, params.posedHit)
         && ValidateHoleShape(params)
         && instance.editRevision != Limit<u32>::s_Max
     ;
@@ -346,9 +356,10 @@ using MorphDeltaLookup = HashMap<
 
 [[nodiscard]] bool ValidateSurfaceEditSession(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableSurfaceEditSession& session)
-{
-    return session.active
+    const DeformableSurfaceEditSession& session
+){
+    return
+        session.active
         && session.entity == instance.entity
         && session.runtimeMesh == instance.handle
         && session.editRevision == instance.editRevision
@@ -359,9 +370,10 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool ValidateSurfaceEditSessionParams(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditSession& session,
-    const DeformableHoleEditParams& params)
-{
-    return ValidateSurfaceEditSession(instance, session)
+    const DeformableHoleEditParams& params
+){
+    return
+        ValidateSurfaceEditSession(instance, session)
         && ValidateParams(instance, params)
         && ExactPosedHit(session.hit, params.posedHit)
     ;
@@ -370,9 +382,10 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool ValidatePreviewedSurfaceEditSessionParams(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditSession& session,
-    const DeformableHoleEditParams& params)
-{
-    return ValidateSurfaceEditSessionParams(instance, session, params)
+    const DeformableHoleEditParams& params
+){
+    return
+        ValidateSurfaceEditSessionParams(instance, session, params)
         && session.previewed
         && ExactHoleEditParams(session.previewParams, params)
     ;
@@ -381,8 +394,8 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool BuildPreviewFrame(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
-    HoleFrame& outFrame)
-{
+    HoleFrame& outFrame
+){
     u32 hitTriangleIndices[3] = {};
     if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
         return false;
@@ -394,7 +407,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidWallVertexSpan(const u32 firstVertex, const u32 vertexCount){
-    return firstVertex != Limit<u32>::s_Max
+    return
+        firstVertex != Limit<u32>::s_Max
         && vertexCount >= s_MinWallLoopVertexCount
         && vertexCount <= Limit<u32>::s_Max - firstVertex
     ;
@@ -420,7 +434,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidAccessoryWallLoopParameter(const f32 parameter){
-    return parameter == s_DeformableAccessoryCenteredWallLoopParameter
+    return
+        parameter == s_DeformableAccessoryCenteredWallLoopParameter
         || (IsFinite(parameter) && parameter >= 0.0f && parameter < 1.0f)
     ;
 }
@@ -433,7 +448,8 @@ using MorphDeltaLookup = HashMap<
     if(!ValidOptionalWallVertexSpan(result.firstWallVertex, result.wallVertexCount))
         return false;
     if(result.wallVertexCount == 0u)
-        return !requireWall
+        return
+            !requireWall
             && result.addedVertexCount == 0u
             && result.addedTriangleCount == 0u
             && result.wallLoopCutCount == 0u
@@ -463,8 +479,8 @@ using MorphDeltaLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const usize indexBase,
     const usize firstWallVertex,
-    const usize wallVertexCount)
-{
+    const usize wallVertexCount
+){
     for(usize pairIndex = 0u; pairIndex < wallVertexCount; ++pairIndex){
         const usize nextPairIndex = (pairIndex + 1u) % wallVertexCount;
         const u32 innerA = static_cast<u32>(firstWallVertex + pairIndex);
@@ -491,8 +507,8 @@ using MorphDeltaLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const u32 firstWallVertexValue,
     const u32 wallVertexCountValue,
-    usize* outIndexBase = nullptr)
-{
+    usize* outIndexBase = nullptr
+){
     if(outIndexBase)
         *outIndexBase = Limit<usize>::s_Max;
     if(!ValidWallVertexSpan(firstWallVertexValue, wallVertexCountValue))
@@ -526,9 +542,10 @@ using MorphDeltaLookup = HashMap<
 
 [[nodiscard]] bool RuntimeMeshHasWallTrianglePairs(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableHoleEditResult& result)
-{
-    return ValidHoleEditResult(result, true)
+    const DeformableHoleEditResult& result
+){
+    return
+        ValidHoleEditResult(result, true)
         && RuntimeMeshHasWallTrianglePairs(instance, result.firstWallVertex, result.wallVertexCount)
     ;
 }
@@ -537,14 +554,16 @@ using MorphDeltaLookup = HashMap<
     const SIMDVector positionVector = LoadFloat(position);
     const SIMDVector normalVector = LoadFloat(normal);
     const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normalVector));
-    return DeformableValidation::FiniteVector(positionVector, 0x7u)
+    return
+        DeformableValidation::FiniteVector(positionVector, 0x7u)
         && DeformableValidation::FiniteVector(normalVector, 0x7u)
         && Abs(normalLengthSquared - 1.0f) <= DeformableValidation::s_RestFrameUnitLengthSquaredEpsilon
     ;
 }
 
 [[nodiscard]] bool ValidHoleRecord(const DeformableSurfaceHoleEditRecord& record){
-    return ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
+    return
+        ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
         && ValidWallLoopCutCount(record.wallLoopCutCount)
         && (record.wallLoopCutCount == 0u || record.depth > s_Epsilon)
         && record.baseEditRevision != Limit<u32>::s_Max
@@ -576,9 +595,10 @@ using MorphDeltaLookup = HashMap<
     const u32 wallVertexCount,
     const f32 normalOffset,
     const f32 uniformScale,
-    const f32 wallLoopParameter)
-{
-    return ValidSurfaceEditId(anchorEditId)
+    const f32 wallLoopParameter
+){
+    return
+        ValidSurfaceEditId(anchorEditId)
         && ValidWallVertexSpan(firstWallVertex, wallVertexCount)
         && IsFinite(normalOffset)
         && normalOffset >= 0.0f
@@ -589,7 +609,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidAccessoryAttachment(const DeformableAccessoryAttachmentComponent& attachment){
-    return attachment.targetEntity.valid()
+    return
+        attachment.targetEntity.valid()
         && attachment.runtimeMesh.valid()
         && ValidAccessoryAttachmentValues(
             attachment.anchorEditId,
@@ -619,7 +640,8 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool AccessoryRecordHasStableAssetPaths(const DeformableAccessoryAttachmentRecord& record){
-    return !record.geometryVirtualPathText.empty()
+    return
+        !record.geometryVirtualPathText.empty()
         && !record.materialVirtualPathText.empty()
         && Name(record.geometryVirtualPathText.view()) == record.geometry.name()
         && Name(record.materialVirtualPathText.view()) == record.material.name()
@@ -628,9 +650,10 @@ using MorphDeltaLookup = HashMap<
 
 [[nodiscard]] bool EditRecordMatchesAccessory(
     const DeformableSurfaceEditRecord& record,
-    const DeformableAccessoryAttachmentRecord& accessory)
-{
-    return record.editId == accessory.anchorEditId
+    const DeformableAccessoryAttachmentRecord& accessory
+){
+    return
+        record.editId == accessory.anchorEditId
         && record.type == DeformableSurfaceEditRecordType::Hole
         && record.result.firstWallVertex == accessory.firstWallVertex
         && record.result.wallVertexCount == accessory.wallVertexCount
@@ -639,8 +662,8 @@ using MorphDeltaLookup = HashMap<
 
 [[nodiscard]] const DeformableSurfaceEditRecord* FindEditRecordById(
     const DeformableSurfaceEditState& state,
-    const DeformableSurfaceEditId editId)
-{
+    const DeformableSurfaceEditId editId
+){
     if(!ValidSurfaceEditId(editId))
         return nullptr;
 
@@ -662,8 +685,8 @@ using SurfaceEditRecordLookup = HashMap<
 
 [[nodiscard]] const DeformableSurfaceEditRecord* FindEditRecordById(
     const SurfaceEditRecordLookup& records,
-    const DeformableSurfaceEditId editId)
-{
+    const DeformableSurfaceEditId editId
+){
     if(!ValidSurfaceEditId(editId))
         return nullptr;
 
@@ -673,8 +696,8 @@ using SurfaceEditRecordLookup = HashMap<
 
 [[nodiscard]] bool BuildSurfaceEditRecordLookup(
     const DeformableSurfaceEditState& state,
-    SurfaceEditRecordLookup& outRecords)
-{
+    SurfaceEditRecordLookup& outRecords
+){
     outRecords.clear();
     outRecords.reserve(state.edits.size());
 
@@ -694,8 +717,8 @@ using SurfaceEditRecordLookup = HashMap<
 
 [[nodiscard]] bool ValidateSurfaceEditAccessoryAnchors(
     const DeformableSurfaceEditState& state,
-    const DeformableRuntimeMeshInstance* runtimeInstance)
-{
+    const DeformableRuntimeMeshInstance* runtimeInstance
+){
     Core::Alloc::ScratchArena<> scratchArena;
     SurfaceEditRecordLookup editRecords(
         0,
@@ -728,15 +751,15 @@ using SurfaceEditRecordLookup = HashMap<
 
 [[nodiscard]] bool ValidateReplayAccessoryAnchors(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableSurfaceEditState& state)
-{
+    const DeformableSurfaceEditState& state
+){
     return ValidateSurfaceEditAccessoryAnchors(state, &instance);
 }
 
 [[nodiscard]] bool ReplayContextTargetsInstance(
     const DeformableRuntimeMeshInstance& instance,
-    const DeformableSurfaceEditReplayContext& context)
-{
+    const DeformableSurfaceEditReplayContext& context
+){
     return !context.targetEntity.valid() || context.targetEntity == instance.entity;
 }
 
@@ -744,8 +767,8 @@ using SurfaceEditRecordLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
     const SIMDVector point,
-    f32 (&outBary)[3])
-{
+    f32 (&outBary)[3]
+){
     const SIMDVector a = LoadRestVertexPosition(instance.restVertices[indices[0]]);
     const SIMDVector b = LoadRestVertexPosition(instance.restVertices[indices[1]]);
     const SIMDVector c = LoadRestVertexPosition(instance.restVertices[indices[2]]);
@@ -779,8 +802,8 @@ using SurfaceEditRecordLookup = HashMap<
 [[nodiscard]] bool TriangleNormalMatchesStoredNormal(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
-    const Float3U& storedNormal)
-{
+    const Float3U& storedNormal
+){
     const SIMDVector a = LoadRestVertexPosition(instance.restVertices[indices[0]]);
     const SIMDVector b = LoadRestVertexPosition(instance.restVertices[indices[1]]);
     const SIMDVector c = LoadRestVertexPosition(instance.restVertices[indices[2]]);
@@ -800,8 +823,8 @@ using SurfaceEditRecordLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditRecord& record,
     const usize triangle,
-    DeformableHoleEditParams& outParams)
-{
+    DeformableHoleEditParams& outParams
+){
     outParams = DeformableHoleEditParams{};
     if(
         record.type != DeformableSurfaceEditRecordType::Hole
@@ -850,7 +873,8 @@ using SurfaceEditRecordLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidMoveTargetHoleRecord(const DeformableSurfaceHoleEditRecord& record){
-    return record.restSample.sourceTri != Limit<u32>::s_Max
+    return
+        record.restSample.sourceTri != Limit<u32>::s_Max
         && DeformableValidation::ValidSourceBarycentric(record.restSample.bary)
         && ValidStoredRestFrame(record.restPosition, record.restNormal)
     ;
@@ -859,8 +883,8 @@ using SurfaceEditRecordLookup = HashMap<
 [[nodiscard]] bool BuildMoveTargetHoleRecord(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePosedHit& hit,
-    DeformableSurfaceHoleEditRecord& outRecord)
-{
+    DeformableSurfaceHoleEditRecord& outRecord
+){
     outRecord = DeformableSurfaceHoleEditRecord{};
     if(!ValidateRuntimePayload(instance) || !ValidateHitIdentity(instance, hit))
         return false;
@@ -880,9 +904,10 @@ using SurfaceEditRecordLookup = HashMap<
 
 [[nodiscard]] bool ReplayResultMatchesStoredRecord(
     const DeformableHoleEditResult& result,
-    const DeformableSurfaceEditRecord& record)
-{
-    return result.removedTriangleCount == record.result.removedTriangleCount
+    const DeformableSurfaceEditRecord& record
+){
+    return
+        result.removedTriangleCount == record.result.removedTriangleCount
         && result.addedVertexCount == record.result.addedVertexCount
         && result.addedTriangleCount == record.result.addedTriangleCount
         && result.editRevision == record.result.editRevision
@@ -894,9 +919,10 @@ using SurfaceEditRecordLookup = HashMap<
 
 [[nodiscard]] bool ReplayResultShapeMatchesStoredRecord(
     const DeformableHoleEditResult& result,
-    const DeformableSurfaceEditRecord& record)
-{
-    return result.removedTriangleCount == record.result.removedTriangleCount
+    const DeformableSurfaceEditRecord& record
+){
+    return
+        result.removedTriangleCount == record.result.removedTriangleCount
         && result.addedVertexCount == record.result.addedVertexCount
         && result.addedTriangleCount == record.result.addedTriangleCount
         && result.wallVertexCount == record.result.wallVertexCount
@@ -905,7 +931,8 @@ using SurfaceEditRecordLookup = HashMap<
 }
 
 [[nodiscard]] bool HoleResultChangesTopology(const DeformableHoleEditResult& result){
-    return result.removedTriangleCount != 0u
+    return
+        result.removedTriangleCount != 0u
         || result.addedTriangleCount != 0u
         || result.addedVertexCount != 0u
     ;
@@ -914,8 +941,8 @@ using SurfaceEditRecordLookup = HashMap<
 [[nodiscard]] bool ValidateReplayAccessories(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState& state,
-    const DeformableSurfaceEditReplayContext& context)
-{
+    const DeformableSurfaceEditReplayContext& context
+){
     if(state.accessories.empty())
         return ReplayContextTargetsInstance(instance, context);
     if(!context.world || !context.targetEntity.valid() || context.targetEntity != instance.entity)
@@ -928,8 +955,8 @@ void RestoreReplayAccessories(
     DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState& state,
     const DeformableSurfaceEditReplayContext& context,
-    u32& outRestoredAccessoryCount)
-{
+    u32& outRestoredAccessoryCount
+){
     outRestoredAccessoryCount = 0u;
     if(state.accessories.empty() || !context.world)
         return;
@@ -959,8 +986,8 @@ void RestoreReplayAccessories(
 
 [[nodiscard]] bool ValidateReplayAccessoryAssets(
     const DeformableSurfaceEditState& state,
-    const DeformableSurfaceEditReplayContext& context)
-{
+    const DeformableSurfaceEditReplayContext& context
+){
     if(state.accessories.empty() || !context.assetManager)
         return true;
 
@@ -988,8 +1015,8 @@ template<typename StringTable>
 [[nodiscard]] bool BuildAccessoryBinaryRecord(
     const DeformableAccessoryAttachmentRecord& record,
     SurfaceEditAccessoryRecordBinary& outRecord,
-    StringTable& stringTable)
-{
+    StringTable& stringTable
+){
     outRecord = SurfaceEditAccessoryRecordBinary{};
     if(!ValidAccessoryRecord(record) || !AccessoryRecordHasStableAssetPaths(record))
         return false;
@@ -1000,7 +1027,8 @@ template<typename StringTable>
     outRecord.normalOffset = record.normalOffset;
     outRecord.uniformScale = record.uniformScale;
     outRecord.wallLoopParameter = record.wallLoopParameter;
-    return ::AppendStringTableText(stringTable, record.geometryVirtualPathText, outRecord.geometryPathOffset)
+    return
+        ::AppendStringTableText(stringTable, record.geometryVirtualPathText, outRecord.geometryPathOffset)
         && ::AppendStringTableText(stringTable, record.materialVirtualPathText, outRecord.materialPathOffset)
     ;
 }
@@ -1010,8 +1038,8 @@ template<typename StringTable>
     const Core::Assets::AssetBytes& rawBinary,
     const usize stringTableOffset,
     const usize stringTableByteCount,
-    DeformableAccessoryAttachmentRecord& outRecord)
-{
+    DeformableAccessoryAttachmentRecord& outRecord
+){
     outRecord = DeformableAccessoryAttachmentRecord{};
     outRecord.anchorEditId = binary.anchorEditId;
     outRecord.firstWallVertex = binary.firstWallVertex;
@@ -1046,8 +1074,8 @@ template<typename StringTable>
     const u64 editCount,
     const u64 accessoryCount,
     const u64 stringTableByteCount,
-    usize& outSize)
-{
+    usize& outSize
+){
     outSize = sizeof(SurfaceEditStateHeaderBinary);
     if(editCount > static_cast<u64>(Limit<usize>::s_Max / sizeof(DeformableSurfaceEditRecord)))
         return false;
@@ -1101,8 +1129,8 @@ template<typename StringTable>
 
 [[nodiscard]] SIMDVector NormalizeRotationQuaternionVector(
     const SIMDVector rotationVector,
-    const SIMDVector fallbackNormalVector)
-{
+    const SIMDVector fallbackNormalVector
+){
     const f32 lengthSquared = VectorGetX(QuaternionLengthSq(rotationVector));
     if(!IsFinite(lengthSquared) || lengthSquared <= Core::Geometry::s_FrameDirectionEpsilon)
         return RotationFromPositiveZToNormalVector(fallbackNormalVector);
@@ -1144,8 +1172,8 @@ template<typename StringTable>
 [[nodiscard]] bool BuildMorphDeltaLookup(
     const DeformableMorph& morph,
     const usize sourceDeltaCount,
-    MorphDeltaLookup& outLookup)
-{
+    MorphDeltaLookup& outLookup
+){
     outLookup.clear();
     outLookup.reserve(sourceDeltaCount);
     for(usize deltaIndex = 0u; deltaIndex < sourceDeltaCount; ++deltaIndex){
@@ -1158,8 +1186,8 @@ template<typename StringTable>
 [[nodiscard]] const DeformableMorphDelta* FindMorphDelta(
     const DeformableMorph& morph,
     const MorphDeltaLookup& lookup,
-    const u32 vertex)
-{
+    const u32 vertex
+){
     const auto found = lookup.find(vertex);
     if(found == lookup.end())
         return nullptr;
@@ -1195,8 +1223,8 @@ template<usize sourceCount>
     const MorphDeltaLookup& lookup,
     const u32 (&sourceVertices)[sourceCount],
     const f32 (&sourceWeights)[sourceCount],
-    const u32 outputVertex)
-{
+    const u32 outputVertex
+){
     static_assert(sourceCount > 0u, "morph transfer requires source samples");
     Core::Geometry::AttributeTransferMorphDelta sourceDeltas[sourceCount] = {};
     Core::Geometry::AttributeTransferMorphBlendSource sources[sourceCount] = {};
@@ -1240,8 +1268,8 @@ template<typename EdgeVector, typename VertexVector>
 [[nodiscard]] bool TransferWallMorphDeltas(
     Vector<DeformableMorph>& morphs,
     const EdgeVector& orderedBoundaryEdges,
-    const VertexVector& innerVertices)
-{
+    const VertexVector& innerVertices
+){
     if(orderedBoundaryEdges.size() != innerVertices.size())
         return false;
     if(innerVertices.empty())
@@ -1317,8 +1345,8 @@ template<usize sourceCount>
     const Vector<SkinInfluence4>& skin,
     const u32 (&sourceVertices)[sourceCount],
     const f32 (&sourceWeights)[sourceCount],
-    SkinInfluence4& outSkin)
-{
+    SkinInfluence4& outSkin
+){
     static_assert(sourceCount > 0u, "skin transfer requires source samples");
     outSkin = SkinInfluence4{};
     if(skin.empty())
@@ -1359,8 +1387,8 @@ template<usize sourceCount>
     const Vector<DeformableVertexRest>& vertices,
     const u32 (&sourceVertices)[sourceCount],
     const f32 (&sourceWeights)[sourceCount],
-    Float4U& outColor)
-{
+    Float4U& outColor
+){
     static_assert(sourceCount > 0u, "color transfer requires source samples");
     outColor = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
 
@@ -1399,8 +1427,8 @@ template<usize sourceCount>
     const SIMDVector tangent,
     const f32 uvU,
     const f32 uvV,
-    u32& outVertex)
-{
+    u32& outVertex
+){
     if(sourceVertex >= vertices.size() || vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
         return false;
     if(!skin.empty() && sourceVertex >= skin.size())
@@ -1437,8 +1465,8 @@ struct BottomCapPolygonVertex{
 [[nodiscard]] f32 Cross2D(
     const BottomCapPolygonVertex& a,
     const BottomCapPolygonVertex& b,
-    const BottomCapPolygonVertex& c)
-{
+    const BottomCapPolygonVertex& c
+){
     return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
 }
 
@@ -1466,15 +1494,16 @@ template<typename PolygonAllocator>
     const BottomCapPolygonVertex& a,
     const BottomCapPolygonVertex& b,
     const BottomCapPolygonVertex& c,
-    const bool counterClockwise)
-{
+    const bool counterClockwise
+){
     constexpr f32 epsilon = 0.0000001f;
     const f32 ab = Cross2D(a, b, point);
     const f32 bc = Cross2D(b, c, point);
     const f32 ca = Cross2D(c, a, point);
-    return counterClockwise
-        ? ab >= -epsilon && bc >= -epsilon && ca >= -epsilon
-        : ab <= epsilon && bc <= epsilon && ca <= epsilon
+    return
+        counterClockwise
+            ? ab >= -epsilon && bc >= -epsilon && ca >= -epsilon
+            : ab <= epsilon && bc <= epsilon && ca <= epsilon
     ;
 }
 
@@ -1511,8 +1540,8 @@ template<typename IndexAllocator>
     const BottomCapPolygonVertex& b,
     const BottomCapPolygonVertex& c,
     const bool counterClockwise,
-    Vector<u32, IndexAllocator>& outIndices)
-{
+    Vector<u32, IndexAllocator>& outIndices
+){
     if(a.vertex == b.vertex || a.vertex == c.vertex || b.vertex == c.vertex)
         return false;
 
@@ -1526,8 +1555,8 @@ template<typename PolygonAllocator>
 [[nodiscard]] bool IsBottomCapEar(
     const Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon,
     const usize vertexIndex,
-    const bool counterClockwise)
-{
+    const bool counterClockwise
+){
     constexpr f32 areaEpsilon = 0.0000001f;
     const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
     const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
@@ -1559,8 +1588,8 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     const SIMDVector tangent,
     const SIMDVector bitangent,
     Vector<u32, IndexAllocator>& outIndices,
-    u32* outAddedTriangleCount)
-{
+    u32* outAddedTriangleCount
+){
     if(outAddedTriangleCount)
         *outAddedTriangleCount = 0u;
     if(
@@ -1659,8 +1688,8 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     const HoleFrame& frame,
     const f32 radiusX,
     const f32 radiusY,
-    const u32 (&triangleIndices)[3])
-{
+    const u32 (&triangleIndices)[3]
+){
     const SIMDVector centroid = TriangleCentroid(instance, triangleIndices);
     const SIMDVector offset = VectorSubtract(centroid, frame.center);
     const f32 x = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
@@ -1672,8 +1701,8 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     const DeformableRuntimeMeshInstance& instance,
     const SIMDVector frameNormal,
     const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removeTriangle,
-    const Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& orderedBoundaryEdges)
-{
+    const Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& orderedBoundaryEdges
+){
     const usize triangleCount = instance.indices.size() / 3u;
     if(
         instance.indices.empty()
@@ -1738,9 +1767,10 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
 
 [[nodiscard]] bool EdgeTouchesRemovedVertex(
     const EdgeRecord& edge,
-    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedVertices)
-{
-    return edge.a < removedVertices.size()
+    const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedVertices
+){
+    return
+        edge.a < removedVertices.size()
         && edge.b < removedVertices.size()
         && (removedVertices[edge.a] != 0u || removedVertices[edge.b] != 0u)
     ;
@@ -1749,8 +1779,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
 [[nodiscard]] bool EdgeLooksLikeExistingCsgWallBoundary(
     const EdgeRecord& edge,
     const Vector<DeformableVertexRest>& restVertices,
-    const SIMDVector frameNormal)
-{
+    const SIMDVector frameNormal
+){
     if(
         edge.fullCount != 1u
         || edge.removedCount != 0u
@@ -1761,7 +1791,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
 
     const f32 aNormalDot = Abs(VectorGetX(Vector3Dot(LoadFloat(restVertices[edge.a].normal), frameNormal)));
     const f32 bNormalDot = Abs(VectorGetX(Vector3Dot(LoadFloat(restVertices[edge.b].normal), frameNormal)));
-    return IsFinite(aNormalDot)
+    return
+        IsFinite(aNormalDot)
         && IsFinite(bNormalDot)
         && (aNormalDot < 0.5f || bNormalDot < 0.5f)
     ;
@@ -1771,8 +1802,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     Vector<u32, Core::Alloc::ScratchAllocator<u32>>& neighbors,
     Vector<u8, Core::Alloc::ScratchAllocator<u8>>& neighborCounts,
     const u32 triangle,
-    const u32 neighbor)
-{
+    const u32 neighbor
+){
     if(
         triangle >= neighborCounts.size()
         || neighbor >= neighborCounts.size()
@@ -1795,8 +1826,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& candidateTriangle,
     Vector<u32, Core::Alloc::ScratchAllocator<u32>>& neighbors,
     Vector<u8, Core::Alloc::ScratchAllocator<u8>>& neighborCounts,
-    Core::Alloc::ScratchArena<>& scratchArena)
-{
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     const usize triangleCount = candidateTriangle.size();
     if(indices.size() / 3u != triangleCount || triangleCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
@@ -1874,8 +1905,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     const u32 hitTriangle,
     const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& candidateTriangle,
     Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removeTriangle,
-    Core::Alloc::ScratchArena<>& scratchArena)
-{
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     removeTriangle.assign(candidateTriangle.size(), 0u);
     if(hitTriangle >= candidateTriangle.size() || candidateTriangle[hitTriangle] == 0u)
         return false;
@@ -1929,8 +1960,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedTriangles,
     Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outBoundaryEdges,
     u32* outRemovedTriangleCount,
-    Core::Alloc::ScratchArena<>& scratchArena)
-{
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     if(outRemovedTriangleCount)
         *outRemovedTriangleCount = 0u;
     outBoundaryEdges.clear();
@@ -2148,8 +2179,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     const Vector<u8, Core::Alloc::ScratchAllocator<u8>>& removedTriangles,
     Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outBoundaryEdges,
     u32* outRemovedTriangleCount,
-    Core::Alloc::ScratchArena<>& scratchArena)
-{
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     if(
         Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
             indices,
@@ -2187,8 +2218,8 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
 bool BeginSurfaceEdit(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePosedHit& hit,
-    DeformableSurfaceEditSession& outSession)
-{
+    DeformableSurfaceEditSession& outSession
+){
     outSession = DeformableSurfaceEditSession{};
     if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance))
         return false;
@@ -2207,8 +2238,8 @@ bool PreviewHole(
     const DeformableRuntimeMeshInstance& instance,
     DeformableSurfaceEditSession& session,
     const DeformableHoleEditParams& params,
-    DeformableHolePreview& outPreview)
-{
+    DeformableHolePreview& outPreview
+){
     outPreview = DeformableHolePreview{};
     session.previewParams = DeformableHoleEditParams{};
     session.previewed = false;
@@ -2243,8 +2274,8 @@ bool CommitHole(
     const DeformableSurfaceEditSession& session,
     const DeformableHoleEditParams& params,
     DeformableHoleEditResult* outResult,
-    DeformableSurfaceEditRecord* outRecord)
-{
+    DeformableSurfaceEditRecord* outRecord
+){
     if(outResult)
         *outResult = DeformableHoleEditResult{};
     if(outRecord)
@@ -2252,49 +2283,45 @@ bool CommitHole(
 
     const bool validRuntimePayload = __hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance);
     if(!validRuntimePayload){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, runtime payload is invalid or not uploaded (entity={} runtime_mesh={} dirty_flags={} vertices={} triangles={})"),
-            instance.entity.id,
-            instance.handle.value,
-            static_cast<u32>(instance.dirtyFlags),
-            instance.restVertices.size(),
-            instance.indices.size() / 3u
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, runtime payload is invalid or not uploaded (entity={} runtime_mesh={} dirty_flags={} vertices={} triangles={})")
+            , instance.entity.id
+            , instance.handle.value
+            , static_cast<u32>(instance.dirtyFlags)
+            , instance.restVertices.size()
+            , instance.indices.size() / 3u
         );
         return false;
     }
     if(!__hidden_deformable_surface_edit::ValidatePreviewedSurfaceEditSessionParams(instance, session, params)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, preview session no longer matches (entity={} runtime_mesh={} revision={} session_revision={} previewed={})"),
-            instance.entity.id,
-            instance.handle.value,
-            instance.editRevision,
-            session.editRevision,
-            session.previewed ? 1u : 0u
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, preview session no longer matches (entity={} runtime_mesh={} revision={} session_revision={} previewed={})")
+            , instance.entity.id
+            , instance.handle.value
+            , instance.editRevision
+            , session.editRevision
+            , session.previewed ? 1u : 0u
         );
         return false;
     }
 
     __hidden_deformable_surface_edit::HoleFrame recordFrame;
     if(outRecord && !__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, recordFrame)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, preview frame could not be rebuilt (entity={} runtime_mesh={} triangle={})"),
-            instance.entity.id,
-            instance.handle.value,
-            params.posedHit.triangle
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, preview frame could not be rebuilt (entity={} runtime_mesh={} triangle={})")
+            , instance.entity.id
+            , instance.handle.value
+            , params.posedHit.triangle
         );
         return false;
     }
 
     DeformableHoleEditResult result;
     if(!CommitDeformableRestSpaceHole(instance, params, &result)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: commit failed while applying rest-space hole (entity={} runtime_mesh={} triangle={} radius={} ellipse={} depth={})"),
-            instance.entity.id,
-            instance.handle.value,
-            params.posedHit.triangle,
-            params.radius,
-            params.ellipseRatio,
-            params.depth
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed while applying rest-space hole (entity={} runtime_mesh={} triangle={} radius={} ellipse={} depth={})")
+            , instance.entity.id
+            , instance.handle.value
+            , params.posedHit.triangle
+            , params.radius
+            , params.ellipseRatio
+            , params.depth
         );
         return false;
     }
@@ -2322,8 +2349,8 @@ bool AttachAccessory(
     const DeformableHoleEditResult& holeResult,
     const f32 normalOffset,
     const f32 uniformScale,
-    DeformableAccessoryAttachmentComponent& outAttachment)
-{
+    DeformableAccessoryAttachmentComponent& outAttachment
+){
     return AttachAccessoryAtWallLoopParameter(
         instance,
         holeResult,
@@ -2340,8 +2367,8 @@ bool AttachAccessoryAtWallLoopParameter(
     const f32 wallLoopParameter,
     const f32 normalOffset,
     const f32 uniformScale,
-    DeformableAccessoryAttachmentComponent& outAttachment)
-{
+    DeformableAccessoryAttachmentComponent& outAttachment
+){
     outAttachment = DeformableAccessoryAttachmentComponent{};
     if(
         !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
@@ -2373,8 +2400,8 @@ bool ResolveAccessoryAttachmentTransform(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    Core::Scene::TransformComponent& outTransform)
-{
+    Core::Scene::TransformComponent& outTransform
+){
     if(
         !__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)
         || attachment.targetEntity != instance.entity
@@ -2784,8 +2811,8 @@ namespace __hidden_deformable_surface_edit{
     const DeformableHoleEditParams& params,
     const bool requireUploadedRuntimePayload,
     const u32 wallLoopCutCount,
-    DeformableHoleEditResult* outResult)
-{
+    DeformableHoleEditResult* outResult
+){
     if(outResult)
         *outResult = DeformableHoleEditResult{};
     const bool validPayload = requireUploadedRuntimePayload
@@ -2796,18 +2823,17 @@ namespace __hidden_deformable_surface_edit{
     const bool validWallLoopCutCount = ValidWallLoopCutCount(wallLoopCutCount);
     const bool validWallLoopDepth = wallLoopCutCount == 0u || params.depth > DeformableRuntime::s_Epsilon;
     if(!validPayload || !validParams || !validWallLoopCutCount || !validWallLoopDepth){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: rest-space hole validation failed (entity={} runtime_mesh={} uploaded_required={} valid_payload={} valid_params={} valid_loop_cuts={} valid_loop_depth={} dirty_flags={} revision={} triangle={})"),
-            instance.entity.id,
-            instance.handle.value,
-            requireUploadedRuntimePayload ? 1u : 0u,
-            validPayload ? 1u : 0u,
-            validParams ? 1u : 0u,
-            validWallLoopCutCount ? 1u : 0u,
-            validWallLoopDepth ? 1u : 0u,
-            static_cast<u32>(instance.dirtyFlags),
-            instance.editRevision,
-            params.posedHit.triangle
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: rest-space hole validation failed (entity={} runtime_mesh={} uploaded_required={} valid_payload={} valid_params={} valid_loop_cuts={} valid_loop_depth={} dirty_flags={} revision={} triangle={})")
+            , instance.entity.id
+            , instance.handle.value
+            , requireUploadedRuntimePayload ? 1u : 0u
+            , validPayload ? 1u : 0u
+            , validParams ? 1u : 0u
+            , validWallLoopCutCount ? 1u : 0u
+            , validWallLoopDepth ? 1u : 0u
+            , static_cast<u32>(instance.dirtyFlags)
+            , instance.editRevision
+            , params.posedHit.triangle
         );
         return false;
     }
@@ -2833,9 +2859,10 @@ namespace __hidden_deformable_surface_edit{
     const f32 radiusY = params.radius * params.ellipseRatio;
     const bool hasEditMaskPerTriangle = !instance.editMaskPerTriangle.empty();
     auto resolveValidatedEditMask = [&instance, hasEditMaskPerTriangle](const usize triangle){
-        return hasEditMaskPerTriangle
-            ? instance.editMaskPerTriangle[triangle]
-            : s_DeformableEditMaskDefault
+        return
+            hasEditMaskPerTriangle
+                ? instance.editMaskPerTriangle[triangle]
+                : s_DeformableEditMaskDefault
         ;
     };
 
@@ -2909,15 +2936,14 @@ namespace __hidden_deformable_surface_edit{
             scratchArena
         )
     ){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: rest-space hole boundary build failed (entity={} runtime_mesh={} hit_triangle={} triangles={} selected_triangles={} radius={} ellipse={})"),
-            instance.entity.id,
-            instance.handle.value,
-            params.posedHit.triangle,
-            triangleCount,
-            selectedTriangleCount,
-            params.radius,
-            params.ellipseRatio
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: rest-space hole boundary build failed (entity={} runtime_mesh={} hit_triangle={} triangles={} selected_triangles={} radius={} ellipse={})")
+            , instance.entity.id
+            , instance.handle.value
+            , params.posedHit.triangle
+            , triangleCount
+            , selectedTriangleCount
+            , params.radius
+            , params.ellipseRatio
         );
         return false;
     }
@@ -2945,27 +2971,25 @@ namespace __hidden_deformable_surface_edit{
             orderedBoundaryEdges
         )
     ){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: rest-space hole ordered boundary loop failed (entity={} runtime_mesh={} hit_triangle={} boundary_edges={} removed_triangles={})"),
-            instance.entity.id,
-            instance.handle.value,
-            params.posedHit.triangle,
-            boundaryEdges.size(),
-            removedTriangleCount
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: rest-space hole ordered boundary loop failed (entity={} runtime_mesh={} hit_triangle={} boundary_edges={} removed_triangles={})")
+            , instance.entity.id
+            , instance.handle.value
+            , params.posedHit.triangle
+            , boundaryEdges.size()
+            , removedTriangleCount
         );
         return false;
     }
 
     const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
     if(addWall && !BoundaryKeptFacesSupportHoleExtrusion(instance, frame.normal, removeTriangle, orderedBoundaryEdges)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: rest-space hole boundary intersects a hard kept face (entity={} runtime_mesh={} hit_triangle={} boundary_edges={} removed_triangles={} depth={})"),
-            instance.entity.id,
-            instance.handle.value,
-            params.posedHit.triangle,
-            orderedBoundaryEdges.size(),
-            removedTriangleCount,
-            params.depth
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: rest-space hole boundary intersects a hard kept face (entity={} runtime_mesh={} hit_triangle={} boundary_edges={} removed_triangles={} depth={})")
+            , instance.entity.id
+            , instance.handle.value
+            , params.posedHit.triangle
+            , orderedBoundaryEdges.size()
+            , removedTriangleCount
+            , params.depth
         );
         return false;
     }
@@ -2973,13 +2997,12 @@ namespace __hidden_deformable_surface_edit{
     Vector<u32> newIndices;
     u32 newSourceTriangleCount = instance.sourceTriangleCount;
     if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || newSourceTriangleCount == 0u){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("DeformableSurfaceEdit: rest-space hole source samples are invalid (entity={} runtime_mesh={} vertices={} source_samples={} source_triangles={})"),
-            instance.entity.id,
-            instance.handle.value,
-            instance.restVertices.size(),
-            instance.sourceSamples.size(),
-            newSourceTriangleCount
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: rest-space hole source samples are invalid (entity={} runtime_mesh={} vertices={} source_samples={} source_triangles={})")
+            , instance.entity.id
+            , instance.handle.value
+            , instance.restVertices.size()
+            , instance.sourceSamples.size()
+            , newSourceTriangleCount
         );
         return false;
     }
@@ -3326,8 +3349,8 @@ enum Enum : u8{
 [[nodiscard]] bool ReplayResultMatchesValidation(
     const DeformableHoleEditResult& result,
     const DeformableSurfaceEditRecord& storedRecord,
-    const ReplayResultValidation::Enum validation)
-{
+    const ReplayResultValidation::Enum validation
+){
     switch(validation){
     case ReplayResultValidation::None:
         return true;
@@ -3344,8 +3367,8 @@ enum Enum : u8{
     const DeformableSurfaceEditRecord& storedRecord,
     DeformableSurfaceEditRecord& replayRecord,
     const ReplayResultValidation::Enum validation,
-    DeformableHoleEditResult& outReplayResult)
-{
+    DeformableHoleEditResult& outReplayResult
+){
     outReplayResult = DeformableHoleEditResult{};
 
     const usize triangleCount = replayInstance.indices.size() / 3u;
@@ -3379,8 +3402,8 @@ enum Enum : u8{
 
 void AccumulateSurfaceEditReplayResult(
     DeformableSurfaceEditReplayResult& replay,
-    const DeformableHoleEditResult& replayResult)
-{
+    const DeformableHoleEditResult& replayResult
+){
     ++replay.appliedEditCount;
     replay.topologyChanged = replay.topologyChanged || HoleResultChangesTopology(replayResult);
 }
@@ -3389,8 +3412,8 @@ void AccumulateSurfaceEditReplayResult(
     const DeformableSurfaceEditState& sourceState,
     const DeformableSurfaceEditId removedAnchorEditId,
     DeformableSurfaceEditState& replayState,
-    u32* outRemovedAccessoryCount)
-{
+    u32* outRemovedAccessoryCount
+){
     replayState.accessories.reserve(sourceState.accessories.size());
     for(const DeformableAccessoryAttachmentRecord& accessory : sourceState.accessories){
         if(outRemovedAccessoryCount && accessory.anchorEditId == removedAnchorEditId){
@@ -3416,8 +3439,8 @@ void AccumulateSurfaceEditReplayResult(
 [[nodiscard]] bool ReplaySurfaceEditRecords(
     DeformableRuntimeMeshInstance& replayInstance,
     const DeformableSurfaceEditState& state,
-    DeformableSurfaceEditReplayResult& result)
-{
+    DeformableSurfaceEditReplayResult& result
+){
     result = DeformableSurfaceEditReplayResult{};
     for(const DeformableSurfaceEditRecord& record : state.edits){
         DeformableSurfaceEditRecord replayRecord = record;
@@ -3443,8 +3466,8 @@ void AccumulateSurfaceEditReplayResult(
     const DeformableSurfaceEditState& state,
     DeformableSurfaceEditState& outUndoState,
     DeformableSurfaceEditUndoResult& outResult,
-    DeformableSurfaceEditRedoEntry* outRedoEntry)
-{
+    DeformableSurfaceEditRedoEntry* outRedoEntry
+){
     outUndoState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditUndoResult{};
     if(outRedoEntry)
@@ -3475,9 +3498,10 @@ void AccumulateSurfaceEditReplayResult(
 }
 
 [[nodiscard]] u32 SurfaceEditStateFinalRevision(const DeformableSurfaceEditState& state){
-    return state.edits.empty()
-        ? 0u
-        : state.edits.back().result.editRevision
+    return
+        state.edits.empty()
+            ? 0u
+            : state.edits.back().result.editRevision
     ;
 }
 
@@ -3485,8 +3509,8 @@ void AccumulateSurfaceEditReplayResult(
     const DeformableSurfaceEditState& state,
     const DeformableSurfaceEditRedoEntry& redoEntry,
     DeformableSurfaceEditState& outRedoState,
-    DeformableSurfaceEditRedoResult& outResult)
-{
+    DeformableSurfaceEditRedoResult& outResult
+){
     outRedoState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditRedoResult{};
     if(
@@ -3520,8 +3544,8 @@ void AccumulateSurfaceEditReplayResult(
     const DeformableSurfaceEditState& state,
     const DeformableSurfaceEditId editId,
     DeformableSurfaceEditState& outHealedState,
-    DeformableSurfaceEditHealResult& outResult)
-{
+    DeformableSurfaceEditHealResult& outResult
+){
     outHealedState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditHealResult{};
     if(!ValidSurfaceEditState(state) || !ValidSurfaceEditId(editId))
@@ -3573,8 +3597,8 @@ template<typename MutateRecordFunc>
     const DeformableSurfaceEditState& state,
     DeformableSurfaceEditState& outMutatedState,
     DeformableSurfaceEditReplayResult& outReplayResult,
-    MutateRecordFunc&& mutateRecord)
-{
+    MutateRecordFunc&& mutateRecord
+){
     bool mutatedEditFound = false;
     bool replayDependsOnMutatedEdit = false;
     outMutatedState.edits.reserve(state.edits.size());
@@ -3622,8 +3646,8 @@ template<typename MutateRecordFunc>
     const f32 ellipseRatio,
     const f32 depth,
     DeformableSurfaceEditState& outResizedState,
-    DeformableSurfaceEditResizeResult& outResult)
-{
+    DeformableSurfaceEditResizeResult& outResult
+){
     outResizedState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditResizeResult{};
     if(
@@ -3668,8 +3692,8 @@ template<typename MutateRecordFunc>
     const DeformableSurfaceEditId editId,
     const DeformableSurfaceHoleEditRecord& moveTarget,
     DeformableSurfaceEditState& outMovedState,
-    DeformableSurfaceEditMoveResult& outResult)
-{
+    DeformableSurfaceEditMoveResult& outResult
+){
     outMovedState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditMoveResult{};
     if(
@@ -3717,8 +3741,8 @@ template<typename MutateRecordFunc>
     const f32 ellipseRatio,
     const f32 depth,
     DeformableSurfaceEditState& outPatchedState,
-    DeformableSurfaceEditPatchResult& outResult)
-{
+    DeformableSurfaceEditPatchResult& outResult
+){
     outPatchedState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditPatchResult{};
     if(
@@ -3772,8 +3796,8 @@ template<typename MutateRecordFunc>
     const DeformableSurfaceEditState& state,
     const DeformableSurfaceEditId editId,
     DeformableSurfaceEditState& outLoopCutState,
-    DeformableSurfaceEditLoopCutResult& outResult)
-{
+    DeformableSurfaceEditLoopCutResult& outResult
+){
     outLoopCutState = DeformableSurfaceEditState{};
     outResult = DeformableSurfaceEditLoopCutResult{};
     if(!ValidSurfaceEditState(state) || !ValidSurfaceEditId(editId))
@@ -3810,8 +3834,8 @@ template<typename MutateRecordFunc>
 [[nodiscard]] bool PrepareCleanReplayInstance(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
-    DeformableRuntimeMeshInstance& outReplayInstance)
-{
+    DeformableRuntimeMeshInstance& outReplayInstance
+){
     outReplayInstance = DeformableRuntimeMeshInstance{};
     if(
         cleanBaseInstance.editRevision != 0u
@@ -3843,8 +3867,8 @@ template<typename MutateRecordFunc>
 bool CommitDeformableRestSpaceHole(
     DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
-    DeformableHoleEditResult* outResult)
-{
+    DeformableHoleEditResult* outResult
+){
     return __hidden_deformable_surface_edit::CommitDeformableRestSpaceHoleImpl(instance, params, true, 0u, outResult);
 }
 
@@ -3856,8 +3880,8 @@ bool ApplySurfaceEditState(
     DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState& state,
     const DeformableSurfaceEditReplayContext& context,
-    DeformableSurfaceEditReplayResult* outResult)
-{
+    DeformableSurfaceEditReplayResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditReplayResult{};
 
@@ -3900,8 +3924,8 @@ bool UndoLastSurfaceEdit(
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
     DeformableSurfaceEditState& state,
     DeformableSurfaceEditUndoResult* outResult,
-    DeformableSurfaceEditHistory* history)
-{
+    DeformableSurfaceEditHistory* history
+){
     if(outResult)
         *outResult = DeformableSurfaceEditUndoResult{};
 
@@ -3944,8 +3968,8 @@ bool RedoLastSurfaceEdit(
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
     DeformableSurfaceEditState& state,
     DeformableSurfaceEditHistory& history,
-    DeformableSurfaceEditRedoResult* outResult)
-{
+    DeformableSurfaceEditRedoResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditRedoResult{};
     if(history.redoStack.empty())
@@ -3988,8 +4012,8 @@ bool HealSurfaceEdit(
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
     DeformableSurfaceEditState& state,
     const DeformableSurfaceEditId editId,
-    DeformableSurfaceEditHealResult* outResult)
-{
+    DeformableSurfaceEditHealResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditHealResult{};
 
@@ -4031,8 +4055,8 @@ bool ResizeSurfaceEdit(
     const f32 radius,
     const f32 ellipseRatio,
     const f32 depth,
-    DeformableSurfaceEditResizeResult* outResult)
-{
+    DeformableSurfaceEditResizeResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditResizeResult{};
 
@@ -4075,8 +4099,8 @@ bool MoveSurfaceEdit(
     DeformableSurfaceEditState& state,
     const DeformableSurfaceEditId editId,
     const DeformablePosedHit& targetHit,
-    DeformableSurfaceEditMoveResult* outResult)
-{
+    DeformableSurfaceEditMoveResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditMoveResult{};
 
@@ -4124,8 +4148,8 @@ bool PatchSurfaceEdit(
     const f32 radius,
     const f32 ellipseRatio,
     const f32 depth,
-    DeformableSurfaceEditPatchResult* outResult)
-{
+    DeformableSurfaceEditPatchResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditPatchResult{};
 
@@ -4172,8 +4196,8 @@ bool AddSurfaceEditLoopCut(
     const DeformableRuntimeMeshInstance& cleanBaseInstance,
     DeformableSurfaceEditState& state,
     const DeformableSurfaceEditId editId,
-    DeformableSurfaceEditLoopCutResult* outResult)
-{
+    DeformableSurfaceEditLoopCutResult* outResult
+){
     if(outResult)
         *outResult = DeformableSurfaceEditLoopCutResult{};
 

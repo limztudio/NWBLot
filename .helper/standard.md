@@ -1,6 +1,6 @@
 # NWBLot Inferred Code Standard
 
-Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).  
+Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).
 Updated: 2026-04-27
 
 ## 1. File and module structure
@@ -66,14 +66,28 @@ Updated: 2026-04-27
   - `if(condition)`
   - `    execute();`
 - Prefer single-line function calls, e.g. `foobar(a, b, c, d);`.
+- Prefer single-line logger macro calls when they contain a single message and a small number of short formatting arguments.
+- For longer logger macro calls with formatting arguments, keep the message argument on the opener line and put subsequent formatting arguments on continuation lines with leading commas:
+  - `NWB_LOGGER_WARNING(NWB_TEXT("message {}")`
+  - `    , arg0`
+  - `    , arg1`
+  - `);`
 - Split function arguments only when the line would exceed the long separator width (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) or when argument count is too high.
 - Prefer single-line function signatures/definitions when the parameter list is still readable. For signatures, treat the long-separator width as a soft readability cue, not a hard split point; do not split a short signature just because it is modestly long.
+- For multiline function definitions with a body, put the final parameter on its own line and attach `){` directly after it instead of placing `{` on a separate line.
 - When splitting calls, place the closing `)` on a new line:
   - `foobar(`
   - `    a,`
   - `    b,`
   - `);`
-- When a control-statement condition spans multiple lines, put `if(`, `for(`, or `while(` on its own line and start the first condition term on the next indented line. Put the outer closing parenthesis/parentheses on their own line:
+- For multiline guard clauses whose condition is a single negated function call, keep the control opener compact and put the single guard statement on the next line without braces:
+  - Correct:
+  - `if(!foobar(`
+  - `    aaa,`
+  - `    bbb`
+  - `))`
+  - `    return false;`
+- For other control-statement conditions spanning multiple lines, put `if(`, `for(`, or `while(` on its own line and start the first condition term on the next indented line. Put the outer closing parenthesis/parentheses on their own line:
   - Correct:
   - `if(`
   - `    !foobar(`
@@ -91,13 +105,6 @@ Updated: 2026-04-27
   - `    || !IsFinite(displacement.bias)`
   - `    || !IsFinite(displacement.uvScale.x)`
   - `)`
-  - Wrong:
-  - `if(!foobar(`
-  - `    aaa`
-  - `))`
-  - Wrong:
-  - `if(!foobar(`
-  - `    aaa))`
   - Wrong:
   - `if(`
   - `    xx`
@@ -145,19 +152,21 @@ Updated: 2026-04-27
   - `value = cond ?`
   - `    valueA : valueB`
   - `;`
-- For standalone multiline ternary statements, place the trailing `;` on its own line after the final branch expression:
+- For standalone multiline ternary statements, place `return` on its own line and place the trailing `;` on its own line after the final branch expression:
   - Correct:
-  - `return cond`
-  - `    ? valueA`
-  - `    : valueB`
+  - `return`
+  - `    cond`
+  - `        ? valueA`
+  - `        : valueB`
   - `;`
   - Wrong:
   - `return cond`
   - `    ? valueA`
   - `    : valueB;`
-- For standalone multiline `return` expressions, place the trailing `;` on its own line after the final expression term:
+- For standalone multiline `return` expressions, place `return` on its own line and place the trailing `;` on its own line after the final expression term:
   - Correct:
-  - `return aaa`
+  - `return`
+  - `    aaa`
   - `    && bbb`
   - `    && ccc`
   - `;`

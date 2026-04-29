@@ -191,8 +191,8 @@ template<usize N>
 static Core::Format::Enum SelectSupportedFormat(
     Core::IDevice& device,
     const Core::Format::Enum (&candidates)[N],
-    const Core::FormatSupport::Mask requiredSupport)
-{
+    const Core::FormatSupport::Mask requiredSupport
+){
     for(const Core::Format::Enum format : candidates){
         if(SupportsFormat(device, format, requiredSupport))
             return format;
@@ -419,7 +419,8 @@ static bool ParseMaterialParameterTypeText(
         return parseSuffix(baseName) || (!vectorName.empty() && parseSuffix(vectorName));
     };
 
-    return tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
+    return
+        tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
         || tryMatch(AStringView("int"), AStringView("ivec"), MaterialParameterValueType::Int)
         || tryMatch(AStringView("uint"), AStringView("uvec"), MaterialParameterValueType::UInt)
         || tryMatch(AStringView("bool"), AStringView("bvec"), MaterialParameterValueType::Bool)
@@ -573,8 +574,8 @@ static bool TryBuildMaterialParameterGpuData(
 static InstanceGpuData BuildInstanceGpuData(
     const Core::Scene::TransformComponent* transform,
     const u32 materialParameterOffset,
-    const u32 materialParameterCount)
-{
+    const u32 materialParameterCount
+){
     InstanceGpuData data;
     data.materialParameters.x = materialParameterOffset;
     data.materialParameters.y = materialParameterCount;
@@ -878,7 +879,8 @@ static bool EqualsAsciiTokenIgnoreCase(const AStringView text, const AStringView
 }
 
 static bool IsTransparentText(const AStringView text){
-    return EqualsAsciiTokenIgnoreCase(text, "transparent")
+    return
+        EqualsAsciiTokenIgnoreCase(text, "transparent")
         || EqualsAsciiTokenIgnoreCase(text, "translucent")
         || EqualsAsciiTokenIgnoreCase(text, "blend")
         || EqualsAsciiTokenIgnoreCase(text, "alpha")
@@ -1088,37 +1090,41 @@ void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
 }
 
 RuntimeMeshHandle RendererSystem::deformableRuntimeMeshHandle(const Core::ECS::EntityID entity)const{
-    return m_deformableRuntimeCache
-        ? m_deformableRuntimeCache->handleForEntity(entity)
-        : RuntimeMeshHandle{}
+    return
+        m_deformableRuntimeCache
+            ? m_deformableRuntimeCache->handleForEntity(entity)
+            : RuntimeMeshHandle{}
     ;
 }
 
 u32 RendererSystem::deformableRuntimeMeshEditRevision(const RuntimeMeshHandle handle)const{
-    return m_deformableRuntimeCache
-        ? m_deformableRuntimeCache->editRevision(handle)
-        : 0u
+    return
+        m_deformableRuntimeCache
+            ? m_deformableRuntimeCache->editRevision(handle)
+            : 0u
     ;
 }
 
 bool RendererSystem::bumpDeformableRuntimeMeshRevision(
     const RuntimeMeshHandle handle,
-    const RuntimeMeshDirtyFlags dirtyFlags)
-{
+    const RuntimeMeshDirtyFlags dirtyFlags
+){
     return m_deformableRuntimeCache && m_deformableRuntimeCache->bumpEditRevision(handle, dirtyFlags);
 }
 
 DeformableRuntimeMeshInstance* RendererSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle){
-    return m_deformableRuntimeCache
-        ? m_deformableRuntimeCache->findInstance(handle)
-        : nullptr
+    return
+        m_deformableRuntimeCache
+            ? m_deformableRuntimeCache->findInstance(handle)
+            : nullptr
     ;
 }
 
 const DeformableRuntimeMeshInstance* RendererSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle)const{
-    return m_deformableRuntimeCache
-        ? m_deformableRuntimeCache->findInstance(handle)
-        : nullptr
+    return
+        m_deformableRuntimeCache
+            ? m_deformableRuntimeCache->findInstance(handle)
+            : nullptr
     ;
 }
 
@@ -1527,26 +1533,22 @@ bool RendererSystem::ensureDeferredCompositeResources(){
     if(!__hidden_ecs_graphics::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
         return false;
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_deferredCompositeVertexShader,
         __hidden_ecs_graphics::DeferredCompositeVertexShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,
         "ECSGraphics_DeferredCompositeVS"
-        )
-    )
+    ))
         return false;
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_deferredCompositePixelShader,
         __hidden_ecs_graphics::DeferredCompositePixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_DeferredCompositePS"
-        )
-    )
+    ))
         return false;
 
     return true;
@@ -1675,59 +1677,49 @@ bool RendererSystem::ensureAvboitResources(){
         }
     }
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_avboitOccupancyPixelShader,
         __hidden_ecs_graphics::AvboitOccupancyPixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_AvboitOccupancyPS"
-        )
-    )
+    ))
         return false;
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_avboitDepthWarpComputeShader,
         __hidden_ecs_graphics::AvboitDepthWarpComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSGraphics_AvboitDepthWarpCS"
-        )
-    )
+    ))
         return false;
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_avboitExtinctionPixelShader,
         __hidden_ecs_graphics::AvboitExtinctionPixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_AvboitExtinctionPS"
-        )
-    )
+    ))
         return false;
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_avboitIntegrateComputeShader,
         __hidden_ecs_graphics::AvboitIntegrateComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSGraphics_AvboitIntegrateCS"
-        )
-    )
+    ))
         return false;
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_avboitAccumulatePixelShader,
         __hidden_ecs_graphics::AvboitAccumulatePixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSGraphics_AvboitAccumulatePS"
-        )
-    )
+    ))
         return false;
 
     return true;
@@ -2252,8 +2244,8 @@ void RendererSystem::invalidateGeometryBindingSets(){
 bool RendererSystem::findMaterialPassDrawItemResources(
     const MaterialPassDrawItem& drawItem,
     GeometryResources*& outGeometry,
-    MaterialPipelineResources*& outPipelineResources)
-{
+    MaterialPipelineResources*& outPipelineResources
+){
     outGeometry = nullptr;
     outPipelineResources = nullptr;
 
@@ -2522,17 +2514,11 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(Geometry::AssetTypeName(), geometryPath, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to load geometry '{}'"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load geometry '{}'"), StringConvert(geometryPath.c_str()));
         return false;
     }
     if(!loadedAsset || loadedAsset->assetType() != Geometry::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: asset '{}' is not geometry"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: asset '{}' is not geometry"), StringConvert(geometryPath.c_str()));
         return false;
     }
 
@@ -2544,19 +2530,15 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     const usize indexCount = geometry.indices().size();
     if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: geometry '{}' index count exceeds u32 limits"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' index count exceeds u32 limits"), StringConvert(geometryPath.c_str()));
         return false;
     }
 
     createdGeometry.indexCount = static_cast<u32>(indexCount);
     if(createdGeometry.indexCount == 0 || (createdGeometry.indexCount % 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: geometry '{}' index count {} is incompatible with triangle-based mesh rendering"),
-            StringConvert(geometryPath.c_str()),
-            createdGeometry.indexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' index count {} is incompatible with triangle-based mesh rendering")
+            , StringConvert(geometryPath.c_str())
+            , createdGeometry.indexCount
         );
         return false;
     }
@@ -2564,20 +2546,14 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
     createdGeometry.dispatchGroupCount = __hidden_ecs_graphics::ComputeDispatchGroupCount(createdGeometry.triangleCount);
     if(createdGeometry.dispatchGroupCount == 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"), StringConvert(geometryPath.c_str()));
         return false;
     }
 
     const Name shaderVertexBufferName = DeriveName(geometryPath, AStringView(":shader_vb"));
     const Name shaderIndexBufferName = DeriveName(geometryPath, AStringView(":shader_ib"));
     if(!shaderVertexBufferName || !shaderIndexBufferName){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to derive shader-driven buffer names for geometry '{}'"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shader-driven buffer names for geometry '{}'"), StringConvert(geometryPath.c_str()));
         return false;
     }
 
@@ -2591,19 +2567,13 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     shaderVertexSetup.dataSize = geometry.vertices().size() * sizeof(GeometryVertex);
     createdGeometry.shaderVertexBuffer = m_graphics.setupBuffer(shaderVertexSetup);
     if(!createdGeometry.shaderVertexBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to create shader vertex buffer for geometry '{}'"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shader vertex buffer for geometry '{}'"), StringConvert(geometryPath.c_str()));
         return false;
     }
 
     const usize expandedIndexCount = static_cast<usize>(createdGeometry.indexCount);
     if(expandedIndexCount > Limit<usize>::s_Max / sizeof(u32)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: geometry '{}' expanded index buffer size overflows"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' expanded index buffer size overflows"), StringConvert(geometryPath.c_str()));
         return false;
     }
     const usize expandedIndexBytes = expandedIndexCount * sizeof(u32);
@@ -2618,10 +2588,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     shaderIndexSetup.dataSize = expandedIndexBytes;
     createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
     if(!createdGeometry.shaderIndexBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to create shader index buffer for geometry '{}'"),
-            StringConvert(geometryPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shader index buffer for geometry '{}'"), StringConvert(geometryPath.c_str()));
         return false;
     }
 
@@ -2641,17 +2608,13 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
         instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: deformable runtime mesh '{}' exceeds renderer u32 limits"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh '{}' exceeds renderer u32 limits"), instance.handle.value);
         return false;
     }
     if((instance.indices.size() % 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: deformable runtime mesh '{}' has non-triangle index count {}"),
-            instance.handle.value,
-            instance.indices.size()
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh '{}' has non-triangle index count {}")
+            , instance.handle.value
+            , instance.indices.size()
         );
         return false;
     }
@@ -2663,10 +2626,7 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
     );
     const Name geometryKey = DeriveName(instance.source.name(), runtimeSuffix);
     if(!geometryKey){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to derive draw resource key for deformable runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive draw resource key for deformable runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -2687,10 +2647,7 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
     createdGeometry.runtimeMesh = instance.handle;
     createdGeometry.runtimeEditRevision = instance.editRevision;
     if(createdGeometry.dispatchGroupCount == 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: deformable runtime mesh '{}' produced no dispatch groups"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh '{}' produced no dispatch groups"), instance.handle.value);
         return false;
     }
 
@@ -2739,17 +2696,11 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to load material '{}'"),
-            StringConvert(materialPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load material '{}'"), StringConvert(materialPath.c_str()));
         return false;
     }
     if(!loadedAsset || loadedAsset->assetType() != Material::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: asset '{}' is not a material"),
-            StringConvert(materialPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: asset '{}' is not a material"), StringConvert(materialPath.c_str()));
         return false;
     }
 
@@ -2795,10 +2746,9 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         if(__hidden_ecs_graphics::ParseAlphaValue(alphaText.view(), parsedAlpha))
             createdInfo.alpha = parsedAlpha;
         else{
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("RendererSystem: material '{}' has invalid alpha '{}'; using 1.0"),
-                StringConvert(materialPath.c_str()),
-                StringConvert(alphaText.c_str())
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: material '{}' has invalid alpha '{}'; using 1.0")
+                , StringConvert(materialPath.c_str())
+                , StringConvert(alphaText.c_str())
             );
         }
     }
@@ -2859,15 +2809,13 @@ bool RendererSystem::ensureComputeEmulationResources(){
     }
 
     if(!m_emulationVertexShader){
-        if(
-            !ensureShaderLoaded(
+        if(!ensureShaderLoaded(
             m_emulationVertexShader,
             __hidden_ecs_graphics::MeshEmulationVertexShaderName(),
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
             "ECSGraphics_MeshEmulationVS"
-            )
-        )
+        ))
             return false;
     }
 
@@ -2967,21 +2915,15 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
     if(!ensureMeshShaderResources())
         return false;
     if(!m_instanceBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: mesh binding set requires an instance buffer")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires an instance buffer"));
         return false;
     }
     if(!m_meshViewBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: mesh binding set requires a mesh view buffer")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a mesh view buffer"));
         return false;
     }
     if(!m_materialParameterBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: mesh binding set requires a material parameter buffer")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a material parameter buffer"));
         return false;
     }
 
@@ -2995,10 +2937,7 @@ bool RendererSystem::ensureMeshBindingSet(GeometryResources& geometry){
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
     if(!geometry.meshBindingSet){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to create mesh shader binding set for geometry '{}'"),
-            StringConvert(geometry.geometryName.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for geometry '{}'"), StringConvert(geometry.geometryName.c_str()));
         return false;
     }
 
@@ -3011,30 +2950,23 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     if(!ensureComputeEmulationResources())
         return false;
     if(!m_instanceBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: compute binding set requires an instance buffer")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires an instance buffer"));
         return false;
     }
     if(!m_meshViewBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: compute binding set requires a mesh view buffer")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a mesh view buffer"));
         return false;
     }
     if(!m_materialParameterBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: compute binding set requires a material parameter buffer")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a material parameter buffer"));
         return false;
     }
 
     if(!geometry.emulationVertexBuffer){
         const Name emulationVertexBufferName = DeriveName(geometry.geometryName, AStringView(":emulation_vb"));
         if(!emulationVertexBufferName){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for geometry '{}'"),
-                StringConvert(geometry.geometryName.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for geometry '{}'")
+                , StringConvert(geometry.geometryName.c_str())
             );
             return false;
         }
@@ -3049,9 +2981,8 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
         ;
         geometry.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);
         if(!geometry.emulationVertexBuffer){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for geometry '{}'"),
-                StringConvert(geometry.geometryName.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for geometry '{}'")
+                , StringConvert(geometry.geometryName.c_str())
             );
             return false;
         }
@@ -3068,9 +2999,8 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);
     if(!geometry.computeBindingSet){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for geometry '{}'"),
-            StringConvert(geometry.geometryName.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for geometry '{}'")
+            , StringConvert(geometry.geometryName.c_str())
         );
         return false;
     }
@@ -3083,8 +3013,8 @@ bool RendererSystem::ensureRendererPipeline(
     const MaterialSurfaceInfo& materialInfo,
     const MaterialPipelineKey& pipelineKey,
     Core::IFramebuffer* framebuffer,
-    MaterialPipelineResources*& outResources)
-{
+    MaterialPipelineResources*& outResources
+){
     outResources = nullptr;
 
     if(!framebuffer)
@@ -3201,10 +3131,7 @@ bool RendererSystem::ensureRendererPipeline(
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"),
-                StringConvert(materialKey.c_str())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             return false;
         }
 
@@ -3220,18 +3147,15 @@ bool RendererSystem::ensureRendererPipeline(
         if(!ensureComputeEmulationResources())
             return false;
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::MeshComputeArchiveStageName();
-        if(
-            !ensureShaderLoaded(
-                resources.computeShader,
-                materialInfo.meshShader.name(),
-                shaderVariant,
-                Core::ShaderType::Compute,
-                "ECSGraphics_RendererCS",
-                &meshComputeArchiveStageName
-            )
-        ){
+        if(!ensureShaderLoaded(
+            resources.computeShader,
+            materialInfo.meshShader.name(),
+            shaderVariant,
+            Core::ShaderType::Compute,
+            "ECSGraphics_RendererCS",
+            &meshComputeArchiveStageName
+        ))
             return false;
-        }
         if(pass == MaterialPipelinePass::Opaque){
             if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
                 return false;
@@ -3247,10 +3171,7 @@ bool RendererSystem::ensureRendererPipeline(
         computeDesc.addBindingLayout(m_computeBindingLayout);
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"),
-                StringConvert(materialKey.c_str())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             return false;
         }
 
@@ -3279,10 +3200,7 @@ bool RendererSystem::ensureRendererPipeline(
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"),
-                StringConvert(materialKey.c_str())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             resources.computePipeline.reset();
             return false;
         }
@@ -3293,26 +3211,21 @@ bool RendererSystem::ensureRendererPipeline(
 
     const bool meshSupported = device->queryFeatureSupport(Core::Feature::Meshlets);
     if(pass == MaterialPipelinePass::Opaque && !hasPixelShader){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"),
-            StringConvert(materialKey.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();
     }
 
     if(!hasMeshShader){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: material '{}' requires a mesh shader; compute emulation is derived internally from that mesh shader"),
-            StringConvert(materialKey.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requires a mesh shader; compute emulation is derived internally from that mesh shader")
+            , StringConvert(materialKey.c_str())
         );
         return failMaterialPipeline();
     }
 
     if(meshSupported && hasMeshShader){
         if(!tryBuildMeshPipeline()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device"),
-                StringConvert(materialKey.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device")
+                , StringConvert(materialKey.c_str())
             );
             return failMaterialPipeline();
         }
@@ -3323,9 +3236,8 @@ bool RendererSystem::ensureRendererPipeline(
     }
 
     if(!tryBuildComputePipeline()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader"),
-            StringConvert(materialKey.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader")
+            , StringConvert(materialKey.c_str())
         );
         return failMaterialPipeline();
     }

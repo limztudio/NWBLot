@@ -63,8 +63,8 @@ static const Name& DeformerComputeShaderName(){
 static bool ResolveDeformerDisplacement(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableDisplacementComponent* component,
-    DeformableDisplacement& outDisplacement)
-{
+    DeformableDisplacement& outDisplacement
+){
     DeformableRuntime::DisplacementResolveFailure::Enum failure =
         DeformableRuntime::DisplacementResolveFailure::None
     ;
@@ -73,28 +73,16 @@ static bool ResolveDeformerDisplacement(
 
     switch(failure){
     case DeformableRuntime::DisplacementResolveFailure::Descriptor:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' has an invalid displacement descriptor"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' has an invalid displacement descriptor"), instance.handle.value);
         break;
     case DeformableRuntime::DisplacementResolveFailure::Scale:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' displacement amplitude scale is invalid"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' displacement amplitude scale is invalid"), instance.handle.value);
         break;
     case DeformableRuntime::DisplacementResolveFailure::Amplitude:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' effective displacement amplitude is invalid"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' effective displacement amplitude is invalid"), instance.handle.value);
         break;
     default:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' failed to resolve displacement"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' failed to resolve displacement"), instance.handle.value);
         break;
     }
     return false;
@@ -105,8 +93,8 @@ static bool HasPotentialDeformerWork(
     const DeformableMorphWeightsComponent* morphWeights,
     const DeformableJointPaletteComponent* jointPalette,
     const DeformableSkeletonPoseComponent* skeletonPose,
-    const DeformableDisplacementComponent* displacement)
-{
+    const DeformableDisplacementComponent* displacement
+){
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::DeformerInputDirty) != 0u)
         return true;
     if(DeformableRuntime::HasMorphWeights(morphWeights))
@@ -121,7 +109,8 @@ static bool HasPotentialDeformerWork(
     if(!ResolveDeformerDisplacement(instance, displacement, resolvedDisplacement))
         return false;
 
-    return resolvedDisplacement.mode != DeformableDisplacementMode::None
+    return
+        resolvedDisplacement.mode != DeformableDisplacementMode::None
         && DeformableValidation::ActiveWeight(resolvedDisplacement.amplitude)
     ;
 }
@@ -147,8 +136,8 @@ static Core::BufferHandle SetupStructuredBuffer(
     const Name& debugName,
     const PayloadT* payload,
     const usize count,
-    const tchar* label)
-{
+    const tchar* label
+){
     usize payloadBytes = 0;
     if(!BufferPayloadBytes(count, sizeof(PayloadT), payloadBytes, label))
         return {};
@@ -170,8 +159,8 @@ static Core::BufferHandle SetupStructuredBuffer(
     const u32 width,
     const u32 height,
     const Float4U* texels,
-    const usize texelCount)
-{
+    const usize texelCount
+){
     if(width == 0u || height == 0u || !texels || texelCount == 0u)
         return {};
     usize uploadBytes = 0u;
@@ -391,15 +380,13 @@ bool DeformerSystem::ensurePipeline(){
         }
     }
 
-    if(
-        !ensureShaderLoaded(
+    if(!ensureShaderLoaded(
         m_computeShader,
         __hidden_deformer_system::DeformerComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         Name("ECSGraphics_DeformerCS")
-        )
-    )
+    ))
         return false;
 
     if(m_computePipeline)
@@ -422,8 +409,8 @@ bool DeformerSystem::ensureShaderLoaded(
     const Name& shaderName,
     const AStringView variantName,
     const Core::ShaderType::Mask shaderType,
-    const Name& debugName)
-{
+    const Name& debugName
+){
     return ShaderAssetLoader::EnsureLoaded(
         outShader,
         shaderName,
@@ -443,8 +430,8 @@ bool DeformerSystem::dispatchRuntimeMesh(
     const DeformableMorphWeightsComponent* morphWeights,
     const DeformableJointPaletteComponent* jointPalette,
     const DeformableSkeletonPoseComponent* skeletonPose,
-    const DeformableDisplacementComponent* displacement)
-{
+    const DeformableDisplacementComponent* displacement
+){
     if(!DeformerMorphPayload::ValidateRuntimeMeshVertexCount(instance))
         return false;
 
@@ -471,10 +458,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
             Core::Alloc::ScratchAllocator<DeformableJointMatrix>(scratchArena)
         };
         if(!DeformableRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, resolvedSkinningMode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: runtime mesh '{}' skeleton pose is invalid"),
-                instance.handle.value
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
         if(
@@ -679,22 +663,16 @@ bool DeformerSystem::ensureRuntimeResources(
     const bool hasDisplacement,
     const usize morphSignature,
     RuntimeResources*& outResources,
-    bool& outResourcesRebuilt)
-{
+    bool& outResourcesRebuilt
+){
     outResources = nullptr;
     outResourcesRebuilt = false;
     if((payloadViews.morphRangeCount == 0u) != (payloadViews.morphDeltaCount == 0u)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' has mismatched morph range/delta payloads"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' has mismatched morph range/delta payloads"), instance.handle.value);
         return false;
     }
     if((payloadViews.skinInfluenceCount == 0u) != (payloadViews.jointPaletteCount == 0u)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' has mismatched skin influence/joint payloads"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' has mismatched skin influence/joint payloads"), instance.handle.value);
         return false;
     }
 
@@ -703,11 +681,10 @@ bool DeformerSystem::ensureRuntimeResources(
     if(!hasActiveMorphs && !hasActiveSkin && !hasDisplacement)
         return false;
     if(hasActiveMorphs && payloadViews.morphRangeCount != instance.restVertices.size()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' has {} morph ranges for {} vertices"),
-            instance.handle.value,
-            payloadViews.morphRangeCount,
-            instance.restVertices.size()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' has {} morph ranges for {} vertices")
+            , instance.handle.value
+            , payloadViews.morphRangeCount
+            , instance.restVertices.size()
         );
         return false;
     }
@@ -720,10 +697,7 @@ bool DeformerSystem::ensureRuntimeResources(
         (hasActiveMorphs && (!payloadViews.morphRanges || !payloadViews.morphDeltas))
         || (hasActiveSkin && (!payloadViews.skinInfluences || !payloadViews.jointPalette))
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' has null active deformer payloads"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' has null active deformer payloads"), instance.handle.value);
         return false;
     }
     if(!ensureDefaultDeformerBuffers() || !ensureDefaultDisplacementResources())
@@ -735,10 +709,7 @@ bool DeformerSystem::ensureRuntimeResources(
         || payloadViews.skinInfluenceCount > static_cast<usize>(Limit<u32>::s_Max)
         || payloadViews.jointPaletteCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' deformer payload exceeds u32 limits"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' deformer payload exceeds u32 limits"), instance.handle.value);
         return false;
     }
 
@@ -795,10 +766,7 @@ bool DeformerSystem::ensureRuntimeResources(
         (hasActiveMorphs && (!rangeBufferName || !deltaBufferName))
         || (hasActiveSkin && (!skinBufferName || !jointPaletteBufferName))
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to derive deformer buffer names for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to derive deformer buffer names for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -824,10 +792,7 @@ bool DeformerSystem::ensureRuntimeResources(
         : m_defaultMorphRangeBuffer
     ;
     if(!rebuilt.morphRangeBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to create morph range buffer for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create morph range buffer for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -842,10 +807,7 @@ bool DeformerSystem::ensureRuntimeResources(
         : m_defaultMorphDeltaBuffer
     ;
     if(!rebuilt.morphDeltaBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to create morph delta buffer for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create morph delta buffer for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -860,10 +822,7 @@ bool DeformerSystem::ensureRuntimeResources(
         : m_defaultSkinBuffer
     ;
     if(!rebuilt.skinBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to create skin buffer for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -878,19 +837,15 @@ bool DeformerSystem::ensureRuntimeResources(
         : m_defaultJointPaletteBuffer
     ;
     if(!rebuilt.jointPaletteBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to create joint palette buffer for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
     if(hasTextureDisplacement){
         if(!ensureDisplacementTexture(displacement, rebuilt.displacementTexture)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: failed to load displacement texture '{}' for runtime mesh '{}'"),
-                StringConvert(displacement.texture.name().c_str()),
-                instance.handle.value
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to load displacement texture '{}' for runtime mesh '{}'")
+                , StringConvert(displacement.texture.name().c_str())
+                , instance.handle.value
             );
             return false;
         }
@@ -899,10 +854,7 @@ bool DeformerSystem::ensureRuntimeResources(
         rebuilt.displacementTexture = m_defaultDisplacementTexture;
     }
     if(!rebuilt.displacementTexture){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to resolve displacement texture resource for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to resolve displacement texture resource for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -919,10 +871,7 @@ bool DeformerSystem::ensureRuntimeResources(
     Core::IDevice* device = m_graphics.getDevice();
     rebuilt.bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout);
     if(!rebuilt.bindingSet){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to create binding set for runtime mesh '{}'"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to create binding set for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 
@@ -1042,8 +991,8 @@ bool DeformerSystem::ensureDefaultDisplacementResources(){
 
 bool DeformerSystem::ensureDisplacementTexture(
     const DeformableDisplacement& displacement,
-    Core::TextureHandle& outTexture)
-{
+    Core::TextureHandle& outTexture
+){
     outTexture = nullptr;
     if(!DeformableDisplacementModeUsesTexture(displacement.mode)){
         outTexture = m_defaultDisplacementTexture;
@@ -1056,17 +1005,11 @@ bool DeformerSystem::ensureDisplacementTexture(
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(DeformableDisplacementTexture::AssetTypeName(), displacement.texture.name(), loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: failed to load displacement texture asset '{}'"),
-            StringConvert(displacement.texture.name().c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: failed to load displacement texture asset '{}'"), StringConvert(displacement.texture.name().c_str()));
         return false;
     }
     if(!loadedAsset || loadedAsset->assetType() != DeformableDisplacementTexture::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: asset '{}' is not a deformable displacement texture"),
-            StringConvert(displacement.texture.name().c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: asset '{}' is not a deformable displacement texture"), StringConvert(displacement.texture.name().c_str()));
         return false;
     }
 

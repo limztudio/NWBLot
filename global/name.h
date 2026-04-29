@@ -358,6 +358,8 @@ inline u64 UpdateFnv64U64(u64 hash, const u64 value){
     return hash;
 }
 
+inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
+
 
 };
 
@@ -368,15 +370,14 @@ template<typename CharT>
         return NAME_NONE;
 
     NameHash derivedHash = {};
-    static constexpr char s_DerivePrefix[] = "nwb/name/derive";
+    const NameHash& baseHash = baseName.hash();
+    const u64 derivePrefixHash = UpdateFnv64(
+        FNV64_OFFSET_BASIS,
+        reinterpret_cast<const u8*>(NameDetail::s_DerivePrefix),
+        sizeof(NameDetail::s_DerivePrefix) - 1u
+    );
     for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
-        u64 laneHash = UpdateFnv64(
-            FNV64_OFFSET_BASIS,
-            reinterpret_cast<const u8*>(s_DerivePrefix),
-            sizeof(s_DerivePrefix) - 1
-        );
-        laneHash = NameDetail::UpdateFnv64U64(laneHash, baseName.hash().qwords[lane]);
-        derivedHash.qwords[lane] = laneHash;
+        derivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(derivePrefixHash, baseHash.qwords[lane]);
     }
     if(!NameDetail::UpdateCanonicalNameHashText(derivedHash, suffix))
         return NAME_NONE;

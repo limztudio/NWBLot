@@ -84,17 +84,17 @@ void World::destroyEntityComponents(EntityID entityId){
     u32 nodeIndex = m_entityComponentHeads[index];
     m_entityComponentHeads[index] = s_InvalidEntityComponentNode;
     while(nodeIndex != s_InvalidEntityComponentNode){
-        const u32 nextNode = m_entityComponentNodes[nodeIndex].next;
-        auto itr = m_pools.find(m_entityComponentNodes[nodeIndex].typeId);
-        if(itr != m_pools.end())
-            itr.value()->remove(entityId);
+        EntityComponentNode& node = m_entityComponentNodes[nodeIndex];
+        const u32 nextNode = node.next;
+        NWB_ASSERT(node.pool);
+        node.pool->remove(entityId);
         releaseEntityComponentNode(nodeIndex);
         nodeIndex = nextNode;
     }
 }
 
 
-void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId){
+void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool){
     ensureEntityComponentHead(entityId);
 
     const usize index = static_cast<usize>(entityId.index());
@@ -104,7 +104,7 @@ void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId){
         NWB_ASSERT(m_entityComponentNodes[nodeIndex].typeId != typeId);
 #endif
 
-    headNode = acquireEntityComponentNode(typeId, headNode);
+    headNode = acquireEntityComponentNode(typeId, pool, headNode);
 }
 
 
@@ -134,18 +134,18 @@ void World::ensureEntityComponentHead(EntityID entityId){
 }
 
 
-u32 World::acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode){
+u32 World::acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& pool, u32 nextNode){
     if(m_freeEntityComponentNode != s_InvalidEntityComponentNode){
         const u32 nodeIndex = m_freeEntityComponentNode;
         EntityComponentNode& node = m_entityComponentNodes[nodeIndex];
         m_freeEntityComponentNode = node.next;
-        node = EntityComponentNode{ typeId, nextNode };
+        node = EntityComponentNode{ typeId, &pool, nextNode };
         return nodeIndex;
     }
 
     NWB_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
     const u32 nodeIndex = static_cast<u32>(m_entityComponentNodes.size());
-    m_entityComponentNodes.push_back(EntityComponentNode{ typeId, nextNode });
+    m_entityComponentNodes.push_back(EntityComponentNode{ typeId, &pool, nextNode });
     return nodeIndex;
 }
 

@@ -31,6 +31,7 @@ class World : NoCopy, public Alloc::ITaskScheduler{
 private:
     struct EntityComponentNode{
         ComponentTypeId typeId;
+        IComponentPool* pool;
         u32 next;
     };
 
@@ -164,7 +165,7 @@ private:
         NWB_ASSERT(m_entityManager.alive(entityId));
         auto* pool = assurePool<T>();
         T& component = pool->add(entityId, Forward<Args>(args)...);
-        addEntityComponentType(entityId, ComponentType<T>());
+        addEntityComponentType(entityId, ComponentType<T>(), *pool);
         return component;
     }
 
@@ -241,10 +242,10 @@ private:
     }
 
     void destroyEntityComponents(EntityID entityId);
-    void addEntityComponentType(EntityID entityId, ComponentTypeId typeId);
+    void addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IComponentPool& pool);
     void removeEntityComponentType(EntityID entityId, ComponentTypeId typeId);
     void ensureEntityComponentHead(EntityID entityId);
-    u32 acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode);
+    u32 acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& pool, u32 nextNode);
     void releaseEntityComponentNode(u32 nodeIndex);
 
 

@@ -70,15 +70,6 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static auto& componentAt(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize denseIndex, EntityID entityId){
-        auto* pool = Get<I>(pools);
-        if(I == anchorPoolIndex)
-            return pool->m_components[denseIndex];
-
-        return pool->get(entityId);
-    }
-
-    template<usize I, typename... Ts>
     static auto& componentAtDense(const Tuple<ComponentPool<Ts>*...>& pools, u32 denseIndex){
         return Get<I>(pools)->m_components[denseIndex];
     }
@@ -129,14 +120,6 @@ struct ViewIterator{
     template<usize... Is>
     bool resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>){
         return (ViewTupleAccess::findDenseIndex<Is>(pools, anchorPoolIndex, anchorDenseIndex, entityId, Get<Is>(denseIndices)) && ...);
-    }
-
-    bool allHave(EntityID entityId)const{
-        return allHaveImpl(entityId, IndexSequenceFor<Ts...>{});
-    }
-    template<usize... Is>
-    bool allHaveImpl(EntityID entityId, IndexSequence<Is...>)const{
-        return (ViewTupleAccess::hasComponent<Is>(pools, anchorPoolIndex, entityId) && ...);
     }
 
     EntityID entityAt(usize denseIndex)const{
@@ -266,20 +249,6 @@ private:
 
     EntityID entityAt(usize denseIndex)const{
         return ECSDetail::ViewTupleAccess::entityAt(m_pools, m_anchorPoolIndex, denseIndex);
-    }
-
-    bool allHave(EntityID entityId)const{
-        return allHaveImpl(entityId, ECSDetail::IndexSequenceFor<Ts...>{});
-    }
-
-    template<usize... Is>
-    bool allHaveImpl(EntityID entityId, ECSDetail::IndexSequence<Is...>)const{
-        return (ECSDetail::ViewTupleAccess::hasComponent<Is>(m_pools, m_anchorPoolIndex, entityId) && ...);
-    }
-
-    template<typename Func, usize... Is>
-    void applyFunc(Func& func, EntityID entityId, usize denseIndex, ECSDetail::IndexSequence<Is...>)const{
-        func(entityId, ECSDetail::ViewTupleAccess::componentAt<Is>(m_pools, m_anchorPoolIndex, denseIndex, entityId)...);
     }
 
     template<usize I = 0, typename Func, typename... Args>

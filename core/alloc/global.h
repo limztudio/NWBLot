@@ -73,8 +73,11 @@ constexpr inline usize Alignment(usize align, usize size){
     if(align <= 1)
         return size;
 
-    const usize padding = align - 1;
-    return AddSize(size, padding) & ~padding;
+    const usize remainder = size % align;
+    if(remainder == 0)
+        return size;
+
+    return AddSize(size, align - remainder);
 }
 
 

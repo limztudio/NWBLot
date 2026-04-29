@@ -1665,14 +1665,14 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> metadataBuffer(
-        static_cast<usize>(m_metadataBytes),
-        0,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> metadataBuffer{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    );
-    NWB_MEMCPY(metadataBuffer.data(), metadataBuffer.size(), &header, sizeof(header));
+    };
+    metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
+    AppendPOD(metadataBuffer, header);
     if(!indexBytes.empty())
-        NWB_MEMCPY(metadataBuffer.data() + sizeof(header), metadataBuffer.size() - sizeof(header), indexBytes.data(), indexBytes.size());
+        metadataBuffer.insert(metadataBuffer.end(), indexBytes.begin(), indexBytes.end());
+    metadataBuffer.resize(static_cast<usize>(m_metadataBytes), 0u);
 
     if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size()))
         return true;
@@ -1875,14 +1875,7 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     }
 
     const u64 requiredBytes = Max(m_nextFreeOffset, m_metadataBytes);
-    u64 requiredSegments = requiredBytes / m_segmentSize;
-    if((requiredBytes % m_segmentSize) != 0){
-        if(requiredSegments == Limit<u64>::s_Max){
-            __hidden_filesystem::LogFailure(m_volumeName, "trimSegments", "required segment count overflow");
-            return false;
-        }
-        ++requiredSegments;
-    }
+    u64 requiredSegments = DivideUp(requiredBytes, m_segmentSize);
     if(requiredSegments == 0)
         requiredSegments = 1;
     if(requiredSegments > static_cast<u64>(m_segmentPaths.size())){

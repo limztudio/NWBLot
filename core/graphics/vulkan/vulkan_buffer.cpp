@@ -206,12 +206,12 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     if(d.isVolatile){
         const u64 alignment = Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
-        if(size > static_cast<u64>(-1) - (alignment - 1)){
+        u64 alignedSize = 0;
+        if(!AlignUpU64Checked(size, alignment, alignedSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
             DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
         }
-        const u64 alignedSize = (size + alignment - 1) & ~(alignment - 1);
         if(alignedSize > static_cast<u64>(-1) / d.maxVersions){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
             DestroyArenaObject(m_context.objectArena, buffer);

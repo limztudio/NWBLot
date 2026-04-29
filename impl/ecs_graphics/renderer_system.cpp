@@ -939,7 +939,7 @@ static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::Avboit
     pushConstants.volume[0] = targets.virtualSliceCount;
     pushConstants.volume[1] = targets.physicalSliceCount;
     pushConstants.volume[2] = targets.lowWidth * targets.lowHeight * targets.physicalSliceCount;
-    pushConstants.volume[3] = (targets.virtualSliceCount + 31u) / 32u;
+    pushConstants.volume[3] = DivideUp(targets.virtualSliceCount, 32u);
     pushConstants.params = Float4(
         alpha,
         s_AvboitExtinctionFixedScale,
@@ -1322,7 +1322,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         return false;
     }
 
-    const u32 coverageWordCount = (avboitTargets.virtualSliceCount + 31u) / 32u;
+    const u32 coverageWordCount = DivideUp(avboitTargets.virtualSliceCount, 32u);
     const u64 coverageBytes = static_cast<u64>(coverageWordCount) * sizeof(u32);
     const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
     const u64 lowPixelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight;

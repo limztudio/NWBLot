@@ -103,12 +103,11 @@ bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleS
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group base alignment is invalid"), operation);
         return false;
     }
-    if(handleSize > Limit<u32>::s_Max - (handleAlignment - 1u)){
+    u32 handleSizeAligned = 0;
+    if(!AlignUpU32Checked(handleSize, handleAlignment, handleSizeAligned)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size alignment overflows"), operation);
         return false;
     }
-
-    const u32 handleSizeAligned = (handleSize + handleAlignment - 1u) & ~(handleAlignment - 1u);
     if(handleSizeAligned == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size is invalid"), operation);
         return false;

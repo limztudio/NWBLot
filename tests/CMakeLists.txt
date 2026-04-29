@@ -1,4 +1,4 @@
-add_subdirectory(common)
+add_subdirectory(global)
 add_subdirectory(math)
 add_subdirectory(geometry)
 add_subdirectory(ecs)

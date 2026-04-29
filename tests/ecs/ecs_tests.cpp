@@ -5,6 +5,7 @@
 #include <core/ecs/ecs.h>
 #include <core/common/common.h>
 
+#include <tests/ecs_test_world.h>
 #include <tests/test_context.h>
 
 #include <global/compile.h>

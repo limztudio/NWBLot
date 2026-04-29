@@ -81,16 +81,14 @@ struct ViewIterator{
     usize anchorPoolIndex;
     usize index;
     usize count;
-    bool valid;
 
     ViewIterator(ComponentTuple poolsValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)
         : pools(Move(poolsValue))
         , anchorPoolIndex(anchorPoolIndexValue)
         , index(indexValue)
         , count(countValue)
-        , valid(validValue)
     {
-        if(valid)
+        if(validValue)
             skipInvalid();
         else
             index = count;

@@ -50,15 +50,6 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static bool hasComponent(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, EntityID entityId){
-        if(I == anchorPoolIndex)
-            return true;
-
-        auto* pool = Get<I>(pools);
-        return pool != nullptr && pool->has(entityId);
-    }
-
-    template<usize I, typename... Ts>
     static bool findDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex){
         if(I == anchorPoolIndex){
             outDenseIndex = static_cast<u32>(anchorDenseIndex);

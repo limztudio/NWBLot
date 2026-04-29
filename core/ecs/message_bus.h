@@ -38,6 +38,7 @@ class MessageBus : NoCopy{
 private:
     class IMessageChannel;
     using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
+    using ChannelPointerAllocator = Alloc::CustomAllocator<IMessageChannel*>;
     using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, MessageChannelPtr>>;
     using ChannelMapLock = SharedMutex::scoped_lock;
 
@@ -168,6 +169,7 @@ public:
     explicit MessageBus(Alloc::CustomArena& arena)
         : m_arena(arena)
         , m_channels(0, Hasher<MessageTypeId>(), EqualTo<MessageTypeId>(), ChannelMapAllocator(arena))
+        , m_channelIterationScratch(ChannelPointerAllocator(arena))
     {}
     ~MessageBus() = default;
 
@@ -227,21 +229,18 @@ private:
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return;
 
-        Alloc::ScratchArena<> scratchArena(4096);
-        Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
-            Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
-        };
+        m_channelIterationScratch.clear();
 
         {
             ChannelMapLock lock(m_channelsMutex, false);
-            channels.reserve(m_channels.size());
+            m_channelIterationScratch.reserve(m_channels.size());
             for(auto& [typeId, channel] : m_channels){
                 static_cast<void>(typeId);
-                channels.push_back(channel.get());
+                m_channelIterationScratch.push_back(channel.get());
             }
         }
 
-        for(auto* channel : channels)
+        for(auto* channel : m_channelIterationScratch)
             func(channel);
     }
 
@@ -286,6 +285,7 @@ private:
     mutable SharedMutex m_channelsMutex;
     Atomic<bool> m_hasChannels{ false };
     ChannelMap m_channels;
+    Vector<IMessageChannel*, ChannelPointerAllocator> m_channelIterationScratch;
 };
 
 

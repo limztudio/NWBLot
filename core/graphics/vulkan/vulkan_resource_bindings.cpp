@@ -698,15 +698,15 @@ bool DescriptorHeapManager::tryEnablePipeline(
     outFlags2.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO;
     outFlags2.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
 
-    outStageMappings.resize(shaderStages.size());
+    outStageMappings.reserve(shaderStages.size());
     for(usize i = 0; i < shaderStages.size(); ++i){
         VkShaderDescriptorSetAndBindingMappingInfoEXT mappingInfo{};
         mappingInfo.sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT;
         mappingInfo.mappingCount = static_cast<u32>(outMappings.size());
         mappingInfo.pMappings = outMappings.data();
         mappingInfo.pNext = shaderStages[i].pNext;
-        outStageMappings[i] = mappingInfo;
-        shaderStages[i].pNext = &outStageMappings[i];
+        outStageMappings.push_back(mappingInfo);
+        shaderStages[i].pNext = &outStageMappings.back();
     }
 
     return true;

@@ -142,19 +142,17 @@ template<typename CharT = char, typename PathT>
 
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> BuildSafeCacheName(const BasicStringView<CharT> text){
-    BasicString<CharT> output;
-    output.resize(text.size());
+    if(text.empty())
+        return BasicString<CharT>();
 
-    for(usize i = 0; i < text.size(); ++i){
-        const CharT ch = text[i];
+    BasicString<CharT> output(text.data(), text.size());
+    for(CharT& ch : output){
         const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z'))
             || (ch >= CharT('0') && ch <= CharT('9'));
         const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
 
-        if(alphaNum || safePunctuation)
-            output[i] = ch;
-        else
-            output[i] = CharT('_');
+        if(!alphaNum && !safePunctuation)
+            ch = CharT('_');
     }
 
     return output;
@@ -200,11 +198,11 @@ inline void CanonicalizeTextInPlace(BasicString<CharT>& inOutText){
 
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> CanonicalizeText(const BasicStringView<CharT> text){
-    BasicString<CharT> output;
-    output.resize(text.size());
-    for(usize i = 0; i < text.size(); ++i)
-        output[i] = Canonicalize(text[i]);
+    if(text.empty())
+        return BasicString<CharT>();
 
+    BasicString<CharT> output(text.data(), text.size());
+    CanonicalizeTextInPlace(output);
     return output;
 }
 template<typename CharT>
@@ -214,19 +212,18 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline BasicString<CharT> BuildCanonicalSafeCacheName(const BasicStringView<CharT> text){
-    BasicString<CharT> output;
-    output.resize(text.size());
+    if(text.empty())
+        return BasicString<CharT>();
 
-    for(usize i = 0; i < text.size(); ++i){
-        const CharT ch = Canonicalize(text[i]);
+    BasicString<CharT> output(text.data(), text.size());
+    for(CharT& ch : output){
+        ch = Canonicalize(ch);
         const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z'))
             || (ch >= CharT('0') && ch <= CharT('9'));
         const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
 
-        if(alphaNum || safePunctuation)
-            output[i] = ch;
-        else
-            output[i] = CharT('_');
+        if(!alphaNum && !safePunctuation)
+            ch = CharT('_');
     }
 
     return output;

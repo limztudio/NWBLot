@@ -354,10 +354,7 @@ static bool TryFindShaderForStage(const Material& material, const Core::ShaderTy
 }
 
 static u32 ComputeDispatchGroupCount(const u32 triangleCount){
-    return triangleCount == 0
-        ? 0
-        : 1u + ((triangleCount - 1u) / s_TrianglesPerWorkgroup)
-    ;
+    return DivideUp(triangleCount, s_TrianglesPerWorkgroup);
 }
 
 static usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity){
@@ -965,10 +962,7 @@ static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
 }
 
 static u32 DispatchGroupCount1D(const u32 itemCount, const u32 groupSize){
-    return itemCount == 0 || groupSize == 0
-        ? 0
-        : ((itemCount - 1u) / groupSize) + 1u
-    ;
+    return DivideUp(itemCount, groupSize);
 }
 
 
@@ -1231,13 +1225,13 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;
-    const u64 lowWidth = Max(
-        1ull,
-        (static_cast<u64>(createdTargets.width) + __hidden_ecs_graphics::s_AvboitDownsample - 1ull) / __hidden_ecs_graphics::s_AvboitDownsample
+    const u64 lowWidth = Max<u64>(
+        1u,
+        DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(__hidden_ecs_graphics::s_AvboitDownsample))
     );
-    const u64 lowHeight = Max(
-        1ull,
-        (static_cast<u64>(createdTargets.height) + __hidden_ecs_graphics::s_AvboitDownsample - 1ull) / __hidden_ecs_graphics::s_AvboitDownsample
+    const u64 lowHeight = Max<u64>(
+        1u,
+        DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(__hidden_ecs_graphics::s_AvboitDownsample))
     );
     if(lowWidth > Limit<u32>::s_Max || lowHeight > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));

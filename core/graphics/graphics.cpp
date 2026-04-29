@@ -52,8 +52,8 @@ static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc,
     const u32 height = Max<u32>(1u, textureDesc.height >> desc.mipLevel);
     const u32 depth = Max<u32>(1u, textureDesc.depth >> desc.mipLevel);
 
-    const u64 blockCountX = (static_cast<u64>(width) + formatBlockWidth - 1u) / formatBlockWidth;
-    const u64 blockCountY = (static_cast<u64>(height) + formatBlockHeight - 1u) / formatBlockHeight;
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(formatBlockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(formatBlockHeight));
     if(blockCountX > Limit<u64>::s_Max / formatInfo.bytesPerBlock)
         return false;
 

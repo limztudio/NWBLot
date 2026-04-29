@@ -127,10 +127,7 @@ static bool HasPotentialDeformerWork(
 }
 
 static u32 DispatchGroupCount(const u32 vertexCount){
-    return vertexCount == 0
-        ? 0
-        : ((vertexCount - 1u) / s_DeformerGroupSize) + 1u
-    ;
+    return DivideUp(vertexCount, s_DeformerGroupSize);
 }
 
 static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){

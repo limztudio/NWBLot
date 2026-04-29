@@ -310,7 +310,7 @@ public:
             return;
         }
 
-        const usize maxChunks = 1 + ((count - 1) / effectiveGrainSize);
+        const usize maxChunks = DivideUp(count, effectiveGrainSize);
         const usize totalThreads = static_cast<usize>(m_threadCount) + 1;
         runParallelForChunks(begin, end, count, computeChunkCount(maxChunks, totalThreads), func);
     }

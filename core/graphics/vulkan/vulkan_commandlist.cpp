@@ -246,8 +246,8 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
         return;
     }
 
-    const u64 blocksX = Max<u64>((static_cast<u64>(resolvedSrc.width) + formatBlockWidth - 1u) / formatBlockWidth, 1ull);
-    const u64 blocksY = Max<u64>((static_cast<u64>(resolvedSrc.height) + formatBlockHeight - 1u) / formatBlockHeight, 1ull);
+    const u64 blocksX = Max<u64>(DivideUp(static_cast<u64>(resolvedSrc.width), static_cast<u64>(formatBlockWidth)), 1ull);
+    const u64 blocksY = Max<u64>(DivideUp(static_cast<u64>(resolvedSrc.height), static_cast<u64>(formatBlockHeight)), 1ull);
     if(blocksX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));

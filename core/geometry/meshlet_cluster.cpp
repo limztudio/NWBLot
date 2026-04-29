@@ -271,7 +271,7 @@ bool BuildMeshlets(
     };
 
     const usize triangleCount = indices.size() / 3u;
-    const usize meshletCountReserve = (triangleCount + static_cast<usize>(config.maxTriangles) - 1u) / config.maxTriangles;
+    const usize meshletCountReserve = DivideUp(triangleCount, static_cast<usize>(config.maxTriangles));
     outMeshlets.reserve(meshletCountReserve);
     outVertexIndices.reserve(indices.size());
     outLocalIndices.reserve(indices.size());

@@ -504,7 +504,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         if(divisor == 0)
             return false;
 
-        outValue = value == 0 ? 0 : 1u + ((value - 1u) / divisor);
+        outValue = DivideUp(value, divisor);
         return true;
     };
     auto addTileCount = [](const u32 startTileIndex, const u32 widthInTiles, const u32 heightInTiles, const u32 depthInTiles, u32& outNextTileIndex){

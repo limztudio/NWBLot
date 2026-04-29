@@ -52,6 +52,13 @@ constexpr T AlignUp(const T value, const T alignment){
 }
 
 template<typename T>
+constexpr T DivideUp(const T value, const T divisor){
+    if(value == 0 || divisor == 0)
+        return 0;
+    return static_cast<T>(1) + ((value - static_cast<T>(1)) / divisor);
+}
+
+template<typename T>
 constexpr bool AlignUpChecked(const T value, const T alignment, T& outValue){
     if(alignment == 0){
         outValue = value;

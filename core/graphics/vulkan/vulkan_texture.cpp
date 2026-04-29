@@ -915,8 +915,8 @@ void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLe
         return;
     }
 
-    const u64 blockCountX = (static_cast<u64>(width) + formatBlockWidth - 1u) / formatBlockWidth;
-    const u64 blockCountY = (static_cast<u64>(height) + formatBlockHeight - 1u) / formatBlockHeight;
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(formatBlockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(formatBlockHeight));
     if(blockCountX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: natural row pitch overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: natural row pitch overflows"));

@@ -213,7 +213,7 @@ inline void CopyHostMemory(
     if(workerPool.isParallelEnabled() && size >= effectiveParallelThreshold){
         auto* dstBytes = static_cast<u8*>(dst);
         auto* srcBytes = static_cast<const u8*>(src);
-        const usize chunkCount = 1 + ((size - 1) / effectiveChunkSize);
+        const usize chunkCount = DivideUp(size, effectiveChunkSize);
         workerPool.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);

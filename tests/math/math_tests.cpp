@@ -35,14 +35,16 @@ static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.0000
 }
 
 static bool NearlyEqual3(SIMDVector value, const f32 x, const f32 y, const f32 z){
-    return NearlyEqual(VectorGetX(value), x)
+    return
+        NearlyEqual(VectorGetX(value), x)
         && NearlyEqual(VectorGetY(value), y)
         && NearlyEqual(VectorGetZ(value), z)
     ;
 }
 
 static bool NearlyEqual4(SIMDVector value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = 0.00001f){
-    return NearlyEqual(VectorGetX(value), x, epsilon)
+    return
+        NearlyEqual(VectorGetX(value), x, epsilon)
         && NearlyEqual(VectorGetY(value), y, epsilon)
         && NearlyEqual(VectorGetZ(value), z, epsilon)
         && NearlyEqual(VectorGetW(value), w, epsilon)

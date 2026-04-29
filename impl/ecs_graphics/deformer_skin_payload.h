@@ -32,47 +32,41 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     const SourceJointVector& sourceJoints,
     const u32 skinningMode,
     SkinInfluenceVector& outSkinInfluences,
-    JointPaletteVector& outJointPalette)
-{
+    JointPaletteVector& outJointPalette){
     outSkinInfluences.clear();
     outJointPalette.clear();
 
     if(instance.skin.empty() || sourceJoints.empty())
         return true;
     if(!ValidDeformableSkinningMode(skinningMode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' skinning mode {} is invalid"),
-            instance.handle.value,
-            skinningMode
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' skinning mode {} is invalid")
+            , instance.handle.value
+            , skinningMode
         );
         return false;
     }
     if(instance.skin.size() != instance.restVertices.size()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' skin count does not match vertex count"),
-            instance.handle.value
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' skin count does not match vertex count")
+            , instance.handle.value
         );
         return false;
     }
     if(instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' has skin but no skeleton joint count"),
-            instance.handle.value
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' has skin but no skeleton joint count")
+            , instance.handle.value
         );
         return false;
     }
     if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits"),
-            instance.handle.value,
-            instance.skeletonJointCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
+            , instance.handle.value
+            , instance.skeletonJointCount
         );
         return false;
     }
     if(!DeformableValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' inverse bind matrices are invalid"),
-            instance.handle.value
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' inverse bind matrices are invalid")
+            , instance.handle.value
         );
         return false;
     }
@@ -80,10 +74,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
         || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformerSystem: runtime mesh '{}' skin payload exceeds u32 limits"),
-            instance.handle.value
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' skin payload exceeds u32 limits"), instance.handle.value);
         return false;
     }
 
@@ -103,18 +94,16 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
                 jointMatrix
             )
         ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix"),
-                instance.handle.value,
-                jointIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix")
+                , instance.handle.value
+                , jointIndex
             );
             return false;
         }
         if(useDualQuaternionPayload && !DeformableRuntime::IsRigidJointMatrix(jointMatrix)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not rigid for dual-quaternion skinning"),
-                instance.handle.value,
-                jointIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} is not rigid for dual-quaternion skinning")
+                , instance.handle.value
+                , jointIndex
             );
             return false;
         }
@@ -122,10 +111,9 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             SIMDVector real = QuaternionIdentity();
             SIMDVector dual = VectorZero();
             if(!DeformableRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build"),
-                    instance.handle.value,
-                    jointIndex
+                NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
+                    , instance.handle.value
+                    , jointIndex
                 );
                 return false;
             }
@@ -139,10 +127,9 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
         if(!DeformableValidation::ValidSkinInfluence(sourceSkin)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} has invalid skin weights"),
-                instance.handle.value,
-                vertexIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} has invalid skin weights")
+                , instance.handle.value
+                , vertexIndex
             );
             return false;
         }
@@ -155,12 +142,11 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
                 failedSkeletonJoint
             )
         ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside skeleton joint count {}"),
-                instance.handle.value,
-                vertexIndex,
-                failedSkeletonJoint,
-                instance.skeletonJointCount
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside skeleton joint count {}")
+                , instance.handle.value
+                , vertexIndex
+                , failedSkeletonJoint
+                , instance.skeletonJointCount
             );
             return false;
         }
@@ -170,12 +156,11 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
             if(DeformableValidation::ActiveWeight(weight) && joint >= jointCount){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}"),
-                    instance.handle.value,
-                    vertexIndex,
-                    joint,
-                    jointCount
+                NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}")
+                    , instance.handle.value
+                    , vertexIndex
+                    , joint
+                    , jointCount
                 );
                 return false;
             }
@@ -198,8 +183,7 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
     const DeformableRuntimeMeshInstance& instance,
     const DeformableJointPaletteComponent* jointPalette,
     SkinInfluenceVector& outSkinInfluences,
-    JointPaletteVector& outJointPalette)
-{
+    JointPaletteVector& outJointPalette){
     outSkinInfluences.clear();
     outJointPalette.clear();
 

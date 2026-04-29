@@ -247,7 +247,8 @@ namespace CommonDetail{
 template<typename T>
 [[nodiscard]] inline bool CommandLineIsWordChar(const T ch){
     static_assert(IsSame_V<T, char> || IsSame_V<T, wchar>, "Command line parsing supports char and wchar strings");
-    return (ch >= T('a') && ch <= T('z'))
+    return
+        (ch >= T('a') && ch <= T('z'))
         || (ch >= T('A') && ch <= T('Z'))
         || (ch >= T('0') && ch <= T('9'))
         || ch == T('_')
@@ -257,7 +258,8 @@ template<typename T>
 template<typename T>
 [[nodiscard]] inline bool CommandLineIsSpace(const T ch){
     static_assert(IsSame_V<T, char> || IsSame_V<T, wchar>, "Command line parsing supports char and wchar strings");
-    return ch == T(' ')
+    return
+        ch == T(' ')
         || ch == T('\t')
         || ch == T('\n')
         || ch == T('\r')

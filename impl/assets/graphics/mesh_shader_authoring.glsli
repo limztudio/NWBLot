@@ -134,9 +134,10 @@ uint nwbMeshSourceVertexLayout(){
 }
 
 uint nwbMeshRemainingTriangles(){
-    return nwbMeshTriangleCount() > nwbMeshBaseTriangle()
-        ? (nwbMeshTriangleCount() - nwbMeshBaseTriangle())
-        : 0u
+    return
+        nwbMeshTriangleCount() > nwbMeshBaseTriangle()
+            ? (nwbMeshTriangleCount() - nwbMeshBaseTriangle())
+            : 0u
     ;
 }
 
@@ -322,7 +323,8 @@ bool nwbMeshAllOutsideClipPlane(const vec4 a, const vec4 b, const vec4 c){
 }
 
 bool nwbMeshInsideClipVolume(const vec4 p){
-    return p.w > 0.0
+    return
+        p.w > 0.0
         && p.x >= -p.w
         && p.x <= p.w
         && p.y >= -p.w
@@ -357,7 +359,8 @@ bool nwbMeshAllOutsideScissor(const vec4 a, const vec4 b, const vec4 c){
     const vec2 triMax = max(p0, max(p1, p2));
     const vec4 scissorRect = g_NwbMeshPushConstants.scissorRect;
 
-    return triMax.x < scissorRect.x
+    return
+        triMax.x < scissorRect.x
         || triMin.x > scissorRect.z
         || triMax.y < scissorRect.y
         || triMin.y > scissorRect.w

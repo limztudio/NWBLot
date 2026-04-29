@@ -91,12 +91,11 @@ static bool ValidateBufferSetupUpload(const Graphics::BufferSetupDesc& desc){
         return false;
     }
     if(desc.destOffsetBytes > desc.bufferDesc.byteSize || static_cast<u64>(desc.dataSize) > desc.bufferDesc.byteSize - desc.destOffsetBytes){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}"),
-            StringConvert(desc.bufferDesc.debugName.c_str()),
-            desc.destOffsetBytes,
-            static_cast<u64>(desc.dataSize),
-            desc.bufferDesc.byteSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}")
+            , StringConvert(desc.bufferDesc.debugName.c_str())
+            , desc.destOffsetBytes
+            , static_cast<u64>(desc.dataSize)
+            , desc.bufferDesc.byteSize
         );
         return false;
     }
@@ -118,11 +117,10 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
         return false;
     }
     if(desc.uploadDataSize < requiredBytes){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Graphics: failed to set up texture '{}': upload data size {} is smaller than required size {}"),
-            StringConvert(desc.textureDesc.name.c_str()),
-            desc.uploadDataSize,
-            requiredBytes
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': upload data size {} is smaller than required size {}")
+            , StringConvert(desc.textureDesc.name.c_str())
+            , desc.uploadDataSize
+            , requiredBytes
         );
         return false;
     }

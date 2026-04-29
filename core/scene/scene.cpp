@@ -32,7 +32,8 @@ namespace __hidden_scene{
     const SIMDVector rotation = LoadFloat(transform.rotation);
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
-    return SceneFloat3Finite(transform.position)
+    return
+        SceneFloat3Finite(transform.position)
         && !QuaternionIsNaN(rotation)
         && !QuaternionIsInfinite(rotation)
         && SceneFloat3Finite(transform.scale)
@@ -105,9 +106,10 @@ SceneCameraView ResolveSceneCameraView(ECS::World& world, const f32 fallbackAspe
         }
     }
 
-    return requestedCamera.valid()
-        ? requestedCamera
-        : fallbackCamera
+    return
+        requestedCamera.valid()
+            ? requestedCamera
+            : fallbackCamera
     ;
 }
 

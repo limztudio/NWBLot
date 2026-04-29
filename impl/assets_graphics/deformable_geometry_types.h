@@ -152,7 +152,8 @@ static constexpr DeformableEditMaskFlags s_DeformableEditMaskKnownFlags =
 }
 
 [[nodiscard]] inline bool DeformableEditMaskAllowsCommit(const DeformableEditMaskFlags flags){
-    return ValidDeformableEditMaskFlags(flags)
+    return
+        ValidDeformableEditMaskFlags(flags)
         && (flags & DeformableEditMaskFlag::Forbidden) == 0u
     ;
 }
@@ -174,7 +175,8 @@ namespace DeformableDisplacementMode{
 };
 
 [[nodiscard]] inline bool DeformableDisplacementModeUsesTexture(const u32 mode){
-    return mode == DeformableDisplacementMode::ScalarTexture
+    return
+        mode == DeformableDisplacementMode::ScalarTexture
         || mode == DeformableDisplacementMode::VectorTangentTexture
         || mode == DeformableDisplacementMode::VectorObjectTexture
     ;
@@ -203,7 +205,8 @@ static_assert(IsTriviallyCopyable_V<DeformableDisplacement>, "DeformableDisplace
         return false;
 
     if(displacement.mode == DeformableDisplacementMode::None){
-        return displacement.amplitude == 0.0f
+        return
+            displacement.amplitude == 0.0f
             && displacement.bias == 0.0f
             && !displacement.texture.valid()
         ;

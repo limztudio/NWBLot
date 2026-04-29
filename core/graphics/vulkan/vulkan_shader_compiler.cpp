@@ -252,27 +252,27 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
     );
 
     if(result.GetCompilationStatus() != shaderc_compilation_status_success){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}"),
-            StringConvert(request.shaderName),
-            StringConvert(request.variantName),
-            StringConvert(result.GetErrorMessage())
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}")
+            , StringConvert(request.shaderName)
+            , StringConvert(request.variantName)
+            , StringConvert(result.GetErrorMessage())
         );
         return false;
     }
 
     const usize spirvWordCount = static_cast<usize>(result.cend() - result.cbegin());
     if(spirvWordCount > Limit<usize>::s_Max / sizeof(u32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : bytecode size overflows"),
-            StringConvert(request.shaderName),
-            StringConvert(request.variantName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : bytecode size overflows")
+            , StringConvert(request.shaderName)
+            , StringConvert(request.variantName)
         );
         return false;
     }
     const usize spirvSize = spirvWordCount * sizeof(u32);
     if(spirvSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty"),
-            StringConvert(request.shaderName),
-            StringConvert(request.variantName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode is empty")
+            , StringConvert(request.shaderName)
+            , StringConvert(request.variantName)
         );
         return false;
     }

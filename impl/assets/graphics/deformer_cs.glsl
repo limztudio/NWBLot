@@ -144,14 +144,16 @@ vec3 nwbDeformerSafeNormalize(const vec3 value, const vec3 fallback){
         return fallback;
 
     const float lengthSquared = dot(value, value);
-    return nwbDeformerFiniteFloat(lengthSquared) && lengthSquared > 0.00000001
-        ? value * inversesqrt(lengthSquared)
-        : fallback
+    return
+        nwbDeformerFiniteFloat(lengthSquared) && lengthSquared > 0.00000001
+            ? value * inversesqrt(lengthSquared)
+            : fallback
     ;
 }
 
 bool nwbDeformerValidFrameDirection(const vec3 value){
-    return nwbDeformerFiniteVec3(value)
+    return
+        nwbDeformerFiniteVec3(value)
         && dot(value, value) > 0.00000001
     ;
 }

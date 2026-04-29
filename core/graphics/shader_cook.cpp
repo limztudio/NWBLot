@@ -57,7 +57,8 @@ namespace IncludeDirectiveKind{
 };
 
 static bool IsIncludeDirectiveBoundary(const AStringView line, const usize cursor){
-    return cursor >= line.size()
+    return
+        cursor >= line.size()
         || IsAsciiSpace(line[cursor])
         || line[cursor] == '"'
         || line[cursor] == '<'
@@ -940,17 +941,13 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
         errorCode.clear();
         if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Failed to read dependency file '{}' : {}"),
-                    PathToString<tchar>(item.path),
-                    StringConvert(errorCode.message())
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}")
+                    , PathToString<tchar>(item.path)
+                    , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Failed to read dependency file '{}'"),
-                    PathToString<tchar>(item.path)
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(item.path));
             }
             return false;
         }

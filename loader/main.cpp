@@ -222,9 +222,8 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
             Vector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords;
             if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
-                NWB_LOGGER_FATAL(
-                    NWB_TEXT("Failed to load shader archive index '{}'"),
-                    StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
+                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
+                    , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
                 );
                 return -1;
             }

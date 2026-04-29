@@ -59,9 +59,10 @@ public:
 
 public:
     [[nodiscard]] bool assign(const char* text){
-        return text == nullptr
-            ? clearAndReturn(true)
-            : assign(AStringView(text))
+        return
+            text == nullptr
+                ? clearAndReturn(true)
+                : assign(AStringView(text))
         ;
     }
 
@@ -89,9 +90,10 @@ public:
     }
 
     [[nodiscard]] bool append(const char* text){
-        return text == nullptr
-            ? true
-            : append(AStringView(text))
+        return
+            text == nullptr
+                ? true
+                : append(AStringView(text))
         ;
     }
 

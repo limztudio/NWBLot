@@ -111,7 +111,8 @@ private:
         u32 runtimeEditRevision = 0;
 
         [[nodiscard]] bool valid()const noexcept{
-            return geometryName != NAME_NONE
+            return
+                geometryName != NAME_NONE
                 && shaderVertexBuffer != nullptr
                 && shaderIndexBuffer != nullptr
                 && indexCount > 0
@@ -190,7 +191,8 @@ public:
         Core::BindingSetHandle accumulateBindingSet;
 
         [[nodiscard]] bool valid()const noexcept{
-            return fullWidth > 0
+            return
+                fullWidth > 0
                 && fullHeight > 0
                 && lowWidth > 0
                 && lowHeight > 0
@@ -240,7 +242,8 @@ private:
         AvboitFrameTargets avboit;
 
         [[nodiscard]] bool valid()const noexcept{
-            return width > 0
+            return
+                width > 0
                 && height > 0
                 && albedoFormat != Core::Format::UNKNOWN
                 && depthFormat != Core::Format::UNKNOWN

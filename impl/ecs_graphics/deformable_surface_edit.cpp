@@ -3129,8 +3129,7 @@ namespace __hidden_deformable_surface_edit{
             const SIMDVector normal,
             const SIMDVector tangent,
             const Float2U& uv0,
-            u32& outVertex)
-        {
+            u32& outVertex){
             if(!newSourceSamples.empty())
                 newSourceSamples[plannedVertex.sourceVertex] = wallSourceSample;
 

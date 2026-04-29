@@ -294,11 +294,10 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
     const u64 requiredSize = depthBytes + rowBytes + naturalRowPitch;
     const BufferDesc& destDesc = dest->getDescription();
     if(destOffsetBytes > destDesc.byteSize || requiredSize > destDesc.byteSize - destOffsetBytes){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination offset {} size {} is outside buffer size {}"),
-            destOffsetBytes,
-            requiredSize,
-            destDesc.byteSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination offset {} size {} is outside buffer size {}")
+            , destOffsetBytes
+            , requiredSize
+            , destDesc.byteSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range is outside the buffer"));
         return;

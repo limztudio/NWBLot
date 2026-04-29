@@ -38,9 +38,8 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     const auto found = m_codecs.find(typeName);
     if(found != m_codecs.end()){
         if(!replaceExisting){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("AssetRegistry: codec for type '{}' is already registered"),
-                StringConvert(typeName.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: codec for type '{}' is already registered")
+                , StringConvert(typeName.c_str())
             );
             return false;
         }

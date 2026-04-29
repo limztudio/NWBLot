@@ -253,9 +253,8 @@ static bool AppendUniquePropertyAssetEntry(EntryT& entry, PathHashSetT& seenPath
 
     const NameHash pathHash = entry.virtualPath.hash();
     if(!seenPathHashes.insert(pathHash).second){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: duplicate property asset virtual path '{}'"),
-            StringConvert(entry.virtualPath.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate property asset virtual path '{}'")
+            , StringConvert(entry.virtualPath.c_str())
         );
         return false;
     }
@@ -298,10 +297,7 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
     outPaths.repoRoot = environment.repoRoot.empty() ? Path(".") : environment.repoRoot;
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: failed to resolve repo root: {}"),
-            StringConvert(errorCode.message())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
         return false;
     }
 
@@ -311,16 +307,14 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(assetRoot), resolvedAssetRoot, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: failed to resolve asset root '{}': {}"),
-                    PathToString<tchar>(assetRoot),
-                    StringConvert(errorCode.message())
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve asset root '{}': {}")
+                    , PathToString<tchar>(assetRoot)
+                    , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: asset root is empty or invalid: '{}'"),
-                    PathToString<tchar>(assetRoot)
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: asset root is empty or invalid: '{}'")
+                    , PathToString<tchar>(assetRoot)
                 );
             }
             return false;
@@ -331,16 +325,14 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
     errorCode.clear();
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(environment.outputDirectory), outPaths.outputDirectory, errorCode)){
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to resolve output directory '{}': {}"),
-                PathToString<tchar>(environment.outputDirectory),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve output directory '{}': {}")
+                , PathToString<tchar>(environment.outputDirectory)
+                , StringConvert(errorCode.message())
             );
         }
         else{
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: output directory is empty or invalid: '{}'"),
-                PathToString<tchar>(environment.outputDirectory)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: output directory is empty or invalid: '{}'")
+                , PathToString<tchar>(environment.outputDirectory)
             );
         }
         return false;
@@ -354,26 +346,23 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
     errorCode.clear();
     if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(requestedCacheDirectory), outPaths.cacheDirectory, errorCode)){
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to resolve cache directory '{}': {}"),
-                PathToString<tchar>(requestedCacheDirectory),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve cache directory '{}': {}")
+                , PathToString<tchar>(requestedCacheDirectory)
+                , StringConvert(errorCode.message())
             );
         }
         else{
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: cache directory is empty or invalid: '{}'"),
-                PathToString<tchar>(requestedCacheDirectory)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: cache directory is empty or invalid: '{}'")
+                , PathToString<tchar>(requestedCacheDirectory)
             );
         }
         return false;
     }
 
     if(!EnsureDirectories(outPaths.cacheDirectory, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}"),
-            PathToString<tchar>(outPaths.cacheDirectory),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}")
+            , PathToString<tchar>(outPaths.cacheDirectory)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -402,27 +391,24 @@ static bool DiscoverNwbFiles(const Core::ShaderCook::CookVector<Path>& assetRoot
         errorCode.clear();
         if(!IsDirectory(assetRoot, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: failed to query asset root '{}': {}"),
-                    PathToString<tchar>(assetRoot),
-                    StringConvert(errorCode.message())
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query asset root '{}': {}")
+                    , PathToString<tchar>(assetRoot)
+                    , StringConvert(errorCode.message())
                 );
                 return false;
             }
 
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: asset root is not a directory: '{}'"),
-                PathToString<tchar>(assetRoot)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: asset root is not a directory: '{}'")
+                , PathToString<tchar>(assetRoot)
             );
             return false;
         }
 
         for(const auto& dirEntry : RecursiveDirectoryIterator(assetRoot, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: error scanning asset root '{}': {}"),
-                    PathToString<tchar>(assetRoot),
-                    StringConvert(errorCode.message())
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: error scanning asset root '{}': {}")
+                    , PathToString<tchar>(assetRoot)
+                    , StringConvert(errorCode.message())
                 );
                 return false;
             }
@@ -430,11 +416,10 @@ static bool DiscoverNwbFiles(const Core::ShaderCook::CookVector<Path>& assetRoot
             errorCode.clear();
             const bool isRegularFile = dirEntry.is_regular_file(errorCode);
             if(errorCode){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: failed to inspect '{}' while scanning '{}': {}"),
-                    PathToString<tchar>(dirEntry.path()),
-                    PathToString<tchar>(assetRoot),
-                    StringConvert(errorCode.message())
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to inspect '{}' while scanning '{}': {}")
+                    , PathToString<tchar>(dirEntry.path())
+                    , PathToString<tchar>(assetRoot)
+                    , StringConvert(errorCode.message())
                 );
                 return false;
             }
@@ -490,10 +475,9 @@ static bool ParseVariantField(
         usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
         for(usize i = 0; i < list.size(); ++i){
             if(!list[i].isString()){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Material meta '{}': field '{}' list elements must be strings"),
-                    PathToString<tchar>(nwbFilePath),
-                    StringConvert(fieldName)
+                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' list elements must be strings")
+                    , PathToString<tchar>(nwbFilePath)
+                    , StringConvert(fieldName)
                 );
                 return false;
             }
@@ -513,10 +497,9 @@ static bool ParseVariantField(
         rawVariant.assign(variantText.data(), variantText.size());
     }
     else{
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Material meta '{}': field '{}' must be a string or list of strings"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string or list of strings")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
         );
         return false;
     }
@@ -533,11 +516,10 @@ static bool ParseVariantField(
 
     AString canonicalVariant;
     if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName),
-            StringConvert(rawVariantView)
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+            , StringConvert(rawVariantView)
         );
         return false;
     }
@@ -567,10 +549,9 @@ static bool ParseMaterialStageShaders(
     for(const auto& [stageKey, shaderValue] : shadersValue->asMap()){
         const AStringView stageKeyText(stageKey.data(), stageKey.size());
         if(!shaderValue.isString()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material meta '{}': shader '{}' must be a string"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(stageKeyText)
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader '{}' must be a string")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(stageKeyText)
             );
             return false;
         }
@@ -584,19 +565,17 @@ static bool ParseMaterialStageShaders(
             return false;
         }
         if(!IsSupportedRendererMaterialShaderStage(stageName)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(stageKeyText)
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(stageKeyText)
             );
             return false;
         }
 
         if(!outStageShaders.emplace(stageName, shaderAsset).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material meta '{}': duplicate shader stage '{}'"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(stageKeyText)
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate shader stage '{}'")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(stageKeyText)
             );
             return false;
         }
@@ -629,10 +608,9 @@ static bool ParseMaterialParameters(
     for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
         const AStringView paramKeyText(paramKey.data(), paramKey.size());
         if(!paramValue.isString()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material meta '{}': parameter '{}' must be a string"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(paramKeyText)
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a string")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(paramKeyText)
             );
             return false;
         }
@@ -641,10 +619,9 @@ static bool ParseMaterialParameters(
         CompactString value;
         const AStringView paramValueText(paramValue.asString().data(), paramValue.asString().size());
         if(!key.assign(paramKeyText) || !value.assign(paramValueText)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material meta '{}': parameter '{}' exceeds CompactString capacity"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(paramKeyText)
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' exceeds CompactString capacity")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(paramKeyText)
             );
             return false;
         }
@@ -654,10 +631,9 @@ static bool ParseMaterialParameters(
         }
 
         if(!outParameters.emplace(key, value).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material meta '{}': duplicate parameter '{}'"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(key.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate parameter '{}'")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(key.c_str())
             );
             return false;
         }
@@ -741,17 +717,15 @@ static const Core::Metascript::Value* FindRequiredMetadataListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const tchar* metaKind,
-    const AStringView fieldName)
-{
+    const AStringView fieldName){
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(field && field->isList())
         return field;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("{} meta '{}': '{}' must be a list"),
-        metaKind,
-        PathToString<tchar>(nwbFilePath),
-        StringConvert(fieldName)
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list")
+        , metaKind
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(fieldName)
     );
     return nullptr;
 }
@@ -764,31 +738,28 @@ static bool ParseMetadataFiniteF32Value(
     f32& outValue
 ){
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' must contain only numeric values"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
     if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
@@ -806,12 +777,11 @@ static bool ParseMetadataF32Tuple(
     f32 (&outValues)[ComponentCount]
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' must be a {}-component list"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label),
-            ComponentCount
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+            , ComponentCount
         );
         return false;
     }
@@ -858,11 +828,10 @@ static bool ParseMetadataFloatListField(
     }
 
     if(outValues.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' must not be empty"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
         );
         return false;
     }
@@ -878,31 +847,28 @@ static bool ParseMetadataU32Value(
     u32& outValue
 ){
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' must contain only integer values"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
     if(numericValue > static_cast<f64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
@@ -921,10 +887,9 @@ static bool ParseMetadataIndexType(
 
     const Core::Metascript::Value* indexType = FindField(asset, "index_type");
     if(!indexType || !indexType->isString()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': 'index_type' must be 'u16' or 'u32'"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'index_type' must be 'u16' or 'u32'")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -939,11 +904,10 @@ static bool ParseMetadataIndexType(
         return true;
     }
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("{} meta '{}': unsupported index_type '{}'"),
-        metaKind,
-        PathToString<tchar>(nwbFilePath),
-        StringConvert(indexTypeText)
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported index_type '{}'")
+        , metaKind
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(indexTypeText)
     );
     return false;
 }
@@ -971,11 +935,10 @@ static bool AppendMetadataIndexRecursive(
     if(!ParseMetadataU32Value(nwbFilePath, value, metaKind, label, index))
         return false;
     if(!use32BitIndices && index > Limit<u16>::s_Max){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u16 index_type"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u16 index_type")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
@@ -1000,10 +963,9 @@ static bool ParseMetadataIndexField(
 
     usize indexCount = 0u;
     if(!CountFlattenedValueLeaves(*field, indexCount)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': 'indices' scalar count overflows"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' scalar count overflows")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1012,11 +974,7 @@ static bool ParseMetadataIndexField(
     if(!AppendMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices))
         return false;
     if(outIndices.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{} meta '{}': 'indices' must not be empty"),
-            metaKind,
-            PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
     }
     return true;
@@ -1036,10 +994,7 @@ static bool BuildGeometryVertices(
     Vector<GeometryVertex>& outVertices
 ){
     if(positions.size() != normals.size() || positions.size() != colors.size()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Geometry meta '{}': vertex stream counts must match"),
-            PathToString<tchar>(nwbFilePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex stream counts must match"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -1064,9 +1019,8 @@ static bool RejectUnsupportedGeometryFields(const DiscoveredNwbFile& discoveredF
     )
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("Geometry meta '{}': unsupported geometry fields are present; define positions, normals, optional colors, index_type, and indices"),
-        PathToString<tchar>(discoveredFile.filePath)
+    NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': unsupported geometry fields are present; define positions, normals, optional colors, index_type, and indices")
+        , PathToString<tchar>(discoveredFile.filePath)
     );
     return false;
 }
@@ -1135,10 +1089,9 @@ static bool ParseU16Value(const Path& nwbFilePath, const Core::Metascript::Value
     if(!ParseU32Value(nwbFilePath, value, label, parsed))
         return false;
     if(parsed > Limit<u16>::s_Max){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
@@ -1150,8 +1103,7 @@ static bool ParseU16Value(const Path& nwbFilePath, const Core::Metascript::Value
 static const Core::Metascript::Value* FindRequiredListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
-    const AStringView fieldName)
-{
+    const AStringView fieldName){
     return FindRequiredMetadataListField(nwbFilePath, map, s_DeformableGeometryMetaKind, fieldName);
 }
 
@@ -1173,11 +1125,10 @@ static bool ParseU16Tuple(
     u16 (&outValues)[ComponentCount]
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component integer list"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label),
-            ComponentCount
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component integer list")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+            , ComponentCount
         );
         return false;
     }
@@ -1237,8 +1188,7 @@ static bool ParseOptionalFloatListField(
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
     ElementVectorT& outValues,
-    bool& outProvided)
-{
+    bool& outProvided){
     outValues.clear();
     outProvided = false;
 
@@ -1279,9 +1229,8 @@ static bool BuildDeformableRestVertices(
         || positions.size() != uv0.size()
         || positions.size() != colors.size()
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': rest vertex stream counts must match"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': rest vertex stream counts must match")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1305,16 +1254,14 @@ static bool GenerateMissingDeformableFrames(
     const bool normalsProvided,
     const bool tangentsProvided,
     Vector<DeformableVertexRest>& vertices,
-    const Vector<u32>& indices)
-{
+    const Vector<u32>& indices){
     if(normalsProvided && tangentsProvided)
         return true;
 
     Core::Geometry::TangentFrameRebuildResult rebuildResult;
     if(!DeformableValidation::RebuildRestVertexTangentFrames(vertices, indices, &rebuildResult)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': failed to generate missing normal/tangent frames"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': failed to generate missing normal/tangent frames")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1330,10 +1277,9 @@ static bool NormalizeSkinInfluenceWeights(
     for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
         const f32 weight = influence.weight[influenceIndex];
         if(!IsFinite(weight) || weight < 0.0f){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': '{}' weights must be finite and non-negative"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(label)
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' weights must be finite and non-negative")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(label)
             );
             return false;
         }
@@ -1341,10 +1287,9 @@ static bool NormalizeSkinInfluenceWeights(
     }
 
     if(!IsFinite(weightSum) || weightSum <= DeformableValidation::s_Epsilon){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' weights must contain a positive total"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' weights must contain a positive total")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
@@ -1354,10 +1299,9 @@ static bool NormalizeSkinInfluenceWeights(
         weight *= inverseWeightSum;
 
     if(!DeformableValidation::ValidSkinInfluence(influence)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' weights failed normalization"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' weights failed normalization")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
         );
         return false;
     }
@@ -1388,18 +1332,16 @@ static bool ParseSkinInfluences(
     const Core::Metascript::Value* joints = FindField(*skin, "joints0");
     const Core::Metascript::Value* weights = FindField(*skin, "weights0");
     if(!joints || !joints->isList() || !weights || !weights->isList()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': 'skin' requires 'joints0' and 'weights0' lists"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'skin' requires 'joints0' and 'weights0' lists")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
     const auto& jointList = joints->asList();
     const auto& weightList = weights->asList();
     if(jointList.size() != vertexCount || weightList.size() != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': skin streams must match vertex count"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': skin streams must match vertex count")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1435,24 +1377,21 @@ static bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const u32 skeletonJointCount,
-    Vector<DeformableJointMatrix>& outMatrices)
-{
+    Vector<DeformableJointMatrix>& outMatrices){
     outMatrices.clear();
 
     const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
     if(!matrices || IsExplicitEmptyOptionalField(*matrices))
         return true;
     if(!matrices->isList()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': 'inverse_bind_matrices' must be a list"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'inverse_bind_matrices' must be a list")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
     if(skeletonJointCount == 0u || matrices->asList().size() != skeletonJointCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': inverse bind matrix count must match skeleton_joint_count"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse bind matrix count must match skeleton_joint_count")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1462,10 +1401,9 @@ static bool ParseInverseBindMatrices(
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
         const Core::Metascript::Value& matrixValue = matrixList[matrixIndex];
         if(!matrixValue.isList() || matrixValue.asList().size() != 4u){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] must contain four columns"),
-                PathToString<tchar>(nwbFilePath),
-                matrixIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] must contain four columns")
+                , PathToString<tchar>(nwbFilePath)
+                , matrixIndex
             );
             return false;
         }
@@ -1495,10 +1433,9 @@ static bool ParseInverseBindMatrices(
         matrix.rows[3] = Float4(column[0u], column[1u], column[2u], column[3u]);
 
         if(!DeformableValidation::ValidAffineJointMatrix(matrix)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix"),
-                PathToString<tchar>(nwbFilePath),
-                matrixIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
+                , PathToString<tchar>(nwbFilePath)
+                , matrixIndex
             );
             return false;
         }
@@ -1525,9 +1462,8 @@ static bool ParseSourceSamples(
         if(IsExplicitEmptyOptionalField(*sourceSamples))
             return true;
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': 'source_samples' must be a map"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'source_samples' must be a map")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1542,9 +1478,8 @@ static bool ParseSourceSamples(
     if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, *sourceSamples, "bary", bary))
         return false;
     if(sourceTri.size() != vertexCount || bary.size() != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': source samples must match vertex count"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': source samples must match vertex count")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1566,20 +1501,17 @@ static bool GenerateIdentitySourceSamples(
     const Path& nwbFilePath,
     const Vector<u32>& indices,
     const usize vertexCount,
-    Vector<SourceSample>& outSourceSamples)
-{
+    Vector<SourceSample>& outSourceSamples){
     outSourceSamples.clear();
     if(vertexCount == 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid vertex count"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid vertex count")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
     if(indices.empty() || (indices.size() % 3u) != 0u || (indices.size() / 3u) > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid indices"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid indices")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1596,11 +1528,10 @@ static bool GenerateIdentitySourceSamples(
         for(u32 cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
             const u32 vertexIndex = indices[indexBase + cornerIndex];
             if(vertexIndex >= vertexCount){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Deformable geometry meta '{}': source sample generation found vertex index {} outside vertex count {}"),
-                    PathToString<tchar>(nwbFilePath),
-                    vertexIndex,
-                    vertexCount
+                NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': source sample generation found vertex index {} outside vertex count {}")
+                    , PathToString<tchar>(nwbFilePath)
+                    , vertexIndex
+                    , vertexCount
                 );
                 return false;
             }
@@ -1619,10 +1550,9 @@ static bool GenerateIdentitySourceSamples(
         if(assigned[vertexIndex] != 0u)
             continue;
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': cannot generate source sample for unreferenced vertex {}"),
-            PathToString<tchar>(nwbFilePath),
-            vertexIndex
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': cannot generate source sample for unreferenced vertex {}")
+            , PathToString<tchar>(nwbFilePath)
+            , vertexIndex
         );
         return false;
     }
@@ -1634,8 +1564,7 @@ static bool ParseEditMasks(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const usize triangleCount,
-    Vector<DeformableEditMaskFlags>& outEditMaskPerTriangle)
-{
+    Vector<DeformableEditMaskFlags>& outEditMaskPerTriangle){
     outEditMaskPerTriangle.clear();
 
     const Core::Metascript::Value* editMasks = FindField(asset, "edit_masks");
@@ -1649,9 +1578,8 @@ static bool ParseEditMasks(
     if(!ParseU32ListField(nwbFilePath, asset, "edit_masks", parsedFlags))
         return false;
     if(parsedFlags.size() != triangleCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': edit mask count must match triangle count"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit mask count must match triangle count")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1659,20 +1587,18 @@ static bool ParseEditMasks(
     outEditMaskPerTriangle.reserve(parsedFlags.size());
     for(usize i = 0; i < parsedFlags.size(); ++i){
         if(parsedFlags[i] > Limit<DeformableEditMaskFlags>::s_Max){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] exceeds u8"),
-                PathToString<tchar>(nwbFilePath),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] exceeds u8")
+                , PathToString<tchar>(nwbFilePath)
+                , i
             );
             return false;
         }
 
         const DeformableEditMaskFlags flags = static_cast<DeformableEditMaskFlags>(parsedFlags[i]);
         if(!ValidDeformableEditMaskFlags(flags)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] is invalid"),
-                PathToString<tchar>(nwbFilePath),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] is invalid")
+                , PathToString<tchar>(nwbFilePath)
+                , i
             );
             return false;
         }
@@ -1685,16 +1611,14 @@ static bool ParseRequiredStringField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const AStringView fieldName,
-    AString& outText)
-{
+    AString& outText){
     outText.clear();
 
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(!field || !field->isString()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must be a string"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' must be a string")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
         );
         return false;
     }
@@ -1703,10 +1627,9 @@ static bool ParseRequiredStringField(
     outText.assign(text.data(), text.size());
     CanonicalizeTextInPlace(outText);
     if(outText.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(fieldName)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
         );
         return false;
     }
@@ -1717,8 +1640,7 @@ static bool ParseOptionalFiniteF32Field(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const AStringView fieldName,
-    f32& outValue)
-{
+    f32& outValue){
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(!field)
         return true;
@@ -1730,8 +1652,7 @@ static bool ParseOptionalFloat2Field(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const AStringView fieldName,
-    Float2U& outValue)
-{
+    Float2U& outValue){
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(!field)
         return true;
@@ -1748,8 +1669,7 @@ static bool ParseDisplacement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     DeformableDisplacement& outDisplacement,
-    CompactString& outTexturePathText)
-{
+    CompactString& outTexturePathText){
     outDisplacement = DeformableDisplacement{};
     outTexturePathText.clear();
 
@@ -1760,9 +1680,8 @@ static bool ParseDisplacement(
         if(IsExplicitEmptyOptionalField(*displacement))
             return true;
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': 'displacement' must be a map"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'displacement' must be a map")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1796,9 +1715,8 @@ static bool ParseDisplacement(
     }
 
     if(field != "texture"){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': displacement field must be 'uv_ramp' or 'texture'"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': displacement field must be 'uv_ramp' or 'texture'")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1809,9 +1727,8 @@ static bool ParseDisplacement(
 
     outDisplacement.texture.virtualPath = ToName(texturePath);
     if(!outTexturePathText.assign(texturePath)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': displacement texture path exceeds CompactString capacity"),
-            PathToString<tchar>(nwbFilePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': displacement texture path exceeds CompactString capacity")
+            , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
@@ -1822,11 +1739,10 @@ static bool ParseDisplacement(
     else if(space == "object" && mode == "vector")
         outDisplacement.mode = DeformableDisplacementMode::VectorObjectTexture;
     else{
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': unsupported displacement texture space='{}' mode='{}'"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(space),
-            StringConvert(mode)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': unsupported displacement texture space='{}' mode='{}'")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(space)
+            , StringConvert(mode)
         );
         return false;
     }
@@ -1858,17 +1774,15 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         const AStringView morphNameView(morphName.data(), morphName.size());
         const Name morphNameId = ToName(morphNameView);
         if(!morphNameId){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': morph names must not be empty"),
-                PathToString<tchar>(nwbFilePath)
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph names must not be empty")
+                , PathToString<tchar>(nwbFilePath)
             );
             return false;
         }
         if(!morphValue.isMap()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': morph '{}' must be a map"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(morphNameView)
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' must be a map")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(morphNameView)
             );
             return false;
         }
@@ -1880,10 +1794,9 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, morphValue, "delta_normal", deltaNormals))
             return false;
         if(!FindField(morphValue, "delta_tangent")){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': morph '{}' requires 'delta_tangent' list"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(morphNameView)
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' requires 'delta_tangent' list")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(morphNameView)
             );
             return false;
         }
@@ -1895,10 +1808,9 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
             || vertexIds.size() != deltaNormals.size()
             || vertexIds.size() != deltaTangents.size()
         ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': morph '{}' stream counts must match and must not be empty"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(morphNameView)
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' stream counts must match and must not be empty")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(morphNameView)
             );
             return false;
         }
@@ -1906,10 +1818,9 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         DeformableMorph morph;
         morph.name = morphNameId;
         if(!morph.nameText.assign(morphNameView)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Deformable geometry meta '{}': morph '{}' exceeds CompactString capacity"),
-                PathToString<tchar>(nwbFilePath),
-                StringConvert(morphNameView)
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' exceeds CompactString capacity")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(morphNameView)
             );
             return false;
         }
@@ -1932,9 +1843,8 @@ static bool RejectDeformableGeometrySourceField(const DiscoveredNwbFile& discove
     if(!FindField(asset, "source"))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("Deformable geometry meta '{}': external 'source' imports are not supported; use an offline converter to emit native .nwb streams"),
-        PathToString<tchar>(discoveredFile.filePath)
+    NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': external 'source' imports are not supported; use an offline converter to emit native .nwb streams")
+        , PathToString<tchar>(discoveredFile.filePath)
     );
     return false;
 }
@@ -1948,9 +1858,8 @@ static bool ParseDeformableGeometryMeta(
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable geometry meta '{}': asset is not a map"),
-            PathToString<tchar>(discoveredFile.filePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': asset is not a map")
+            , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
     }
@@ -2082,9 +1991,8 @@ static bool ParseDeformableDisplacementTextureMeta(
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable displacement texture meta '{}': asset is not a map"),
-            PathToString<tchar>(discoveredFile.filePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable displacement texture meta '{}': asset is not a map")
+            , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
     }
@@ -2110,16 +2018,14 @@ static bool ParseDeformableDisplacementTextureMeta(
     if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "texels", outEntry.texels))
         return false;
     if(outEntry.width == 0u || outEntry.height == 0u || outEntry.width > Limit<u32>::s_Max / outEntry.height){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable displacement texture meta '{}': dimensions are invalid"),
-            PathToString<tchar>(discoveredFile.filePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable displacement texture meta '{}': dimensions are invalid")
+            , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
     }
     if(outEntry.texels.size() != static_cast<usize>(outEntry.width) * static_cast<usize>(outEntry.height)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Deformable displacement texture meta '{}': texel count must match width * height"),
-            PathToString<tchar>(discoveredFile.filePath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable displacement texture meta '{}': texel count must match width * height")
+            , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
     }
@@ -2162,10 +2068,9 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
         Path includeDirectory;
         if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory)){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: failed to resolve virtual include root '{}' for entry '{}'"),
-                    StringConvert(includeRoot),
-                    StringConvert(entry.name)
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve virtual include root '{}' for entry '{}'")
+                    , StringConvert(includeRoot)
+                    , StringConvert(entry.name)
                 );
                 return false;
             }
@@ -2173,18 +2078,16 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
             errorCode.clear();
             if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
                 if(errorCode){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("GraphicsAssetCooker: failed to resolve include root '{}' for entry '{}': {}"),
-                        StringConvert(includeRoot),
-                        StringConvert(entry.name),
-                        StringConvert(errorCode.message())
+                    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve include root '{}' for entry '{}': {}")
+                        , StringConvert(includeRoot)
+                        , StringConvert(entry.name)
+                        , StringConvert(errorCode.message())
                     );
                 }
                 else{
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("GraphicsAssetCooker: include root '{}' is empty or invalid for entry '{}'"),
-                        StringConvert(includeRoot),
-                        StringConvert(entry.name)
+                    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: include root '{}' is empty or invalid for entry '{}'")
+                        , StringConvert(includeRoot)
+                        , StringConvert(entry.name)
                     );
                 }
                 return false;
@@ -2194,19 +2097,17 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
         errorCode.clear();
         const bool isDirectory = IsDirectory(includeDirectory, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to query include root '{}' for entry '{}': {}"),
-                PathToString<tchar>(includeDirectory),
-                StringConvert(entry.name),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query include root '{}' for entry '{}': {}")
+                , PathToString<tchar>(includeDirectory)
+                , StringConvert(entry.name)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
         if(!isDirectory){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: include root is not a directory for entry '{}': '{}'"),
-                StringConvert(entry.name),
-                PathToString<tchar>(includeDirectory)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: include root is not a directory for entry '{}': '{}'")
+                , StringConvert(entry.name)
+                , PathToString<tchar>(includeDirectory)
             );
             return false;
         }
@@ -2228,18 +2129,14 @@ static bool CountShaderVariants(const Core::ShaderCook::ShaderEntry& entry, u64&
     for(const auto& [defineName, defineEntry] : entry.defineValues){
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: entry '{}' has define '{}' with no values"),
-                StringConvert(entry.name),
-                StringConvert(defineName)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has define '{}' with no values")
+                , StringConvert(entry.name)
+                , StringConvert(defineName)
             );
             return false;
         }
         if(outVariantCount > Limit<u64>::s_Max / valueCount){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: variant count overflow for entry '{}'"),
-                StringConvert(entry.name)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: variant count overflow for entry '{}'"), StringConvert(entry.name));
             return false;
         }
         outVariantCount *= valueCount;
@@ -2305,12 +2202,11 @@ static bool NormalizeMaterialVariant(
 
     if(requestedVariant == Core::ShaderArchive::s_DefaultVariant){
         if(!preparedShaderEntry.entry.defineValues.empty() && preparedShaderEntry.entry.defaultVariant.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material '{}' requests variant '{}' for shader '{}' stage '{}', but that shader has no default variant alias"),
-                StringConvert(materialEntry.virtualPath.c_str()),
-                StringConvert(requestedVariant),
-                StringConvert(preparedShaderEntry.entry.name),
-                StringConvert(stageName.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' requests variant '{}' for shader '{}' stage '{}', but that shader has no default variant alias")
+                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(requestedVariant)
+                , StringConvert(preparedShaderEntry.entry.name)
+                , StringConvert(stageName.c_str())
             );
             return false;
         }
@@ -2325,10 +2221,9 @@ static bool NormalizeMaterialVariant(
 
     AString canonicalVariant;
     if(!shaderCook.canonicalizeVariantSignature(requestedVariant, canonicalVariant)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Material '{}' has invalid shader_variant '{}'"),
-            StringConvert(materialEntry.virtualPath.c_str()),
-            StringConvert(requestedVariant)
+        NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has invalid shader_variant '{}'")
+            , StringConvert(materialEntry.virtualPath.c_str())
+            , StringConvert(requestedVariant)
         );
         return false;
     }
@@ -2362,10 +2257,9 @@ static bool ValidateAndNormalizeMaterials(
             ToName(preparedEntry.entry.archiveStage.view())
         };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: duplicate prepared shader key '{}' stage '{}'"),
-                StringConvert(preparedEntry.entry.name),
-                StringConvert(preparedEntry.entry.archiveStage.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate prepared shader key '{}' stage '{}'")
+                , StringConvert(preparedEntry.entry.name)
+                , StringConvert(preparedEntry.entry.archiveStage.c_str())
             );
             return false;
         }
@@ -2379,11 +2273,10 @@ static bool ValidateAndNormalizeMaterials(
             const PreparedShaderKey shaderLookupKey{ shaderAsset.name(), stageName };
             const auto foundShader = preparedShaderLookup.find(shaderLookupKey);
             if(foundShader == preparedShaderLookup.end()){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Material '{}' references unknown shader '{}' for stage '{}'"),
-                    StringConvert(materialEntry.virtualPath.c_str()),
-                    StringConvert(shaderAsset.name().c_str()),
-                    StringConvert(stageName.c_str())
+                NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown shader '{}' for stage '{}'")
+                    , StringConvert(materialEntry.virtualPath.c_str())
+                    , StringConvert(shaderAsset.name().c_str())
+                    , StringConvert(stageName.c_str())
                 );
                 return false;
             }
@@ -2399,11 +2292,10 @@ static bool ValidateAndNormalizeMaterials(
             }
 
             if(normalizedVariant != stageNormalizedVariant){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Material '{}' resolves to different normalized variants across stages ('{}' vs '{}')"),
-                    StringConvert(materialEntry.virtualPath.c_str()),
-                    StringConvert(normalizedVariant),
-                    StringConvert(stageNormalizedVariant)
+                NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' resolves to different normalized variants across stages ('{}' vs '{}')")
+                    , StringConvert(materialEntry.virtualPath.c_str())
+                    , StringConvert(normalizedVariant)
+                    , StringConvert(stageNormalizedVariant)
                 );
                 return false;
             }
@@ -2462,11 +2354,10 @@ static bool GetVariantBytecode(
     errorCode.clear();
     const bool hasCachedBytecode = FileExists(cachePaths.bytecodePath, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: failed to query bytecode cache '{}' for entry '{}': {}"),
-            PathToString<tchar>(cachePaths.bytecodePath),
-            StringConvert(entry.name),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query bytecode cache '{}' for entry '{}': {}")
+            , PathToString<tchar>(cachePaths.bytecodePath)
+            , StringConvert(entry.name)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -2474,11 +2365,10 @@ static bool GetVariantBytecode(
     errorCode.clear();
     const bool hasCachedChecksum = FileExists(cachePaths.sourceChecksumPath, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: failed to query checksum cache '{}' for entry '{}': {}"),
-            PathToString<tchar>(cachePaths.sourceChecksumPath),
-            StringConvert(entry.name),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query checksum cache '{}' for entry '{}': {}")
+            , PathToString<tchar>(cachePaths.sourceChecksumPath)
+            , StringConvert(entry.name)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -2510,10 +2400,7 @@ static bool GetVariantBytecode(
         Core::Alloc::ScratchAllocator<Pair<const AString, AString>>(scratchArena)
     );
     if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: define count overflow for entry '{}'"),
-            StringConvert(entry.name)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: define count overflow for entry '{}'"), StringConvert(entry.name));
         return false;
     }
 
@@ -2531,9 +2418,8 @@ static bool GetVariantBytecode(
     for(const auto& [defineName, value] : mergedDefines)
         compileDefines.push_back(Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) });
     if(compileDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation"),
-            StringConvert(entry.name)
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation")
+            , StringConvert(entry.name)
         );
         return false;
     }
@@ -2555,27 +2441,24 @@ static bool GetVariantBytecode(
 
     errorCode.clear();
     if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}"),
-            PathToString<tchar>(cachePaths.bytecodePath.parent_path()),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}")
+            , PathToString<tchar>(cachePaths.bytecodePath.parent_path())
+            , StringConvert(errorCode.message())
         );
         return false;
     }
 
     if(!WriteBinaryFile(cachePaths.bytecodePath, outBytecode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Failed to write shader bytecode cache '{}' for entry '{}'"),
-            PathToString<tchar>(cachePaths.bytecodePath),
-            StringConvert(entry.name)
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write shader bytecode cache '{}' for entry '{}'")
+            , PathToString<tchar>(cachePaths.bytecodePath)
+            , StringConvert(entry.name)
         );
         return false;
     }
 
     if(!WriteTextFile(cachePaths.sourceChecksumPath, sourceChecksumHex)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Failed to write cook source checksum '{}'"),
-            PathToString<tchar>(cachePaths.sourceChecksumPath)
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write cook source checksum '{}'")
+            , PathToString<tchar>(cachePaths.sourceChecksumPath)
         );
         return false;
     }
@@ -2668,11 +2551,10 @@ static bool ParseAssetMetadata(
                 ToName(shaderEntry.archiveStage.view())
             };
             if(!seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'"),
-                    StringConvert(shaderEntry.name),
-                    StringConvert(shaderEntry.archiveStage.c_str()),
-                    PathToString<tchar>(nwbFile)
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'")
+                    , StringConvert(shaderEntry.name)
+                    , StringConvert(shaderEntry.archiveStage.c_str())
+                    , PathToString<tchar>(nwbFile)
                 );
                 return false;
             }
@@ -2691,11 +2573,10 @@ static bool ParseAssetMetadata(
                 ErrorCode errorCode;
                 const Path absSource = AbsolutePath(Path(includeEntry.source), errorCode).lexically_normal();
                 if(errorCode){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("GraphicsAssetCooker: failed to resolve include metadata source '{}' from '{}': {}"),
-                        StringConvert(includeEntry.source),
-                        PathToString<tchar>(nwbFile),
-                        StringConvert(errorCode.message())
+                    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve include metadata source '{}' from '{}': {}")
+                        , StringConvert(includeEntry.source)
+                        , PathToString<tchar>(nwbFile)
+                        , StringConvert(errorCode.message())
                     );
                     return false;
                 }
@@ -2703,9 +2584,8 @@ static bool ParseAssetMetadata(
                 AString key = PathToString(absSource);
                 CanonicalizeTextInPlace(key);
                 if(!outMetadata.includeMetadata.emplace(Move(key), Move(includeEntry)).second){
-                    NWB_LOGGER_ERROR(
-                        NWB_TEXT("GraphicsAssetCooker: duplicate include metadata for source '{}'"),
-                        PathToString<tchar>(absSource)
+                    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate include metadata for source '{}'")
+                        , PathToString<tchar>(absSource)
                     );
                     return false;
                 }
@@ -2760,19 +2640,16 @@ static bool ParseAssetMetadata(
             continue;
         }
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("GraphicsAssetCooker: unsupported asset type '{}' in meta '{}'"),
-            StringConvert(rawAssetTypeText),
-            PathToString<tchar>(nwbFile)
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: unsupported asset type '{}' in meta '{}'")
+            , StringConvert(rawAssetTypeText)
+            , PathToString<tchar>(nwbFile)
         );
         return false;
     }
 
     if(outMetadata.shaderEntries.empty()){
         if(!outMetadata.materialEntries.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: material assets require at least one shader entry")
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: material assets require at least one shader entry"));
             return false;
         }
         if(!outMetadata.geometryEntries.empty())
@@ -2814,18 +2691,16 @@ static bool PrepareShaderEntriesForCook(
         errorCode.clear();
         if(!ResolveAbsolutePath(resolvedPaths.repoRoot, preparedEntry.entry.source, preparedEntry.sourcePath, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Failed to resolve source path '{}' for entry '{}': {}"),
-                    StringConvert(preparedEntry.entry.source),
-                    StringConvert(preparedEntry.entry.name),
-                    StringConvert(errorCode.message())
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve source path '{}' for entry '{}': {}")
+                    , StringConvert(preparedEntry.entry.source)
+                    , StringConvert(preparedEntry.entry.name)
+                    , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Failed to resolve source path '{}' for entry '{}': path is empty or invalid"),
-                    StringConvert(preparedEntry.entry.source),
-                    StringConvert(preparedEntry.entry.name)
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve source path '{}' for entry '{}': path is empty or invalid")
+                    , StringConvert(preparedEntry.entry.source)
+                    , StringConvert(preparedEntry.entry.name)
                 );
             }
             return false;
@@ -2834,19 +2709,17 @@ static bool PrepareShaderEntriesForCook(
         errorCode.clear();
         const bool sourceExists = FileExists(preparedEntry.sourcePath, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to query source path '{}' for entry '{}': {}"),
-                PathToString<tchar>(preparedEntry.sourcePath),
-                StringConvert(preparedEntry.entry.name),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query source path '{}' for entry '{}': {}")
+                , PathToString<tchar>(preparedEntry.sourcePath)
+                , StringConvert(preparedEntry.entry.name)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
         if(!sourceExists){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Shader source does not exist for entry '{}': '{}'"),
-                StringConvert(preparedEntry.entry.name),
-                PathToString<tchar>(preparedEntry.sourcePath)
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader source does not exist for entry '{}': '{}'")
+                , StringConvert(preparedEntry.entry.name)
+                , PathToString<tchar>(preparedEntry.sourcePath)
             );
             return false;
         }
@@ -2854,19 +2727,17 @@ static bool PrepareShaderEntriesForCook(
         errorCode.clear();
         const bool isRegularSourceFile = IsRegularFile(preparedEntry.sourcePath, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to inspect source path '{}' for entry '{}': {}"),
-                PathToString<tchar>(preparedEntry.sourcePath),
-                StringConvert(preparedEntry.entry.name),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect source path '{}' for entry '{}': {}")
+                , PathToString<tchar>(preparedEntry.sourcePath)
+                , StringConvert(preparedEntry.entry.name)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
         if(!isRegularSourceFile){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Shader source is not a regular file for entry '{}': '{}'"),
-                StringConvert(preparedEntry.entry.name),
-                PathToString<tchar>(preparedEntry.sourcePath)
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader source is not a regular file for entry '{}': '{}'")
+                , StringConvert(preparedEntry.entry.name)
+                , PathToString<tchar>(preparedEntry.sourcePath)
             );
             return false;
         }
@@ -2880,9 +2751,8 @@ static bool PrepareShaderEntriesForCook(
         if(!shaderCook.validateDefaultVariant(preparedEntry.entry.name, preparedEntry.entry.defaultVariant, preparedEntry.entry.defineValues))
             return false;
         if(!shaderCook.canonicalizeVariantSignature(preparedEntry.entry.defaultVariant, preparedEntry.entry.defaultVariant)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to canonicalize merged default_variant for '{}'"),
-                StringConvert(preparedEntry.entry.name)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to canonicalize merged default_variant for '{}'")
+                , StringConvert(preparedEntry.entry.name)
             );
             return false;
         }
@@ -2901,9 +2771,8 @@ static bool PrepareShaderEntriesForCook(
 
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         if(!BuildMeshComputeShadowEntry(outPreparedPlan.preparedEntries.back().entry, meshComputeShadowEntry.entry)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to build mesh-compute shadow entry for '{}'"),
-                StringConvert(outPreparedPlan.preparedEntries.back().entry.name)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build mesh-compute shadow entry for '{}'")
+                , StringConvert(outPreparedPlan.preparedEntries.back().entry.name)
             );
             return false;
         }
@@ -2943,11 +2812,10 @@ static bool AppendPreparedShadersToVolume(
         const Name shaderName = ToName(entry.name);
         const Name stageName = ToName(entry.archiveStage.view());
         if(!shaderName || !stageName || entry.entryPoint.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'"),
-                StringConvert(entry.name),
-                StringConvert(entry.archiveStage.c_str()),
-                StringConvert(entry.entryPoint)
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'")
+                , StringConvert(entry.name)
+                , StringConvert(entry.archiveStage.c_str())
+                , StringConvert(entry.entryPoint)
             );
             return false;
         }
@@ -2956,9 +2824,8 @@ static bool AppendPreparedShadersToVolume(
         const AString stageSafeName = BuildSafeCacheName(entry.archiveStage.view());
 
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: variant combination count exceeds runtime limits for entry '{}'"),
-                StringConvert(entry.name)
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: variant combination count exceeds runtime limits for entry '{}'")
+                , StringConvert(entry.name)
             );
             return false;
         }
@@ -2999,31 +2866,26 @@ static bool AppendPreparedShadersToVolume(
 
             const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, variantName, stageName);
             if(!virtualPath){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'"),
-                    StringConvert(entry.name),
-                    StringConvert(entry.archiveStage.c_str()),
-                    StringConvert(variantName)
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
+                    , StringConvert(entry.name)
+                    , StringConvert(entry.archiveStage.c_str())
+                    , StringConvert(variantName)
                 );
                 return false;
             }
 
             const NameHash virtualPathHash = virtualPath.hash();
             if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')"),
-                    StringConvert(virtualPath.c_str()),
-                    StringConvert(entry.name),
-                    StringConvert(variantName)
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')")
+                    , StringConvert(virtualPath.c_str())
+                    , StringConvert(entry.name)
+                    , StringConvert(variantName)
                 );
                 return false;
             }
 
             if(!volumeSession.pushDataDeferred(virtualPath, cookedBytecode)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Failed to push shader bytecode '{}'"),
-                    StringConvert(virtualPath.c_str())
-                );
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to push shader bytecode '{}'"), StringConvert(virtualPath.c_str()));
                 return false;
             }
 
@@ -3052,9 +2914,8 @@ static bool AppendMaterialAssetsToVolume(
     for(const MaterialEntry& materialEntry : materialEntries){
         const NameHash materialVirtualPathHash = materialEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(materialVirtualPathHash).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: duplicate material virtual path '{}'"),
-                StringConvert(materialEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate material virtual path '{}'")
+                , StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
         }
@@ -3065,27 +2926,24 @@ static bool AppendMaterialAssetsToVolume(
             cookedMaterial.setShaderForStage(stageName, shaderAsset);
         for(const auto& [paramName, paramValue] : materialEntry.parameters){
             if(!cookedMaterial.setParameter(paramName, paramValue)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("GraphicsAssetCooker: invalid material parameter '{}' for '{}'"),
-                    StringConvert(paramName.c_str()),
-                    StringConvert(materialEntry.virtualPath.c_str())
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: invalid material parameter '{}' for '{}'")
+                    , StringConvert(paramName.c_str())
+                    , StringConvert(materialEntry.virtualPath.c_str())
                 );
                 return false;
             }
         }
 
         if(!materialCodec.serialize(cookedMaterial, materialBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to serialize material '{}'"),
-                StringConvert(materialEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize material '{}'")
+                , StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
         }
 
         if(!volumeSession.pushDataDeferred(materialEntry.virtualPath, materialBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to push material '{}'"),
-                StringConvert(materialEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push material '{}'")
+                , StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;
         }
@@ -3105,34 +2963,30 @@ static bool AppendGeometryAssetsToVolume(
     for(GeometryEntry& geometryEntry : geometryEntries){
         const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: duplicate geometry virtual path '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate geometry virtual path '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
 
         Geometry cookedGeometry;
         if(!BuildGeometryAsset(geometryEntry, cookedGeometry)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to build geometry '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build geometry '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
 
         if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to serialize geometry '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize geometry '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
 
         if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to push geometry '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push geometry '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
@@ -3152,34 +3006,30 @@ static bool AppendDeformableGeometryAssetsToVolume(
     for(DeformableGeometryEntry& geometryEntry : geometryEntries){
         const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: duplicate deformable geometry virtual path '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate deformable geometry virtual path '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
 
         DeformableGeometry cookedGeometry;
         if(!BuildDeformableGeometryAsset(geometryEntry, cookedGeometry)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to build deformable geometry '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build deformable geometry '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
 
         if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable geometry '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable geometry '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
 
         if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to push deformable geometry '{}'"),
-                StringConvert(geometryEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push deformable geometry '{}'")
+                , StringConvert(geometryEntry.virtualPath.c_str())
             );
             return false;
         }
@@ -3199,9 +3049,8 @@ static bool AppendDeformableDisplacementTexturesToVolume(
     for(DeformableDisplacementTextureEntry& textureEntry : textureEntries){
         const NameHash textureVirtualPathHash = textureEntry.virtualPath.hash();
         if(!inOutSeenVirtualPathHashes.insert(textureVirtualPathHash).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: duplicate deformable displacement texture virtual path '{}'"),
-                StringConvert(textureEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate deformable displacement texture virtual path '{}'")
+                , StringConvert(textureEntry.virtualPath.c_str())
             );
             return false;
         }
@@ -3211,17 +3060,15 @@ static bool AppendDeformableDisplacementTexturesToVolume(
         texture.setTexels(Move(textureEntry.texels));
 
         if(!textureCodec.serialize(texture, textureBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable displacement texture '{}'"),
-                StringConvert(textureEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable displacement texture '{}'")
+                , StringConvert(textureEntry.virtualPath.c_str())
             );
             return false;
         }
 
         if(!volumeSession.pushDataDeferred(textureEntry.virtualPath, textureBinary)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("GraphicsAssetCooker: failed to push deformable displacement texture '{}'"),
-                StringConvert(textureEntry.virtualPath.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push deformable displacement texture '{}'")
+                , StringConvert(textureEntry.virtualPath.c_str())
             );
             return false;
         }

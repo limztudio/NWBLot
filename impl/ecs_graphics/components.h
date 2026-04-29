@@ -100,7 +100,8 @@ namespace DeformableSkinningMode{
 };
 
 [[nodiscard]] inline bool ValidDeformableSkinningMode(const u32 mode){
-    return mode == DeformableSkinningMode::LinearBlend
+    return
+        mode == DeformableSkinningMode::LinearBlend
         || mode == DeformableSkinningMode::DualQuaternion
     ;
 }

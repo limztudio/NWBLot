@@ -38,8 +38,7 @@ template<typename OnDestroyFunc, typename SetActiveFunc>
     WPARAM wParam,
     OnDestroyFunc&& onDestroy,
     SetActiveFunc&& setActive,
-    LRESULT& outResult)
-{
+    LRESULT& outResult){
     switch(message){
     case WM_DESTROY:
         onDestroy();

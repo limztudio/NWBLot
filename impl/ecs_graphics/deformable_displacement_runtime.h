@@ -37,12 +37,12 @@ namespace DisplacementResolveFailure{
 
 [[nodiscard]] inline bool ValidateDisplacementTexture(
     const DeformableDisplacement& displacement,
-    const DeformableDisplacementTexture* texture)
-{
+    const DeformableDisplacementTexture* texture){
     if(!DeformableDisplacementModeUsesTexture(displacement.mode))
         return true;
 
-    return texture
+    return
+        texture
         && texture->virtualPath() == displacement.texture.name()
         && texture->validatePayload()
     ;
@@ -78,8 +78,7 @@ namespace DisplacementResolveFailure{
 [[nodiscard]] inline Float4U SampleDisplacementTexture(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
-    const Float2U& uv)
-{
+    const Float2U& uv){
     return SampleDisplacementTextureCoord(texture, DisplacementTextureCoord(displacement, uv));
 }
 
@@ -88,8 +87,7 @@ namespace DisplacementResolveFailure{
     const u32 mode,
     const Float4U& sample,
     const SIMDVector normal,
-    const SIMDVector tangentWithHandedness)
-{
+    const SIMDVector tangentWithHandedness){
     SIMDVector vectorOffset = VectorMultiply(
         VectorAdd(VectorSetW(LoadFloat(sample), 0.0f), VectorReplicate(displacement.bias)),
         VectorReplicate(displacement.amplitude)
@@ -118,8 +116,7 @@ namespace DisplacementResolveFailure{
     const DeformableDisplacement& sourceDisplacement,
     const DeformableDisplacementComponent* component,
     DeformableDisplacement& outDisplacement,
-    DisplacementResolveFailure::Enum& outFailure)
-{
+    DisplacementResolveFailure::Enum& outFailure){
     outDisplacement = sourceDisplacement;
     outFailure = DisplacementResolveFailure::None;
 
@@ -153,8 +150,7 @@ namespace DisplacementResolveFailure{
 [[nodiscard]] inline bool ResolveEffectiveDisplacement(
     const DeformableDisplacement& sourceDisplacement,
     const DeformableDisplacementComponent* component,
-    DeformableDisplacement& outDisplacement)
-{
+    DeformableDisplacement& outDisplacement){
     DisplacementResolveFailure::Enum failure = DisplacementResolveFailure::None;
     return ResolveEffectiveDisplacement(sourceDisplacement, component, outDisplacement, failure);
 }

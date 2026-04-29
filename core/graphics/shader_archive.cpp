@@ -83,9 +83,10 @@ bool ValidateRecord(const ShaderArchive::Record& record){
 
 
 AStringView NormalizeVariantName(const AStringView variantName){
-    return variantName.empty()
-        ? AStringView(ShaderArchive::s_DefaultVariant)
-        : variantName
+    return
+        variantName.empty()
+            ? AStringView(ShaderArchive::s_DefaultVariant)
+            : variantName
     ;
 }
 

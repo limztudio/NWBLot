@@ -230,36 +230,28 @@ static Core::ShaderHandle CreateShaderFromAsset(
 
     Name shaderVirtualPath = NAME_NONE;
     if(!shaderPathResolver(shaderName, Core::ShaderArchive::s_DefaultVariant, stageName, shaderVirtualPath)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("UiSystem: failed to resolve shader '{}' stage '{}'"),
-            StringConvert(shaderName.c_str()),
-            StringConvert(stageName.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to resolve shader '{}' stage '{}'")
+            , StringConvert(shaderName.c_str())
+            , StringConvert(stageName.c_str())
         );
         return nullptr;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!assetManager.loadSync(Shader::AssetTypeName(), shaderVirtualPath, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("UiSystem: failed to load shader asset '{}'"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to load shader asset '{}'"), StringConvert(shaderVirtualPath.c_str()));
         return nullptr;
     }
     if(!loadedAsset || loadedAsset->assetType() != Shader::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("UiSystem: asset '{}' is not a shader"),
-            StringConvert(shaderVirtualPath.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: asset '{}' is not a shader"), StringConvert(shaderVirtualPath.c_str()));
         return nullptr;
     }
 
     const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
     const Vector<u8>& shaderBinary = shaderAsset.bytecode();
     if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("UiSystem: shader asset '{}' has invalid bytecode"),
-            StringConvert(shaderVirtualPath.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: shader asset '{}' has invalid bytecode")
+            , StringConvert(shaderVirtualPath.c_str())
         );
         return nullptr;
     }
@@ -268,10 +260,7 @@ static Core::ShaderHandle CreateShaderFromAsset(
     shaderDesc.setShaderType(shaderType).setDebugName(debugName);
     Core::ShaderHandle shader = graphics.getDevice()->createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
     if(!shader){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("UiSystem: failed to create shader '{}'"),
-            StringConvert(debugName.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create shader '{}'"), StringConvert(debugName.c_str()));
         return nullptr;
     }
 

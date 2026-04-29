@@ -61,9 +61,10 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
 }
 
 [[nodiscard]] u32 SaturateUsizeToU32(const usize value){
-    return value > static_cast<usize>(Limit<u32>::s_Max)
-        ? Limit<u32>::s_Max
-        : static_cast<u32>(value)
+    return
+        value > static_cast<usize>(Limit<u32>::s_Max)
+            ? Limit<u32>::s_Max
+            : static_cast<u32>(value)
     ;
 }
 
@@ -77,8 +78,7 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
 
 [[nodiscard]] bool DisplacementDebugMayEmitLines(
     const DeformableDisplacement& displacement,
-    const DeformableDisplacementTexture* texture)
-{
+    const DeformableDisplacementTexture* texture){
     if(displacement.mode == DeformableDisplacementMode::ScalarUvRamp)
         return true;
     if(!DeformableDisplacementModeUsesTexture(displacement.mode))
@@ -92,8 +92,7 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     const u32 firstWallVertex,
     const u32 wallVertexCount,
     usize& inOutLineCount,
-    usize& inOutPointCount)
-{
+    usize& inOutPointCount){
     if(firstWallVertex == Limit<u32>::s_Max || wallVertexCount < 3u)
         return true;
 
@@ -104,7 +103,8 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     if(count > Limit<usize>::s_Max / 3u)
         return false;
 
-    return AddReserveCount(inOutLineCount, count * 3u)
+    return
+        AddReserveCount(inOutLineCount, count * 3u)
         && AddReserveCount(inOutPointCount, count)
     ;
 }
@@ -115,8 +115,7 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
     const DeformableHolePreview* preview,
     const DeformableSurfaceEditState* state,
     const DeformableDisplacementTexture* displacementTexture,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     usize lineCount = 0u;
     usize pointCount = 0u;
 
@@ -182,17 +181,17 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
 
 [[nodiscard]] f32 Length3(const SIMDVector value){
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(value));
-    return IsFinite(lengthSquared)
-        ? Sqrt(Max(0.0f, lengthSquared))
-        : 0.0f
+    return
+        IsFinite(lengthSquared)
+            ? Sqrt(Max(0.0f, lengthSquared))
+            : 0.0f
     ;
 }
 
 [[nodiscard]] SIMDVector VectorTextureOffsetToRestFrame(
     const DeformableDisplacement& displacement,
     const DeformableVertexRest& vertex,
-    const Float4U& sample)
-{
+    const Float4U& sample){
     const SIMDVector normal = VectorSetW(LoadRestVertexNormal(vertex), 0.0f);
     const SIMDVector tangentWithHandedness = LoadRestVertexTangent(vertex);
     return DeformableRuntime::VectorTextureOffsetToFrame(
@@ -208,8 +207,7 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture* texture,
     const DeformableVertexRest& vertex,
-    SIMDVector& outOffset)
-{
+    SIMDVector& outOffset){
     outOffset = VectorZero();
     if(displacement.mode == DeformableDisplacementMode::None)
         return false;
@@ -304,8 +302,7 @@ void AppendPoint(
 void AppendWallVertexBasisDebug(
     const DeformableVertexRest& vertex,
     const SIMDVector position,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     if(!DeformableValidation::ValidRestVertexFrame(vertex))
         return;
 
@@ -385,8 +382,7 @@ void AppendMorphDeltaDebug(const DeformableRuntimeMeshInstance& instance, Deform
 void AppendDisplacementMagnitudeDebug(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableDisplacementTexture* displacementTexture,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     if(instance.displacement.mode == DeformableDisplacementMode::None)
         return;
     if(
@@ -424,8 +420,7 @@ void AppendDisplacementMagnitudeDebug(
 void AppendPreviewDebug(
     const DeformableSurfaceEditSession* session,
     const DeformableHolePreview* preview,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     if(!session || !preview || !preview->valid)
         return;
 
@@ -508,8 +503,7 @@ void AppendWallLoopDebug(
 void AppendEditStateDebug(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableSurfaceEditState* state,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     if(!state)
         return;
 
@@ -584,8 +578,7 @@ void AppendEditMaskMarker(
     const DeformableRuntimeMeshInstance& instance,
     const usize triangle,
     const DeformableEditMaskFlags flags,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     if(flags == s_DeformableEditMaskDefault)
         return;
 
@@ -649,8 +642,7 @@ void CountEditMasks(const DeformableRuntimeMeshInstance& instance, DeformableSur
 void AppendPayloadDiagnostics(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableDisplacementTexture* displacementTexture,
-    DeformableSurfaceEditDebugSnapshot& snapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& snapshot){
     for(const DeformableVertexRest& vertex : instance.restVertices){
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             ++snapshot.invalidFrameCount;
@@ -715,8 +707,7 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     const DeformableSurfaceEditSession* session,
     const DeformableHolePreview* preview,
     const DeformableSurfaceEditState* state,
-    DeformableSurfaceEditDebugSnapshot& outSnapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& outSnapshot){
     return BuildDeformableSurfaceEditDebugSnapshot(
         instance,
         session,
@@ -733,8 +724,7 @@ bool BuildDeformableSurfaceEditDebugSnapshot(
     const DeformableHolePreview* preview,
     const DeformableSurfaceEditState* state,
     const DeformableDisplacementTexture* displacementTexture,
-    DeformableSurfaceEditDebugSnapshot& outSnapshot)
-{
+    DeformableSurfaceEditDebugSnapshot& outSnapshot){
     using namespace __hidden_deformable_debug_draw;
 
     ResetSnapshotPreservingOutputStorage(outSnapshot);

@@ -92,8 +92,7 @@ private:
 
 
 public:
-    ScratchArena(usize initSize = 1024)
-    {
+    ScratchArena(usize initSize = 1024){
         for(usize i = 0; i < LengthOf(m_bucket); ++i){
             auto& bucket = m_bucket[i];
             bucket.head = nullptr;

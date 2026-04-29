@@ -26,12 +26,11 @@ bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView
     ErrorCode errorCode;
 
     if(!RemoveAllIfExists(directoryPath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: failed to remove {} '{}': {}"),
-            StringConvert(operationName),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to remove {} '{}': {}")
+            , StringConvert(operationName)
+            , StringConvert(label)
+            , PathToString<tchar>(directoryPath)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -43,12 +42,11 @@ void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringVi
     ErrorCode errorCode;
 
     if(!RemoveAllIfExists(directoryPath, errorCode) && errorCode){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("{}: failed to remove {} '{}': {}"),
-            StringConvert(operationName),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_WARNING(NWB_TEXT("{}: failed to remove {} '{}': {}")
+            , StringConvert(operationName)
+            , StringConvert(label)
+            , PathToString<tchar>(directoryPath)
+            , StringConvert(errorCode.message())
         );
     }
 }
@@ -57,12 +55,11 @@ bool EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView ope
     ErrorCode errorCode;
 
     if(!::EnsureEmptyDirectory(directoryPath, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("{}: failed to create {} '{}': {}"),
-            StringConvert(operationName),
-            StringConvert(label),
-            PathToString<tchar>(directoryPath),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create {} '{}': {}")
+            , StringConvert(operationName)
+            , StringConvert(label)
+            , PathToString<tchar>(directoryPath)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -137,7 +134,8 @@ static bool CanRepresentU64(const u64 value){
 }
 
 static bool IsAsciiAlphaNumeric(const char ch){
-    return (ch >= '0' && ch <= '9')
+    return
+        (ch >= '0' && ch <= '9')
         || (ch >= 'A' && ch <= 'Z')
         || (ch >= 'a' && ch <= 'z')
     ;
@@ -204,32 +202,29 @@ static AString LastErrnoMessage(){
 }
 
 static void LogFailure(AStringView volumeName, AStringView operation, AStringView detail){
-    NWB_LOGGER_WARNING(
-        NWB_TEXT("Filesystem('{}'): {} failed: {}"),
-        StringConvert(volumeName),
-        StringConvert(operation),
-        StringConvert(detail)
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: {}")
+        , StringConvert(volumeName)
+        , StringConvert(operation)
+        , StringConvert(detail)
     );
 }
 
 static void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail){
-    NWB_LOGGER_WARNING(
-        NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}"),
-        StringConvert(volumeName),
-        StringConvert(operation),
-        StringConvert(path.string()),
-        StringConvert(detail)
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}")
+        , StringConvert(volumeName)
+        , StringConvert(operation)
+        , StringConvert(path.string())
+        , StringConvert(detail)
     );
 }
 
 static void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode){
-    NWB_LOGGER_WARNING(
-        NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}"),
-        StringConvert(volumeName),
-        StringConvert(operation),
-        StringConvert(path.string()),
-        errorCode.value(),
-        StringConvert(errorCode.message())
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}")
+        , StringConvert(volumeName)
+        , StringConvert(operation)
+        , StringConvert(path.string())
+        , errorCode.value()
+        , StringConvert(errorCode.message())
     );
 }
 
@@ -241,8 +236,7 @@ static bool ForEachSegmentChunk(
     const u64 segmentSize,
     const u64 offset,
     const u64 byteCount,
-    ChunkFunc&& chunkFunc)
-{
+    ChunkFunc&& chunkFunc){
     if(segmentSize == 0){
         LogFailure(volumeName, operation, "segment size is zero");
         return false;
@@ -259,13 +253,12 @@ static bool ForEachSegmentChunk(
     }
     const u64 capacityBytes = static_cast<u64>(segmentPaths.size()) * segmentSize;
     if(endOffset > capacityBytes){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}"),
-            StringConvert(volumeName),
-            StringConvert(operation),
-            offset,
-            endOffset,
-            capacityBytes
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed: range [{}..{}) exceeds capacity {}")
+            , StringConvert(volumeName)
+            , StringConvert(operation)
+            , offset
+            , endOffset
+            , capacityBytes
         );
         return false;
     }
@@ -308,8 +301,7 @@ static bool TransferSegmentChunk(
     const AStringView seekOperation,
     Stream& stream,
     SeekStream&& seekStream,
-    TransferStream&& transferStream)
-{
+    TransferStream&& transferStream){
     if(!stream.is_open()){
         LogFailureWithPath(volumeName, openOperation, segmentPaths[segmentIndex], LastErrnoMessage());
         return false;
@@ -332,8 +324,7 @@ static bool ReadSegmentBytes(
     const GlobalFilesystemDetail::StreamOffset streamOffset,
     const GlobalFilesystemDetail::StreamSize streamChunkSize,
     const u64 chunkBytes,
-    u8*& outputBytes)
-{
+    u8*& outputBytes){
     GlobalFilesystemDetail::InputFileStream stream(
         segmentPaths[segmentIndex],
         GlobalFilesystemDetail::InputFileStream::binary
@@ -350,13 +341,12 @@ static bool ReadSegmentBytes(
         [&](auto& stream){
             stream.read(reinterpret_cast<char*>(outputBytes), streamChunkSize);
             if(stream.gcount() != streamChunkSize){
-                NWB_LOGGER_WARNING(
-                    NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}"),
-                    StringConvert(volumeName),
-                    StringConvert(segmentPaths[segmentIndex].string()),
-                    static_cast<i64>(streamChunkSize),
-                    static_cast<i64>(stream.gcount()),
-                    StringConvert(LastErrnoMessage())
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}")
+                    , StringConvert(volumeName)
+                    , StringConvert(segmentPaths[segmentIndex].string())
+                    , static_cast<i64>(streamChunkSize)
+                    , static_cast<i64>(stream.gcount())
+                    , StringConvert(LastErrnoMessage())
                 );
                 return false;
             }
@@ -375,8 +365,7 @@ static bool WriteSegmentBytes(
     const GlobalFilesystemDetail::StreamOffset streamOffset,
     const GlobalFilesystemDetail::StreamSize streamChunkSize,
     const u64 chunkBytes,
-    const u8*& inputBytes)
-{
+    const u8*& inputBytes){
     GlobalFilesystemDetail::FileStream stream(
         segmentPaths[segmentIndex],
         GlobalFilesystemDetail::FileStream::binary
@@ -395,12 +384,11 @@ static bool WriteSegmentBytes(
         [&](auto& stream){
             stream.write(reinterpret_cast<const char*>(inputBytes), streamChunkSize);
             if(!stream.good()){
-                NWB_LOGGER_WARNING(
-                    NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}"),
-                    StringConvert(volumeName),
-                    StringConvert(segmentPaths[segmentIndex].string()),
-                    static_cast<i64>(streamChunkSize),
-                    StringConvert(LastErrnoMessage())
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}")
+                    , StringConvert(volumeName)
+                    , StringConvert(segmentPaths[segmentIndex].string())
+                    , static_cast<i64>(streamChunkSize)
+                    , StringConvert(LastErrnoMessage())
                 );
                 return false;
             }
@@ -456,10 +444,9 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
 
     const bool sourceExists = FileExists(fromDirectory, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Filesystem volume publish: failed to query output directory '{}': {}"),
-            PathToString<tchar>(fromDirectory),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query output directory '{}': {}")
+            , PathToString<tchar>(fromDirectory)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -469,16 +456,14 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     errorCode.clear();
     if(!IsDirectory(fromDirectory, errorCode)){
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: failed to inspect output directory '{}': {}"),
-                PathToString<tchar>(fromDirectory),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to inspect output directory '{}': {}")
+                , PathToString<tchar>(fromDirectory)
+                , StringConvert(errorCode.message())
             );
         }
         else{
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: output path '{}' is not a directory"),
-                PathToString<tchar>(fromDirectory)
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: output path '{}' is not a directory")
+                , PathToString<tchar>(fromDirectory)
             );
         }
         return false;
@@ -490,10 +475,9 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
             return true;
 
         if(!EnsureDirectories(toDirectory, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}"),
-                PathToString<tchar>(toDirectory),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}")
+                , PathToString<tchar>(toDirectory)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
@@ -506,10 +490,9 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         if(!ensureDestination())
             return false;
         if(!RenamePath(currentPath, toDirectory / currentPath.filename(), errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}"),
-                PathToString<tchar>(currentPath),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}")
+                , PathToString<tchar>(currentPath)
+                , StringConvert(errorCode.message())
             );
             rollbackMovedFiles();
             return false;
@@ -523,10 +506,9 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         const Path currentPath = fromDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
         const bool exists = FileExists(currentPath, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}"),
-                PathToString<tchar>(currentPath),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}")
+                , PathToString<tchar>(currentPath)
+                , StringConvert(errorCode.message())
             );
             rollbackMovedFiles();
             return false;
@@ -554,10 +536,9 @@ static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirec
     if(fileNames.empty())
         return true;
     if(!EnsureDirectories(toDirectory, errorCode)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem volume publish: failed to recreate output directory '{}' during rollback: {}"),
-            PathToString<tchar>(toDirectory),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to recreate output directory '{}' during rollback: {}")
+            , PathToString<tchar>(toDirectory)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -566,10 +547,9 @@ static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirec
         const Path sourcePath = fromDirectory / fileName;
         const Path destinationPath = toDirectory / fileName;
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem volume publish: failed to restore backup segment '{}' during rollback: {}"),
-                PathToString<tchar>(sourcePath),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to restore backup segment '{}' during rollback: {}")
+                , PathToString<tchar>(sourcePath)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
@@ -588,10 +568,9 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
         return false;
     }
     if(!EnsureDirectories(toDirectory, errorCode)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}"),
-            PathToString<tchar>(toDirectory),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}")
+            , PathToString<tchar>(toDirectory)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -601,11 +580,10 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
         const Path sourcePath = fromDirectory / fileName;
         const Path destinationPath = toDirectory / fileName;
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}"),
-                PathToString<tchar>(sourcePath),
-                PathToString<tchar>(destinationPath),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}")
+                , PathToString<tchar>(sourcePath)
+                , PathToString<tchar>(destinationPath)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
@@ -623,10 +601,9 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
         const Path segmentPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
         errorCode.clear();
         if(!RemoveFile(segmentPath, errorCode)){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}"),
-                PathToString<tchar>(segmentPath),
-                StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}")
+                , PathToString<tchar>(segmentPath)
+                , StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
             );
         }
     }
@@ -661,10 +638,9 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 
     const bool outputExists = FileExists(outputDirectory, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Failed to query output directory '{}' : {}"),
-            PathToString<tchar>(outputDirectory),
-            StringConvert(errorCode.message())
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to query output directory '{}' : {}")
+            , PathToString<tchar>(outputDirectory)
+            , StringConvert(errorCode.message())
         );
         return false;
     }
@@ -674,16 +650,14 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
     errorCode.clear();
     if(!IsDirectory(outputDirectory, errorCode)){
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to inspect output directory '{}' : {}"),
-                PathToString<tchar>(outputDirectory),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect output directory '{}' : {}")
+                , PathToString<tchar>(outputDirectory)
+                , StringConvert(errorCode.message())
             );
         }
         else{
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to remove old segments: output path '{}' is not a directory"),
-                PathToString<tchar>(outputDirectory)
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old segments: output path '{}' is not a directory")
+                , PathToString<tchar>(outputDirectory)
             );
         }
         return false;
@@ -694,10 +668,9 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 
         const bool exists = FileExists(hashedPath, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to query hashed segment '{}' : {}"),
-                PathToString<tchar>(hashedPath),
-                StringConvert(errorCode.message())
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query hashed segment '{}' : {}")
+                , PathToString<tchar>(hashedPath)
+                , StringConvert(errorCode.message())
             );
             return false;
         }
@@ -705,10 +678,9 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
             break;
 
         if(!RemoveFile(hashedPath, errorCode)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Failed to remove old hashed segment '{}' : {}"),
-                PathToString<tchar>(hashedPath),
-                StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old hashed segment '{}' : {}")
+                , PathToString<tchar>(hashedPath)
+                , StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
             );
             return false;
         }
@@ -906,12 +878,11 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
                 if(errorCode)
                     __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", segmentPath, errorCode);
                 else{
-                    NWB_LOGGER_WARNING(
-                        NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}"),
-                        StringConvert(m_volumeName),
-                        StringConvert(segmentPath.string()),
-                        segmentFileSize,
-                        m_segmentSize
+                    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
+                        , StringConvert(m_volumeName)
+                        , StringConvert(segmentPath.string())
+                        , segmentFileSize
+                        , m_segmentSize
                     );
                 }
                 unmountLocked();
@@ -920,11 +891,10 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.segmentSize != 0 && desc.segmentSize != m_segmentSize){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}"),
-                StringConvert(m_volumeName),
-                desc.segmentSize,
-                m_segmentSize
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}")
+                , StringConvert(m_volumeName)
+                , desc.segmentSize
+                , m_segmentSize
             );
             unmountLocked();
             return false;
@@ -937,11 +907,10 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.metadataSize != 0 && desc.metadataSize != m_metadataBytes){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}"),
-                StringConvert(m_volumeName),
-                desc.metadataSize,
-                m_metadataBytes
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}")
+                , StringConvert(m_volumeName)
+                , desc.metadataSize
+                , m_metadataBytes
             );
             unmountLocked();
             return false;
@@ -949,11 +918,10 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     }
 
     if(m_maxSegments != 0 && m_segmentPaths.size() > m_maxSegments){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}"),
-            StringConvert(m_volumeName),
-            m_segmentPaths.size(),
-            m_maxSegments
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}")
+            , StringConvert(m_volumeName)
+            , m_segmentPaths.size()
+            , m_maxSegments
         );
         unmountLocked();
         return false;
@@ -1066,10 +1034,9 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
         ++fileCountAfterWrite;
     }
     if(!canFitMetadataForFileCountLocked(fileCountAfterWrite)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}"),
-            StringConvert(m_volumeName),
-            fileCountAfterWrite
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}")
+            , StringConvert(m_volumeName)
+            , fileCountAfterWrite
         );
         return false;
     }
@@ -1148,11 +1115,10 @@ bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)con
 
     const FileRecord& record = itr.value();
     if(record.size > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): readFile failed: file size {} exceeds runtime buffer limit {}"),
-            StringConvert(m_volumeName),
-            record.size,
-            static_cast<u64>(Limit<usize>::s_Max)
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readFile failed: file size {} exceeds runtime buffer limit {}")
+            , StringConvert(m_volumeName)
+            , record.size
+            , static_cast<u64>(Limit<usize>::s_Max)
         );
         return false;
     }
@@ -1371,11 +1337,10 @@ bool VolumeFileSystem::scanSegmentsLocked(){
 
 bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     if(m_maxSegments != 0 && segmentIndex >= m_maxSegments){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}"),
-            StringConvert(m_volumeName),
-            segmentIndex,
-            m_maxSegments
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} exceeds maxSegments {}")
+            , StringConvert(m_volumeName)
+            , segmentIndex
+            , m_maxSegments
         );
         return false;
     }
@@ -1401,10 +1366,9 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
 
     GlobalFilesystemDetail::StreamOffset streamOffset = 0;
     if(!__hidden_filesystem::ToStreamOff(m_segmentSize - 1, streamOffset)){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset"),
-            StringConvert(m_volumeName),
-            m_segmentSize
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset")
+            , StringConvert(m_volumeName)
+            , m_segmentSize
         );
         return false;
     }
@@ -1437,11 +1401,10 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
     else if(segmentIndex < m_segmentPaths.size())
         m_segmentPaths[segmentIndex] = path;
     else{
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})"),
-            StringConvert(m_volumeName),
-            segmentIndex,
-            m_segmentPaths.size()
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment index {} is non-contiguous (segment count {})")
+            , StringConvert(m_volumeName)
+            , segmentIndex
+            , m_segmentPaths.size()
         );
         return false;
     }
@@ -1467,11 +1430,10 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
             return true;
 
         if(!m_writable){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only"),
-                StringConvert(m_volumeName),
-                requiredBytes,
-                capacity
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): ensureCapacity failed: required {} bytes, current capacity {} bytes, filesystem is read-only")
+                , StringConvert(m_volumeName)
+                , requiredBytes
+                , capacity
             );
             return false;
         }
@@ -1492,20 +1454,18 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
     if(header.version != s_VolumeFormatVersion){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): loadMetadata failed: format version {} is not supported (expected {})"),
-            StringConvert(m_volumeName),
-            header.version,
-            s_VolumeFormatVersion
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: format version {} is not supported (expected {})")
+            , StringConvert(m_volumeName)
+            , header.version
+            , s_VolumeFormatVersion
         );
         return false;
     }
     if(header.segmentSize != m_segmentSize){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}"),
-            StringConvert(m_volumeName),
-            header.segmentSize,
-            m_segmentSize
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}")
+            , StringConvert(m_volumeName)
+            , header.segmentSize
+            , m_segmentSize
         );
         return false;
     }
@@ -1549,11 +1509,10 @@ bool VolumeFileSystem::loadMetadataLocked(){
 
     const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
     if(header.indexBytes != expectedIndexBytes){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}"),
-            StringConvert(m_volumeName),
-            header.indexBytes,
-            expectedIndexBytes
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}")
+            , StringConvert(m_volumeName)
+            , header.indexBytes
+            , expectedIndexBytes
         );
         return false;
     }
@@ -1698,11 +1657,10 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
     if(totalMetaBytes > m_metadataBytes){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes"),
-            StringConvert(m_volumeName),
-            totalMetaBytes,
-            m_metadataBytes
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes")
+            , StringConvert(m_volumeName)
+            , totalMetaBytes
+            , m_metadataBytes
         );
         return false;
     }
@@ -1836,12 +1794,11 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
     const u64 capacityBytes = static_cast<u64>(m_segmentPaths.size()) * m_segmentSize;
     if(sourceEndOffset > capacityBytes){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}"),
-            StringConvert(m_volumeName),
-            sourceOffset,
-            sourceEndOffset,
-            capacityBytes
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}")
+            , StringConvert(m_volumeName)
+            , sourceOffset
+            , sourceEndOffset
+            , capacityBytes
         );
         return false;
     }
@@ -1999,10 +1956,7 @@ bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig&
     if(m_volumeFileSystem.mount(desc))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("VolumeSession::create failed to mount volume '{}'"),
-        StringConvert(config.volumeName)
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::create failed to mount volume '{}'"), StringConvert(config.volumeName));
     return false;
 }
 
@@ -2017,10 +1971,7 @@ bool VolumeSession::load(const AStringView volumeName, const Path& mountDirector
     if(m_volumeFileSystem.mount(desc))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("VolumeSession::load failed to mount volume '{}'"),
-        StringConvert(volumeName)
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::load failed to mount volume '{}'"), StringConvert(volumeName));
     return false;
 }
 
@@ -2041,10 +1992,7 @@ bool VolumeSession::pushData(const Name& virtualPath, const void* data, const us
     if(m_volumeFileSystem.writeFile(virtualPath, data, bytes))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("VolumeSession::pushData failed to write '{}'"),
-        StringConvert(virtualPath.c_str())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushData failed to write '{}'"), StringConvert(virtualPath.c_str()));
     return false;
 }
 
@@ -2080,10 +2028,7 @@ bool VolumeSession::pushDataDeferred(const Name& virtualPath, const void* data, 
     if(m_volumeFileSystem.writeFileDeferred(virtualPath, data, bytes))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("VolumeSession::pushDataDeferred failed to write '{}'"),
-        StringConvert(virtualPath.c_str())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::pushDataDeferred failed to write '{}'"), StringConvert(virtualPath.c_str()));
     return false;
 }
 
@@ -2141,10 +2086,7 @@ bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData)
     if(m_volumeFileSystem.readFile(virtualPathName, outData))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("VolumeSession::loadData failed to read '{}'"),
-        StringConvert(virtualPath)
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed to read '{}'"), StringConvert(virtualPath));
     return false;
 }
 
@@ -2163,10 +2105,7 @@ bool VolumeSession::loadData(const Name& virtualPath, Vector<u8>& outData)const{
     if(m_volumeFileSystem.readFile(virtualPath, outData))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("VolumeSession::loadData failed to read '{}'"),
-        StringConvert(virtualPath.c_str())
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed to read '{}'"), StringConvert(virtualPath.c_str()));
     return false;
 }
 

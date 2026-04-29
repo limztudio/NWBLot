@@ -27,8 +27,7 @@ World::World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool)
     , m_scheduler(m_arena)
     , m_messageBus(m_arena)
 {}
-World::~World()
-{
+World::~World(){
     clear();
 }
 

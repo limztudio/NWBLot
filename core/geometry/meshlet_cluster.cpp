@@ -57,7 +57,8 @@ struct TriangleLocalIndices{
 }
 
 [[nodiscard]] bool ValidConfig(const MeshletBuildConfig& config){
-    return config.maxVertices >= 3u
+    return
+        config.maxVertices >= 3u
         && config.maxTriangles >= 1u
         && config.maxTriangles <= (Limit<u32>::s_Max / 3u)
     ;

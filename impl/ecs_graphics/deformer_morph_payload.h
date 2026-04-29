@@ -49,10 +49,9 @@ struct BlendedMorphDeltaAccumulator{
     if(DeformableRuntime::BuildMorphWeightSumLookup(instance.morphs, weights, outWeights, failedMorph))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' weight is invalid"),
-        instance.handle.value,
-        StringConvert(failedMorph.c_str())
+    NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' morph '{}' weight is invalid")
+        , instance.handle.value
+        , StringConvert(failedMorph.c_str())
     );
     return false;
 }
@@ -75,10 +74,11 @@ struct BlendedMorphDeltaAccumulator{
 }
 
 [[nodiscard]] inline bool ActiveBlendedMorphDelta(const BlendedMorphDeltaAccumulator& delta){
-    return delta.active
+    return
+        delta.active
         && (ActiveDeltaVector(LoadFloat(delta.deltaPosition), 0x7u)
-            || ActiveDeltaVector(LoadFloat(delta.deltaNormal), 0x7u)
-            || ActiveDeltaVector(LoadFloat(delta.deltaTangent), 0xFu))
+        || ActiveDeltaVector(LoadFloat(delta.deltaNormal), 0x7u)
+        || ActiveDeltaVector(LoadFloat(delta.deltaTangent), 0xFu))
     ;
 }
 
@@ -89,8 +89,7 @@ inline void AccumulateWeightedVector(Float4& target, const SIMDVector source, co
 inline void AccumulateWeightedMorphDelta(
     BlendedMorphDeltaAccumulator& target,
     const DeformableMorphDelta& source,
-    const f32 weight)
-{
+    const f32 weight){
     target.active = true;
     const SIMDVector weightVector = VectorReplicate(weight);
     AccumulateWeightedVector(target.deltaPosition, LoadFloat(source.deltaPosition), weightVector);
@@ -102,10 +101,7 @@ inline void AccumulateWeightedMorphDelta(
     if(instance.restVertices.size() <= static_cast<usize>(Limit<u32>::s_Max))
         return true;
 
-    NWB_LOGGER_ERROR(
-        NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex count exceeds u32 limits"),
-        instance.handle.value
-    );
+    NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' vertex count exceeds u32 limits"), instance.handle.value);
     return false;
 }
 
@@ -115,8 +111,7 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
     const DeformableMorphWeightsComponent* morphWeights,
     MorphRangeVector& outRanges,
     MorphDeltaVector& outDeltas,
-    usize& outSignature)
-{
+    usize& outSignature){
     outRanges.clear();
     outDeltas.clear();
     outSignature = 0;
@@ -152,10 +147,9 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
         if(!DeformableValidation::ActiveWeight(weight))
             continue;
         if(morph.deltas.empty()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: active morph '{}' on runtime mesh '{}' has no deltas"),
-                StringConvert(morph.name.c_str()),
-                instance.handle.value
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: active morph '{}' on runtime mesh '{}' has no deltas")
+                , StringConvert(morph.name.c_str())
+                , instance.handle.value
             );
             return false;
         }
@@ -163,10 +157,9 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
             morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max)
             || activeInputDeltaCount > static_cast<usize>(Limit<u32>::s_Max) - morph.deltas.size()
         ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' exceeds u32 delta limits"),
-                StringConvert(morph.name.c_str()),
-                instance.handle.value
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' exceeds u32 delta limits")
+                , StringConvert(morph.name.c_str())
+                , instance.handle.value
             );
             return false;
         }
@@ -183,10 +176,9 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
         }
         for(const DeformableMorphDelta& delta : morph.deltas){
             if(!DeformableValidation::ValidMorphDelta(delta, vertexCount)){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta"),
-                    StringConvert(morph.name.c_str()),
-                    instance.handle.value
+                NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta")
+                    , StringConvert(morph.name.c_str())
+                    , instance.handle.value
                 );
                 return false;
             }

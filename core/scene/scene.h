@@ -45,7 +45,8 @@ struct SceneCameraView{
     CameraProjectionData projectionData;
 
     [[nodiscard]] bool valid()const noexcept{
-        return entity.valid()
+        return
+            entity.valid()
             && transform != nullptr
             && camera != nullptr
             && CameraProjectionDataValid(projectionData)

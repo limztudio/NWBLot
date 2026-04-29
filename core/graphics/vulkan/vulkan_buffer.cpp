@@ -367,21 +367,19 @@ bool Device::validateHeapMemoryBinding(
     }
     const u64 alignment = Max<u64>(static_cast<u64>(memoryRequirements.alignment), 1u);
     if((offset % alignment) != 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {}: offset {} is not aligned to required alignment {}"),
-            operationName,
-            offset,
-            alignment
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} is not aligned to required alignment {}")
+            , operationName
+            , offset
+            , alignment
         );
         return false;
     }
     if(offset > outHeap->m_desc.capacity || static_cast<u64>(memoryRequirements.size) > outHeap->m_desc.capacity - offset){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {}: offset {} size {} exceeds heap capacity {}"),
-            operationName,
-            offset,
-            static_cast<u64>(memoryRequirements.size),
-            outHeap->m_desc.capacity
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} size {} exceeds heap capacity {}")
+            , operationName
+            , offset
+            , static_cast<u64>(memoryRequirements.size)
+            , outHeap->m_desc.capacity
         );
         return false;
     }

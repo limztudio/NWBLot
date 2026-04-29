@@ -952,8 +952,7 @@ static bool LoadCookedMinimalDeformable(
     TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
-{
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
@@ -980,8 +979,7 @@ static bool LoadCookedMinimalGeometry(
     TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
-{
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
@@ -1010,8 +1008,7 @@ static bool CookAndLoadMinimalDeformable(
     const AStringView metaText,
     const AStringView caseName,
     Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
-{
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     Path outputDirectory;
     const bool cooked = CookSingleDeformableMeta(
         metaText,
@@ -1070,8 +1067,7 @@ static bool CookAndLoadMinimalGeometry(
 
 static void CheckMinimalDeformableGeometryDefaults(
     TestContext& context,
-    const NWB::Core::Assets::IAsset& loadedAsset)
-{
+    const NWB::Core::Assets::IAsset& loadedAsset){
     const NWB::Impl::DeformableGeometry& loadedGeometry =
         static_cast<const NWB::Impl::DeformableGeometry&>(loadedAsset)
     ;

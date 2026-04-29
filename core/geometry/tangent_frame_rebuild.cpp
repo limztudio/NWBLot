@@ -55,7 +55,8 @@ static_assert(
 }
 
 [[nodiscard]] bool ValidInputVertex(const TangentFrameRebuildVertex& vertex){
-    return FrameFiniteVector(LoadFloat(vertex.position), 0x7u)
+    return
+        FrameFiniteVector(LoadFloat(vertex.position), 0x7u)
         && FrameFiniteVector(LoadFloat(vertex.uv0), 0x3u)
     ;
 }

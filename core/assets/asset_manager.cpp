@@ -45,19 +45,17 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
 
     AssetBytes binary;
     if(!m_binarySource.readAssetBinary(virtualPath, binary)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'"),
-            StringConvert(virtualPath.c_str()),
-            StringConvert(assetType.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'")
+            , StringConvert(virtualPath.c_str())
+            , StringConvert(assetType.c_str())
         );
         return false;
     }
 
     if(!m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'"),
-            StringConvert(virtualPath.c_str()),
-            StringConvert(assetType.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'")
+            , StringConvert(virtualPath.c_str())
+            , StringConvert(assetType.c_str())
         );
         return false;
     }

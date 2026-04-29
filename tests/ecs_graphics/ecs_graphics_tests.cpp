@@ -170,11 +170,11 @@ struct TestAssetManager{
 static bool SetAccessoryRecordAssetPaths(
     NWB::Impl::DeformableAccessoryAttachmentRecord& record,
     const AStringView geometryPath,
-    const AStringView materialPath)
-{
+    const AStringView materialPath){
     record.geometry.virtualPath = Name(geometryPath);
     record.material.virtualPath = Name(materialPath);
-    return record.geometryVirtualPathText.assign(geometryPath)
+    return
+        record.geometryVirtualPathText.assign(geometryPath)
         && record.materialVirtualPathText.assign(materialPath)
     ;
 }
@@ -184,8 +184,7 @@ static bool AppendAccessoryRecord(
     const NWB::Impl::DeformableAccessoryAttachmentComponent& attachment,
     const NWB::Impl::DeformableSurfaceEditId anchorEditId,
     const AStringView geometryPath,
-    const AStringView materialPath)
-{
+    const AStringView materialPath){
     NWB::Impl::DeformableAccessoryAttachmentRecord record;
     if(!SetAccessoryRecordAssetPaths(record, geometryPath, materialPath))
         return false;
@@ -228,14 +227,16 @@ static u32 CountDebugPointKind(
 }
 
 static bool FiniteFloat3(const Float3U& value){
-    return IsFinite(value.x)
+    return
+        IsFinite(value.x)
         && IsFinite(value.y)
         && IsFinite(value.z)
     ;
 }
 
 static bool FiniteFloat4(const Float4U& value){
-    return IsFinite(value.x)
+    return
+        IsFinite(value.x)
         && IsFinite(value.y)
         && IsFinite(value.z)
         && IsFinite(value.w)
@@ -391,8 +392,7 @@ static NWB::Impl::DeformableDisplacementTexture MakeTestDisplacementTexture(
     const AStringView virtualPath,
     const Float4U& left,
     const Float4U& center,
-    const Float4U& right)
-{
+    const Float4U& right){
     NWB::Impl::DeformableDisplacementTexture texture{ Name(virtualPath) };
     texture.setSize(3u, 1u);
 
@@ -542,8 +542,7 @@ static Float3U BarycentricPosition(
     const Float3U& a,
     const Float3U& b,
     const Float3U& c,
-    const NWB::Impl::DeformableHitBarycentric& bary)
-{
+    const NWB::Impl::DeformableHitBarycentric& bary){
     SIMDVector position = VectorScale(LoadFloat(a), bary[0]);
     position = VectorMultiplyAdd(LoadFloat(b), VectorReplicate(bary[1]), position);
     position = VectorMultiplyAdd(LoadFloat(c), VectorReplicate(bary[2]), position);
@@ -560,8 +559,7 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     const f32 bary1,
     const f32 bary2,
     const f32 radius,
-    const f32 depth)
-{
+    const f32 depth){
     NWB::Impl::DeformableHoleEditParams params;
     params.posedHit.entity = instance.entity;
     params.posedHit.runtimeMesh = instance.handle;
@@ -594,8 +592,7 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
     const f32 radius,
-    const f32 depth)
-{
+    const f32 depth){
     return MakeHoleEditParams(instance, triangle, 0.25f, 0.25f, 0.5f, radius, depth);
 }
 
@@ -618,8 +615,7 @@ static bool CommitRecordedHole(
     const f32 radius,
     const f32 depth,
     NWB::Impl::DeformableSurfaceEditState& state,
-    NWB::Impl::DeformableHoleEditResult* outResult = nullptr)
-{
+    NWB::Impl::DeformableHoleEditResult* outResult = nullptr){
     const NWB::Impl::DeformableHoleEditParams params = MakeHoleEditParams(instance, triangle, bary0, bary1, bary2, radius, depth);
     NWB::Impl::DeformableSurfaceEditSession session;
     NWB::Impl::DeformableHolePreview preview;
@@ -645,8 +641,7 @@ static bool CommitRecordedHole(
     const f32 radius,
     const f32 depth,
     NWB::Impl::DeformableSurfaceEditState& state,
-    NWB::Impl::DeformableHoleEditResult* outResult = nullptr)
-{
+    NWB::Impl::DeformableHoleEditResult* outResult = nullptr){
     return CommitRecordedHole(instance, triangle, 0.25f, 0.25f, 0.5f, radius, depth, state, outResult);
 }
 
@@ -664,8 +659,7 @@ static bool CommitRecordedHoleAccessory(
     const f32 normalOffset,
     const f32 uniformScale,
     NWB::Impl::DeformableSurfaceEditState& state,
-    RecordedHoleAccessory& outRecorded)
-{
+    RecordedHoleAccessory& outRecorded){
     outRecorded = RecordedHoleAccessory{};
     const usize oldEditCount = state.edits.size();
     if(!CommitRecordedHole(instance, triangle, radius, depth, state, &outRecorded.hole))
@@ -697,8 +691,7 @@ static bool PrepareSurfaceEditReplayFixture(
     TestContext& context,
     const NWB::Impl::DeformableSurfaceEditState& state,
     NWB::Impl::DeformableRuntimeMeshInstance& replayInstance,
-    SurfaceEditReplayFixture& outFixture)
-{
+    SurfaceEditReplayFixture& outFixture){
     NWB::Core::Assets::AssetBytes binary;
     const bool serialized = NWB::Impl::SerializeSurfaceEditState(state, binary);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, serialized);
@@ -726,8 +719,7 @@ static bool ApplySurfaceEditReplayFixture(
     const NWB::Impl::DeformableSurfaceEditState& state,
     NWB::Impl::DeformableRuntimeMeshInstance& replayInstance,
     SurfaceEditReplayFixture& outFixture,
-    NWB::Impl::DeformableSurfaceEditReplayResult& outResult)
-{
+    NWB::Impl::DeformableSurfaceEditReplayResult& outResult){
     if(!PrepareSurfaceEditReplayFixture(context, state, replayInstance, outFixture))
         return false;
 
@@ -743,8 +735,7 @@ static bool ApplySurfaceEditReplayFixture(
 
 static Float3U RestHitPosition(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
-    const NWB::Impl::DeformableHoleEditParams& params)
-{
+    const NWB::Impl::DeformableHoleEditParams& params){
     const usize indexBase = static_cast<usize>(params.posedHit.triangle) * 3u;
     const Float3U& a = instance.restVertices[instance.indices[indexBase + 0u]].position;
     const Float3U& b = instance.restVertices[instance.indices[indexBase + 1u]].position;
@@ -755,8 +746,7 @@ static Float3U RestHitPosition(
 static bool FindNearestUpFacingRestTriangle(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const Float3U& target,
-    u32& outTriangle)
-{
+    u32& outTriangle){
     outTriangle = Limit<u32>::s_Max;
     f32 bestDistanceSquared = Limit<f32>::s_Max;
     const usize triangleCount = instance.indices.size() / 3u;
@@ -796,8 +786,7 @@ static void CheckHoleEditUnchanged(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const usize oldVertexCount,
     const usize oldIndexCount,
-    const u32 oldRevision)
-{
+    const u32 oldRevision){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
@@ -808,8 +797,7 @@ static void ResolveRestoredAccessoryAttachmentTransform(
     NWB::Impl::DeformableRuntimeMeshInstance& editedInstance,
     const NWB::Impl::DeformableSurfaceEditState& state,
     const usize accessoryIndex,
-    NWB::Core::Scene::TransformComponent& outTransform)
-{
+    NWB::Core::Scene::TransformComponent& outTransform){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, accessoryIndex < state.accessories.size());
     if(accessoryIndex >= state.accessories.size())
         return;
@@ -878,8 +866,7 @@ static void CheckAddedTrianglesResolveToSample(
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const usize firstAddedTriangle,
     const u32 addedTriangleCount,
-    const NWB::Impl::SourceSample& expectedSample)
-{
+    const NWB::Impl::SourceSample& expectedSample){
     const f32 bary[3] = { 1.0f / 3.0f, 1.0f / 3.0f, 1.0f / 3.0f };
     for(u32 triangleOffset = 0u; triangleOffset < addedTriangleCount; ++triangleOffset){
         NWB::Impl::SourceSample sample;
@@ -2381,8 +2368,7 @@ static void CheckJointRotationQuaternion(
     const f32 x,
     const f32 y,
     const f32 z,
-    const f32 w)
-{
+    const f32 w){
     SIMDVector quaternion = QuaternionIdentity();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2418,8 +2404,7 @@ static void TestJointRotationQuaternionBuildsColumnVectorRotations(TestContext& 
 
 static NWB::Impl::DeformableSkeletonPoseComponent MakeTwoJointSkeletonPose(
     const NWB::Impl::DeformableJointMatrix& rootJoint,
-    const NWB::Impl::DeformableJointMatrix& childJoint)
-{
+    const NWB::Impl::DeformableJointMatrix& childJoint){
     NWB::Impl::DeformableSkeletonPoseComponent pose;
     pose.parentJoints.push_back(NWB::Impl::s_DeformableSkeletonRootParent);
     pose.parentJoints.push_back(0u);

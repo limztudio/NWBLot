@@ -311,11 +311,10 @@ bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSi
         return false;
     }
     if(byteSize > context.physicalDeviceProperties.limits.maxPushConstantsSize){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {}: push constant size {} exceeds device limit {}"),
-            operationName,
-            byteSize,
-            context.physicalDeviceProperties.limits.maxPushConstantsSize
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size {} exceeds device limit {}")
+            , operationName
+            , byteSize
+            , context.physicalDeviceProperties.limits.maxPushConstantsSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size exceeds device limit"));
         return false;
@@ -514,9 +513,8 @@ bool Device::createPipelineLayoutForBindingLayouts(
             VulkanDetail::GetPushConstantByteSize(layout->getBindingLayoutDesc())
         );
         if(layout->m_descriptorSetLayouts.size() > static_cast<usize>(Limit<u32>::s_Max) - descriptorSetLayoutCount){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits"),
-                operationName
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits")
+                , operationName
             );
             return false;
         }
@@ -910,9 +908,9 @@ DescriptorHeapAllocation DescriptorHeapManager::allocate(const DescriptorHeapKin
         return result;
     }
     if(alignedOffset > heap.capacityBytes || sizeBytes > heap.capacityBytes - alignedOffset){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap is out of space (kind={}, requested={} bytes)."),
-            kind == DescriptorHeapKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource"),
-            sizeBytes
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor heap is out of space (kind={}, requested={} bytes).")
+            , kind == DescriptorHeapKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource")
+            , sizeBytes
         );
         return result;
     }
@@ -1088,8 +1086,8 @@ bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactStrin
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
     );
     if(memoryTypeIndex == UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find host-visible memory for descriptor heap '{}'."),
-            StringConvert(debugName.view())
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find host-visible memory for descriptor heap '{}'.")
+            , StringConvert(debugName.view())
         );
         shutdownHeap(heap);
         return false;
@@ -1131,8 +1129,8 @@ bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactStrin
     addressInfo.buffer = heap.buffer;
     heap.deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     if(heap.deviceAddress == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor heap device address '{}'."),
-            StringConvert(debugName.view())
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor heap device address '{}'.")
+            , StringConvert(debugName.view())
         );
         shutdownHeap(heap);
         return false;
@@ -1283,10 +1281,9 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
             return nullptr;
         }
         if(!VulkanDetail::IsSupportedDescriptorBindingType(item.type)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding slot {} has unsupported resource type {}"),
-                item.slot,
-                static_cast<u32>(item.type)
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor set layout: binding slot {} has unsupported resource type {}")
+                , item.slot
+                , static_cast<u32>(item.type)
             );
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
@@ -1408,10 +1405,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     for(usize i = 0; i < desc.registerSpaces.size(); ++i){
         const auto& item = desc.registerSpaces[i];
         if(!VulkanDetail::IsDescriptorHeapCompatibleType(item.type)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}"),
-                item.slot,
-                static_cast<u32>(item.type)
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: register space slot {} has unsupported resource type {}")
+                , item.slot
+                , static_cast<u32>(item.type)
             );
             DestroyArenaObject(m_context.objectArena, layout);
             return nullptr;
@@ -1579,10 +1575,9 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     if(table->m_layout->m_isBindless){
         const u32 maxCapacity = VulkanDetail::NormalizeDescriptorTableCapacity(table->m_layout->m_bindlessDesc.maxCapacity);
         if(newSize > maxCapacity){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to resize bindless descriptor table to {} descriptors: layout max capacity is {}"),
-                newSize,
-                maxCapacity
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize bindless descriptor table to {} descriptors: layout max capacity is {}")
+                , newSize
+                , maxCapacity
             );
             return;
         }
@@ -1750,11 +1745,10 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
         return false;
     }
     if(table->m_layout && table->m_layout->m_isBindless && item.arrayElement >= table->m_capacity){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: array element {} exceeds bindless capacity {}"),
-            item.slot,
-            item.arrayElement,
-            table->m_capacity
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: array element {} exceeds bindless capacity {}")
+            , item.slot
+            , item.arrayElement
+            , table->m_capacity
         );
         return false;
     }
@@ -1776,19 +1770,17 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
         layoutBinding = VulkanDetail::FindLayoutBinding(table->m_layout->m_desc, item.slot, item.type);
 
     if(!layoutBinding){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: layout does not contain resource type {} at that slot"),
-            item.slot,
-            static_cast<u32>(item.type)
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: layout does not contain resource type {} at that slot")
+            , item.slot
+            , static_cast<u32>(item.type)
         );
         return false;
     }
     if(!table->m_layout->m_isBindless && item.arrayElement >= layoutBinding->getArraySize()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: array element {} exceeds layout array size {}"),
-            item.slot,
-            item.arrayElement,
-            layoutBinding->getArraySize()
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: array element {} exceeds layout array size {}")
+            , item.slot
+            , item.arrayElement
+            , layoutBinding->getArraySize()
         );
         return false;
     }
@@ -1877,10 +1869,9 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
             break;
         }
         default:
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: unsupported resource type {}"),
-                item.slot,
-                static_cast<u32>(item.type)
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: unsupported resource type {}")
+                , item.slot
+                , static_cast<u32>(item.type)
             );
             return false;
         }
@@ -1980,10 +1971,9 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
 
         const BindingLayoutItem* layoutBinding = VulkanDetail::FindLayoutBinding(layout->m_desc, item.slot, item.type);
         if(!layoutBinding){
-            NWB_LOGGER_WARNING(
-                NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: layout does not contain resource type {} at that slot"),
-                item.slot,
-                static_cast<u32>(item.type)
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: layout does not contain resource type {} at that slot")
+                , item.slot
+                , static_cast<u32>(item.type)
             );
             continue;
         }
@@ -2085,10 +2075,9 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                 break;
             }
             default:
-                NWB_LOGGER_WARNING(
-                    NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: unsupported resource type {}"),
-                    item.slot,
-                    static_cast<u32>(item.type)
+                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: unsupported resource type {}")
+                    , item.slot
+                    , static_cast<u32>(item.type)
                 );
                 break;
             }
@@ -2128,8 +2117,7 @@ void CommandList::bindPipelineBindingSets(
     const bool usesDescriptorHeap,
     const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
     const u32 pushDataSize,
-    const BindingSetVector& bindings)
-{
+    const BindingSetVector& bindings){
     retainBindingSets(bindings);
 
     if(usesDescriptorHeap){
@@ -2165,8 +2153,7 @@ void CommandList::bindDescriptorHeapState(
     const bool usesDescriptorHeap,
     const FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& pushRanges,
     const u32 pushDataSize,
-    const BindingSetVector& bindings)
-{
+    const BindingSetVector& bindings){
     if(!usesDescriptorHeap || !m_context.descriptorHeapManager)
         return;
 

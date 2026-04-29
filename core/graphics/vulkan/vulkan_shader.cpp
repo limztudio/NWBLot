@@ -165,20 +165,18 @@ inline bool ResolveShaderEntryPoint(
         return true;
 
     case EntryPointLookupResult::NotFound:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}"),
-            StringConvert(entryName),
-            static_cast<u32>(shaderType),
-            StringConvert(errorContext)
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}")
+            , StringConvert(entryName)
+            , static_cast<u32>(shaderType)
+            , StringConvert(errorContext)
         );
         return false;
 
     case EntryPointLookupResult::InvalidSpirv:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}"),
-            StringConvert(entryName),
-            static_cast<u32>(shaderType),
-            StringConvert(errorContext)
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}")
+            , StringConvert(entryName)
+            , static_cast<u32>(shaderType)
+            , StringConvert(errorContext)
         );
         return false;
 
@@ -440,10 +438,9 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     }
     const auto& limits = m_context.physicalDeviceProperties.limits;
     if(attributeCount > limits.maxVertexInputAttributes){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}"),
-            attributeCount,
-            limits.maxVertexInputAttributes
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}")
+            , attributeCount
+            , limits.maxVertexInputAttributes
         );
         return nullptr;
     }

@@ -25,7 +25,8 @@ namespace __hidden_geometry_surface_patch_edit{
 
 
 [[nodiscard]] bool ValidEdge(const MeshTopologyEdge& edge, const usize vertexCount){
-    return edge.a < vertexCount
+    return
+        edge.a < vertexCount
         && edge.b < vertexCount
         && edge.a != edge.b
     ;

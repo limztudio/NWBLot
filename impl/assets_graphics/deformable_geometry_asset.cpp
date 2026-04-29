@@ -77,8 +77,7 @@ template<typename StringTable>
     const DeformableDisplacement& displacement,
     const CompactString& texturePathText,
     StringTable& stringTable,
-    DeformableDisplacementBinary& outBinary)
-{
+    DeformableDisplacementBinary& outBinary){
     outBinary = DeformableDisplacementBinary{};
     if(DeformableDisplacementModeUsesTexture(displacement.mode)){
         if(!StableTextMatchesName(texturePathText, displacement.texture.name()))
@@ -193,52 +192,45 @@ template<typename T, typename Allocator>
 void LogGeometryMorphPayloadFailure(
     const TString& geometryPathText,
     const Vector<DeformableMorph>& morphs,
-    const DeformableValidation::MorphPayloadFailureInfo& failure)
-{
+    const DeformableValidation::MorphPayloadFailureInfo& failure){
     const TString morphNameText = DeformableValidation::MorphPayloadFailureMorphNameText(morphs, failure);
 
     switch(failure.reason){
     case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits"),
-            geometryPathText
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits")
+            , geometryPathText
         );
         break;
     case DeformableValidation::MorphPayloadFailure::EmptyMorph:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph {} is unnamed or empty"),
-            geometryPathText,
-            failure.morphIndex
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph {} is unnamed or empty")
+            , geometryPathText
+            , failure.morphIndex
         );
         break;
     case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' contains duplicate morph '{}'"),
-            geometryPathText,
-            morphNameText
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' contains duplicate morph '{}'")
+            , geometryPathText
+            , morphNameText
         );
         break;
     case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta count exceeds u32 limits"),
-            geometryPathText,
-            morphNameText
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta count exceeds u32 limits")
+            , geometryPathText
+            , morphNameText
         );
         break;
     case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta {} is invalid"),
-            geometryPathText,
-            morphNameText,
-            failure.deltaIndex
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta {} is invalid")
+            , geometryPathText
+            , morphNameText
+            , failure.deltaIndex
         );
         break;
     case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}"),
-            geometryPathText,
-            morphNameText,
-            failure.vertexId
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}")
+            , geometryPathText
+            , morphNameText
+            , failure.vertexId
         );
         break;
     case DeformableValidation::MorphPayloadFailure::None:
@@ -263,9 +255,10 @@ void DeformableDisplacementTexture::setSize(const u32 width, const u32 height){
 
 bool DeformableDisplacementTexture::validatePayload()const{
     const auto texturePathText = [this]() -> TString{
-        return virtualPath()
-            ? StringConvert(virtualPath().c_str())
-            : TString(NWB_TEXT("<unnamed>"))
+        return
+            virtualPath()
+                ? StringConvert(virtualPath().c_str())
+                : TString(NWB_TEXT("<unnamed>"))
         ;
     };
 
@@ -274,28 +267,25 @@ bool DeformableDisplacementTexture::validatePayload()const{
         return false;
     }
     if(m_width == 0u || m_height == 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions are empty"),
-            texturePathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions are empty")
+            , texturePathText()
         );
         return false;
     }
     if(m_width > Limit<u32>::s_Max / m_height){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions overflow"),
-            texturePathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions overflow")
+            , texturePathText()
         );
         return false;
     }
 
     const usize requiredTexelCount = static_cast<usize>(m_width) * static_cast<usize>(m_height);
     if(m_texels.size() != requiredTexelCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel count {} does not match dimensions {}x{}"),
-            texturePathText(),
-            m_texels.size(),
-            m_width,
-            m_height
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel count {} does not match dimensions {}x{}")
+            , texturePathText()
+            , m_texels.size()
+            , m_width
+            , m_height
         );
         return false;
     }
@@ -303,10 +293,9 @@ bool DeformableDisplacementTexture::validatePayload()const{
     for(usize i = 0; i < m_texels.size(); ++i){
         const Float4U& texel = m_texels[i];
         if(!IsFinite(texel.x) || !IsFinite(texel.y) || !IsFinite(texel.z) || !IsFinite(texel.w)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel {} is not finite"),
-                texturePathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel {} is not finite")
+                , texturePathText()
+                , i
             );
             return false;
         }
@@ -377,18 +366,18 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
 
 bool DeformableGeometry::validatePayload()const{
     const auto geometryPathText = [this]() -> TString{
-        return virtualPath()
-            ? StringConvert(virtualPath().c_str())
-            : TString(NWB_TEXT("<unnamed>"))
+        return
+            virtualPath()
+                ? StringConvert(virtualPath().c_str())
+                : TString(NWB_TEXT("<unnamed>"))
         ;
     };
 
     const usize vertexCount = m_restVertices.size();
     const usize indexCount = m_indices.size();
     if(m_restVertices.empty() || m_indices.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has incomplete rest/index payload"),
-            geometryPathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has incomplete rest/index payload")
+            , geometryPathText()
         );
         return false;
     }
@@ -396,17 +385,15 @@ bool DeformableGeometry::validatePayload()const{
         vertexCount > static_cast<usize>(Limit<u32>::s_Max)
         || indexCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits"),
-            geometryPathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits")
+            , geometryPathText()
         );
         return false;
     }
     if((indexCount % 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3"),
-            geometryPathText(),
-            indexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3")
+            , geometryPathText()
+            , indexCount
         );
         return false;
     }
@@ -417,26 +404,23 @@ bool DeformableGeometry::validatePayload()const{
             DeformableValidation::FindRestVertexPayloadFailure(vertex)
         ;
         if(restVertexFailure == DeformableValidation::RestVertexPayloadFailure::NonFiniteData){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} contains non-finite data"),
-                geometryPathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} contains non-finite data")
+                , geometryPathText()
+                , i
             );
             return false;
         }
         if(restVertexFailure == DeformableValidation::RestVertexPayloadFailure::DegenerateFrame){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has a degenerate normal/tangent frame"),
-                geometryPathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has a degenerate normal/tangent frame")
+                , geometryPathText()
+                , i
             );
             return false;
         }
         if(restVertexFailure == DeformableValidation::RestVertexPayloadFailure::InvalidFrame){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has an invalid normal/tangent frame"),
-                geometryPathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has an invalid normal/tangent frame")
+                , geometryPathText()
+                , i
             );
             return false;
         }
@@ -450,82 +434,73 @@ bool DeformableGeometry::validatePayload()const{
             u32 invalidIndex = a;
             if(a < vertexCount)
                 invalidIndex = b >= vertexCount ? b : c;
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' index {} exceeds {} vertices"),
-                geometryPathText(),
-                invalidIndex,
-                vertexCount
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' index {} exceeds {} vertices")
+                , geometryPathText()
+                , invalidIndex
+                , vertexCount
             );
             return false;
         }
         if(a == b || a == c || b == c){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} is degenerate"),
-                geometryPathText(),
-                indexBase / 3u
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} is degenerate")
+                , geometryPathText()
+                , indexBase / 3u
             );
             return false;
         }
 
         if(!DeformableValidation::ValidTriangleArea(m_restVertices, a, b, c)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} has zero area"),
-                geometryPathText(),
-                indexBase / 3u
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} has zero area")
+                , geometryPathText()
+                , indexBase / 3u
             );
             return false;
         }
     }
 
     if(!m_skin.empty() && m_skin.size() != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skin count {} does not match vertex count {}"),
-            geometryPathText(),
-            m_skin.size(),
-            vertexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skin count {} does not match vertex count {}")
+            , geometryPathText()
+            , m_skin.size()
+            , vertexCount
         );
         return false;
     }
     if(!m_skin.empty() && m_skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has skin but no skeleton joint count"),
-            geometryPathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has skin but no skeleton joint count")
+            , geometryPathText()
         );
         return false;
     }
     if(m_skeletonJointCount > __hidden_deformable_geometry_asset::s_DeformableSkeletonJointLimit){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skeleton joint count {} exceeds skin stream limits"),
-            geometryPathText(),
-            m_skeletonJointCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skeleton joint count {} exceeds skin stream limits")
+            , geometryPathText()
+            , m_skeletonJointCount
         );
         return false;
     }
     if(!DeformableValidation::ValidInverseBindMatrices(m_inverseBindMatrices, m_skeletonJointCount)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' inverse bind matrices must be empty or match a valid skeleton"),
-            geometryPathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' inverse bind matrices must be empty or match a valid skeleton")
+            , geometryPathText()
         );
         return false;
     }
     for(usize i = 0; i < m_skin.size(); ++i){
         if(!DeformableValidation::ValidSkinInfluence(m_skin[i])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weights for vertex {} are invalid"),
-                geometryPathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weights for vertex {} are invalid")
+                , geometryPathText()
+                , i
             );
             return false;
         }
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(m_skin[i].joint[influenceIndex]);
             if(joint >= m_skeletonJointCount){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin joint {} for vertex {} exceeds skeleton joint count {}"),
-                    geometryPathText(),
-                    joint,
-                    i,
-                    m_skeletonJointCount
+                NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin joint {} for vertex {} exceeds skeleton joint count {}")
+                    , geometryPathText()
+                    , joint
+                    , i
+                    , m_skeletonJointCount
                 );
                 return false;
             }
@@ -534,50 +509,45 @@ bool DeformableGeometry::validatePayload()const{
 
     const usize triangleCount = indexCount / 3u;
     if(!m_sourceSamples.empty() && m_sourceSamples.size() != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' source samples {} do not match vertices {}"),
-            geometryPathText(),
-            m_sourceSamples.size(),
-            vertexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' source samples {} do not match vertices {}")
+            , geometryPathText()
+            , m_sourceSamples.size()
+            , vertexCount
         );
         return false;
     }
     for(usize i = 0; i < m_sourceSamples.size(); ++i){
         const SourceSample& sample = m_sourceSamples[i];
         if(!DeformableValidation::ValidSourceSample(sample, static_cast<u32>(triangleCount))){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' source sample {} is invalid"),
-                geometryPathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' source sample {} is invalid")
+                , geometryPathText()
+                , i
             );
             return false;
         }
     }
 
     if(!m_editMaskPerTriangle.empty() && m_editMaskPerTriangle.size() != triangleCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' edit mask count {} does not match triangle count {}"),
-            geometryPathText(),
-            m_editMaskPerTriangle.size(),
-            triangleCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' edit mask count {} does not match triangle count {}")
+            , geometryPathText()
+            , m_editMaskPerTriangle.size()
+            , triangleCount
         );
         return false;
     }
     for(usize i = 0; i < m_editMaskPerTriangle.size(); ++i){
         if(!ValidDeformableEditMaskFlags(m_editMaskPerTriangle[i])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' edit mask {} is invalid"),
-                geometryPathText(),
-                i
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' edit mask {} is invalid")
+                , geometryPathText()
+                , i
             );
             return false;
         }
     }
 
     if(!ValidDeformableDisplacementDescriptor(m_displacement)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid"),
-            geometryPathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid")
+            , geometryPathText()
         );
         return false;
     }
@@ -588,9 +558,8 @@ bool DeformableGeometry::validatePayload()const{
                 m_displacement.texture.name()
             )
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement texture path text does not match asset ref"),
-            geometryPathText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement texture path text does not match asset ref")
+            , geometryPathText()
         );
         return false;
     }
@@ -604,9 +573,8 @@ bool DeformableGeometry::validatePayload()const{
     }
     for(const DeformableMorph& morph : m_morphs){
         if(!morph.nameText.empty() && !__hidden_deformable_geometry_asset::StableTextMatchesName(morph.nameText, morph.name)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph name text does not match morph name"),
-                geometryPathText()
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph name text does not match morph name")
+                , geometryPathText()
             );
             return false;
         }
@@ -704,22 +672,16 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     if(inverseBindMatrixCount != 0u && inverseBindMatrixCount != skeletonJointCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count"));
         return false;
     }
     if(sourceSampleCount != 0u && sourceSampleCount != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::loadBinary failed: source sample count must be empty or match vertex count")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: source sample count must be empty or match vertex count"));
         return false;
     }
     const u64 triangleCount = indexCount / 3u;
     if(editMaskCount != 0u && editMaskCount != triangleCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometry::loadBinary failed: edit mask count must be empty or match triangle count")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: edit mask count must be empty or match triangle count"));
         return false;
     }
 
@@ -881,10 +843,9 @@ bool DeformableDisplacementTextureAssetCodec::deserialize(
 
 bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
-            StringConvert(asset.assetType().c_str()),
-            StringConvert(DeformableGeometry::s_AssetTypeText)
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
+            , StringConvert(asset.assetType().c_str())
+            , StringConvert(DeformableGeometry::s_AssetTypeText)
         );
         return false;
     }
@@ -974,9 +935,8 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
                     morphHeader.nameOffset
                 )
         ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: morph '{}' is missing stable name text"),
-                StringConvert(morph.name.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: morph '{}' is missing stable name text")
+                , StringConvert(morph.name.c_str())
             );
             return false;
         }
@@ -993,9 +953,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
             displacementBinary
         )
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: displacement texture is missing stable virtual path text")
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: displacement texture is missing stable virtual path text"));
         return false;
     }
     AppendPOD(outBinary, displacementBinary);
@@ -1018,10 +976,9 @@ bool DeformableDisplacementTextureAssetCodec::serialize(
     Core::Assets::AssetBytes& outBinary)const
 {
     if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
-            StringConvert(asset.assetType().c_str()),
-            StringConvert(DeformableDisplacementTexture::s_AssetTypeText)
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
+            , StringConvert(asset.assetType().c_str())
+            , StringConvert(DeformableDisplacementTexture::s_AssetTypeText)
         );
         return false;
     }

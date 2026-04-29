@@ -51,14 +51,16 @@ static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.0000
 }
 
 static bool NearlyEqual3(const Float3U& value, const f32 x, const f32 y, const f32 z){
-    return NearlyEqual(value.x, x)
+    return
+        NearlyEqual(value.x, x)
         && NearlyEqual(value.y, y)
         && NearlyEqual(value.z, z)
     ;
 }
 
 static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f32 z, const f32 w){
-    return NearlyEqual(value.x, x)
+    return
+        NearlyEqual(value.x, x)
         && NearlyEqual(value.y, y)
         && NearlyEqual(value.z, z)
         && NearlyEqual(value.w, w)
@@ -66,7 +68,8 @@ static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f
 }
 
 static bool NearlyEqualBounds(const MeshletBounds& lhs, const MeshletBounds& rhs){
-    return NearlyEqual3(lhs.minimum, rhs.minimum.x, rhs.minimum.y, rhs.minimum.z)
+    return
+        NearlyEqual3(lhs.minimum, rhs.minimum.x, rhs.minimum.y, rhs.minimum.z)
         && NearlyEqual3(lhs.maximum, rhs.maximum.x, rhs.maximum.y, rhs.maximum.z)
         && NearlyEqual3(lhs.center, rhs.center.x, rhs.center.y, rhs.center.z)
         && NearlyEqual(lhs.radius, rhs.radius)
@@ -118,8 +121,7 @@ static SkinInfluence4 MakeSkinInfluence(
     const u16 joint0,
     const f32 weight0,
     const u16 joint1,
-    const f32 weight1)
-{
+    const f32 weight1){
     SkinInfluence4 influence;
     influence.joint[0] = joint0;
     influence.weight[0] = weight0;
@@ -196,8 +198,7 @@ static MorphDelta MakeMorphDelta(
     const f32 positionZ,
     const f32 normalY,
     const f32 tangentX,
-    const f32 tangentW)
-{
+    const f32 tangentW){
     MorphDelta delta;
     delta.vertexId = vertexId;
     delta.deltaPosition = Float3U(0.0f, 0.0f, positionZ);

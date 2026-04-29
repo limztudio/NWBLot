@@ -58,9 +58,10 @@ vec3 nwbProjectDirectionalLightVector(){
 }
 
 vec3 nwbProjectFallbackTangent(vec3 normal){
-    return abs(normal.z) < 0.999
-        ? nwbProjectSafeNormalize(cross(vec3(0.0, 0.0, 1.0), normal), vec3(1.0, 0.0, 0.0))
-        : vec3(1.0, 0.0, 0.0)
+    return
+        abs(normal.z) < 0.999
+            ? nwbProjectSafeNormalize(cross(vec3(0.0, 0.0, 1.0), normal), vec3(1.0, 0.0, 0.0))
+            : vec3(1.0, 0.0, 0.0)
     ;
 }
 

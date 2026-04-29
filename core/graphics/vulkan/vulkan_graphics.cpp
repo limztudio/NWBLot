@@ -196,10 +196,9 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
             return nullptr;
         }
         if(desc.patchControlPoints > m_context.physicalDeviceProperties.limits.maxTessellationPatchSize){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}"),
-                desc.patchControlPoints,
-                m_context.physicalDeviceProperties.limits.maxTessellationPatchSize
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}")
+                , desc.patchControlPoints
+                , m_context.physicalDeviceProperties.limits.maxTessellationPatchSize
             );
             DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;

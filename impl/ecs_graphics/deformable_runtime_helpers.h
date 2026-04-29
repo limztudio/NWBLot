@@ -110,7 +110,8 @@ template<typename MorphVector, typename MorphWeightLookup>
         VectorGetW(matrix.v[2]),
         VectorGetW(matrix.v[3])
     );
-    return DeformableValidation::FiniteVector(matrix.v[0], 0xFu)
+    return
+        DeformableValidation::FiniteVector(matrix.v[0], 0xFu)
         && DeformableValidation::FiniteVector(matrix.v[1], 0xFu)
         && DeformableValidation::FiniteVector(matrix.v[2], 0xFu)
         && DeformableValidation::FiniteVector(matrix.v[3], 0xFu)
@@ -137,8 +138,7 @@ template<typename MorphVector, typename MorphWeightLookup>
     const DeformableRuntimeMeshInstance& instance,
     const u32 jointIndex,
     const DeformableJointMatrix& poseJoint,
-    SIMDMatrix& outMatrix)
-{
+    SIMDMatrix& outMatrix){
     outMatrix = LoadJointMatrix(poseJoint);
     if(!IsInvertibleAffineJointMatrix(outMatrix))
         return false;
@@ -159,8 +159,7 @@ template<typename JointMatrixVector>
 [[nodiscard]] inline bool BuildJointPaletteFromSkeletonPose(
     const DeformableSkeletonPoseComponent& pose,
     JointMatrixVector& outJointPalette,
-    u32& outSkinningMode)
-{
+    u32& outSkinningMode){
     outJointPalette.clear();
     outSkinningMode = DeformableSkinningMode::LinearBlend;
 
@@ -216,7 +215,8 @@ template<typename JointMatrixVector>
     outNormalMatrix.v[1] = VectorSetW(VectorMultiply(cross20, inverseDeterminant), 0.0f);
     outNormalMatrix.v[2] = VectorSetW(VectorMultiply(cross01, inverseDeterminant), 0.0f);
     outNormalMatrix.v[3] = VectorZero();
-    return DeformableValidation::FiniteVector(outNormalMatrix.v[0], 0x7u)
+    return
+        DeformableValidation::FiniteVector(outNormalMatrix.v[0], 0x7u)
         && DeformableValidation::FiniteVector(outNormalMatrix.v[1], 0x7u)
         && DeformableValidation::FiniteVector(outNormalMatrix.v[2], 0x7u)
     ;
@@ -248,7 +248,8 @@ template<typename JointMatrixVector>
     const f32 dot02 = VectorGetX(Vector3Dot(column0, column2));
     const f32 dot12 = VectorGetX(Vector3Dot(column1, column2));
     const f32 determinant = VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
-    return IsFinite(length0)
+    return
+        IsFinite(length0)
         && IsFinite(length1)
         && IsFinite(length2)
         && IsFinite(dot01)
@@ -301,7 +302,8 @@ template<typename JointMatrixVector>
     real = VectorScale(real, invLength);
     dual = VectorScale(dual, invLength);
     dual = VectorSubtract(dual, VectorScale(real, VectorGetX(Vector4Dot(real, dual))));
-    return DeformableValidation::FiniteVector(real, 0xFu)
+    return
+        DeformableValidation::FiniteVector(real, 0xFu)
         && DeformableValidation::FiniteVector(dual, 0xFu)
     ;
 }
@@ -338,7 +340,8 @@ template<typename JointMatrixVector>
     outIndices[0] = instance.indices[indexBase + 0u];
     outIndices[1] = instance.indices[indexBase + 1u];
     outIndices[2] = instance.indices[indexBase + 2u];
-    return outIndices[0] < instance.restVertices.size()
+    return
+        outIndices[0] < instance.restVertices.size()
         && outIndices[1] < instance.restVertices.size()
         && outIndices[2] < instance.restVertices.size()
     ;

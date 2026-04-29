@@ -120,14 +120,13 @@ u32 GetMaxMipLevels(const TextureDesc& desc){
 bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName){
     const u32 maxMipLevels = GetMaxMipLevels(desc);
     if(desc.mipLevels > maxMipLevels){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}"),
-            operationName,
-            desc.mipLevels,
-            maxMipLevels,
-            desc.width,
-            desc.height,
-            desc.depth
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}")
+            , operationName
+            , desc.mipLevels
+            , maxMipLevels
+            , desc.width
+            , desc.height
+            , desc.depth
         );
         return false;
     }

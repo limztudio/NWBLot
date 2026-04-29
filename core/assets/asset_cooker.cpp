@@ -94,9 +94,8 @@ bool AssetCookerRegistry::registerCooker(UniquePtr<IAssetCooker>&& cooker){
 
     auto registered = m_assetCookers.emplace(typeName, Move(cooker));
     if(!registered.second){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("AssetCookerRegistry: cooker for type '{}' is already registered"),
-            StringConvert(typeName.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCookerRegistry: cooker for type '{}' is already registered")
+            , StringConvert(typeName.c_str())
         );
         return false;
     }
@@ -121,26 +120,23 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
             IAssetCooker& onlyCooker = *onlyCookerEntry.second;
             AssetCookOptions resolvedOptions = options;
             resolvedOptions.assetType = onlyCooker.assetTypeText();
-            NWB_LOGGER_INFO(
-                NWB_TEXT("AssetCookerRegistry: selected only registered asset cooker '{}'"),
-                StringConvert(resolvedOptions.assetType.c_str())
+            NWB_LOGGER_INFO(NWB_TEXT("AssetCookerRegistry: selected only registered asset cooker '{}'")
+                , StringConvert(resolvedOptions.assetType.c_str())
             );
             return onlyCooker.cook(resolvedOptions);
         }
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Missing --asset-type. Available types: {}"),
-            StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
+        NWB_LOGGER_ERROR(NWB_TEXT("Missing --asset-type. Available types: {}")
+            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
         );
         return false;
     }
 
     const auto found = m_assetCookers.find(requestedType);
     if(found == m_assetCookers.end()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}"),
-            StringConvert(options.assetType.c_str()),
-            StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
+        NWB_LOGGER_ERROR(NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}")
+            , StringConvert(options.assetType.c_str())
+            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
         );
         return false;
     }

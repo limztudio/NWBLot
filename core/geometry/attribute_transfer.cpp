@@ -96,7 +96,8 @@ struct SkinWeightSample{
 }
 
 [[nodiscard]] bool ValidMorphDelta(const AttributeTransferMorphDelta& delta){
-    return FiniteVector(LoadFloat(delta.deltaPosition), 0x7u)
+    return
+        FiniteVector(LoadFloat(delta.deltaPosition), 0x7u)
         && FiniteVector(LoadFloat(delta.deltaNormal), 0x7u)
         && FiniteVector(LoadFloat(delta.deltaTangent), 0xFu)
     ;

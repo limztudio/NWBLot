@@ -60,7 +60,8 @@ struct DeformableRuntimeMeshInstance{
     RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
 
     [[nodiscard]] bool valid()const{
-        return entity.valid()
+        return
+            entity.valid()
             && handle.valid()
             && source.valid()
             && !restVertices.empty()

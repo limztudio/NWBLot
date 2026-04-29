@@ -160,11 +160,10 @@ bool BuildOpacityMicromapUsageCounts(const Vector<RayTracingOpacityMicromapUsage
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
         const VkOpacityMicromapFormatEXT format = ConvertOpacityMicromapFormat(count.format);
         if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_EXT){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}"),
-                operation,
-                i,
-                static_cast<u32>(count.format)
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap usage count {} has invalid format {}")
+                , operation
+                , i
+                , static_cast<u32>(count.format)
             );
             outUsageCounts.clear();
             return false;
@@ -1072,10 +1071,9 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
     if(desc.maxRecursionDepth > m_context.rayTracingPipelineProperties.maxRayRecursionDepth){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}"),
-            desc.maxRecursionDepth,
-            m_context.rayTracingPipelineProperties.maxRayRecursionDepth
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}")
+            , desc.maxRecursionDepth
+            , m_context.rayTracingPipelineProperties.maxRayRecursionDepth
         );
         return nullptr;
     }

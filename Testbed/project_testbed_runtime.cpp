@@ -84,9 +84,10 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
 
 
 [[nodiscard]] static const char* SurfaceEditTargetLabel(const usize targetIndex){
-    return targetIndex < s_SurfaceEditTargetCount
-        ? s_SurfaceEditTargets[targetIndex].label.data()
-        : "invalid"
+    return
+        targetIndex < s_SurfaceEditTargetCount
+            ? s_SurfaceEditTargets[targetIndex].label.data()
+            : "invalid"
     ;
 }
 
@@ -112,8 +113,7 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
 }
 
 [[nodiscard]] static const tchar* SurfaceEditPermissionText(
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Enum permission)
-{
+    const NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Enum permission){
     switch(permission){
     case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Restricted:
         return NWB_TEXT("restricted");
@@ -128,8 +128,7 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
 [[nodiscard]] static const NWB::Impl::DeformableDisplacementTexture* ResolveSurfaceEditDebugDisplacementTexture(
     const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
     NWB::Core::Assets::AssetManager& assetManager,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset)
-{
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     outLoadedAsset.reset();
     const NWB::Impl::DeformableDisplacement& displacement = instance.displacement;
     if(!NWB::Impl::DeformableDisplacementModeUsesTexture(displacement.mode) || !displacement.texture.valid())
@@ -147,9 +146,10 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
         return nullptr;
 
     const auto* texture = checked_cast<const NWB::Impl::DeformableDisplacementTexture*>(outLoadedAsset.get());
-    return texture->virtualPath() == displacement.texture.name() && texture->validatePayload()
-        ? texture
-        : nullptr
+    return
+        texture->virtualPath() == displacement.texture.name() && texture->validatePayload()
+            ? texture
+            : nullptr
     ;
 }
 
@@ -216,8 +216,7 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
 static void ResolveFlyCameraAnglesFromTransform(
     const NWB::Core::Scene::TransformComponent& transform,
     f32& outYawRadians,
-    f32& outPitchRadians)
-{
+    f32& outPitchRadians){
     const Float4 localForward(0.0f, 0.0f, 1.0f);
     const EditorVec3 forward = NormalizeVec3(
         Vector3Rotate(LoadFloat(localForward), LoadFloat(transform.rotation)),
@@ -494,8 +493,7 @@ static void UpdateProxySkeletonPose(
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSurfaceEditTargetEntity(
     NWB::Core::ECS::World& world,
-    const SurfaceEditTargetDesc& target)
-{
+    const SurfaceEditTargetDesc& target){
     TestbedDeformableGeometryRef geometry;
     geometry.virtualPath = Name(target.geometryPath);
     TestbedMaterialRef material;
@@ -1043,8 +1041,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
         [&](NWB::Core::ECS::EntityID entity,
             NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent& attachment,
             NWB::Core::Scene::TransformComponent& transform,
-            NWB::Core::ECSGraphics::RendererComponent& renderer)
-        {
+            NWB::Core::ECSGraphics::RendererComponent& renderer){
             static_cast<void>(entity);
             const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
@@ -1569,8 +1566,7 @@ bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
 
 bool ProjectTestbed::prepareSurfaceEditMutation(
     const tchar* action,
-    SurfaceEditMutationContext& outContext)
-{
+    SurfaceEditMutationContext& outContext){
     outContext = SurfaceEditMutationContext{};
     if(m_pendingSurfaceEditReplay || m_pendingSurfaceEditAccessory){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit {}: waiting for pending replay/accessory work"), action);
@@ -1596,8 +1592,7 @@ bool ProjectTestbed::prepareSurfaceEditMutation(
 void ProjectTestbed::finishSurfaceEditMutation(
     const tchar* action,
     const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
-    const bool clearRedo)
-{
+    const bool clearRedo){
     clearSurfaceEditPreview();
     clearPendingSurfaceEditAccessory();
     if(clearRedo)
@@ -1622,8 +1617,7 @@ bool ProjectTestbed::buildSurfaceEditPickRay(NWB::Core::ECSGraphics::DeformableP
 bool ProjectTestbed::pickSurfaceEditMutationTarget(
     const tchar* action,
     const SurfaceEditMutationContext& editContext,
-    NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit)
-{
+    NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit){
     outTargetHit = NWB::Core::ECSGraphics::DeformablePosedHit{};
 
     NWB::Core::ECSGraphics::DeformablePickingRay ray;

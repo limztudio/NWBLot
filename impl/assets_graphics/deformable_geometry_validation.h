@@ -76,8 +76,7 @@ namespace RestVertexPayloadFailure{
     const MorphPayloadFailure::Enum reason,
     const usize morphIndex = 0,
     const usize deltaIndex = 0,
-    const u32 vertexId = 0)
-{
+    const u32 vertexId = 0){
     MorphPayloadFailureInfo info;
     info.reason = reason;
     info.morphIndex = morphIndex;
@@ -88,15 +87,15 @@ namespace RestVertexPayloadFailure{
 
 [[nodiscard]] inline TString MorphPayloadFailureMorphNameText(
     const Vector<DeformableMorph>& morphs,
-    const MorphPayloadFailureInfo& failure)
-{
+    const MorphPayloadFailureInfo& failure){
     const DeformableMorph* morph = failure.morphIndex < morphs.size()
         ? &morphs[failure.morphIndex]
         : nullptr
     ;
-    return (morph && morph->name)
-        ? StringConvert(morph->name.c_str())
-        : TString(NWB_TEXT("<unnamed>"))
+    return
+        (morph && morph->name)
+            ? StringConvert(morph->name.c_str())
+            : TString(NWB_TEXT("<unnamed>"))
     ;
 }
 
@@ -115,7 +114,8 @@ namespace RestVertexPayloadFailure{
     const SIMDVector tangent = LoadRestVertexTangent(vertex);
     const SIMDVector uv0 = LoadRestVertexUv0(vertex);
     const SIMDVector color0 = LoadRestVertexColor0(vertex);
-    return FiniteVector(position, 0x7u)
+    return
+        FiniteVector(position, 0x7u)
         && FiniteVector(normal, 0x7u)
         && FiniteVector(tangent, 0xFu)
         && FiniteVector(uv0, 0x3u)
@@ -155,7 +155,8 @@ namespace RestVertexPayloadFailure{
         return true;
 
     const f32 frameDot = VectorGetX(Vector3Dot(normal, tangent));
-    return Abs(normalLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
+    return
+        Abs(normalLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
         && Abs(tangentLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
         && Abs(frameDot) <= s_RestFrameOrthogonalityEpsilon
     ;
@@ -212,8 +213,7 @@ namespace RestVertexPayloadFailure{
 [[nodiscard]] inline bool RebuildRestVertexTangentFrames(
     Vector<DeformableVertexRest>& vertices,
     const Vector<u32>& indices,
-    Core::Geometry::TangentFrameRebuildResult* outResult = nullptr)
-{
+    Core::Geometry::TangentFrameRebuildResult* outResult = nullptr){
     Core::Alloc::ScratchArena<> scratchArena;
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
     using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
@@ -243,7 +243,8 @@ namespace RestVertexPayloadFailure{
 
 [[nodiscard]] inline bool ValidBarycentric(SIMDVector baryVector, const f32 minimumBarycentric){
     const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
-    return FiniteVector(baryVector, 0x7u)
+    return
+        FiniteVector(baryVector, 0x7u)
         && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
         && Abs(barySum - 1.0f) <= s_BarycentricSumEpsilon
     ;
@@ -301,7 +302,8 @@ namespace RestVertexPayloadFailure{
 }
 
 [[nodiscard]] inline bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
-    return sourceTriangleCount != 0u
+    return
+        sourceTriangleCount != 0u
         && sample.sourceTri < sourceTriangleCount
         && ValidSourceBarycentric(sample.bary)
     ;
@@ -362,8 +364,7 @@ namespace RestVertexPayloadFailure{
 
 [[nodiscard]] inline bool ValidInverseBindMatrices(
     const Vector<DeformableJointMatrix>& inverseBindMatrices,
-    const u32 skeletonJointCount)
-{
+    const u32 skeletonJointCount){
     if(inverseBindMatrices.empty())
         return true;
     if(skeletonJointCount == 0u || inverseBindMatrices.size() != skeletonJointCount)
@@ -380,7 +381,8 @@ namespace RestVertexPayloadFailure{
     const SIMDVector deltaPosition = LoadFloat(delta.deltaPosition);
     const SIMDVector deltaNormal = LoadFloat(delta.deltaNormal);
     const SIMDVector deltaTangent = LoadFloat(delta.deltaTangent);
-    return delta.vertexId < vertexCount
+    return
+        delta.vertexId < vertexCount
         && FiniteVector(deltaPosition, 0x7u)
         && FiniteVector(deltaNormal, 0x7u)
         && FiniteVector(deltaTangent, 0xFu)
@@ -389,8 +391,7 @@ namespace RestVertexPayloadFailure{
 
 [[nodiscard]] inline MorphPayloadFailureInfo FindMorphPayloadFailure(
     const Vector<DeformableMorph>& morphs,
-    const usize vertexCount)
-{
+    const usize vertexCount){
     if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
         return MakeMorphPayloadFailure(MorphPayloadFailure::MorphCountLimit);
     if(morphs.empty())
@@ -488,8 +489,7 @@ namespace RestVertexPayloadFailure{
     const Vector<DeformableJointMatrix>& inverseBindMatrices,
     const Vector<SourceSample>& sourceSamples,
     const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
-    const Vector<DeformableMorph>& morphs)
-{
+    const Vector<DeformableMorph>& morphs){
     if(restVertices.empty() || indices.empty())
         return false;
     if(

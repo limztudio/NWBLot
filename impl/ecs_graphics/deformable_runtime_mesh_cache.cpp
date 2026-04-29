@@ -51,51 +51,40 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
 void LogRuntimeMorphPayloadFailure(
     const TString& sourceText,
     const Vector<DeformableMorph>& morphs,
-    const DeformableValidation::MorphPayloadFailureInfo& failure)
-{
+    const DeformableValidation::MorphPayloadFailureInfo& failure){
     const TString morphNameText = DeformableValidation::MorphPayloadFailureMorphNameText(morphs, failure);
 
     switch(failure.reason){
     case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"),
-            sourceText
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph count exceeds u32 limits"), sourceText);
         break;
     case DeformableValidation::MorphPayloadFailure::EmptyMorph:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an unnamed or empty morph"),
-            sourceText
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an unnamed or empty morph"), sourceText);
         break;
     case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' contains duplicate morph '{}'"),
-            sourceText,
-            morphNameText
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' contains duplicate morph '{}'")
+            , sourceText
+            , morphNameText
         );
         break;
     case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta count exceeds u32 limits"),
-            sourceText,
-            morphNameText
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta count exceeds u32 limits")
+            , sourceText
+            , morphNameText
         );
         break;
     case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta {} is invalid"),
-            sourceText,
-            morphNameText,
-            failure.deltaIndex
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' delta {} is invalid")
+            , sourceText
+            , morphNameText
+            , failure.deltaIndex
         );
         break;
     case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}"),
-            sourceText,
-            morphNameText,
-            failure.vertexId
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' morph '{}' has duplicate vertex {}")
+            , sourceText
+            , morphNameText
+            , failure.vertexId
         );
         break;
     case DeformableValidation::MorphPayloadFailure::None:
@@ -105,16 +94,16 @@ void LogRuntimeMorphPayloadFailure(
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const DeformableRuntimeMeshInstance& instance){
     const auto sourceText = [&instance]() -> TString{
-        return instance.source.name()
-            ? StringConvert(instance.source.name().c_str())
-            : TString(NWB_TEXT("<unnamed>"))
+        return
+            instance.source.name()
+                ? StringConvert(instance.source.name().c_str())
+                : TString(NWB_TEXT("<unnamed>"))
         ;
     };
 
     if(instance.restVertices.empty() || instance.indices.empty()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has incomplete rest/index payload"),
-            sourceText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has incomplete rest/index payload")
+            , sourceText()
         );
         return false;
     }
@@ -124,34 +113,30 @@ void LogRuntimeMorphPayloadFailure(
         vertexCount > static_cast<usize>(Limit<u32>::s_Max)
         || indexCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' exceeds u32 vertex/index count limits"),
-            sourceText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' exceeds u32 vertex/index count limits")
+            , sourceText()
         );
         return false;
     }
     if((indexCount % 3u) != 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3"),
-            sourceText(),
-            indexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index count {} is not a multiple of 3")
+            , sourceText()
+            , indexCount
         );
         return false;
     }
     if(!ValidDeformableDisplacementDescriptor(instance.displacement)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor"),
-            sourceText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor")
+            , sourceText()
         );
         return false;
     }
 
     for(usize vertexIndex = 0; vertexIndex < vertexCount; ++vertexIndex){
         if(!DeformableValidation::ValidRestVertexFrame(instance.restVertices[vertexIndex])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} has invalid data or frame"),
-                sourceText(),
-                vertexIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' rest vertex {} has invalid data or frame")
+                , sourceText()
+                , vertexIndex
             );
             return false;
         }
@@ -161,11 +146,10 @@ void LogRuntimeMorphPayloadFailure(
         if(static_cast<usize>(index) < vertexCount)
             return false;
 
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices"),
-            sourceText(),
-            index,
-            vertexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' index {} exceeds {} vertices")
+            , sourceText()
+            , index
+            , vertexCount
         );
         return true;
     };
@@ -176,10 +160,9 @@ void LogRuntimeMorphPayloadFailure(
         if(indexOutOfRange(a) || indexOutOfRange(b) || indexOutOfRange(c))
             return false;
         if(a == b || a == c || b == c){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} is degenerate"),
-                sourceText(),
-                indexBase / 3u
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} is degenerate")
+                , sourceText()
+                , indexBase / 3u
             );
             return false;
         }
@@ -189,52 +172,46 @@ void LogRuntimeMorphPayloadFailure(
         const SIMDVector ac = VectorSubtract(LoadRestVertexPosition(instance.restVertices[c]), aPosition);
         const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
         if(!(areaLengthSquared > DeformableValidation::s_TriangleAreaLengthSquaredEpsilon)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} has zero area"),
-                sourceText(),
-                indexBase / 3u
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' triangle {} has zero area")
+                , sourceText()
+                , indexBase / 3u
             );
             return false;
         }
     }
 
     if(!instance.skin.empty() && instance.skin.size() != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin count {} does not match vertex count {}"),
-            sourceText(),
-            instance.skin.size(),
-            vertexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin count {} does not match vertex count {}")
+            , sourceText()
+            , instance.skin.size()
+            , vertexCount
         );
         return false;
     }
     if(!instance.skin.empty() && instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has skin but no skeleton joint count"),
-            sourceText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has skin but no skeleton joint count")
+            , sourceText()
         );
         return false;
     }
     if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits"),
-            sourceText(),
-            instance.skeletonJointCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
+            , sourceText()
+            , instance.skeletonJointCount
         );
         return false;
     }
     if(!DeformableValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' inverse bind matrices are invalid"),
-            sourceText()
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' inverse bind matrices are invalid")
+            , sourceText()
         );
         return false;
     }
     for(usize vertexIndex = 0; vertexIndex < instance.skin.size(); ++vertexIndex){
         if(!DeformableValidation::ValidSkinInfluence(instance.skin[vertexIndex])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin influence {} is invalid"),
-                sourceText(),
-                vertexIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin influence {} is invalid")
+                , sourceText()
+                , vertexIndex
             );
             return false;
         }
@@ -246,52 +223,47 @@ void LogRuntimeMorphPayloadFailure(
             failedJoint
             )
         ){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin joint {} for vertex {} exceeds skeleton joint count {}"),
-                sourceText(),
-                failedJoint,
-                vertexIndex,
-                instance.skeletonJointCount
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin joint {} for vertex {} exceeds skeleton joint count {}")
+                , sourceText()
+                , failedJoint
+                , vertexIndex
+                , instance.skeletonJointCount
             );
             return false;
         }
     }
 
     if(!instance.sourceSamples.empty() && instance.sourceSamples.size() != vertexCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample count {} does not match vertex count {}"),
-            sourceText(),
-            instance.sourceSamples.size(),
-            vertexCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample count {} does not match vertex count {}")
+            , sourceText()
+            , instance.sourceSamples.size()
+            , vertexCount
         );
         return false;
     }
     for(usize vertexIndex = 0; vertexIndex < instance.sourceSamples.size(); ++vertexIndex){
         if(!DeformableValidation::ValidSourceSample(instance.sourceSamples[vertexIndex], instance.sourceTriangleCount)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample {} is invalid"),
-                sourceText(),
-                vertexIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' source sample {} is invalid")
+                , sourceText()
+                , vertexIndex
             );
             return false;
         }
     }
     const usize triangleCount = indexCount / 3u;
     if(!instance.editMaskPerTriangle.empty() && instance.editMaskPerTriangle.size() != triangleCount){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit mask count {} does not match triangle count {}"),
-            sourceText(),
-            instance.editMaskPerTriangle.size(),
-            triangleCount
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit mask count {} does not match triangle count {}")
+            , sourceText()
+            , instance.editMaskPerTriangle.size()
+            , triangleCount
         );
         return false;
     }
     for(usize triangleIndex = 0; triangleIndex < instance.editMaskPerTriangle.size(); ++triangleIndex){
         if(!ValidDeformableEditMaskFlags(instance.editMaskPerTriangle[triangleIndex])){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit mask {} is invalid"),
-                sourceText(),
-                triangleIndex
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit mask {} is invalid")
+                , sourceText()
+                , triangleIndex
             );
             return false;
         }
@@ -417,16 +389,14 @@ bool DeformableRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handle
         __hidden_deformable_runtime_mesh_cache::ExpandDirtyFlags(dirtyFlags)
     ;
     if(expandedDirtyFlags == RuntimeMeshDirtyFlag::None){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' revision bump requires dirty flags"),
-            instance->handle.value
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' revision bump requires dirty flags")
+            , instance->handle.value
         );
         return false;
     }
     if(instance->editRevision == Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit revision overflowed"),
-            instance->handle.value
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' edit revision overflowed")
+            , instance->handle.value
         );
         return false;
     }
@@ -529,16 +499,14 @@ bool DeformableRuntimeMeshCache::ensureSourceLoaded(const Core::Assets::AssetRef
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!m_assetManager.loadSync(DeformableGeometry::AssetTypeName(), sourceName, loadedAsset)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: failed to load deformable geometry '{}'"),
-            StringConvert(sourceName.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: failed to load deformable geometry '{}'")
+            , StringConvert(sourceName.c_str())
         );
         return false;
     }
     if(!loadedAsset || loadedAsset->assetType() != DeformableGeometry::AssetTypeName()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: asset '{}' is not deformable geometry"),
-            StringConvert(sourceName.c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: asset '{}' is not deformable geometry")
+            , StringConvert(sourceName.c_str())
         );
         return false;
     }
@@ -596,9 +564,8 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
     restVertexSetup.dataSize = restVertexBytes;
     instance.restVertexBuffer = m_graphics.setupBuffer(restVertexSetup);
     if(!instance.restVertexBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: failed to create rest vertex buffer for '{}'"),
-            StringConvert(instance.source.name().c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: failed to create rest vertex buffer for '{}'")
+            , StringConvert(instance.source.name().c_str())
         );
         return false;
     }
@@ -613,9 +580,8 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
     indexSetup.dataSize = indexBytes;
     instance.indexBuffer = m_graphics.setupBuffer(indexSetup);
     if(!instance.indexBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: failed to create index buffer for '{}'"),
-            StringConvert(instance.source.name().c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: failed to create index buffer for '{}'")
+            , StringConvert(instance.source.name().c_str())
         );
         return false;
     }
@@ -632,9 +598,8 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
     deformedVertexSetup.dataSize = restVertexBytes;
     instance.deformedVertexBuffer = m_graphics.setupBuffer(deformedVertexSetup);
     if(!instance.deformedVertexBuffer){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: failed to create deformed vertex buffer for '{}'"),
-            StringConvert(instance.source.name().c_str())
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: failed to create deformed vertex buffer for '{}'")
+            , StringConvert(instance.source.name().c_str())
         );
         return false;
     }
@@ -703,10 +668,9 @@ bool DeformableRuntimeMeshCache::computePayloadBytes(
 )const{
     outBytes = 0;
     if(stride == 0u || count > Limit<usize>::s_Max / stride){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' '{}' payload byte size overflows"),
-            StringConvert(instance.source.name().c_str()),
-            StringConvert(label)
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' '{}' payload byte size overflows")
+            , StringConvert(instance.source.name().c_str())
+            , StringConvert(label)
         );
         return false;
     }

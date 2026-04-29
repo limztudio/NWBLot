@@ -62,8 +62,7 @@ void OrthonormalizeVertexFrame(
     const SIMDVector fallbackNormal,
     const SIMDVector fallbackTangent,
     SIMDVector* outNormal = nullptr,
-    SIMDVector* outTangent = nullptr)
-{
+    SIMDVector* outTangent = nullptr){
     SIMDVector normal = LoadVertexNormal(vertex);
     SIMDVector tangent = LoadVertexTangent(vertex);
     Core::Geometry::FrameOrthonormalize(normal, tangent, fallbackNormal, fallbackTangent);
@@ -78,7 +77,8 @@ void OrthonormalizeVertexFrame(
 [[nodiscard]] bool IsFiniteRay(const DeformablePickingRay& ray){
     const f32 minDistance = ray.minDistance();
     const f32 maxDistance = ray.maxDistance();
-    return DeformableValidation::FiniteVector(ray.originVector(), 0x7u)
+    return
+        DeformableValidation::FiniteVector(ray.originVector(), 0x7u)
         && DeformableValidation::FiniteVector(ray.directionVector(), 0x7u)
         && IsFinite(minDistance)
         && IsFinite(maxDistance)
@@ -158,8 +158,7 @@ template<typename SourceJointVector, typename PreparedJointPaletteVector>
     const DeformableRuntimeMeshInstance& instance,
     const SourceJointVector& sourceJoints,
     const u32 skinningMode,
-    PreparedJointPaletteVector& outJointPalette)
-{
+    PreparedJointPaletteVector& outJointPalette){
     outJointPalette.clear();
     if(instance.skin.empty() || sourceJoints.empty())
         return true;
@@ -199,8 +198,7 @@ template<typename PreparedJointPaletteVector>
 [[nodiscard]] bool BuildPreparedJointPalette(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableJointPaletteComponent* jointPalette,
-    PreparedJointPaletteVector& outJointPalette)
-{
+    PreparedJointPaletteVector& outJointPalette){
     outJointPalette.clear();
     if(!jointPalette)
         return true;
@@ -219,8 +217,7 @@ template<typename PreparedJointPaletteVector>
     const PreparedJointPaletteVector& jointPalette,
     const u32 skinningMode,
     const u32 vertexId,
-    DeformableVertexRest& vertex)
-{
+    DeformableVertexRest& vertex){
     if(jointPalette.empty())
         return true;
     if(instance.skin.empty())
@@ -341,8 +338,7 @@ template<typename PreparedJointPaletteVector>
     Core::Assets::AssetManager* assetManager,
     const DeformableDisplacementTexture* inputTexture,
     UniquePtr<Core::Assets::IAsset>& outLoadedAsset,
-    const DeformableDisplacementTexture*& outTexture)
-{
+    const DeformableDisplacementTexture*& outTexture){
     outLoadedAsset.reset();
     outTexture = inputTexture;
     if(!DeformableDisplacementModeUsesTexture(displacement.mode))
@@ -366,8 +362,7 @@ template<typename PreparedJointPaletteVector>
 void ApplyScalarTextureNormal(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
-    DeformableVertexRest& vertex)
-{
+    DeformableVertexRest& vertex){
     if(texture.width() <= 1u && texture.height() <= 1u)
         return;
 
@@ -404,8 +399,7 @@ void ApplyScalarTextureNormal(
 void ApplyVectorTextureNormal(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
-    DeformableVertexRest& vertex)
-{
+    DeformableVertexRest& vertex){
     if(texture.width() <= 1u && texture.height() <= 1u)
         return;
 
@@ -473,8 +467,7 @@ void ApplyVectorTextureNormal(
 void ApplyDisplacement(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture* texture,
-    DeformableVertexRest& vertex)
-{
+    DeformableVertexRest& vertex){
     if(displacement.mode == DeformableDisplacementMode::None)
         return;
 
@@ -559,8 +552,7 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
     const SIMDVector bVector,
     const SIMDVector cVector,
     f32& outDistance,
-    f32 (&outBary)[3])
-{
+    f32 (&outBary)[3]){
     const SIMDVector edge0 = VectorSubtract(bVector, aVector);
     const SIMDVector edge1 = VectorSubtract(cVector, aVector);
     const SIMDVector p = Vector3Cross(directionVector, edge1);
@@ -707,16 +699,14 @@ template<typename VertexVector>
 bool BuildDeformablePickingVertices(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
-    Vector<DeformableVertexRest>& outVertices)
-{
+    Vector<DeformableVertexRest>& outVertices){
     return __hidden_deformable_picking::BuildPickingVerticesIfReady(instance, inputs, outVertices);
 }
 
 bool BuildDeformablePickingVertices(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
-    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>>& outVertices)
-{
+    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>>& outVertices){
     return __hidden_deformable_picking::BuildPickingVerticesIfReady(instance, inputs, outVertices);
 }
 
@@ -724,8 +714,7 @@ bool ResolveDeformableRestSurfaceSample(
     const DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
     const f32 (&bary)[3],
-    SourceSample& outSample)
-{
+    SourceSample& outSample){
     outSample = SourceSample{};
     if(!DeformableValidation::ValidLooseBarycentric(bary))
         return false;
@@ -771,8 +760,7 @@ bool ResolveDeformableRestSurfaceSample(
     const DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
     const DeformableHitBarycentric& bary,
-    SourceSample& outSample)
-{
+    SourceSample& outSample){
     const f32 unpackedBary[3] = { bary[0], bary[1], bary[2] };
     return ResolveDeformableRestSurfaceSample(instance, triangle, unpackedBary, outSample);
 }
@@ -787,9 +775,10 @@ DeformableEditMaskFlags ResolveDeformableTriangleEditMask(const DeformableRuntim
         return DeformableEditMaskFlag::Forbidden;
 
     const DeformableEditMaskFlags flags = instance.editMaskPerTriangle[triangle];
-    return ValidDeformableEditMaskFlags(flags)
-        ? flags
-        : static_cast<DeformableEditMaskFlags>(DeformableEditMaskFlag::Forbidden)
+    return
+        ValidDeformableEditMaskFlags(flags)
+            ? flags
+            : static_cast<DeformableEditMaskFlags>(DeformableEditMaskFlag::Forbidden)
     ;
 }
 
@@ -797,8 +786,7 @@ bool RaycastDeformableRuntimeMesh(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformablePickingRay& ray,
-    DeformablePosedHit& outHit)
-{
+    DeformablePosedHit& outHit){
     outHit = DeformablePosedHit{};
     if(!instance.entity.valid() || !instance.handle.valid() || !__hidden_deformable_picking::IsFiniteRay(ray))
         return false;
@@ -882,8 +870,7 @@ bool RaycastVisibleDeformableRenderers(
     const RendererSystem& rendererSystem,
     const DeformablePickingRay& ray,
     DeformablePosedHit& outHit,
-    Core::Assets::AssetManager* assetManager)
-{
+    Core::Assets::AssetManager* assetManager){
     outHit = DeformablePosedHit{};
     bool foundHit = false;
     f32 closestDistance = ray.maxDistance();

@@ -121,10 +121,11 @@ struct SystemMemoryAllocator{
     SystemMemoryFreeFunction deallocate = nullptr;
 
     [[nodiscard]] bool valid()const noexcept{
-        return allocate != nullptr
+        return
+            allocate != nullptr
             && reallocate != nullptr
             && deallocate != nullptr
-            ;
+        ;
     }
 };
 
@@ -649,11 +650,12 @@ struct TextureSubresourceSet{
 
 };
 inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{
-    return lhs.baseMipLevel == rhs.baseMipLevel
+    return
+        lhs.baseMipLevel == rhs.baseMipLevel
         && lhs.numMipLevels == rhs.numMipLevels
         && lhs.baseArraySlice == rhs.baseArraySlice
         && lhs.numArraySlices == rhs.numArraySlices
-        ;
+    ;
 }
 inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 

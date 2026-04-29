@@ -85,10 +85,9 @@ bool ShaderAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::
 
 bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("ShaderAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
-            StringConvert(asset.assetType().c_str()),
-            StringConvert(Shader::s_AssetTypeText)
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
+            , StringConvert(asset.assetType().c_str())
+            , StringConvert(Shader::s_AssetTypeText)
         );
         return false;
     }

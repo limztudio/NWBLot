@@ -113,9 +113,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         }
 
         if(!m_stageShaders.emplace(stageName, shaderAsset).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material::loadBinary failed: duplicate shader stage '{}'"),
-                StringConvert(stageName.c_str())
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: duplicate shader stage '{}'")
+                , StringConvert(stageName.c_str())
             );
             return false;
         }
@@ -146,10 +145,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         }
 
         if(!m_parameters.emplace(key, value).second){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Material::loadBinary failed: duplicate parameter key '{}'"),
-                StringConvert(key.c_str())
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: duplicate parameter key '{}'"), StringConvert(key.c_str()));
             return false;
         }
     }
@@ -187,10 +183,9 @@ bool MaterialAssetCodec::deserialize(const Name& virtualPath, const Core::Assets
 
 bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'"),
-            StringConvert(asset.assetType().c_str()),
-            StringConvert(Material::s_AssetTypeText)
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
+            , StringConvert(asset.assetType().c_str())
+            , StringConvert(Material::s_AssetTypeText)
         );
         return false;
     }

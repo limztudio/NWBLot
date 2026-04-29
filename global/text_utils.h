@@ -16,7 +16,8 @@
 
 template<typename CharT>
 [[nodiscard]] inline bool IsAsciiSpace(const CharT ch){
-    return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n')
+    return
+        ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n')
         || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v')
     ;
 }
@@ -164,9 +165,10 @@ template<typename CharT>
 inline constexpr CharT Canonicalize(CharT c){
     if(c == static_cast<CharT>('\\'))
         return static_cast<CharT>('/');
-    return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
-        ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
-        : c
+    return
+        (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
+            ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
+            : c
     ;
 }
 

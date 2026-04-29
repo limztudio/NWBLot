@@ -98,7 +98,8 @@ static_assert(
 }
 
 [[nodiscard]] inline bool CameraClipRangeValid(const CameraComponent& camera){
-    return IsFinite(camera.nearPlane())
+    return
+        IsFinite(camera.nearPlane())
         && IsFinite(camera.farPlane())
         && camera.nearPlane() > 0.0f
         && camera.nearPlane() < camera.farPlane()
@@ -115,7 +116,8 @@ static_assert(
 
 [[nodiscard]] inline bool CameraProjectionDataValid(const CameraProjectionData& projectionData){
     const SIMDVector projectionParams = LoadFloat(projectionData.projectionParams);
-    return IsFinite(projectionData.aspectRatio)
+    return
+        IsFinite(projectionData.aspectRatio)
         && IsFinite(projectionData.tanHalfVerticalFov)
         && !Vector4IsNaN(projectionParams)
         && !Vector4IsInfinite(projectionParams)

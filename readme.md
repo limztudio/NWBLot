@@ -25,7 +25,8 @@
   - the Windows toolchain now builds with `clang`/`clang++`, `lld-link`, and Ninja. It still targets the Windows/MSVC ABI, so the Windows SDK and the Microsoft C++ runtime/standard library remain part of the environment.
 
 - Linux status
-  - engine preset: `linux-clang-engine-x64`
-  - migration is still in progress.
-  - `nwb_logserver` is available on Linux in console mode.
-  - Windows-only targets are intentionally disabled on non-Windows for now: `nwb_frame`, `nwb_loader`, `testbed`.
+  - full configure preset: `linux-clang-x64`
+  - engine-only configure preset: `linux-clang-engine-x64`
+  - testbed configure preset: `linux-clang-testbed-x64`
+  - Linux uses the same CMake + Ninja + Clang flow and `dbg` / `opt` / `fin` build configurations as Windows.
+  - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are available when their dependencies are found.

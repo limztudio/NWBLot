@@ -371,9 +371,6 @@ ASALocalRun/
 # BeatPulse healthcheck temp database
 healthchecksdb
 
-# Backup folder for Package Reference Convert tool in Visual Studio 2017
-MigrationBackup/
-
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 
@@ -400,12 +397,3 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
-
-# Legacy MSBuild project files kept out of the CMake/Clang workflow
-*.sln
-*.vcxproj
-*.vcxproj.user
-*.vcxitems
-*.props
-*.targets
-*.filters

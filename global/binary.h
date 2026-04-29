@@ -14,53 +14,161 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename Container, typename PodType>
-inline void AppendPOD(Container& outBinary, const PodType& value){
-    const usize beginOffset = outBinary.size();
-    if(beginOffset > Limit<usize>::s_Max - sizeof(PodType))
-        throw RuntimeException("AppendPOD size overflow");
+namespace BinaryDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Container>
+inline void RequireByteContainer(){
+    using ByteType = typename Container::value_type;
+    static_assert(sizeof(ByteType) == 1u, "binary helpers require a byte-sized container");
+}
+
+template<typename Container>
+[[nodiscard]] inline bool CanAppendBytes(const Container& outBinary, const usize byteCount){
+    return outBinary.size() <= Limit<usize>::s_Max - byteCount;
+}
+
+template<typename Container>
+inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const usize byteCount){
+    if(byteCount == 0u)
+        return;
 
     using ByteType = typename Container::value_type;
-    static_assert(sizeof(ByteType) == 1u, "AppendPOD requires a byte-sized output container");
-    const ByteType* bytes = reinterpret_cast<const ByteType*>(&value);
-    outBinary.insert(outBinary.end(), bytes, bytes + sizeof(PodType));
+    const ByteType* first = reinterpret_cast<const ByteType*>(bytes);
+    outBinary.insert(outBinary.end(), first, first + byteCount);
+}
+
+template<typename Container>
+[[nodiscard]] inline bool AppendBytes(Container& outBinary, const void* bytes, const usize byteCount){
+    RequireByteContainer<Container>();
+    if(!CanAppendBytes(outBinary, byteCount))
+        return false;
+
+    AppendBytesUnchecked(outBinary, bytes, byteCount);
+    return true;
+}
+
+template<typename Container>
+[[nodiscard]] inline bool CanReadBytes(const Container& binary, const usize offset, const usize byteCount){
+    if(offset > binary.size())
+        return false;
+    return binary.size() - offset >= byteCount;
+}
+
+template<typename Container>
+[[nodiscard]] inline bool ReadBytes(const Container& binary, usize& inOutOffset, void* outBytes, const usize byteCount){
+    RequireByteContainer<Container>();
+    if(!CanReadBytes(binary, inOutOffset, byteCount))
+        return false;
+
+    if(byteCount > 0u)
+        NWB_MEMCPY(outBytes, byteCount, binary.data() + inOutOffset, byteCount);
+    inOutOffset += byteCount;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Container, typename PodType>
+inline void AppendPOD(Container& outBinary, const PodType& value){
+    if(!BinaryDetail::AppendBytes(outBinary, &value, sizeof(PodType)))
+        throw RuntimeException("AppendPOD size overflow");
 }
 
 template<typename Container, typename PodType>
 [[nodiscard]] inline bool ReadPOD(const Container& binary, usize& inOutOffset, PodType& outValue){
-    if(inOutOffset > binary.size())
-        return false;
-    if(binary.size() - inOutOffset < sizeof(PodType))
+    return BinaryDetail::ReadBytes(binary, inOutOffset, &outValue, sizeof(PodType));
+}
+
+
+namespace BinaryDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename Container>
+[[nodiscard]] inline bool ReadLengthPrefixedString(const Container& binary, usize& inOutOffset, AStringView& outText){
+    outText = {};
+
+    usize cursor = inOutOffset;
+    u32 textLength = 0;
+    if(!ReadPOD(binary, cursor, textLength))
         return false;
 
-    NWB_MEMCPY(&outValue, sizeof(PodType), binary.data() + inOutOffset, sizeof(PodType));
-    inOutOffset += sizeof(PodType);
+    if(!CanReadBytes(binary, cursor, textLength))
+        return false;
+
+    outText = AStringView(reinterpret_cast<const char*>(binary.data() + cursor), textLength);
+    cursor += textLength;
+    inOutOffset = cursor;
     return true;
 }
+
+template<typename Container>
+[[nodiscard]] inline bool ReadStringTableTextView(
+    const Container& binary,
+    const usize stringTableOffset,
+    const usize stringTableByteCount,
+    const u32 textOffset,
+    AStringView& outText
+){
+    outText = {};
+    if(textOffset == Limit<u32>::s_Max || static_cast<usize>(textOffset) >= stringTableByteCount)
+        return false;
+    if(!CanReadBytes(binary, stringTableOffset, stringTableByteCount))
+        return false;
+
+    const usize relativeOffset = static_cast<usize>(textOffset);
+    const usize absoluteOffset = stringTableOffset + relativeOffset;
+    const usize remainingBytes = stringTableByteCount - relativeOffset;
+
+    usize textLength = 0u;
+    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
+        ++textLength;
+
+    if(textLength == 0u || textLength >= remainingBytes)
+        return false;
+
+    outText = AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename Container>
 [[nodiscard]] inline bool AppendString(Container& outBinary, const AStringView text){
     if(text.size() > Limit<u32>::s_Max)
         return false;
 
-    const usize lengthOffset = outBinary.size();
-    if(lengthOffset > Limit<usize>::s_Max - sizeof(u32))
-        return false;
-
     const u32 textLength = static_cast<u32>(text.size());
-    const usize textOffset = lengthOffset + sizeof(u32);
-    if(textOffset > Limit<usize>::s_Max - textLength)
+    const usize byteCount = sizeof(u32) + textLength;
+    if(!BinaryDetail::CanAppendBytes(outBinary, byteCount))
         return false;
 
-    using ByteType = typename Container::value_type;
-    static_assert(sizeof(ByteType) == 1u, "AppendString requires a byte-sized output container");
-    outBinary.reserve(textOffset + textLength);
-    const ByteType* lengthBytes = reinterpret_cast<const ByteType*>(&textLength);
-    outBinary.insert(outBinary.end(), lengthBytes, lengthBytes + sizeof(textLength));
-    if(textLength > 0){
-        const ByteType* textBytes = reinterpret_cast<const ByteType*>(text.data());
-        outBinary.insert(outBinary.end(), textBytes, textBytes + textLength);
-    }
+    BinaryDetail::RequireByteContainer<Container>();
+    outBinary.reserve(outBinary.size() + byteCount);
+    BinaryDetail::AppendBytesUnchecked(outBinary, &textLength, sizeof(textLength));
+    BinaryDetail::AppendBytesUnchecked(outBinary, text.data(), textLength);
     return true;
 }
 
@@ -72,18 +180,11 @@ template<typename Container>
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
     usize cursor = inOutOffset;
-    u32 textLength = 0;
-    if(!ReadPOD(binary, cursor, textLength))
+    AStringView parsedText;
+    if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, parsedText))
         return false;
 
-    if(cursor > binary.size())
-        return false;
-    if(binary.size() - cursor < textLength)
-        return false;
-
-    outText.assign(reinterpret_cast<const char*>(binary.data() + cursor), textLength);
-    cursor += textLength;
-
+    outText.assign(parsedText.data(), parsedText.size());
     inOutOffset = cursor;
     return true;
 }
@@ -91,19 +192,13 @@ template<typename Container>
 template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
     usize cursor = inOutOffset;
-    u32 textLength = 0;
-    if(!ReadPOD(binary, cursor, textLength))
-        return false;
-
-    if(cursor > binary.size())
-        return false;
-    if(binary.size() - cursor < textLength)
+    AStringView parsedTextView;
+    if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, parsedTextView))
         return false;
 
     CompactString parsedText;
-    if(!parsedText.assign(AStringView(reinterpret_cast<const char*>(binary.data() + cursor), textLength)))
+    if(!parsedText.assign(parsedTextView))
         return false;
-    cursor += textLength;
 
     outText = parsedText;
     inOutOffset = cursor;
@@ -174,12 +269,10 @@ template<typename Container>
 
     const usize beginOffset = outStringTable.size();
     outOffset = static_cast<u32>(beginOffset);
-    using ByteType = typename Container::value_type;
-    static_assert(sizeof(ByteType) == 1u, "AppendStringTableText requires a byte-sized output container");
+    BinaryDetail::RequireByteContainer<Container>();
     outStringTable.reserve(reserveBytes);
-    const ByteType* textBytes = reinterpret_cast<const ByteType*>(text.data());
-    outStringTable.insert(outStringTable.end(), textBytes, textBytes + text.size());
-    outStringTable.push_back(ByteType{});
+    BinaryDetail::AppendBytesUnchecked(outStringTable, text.data(), text.size());
+    outStringTable.push_back(typename Container::value_type{});
     return true;
 }
 
@@ -197,25 +290,12 @@ template<typename Container>
     CompactString& outText
 ){
     outText.clear();
-    if(textOffset == Limit<u32>::s_Max || static_cast<usize>(textOffset) >= stringTableByteCount)
-        return false;
-    if(stringTableOffset > binary.size())
-        return false;
-    if(stringTableByteCount > binary.size() - stringTableOffset)
-        return false;
-
-    const usize relativeOffset = static_cast<usize>(textOffset);
-    const usize absoluteOffset = stringTableOffset + relativeOffset;
-    const usize remainingBytes = stringTableByteCount - relativeOffset;
-    usize textLength = 0u;
-    while(textLength < remainingBytes && binary[absoluteOffset + textLength] != 0u)
-        ++textLength;
-
-    if(textLength == 0u || textLength >= remainingBytes)
+    AStringView parsedTextView;
+    if(!BinaryDetail::ReadStringTableTextView(binary, stringTableOffset, stringTableByteCount, textOffset, parsedTextView))
         return false;
 
     CompactString parsedText;
-    if(!parsedText.assign(AStringView(reinterpret_cast<const char*>(binary.data() + absoluteOffset), textLength)))
+    if(!parsedText.assign(parsedTextView))
         return false;
 
     outText = parsedText;

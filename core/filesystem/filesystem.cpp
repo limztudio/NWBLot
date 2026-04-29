@@ -2009,7 +2009,7 @@ bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig&
 
 bool VolumeSession::load(const AStringView volumeName, const Path& mountDirectory){
     VolumeMountDesc desc;
-    desc.volumeName = AString(volumeName);
+    desc.volumeName.assign(volumeName);
     desc.mountDirectory = mountDirectory;
     desc.createIfMissing = false;
     desc.usage = VolumeUsage::RuntimeReadOnly;

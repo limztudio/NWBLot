@@ -956,7 +956,7 @@ struct ShaderDesc{
 
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
     constexpr ShaderDesc& setDebugName(const Name& value){ debugName = value; return *this; }
-    ShaderDesc& setEntryName(const AStringView value){ entryName = AString(value); return *this; }
+    ShaderDesc& setEntryName(const AStringView value){ entryName.assign(value); return *this; }
     constexpr ShaderDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr ShaderDesc& setUseSpecificShaderExt(bool value){ useSpecificShaderExt = value; return *this; }
     constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data){ numCustomSemantics = count; pCustomSemantics = data; return *this; }
@@ -2717,7 +2717,7 @@ struct RayTracingPipelineShaderDesc{
 
     RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value){ shader = value; return *this; }
     RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
-    RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
+    RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
 };
 
 struct RayTracingPipelineHitGroupDesc{
@@ -2732,7 +2732,7 @@ struct RayTracingPipelineHitGroupDesc{
     RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value){ intersectionShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName = AString(value); return *this; }
+    RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
 

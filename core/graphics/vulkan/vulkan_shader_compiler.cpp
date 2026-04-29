@@ -241,7 +241,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
 
     shaderc::Compiler compiler;
     const AString inputFileName = PathToString(request.sourcePath);
-    const AString entryPoint = AString(request.entryPoint);
+    const AString entryPoint(request.entryPoint);
     const shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
         sourceText.c_str(),
         sourceText.size(),

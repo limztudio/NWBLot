@@ -349,8 +349,9 @@ bool BlendState::usesConstantColor(u32 numTargets)const{
 
 
 FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
-    colorFormats.resize(desc.colorAttachments.size());
-    for(usize i = 0; i < desc.colorAttachments.size(); ++i){
+    const usize colorAttachmentCount = desc.colorAttachments.size();
+    colorFormats.resize(colorAttachmentCount);
+    for(usize i = 0; i < colorAttachmentCount; ++i){
         const FramebufferAttachment& attachment = desc.colorAttachments[i];
         colorFormats[i] = attachment.format == Format::UNKNOWN && attachment.texture ? attachment.texture->getDescription().format : attachment.format;
     }

@@ -76,7 +76,7 @@ static bool MountPipelineCacheVolume(
     Filesystem::VolumeFileSystem& outVolume
 ){
     Filesystem::VolumeMountDesc mountDesc;
-    mountDesc.volumeName = AString(volumeName);
+    mountDesc.volumeName.assign(volumeName);
     mountDesc.mountDirectory = directory;
     mountDesc.createIfMissing = createIfMissing;
     mountDesc.usage = usage;

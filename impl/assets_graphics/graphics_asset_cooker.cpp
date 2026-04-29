@@ -2315,7 +2315,7 @@ static bool NormalizeMaterialVariant(
             return false;
         }
 
-        outNormalizedVariant = AString(Core::ShaderArchive::s_DefaultVariant);
+        outNormalizedVariant.assign(Core::ShaderArchive::s_DefaultVariant);
         return true;
     }
 
@@ -2410,7 +2410,7 @@ static bool ValidateAndNormalizeMaterials(
         }
 
         if(!hasNormalizedVariant)
-            normalizedVariant = AString(Core::ShaderArchive::s_DefaultVariant);
+            normalizedVariant.assign(Core::ShaderArchive::s_DefaultVariant);
 
         materialEntry.shaderVariant = Move(normalizedVariant);
     }

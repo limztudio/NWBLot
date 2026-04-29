@@ -180,8 +180,9 @@ constexpr VkPipelineColorBlendAttachmentState ConvertBlendState(const BlendState
 }
 
 inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const FramebufferInfo& fbinfo, const BlendState& blendState, PipelineColorBlendAttachmentVector& outBlendAttachments){
-    outBlendAttachments.resize(fbinfo.colorFormats.size());
-    for(usize i = 0; i < fbinfo.colorFormats.size(); ++i)
+    const usize colorFormatCount = fbinfo.colorFormats.size();
+    outBlendAttachments.resize(colorFormatCount);
+    for(usize i = 0; i < colorFormatCount; ++i)
         outBlendAttachments[i] = ConvertBlendState(blendState.targets[i]);
 
     auto colorBlending = MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);

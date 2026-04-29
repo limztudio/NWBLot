@@ -414,7 +414,7 @@ void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     ScopedLock lock(FrameDetail::s_ListMutex);
 
     FrameDetail::s_Messages.emplace_back(BasicString<tchar>(str), type);
-    SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Messages[FrameDetail::s_Messages.size() - 1].first().c_str()));
+    SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Messages.back().first().c_str()));
 
     auto numItem = SendMessage(FrameDetail::s_ListHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)

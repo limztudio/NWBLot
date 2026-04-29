@@ -129,8 +129,8 @@ void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId)
 
 void World::ensureEntityComponentHead(EntityID entityId){
     const usize index = static_cast<usize>(entityId.index());
-    while(index >= m_entityComponentHeads.size())
-        m_entityComponentHeads.push_back(s_InvalidEntityComponentNode);
+    if(index >= m_entityComponentHeads.size())
+        m_entityComponentHeads.resize(index + 1u, s_InvalidEntityComponentNode);
 }
 
 

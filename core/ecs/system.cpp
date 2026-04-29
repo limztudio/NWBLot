@@ -48,12 +48,16 @@ SystemScheduler::SystemScheduler(Alloc::CustomArena& arena)
 
 
 void SystemScheduler::addSystem(ISystem& system){
+#if NWB_OCCUR_ASSERT
     if(
         FindIf(m_allSystems.begin(), m_allSystems.end(),
             [&system](ISystem* iterSystem){ return iterSystem == &system; }
         ) != m_allSystems.end()
-    )
+    ){
+        NWB_ASSERT(false);
         return;
+    }
+#endif
 
     m_allSystems.push_back(&system);
     m_dirty = true;

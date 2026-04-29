@@ -102,6 +102,17 @@ struct ViewIterator{
     }
 
     void skipInvalid(){
+        if constexpr(sizeof...(Ts) == 1u){
+            if(index < count){
+                entity = ViewTupleAccess::entityAtDense<0>(pools, index);
+                Get<0>(denseIndices) = static_cast<u32>(index);
+            }
+            else{
+                entity = ENTITY_ID_INVALID;
+            }
+            return;
+        }
+
         while(index < count){
             const EntityID entityId = entityAt(index);
             if(resolveDenseIndices(entityId, index)){

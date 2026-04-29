@@ -321,7 +321,7 @@ void LogRuntimeMorphPayloadFailure(
 const DeformableGeometry* DeformableRuntimeMeshCache::DeformableGeometrySource::geometry()const{
     if(!asset || asset->assetType() != DeformableGeometry::AssetTypeName())
         return nullptr;
-    return static_cast<const DeformableGeometry*>(asset.get());
+    return checked_cast<const DeformableGeometry*>(asset.get());
 }
 
 

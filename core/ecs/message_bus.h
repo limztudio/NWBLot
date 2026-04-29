@@ -37,7 +37,7 @@ private:
     class IMessageChannel;
     using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
     using ChannelVectorAllocator = Alloc::CustomAllocator<MessageChannelPtr>;
-    using ChannelMapLock = SharedMutex::scoped_lock;
+    using ChannelLock = SharedMutex::scoped_lock;
 
 
 private:
@@ -219,7 +219,7 @@ private:
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return;
 
-        ChannelMapLock lock(m_channelsMutex, false);
+        ChannelLock lock(m_channelsMutex, false);
 
         for(auto& channel : m_channels){
             if(!channel)
@@ -233,21 +233,21 @@ private:
         const MessageTypeId typeId = MessageType<T>();
 
         {
-            ChannelMapLock readLock(m_channelsMutex, false);
+            ChannelLock readLock(m_channelsMutex, false);
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
                 if(channel)
-                    return static_cast<MessageChannel<T>*>(channel.get());
+                    return checked_cast<MessageChannel<T>*>(channel.get());
             }
         }
 
-        ChannelMapLock writeLock(m_channelsMutex, true);
+        ChannelLock writeLock(m_channelsMutex, true);
         if(typeId >= m_channels.size())
             m_channels.resize(typeId + 1u);
 
         auto& slot = m_channels[typeId];
         if(slot)
-            return static_cast<MessageChannel<T>*>(slot.get());
+            return checked_cast<MessageChannel<T>*>(slot.get());
 
         auto channel = MakeCustomUnique<MessageChannel<T>>(m_arena, m_arena);
         auto* raw = channel.get();
@@ -260,7 +260,7 @@ private:
     const MessageChannel<T>* getChannel()const{
         const MessageTypeId typeId = MessageType<T>();
 
-        ChannelMapLock lock(m_channelsMutex, false);
+        ChannelLock lock(m_channelsMutex, false);
 
         if(typeId >= m_channels.size())
             return nullptr;
@@ -268,7 +268,7 @@ private:
         const auto& channel = m_channels[typeId];
         if(!channel)
             return nullptr;
-        return static_cast<const MessageChannel<T>*>(channel.get());
+        return checked_cast<const MessageChannel<T>*>(channel.get());
     }
 
 

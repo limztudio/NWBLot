@@ -107,6 +107,7 @@ void SystemScheduler::rebuild(){
 
     Alloc::ScratchArena<> scratchArena(4096);
     using ScratchComponentAccessAllocator = Alloc::ScratchAllocator<ComponentAccess>;
+    using ScratchSystemAllocator = Alloc::ScratchAllocator<ISystem*>;
 
     Vector<u8, Alloc::ScratchAllocator<u8>> assignedSystems(
         systemCount, 0,
@@ -124,6 +125,9 @@ void SystemScheduler::rebuild(){
 
     Vector<ComponentAccess, ScratchComponentAccessAllocator> stageAccesses{ScratchComponentAccessAllocator(scratchArena)};
     stageAccesses.reserve(componentAccessReserve);
+
+    Vector<ISystem*, ScratchSystemAllocator> stageSystems{ScratchSystemAllocator(scratchArena)};
+    stageSystems.reserve(systemCount);
 
     auto componentAccessCompatible = [](const auto& accesses, const ComponentAccess& access) -> bool{
         for(const ComponentAccess& stageAccess : accesses){
@@ -149,9 +153,7 @@ void SystemScheduler::rebuild(){
 
     while(numAssigned < systemCount){
         stageAccesses.clear();
-
-        Stage stage{SystemAllocator(m_arena)};
-        stage.reserve(systemCount - numAssigned);
+        stageSystems.clear();
 
         for(usize i = 0; i < systemCount; ++i){
             if(assignedSystems[i] != 0u)
@@ -172,11 +174,15 @@ void SystemScheduler::rebuild(){
                 for(const auto& ca : acc)
                     addComponentAccess(stageAccesses, ca);
                 assignedSystems[i] = 1u;
-                stage.push_back(sys);
+                stageSystems.push_back(sys);
                 ++numAssigned;
             }
         }
 
+        Stage stage{SystemAllocator(m_arena)};
+        stage.reserve(stageSystems.size());
+        for(ISystem* system : stageSystems)
+            stage.push_back(system);
         m_stages.push_back(Move(stage));
     }
 

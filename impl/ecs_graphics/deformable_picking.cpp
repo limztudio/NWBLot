@@ -359,7 +359,7 @@ template<typename PreparedJointPaletteVector>
         return false;
 
     outLoadedAsset = Move(loadedAsset);
-    outTexture = static_cast<const DeformableDisplacementTexture*>(outLoadedAsset.get());
+    outTexture = checked_cast<const DeformableDisplacementTexture*>(outLoadedAsset.get());
     return ValidateDisplacementTexture(displacement, outTexture);
 }
 

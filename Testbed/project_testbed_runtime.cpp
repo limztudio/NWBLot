@@ -146,7 +146,7 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
     )
         return nullptr;
 
-    const auto* texture = static_cast<const NWB::Impl::DeformableDisplacementTexture*>(outLoadedAsset.get());
+    const auto* texture = checked_cast<const NWB::Impl::DeformableDisplacementTexture*>(outLoadedAsset.get());
     return texture->virtualPath() == displacement.texture.name() && texture->validatePayload()
         ? texture
         : nullptr

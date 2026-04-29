@@ -110,7 +110,7 @@ public:
         for(auto& system : m_systems){
             if(system.typeId != systemTypeId)
                 continue;
-            return static_cast<T*>(system.system.get());
+            return checked_cast<T*>(system.system.get());
         }
         return nullptr;
     }
@@ -203,7 +203,7 @@ private:
         auto itr = m_pools.find(typeId);
         if(itr == m_pools.end())
             return nullptr;
-        return static_cast<ComponentPool<T>*>(itr.value().get());
+        return checked_cast<ComponentPool<T>*>(itr.value().get());
     }
 
     template<typename T>
@@ -212,7 +212,7 @@ private:
         auto itr = m_pools.find(typeId);
         if(itr == m_pools.end())
             return nullptr;
-        return static_cast<const ComponentPool<T>*>(itr.value().get());
+        return checked_cast<const ComponentPool<T>*>(itr.value().get());
     }
 
     template<typename T>
@@ -220,7 +220,7 @@ private:
         const auto typeId = ComponentType<T>();
         auto itr = m_pools.find(typeId);
         if(itr != m_pools.end())
-            return static_cast<ComponentPool<T>*>(itr.value().get());
+            return checked_cast<ComponentPool<T>*>(itr.value().get());
 
         auto pool = MakeCustomUnique<ComponentPool<T>>(m_arena, m_arena);
         auto* raw = pool.get();

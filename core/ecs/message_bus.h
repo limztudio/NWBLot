@@ -39,6 +39,7 @@ private:
     class IMessageChannel;
     using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
     using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, MessageChannelPtr>>;
+    using ChannelMapLock = SharedMutex::scoped_lock;
 
 
 private:
@@ -232,7 +233,7 @@ private:
         };
 
         {
-            ScopedLock lock(m_channelsMutex);
+            ChannelMapLock lock(m_channelsMutex, false);
             channels.reserve(m_channels.size());
             for(auto& [typeId, channel] : m_channels){
                 static_cast<void>(typeId);
@@ -248,8 +249,14 @@ private:
     MessageChannel<T>* getOrCreateChannel(){
         const MessageTypeId typeId = MessageType<T>();
 
-        ScopedLock lock(m_channelsMutex);
+        {
+            ChannelMapLock readLock(m_channelsMutex, false);
+            auto itr = m_channels.find(typeId);
+            if(itr != m_channels.end())
+                return static_cast<MessageChannel<T>*>(itr.value().get());
+        }
 
+        ChannelMapLock writeLock(m_channelsMutex, true);
         auto itr = m_channels.find(typeId);
         if(itr != m_channels.end())
             return static_cast<MessageChannel<T>*>(itr.value().get());
@@ -265,7 +272,7 @@ private:
     const MessageChannel<T>* getChannel()const{
         const MessageTypeId typeId = MessageType<T>();
 
-        ScopedLock lock(m_channelsMutex);
+        ChannelMapLock lock(m_channelsMutex, false);
 
         auto itr = m_channels.find(typeId);
         if(itr == m_channels.end())
@@ -276,7 +283,7 @@ private:
 
 private:
     Alloc::CustomArena& m_arena;
-    mutable Futex m_channelsMutex;
+    mutable SharedMutex m_channelsMutex;
     Atomic<bool> m_hasChannels{ false };
     ChannelMap m_channels;
 };

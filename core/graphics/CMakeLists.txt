@@ -4,7 +4,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graphics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_allocator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_buffer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_commandlist.cpp"
@@ -24,7 +23,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_stubs.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_context.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/basic.h"
     "${CMAKE_CURRENT_LIST_DIR}/common.h"
     "${CMAKE_CURRENT_LIST_DIR}/graphics_backend.h"
@@ -33,12 +31,10 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_context.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_queries.h"
-    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_shader_compiler.h"
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_logclient nwb_assets nwb_common nwb_input nwb::volk)
 target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)

@@ -1174,7 +1174,8 @@ static NWB::Impl::DeformableMorphDelta MakeMorphDelta(const u32 vertexId, const 
 }
 
 #if defined(NWB_FINAL)
-static bool OverwriteU32(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u32 value){
+template<typename T>
+static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offset, const T value){
     if(offset > binary.size() || sizeof(value) > binary.size() - offset)
         return false;
 
@@ -1182,12 +1183,12 @@ static bool OverwriteU32(NWB::Core::Assets::AssetBytes& binary, const usize offs
     return true;
 }
 
-static bool OverwriteU64(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u64 value){
-    if(offset > binary.size() || sizeof(value) > binary.size() - offset)
-        return false;
+static bool OverwriteU32(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u32 value){
+    return OverwritePOD(binary, offset, value);
+}
 
-    NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
-    return true;
+static bool OverwriteU64(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u64 value){
+    return OverwritePOD(binary, offset, value);
 }
 
 static usize DeformableHeaderCountOffset(const usize countIndex){

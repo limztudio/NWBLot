@@ -78,6 +78,19 @@ void SystemScheduler::rebuild(){
     const usize systemCount = m_allSystems.size();
     m_stages.reserve(systemCount);
 
+    if(systemCount == 0u){
+        m_dirty = false;
+        return;
+    }
+
+    if(systemCount == 1u){
+        Stage stage{SystemAllocator(m_arena)};
+        stage.push_back(m_allSystems[0]);
+        m_stages.push_back(Move(stage));
+        m_dirty = false;
+        return;
+    }
+
     // Determine parallel stages by analyzing read/write dependencies.
     // Two systems can share a stage if:
     //  - They do not both write the same component type

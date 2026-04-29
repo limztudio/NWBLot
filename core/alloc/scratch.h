@@ -24,6 +24,16 @@ inline constexpr usize s_MaxAlignSize = 512;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr void AssertScratchAllocatorDeallocateArgs(const void* const buffer, const usize count)noexcept{
+    NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+    static_cast<void>(buffer);
+    static_cast<void>(count);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<usize maxAlignSize = s_MaxAlignSize>
 class ScratchArena : NoCopy{
 private:
@@ -236,9 +246,7 @@ public:
 
 public:
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-        static_cast<void>(buffer);
-        static_cast<void>(count);
+        AssertScratchAllocatorDeallocateArgs(buffer, count);
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
@@ -307,9 +315,7 @@ public:
     }
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
-        static_cast<void>(buffer);
-        static_cast<void>(count);
+        AssertScratchAllocatorDeallocateArgs(buffer, count);
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{

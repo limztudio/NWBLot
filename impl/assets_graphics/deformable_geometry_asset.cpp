@@ -131,24 +131,6 @@ template<typename T>
     return true;
 }
 
-#if defined(NWB_COOK)
-[[nodiscard]] static bool AddReserveBytes(usize& inOutBytes, const usize additionalBytes){
-    if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
-        return false;
-
-    inOutBytes += additionalBytes;
-    return true;
-}
-
-template<typename T>
-[[nodiscard]] static bool AddVectorReserveBytes(usize& inOutBytes, const Vector<T>& values){
-    if(values.size() > Limit<usize>::s_Max / sizeof(T))
-        return false;
-
-    return AddReserveBytes(inOutBytes, values.size() * sizeof(T));
-}
-#endif
-
 template<typename T>
 static void ResizeVectorPayload(Vector<T>& outValues, const usize count){
     outValues.resize(count);
@@ -912,24 +894,24 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         return false;
 
     usize reserveBytes = __hidden_deformable_geometry_asset::s_DeformableGeometryHeaderBytes;
-    bool canReserve = __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.restVertices())
-        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.indices())
-        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.skin())
-        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.inverseBindMatrices())
-        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.sourceSamples())
-        && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.editMaskPerTriangle())
+    bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, geometry.restVertices())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.indices())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.skin())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.inverseBindMatrices())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.sourceSamples())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.editMaskPerTriangle())
     ;
     for(const DeformableMorph& morph : geometry.morphs()){
         canReserve = canReserve
-            && __hidden_deformable_geometry_asset::AddReserveBytes(
+            && AddBinaryReserveBytes(
                 reserveBytes,
                 sizeof(__hidden_deformable_geometry_asset::DeformableMorphHeaderBinary)
             )
-            && __hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, morph.deltas)
+            && AddBinaryVectorReserveBytes(reserveBytes, morph.deltas)
         ;
     }
     canReserve = canReserve
-        && __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, sizeof(__hidden_deformable_geometry_asset::DeformableDisplacementBinary))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(__hidden_deformable_geometry_asset::DeformableDisplacementBinary))
     ;
 
     usize stringTableReserveBytes = 0u;
@@ -942,7 +924,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         ;
     }
     if(canReserve && canReserveStringTable)
-        canReserve = __hidden_deformable_geometry_asset::AddReserveBytes(reserveBytes, stringTableReserveBytes);
+        canReserve = AddBinaryReserveBytes(reserveBytes, stringTableReserveBytes);
 
     outBinary.clear();
     if(canReserve)
@@ -1049,7 +1031,7 @@ bool DeformableDisplacementTextureAssetCodec::serialize(
         return false;
 
     usize reserveBytes = sizeof(u32) + sizeof(u32) + sizeof(u32) + sizeof(u32) + sizeof(u64);
-    if(!__hidden_deformable_geometry_asset::AddVectorReserveBytes(reserveBytes, texture.texels())){
+    if(!AddBinaryVectorReserveBytes(reserveBytes, texture.texels())){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: payload size overflows"));
         return false;
     }

@@ -90,18 +90,6 @@ bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<Value
     return true;
 }
 
-template<typename ValueT>
-bool AddVectorReserveBytes(usize& inOutReserveBytes, const Vector<ValueT>& values){
-    if(values.size() > Limit<usize>::s_Max / sizeof(ValueT))
-        return false;
-
-    const usize byteCount = values.size() * sizeof(ValueT);
-    if(byteCount > Limit<usize>::s_Max - inOutReserveBytes)
-        return false;
-
-    inOutReserveBytes += byteCount;
-    return true;
-}
 #endif
 
 
@@ -293,8 +281,8 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
 
     usize reserveBytes = __hidden_geometry_asset::s_GeometryHeaderBytes;
-    const bool canReserve = __hidden_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.vertices())
-        && __hidden_geometry_asset::AddVectorReserveBytes(reserveBytes, geometry.indices())
+    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, geometry.vertices())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.indices())
     ;
 
     outBinary.clear();

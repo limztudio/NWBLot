@@ -110,6 +110,40 @@ template<typename Container>
     return true;
 }
 
+[[nodiscard]] inline bool AddBinaryReserveBytes(usize& inOutBytes, const usize additionalBytes){
+    if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
+        return false;
+
+    inOutBytes += additionalBytes;
+    return true;
+}
+
+[[nodiscard]] inline bool AddBinaryRepeatedReserveBytes(usize& inOutBytes, const usize count, const usize bytesPerItem){
+    if(bytesPerItem != 0u && count > Limit<usize>::s_Max / bytesPerItem)
+        return false;
+
+    return AddBinaryReserveBytes(inOutBytes, count * bytesPerItem);
+}
+
+[[nodiscard]] inline bool AddBinaryStringReserveBytes(usize& inOutBytes, const AStringView text){
+    if(text.size() > Limit<u32>::s_Max)
+        return false;
+
+    return AddBinaryReserveBytes(inOutBytes, sizeof(u32))
+        && AddBinaryReserveBytes(inOutBytes, text.size())
+    ;
+}
+
+[[nodiscard]] inline bool AddBinaryStringReserveBytes(usize& inOutBytes, const CompactString& text){
+    return AddBinaryStringReserveBytes(inOutBytes, text.view());
+}
+
+template<typename Container>
+[[nodiscard]] inline bool AddBinaryVectorReserveBytes(usize& inOutBytes, const Container& values){
+    using ValueType = typename Container::value_type;
+    return AddBinaryRepeatedReserveBytes(inOutBytes, values.size(), sizeof(ValueType));
+}
+
 [[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const AStringView text){
     if(text.empty())
         return false;
@@ -120,13 +154,10 @@ template<typename Container>
     constexpr usize s_U32Max = static_cast<usize>(Limit<u32>::s_Max);
     if(byteCount > s_U32Max)
         return false;
-    if(inOutBytes > Limit<usize>::s_Max - byteCount)
-        return false;
     if(inOutBytes > s_U32Max - byteCount)
         return false;
 
-    inOutBytes += byteCount;
-    return true;
+    return AddBinaryReserveBytes(inOutBytes, byteCount);
 }
 
 [[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const CompactString& text){

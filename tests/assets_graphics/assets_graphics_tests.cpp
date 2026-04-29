@@ -6,6 +6,7 @@
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 
+#include <tests/assets_graphics/deformable_test_helpers.h>
 #include <tests/test_context.h>
 
 #include <core/alloc/scratch.h>
@@ -30,6 +31,7 @@ namespace __hidden_assets_graphics_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
+using NWB::Tests::MakeSourceSample;
 
 
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -1160,15 +1162,6 @@ static NWB::Impl::DeformableJointMatrix MakeJointMatrix(const f32 tx, const f32 
     NWB::Impl::DeformableJointMatrix matrix = NWB::Impl::MakeIdentityDeformableJointMatrix();
     matrix.rows[3] = Float4(tx, ty, tz, 1.0f);
     return matrix;
-}
-
-static NWB::Impl::SourceSample MakeSourceSample(const u32 sourceTri, const f32 a, const f32 b, const f32 c){
-    NWB::Impl::SourceSample sample;
-    sample.sourceTri = sourceTri;
-    sample.bary[0] = a;
-    sample.bary[1] = b;
-    sample.bary[2] = c;
-    return sample;
 }
 
 static NWB::Impl::DeformableMorphDelta MakeMorphDelta(const u32 vertexId, const f32 zDelta){

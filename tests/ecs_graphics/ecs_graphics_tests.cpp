@@ -8,6 +8,7 @@
 #include <impl/ecs_graphics/deformer_morph_payload.h>
 #include <impl/ecs_graphics/deformer_skin_payload.h>
 
+#include <tests/assets_graphics/deformable_test_helpers.h>
 #include <tests/test_context.h>
 
 #include <core/assets/asset_manager.h>
@@ -17,6 +18,7 @@
 #include <impl/assets_graphics/deformable_geometry_asset.h>
 #include <impl/assets_graphics/geometry_asset.h>
 #include <impl/assets_graphics/material_asset.h>
+
 #include <logger/client/logger.h>
 
 #include <global/binary.h>
@@ -35,6 +37,7 @@ namespace __hidden_ecs_graphics_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
+using NWB::Tests::MakeSourceSample;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -287,15 +290,6 @@ static NWB::Impl::DeformableJointMatrix MakeNonUniformScaleJointMatrix(){
     NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
-}
-
-static NWB::Impl::SourceSample MakeSourceSample(const u32 sourceTri, const f32 a, const f32 b, const f32 c){
-    NWB::Impl::SourceSample sample;
-    sample.sourceTri = sourceTri;
-    sample.bary[0] = a;
-    sample.bary[1] = b;
-    sample.bary[2] = c;
-    return sample;
 }
 
 static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){

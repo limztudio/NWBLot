@@ -157,7 +157,9 @@
 
 
 #define NWB_COUT ::std::cout
+#define NWB_CIN ::std::cin
 #define NWB_WCOUT ::std::wcout
+#define NWB_WCIN ::std::wcin
 #define NWB_CERR ::std::cerr
 #define NWB_WCERR ::std::wcerr
 #define NWB_GETENV(name) ::std::getenv(name)
@@ -203,6 +205,7 @@
 
 #if defined(UNICODE) || defined(_UNICODE)
 #define NWB_TCOUT NWB_WCOUT
+#define NWB_TCIN NWB_WCIN
 #define NWB_TCERR NWB_WCERR
 #define NWB_TSTRLEN(src) NWB_WSTRLEN(src)
 #define NWB_TSTRNLEN(src, count) NWB_WSTRNLEN(src, count)
@@ -215,6 +218,7 @@
 #define NWB_TVSNPRINTF(dest, destSize, format, args) NWB_VWSNPRINTF(dest, destSize, format, args)
 #else
 #define NWB_TCOUT NWB_COUT
+#define NWB_TCIN NWB_CIN
 #define NWB_TCERR NWB_CERR
 #define NWB_TSTRLEN(src) NWB_STRLEN(src)
 #define NWB_TSTRNLEN(src, count) NWB_STRNLEN(src, count)

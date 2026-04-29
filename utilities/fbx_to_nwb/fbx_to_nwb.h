@@ -17,31 +17,18 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct Vec2{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-};
-
-struct Vec3{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-    f32 z = 0.0f;
-};
-
-struct Vec4{
-    f32 x = 1.0f;
-    f32 y = 1.0f;
-    f32 z = 1.0f;
-    f32 w = 1.0f;
-};
+using Vec2 = Float2U;
+using Vec3 = Float3U;
+using Vec4 = Float4U;
 
 struct GeometryVertex{
     Vec3 position;
     Vec3 normal;
     Vec2 uv0;
-    Vec4 color;
+    Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 };
 static_assert(sizeof(GeometryVertex) == sizeof(f32) * 12u);
+static_assert(alignof(GeometryVertex) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<GeometryVertex>);
 
 

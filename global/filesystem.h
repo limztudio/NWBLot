@@ -56,6 +56,8 @@ using FileOpenMode = std::ios_base::openmode;
 
 inline constexpr FileOpenMode s_FileOpenWrite = std::ios::out;
 inline constexpr FileOpenMode s_FileOpenAppend = std::ios::app;
+inline constexpr FileOpenMode s_FileOpenBinary = std::ios::binary;
+inline constexpr FileOpenMode s_FileOpenTruncate = std::ios::trunc;
 
 using DirectoryIterator = std::filesystem::directory_iterator;
 using RecursiveDirectoryIterator = std::filesystem::recursive_directory_iterator;

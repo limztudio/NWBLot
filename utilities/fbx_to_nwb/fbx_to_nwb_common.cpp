@@ -4,10 +4,6 @@
 
 #include "fbx_to_nwb.h"
 
-#include <algorithm>
-#include <cctype>
-#include <sstream>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,14 +15,11 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 AString Trim(AString value){
-    const auto isSpace = [](const unsigned char c){ return std::isspace(c) != 0; };
-    while(!value.empty() && isSpace(static_cast<unsigned char>(value.front()))){
-        value.erase(value.begin());
-    }
-    while(!value.empty() && isSpace(static_cast<unsigned char>(value.back()))){
-        value.pop_back();
-    }
-    return value;
+    const AStringView trimmed = TrimView(AStringView(value));
+    if(trimmed.size() == value.size())
+        return value;
+
+    return AString(trimmed);
 }
 
 AString UnquotePath(AString value){
@@ -42,8 +35,10 @@ AString UnquotePath(AString value){
 }
 
 AString ToLower(AString value){
-    std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char c){
-        return static_cast<char>(std::tolower(c));
+    Transform(value.begin(), value.end(), value.begin(), [](const char c){
+        if(c >= 'A' && c <= 'Z')
+            return static_cast<char>(c - 'A' + 'a');
+        return c;
     });
     return value;
 }
@@ -71,8 +66,8 @@ bool ValidateAssetKind(AString& inOutValue, AString& outError){
 
 bool ParseColorText(const AString& text, Vec4& outColor){
     AString normalized = text;
-    std::replace(normalized.begin(), normalized.end(), ',', ' ');
-    std::istringstream in(normalized);
+    Replace(normalized.begin(), normalized.end(), ',', ' ');
+    AStringStream in(normalized);
 
     Vec4 color;
     if(!(in >> color.x >> color.y >> color.z >> color.w))

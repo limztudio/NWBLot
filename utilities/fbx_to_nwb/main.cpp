@@ -7,9 +7,6 @@
 #include <core/alloc/scratch.h>
 #include <core/common/common.h>
 
-#include <iostream>
-#include <string>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,7 +23,7 @@ int Run(const int argc, char** argv){
     if(prompted){
         NWB_COUT << "Press Enter to exit...";
         AString line;
-        static_cast<void>(std::getline(std::cin, line));
+        static_cast<void>(ReadTextLine(NWB_CIN, line));
     }
     return result;
 }

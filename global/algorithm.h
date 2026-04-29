@@ -9,6 +9,7 @@
 #include "type_properties.h"
 
 #include <algorithm>
+#include <numeric>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +33,21 @@ constexpr void Sort(RandomIt first, RandomIt last, Compare&& compare){
 template<typename ForwardIt>
 constexpr ForwardIt Rotate(ForwardIt first, ForwardIt middle, ForwardIt last){
     return std::rotate(first, middle, last);
+}
+
+template<typename InputIt, typename OutputIt, typename UnaryOp>
+constexpr OutputIt Transform(InputIt first, InputIt last, OutputIt dFirst, UnaryOp&& op){
+    return std::transform(first, last, dFirst, Forward<UnaryOp>(op));
+}
+
+template<typename ForwardIt, typename T>
+constexpr void Replace(ForwardIt first, ForwardIt last, const T& oldValue, const T& newValue){
+    std::replace(first, last, oldValue, newValue);
+}
+
+template<typename ForwardIt, typename T>
+constexpr void Iota(ForwardIt first, ForwardIt last, T value){
+    std::iota(first, last, value);
 }
 
 template<typename ForwardIt, typename T>

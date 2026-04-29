@@ -81,6 +81,10 @@ template<typename CharT>
 [[nodiscard]] inline bool ReadTextLine(BasicStringStream<CharT>& stream, BasicString<CharT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));
 }
+template<typename CharT, typename Traits>
+[[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, BasicString<CharT>& outLine){
+    return static_cast<bool>(std::getline(stream, outLine));
+}
 
 
 template<usize N>

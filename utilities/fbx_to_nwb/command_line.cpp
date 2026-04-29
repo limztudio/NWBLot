@@ -6,11 +6,6 @@
 
 #include <CLI.hpp>
 
-#include <cstdlib>
-#include <iostream>
-#include <string>
-#include <system_error>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,7 +50,7 @@ bool PromptString(const AString& label, const AString& defaultValue, AString& ou
     NWB_COUT << ": ";
 
     AString line;
-    if(!std::getline(std::cin, line)){
+    if(!ReadTextLine(NWB_CIN, line)){
         outValue = defaultValue;
         return !outValue.empty();
     }
@@ -71,7 +66,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
         NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         AString line;
-        if(!std::getline(std::cin, line)){
+        if(!ReadTextLine(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -100,7 +95,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
         NWB_COUT << label << " [" << defaultValue << "]: ";
 
         AString line;
-        if(!std::getline(std::cin, line)){
+        if(!ReadTextLine(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -111,9 +106,8 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
             return true;
         }
 
-        char* end = nullptr;
-        const f64 parsed = std::strtod(line.c_str(), &end);
-        if(end && *end == '\0' && IsFinite(parsed) && parsed > 0.0){
+        f64 parsed = 0.0;
+        if(ParseF64FromChars(line.data(), line.data() + line.size(), parsed) && IsFinite(parsed) && parsed > 0.0){
             outValue = parsed;
             return true;
         }
@@ -300,7 +294,12 @@ int Run(int argc, char** argv, bool& prompted){
     }
 
     ErrorCode errorCode;
-    if(!IsRegularFile(PathFromUtf8(options.inputPath), errorCode)){
+    const bool inputIsRegularFile = IsRegularFile(PathFromUtf8(options.inputPath), errorCode);
+    if(errorCode && !IsMissingPathError(errorCode)){
+        NWB_CERR << "Failed to query input FBX path: " << errorCode.message() << "\n";
+        return 1;
+    }
+    if(!inputIsRegularFile){
         NWB_CERR << "Input FBX file was not found: " << options.inputPath << "\n";
         return 1;
     }

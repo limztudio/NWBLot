@@ -4,11 +4,6 @@
 
 #include "fbx_to_nwb.h"
 
-#include <cstdlib>
-#include <iostream>
-#include <numeric>
-#include <sstream>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,11 +53,10 @@ bool ParseIndexSelector(const AString& text, usize& outIndex){
     if(trimmed.empty())
         return false;
 
-    char* end = nullptr;
-    const unsigned long long parsed = std::strtoull(trimmed.c_str(), &end, 10);
-    if(!end || *end != '\0')
+    u64 parsed = 0u;
+    if(!ParseU64(trimmed, parsed))
         return false;
-    if(parsed > static_cast<unsigned long long>(Limit<usize>::s_Max))
+    if(parsed > static_cast<u64>(Limit<usize>::s_Max))
         return false;
 
     outIndex = static_cast<usize>(parsed);
@@ -235,8 +229,10 @@ bool EstimateSelectedTriangleCorners(
 
 
 SceneHandle::~SceneHandle(){
-    if(scene)
+    if(scene){
         ufbx_free_scene(scene);
+        scene = nullptr;
+    }
 }
 
 
@@ -317,7 +313,7 @@ bool SelectMeshInstances(
     const AString normalized = ToLower(Trim(selector));
     if(normalized.empty() || normalized == "all"){
         outSelection.resize(instances.size());
-        std::iota(outSelection.begin(), outSelection.end(), usize{ 0 });
+        Iota(outSelection.begin(), outSelection.end(), usize{ 0 });
         return true;
     }
     if(normalized == "first"){
@@ -453,7 +449,7 @@ bool BuildGeometry(
         outVertices = Move(flatVertices);
     }
     else{
-        std::iota(outIndices.begin(), outIndices.end(), u32{ 0 });
+        Iota(outIndices.begin(), outIndices.end(), u32{ 0 });
         outVertices = Move(flatVertices);
     }
 

@@ -4,10 +4,6 @@
 
 #include "fbx_to_nwb.h"
 
-#include <fstream>
-#include <ostream>
-#include <system_error>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,11 +26,13 @@ f32 CleanFloat(const f32 value){
     return value;
 }
 
-void WriteFloat(std::ostream& out, const f32 value){
+template<typename Stream>
+void WriteFloat(Stream& out, const f32 value){
     out << CleanFloat(value);
 }
 
-void WriteVec2(std::ostream& out, const Vec2& value){
+template<typename Stream>
+void WriteVec2(Stream& out, const Vec2& value){
     out << "[";
     WriteFloat(out, value.x);
     out << ", ";
@@ -42,7 +40,8 @@ void WriteVec2(std::ostream& out, const Vec2& value){
     out << "]";
 }
 
-void WriteVec3(std::ostream& out, const Vec3& value){
+template<typename Stream>
+void WriteVec3(Stream& out, const Vec3& value){
     out << "[";
     WriteFloat(out, value.x);
     out << ", ";
@@ -52,7 +51,8 @@ void WriteVec3(std::ostream& out, const Vec3& value){
     out << "]";
 }
 
-void WriteVec4(std::ostream& out, const Vec4& value){
+template<typename Stream>
+void WriteVec4(Stream& out, const Vec4& value){
     out << "[";
     WriteFloat(out, value.x);
     out << ", ";
@@ -125,7 +125,7 @@ bool WriteNwbGeometry(
         }
     }
 
-    BasicOutputFileStream<char> file(outputPath, std::ios::binary | std::ios::trunc);
+    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!file){
         outError = "failed to open output file";
         return false;

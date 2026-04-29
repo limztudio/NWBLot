@@ -10,6 +10,7 @@
 #include <global/containers.h>
 #include <global/filesystem.h>
 #include <global/limit.h>
+#include <global/math/type.h>
 #include <global/simplemath.h>
 #include <global/text_utils.h>
 #include <global/type.h>

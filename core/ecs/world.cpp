@@ -19,7 +19,9 @@ World::World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool)
     : Alloc::ITaskScheduler(threadPool)
     , m_arena(arena)
     , m_entityManager(m_arena)
-    , m_entityComponentTypes(EntityComponentTypeVectorAllocator(m_arena))
+    , m_entityComponentHeads(EntityComponentHeadAllocator(m_arena))
+    , m_entityComponentNodes(EntityComponentNodeAllocator(m_arena))
+    , m_freeEntityComponentNode(s_InvalidEntityComponentNode)
     , m_pools(0, Hasher<ComponentTypeId>(), EqualTo<ComponentTypeId>(), PoolMapAllocator(m_arena))
     , m_systems(SystemVectorAllocator(m_arena))
     , m_scheduler(m_arena)
@@ -67,52 +69,89 @@ void World::clear(){
     m_scheduler.clear();
     m_systems.clear();
     m_pools.clear();
-    m_entityComponentTypes.clear();
+    m_entityComponentHeads.clear();
+    m_entityComponentNodes.clear();
+    m_freeEntityComponentNode = s_InvalidEntityComponentNode;
     m_entityManager.clear();
 }
 
 
 void World::destroyEntityComponents(EntityID entityId){
     const usize index = static_cast<usize>(entityId.index());
-    if(index >= m_entityComponentTypes.size())
+    if(index >= m_entityComponentHeads.size())
         return;
 
-    auto& componentTypes = m_entityComponentTypes[index];
-    for(ComponentTypeId typeId : componentTypes){
-        auto itr = m_pools.find(typeId);
+    u32 nodeIndex = m_entityComponentHeads[index];
+    m_entityComponentHeads[index] = s_InvalidEntityComponentNode;
+    while(nodeIndex != s_InvalidEntityComponentNode){
+        const u32 nextNode = m_entityComponentNodes[nodeIndex].next;
+        auto itr = m_pools.find(m_entityComponentNodes[nodeIndex].typeId);
         if(itr != m_pools.end())
             itr.value()->remove(entityId);
+        releaseEntityComponentNode(nodeIndex);
+        nodeIndex = nextNode;
     }
-    componentTypes.clear();
 }
 
 
 void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId){
-    const usize index = static_cast<usize>(entityId.index());
-    while(index >= m_entityComponentTypes.size())
-        m_entityComponentTypes.emplace_back(EntityComponentTypeAllocator(m_arena));
+    ensureEntityComponentHead(entityId);
 
-    auto& componentTypes = m_entityComponentTypes[index];
-    NWB_ASSERT(
-        FindIf(componentTypes.begin(), componentTypes.end(),
-            [typeId](ComponentTypeId iterTypeId){ return iterTypeId == typeId; }
-        ) == componentTypes.end()
-    );
-    componentTypes.push_back(typeId);
+    const usize index = static_cast<usize>(entityId.index());
+    u32& headNode = m_entityComponentHeads[index];
+    for(u32 nodeIndex = headNode; nodeIndex != s_InvalidEntityComponentNode; nodeIndex = m_entityComponentNodes[nodeIndex].next)
+        NWB_ASSERT(m_entityComponentNodes[nodeIndex].typeId != typeId);
+
+    headNode = acquireEntityComponentNode(typeId, headNode);
 }
 
 
 void World::removeEntityComponentType(EntityID entityId, ComponentTypeId typeId){
     const usize index = static_cast<usize>(entityId.index());
-    if(index >= m_entityComponentTypes.size())
+    if(index >= m_entityComponentHeads.size())
         return;
 
-    auto& componentTypes = m_entityComponentTypes[index];
-    auto itr = FindIf(componentTypes.begin(), componentTypes.end(),
-        [typeId](ComponentTypeId iterTypeId){ return iterTypeId == typeId; }
-    );
-    if(itr != componentTypes.end())
-        componentTypes.erase(itr);
+    u32* nextNodeSlot = &m_entityComponentHeads[index];
+    while(*nextNodeSlot != s_InvalidEntityComponentNode){
+        EntityComponentNode& node = m_entityComponentNodes[*nextNodeSlot];
+        if(node.typeId == typeId){
+            const u32 removedNodeIndex = *nextNodeSlot;
+            *nextNodeSlot = node.next;
+            releaseEntityComponentNode(removedNodeIndex);
+            return;
+        }
+        nextNodeSlot = &node.next;
+    }
+}
+
+
+void World::ensureEntityComponentHead(EntityID entityId){
+    const usize index = static_cast<usize>(entityId.index());
+    while(index >= m_entityComponentHeads.size())
+        m_entityComponentHeads.push_back(s_InvalidEntityComponentNode);
+}
+
+
+u32 World::acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode){
+    if(m_freeEntityComponentNode != s_InvalidEntityComponentNode){
+        const u32 nodeIndex = m_freeEntityComponentNode;
+        EntityComponentNode& node = m_entityComponentNodes[nodeIndex];
+        m_freeEntityComponentNode = node.next;
+        node = EntityComponentNode{ typeId, nextNode };
+        return nodeIndex;
+    }
+
+    NWB_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
+    const u32 nodeIndex = static_cast<u32>(m_entityComponentNodes.size());
+    m_entityComponentNodes.push_back(EntityComponentNode{ typeId, nextNode });
+    return nodeIndex;
+}
+
+
+void World::releaseEntityComponentNode(u32 nodeIndex){
+    NWB_ASSERT(nodeIndex < m_entityComponentNodes.size());
+    m_entityComponentNodes[nodeIndex].next = m_freeEntityComponentNode;
+    m_freeEntityComponentNode = nodeIndex;
 }
 
 

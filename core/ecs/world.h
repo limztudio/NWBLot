@@ -29,11 +29,15 @@ class World : NoCopy, public Alloc::ITaskScheduler{
 
 
 private:
+    struct EntityComponentNode{
+        ComponentTypeId typeId;
+        u32 next;
+    };
+
     using ComponentPoolPtr = CustomUniquePtr<IComponentPool>;
     using SystemPtr = CustomUniquePtr<ISystem>;
-    using EntityComponentTypeAllocator = Alloc::CustomAllocator<ComponentTypeId>;
-    using EntityComponentTypeVector = Vector<ComponentTypeId, EntityComponentTypeAllocator>;
-    using EntityComponentTypeVectorAllocator = Alloc::CustomAllocator<EntityComponentTypeVector>;
+    using EntityComponentHeadAllocator = Alloc::CustomAllocator<u32>;
+    using EntityComponentNodeAllocator = Alloc::CustomAllocator<EntityComponentNode>;
     using PoolMapAllocator = Alloc::CustomAllocator<Pair<const ComponentTypeId, ComponentPoolPtr>>;
     using PoolMap = HashMap<
         ComponentTypeId,
@@ -49,6 +53,8 @@ private:
     };
 
     using SystemVectorAllocator = Alloc::CustomAllocator<SystemEntry>;
+
+    static constexpr u32 s_InvalidEntityComponentNode = Limit<u32>::s_Max;
 
 
 public:
@@ -237,13 +243,18 @@ private:
     void destroyEntityComponents(EntityID entityId);
     void addEntityComponentType(EntityID entityId, ComponentTypeId typeId);
     void removeEntityComponentType(EntityID entityId, ComponentTypeId typeId);
+    void ensureEntityComponentHead(EntityID entityId);
+    u32 acquireEntityComponentNode(ComponentTypeId typeId, u32 nextNode);
+    void releaseEntityComponentNode(u32 nodeIndex);
 
 
 private:
     Alloc::CustomArena& m_arena;
 
     EntityManager m_entityManager;
-    Vector<EntityComponentTypeVector, EntityComponentTypeVectorAllocator> m_entityComponentTypes;
+    Vector<u32, EntityComponentHeadAllocator> m_entityComponentHeads;
+    Vector<EntityComponentNode, EntityComponentNodeAllocator> m_entityComponentNodes;
+    u32 m_freeEntityComponentNode;
     PoolMap m_pools;
     Vector<SystemEntry, SystemVectorAllocator> m_systems;
     SystemScheduler m_scheduler;

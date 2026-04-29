@@ -64,7 +64,6 @@ public:
     virtual void remove(EntityID entityId) = 0;
     virtual void clear() = 0;
     virtual usize size()const = 0;
-    virtual ComponentTypeId typeId()const = 0;
 };
 
 
@@ -100,8 +99,7 @@ private:
 
 public:
     explicit ComponentPool(Alloc::CustomArena& arena)
-        : m_typeId(ComponentType<T>())
-        , m_sparse(SparseAllocator(arena))
+        : m_sparse(SparseAllocator(arena))
         , m_dense(EntityIdAllocator(arena))
         , m_components(ComponentAllocator(arena))
     {}
@@ -178,10 +176,8 @@ public:
     }
 
     inline virtual usize size()const override{ return m_dense.size(); }
-    inline virtual ComponentTypeId typeId()const override{ return m_typeId; }
 
 private:
-    ComponentTypeId m_typeId;
     Vector<u32, SparseAllocator> m_sparse;
     Vector<EntityID, EntityIdAllocator> m_dense;
     Vector<T, ComponentAllocator> m_components;

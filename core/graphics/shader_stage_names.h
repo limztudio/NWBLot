@@ -23,21 +23,6 @@ namespace ShaderStageNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline AStringView MeshComputeArchiveStageText(){
-    static constexpr AStringView s_StageText = "mesh_compute";
-    return s_StageText;
-}
-
-inline const Name& MeshComputeArchiveStageName(){
-    static const Name s_StageName(MeshComputeArchiveStageText().data());
-    return s_StageName;
-}
-
-inline AStringView MeshComputeImplicitDefineText(){
-    static constexpr AStringView s_DefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
-    return s_DefineText;
-}
-
 inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Mask shaderType){
     switch(shaderType){
         case Core::ShaderType::Vertex: { static const Name s("vs"); return s; }

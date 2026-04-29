@@ -12,6 +12,7 @@
 #include <core/graphics/shader_stage_names.h>
 #include <logger/client/logger.h>
 #include <impl/assets_graphics/geometry_asset.h>
+#include <impl/assets_graphics/material_shader_stage_names.h>
 #include <impl/assets_graphics/material_asset.h>
 #include <impl/assets_graphics/shader_asset.h>
 
@@ -3223,7 +3224,7 @@ bool RendererSystem::ensureRendererPipeline(
             return false;
         if(!ensureComputeEmulationResources())
             return false;
-        const Name& meshComputeArchiveStageName = Core::ShaderStageNames::MeshComputeArchiveStageName();
+        const Name& meshComputeArchiveStageName = MaterialShaderStageNames::MeshComputeArchiveStageName();
         if(
             !ensureShaderLoaded(
             resources.computeShader,

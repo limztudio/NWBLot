@@ -13,12 +13,12 @@
 #include "deformable_geometry_asset.h"
 #include "deformable_geometry_validation.h"
 #include "geometry_asset.h"
+#include "material_shader_stage_names.h"
 #include "material_asset.h"
 #include "shader_asset.h"
 
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_cook.h>
-#include <core/graphics/shader_stage_names.h>
 
 #include <core/filesystem/filesystem.h>
 #include <core/metascript/parser.h>
@@ -81,7 +81,7 @@ static bool IsSupportedRendererMaterialShaderStage(const Name& stageName){
 
 static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sourceEntry, Core::ShaderCook::ShaderEntry& outEntry){
     outEntry = sourceEntry;
-    if(!outEntry.archiveStage.assign(Core::ShaderStageNames::MeshComputeArchiveStageText()))
+    if(!outEntry.archiveStage.assign(MaterialShaderStageNames::MeshComputeArchiveStageText()))
         return false;
     if(!outEntry.stage.assign("cs"))
         return false;
@@ -89,7 +89,7 @@ static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sou
         return false;
 
     outEntry.implicitDefines.insert_or_assign(
-        AString(Core::ShaderStageNames::MeshComputeImplicitDefineText()),
+        AString(MaterialShaderStageNames::MeshComputeImplicitDefineText()),
         AString("1")
     );
     return true;

@@ -73,7 +73,6 @@ private:
 
 public:
     explicit EntityManager(Alloc::CustomArena& arena);
-    ~EntityManager();
 
 
 public:
@@ -86,7 +85,7 @@ public:
 
 private:
     Vector<u32, GenerationAllocator> m_generations;
-    Deque<u32, FreeIndexAllocator> m_freeIndices;
+    Vector<u32, FreeIndexAllocator> m_freeIndices;
     usize m_aliveCount;
 };
 

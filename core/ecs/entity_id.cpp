@@ -19,16 +19,14 @@ EntityManager::EntityManager(Alloc::CustomArena& arena)
     , m_freeIndices(FreeIndexAllocator(arena))
     , m_aliveCount(0)
 {}
-EntityManager::~EntityManager()
-{}
 
 
 EntityID EntityManager::create(){
     u32 index;
 
     if(!m_freeIndices.empty()){
-        index = m_freeIndices.front();
-        m_freeIndices.pop_front();
+        index = m_freeIndices.back();
+        m_freeIndices.pop_back();
     }
     else{
         if(m_generations.size() >= static_cast<usize>(ECSDetail::ENTITY_INVALID_INDEX)){

@@ -50,6 +50,11 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
+    static EntityID entityAtDense(const Tuple<ComponentPool<Ts>*...>& pools, usize denseIndex){
+        return Get<I>(pools)->m_dense[denseIndex];
+    }
+
+    template<usize I, typename... Ts>
     static bool findDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex){
         if(I == anchorPoolIndex){
             outDenseIndex = static_cast<u32>(anchorDenseIndex);
@@ -78,12 +83,14 @@ struct ViewIterator{
 
     ComponentTuple pools;
     DenseIndexTuple denseIndices;
+    EntityID entity;
     usize anchorPoolIndex;
     usize index;
     usize count;
 
     ViewIterator(ComponentTuple poolsValue, usize anchorPoolIndexValue, usize indexValue, usize countValue, bool validValue)
         : pools(Move(poolsValue))
+        , entity(ENTITY_ID_INVALID)
         , anchorPoolIndex(anchorPoolIndexValue)
         , index(indexValue)
         , count(countValue)
@@ -96,11 +103,16 @@ struct ViewIterator{
 
     void skipInvalid(){
         while(index < count){
-            EntityID entityId = entityAt(index);
-            if(resolveDenseIndices(entityId, index))
+            const EntityID entityId = entityAt(index);
+            if(resolveDenseIndices(entityId, index)){
+                entity = entityId;
                 break;
+            }
             ++index;
         }
+
+        if(index >= count)
+            entity = ENTITY_ID_INVALID;
     }
 
     bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex){
@@ -116,12 +128,11 @@ struct ViewIterator{
     }
 
     ValueTuple operator*()const{
-        EntityID entityId = entityAt(index);
-        return deref(entityId, IndexSequenceFor<Ts...>{});
+        return deref(IndexSequenceFor<Ts...>{});
     }
     template<usize... Is>
-    ValueTuple deref(EntityID entityId, IndexSequence<Is...>)const{
-        return ForwardAsTuple(entityId, ViewTupleAccess::componentAtDense<Is>(pools, Get<Is>(denseIndices))...);
+    ValueTuple deref(IndexSequence<Is...>)const{
+        return ForwardAsTuple(entity, ViewTupleAccess::componentAtDense<Is>(pools, Get<Is>(denseIndices))...);
     }
 
     ViewIterator& operator++(){
@@ -182,6 +193,15 @@ public:
         if(!m_valid)
             return;
 
+        if constexpr(sizeof...(Ts) == 1u){
+            for(usize i = 0; i < m_count; ++i){
+                const EntityID entityId = ECSDetail::ViewTupleAccess::entityAtDense<0>(m_pools, i);
+                auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
+                func(entityId, component);
+            }
+            return;
+        }
+
         for(usize i = 0; i < m_count; ++i){
             EntityID entityId = entityAt(i);
             tryApplyFunc(func, entityId, i);
@@ -192,6 +212,17 @@ public:
     void parallelEach(Alloc::ThreadPool& pool, Func&& func)const{
         if(!m_valid)
             return;
+
+        if constexpr(sizeof...(Ts) == 1u){
+            pool.parallelFor(static_cast<usize>(0), m_count,
+                [this, &func](usize i){
+                    const EntityID entityId = ECSDetail::ViewTupleAccess::entityAtDense<0>(m_pools, i);
+                    auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
+                    func(entityId, component);
+                }
+            );
+            return;
+        }
 
         pool.parallelFor(static_cast<usize>(0), m_count,
             [this, &func](usize i){

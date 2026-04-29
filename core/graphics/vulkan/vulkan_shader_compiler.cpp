@@ -277,8 +277,9 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         return false;
     }
 
-    outBytecode.resize(spirvSize);
-    NWB_MEMCPY(outBytecode.data(), spirvSize, result.cbegin(), spirvSize);
+    const u8* spirvBytes = reinterpret_cast<const u8*>(result.cbegin());
+    outBytecode.clear();
+    outBytecode.insert(outBytecode.end(), spirvBytes, spirvBytes + spirvSize);
     return true;
 }
 

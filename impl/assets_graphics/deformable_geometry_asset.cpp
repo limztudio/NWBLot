@@ -178,13 +178,8 @@ template<typename T, typename Allocator>
     }
 
     if(payloadBytes > 0){
-        outBinary.resize(beginOffset + payloadBytes);
-        NWB_MEMCPY(
-            outBinary.data() + beginOffset,
-            payloadBytes,
-            reinterpret_cast<const u8*>(values.data()),
-            payloadBytes
-        );
+        const u8* payloadBegin = reinterpret_cast<const u8*>(values.data());
+        outBinary.insert(outBinary.end(), payloadBegin, payloadBegin + payloadBytes);
     }
     return true;
 }

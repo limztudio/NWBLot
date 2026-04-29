@@ -210,8 +210,8 @@ struct MeshSetupJobData{
 static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize dataSize){
     UploadBytes bytes{UploadBytesAllocator(arena)};
     if(data && dataSize > 0){
-        bytes.resize(dataSize);
-        NWB_MEMCPY(bytes.data(), dataSize, data, dataSize);
+        const u8* sourceBytes = static_cast<const u8*>(data);
+        bytes.insert(bytes.end(), sourceBytes, sourceBytes + dataSize);
     }
 
     return bytes;

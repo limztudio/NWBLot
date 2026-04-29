@@ -44,16 +44,6 @@ void World::destroyEntity(EntityID entityId){
 }
 
 
-bool World::alive(EntityID entityId)const{
-    return m_entityManager.alive(entityId);
-}
-
-
-usize World::entityCount()const{
-    return m_entityManager.count();
-}
-
-
 void World::removeSystem(ISystem& system){
     m_scheduler.removeSystem(system);
 

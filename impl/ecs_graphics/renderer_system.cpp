@@ -1772,10 +1772,6 @@ bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
     return targets.valid();
 }
 
-void RendererSystem::resetDeferredFrameTargets(){
-    m_deferredTargets = DeferredFrameTargets{};
-}
-
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo){
         commandList.setTextureState(targets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);

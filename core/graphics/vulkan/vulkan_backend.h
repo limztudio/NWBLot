@@ -1493,7 +1493,7 @@ public:
     virtual void endRenderPass()override;
 
     virtual void setResourceStatesForBindingSet(IBindingSet* bindingSet)override;
-    virtual void setEnableAutomaticBarriers(bool enable)override;
+    virtual void setEnableAutomaticBarriers(bool enable)override{ m_enableAutomaticBarriers = enable; }
     virtual void commitBarriers()override;
 
     virtual void setTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits)override;
@@ -1558,7 +1558,7 @@ public:
     virtual ResourceStates::Mask getBufferState(IBuffer* buffer)override;
 
     virtual IDevice* getDevice()override;
-    virtual const CommandListParameters& getDescription()override;
+    virtual const CommandListParameters& getDescription()override{ return m_desc; }
 
 public:
     void copyTextureToBuffer(IBuffer* dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* src, const TextureSlice& srcSlice);
@@ -1757,7 +1757,7 @@ public:
     virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)override;
     [[nodiscard]] virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue)override;
     virtual bool isAftermathEnabled()override{ return m_aftermathEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
-    [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override;
+    [[nodiscard]] virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper()override{ return m_aftermathCrashDumpHelper; }
 
     [[nodiscard]] virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue)override;
     virtual void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value)override;

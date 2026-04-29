@@ -1052,14 +1052,6 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     return 0;
 }
 
-AftermathCrashDumpHelper& Device::getAftermathCrashDumpHelper(){
-    return m_aftermathCrashDumpHelper;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 DeviceHandle CreateDevice(const DeviceDesc& desc){
     auto* device = NewArenaObject<Device>(desc.allocator.getObjectArena(), desc);
     return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator.getObjectArena()), AdoptRef);

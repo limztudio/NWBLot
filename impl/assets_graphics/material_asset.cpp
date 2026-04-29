@@ -332,10 +332,6 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Material::setShaderVariant(const AStringView variantName){
-    m_shaderVariant = AString(variantName);
-}
-
 void Material::setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset){
     if(!stageName || !shaderAsset.valid())
         return;

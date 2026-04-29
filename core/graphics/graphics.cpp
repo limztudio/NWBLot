@@ -508,18 +508,6 @@ GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
     return m_backend->getGraphicsAPI();
 }
 
-f64 Graphics::getPreviousFrameTimestamp()const{
-    return DurationInSeconds<f64>(m_previousFrameTimestamp);
-}
-
-bool Graphics::isVsyncEnabled()const{
-    return m_swapChainState.vsyncEnabled;
-}
-
-void Graphics::setVSyncEnabled(bool enabled){
-    m_requestedVSync = enabled;
-}
-
 void Graphics::reportLiveObjects()const{
     m_backend->reportLiveObjects();
 }
@@ -532,10 +520,6 @@ void Graphics::getWindowDimensions(i32& width, i32& height)const{
 void Graphics::getDPIScaleInfo(f32& x, f32& y)const{
     x = m_dpiScaleFactorX;
     y = m_dpiScaleFactorY;
-}
-
-const tchar* Graphics::getWindowTitle()const{
-    return m_windowTitle.c_str();
 }
 
 void Graphics::setWindowTitle(NotNull<const tchar*> title){

@@ -117,26 +117,32 @@ public:
 
 
 public:
-    [[nodiscard]] virtual IDevice* getDevice()const override;
+    [[nodiscard]] virtual IDevice* getDevice()const override{ return m_rhiDevice.get(); }
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
-    [[nodiscard]] virtual const tchar* getRendererString()const override;
+    [[nodiscard]] virtual const tchar* getRendererString()const override{ return m_rendererString.c_str(); }
     [[nodiscard]] virtual void* queryInterface(GraphicsBackendInterfaceID interfaceID)override;
     [[nodiscard]] virtual const void* queryInterface(GraphicsBackendInterfaceID interfaceID)const override;
 
     virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
-    virtual bool isInstanceExtensionEnabled(const char* extensionName)const override;
-    virtual bool isDeviceExtensionEnabled(const char* extensionName)const override;
-    virtual bool isLayerEnabled(const char* layerName)const override;
+    virtual bool isInstanceExtensionEnabled(const char* extensionName)const override{
+        return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
+    }
+    virtual bool isDeviceExtensionEnabled(const char* extensionName)const override{
+        return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
+    }
+    virtual bool isLayerEnabled(const char* layerName)const override{
+        return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
+    }
     virtual void getEnabledInstanceExtensions(Vector<AString>& extensions)const override;
     virtual void getEnabledDeviceExtensions(Vector<AString>& extensions)const override;
     virtual void getEnabledLayers(Vector<AString>& layers)const override;
 
     virtual ITexture* getCurrentBackBuffer()override;
     virtual ITexture* getBackBuffer(u32 index)override;
-    virtual u32 getCurrentBackBufferIndex()override;
-    virtual u32 getBackBufferCount()override;
+    virtual u32 getCurrentBackBufferIndex()override{ return m_swapChainIndex; }
+    virtual u32 getBackBufferCount()override{ return static_cast<u32>(m_swapChainImages.size()); }
 
     virtual void setPlatformFrameParam(const Common::FrameParam& frameParam)override{ m_platformFrameParam = frameParam; }
     virtual bool createInstance()override;

@@ -343,14 +343,6 @@ BackendContext::BackendContext(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IDevice* BackendContext::getDevice()const{
-    return m_rhiDevice.get();
-}
-
-const tchar* BackendContext::getRendererString()const{
-    return m_rendererString.c_str();
-}
-
 void* BackendContext::queryInterface(GraphicsBackendInterfaceID interfaceID){
     if(interfaceID == s_BackendQueriesInterfaceID)
         return static_cast<IBackendQueries*>(this);
@@ -371,18 +363,6 @@ bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
             return true;
     }
     return false;
-}
-
-bool BackendContext::isInstanceExtensionEnabled(const char* extensionName)const{
-    return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
-}
-
-bool BackendContext::isDeviceExtensionEnabled(const char* extensionName)const{
-    return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
-}
-
-bool BackendContext::isLayerEnabled(const char* layerName)const{
-    return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
 }
 
 void BackendContext::getEnabledInstanceExtensions(Vector<AString>& extensions)const{
@@ -416,14 +396,6 @@ ITexture* BackendContext::getBackBuffer(u32 index){
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
     return nullptr;
-}
-
-u32 BackendContext::getCurrentBackBufferIndex(){
-    return m_swapChainIndex;
-}
-
-u32 BackendContext::getBackBufferCount(){
-    return static_cast<u32>(m_swapChainImages.size());
 }
 
 void BackendContext::clearSemaphores(SemaphoreVector& semaphores){

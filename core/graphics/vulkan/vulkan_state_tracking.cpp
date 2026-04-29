@@ -151,10 +151,6 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
 }
 
-void CommandList::setEnableAutomaticBarriers(bool enable){
-    m_enableAutomaticBarriers = enable;
-}
-
 void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
     IFramebuffer* resumeFramebuffer = nullptr;
     if(m_renderPassActive){

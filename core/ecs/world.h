@@ -55,7 +55,7 @@ public:
 
 public:
     Entity createEntity();
-    usize entityCount()const;
+    usize entityCount()const{ return m_entityManager.count(); }
 
 
 public:
@@ -148,7 +148,7 @@ public:
 
 private:
     void destroyEntity(EntityID entityId);
-    bool alive(EntityID entityId)const;
+    bool alive(EntityID entityId)const{ return m_entityManager.alive(entityId); }
 
     template<typename T, typename... Args>
     T& addComponent(EntityID entityId, Args&&... args){

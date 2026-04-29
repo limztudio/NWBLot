@@ -278,14 +278,16 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam){
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
-        if(HandleWin32FrameLifecycleMessage(
-            hwnd,
-            uMsg,
-            wParam,
-            [](){},
-            [&](const bool isActive){ frame->data<Common::WinFrame>().setActive(isActive); },
-            lifecycleResult
-        ))
+        if(
+            HandleWin32FrameLifecycleMessage(
+                hwnd,
+                uMsg,
+                wParam,
+                [](){},
+                [&](const bool isActive){ frame->data<Common::WinFrame>().setActive(isActive); },
+                lifecycleResult
+            )
+        )
             return lifecycleResult;
 
         PAINTSTRUCT ps;

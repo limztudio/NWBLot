@@ -122,14 +122,14 @@ public:
 
     [[nodiscard]] const tchar* getRendererString()const;
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
-    [[nodiscard]] f64 getPreviousFrameTimestamp()const;
-    [[nodiscard]] bool isVsyncEnabled()const;
-    void setVSyncEnabled(bool enabled);
+    [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
+    [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
+    void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
     void reportLiveObjects()const;
 
     void getWindowDimensions(i32& width, i32& height)const;
     void getDPIScaleInfo(f32& x, f32& y)const;
-    [[nodiscard]] const tchar* getWindowTitle()const;
+    [[nodiscard]] const tchar* getWindowTitle()const{ return m_windowTitle.c_str(); }
     void setWindowTitle(NotNull<const tchar*> title);
 
     [[nodiscard]] ITexture* getCurrentBackBuffer()const;

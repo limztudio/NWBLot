@@ -42,7 +42,7 @@ public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
 
 public:
-    void setShaderVariant(AStringView variantName);
+    void setShaderVariant(AStringView variantName){ m_shaderVariant = AString(variantName); }
     void setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset);
     bool setParameter(const CompactString& key, const CompactString& value);
 

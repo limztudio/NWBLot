@@ -63,10 +63,6 @@ bool EntityManager::alive(EntityID entityId)const{
 }
 
 
-usize EntityManager::count()const{
-    return m_aliveCount;
-}
-
 void EntityManager::clear(){
     m_generations.clear();
     m_freeIndices.clear();

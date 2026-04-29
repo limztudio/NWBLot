@@ -84,7 +84,9 @@ private:
     [[nodiscard]] bool createOrRefreshTexture(Core::ICommandList& commandList, ImTextureData& textureData);
     void destroyTexture(ImTextureData& textureData);
     [[nodiscard]] UiTextureResource* textureResourceFromId(ImTextureID textureId)const;
-    [[nodiscard]] UiTextureResource* fallbackTextureResource()const;
+    [[nodiscard]] UiTextureResource* fallbackTextureResource()const{
+        return m_textures.empty() ? nullptr : m_textures.front().get();
+    }
     [[nodiscard]] Core::IBindingSet* bindingSetForTexture(ImTextureID textureId)const;
     [[nodiscard]] bool uploadDrawBuffers(Core::ICommandList& commandList, ImDrawData& drawData);
     void renderDrawData(Core::ICommandList& commandList, Core::IFramebuffer* framebuffer, ImDrawData& drawData);

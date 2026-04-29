@@ -305,7 +305,7 @@ private:
     [[nodiscard]] bool ensureAvboitPipelines(AvboitFrameTargets& targets);
     [[nodiscard]] bool ensureRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
-    void resetDeferredFrameTargets();
+    void resetDeferredFrameTargets(){ m_deferredTargets = DeferredFrameTargets{}; }
     void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     void clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void renderMaterialPass(

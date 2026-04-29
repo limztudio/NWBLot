@@ -484,10 +484,6 @@ IDevice* CommandList::getDevice(){
     return &m_device;
 }
 
-const CommandListParameters& CommandList::getDescription(){
-    return m_desc;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Texture tiling and sampler feedback stubs

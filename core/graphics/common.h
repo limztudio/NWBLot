@@ -3468,7 +3468,7 @@ public:
 
 public:
     usize pushEvent(const char* name);
-    void popEvent();
+    void popEvent(){ m_eventStack = m_eventStack.parent_path(); }
     Pair<bool, AString> getEventString(usize hash);
 
 

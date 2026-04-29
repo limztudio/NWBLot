@@ -490,10 +490,6 @@ usize AftermathMarkerTracker::pushEvent(const char* name){
     return hash;
 }
 
-void AftermathMarkerTracker::popEvent(){
-    m_eventStack = m_eventStack.parent_path();
-}
-
 Pair<bool, AString> AftermathMarkerTracker::getEventString(usize hash){
     auto found = m_eventStrings.find(hash);
     if(found != m_eventStrings.end())

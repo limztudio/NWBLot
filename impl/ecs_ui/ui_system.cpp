@@ -832,10 +832,6 @@ UiSystem::UiTextureResource* UiSystem::textureResourceFromId(const ImTextureID t
     return nullptr;
 }
 
-UiSystem::UiTextureResource* UiSystem::fallbackTextureResource()const{
-    return m_textures.empty() ? nullptr : m_textures.front().get();
-}
-
 Core::IBindingSet* UiSystem::bindingSetForTexture(const ImTextureID textureId)const{
     UiTextureResource* resource = textureResourceFromId(textureId);
     if(!resource)

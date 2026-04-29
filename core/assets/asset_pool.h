@@ -45,10 +45,10 @@ public:
 
     [[nodiscard]] AssetType* find(HandleType handle);
     [[nodiscard]] const AssetType* find(HandleType handle)const;
-    [[nodiscard]] bool contains(HandleType handle)const;
+    [[nodiscard]] bool contains(HandleType handle)const{ return validHandle(handle); }
 
-    [[nodiscard]] u32 liveCount()const;
-    [[nodiscard]] bool empty()const;
+    [[nodiscard]] u32 liveCount()const{ return m_liveCount; }
+    [[nodiscard]] bool empty()const{ return m_liveCount == 0; }
 
 
 private:
@@ -160,24 +160,6 @@ const typename AssetPool<TAsset>::AssetType* AssetPool<TAsset>::find(const Handl
         return nullptr;
 
     return m_slots[handle.index].asset.get();
-}
-
-
-template<typename TAsset>
-bool AssetPool<TAsset>::contains(const HandleType handle)const{
-    return validHandle(handle);
-}
-
-
-template<typename TAsset>
-u32 AssetPool<TAsset>::liveCount()const{
-    return m_liveCount;
-}
-
-
-template<typename TAsset>
-bool AssetPool<TAsset>::empty()const{
-    return m_liveCount == 0;
 }
 
 

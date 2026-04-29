@@ -65,12 +65,7 @@ bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
 
 
 bool ShaderAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    auto asset = MakeUnique<Shader>(virtualPath);
-    if(!asset->loadBinary(binary))
-        return false;
-
-    outAsset = Move(asset);
-    return true;
+    return Core::Assets::DeserializeTypedAsset<Shader>(virtualPath, binary, outAsset);
 }
 
 

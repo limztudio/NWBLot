@@ -8,6 +8,7 @@
 #include <core/alloc/custom.h>
 #include <core/alloc/memory.h>
 #include <core/alloc/thread.h>
+#include <core/common/common.h>
 #include <core/ecs/world.h>
 
 #include <global/global.h>
@@ -43,6 +44,26 @@ struct TestContext{
         NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
     }
 };
+
+template<typename RunTests>
+[[nodiscard]] inline int RunTestSuite(const char* suiteName, RunTests&& runTests){
+    Core::Common::InitializerGuard commonInitializerGuard;
+    if(!commonInitializerGuard.initialize()){
+        NWB_CERR << suiteName << " tests failed: common initialization failed\n";
+        return -1;
+    }
+
+    TestContext context;
+    Forward<RunTests>(runTests)(context);
+
+    if(context.failed != 0u){
+        NWB_CERR << suiteName << " tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
+        return -1;
+    }
+
+    NWB_COUT << suiteName << " tests passed: " << context.passed << '\n';
+    return 0;
+}
 
 class CapturingLogger final : public Log::IClient{
 public:

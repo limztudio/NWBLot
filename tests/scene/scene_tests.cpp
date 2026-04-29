@@ -398,25 +398,12 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     static_cast<void>(argc);
     static_cast<void>(argv);
 
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize()){
-        NWB_CERR << "scene tests failed: common initialization failed\n";
-        return -1;
-    }
-
-    __hidden_scene_tests::TestContext context;
-    __hidden_scene_tests::TestSceneAndMainCamera(context);
-    __hidden_scene_tests::TestSceneCameraResolution(context);
-    __hidden_scene_tests::TestCameraProjectionHelpers(context);
-    __hidden_scene_tests::TestLightComponents(context);
-
-    if(context.failed != 0){
-        NWB_CERR << "scene tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
-        return -1;
-    }
-
-    NWB_COUT << "scene tests passed: " << context.passed << '\n';
-    return 0;
+    return NWB::Tests::RunTestSuite("scene", [](NWB::Tests::TestContext& context){
+        __hidden_scene_tests::TestSceneAndMainCamera(context);
+        __hidden_scene_tests::TestSceneCameraResolution(context);
+        __hidden_scene_tests::TestCameraProjectionHelpers(context);
+        __hidden_scene_tests::TestLightComponents(context);
+    });
 }
 
 

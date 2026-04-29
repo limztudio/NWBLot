@@ -36,14 +36,6 @@ constexpr VkPrimitiveTopology ConvertPrimitiveTopology(PrimitiveType::Enum primT
     }
 }
 
-constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode){
-    switch(fillMode){
-    case RasterFillMode::Solid:     return VK_POLYGON_MODE_FILL;
-    case RasterFillMode::Wireframe: return VK_POLYGON_MODE_LINE;
-    default: return VK_POLYGON_MODE_FILL;
-    }
-}
-
 void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
     const RasterState& rasterState = desc.renderState.rasterState;
     const DepthStencilState& depthStencilState = desc.renderState.depthStencilState;
@@ -268,17 +260,12 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     viewportState.scissorCount = 1;
 
     // Step 5: Rasterization state
-    auto rasterizer = VulkanDetail::MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
-    rasterizer.depthClampEnable = desc.renderState.rasterState.depthClipEnable ? VK_FALSE : VK_TRUE;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode = VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode);
-    rasterizer.cullMode = VulkanDetail::ConvertCullMode(desc.renderState.rasterState.cullMode);
-    rasterizer.frontFace = desc.renderState.rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable = desc.renderState.rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
-    rasterizer.depthBiasConstantFactor = static_cast<f32>(desc.renderState.rasterState.depthBias);
-    rasterizer.depthBiasClamp = desc.renderState.rasterState.depthBiasClamp;
-    rasterizer.depthBiasSlopeFactor = desc.renderState.rasterState.slopeScaledDepthBias;
-    rasterizer.lineWidth = s_DefaultRasterLineWidth;
+    const RasterState& rasterState = desc.renderState.rasterState;
+    auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
+        rasterState,
+        VulkanDetail::ConvertFillMode(rasterState.fillMode),
+        rasterState.depthClipEnable ? VK_FALSE : VK_TRUE
+    );
 
     // Step 6: Multisample state
     VkPipelineMultisampleStateCreateInfo multisampling;

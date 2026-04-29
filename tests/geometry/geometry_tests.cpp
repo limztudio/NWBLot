@@ -1214,50 +1214,38 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     static_cast<void>(argc);
     static_cast<void>(argv);
 
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize()){
-        NWB_CERR << "geometry tests failed: common initialization failed\n";
-        return -1;
-    }
-
-    __hidden_geometry_tests::TestContext context;
-    __hidden_geometry_tests::TestResolvesCoreFrameMath(context);
-    __hidden_geometry_tests::TestBlendsSkinInfluenceWeights(context);
-    __hidden_geometry_tests::TestBlendSkinInfluenceRejectsInvalidInput(context);
-    __hidden_geometry_tests::TestBlendsFloat4Weights(context);
-    __hidden_geometry_tests::TestBlendFloat4RejectsInvalidInput(context);
-    __hidden_geometry_tests::TestBlendsMorphDeltaWeights(context);
-    __hidden_geometry_tests::TestBlendMorphDeltaReportsInactiveOutput(context);
-    __hidden_geometry_tests::TestBlendMorphDeltaRejectsInvalidInput(context);
-    __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
-    __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
-    __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
-    __hidden_geometry_tests::TestOrdersBoundaryLoopCounterClockwise(context);
-    __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
-    __hidden_geometry_tests::TestBuildsBoundaryEdgesFromRemovedTriangles(context);
-    __hidden_geometry_tests::TestRejectsMalformedRemovedTriangleBoundaries(context);
-    __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
-    __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
-    __hidden_geometry_tests::TestBuildsBoundaryLoopVertexFrame(context);
-    __hidden_geometry_tests::TestBuildsSurfacePatchLoopDistances(context);
-    __hidden_geometry_tests::TestRejectsMalformedSurfacePatchLoopDistances(context);
-    __hidden_geometry_tests::TestBuildsSurfacePatchRingEdges(context);
-    __hidden_geometry_tests::TestRejectsMalformedSurfacePatchRingEdges(context);
-    __hidden_geometry_tests::TestBuildsSurfacePatchWallVertices(context);
-    __hidden_geometry_tests::TestRejectsMalformedSurfacePatchWallVertices(context);
-    __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
-    __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
-    __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);
-    __hidden_geometry_tests::TestMeshletBuilderRebuildsDeterministically(context);
-    __hidden_geometry_tests::TestMeshletBuilderRejectsInvalidInput(context);
-    __hidden_geometry_tests::TestRejectsInvalidMeshletDeformationBounds(context);
-    if(context.failed != 0u){
-        NWB_CERR << "geometry tests failed: " << context.failed << " failed, " << context.passed << " passed\n";
-        return -1;
-    }
-
-    NWB_COUT << "geometry tests passed: " << context.passed << '\n';
-    return 0;
+    return NWB::Tests::RunTestSuite("geometry", [](NWB::Tests::TestContext& context){
+        __hidden_geometry_tests::TestResolvesCoreFrameMath(context);
+        __hidden_geometry_tests::TestBlendsSkinInfluenceWeights(context);
+        __hidden_geometry_tests::TestBlendSkinInfluenceRejectsInvalidInput(context);
+        __hidden_geometry_tests::TestBlendsFloat4Weights(context);
+        __hidden_geometry_tests::TestBlendFloat4RejectsInvalidInput(context);
+        __hidden_geometry_tests::TestBlendsMorphDeltaWeights(context);
+        __hidden_geometry_tests::TestBlendMorphDeltaReportsInactiveOutput(context);
+        __hidden_geometry_tests::TestBlendMorphDeltaRejectsInvalidInput(context);
+        __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
+        __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
+        __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
+        __hidden_geometry_tests::TestOrdersBoundaryLoopCounterClockwise(context);
+        __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
+        __hidden_geometry_tests::TestBuildsBoundaryEdgesFromRemovedTriangles(context);
+        __hidden_geometry_tests::TestRejectsMalformedRemovedTriangleBoundaries(context);
+        __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
+        __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);
+        __hidden_geometry_tests::TestBuildsBoundaryLoopVertexFrame(context);
+        __hidden_geometry_tests::TestBuildsSurfacePatchLoopDistances(context);
+        __hidden_geometry_tests::TestRejectsMalformedSurfacePatchLoopDistances(context);
+        __hidden_geometry_tests::TestBuildsSurfacePatchRingEdges(context);
+        __hidden_geometry_tests::TestRejectsMalformedSurfacePatchRingEdges(context);
+        __hidden_geometry_tests::TestBuildsSurfacePatchWallVertices(context);
+        __hidden_geometry_tests::TestRejectsMalformedSurfacePatchWallVertices(context);
+        __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
+        __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
+        __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);
+        __hidden_geometry_tests::TestMeshletBuilderRebuildsDeterministically(context);
+        __hidden_geometry_tests::TestMeshletBuilderRejectsInvalidInput(context);
+        __hidden_geometry_tests::TestRejectsInvalidMeshletDeformationBounds(context);
+    });
 }
 
 

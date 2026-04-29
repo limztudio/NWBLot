@@ -84,6 +84,33 @@ constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
     }
 }
 
+constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode){
+    switch(fillMode){
+    case RasterFillMode::Solid:     return VK_POLYGON_MODE_FILL;
+    case RasterFillMode::Wireframe: return VK_POLYGON_MODE_LINE;
+    default: return VK_POLYGON_MODE_FILL;
+    }
+}
+
+inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(
+    const RasterState& rasterState,
+    const VkPolygonMode polygonMode,
+    const VkBool32 depthClampEnable
+){
+    auto rasterizer = MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
+    rasterizer.depthClampEnable = depthClampEnable;
+    rasterizer.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer.polygonMode = polygonMode;
+    rasterizer.cullMode = ConvertCullMode(rasterState.cullMode);
+    rasterizer.frontFace = rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.depthBiasEnable = rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
+    rasterizer.depthBiasConstantFactor = static_cast<f32>(rasterState.depthBias);
+    rasterizer.depthBiasClamp = rasterState.depthBiasClamp;
+    rasterizer.depthBiasSlopeFactor = rasterState.slopeScaledDepthBias;
+    rasterizer.lineWidth = s_DefaultRasterLineWidth;
+    return rasterizer;
+}
+
 constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
     switch(compareFunc){
     case ComparisonFunc::Never:          return VK_COMPARE_OP_NEVER;

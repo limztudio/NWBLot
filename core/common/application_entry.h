@@ -35,6 +35,30 @@ template<typename EntryPoint, typename CharT>
     return entryPoint(argc, argv, instance);
 }
 
+#if defined(NWB_UNICODE)
+template<typename Run>
+[[nodiscard]] inline int InvokeWithUtf8Args(const isize argc, wchar** argv, Run&& run){
+    const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
+    Vector<AString> utf8Args;
+    Vector<char*> utf8Argv;
+    utf8Args.reserve(argCount);
+    utf8Argv.reserve(argCount + 1u);
+
+    for(usize i = 0; i < argCount; ++i){
+        if(argv == nullptr || argv[i] == nullptr){
+            utf8Argv.push_back(nullptr);
+            continue;
+        }
+
+        utf8Args.push_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
+        utf8Argv.push_back(utf8Args.back().data());
+    }
+
+    utf8Argv.push_back(nullptr);
+    return Forward<Run>(run)(static_cast<int>(argCount), utf8Argv.data());
+}
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

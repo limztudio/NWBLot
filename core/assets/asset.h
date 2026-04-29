@@ -109,6 +109,20 @@ protected:
     {}
 };
 
+template<typename AssetT>
+[[nodiscard]] inline bool DeserializeTypedAsset(
+    const Name& virtualPath,
+    const AssetBytes& binary,
+    UniquePtr<IAsset>& outAsset
+){
+    auto asset = MakeUnique<AssetT>(virtualPath);
+    if(!asset->loadBinary(binary))
+        return false;
+
+    outAsset = Move(asset);
+    return true;
+}
+
 
 NWB_ASSETS_END
 

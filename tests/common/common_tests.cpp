@@ -139,26 +139,13 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     static_cast<void>(argc);
     static_cast<void>(argv);
 
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize()){
-        NWB_CERR << "common tests failed: common initialization failed\n";
-        return -1;
-    }
-
-    __hidden_common_tests::TestContext context;
-    __hidden_common_tests::TestPodRoundTrip(context);
-    __hidden_common_tests::TestLengthPrefixedStringRoundTrip(context);
-    __hidden_common_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
-    __hidden_common_tests::TestStringTableText(context);
-    __hidden_common_tests::TestInvalidStringTableReads(context);
-
-    if(context.failed != 0){
-        NWB_CERR << "common tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
-        return -1;
-    }
-
-    NWB_COUT << "common tests passed: " << context.passed << '\n';
-    return 0;
+    return NWB::Tests::RunTestSuite("common", [](NWB::Tests::TestContext& context){
+        __hidden_common_tests::TestPodRoundTrip(context);
+        __hidden_common_tests::TestLengthPrefixedStringRoundTrip(context);
+        __hidden_common_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
+        __hidden_common_tests::TestStringTableText(context);
+        __hidden_common_tests::TestInvalidStringTableReads(context);
+    });
 }
 
 

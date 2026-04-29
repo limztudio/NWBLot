@@ -805,12 +805,7 @@ bool DeformableGeometryAssetCodec::deserialize(
     const Core::Assets::AssetBytes& binary,
     UniquePtr<Core::Assets::IAsset>& outAsset
 )const{
-    auto asset = MakeUnique<DeformableGeometry>(virtualPath);
-    if(!asset->loadBinary(binary))
-        return false;
-
-    outAsset = Move(asset);
-    return true;
+    return Core::Assets::DeserializeTypedAsset<DeformableGeometry>(virtualPath, binary, outAsset);
 }
 
 bool DeformableDisplacementTextureAssetCodec::deserialize(
@@ -818,12 +813,7 @@ bool DeformableDisplacementTextureAssetCodec::deserialize(
     const Core::Assets::AssetBytes& binary,
     UniquePtr<Core::Assets::IAsset>& outAsset
 )const{
-    auto asset = MakeUnique<DeformableDisplacementTexture>(virtualPath);
-    if(!asset->loadBinary(binary))
-        return false;
-
-    outAsset = Move(asset);
-    return true;
+    return Core::Assets::DeserializeTypedAsset<DeformableDisplacementTexture>(virtualPath, binary, outAsset);
 }
 
 

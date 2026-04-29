@@ -200,27 +200,14 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     static_cast<void>(argc);
     static_cast<void>(argv);
 
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize()){
-        NWB_CERR << "math tests failed: common initialization failed\n";
-        return -1;
-    }
-
-    __hidden_math_tests::TestContext context;
-    __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);
-    __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
-    __hidden_math_tests::TestVector3RotateQuarterTurn(context);
-    __hidden_math_tests::TestVector4CrossBasisOrientation(context);
-    __hidden_math_tests::TestGlslNamedScalarFunctions(context);
-    __hidden_math_tests::TestGlslRefractCriticalAngle(context);
-
-    if(context.failed != 0){
-        NWB_CERR << "math tests failed: " << context.failed << " of " << (context.passed + context.failed) << '\n';
-        return -1;
-    }
-
-    NWB_COUT << "math tests passed: " << context.passed << '\n';
-    return 0;
+    return NWB::Tests::RunTestSuite("math", [](NWB::Tests::TestContext& context){
+        __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);
+        __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
+        __hidden_math_tests::TestVector3RotateQuarterTurn(context);
+        __hidden_math_tests::TestVector4CrossBasisOrientation(context);
+        __hidden_math_tests::TestGlslNamedScalarFunctions(context);
+        __hidden_math_tests::TestGlslRefractCriticalAngle(context);
+    });
 }
 
 

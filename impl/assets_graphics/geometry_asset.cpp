@@ -243,12 +243,7 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
 
 
 bool GeometryAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    auto asset = MakeUnique<Geometry>(virtualPath);
-    if(!asset->loadBinary(binary))
-        return false;
-
-    outAsset = Move(asset);
-    return true;
+    return Core::Assets::DeserializeTypedAsset<Geometry>(virtualPath, binary, outAsset);
 }
 
 

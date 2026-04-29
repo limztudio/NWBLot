@@ -163,12 +163,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 
 
 bool MaterialAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    auto asset = MakeUnique<Material>(virtualPath);
-    if(!asset->loadBinary(binary))
-        return false;
-
-    outAsset = Move(asset);
-    return true;
+    return Core::Assets::DeserializeTypedAsset<Material>(virtualPath, binary, outAsset);
 }
 
 

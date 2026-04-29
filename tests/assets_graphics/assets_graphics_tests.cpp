@@ -2314,50 +2314,31 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     static_cast<void>(argc);
     static_cast<void>(argv);
 
-    NWB::Core::Common::InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize()){
-        NWB_CERR << "assets graphics tests failed: common initialization failed\n";
-        return -1;
-    }
-
-    __hidden_assets_graphics_tests::TestContext context;
-    __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
-    __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
-    __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
-    __hidden_assets_graphics_tests::TestGeometryCodecRejectsOldBinaryVersion(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTripsTextureDisplacement(context);
-    __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);
-    __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
-    __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
-    __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerGeneratesMissingFrames(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerNormalizesSkinWeights(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerTextureDisplacementModes(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
-    __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
-    __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
-
-    if(context.failed != 0){
-        NWB_CERR
-            << "assets graphics tests failed: "
-            << context.failed
-            << " of "
-            << (context.passed + context.failed)
-            << '\n'
-        ;
-        return -1;
-    }
-
-    NWB_COUT << "assets graphics tests passed: " << context.passed << '\n';
-    return 0;
+    return NWB::Tests::RunTestSuite("assets graphics", [](NWB::Tests::TestContext& context){
+        __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
+        __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestGeometryCodecRejectsOldBinaryVersion(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTripsTextureDisplacement(context);
+        __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);
+        __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
+        __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
+        __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerGeneratesMissingFrames(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerNormalizesSkinWeights(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerTextureDisplacementModes(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
+        __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
+    });
 }
 
 

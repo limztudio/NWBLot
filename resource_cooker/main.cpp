@@ -4,7 +4,7 @@
 
 #include "resource_cooker.h"
 
-#include <core/alloc/scratch.h>
+#include <core/common/application_entry.h>
 #include <core/common/common.h>
 #include <logger/client/logger.h>
 
@@ -52,37 +52,13 @@ static int EntryPoint(const isize argc, wchar** argv, void*){
         if(!InitializeResourceCookerCommon(commonInitializerGuard))
             return -1;
 
-        const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
-        NWB::Core::Alloc::ScratchArena<> scratchArena;
-        Vector<AString, NWB::Core::Alloc::ScratchAllocator<AString>> utf8Args{
-            NWB::Core::Alloc::ScratchAllocator<AString>(scratchArena)
-        };
-        Vector<char*, NWB::Core::Alloc::ScratchAllocator<char*>> utf8Argv{
-            NWB::Core::Alloc::ScratchAllocator<char*>(scratchArena)
-        };
-        utf8Args.reserve(argCount);
-        utf8Argv.reserve(argCount + 1u);
-
-        for(usize i = 0; i < argCount; ++i){
-            if(argv == nullptr || argv[i] == nullptr){
-                utf8Argv.push_back(nullptr);
-                continue;
-            }
-
-            utf8Args.push_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
-            utf8Argv.push_back(utf8Args.back().data());
-        }
-
-        utf8Argv.push_back(nullptr);
-        return RunResourceCooker(static_cast<int>(argCount), utf8Argv.data());
+        return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, RunResourceCooker);
     }
     catch(...){
         return -1;
     }
 }
 #endif
-
-#include <core/common/application_entry.h>
 
 NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 

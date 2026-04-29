@@ -43,7 +43,7 @@ void World::destroyEntity(EntityID entityId){
         return;
 
     destroyEntityComponents(entityId);
-    m_entityManager.destroy(entityId);
+    m_entityManager.destroyAlive(entityId);
 }
 
 

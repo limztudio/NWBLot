@@ -46,6 +46,13 @@ void EntityManager::destroy(EntityID entityId){
     if(!alive(entityId))
         return;
 
+    destroyAlive(entityId);
+}
+
+
+void EntityManager::destroyAlive(EntityID entityId){
+    NWB_ASSERT(alive(entityId));
+
     const u32 index = entityId.index();
     m_generations[index] = static_cast<u16>((m_generations[index] + 1u) & ECSDetail::ENTITY_GENERATION_MASK);
     m_freeIndices.push_back(index);

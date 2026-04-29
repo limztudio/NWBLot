@@ -78,6 +78,7 @@ public:
 public:
     EntityID create();
     void destroy(EntityID entityId);
+    void destroyAlive(EntityID entityId);
     bool alive(EntityID entityId)const;
     usize count()const{ return m_aliveCount; }
     void clear();

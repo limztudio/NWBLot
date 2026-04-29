@@ -232,7 +232,7 @@ private:
     MessageChannel<T>* getOrCreateChannel(){
         const MessageTypeId typeId = MessageType<T>();
 
-        {
+        if(m_hasChannels.load(MemoryOrder::acquire)){
             ChannelLock readLock(m_channelsMutex, false);
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
@@ -258,6 +258,9 @@ private:
 
     template<typename T>
     const MessageChannel<T>* getChannel()const{
+        if(!m_hasChannels.load(MemoryOrder::acquire))
+            return nullptr;
+
         const MessageTypeId typeId = MessageType<T>();
 
         ChannelLock lock(m_channelsMutex, false);

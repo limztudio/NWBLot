@@ -5,6 +5,9 @@
 #pragma once
 
 
+#include "namespace.h"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -43,15 +46,6 @@
 #else
 #define NWB_COMPILER_FRONTEND_GNU 0
 #endif
-
-#ifndef NWB_BEGIN
-#define NWB_BEGIN namespace NWB{
-#endif
-
-#ifndef NWB_END
-#define NWB_END };
-#endif
-
 
 #if defined(PROP_DBG)
 #define NWB_DEBUG

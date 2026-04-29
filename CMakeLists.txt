@@ -23,6 +23,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 endif()
 
 option(NWB_BUILD_RESOURCE_COOKER "Build the resource cooker tool." ON)
+option(NWB_BUILD_UTILITIES "Build standalone utility tools." ON)
 option(NWB_BUILD_LOGSERVER "Build the log server app." ${NWB_BUILD_LOGSERVER_DEFAULT})
 option(NWB_BUILD_LOADER "Build the loader static library." ${NWB_BUILD_LOADER_DEFAULT})
 option(NWB_BUILD_TESTBED "Build the testbed app." ${WIN32})
@@ -55,6 +56,10 @@ if(NWB_BUILD_RESOURCE_COOKER)
     else()
         message(STATUS "Skipping nwb_resource_cooker: shaderc is unavailable")
     endif()
+endif()
+
+if(NWB_BUILD_UTILITIES)
+    add_subdirectory(utilities)
 endif()
 
 if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED)

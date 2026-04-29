@@ -6,13 +6,10 @@
 
 #include <CLI.hpp>
 
-#include <cmath>
 #include <cstdlib>
-#include <filesystem>
 #include <iostream>
 #include <string>
 #include <system_error>
-#include <utility>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -63,8 +60,8 @@ bool PromptString(const AString& label, const AString& defaultValue, AString& ou
         return !outValue.empty();
     }
 
-    line = Trim(std::move(line));
-    outValue = line.empty() ? defaultValue : std::move(line);
+    line = Trim(Move(line));
+    outValue = line.empty() ? defaultValue : Move(line);
     return !outValue.empty();
 }
 
@@ -79,7 +76,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
             return true;
         }
 
-        line = ToLower(Trim(std::move(line)));
+        line = ToLower(Trim(Move(line)));
         if(line.empty()){
             outValue = defaultValue;
             return true;
@@ -108,7 +105,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
             return true;
         }
 
-        line = Trim(std::move(line));
+        line = Trim(Move(line));
         if(line.empty()){
             outValue = defaultValue;
             return true;
@@ -116,7 +113,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
 
         char* end = nullptr;
         const f64 parsed = std::strtod(line.c_str(), &end);
-        if(end && *end == '\0' && std::isfinite(parsed) && parsed > 0.0){
+        if(end && *end == '\0' && IsFinite(parsed) && parsed > 0.0){
             outValue = parsed;
             return true;
         }
@@ -161,7 +158,7 @@ bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& pr
         }
         options.inputPath = input;
     }
-    options.inputPath = UnquotePath(std::move(options.inputPath));
+    options.inputPath = UnquotePath(Move(options.inputPath));
 
     if(!presence.preserveSpace && !options.acceptDefaults && !options.listMeshes){
         bool convertSpace = true;
@@ -199,7 +196,7 @@ bool ConfigurePromptsAfterLoad(
     }
     if(options.outputPath.empty())
         options.outputPath = PathToUtf8(DefaultOutputPath(options.inputPath));
-    options.outputPath = UnquotePath(std::move(options.outputPath));
+    options.outputPath = UnquotePath(Move(options.outputPath));
 
     if(!presence.indexType && !options.acceptDefaults){
         AString indexType;
@@ -254,7 +251,7 @@ int Run(int argc, char** argv, bool& prompted){
 
     CLI::Option* inputOption = app.add_option("input", options.inputPath, "Input FBX file path");
     CLI::Option* outputOption = app.add_option("-o,--output", options.outputPath, "Output NWB geometry metadata path");
-    CLI::Option* assetKindOption = app.add_option("--geometry-type,--asset-kind", options.assetKind, "NWB geometry type: geometry or deformable_geometry");
+    CLI::Option* assetKindOption = app.add_option("--geometry-type", options.assetKind, "NWB geometry type: geometry or deformable_geometry");
     CLI::Option* meshOption = app.add_option("-m,--mesh", options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* indexTypeOption = app.add_option("--index-type", options.indexType, "Index type: auto, u16, or u32");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
@@ -297,7 +294,7 @@ int Run(int argc, char** argv, bool& prompted){
     if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
         return 1;
 
-    if(!std::isfinite(options.scale) || options.scale <= 0.0){
+    if(!IsFinite(options.scale) || options.scale <= 0.0){
         NWB_CERR << "--scale must be a positive finite number.\n";
         return 1;
     }

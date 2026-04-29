@@ -4,12 +4,10 @@
 
 #include "fbx_to_nwb.h"
 
-#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <numeric>
 #include <sstream>
-#include <utility>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -147,7 +145,7 @@ bool AppendInstanceGeometry(
                 inOutTriangleIndices[triangleIndex * 3u + 2u],
             };
             if(options.flipWinding)
-                std::swap(cornerIndices[1], cornerIndices[2]);
+                Swap(cornerIndices[1], cornerIndices[2]);
 
             for(const u32 cornerIndex : cornerIndices){
                 ufbx_vec3 position = {};
@@ -452,11 +450,11 @@ bool BuildGeometry(
         }
 
         flatVertices.resize(uniqueVertexCount);
-        outVertices = std::move(flatVertices);
+        outVertices = Move(flatVertices);
     }
     else{
         std::iota(outIndices.begin(), outIndices.end(), u32{ 0 });
-        outVertices = std::move(flatVertices);
+        outVertices = Move(flatVertices);
     }
 
     return true;

@@ -4,7 +4,6 @@
 
 #include "fbx_to_nwb.h"
 
-#include <cmath>
 #include <fstream>
 #include <ostream>
 #include <system_error>
@@ -26,7 +25,7 @@ namespace __hidden_nwb_geometry_writer{
 
 
 f32 CleanFloat(const f32 value){
-    if(std::fabs(value) < 0.00000001f)
+    if(Abs(value) < 0.00000001f)
         return 0.0f;
     return value;
 }

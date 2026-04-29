@@ -6,10 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cmath>
-#include <cstdlib>
 #include <sstream>
-#include <utility>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +30,7 @@ AString Trim(AString value){
 }
 
 AString UnquotePath(AString value){
-    value = Trim(std::move(value));
+    value = Trim(Move(value));
     if(value.size() >= 2u){
         const char first = value.front();
         const char last = value.back();
@@ -52,15 +49,7 @@ AString ToLower(AString value){
 }
 
 AString NormalizeAssetKind(AString value){
-    value = ToLower(Trim(std::move(value)));
-    std::replace(value.begin(), value.end(), '-', '_');
-    if(value == "static" || value == "static_geometry"){
-        return "geometry";
-    }
-    if(value == "deformable" || value == "deformable_mesh"){
-        return "deformable_geometry";
-    }
-    return value;
+    return ToLower(Trim(Move(value)));
 }
 
 bool IsStaticGeometryKind(const AString& value){
@@ -72,7 +61,7 @@ bool IsDeformableGeometryKind(const AString& value){
 }
 
 bool ValidateAssetKind(AString& inOutValue, AString& outError){
-    inOutValue = NormalizeAssetKind(std::move(inOutValue));
+    inOutValue = NormalizeAssetKind(Move(inOutValue));
     if(IsStaticGeometryKind(inOutValue) || IsDeformableGeometryKind(inOutValue))
         return true;
 
@@ -95,7 +84,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
 
     const f32 values[] = { color.x, color.y, color.z, color.w };
     for(const f32 value : values){
-        if(!std::isfinite(value))
+        if(!IsFinite(value))
             return false;
     }
 
@@ -108,18 +97,18 @@ bool Normalize(Vec3& value){
         static_cast<f64>(value.x) * static_cast<f64>(value.x)
         + static_cast<f64>(value.y) * static_cast<f64>(value.y)
         + static_cast<f64>(value.z) * static_cast<f64>(value.z);
-    if(!std::isfinite(lengthSquared) || lengthSquared <= 0.0)
+    if(!IsFinite(lengthSquared) || lengthSquared <= 0.0)
         return false;
 
-    const f64 invLength = 1.0 / std::sqrt(lengthSquared);
+    const f64 invLength = 1.0 / Sqrt(lengthSquared);
     value.x = static_cast<f32>(static_cast<f64>(value.x) * invLength);
     value.y = static_cast<f32>(static_cast<f64>(value.y) * invLength);
     value.z = static_cast<f32>(static_cast<f64>(value.z) * invLength);
-    return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z);
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
 Vec4 BuildFallbackTangent(const Vec3& normal){
-    Vec3 reference = std::fabs(normal.x) < 0.9f
+    Vec3 reference = Abs(normal.x) < 0.9f
         ? Vec3{ 1.0f, 0.0f, 0.0f }
         : Vec3{ 0.0f, 1.0f, 0.0f };
 
@@ -154,7 +143,7 @@ bool IsFiniteVertex(const GeometryVertex& vertex){
         vertex.color.w,
     };
     for(const f32 value : values){
-        if(!std::isfinite(value))
+        if(!IsFinite(value))
             return false;
     }
     return true;

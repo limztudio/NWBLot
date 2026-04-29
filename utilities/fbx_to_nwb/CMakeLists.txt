@@ -9,6 +9,7 @@ target_sources(nwb_fbx_to_nwb PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
 )
 target_link_libraries(nwb_fbx_to_nwb PRIVATE
+    nwb_common
     nwb_alloc
     nwb::ufbx
     nwb::cli11_headers

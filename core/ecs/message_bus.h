@@ -185,6 +185,9 @@ public:
 private:
     template<typename Func>
     void forEachChannelUnlocked(Func&& func){
+        if(!m_hasChannels.load(MemoryOrder::acquire))
+            return;
+
         Alloc::ScratchArena<> scratchArena(4096);
         Vector<IMessageChannel*, Alloc::ScratchAllocator<IMessageChannel*>> channels{
             Alloc::ScratchAllocator<IMessageChannel*>(scratchArena)
@@ -216,6 +219,7 @@ private:
         auto channel = MakeCustomUnique<MessageChannel<T>>(m_arena, m_arena);
         auto* raw = channel.get();
         m_channels.emplace(typeId, Move(channel));
+        m_hasChannels.store(true, MemoryOrder::release);
         return raw;
     }
 
@@ -235,6 +239,7 @@ private:
 private:
     Alloc::CustomArena& m_arena;
     mutable Futex m_channelsMutex;
+    Atomic<bool> m_hasChannels{ false };
     ChannelMap m_channels;
 };
 

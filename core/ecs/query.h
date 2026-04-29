@@ -99,7 +99,7 @@ struct ViewIterator{
     void skipInvalid(){
         while(index < count){
             EntityID entityId = entityAt(index);
-            if(entityId.valid() && resolveDenseIndices(entityId, index))
+            if(resolveDenseIndices(entityId, index))
                 break;
             ++index;
         }
@@ -186,8 +186,7 @@ public:
 
         for(usize i = 0; i < m_count; ++i){
             EntityID entityId = entityAt(i);
-            if(entityId.valid())
-                tryApplyFunc(func, entityId, i);
+            tryApplyFunc(func, entityId, i);
         }
     }
 
@@ -199,8 +198,7 @@ public:
         pool.parallelFor(static_cast<usize>(0), m_count,
             [this, &func](usize i){
                 EntityID entityId = entityAt(i);
-                if(entityId.valid())
-                    tryApplyFunc(func, entityId, i);
+                tryApplyFunc(func, entityId, i);
             }
         );
     }

@@ -38,7 +38,7 @@ EntityID EntityManager::create(){
     }
 
     ++m_aliveCount;
-    return EntityID(index, m_generations[index]);
+    return EntityID(index, static_cast<u32>(m_generations[index]));
 }
 
 
@@ -47,7 +47,7 @@ void EntityManager::destroy(EntityID entityId){
         return;
 
     const u32 index = entityId.index();
-    m_generations[index] = (m_generations[index] + 1) & ECSDetail::ENTITY_GENERATION_MASK;
+    m_generations[index] = static_cast<u16>((m_generations[index] + 1u) & ECSDetail::ENTITY_GENERATION_MASK);
     m_freeIndices.push_back(index);
     --m_aliveCount;
 }
@@ -57,7 +57,7 @@ bool EntityManager::alive(EntityID entityId)const{
     const u32 index = entityId.index();
     if(index >= static_cast<u32>(m_generations.size()))
         return false;
-    return m_generations[index] == entityId.generation();
+    return static_cast<u32>(m_generations[index]) == entityId.generation();
 }
 
 

@@ -67,7 +67,7 @@ inline constexpr EntityID ENTITY_ID_INVALID = EntityID{};
 
 class EntityManager{
 private:
-    using GenerationAllocator = Alloc::CustomAllocator<u32>;
+    using GenerationAllocator = Alloc::CustomAllocator<u16>;
     using FreeIndexAllocator = Alloc::CustomAllocator<u32>;
 
 
@@ -84,7 +84,7 @@ public:
 
 
 private:
-    Vector<u32, GenerationAllocator> m_generations;
+    Vector<u16, GenerationAllocator> m_generations;
     Vector<u32, FreeIndexAllocator> m_freeIndices;
     usize m_aliveCount;
 };

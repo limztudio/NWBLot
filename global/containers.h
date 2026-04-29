@@ -9,6 +9,7 @@
 #include "type.h"
 
 #include <functional>
+#include <optional>
 
 #include <tuple>
 #include <array>
@@ -65,6 +66,12 @@ class CacheAlignedAllocator;
 
 template<typename FUNC>
 using Function = std::function<FUNC>;
+
+template<typename T>
+using Optional = std::optional<T>;
+
+using InPlaceType = std::in_place_t;
+inline constexpr InPlaceType s_InPlace{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

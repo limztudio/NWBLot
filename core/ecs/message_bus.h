@@ -7,8 +7,6 @@
 
 #include "type_id.h"
 
-#include <optional>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,8 +62,8 @@ private:
                 moveFrom(Move(rhs));
             }
             template<typename... Args>
-            explicit PendingMessage(std::in_place_t, Args&&... args)
-                : m_value(std::in_place, Forward<Args>(args)...)
+            explicit PendingMessage(InPlaceType, Args&&... args)
+                : m_value(s_InPlace, Forward<Args>(args)...)
             {}
             ~PendingMessage() = default;
 
@@ -92,7 +90,7 @@ private:
 
 
         private:
-            std::optional<T> m_value;
+            Optional<T> m_value;
         };
 
         using PendingAllocator = Alloc::CustomCacheAlignedAllocator<PendingMessage>;
@@ -106,16 +104,16 @@ private:
 
     public:
         void post(const T& message){
-            m_pending.emplace(std::in_place, message);
+            m_pending.emplace(s_InPlace, message);
         }
 
         void post(T&& message){
-            m_pending.emplace(std::in_place, Move(message));
+            m_pending.emplace(s_InPlace, Move(message));
         }
 
         template<typename... Args>
         void emplace(Args&&... args){
-            m_pending.emplace(std::in_place, Forward<Args>(args)...);
+            m_pending.emplace(s_InPlace, Forward<Args>(args)...);
         }
 
         template<typename Func>

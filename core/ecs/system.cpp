@@ -16,6 +16,11 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+ISystem::ISystem(Alloc::CustomArena& arena)
+    : m_access(AccessAllocator(arena))
+{}
+
+
 void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
     for(auto& access : m_access){
         if(access.typeId != typeId)

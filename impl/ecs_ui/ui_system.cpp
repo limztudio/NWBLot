@@ -296,7 +296,8 @@ UiSystem::UiSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver
 )
-    : Core::IRenderPass(graphics)
+    : Core::ECS::ISystem(arena)
+    , Core::IRenderPass(graphics)
     , m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)

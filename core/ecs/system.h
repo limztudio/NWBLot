@@ -53,7 +53,14 @@ class ISystem{
     friend class SystemScheduler;
 
 
+private:
+    using AccessAllocator = Alloc::CustomAllocator<ComponentAccess>;
+
+
 public:
+    explicit ISystem(Alloc::CustomArena& arena);
+    ISystem(const ISystem&) = delete;
+    ISystem& operator=(const ISystem&) = delete;
     virtual ~ISystem() = default;
 
 
@@ -75,7 +82,7 @@ protected:
 private:
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
-    Vector<ComponentAccess> m_access;
+    Vector<ComponentAccess, AccessAllocator> m_access;
 };
 
 

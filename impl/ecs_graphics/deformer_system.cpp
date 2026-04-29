@@ -246,7 +246,8 @@ DeformerSystem::DeformerSystem(
     Core::Assets::AssetManager& assetManager,
     RendererSystem& rendererSystem,
     ShaderPathResolveCallback shaderPathResolver)
-    : Core::IRenderPass(graphics)
+    : Core::ECS::ISystem(arena)
+    , Core::IRenderPass(graphics)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)

@@ -999,7 +999,8 @@ RendererSystem::RendererSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver
 )
-    : Core::IRenderPass(graphics)
+    : Core::ECS::ISystem(arena)
+    , Core::IRenderPass(graphics)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)

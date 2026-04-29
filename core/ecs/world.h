@@ -94,7 +94,7 @@ public:
     T& addSystem(Args&&... args){
         static_assert(IsBaseOf_V<ISystem, T>, "addSystem requires T to derive from ISystem");
 
-        auto ptr = MakeCustomUnique<T>(m_arena, Forward<Args>(args)...);
+        auto ptr = MakeCustomUnique<T>(m_arena, m_arena, Forward<Args>(args)...);
         T& ref = *ptr;
         m_scheduler.addSystem(ref);
         m_systems.push_back(SystemEntry{ SystemType<T>(), Move(ptr) });

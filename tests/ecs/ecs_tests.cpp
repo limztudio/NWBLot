@@ -76,7 +76,9 @@ struct TickMessage{
 
 class CountingSystem final : public NWB::Core::ECS::ISystem{
 public:
-    CountingSystem(){
+    explicit CountingSystem(NWB::Core::Alloc::CustomArena& arena)
+        : NWB::Core::ECS::ISystem(arena)
+    {
         writeAccess<PositionComponent>();
     }
 

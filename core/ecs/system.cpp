@@ -97,16 +97,8 @@ void SystemScheduler::rebuild(){
     //  - One does not write a component that the other reads
 
     Alloc::ScratchArena<> scratchArena(4096);
-    using ScratchComponentAccessPair = Pair<const ComponentTypeId, AccessMode::Enum>;
-    using ScratchComponentAccessAllocator = Alloc::ScratchAllocator<ScratchComponentAccessPair>;
+    using ScratchComponentAccessAllocator = Alloc::ScratchAllocator<ComponentAccess>;
     using ScratchSystemAllocator = Alloc::ScratchAllocator<ISystem*>;
-    using ComponentAccessMap = HashMap<
-        ComponentTypeId,
-        AccessMode::Enum,
-        Hasher<ComponentTypeId>,
-        EqualTo<ComponentTypeId>,
-        ScratchComponentAccessAllocator
-    >;
 
     Vector<u8, Alloc::ScratchAllocator<u8>> assignedSystems(
         systemCount, 0,
@@ -124,19 +116,34 @@ void SystemScheduler::rebuild(){
         componentAccessReserve += sys->m_access.size();
     }
 
-    ComponentAccessMap stageAccess(
-        0,
-        Hasher<ComponentTypeId>(),
-        EqualTo<ComponentTypeId>(),
-        ScratchComponentAccessAllocator(scratchArena)
-    );
-    stageAccess.reserve(componentAccessReserve);
+    Vector<ComponentAccess, ScratchComponentAccessAllocator> stageAccesses{ScratchComponentAccessAllocator(scratchArena)};
+    stageAccesses.reserve(componentAccessReserve);
+
+    auto componentAccessCompatible = [](const auto& accesses, const ComponentAccess& access) -> bool{
+        for(const ComponentAccess& stageAccess : accesses){
+            if(stageAccess.typeId != access.typeId)
+                continue;
+            return access.mode != AccessMode::Write && stageAccess.mode != AccessMode::Write;
+        }
+        return true;
+    };
+
+    auto addComponentAccess = [](auto& accesses, const ComponentAccess& access){
+        for(ComponentAccess& stageAccess : accesses){
+            if(stageAccess.typeId != access.typeId)
+                continue;
+            if(access.mode == AccessMode::Write)
+                stageAccess.mode = AccessMode::Write;
+            return;
+        }
+        accesses.push_back(access);
+    };
 
     usize numAssigned = 0;
 
     while(numAssigned < systemCount){
         stageSystems.clear();
-        stageAccess.clear();
+        stageAccesses.clear();
 
         for(usize i = 0; i < systemCount; ++i){
             if(assignedSystems[i] != 0u)
@@ -147,11 +154,7 @@ void SystemScheduler::rebuild(){
 
             bool compatible = true;
             for(const auto& ca : acc){
-                const auto foundAccess = stageAccess.find(ca.typeId);
-                if(foundAccess == stageAccess.end())
-                    continue;
-
-                if(ca.mode == AccessMode::Write || foundAccess.value() == AccessMode::Write){
+                if(!componentAccessCompatible(stageAccesses, ca)){
                     compatible = false;
                     break;
                 }
@@ -159,7 +162,7 @@ void SystemScheduler::rebuild(){
 
             if(compatible){
                 for(const auto& ca : acc)
-                    stageAccess.try_emplace(ca.typeId, ca.mode);
+                    addComponentAccess(stageAccesses, ca);
                 assignedSystems[i] = 1u;
                 stageSystems.push_back(sys);
                 ++numAssigned;

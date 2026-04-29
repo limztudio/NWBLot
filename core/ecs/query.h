@@ -192,7 +192,7 @@ public:
         return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, 0, m_count, m_valid);
     }
     IteratorType end()const{
-        return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, m_count, m_count, m_valid);
+        return IteratorType(m_pools, m_anchorEntities, m_anchorPoolIndex, m_count, m_count, false);
     }
 
     [[nodiscard]] usize candidateCount()const noexcept{

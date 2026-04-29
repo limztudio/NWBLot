@@ -36,7 +36,7 @@ class MessageBus : NoCopy{
 private:
     class IMessageChannel;
     using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
-    using ChannelMapAllocator = Alloc::CustomAllocator<Pair<const MessageTypeId, MessageChannelPtr>>;
+    using ChannelVectorAllocator = Alloc::CustomAllocator<MessageChannelPtr>;
     using ChannelMapLock = SharedMutex::scoped_lock;
 
 
@@ -153,19 +153,13 @@ private:
         Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
     };
 
-    using ChannelMap = HashMap<
-        MessageTypeId,
-        MessageChannelPtr,
-        Hasher<MessageTypeId>,
-        EqualTo<MessageTypeId>,
-        ChannelMapAllocator
-    >;
+    using ChannelVector = Vector<MessageChannelPtr, ChannelVectorAllocator>;
 
 
 public:
     explicit MessageBus(Alloc::CustomArena& arena)
         : m_arena(arena)
-        , m_channels(0, Hasher<MessageTypeId>(), EqualTo<MessageTypeId>(), ChannelMapAllocator(arena))
+        , m_channels(ChannelVectorAllocator(arena))
     {}
     ~MessageBus() = default;
 
@@ -227,8 +221,9 @@ private:
 
         ChannelMapLock lock(m_channelsMutex, false);
 
-        for(auto& [typeId, channel] : m_channels){
-            static_cast<void>(typeId);
+        for(auto& channel : m_channels){
+            if(!channel)
+                continue;
             func(*channel);
         }
     }
@@ -239,19 +234,24 @@ private:
 
         {
             ChannelMapLock readLock(m_channelsMutex, false);
-            auto itr = m_channels.find(typeId);
-            if(itr != m_channels.end())
-                return static_cast<MessageChannel<T>*>(itr.value().get());
+            if(typeId < m_channels.size()){
+                auto& channel = m_channels[typeId];
+                if(channel)
+                    return static_cast<MessageChannel<T>*>(channel.get());
+            }
         }
 
         ChannelMapLock writeLock(m_channelsMutex, true);
-        auto itr = m_channels.find(typeId);
-        if(itr != m_channels.end())
-            return static_cast<MessageChannel<T>*>(itr.value().get());
+        if(typeId >= m_channels.size())
+            m_channels.resize(typeId + 1u);
+
+        auto& slot = m_channels[typeId];
+        if(slot)
+            return static_cast<MessageChannel<T>*>(slot.get());
 
         auto channel = MakeCustomUnique<MessageChannel<T>>(m_arena, m_arena);
         auto* raw = channel.get();
-        m_channels.emplace(typeId, Move(channel));
+        slot = Move(channel);
         m_hasChannels.store(true, MemoryOrder::release);
         return raw;
     }
@@ -262,10 +262,13 @@ private:
 
         ChannelMapLock lock(m_channelsMutex, false);
 
-        auto itr = m_channels.find(typeId);
-        if(itr == m_channels.end())
+        if(typeId >= m_channels.size())
             return nullptr;
-        return static_cast<const MessageChannel<T>*>(itr.value().get());
+
+        const auto& channel = m_channels[typeId];
+        if(!channel)
+            return nullptr;
+        return static_cast<const MessageChannel<T>*>(channel.get());
     }
 
 
@@ -273,7 +276,7 @@ private:
     Alloc::CustomArena& m_arena;
     mutable SharedMutex m_channelsMutex;
     Atomic<bool> m_hasChannels{ false };
-    ChannelMap m_channels;
+    ChannelVector m_channels;
 };
 
 

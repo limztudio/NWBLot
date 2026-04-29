@@ -241,6 +241,46 @@ bool AddDescriptorPoolSize(PoolSizeVector& poolSizes, const VkDescriptorType typ
     return true;
 }
 
+template<typename PoolSizeVector>
+bool AddEmptyLayoutDescriptorPoolSize(PoolSizeVector& poolSizes, const u32 descriptorCount){
+    if(!poolSizes.empty())
+        return true;
+
+    return AddDescriptorPoolSize(poolSizes, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount);
+}
+
+template<typename PoolSizeVector>
+bool AddBindingLayoutDescriptorPoolSizes(PoolSizeVector& poolSizes, const BindingLayoutDesc& desc, const u32 descriptorSetCount){
+    if(descriptorSetCount == 0)
+        return true;
+
+    for(const auto& item : desc.bindings){
+        if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
+            continue;
+
+        const u32 arraySize = item.getArraySize() > 0 ? item.getArraySize() : 1u;
+        if(arraySize > UINT32_MAX / descriptorSetCount)
+            return false;
+
+        const VkDescriptorType type = ConvertDescriptorType(item.type);
+        if(!AddDescriptorPoolSize(poolSizes, type, arraySize * descriptorSetCount))
+            return false;
+    }
+
+    return AddEmptyLayoutDescriptorPoolSize(poolSizes, descriptorSetCount);
+}
+
+template<typename PoolSizeVector>
+bool AddBindlessLayoutDescriptorPoolSizes(PoolSizeVector& poolSizes, const BindlessLayoutDesc& desc, const u32 descriptorCount){
+    for(const auto& item : desc.registerSpaces){
+        const VkDescriptorType type = ConvertDescriptorType(item.type);
+        if(!AddDescriptorPoolSize(poolSizes, type, descriptorCount))
+            return false;
+    }
+
+    return AddEmptyLayoutDescriptorPoolSize(poolSizes, descriptorCount);
+}
+
 constexpr u32 NormalizeDescriptorTableCapacity(const u32 capacity){
     return capacity > 0 ? capacity : 1u;
 }
@@ -1463,38 +1503,21 @@ DescriptorTableHandle Device::createDescriptorTable(const BindingLayoutHandle& l
     ;
     const bool useVariableDescriptorCount = layout->m_isBindless && !layout->m_bindlessDesc.registerSpaces.empty();
 
+    const usize poolSizeCapacity = layout->m_isBindless
+        ? layout->m_bindlessDesc.registerSpaces.size()
+        : layout->m_desc.bindings.size()
+    ;
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
-    poolSizes.reserve(8);
+    poolSizes.reserve(poolSizeCapacity);
 
-    if(layout->m_isBindless){
-        for(const auto& item : layout->m_bindlessDesc.registerSpaces){
-            const VkDescriptorType type = VulkanDetail::ConvertDescriptorType(item.type);
-            if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, type, descriptorTableCapacity)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
-                DestroyArenaObject(m_context.objectArena, table);
-                return nullptr;
-            }
-        }
-    }
-    else{
-        for(const auto& item : layout->m_desc.bindings){
-            if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
-                continue;
-
-            const VkDescriptorType type = VulkanDetail::ConvertDescriptorType(item.type);
-            if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, type, item.getArraySize() > 0 ? item.getArraySize() : 1u)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
-                DestroyArenaObject(m_context.objectArena, table);
-                return nullptr;
-            }
-        }
-    }
-
-    if(poolSizes.empty()){
-        VkDescriptorPoolSize fallback = {};
-        fallback.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        fallback.descriptorCount = 1;
-        poolSizes.push_back(fallback);
+    const bool poolSizesAdded = layout->m_isBindless
+        ? VulkanDetail::AddBindlessLayoutDescriptorPoolSizes(poolSizes, layout->m_bindlessDesc, descriptorTableCapacity)
+        : VulkanDetail::AddBindingLayoutDescriptorPoolSizes(poolSizes, layout->m_desc, 1u)
+    ;
+    if(!poolSizesAdded){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: descriptor pool size overflows"));
+        DestroyArenaObject(m_context.objectArena, table);
+        return nullptr;
     }
 
     auto poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
@@ -1623,19 +1646,9 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
         poolSizes.reserve(table->m_layout->m_bindlessDesc.registerSpaces.size());
 
-        for(const auto& item : table->m_layout->m_bindlessDesc.registerSpaces){
-            if(!VulkanDetail::AddDescriptorPoolSize(poolSizes, VulkanDetail::ConvertDescriptorType(item.type), newSize)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
-                static_cast<void>(keepContents);
-                return;
-            }
-        }
-
-        if(poolSizes.empty()){
-            VkDescriptorPoolSize fallback = {};
-            fallback.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            fallback.descriptorCount = newSize;
-            poolSizes.push_back(fallback);
+        if(!VulkanDetail::AddBindlessLayoutDescriptorPoolSizes(poolSizes, table->m_layout->m_bindlessDesc, newSize)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
+            return;
         }
 
         VkDescriptorPool newPool = VK_NULL_HANDLE;
@@ -1650,7 +1663,6 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         res = vkCreateDescriptorPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &newPool);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless descriptor pool for resize: {}"), ResultToString(res));
-            static_cast<void>(keepContents);
             return;
         }
 
@@ -1671,30 +1683,20 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate bindless descriptor set during resize: {}"), ResultToString(res));
             vkDestroyDescriptorPool(m_context.device, newPool, m_context.allocationCallbacks);
-            static_cast<void>(keepContents);
             return;
         }
 
-        static_cast<void>(commitResize(newPool, newDescriptorSets, newSize));
+        if(!commitResize(newPool, newDescriptorSets, newSize))
+            return;
         return;
     }
 
     Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
-    poolSizes.reserve(7);
-    VkDescriptorPoolSize uniformSize = { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, newSize };
-    VkDescriptorPoolSize storageSize = { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, newSize };
-    VkDescriptorPoolSize samplerSize = { VK_DESCRIPTOR_TYPE_SAMPLER, newSize };
-    VkDescriptorPoolSize sampledImageSize = { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, newSize };
-    VkDescriptorPoolSize storageImageSize = { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, newSize };
-    VkDescriptorPoolSize uniformTexelSize = { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, newSize };
-    VkDescriptorPoolSize storageTexelSize = { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, newSize };
-    poolSizes.push_back(uniformSize);
-    poolSizes.push_back(storageSize);
-    poolSizes.push_back(samplerSize);
-    poolSizes.push_back(sampledImageSize);
-    poolSizes.push_back(storageImageSize);
-    poolSizes.push_back(uniformTexelSize);
-    poolSizes.push_back(storageTexelSize);
+    poolSizes.reserve(table->m_layout->m_desc.bindings.size());
+    if(!VulkanDetail::AddBindingLayoutDescriptorPoolSizes(poolSizes, table->m_layout->m_desc, newSize)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
+        return;
+    }
 
     VkDescriptorPool newPool = VK_NULL_HANDLE;
     DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
@@ -1728,7 +1730,8 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
     }
 
-    static_cast<void>(commitResize(newPool, newDescriptorSets, newSize));
+    if(!commitResize(newPool, newDescriptorSets, newSize))
+        return;
 }
 
 bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){

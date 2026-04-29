@@ -3227,12 +3227,12 @@ bool RendererSystem::ensureRendererPipeline(
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::MeshComputeArchiveStageName();
         if(
             !ensureShaderLoaded(
-            resources.computeShader,
-            materialInfo.meshShader.name(),
-            shaderVariant,
-            Core::ShaderType::Compute,
-            "ECSGraphics_RendererCS",
-            &meshComputeArchiveStageName
+                resources.computeShader,
+                materialInfo.meshShader.name(),
+                shaderVariant,
+                Core::ShaderType::Compute,
+                "ECSGraphics_RendererCS",
+                &meshComputeArchiveStageName
             )
         ){
             return false;

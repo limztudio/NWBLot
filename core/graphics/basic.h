@@ -62,8 +62,12 @@ struct Object{
     };
 
 
-    constexpr Object(u64 i)noexcept : integer(i){}
-    constexpr Object(void* p)noexcept : pointer(p){}
+    constexpr Object(u64 i)noexcept
+        : integer(i)
+    {}
+    constexpr Object(void* p)noexcept
+        : pointer(p)
+    {}
 
     template<typename T>
     explicit operator T*()const noexcept{ return static_cast<T*>(pointer); }
@@ -81,7 +85,9 @@ class IResource : public Alloc::ITaskScheduler{
 
 
 protected:
-    inline explicit IResource(Alloc::ThreadPool& pool)noexcept : Alloc::ITaskScheduler(pool){}
+    inline explicit IResource(Alloc::ThreadPool& pool)noexcept
+        : Alloc::ITaskScheduler(pool)
+    {}
     virtual ~IResource()noexcept = default;
 
 

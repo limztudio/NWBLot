@@ -456,7 +456,9 @@ private:
 
 class IJobScheduler{
 public:
-    inline explicit IJobScheduler(JobSystem& jobSystem) : m_jobSystem(jobSystem){}
+    inline explicit IJobScheduler(JobSystem& jobSystem)
+        : m_jobSystem(jobSystem)
+    {}
 
 
 protected:

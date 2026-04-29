@@ -234,10 +234,14 @@ public:
 
 
 public:
-    constexpr ScratchAllocator(ScratchArena<maxAlignSize>& arena)noexcept : m_arena(arena){}
+    constexpr ScratchAllocator(ScratchArena<maxAlignSize>& arena)noexcept
+        : m_arena(arena)
+    {}
     constexpr ScratchAllocator(const ScratchAllocator&)noexcept = default;
     template<class F>
-    constexpr ScratchAllocator(const ScratchAllocator<F, maxAlignSize>& rhs)noexcept : m_arena(rhs.m_arena){}
+    constexpr ScratchAllocator(const ScratchAllocator<F, maxAlignSize>& rhs)noexcept
+        : m_arena(rhs.m_arena)
+    {}
 
     constexpr ~ScratchAllocator() = default;
     constexpr ScratchAllocator& operator=(const ScratchAllocator&) = default;
@@ -299,10 +303,14 @@ public:
 
 
 public:
-    constexpr ScratchCacheAlignedAllocator(ScratchArena<maxAlignSize>& arena)noexcept : m_arena(arena){}
+    constexpr ScratchCacheAlignedAllocator(ScratchArena<maxAlignSize>& arena)noexcept
+        : m_arena(arena)
+    {}
     constexpr ScratchCacheAlignedAllocator(const ScratchCacheAlignedAllocator&)noexcept = default;
     template<class F>
-    constexpr ScratchCacheAlignedAllocator(const ScratchCacheAlignedAllocator<F, maxAlignSize>& rhs)noexcept : m_arena(rhs.m_arena){}
+    constexpr ScratchCacheAlignedAllocator(const ScratchCacheAlignedAllocator<F, maxAlignSize>& rhs)noexcept
+        : m_arena(rhs.m_arena)
+    {}
 
     constexpr ~ScratchCacheAlignedAllocator() = default;
     constexpr ScratchCacheAlignedAllocator& operator=(const ScratchCacheAlignedAllocator&) = default;

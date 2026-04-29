@@ -100,7 +100,9 @@ struct ArenaDeleter{
     POOL* m_pool = nullptr;
 
     constexpr ArenaDeleter()noexcept = default;
-    constexpr ArenaDeleter(POOL& pool)noexcept : m_pool(&pool){}
+    constexpr ArenaDeleter(POOL& pool)noexcept
+        : m_pool(&pool)
+    {}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U, POOL>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept
         : m_pool(other.m_pool){}
@@ -117,7 +119,10 @@ struct ArenaDeleter<T[], POOL>{
     usize m_size = 0;
 
     constexpr ArenaDeleter()noexcept = default;
-    constexpr ArenaDeleter(POOL& pool, usize size)noexcept : m_pool(&pool), m_size(size){}
+    constexpr ArenaDeleter(POOL& pool, usize size)noexcept
+        : m_pool(&pool)
+        , m_size(size)
+    {}
     template<typename U>
     ArenaDeleter(const ArenaDeleter<U[], POOL>& other, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept
         : m_pool(other.m_pool), m_size(other.m_size){}
@@ -145,7 +150,9 @@ struct EmptyDeleter<T[]>{
     usize m_size = 0;
 
     constexpr EmptyDeleter()noexcept = default;
-    constexpr EmptyDeleter(usize size)noexcept : m_size(size){}
+    constexpr EmptyDeleter(usize size)noexcept
+        : m_size(size)
+    {}
     template<typename U>
     EmptyDeleter(const EmptyDeleter<U[]>&, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 

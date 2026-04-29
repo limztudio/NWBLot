@@ -24,8 +24,12 @@ using LocalTime = std::tm;
 // assume that the resolution is miliseconds
 class TimerDelta{
 public:
-    TimerDelta()noexcept : m_value(0){}
-    TimerDelta(i64 v)noexcept : m_value(v){}
+    TimerDelta()noexcept
+        : m_value(0)
+    {}
+    TimerDelta(i64 v)noexcept
+        : m_value(v)
+    {}
     TimerDelta(const TimerDelta&)noexcept = default;
     TimerDelta(TimerDelta&&)noexcept = default;
 

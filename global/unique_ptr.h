@@ -28,10 +28,16 @@ public:
 
 
 protected:
-    constexpr Storage()noexcept : m_pair(pointer()){}
-    explicit Storage(pointer pValue)noexcept : m_pair(pValue){}
+    constexpr Storage()noexcept
+        : m_pair(pointer())
+    {}
+    explicit Storage(pointer pValue)noexcept
+        : m_pair(pValue)
+    {}
     template<typename DeleterArg>
-    Storage(pointer pValue, DeleterArg&& deleter)noexcept : m_pair(pValue, Forward<DeleterArg>(deleter)){}
+    Storage(pointer pValue, DeleterArg&& deleter)noexcept
+        : m_pair(pValue, Forward<DeleterArg>(deleter))
+    {}
 
 
 public:
@@ -86,22 +92,36 @@ public:
 
 
 public:
-    constexpr UniquePtr()noexcept : base_type(pointer()){
+    constexpr UniquePtr()noexcept
+        : base_type(pointer())
+    {
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    constexpr UniquePtr(std::nullptr_t)noexcept : base_type(pointer()){
+    constexpr UniquePtr(std::nullptr_t)noexcept
+        : base_type(pointer())
+    {
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    explicit UniquePtr(pointer pValue)noexcept : base_type(pValue){
+    explicit UniquePtr(pointer pValue)noexcept
+        : base_type(pValue)
+    {
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    UniquePtr(pointer pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter)noexcept : base_type(pValue, deleter){}
-    UniquePtr(pointer pValue, typename RemoveReference<deleter_type>::type&& deleter)noexcept : base_type(pValue, Move(deleter)){
+    UniquePtr(pointer pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter)noexcept
+        : base_type(pValue, deleter)
+    {}
+    UniquePtr(pointer pValue, typename RemoveReference<deleter_type>::type&& deleter)noexcept
+        : base_type(pValue, Move(deleter))
+    {
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
-    UniquePtr(this_type&& x)noexcept : base_type(x.release(), Forward<deleter_type>(x.get_deleter())){}
+    UniquePtr(this_type&& x)noexcept
+        : base_type(x.release(), Forward<deleter_type>(x.get_deleter()))
+    {}
     template<typename U, typename E>
-    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept : base_type(u.release(), Forward<E>(u.get_deleter())){}
+    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept
+        : base_type(u.release(), Forward<E>(u.get_deleter()))
+    {}
     UniquePtr(const this_type&) = delete;
     UniquePtr& operator=(const this_type&) = delete;
     UniquePtr& operator=(pointer pValue) = delete;
@@ -152,25 +172,39 @@ public:
 
 
 public:
-    constexpr UniquePtr()noexcept : base_type(pointer()){
+    constexpr UniquePtr()noexcept
+        : base_type(pointer())
+    {
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    constexpr UniquePtr(std::nullptr_t)noexcept : base_type(pointer()){
+    constexpr UniquePtr(std::nullptr_t)noexcept
+        : base_type(pointer())
+    {
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
     template<typename P, typename = EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>>
-    explicit UniquePtr(P pArray)noexcept : base_type(pArray){
+    explicit UniquePtr(P pArray)noexcept
+        : base_type(pArray)
+    {
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
     template<typename P>
-    UniquePtr(P pArray, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>::type* = 0)noexcept : base_type(pArray, deleter){}
+    UniquePtr(P pArray, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>::type* = 0)noexcept
+        : base_type(pArray, deleter)
+    {}
     template<typename P>
-    UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept : base_type(pArray, Move(deleter)){
+    UniquePtr(P pArray, typename RemoveReference<deleter_type>::type&& deleter, EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept
+        : base_type(pArray, Move(deleter))
+    {
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
-    UniquePtr(this_type&& x)noexcept : base_type(x.release(), Forward<deleter_type>(x.get_deleter())){}
+    UniquePtr(this_type&& x)noexcept
+        : base_type(x.release(), Forward<deleter_type>(x.get_deleter()))
+    {}
     template<typename U, typename E>
-    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept : base_type(u.release(), Forward<E>(u.get_deleter())){}
+    UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept
+        : base_type(u.release(), Forward<E>(u.get_deleter()))
+    {}
     UniquePtr(const this_type&) = delete;
     UniquePtr& operator=(const this_type&) = delete;
     UniquePtr& operator=(pointer pArray) = delete;

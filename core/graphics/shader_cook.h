@@ -57,8 +57,12 @@ public:
     struct DefineEntry{
         CookVector<AString> values;
 
-        explicit DefineEntry(CookArena& memoryArena) : values(CookAllocator<AString>(memoryArena)){}
-        explicit DefineEntry(CookVector<AString>&& inValues) : values(Move(inValues)){}
+        explicit DefineEntry(CookArena& memoryArena)
+            : values(CookAllocator<AString>(memoryArena))
+        {}
+        explicit DefineEntry(CookVector<AString>&& inValues)
+            : values(Move(inValues))
+        {}
     };
 
 
@@ -68,7 +72,9 @@ public:
         AString defaultVariant;
         CookMap<AString, DefineEntry> defineValues;
 
-        explicit IncludeEntry(CookArena& memoryArena) : defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena)){}
+        explicit IncludeEntry(CookArena& memoryArena)
+            : defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena))
+        {}
     };
 
     struct ShaderEntry{

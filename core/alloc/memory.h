@@ -114,10 +114,14 @@ public:
 
 
 public:
-    constexpr MemoryAllocator(MemoryArena& arena)noexcept : m_arena(arena){}
+    constexpr MemoryAllocator(MemoryArena& arena)noexcept
+        : m_arena(arena)
+    {}
     constexpr MemoryAllocator(const MemoryAllocator&)noexcept = default;
     template<class F>
-    constexpr MemoryAllocator(const MemoryAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
+    constexpr MemoryAllocator(const MemoryAllocator<F>& rhs)noexcept
+        : m_arena(rhs.m_arena)
+    {}
 
     constexpr ~MemoryAllocator() = default;
     constexpr MemoryAllocator& operator=(const MemoryAllocator&) = default;
@@ -170,10 +174,14 @@ public:
 
 
 public:
-    constexpr MemoryCacheAlignedAllocator(MemoryArena& arena)noexcept : m_arena(arena){}
+    constexpr MemoryCacheAlignedAllocator(MemoryArena& arena)noexcept
+        : m_arena(arena)
+    {}
     constexpr MemoryCacheAlignedAllocator(const MemoryCacheAlignedAllocator&)noexcept = default;
     template<class F>
-    constexpr MemoryCacheAlignedAllocator(const MemoryCacheAlignedAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
+    constexpr MemoryCacheAlignedAllocator(const MemoryCacheAlignedAllocator<F>& rhs)noexcept
+        : m_arena(rhs.m_arena)
+    {}
 
     constexpr ~MemoryCacheAlignedAllocator() = default;
     constexpr MemoryCacheAlignedAllocator& operator=(const MemoryCacheAlignedAllocator&)noexcept{ return *this; }

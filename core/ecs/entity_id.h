@@ -49,8 +49,12 @@ struct EntityID{
     u32 id;
 
 
-    inline constexpr EntityID() : id(~0u){}
-    inline constexpr explicit EntityID(u32 idValue) : id(idValue){}
+    inline constexpr EntityID()
+        : id(~0u)
+    {}
+    inline constexpr explicit EntityID(u32 idValue)
+        : id(idValue)
+    {}
     inline constexpr EntityID(u32 index, u32 generation)
         : id(
             ((generation & ECSDetail::ENTITY_GENERATION_MASK) << ECSDetail::ENTITY_INDEX_BITS)

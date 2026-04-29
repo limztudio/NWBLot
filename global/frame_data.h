@@ -27,7 +27,9 @@ public:
 
 
 public:
-    inline BasicFrameData() : m_data{}{}
+    inline BasicFrameData()
+        : m_data{}
+    {}
 
 
 public:

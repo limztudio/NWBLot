@@ -448,7 +448,9 @@ private:
 
 class ITaskScheduler{
 public:
-    inline explicit ITaskScheduler(ThreadPool& pool) : m_taskPool(pool){}
+    inline explicit ITaskScheduler(ThreadPool& pool)
+        : m_taskPool(pool)
+    {}
 
 
 public:

@@ -243,7 +243,11 @@ public:
     ScopedLock(const ScopedLock&) = delete;
     ScopedLock& operator=(const ScopedLock&) = delete;
 
-    ScopedLock(Semaphore<LeastMaxValue>& obj) : m_obj(obj){ m_obj.acquire(); }
+    ScopedLock(Semaphore<LeastMaxValue>& obj)
+        : m_obj(obj)
+    {
+        m_obj.acquire();
+    }
     ~ScopedLock(){ m_obj.release(); }
 
 

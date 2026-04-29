@@ -71,9 +71,16 @@ private:
 
 public:
     ValueStorage(){}
-    ValueStorage(BothValuesTag, typename Types::first_param_type x, typename Types::second_param_type y) : m_first(x), m_second(y){}
-    ValueStorage(FirstValueTag, typename Types::first_param_type x) : m_first(x){}
-    ValueStorage(SecondValueTag, typename Types::second_param_type y) : m_second(y){}
+    ValueStorage(BothValuesTag, typename Types::first_param_type x, typename Types::second_param_type y)
+        : m_first(x)
+        , m_second(y)
+    {}
+    ValueStorage(FirstValueTag, typename Types::first_param_type x)
+        : m_first(x)
+    {}
+    ValueStorage(SecondValueTag, typename Types::second_param_type y)
+        : m_second(y)
+    {}
 
 
 public:
@@ -114,9 +121,15 @@ private:
 
 public:
     Implementation(){}
-    Implementation(typename Base::first_param_type x, typename Base::second_param_type y) : Base(BothValuesTag{}, x, y){}
-    Implementation(typename Base::first_param_type x) : Base(FirstValueTag{}, x){}
-    Implementation(typename Base::second_param_type y) : Base(SecondValueTag{}, y){}
+    Implementation(typename Base::first_param_type x, typename Base::second_param_type y)
+        : Base(BothValuesTag{}, x, y)
+    {}
+    Implementation(typename Base::first_param_type x)
+        : Base(FirstValueTag{}, x)
+    {}
+    Implementation(typename Base::second_param_type y)
+        : Base(SecondValueTag{}, y)
+    {}
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 1> : public ImplementationTypes<T1, T2>, private T1{
@@ -126,9 +139,16 @@ private:
 
 public:
     Implementation(){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type y) : T1(x), m_second(y){}
-    Implementation(typename Types::first_param_type x) : T1(x){}
-    Implementation(typename Types::second_param_type y) : m_second(y){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)
+        : T1(x)
+        , m_second(y)
+    {}
+    Implementation(typename Types::first_param_type x)
+        : T1(x)
+    {}
+    Implementation(typename Types::second_param_type y)
+        : m_second(y)
+    {}
 
 
 public:
@@ -154,9 +174,16 @@ private:
 
 public:
     Implementation(){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type y) : T2(y), m_first(x){}
-    Implementation(typename Types::first_param_type x) : m_first(x){}
-    Implementation(typename Types::second_param_type y) : T2(y){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)
+        : T2(y)
+        , m_first(x)
+    {}
+    Implementation(typename Types::first_param_type x)
+        : m_first(x)
+    {}
+    Implementation(typename Types::second_param_type y)
+        : T2(y)
+    {}
 
 
 public:
@@ -182,9 +209,16 @@ private:
 
 public:
     Implementation(){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type y) : T1(x), T2(y){}
-    Implementation(typename Types::first_param_type x) : T1(x){}
-    Implementation(typename Types::second_param_type y) : T2(y){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type y)
+        : T1(x)
+        , T2(y)
+    {}
+    Implementation(typename Types::first_param_type x)
+        : T1(x)
+    {}
+    Implementation(typename Types::second_param_type y)
+        : T2(y)
+    {}
 
 
 public:
@@ -204,8 +238,12 @@ private:
 
 public:
     Implementation(){}
-    Implementation(typename Types::first_param_type x, typename Types::second_param_type) : T1(x){}
-    Implementation(typename Types::first_param_type x) : T1(x){}
+    Implementation(typename Types::first_param_type x, typename Types::second_param_type)
+        : T1(x)
+    {}
+    Implementation(typename Types::first_param_type x)
+        : T1(x)
+    {}
 
 
 public:
@@ -225,8 +263,12 @@ private:
 
 public:
     Implementation(){}
-    Implementation(typename Base::first_param_type x, typename Base::second_param_type y) : Base(BothValuesTag{}, x, y){}
-    Implementation(typename Base::first_param_type x) : Base(BothValuesTag{}, x, x){}
+    Implementation(typename Base::first_param_type x, typename Base::second_param_type y)
+        : Base(BothValuesTag{}, x, y)
+    {}
+    Implementation(typename Base::first_param_type x)
+        : Base(BothValuesTag{}, x, x)
+    {}
 };
 
 
@@ -257,9 +299,15 @@ public:
 
 
 public:
-    CompressedPair() : Base(){}
-    CompressedPair(first_param_type x, second_param_type y) : Base(x, y){}
-    explicit CompressedPair(first_param_type x) : Base(x){}
+    CompressedPair()
+        : Base()
+    {}
+    CompressedPair(first_param_type x, second_param_type y)
+        : Base(x, y)
+    {}
+    explicit CompressedPair(first_param_type x)
+        : Base(x)
+    {}
 
 
 public:

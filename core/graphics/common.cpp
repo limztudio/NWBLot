@@ -385,7 +385,9 @@ static bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& atta
     return true;
 }
 
-FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc) : FramebufferInfo(desc){
+FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
+    : FramebufferInfo(desc)
+{
     if(desc.depthAttachment.valid()){
         if(!ResolveFramebufferAttachmentExtent(desc.depthAttachment, width, height, arraySize))
             return;

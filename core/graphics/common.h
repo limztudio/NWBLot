@@ -163,9 +163,24 @@ private:
 struct Color{
     f32 r, g, b, a;
 
-    constexpr Color()noexcept : r(0), g(0), b(0), a(0) {}
-    constexpr Color(f32 c)noexcept : r(c), g(c), b(c), a(c) {}
-    constexpr Color(f32 red, f32 green, f32 blue, f32 alpha)noexcept : r(red), g(green), b(blue), a(alpha) {}
+    constexpr Color()noexcept
+        : r(0)
+        , g(0)
+        , b(0)
+        , a(0)
+    {}
+    constexpr Color(f32 c)noexcept
+        : r(c)
+        , g(c)
+        , b(c)
+        , a(c)
+    {}
+    constexpr Color(f32 red, f32 green, f32 blue, f32 alpha)noexcept
+        : r(red)
+        , g(green)
+        , b(blue)
+        , a(alpha)
+    {}
 };
 inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
     return
@@ -183,8 +198,22 @@ struct Viewport{
     f32 minY, maxY;
     f32 minZ, maxZ;
 
-    constexpr Viewport()noexcept : minX(0), maxX(0), minY(0), maxY(0), minZ(0), maxZ(0) {}
-    constexpr Viewport(f32 width, f32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height), minZ(0), maxZ(1) {}
+    constexpr Viewport()noexcept
+        : minX(0)
+        , maxX(0)
+        , minY(0)
+        , maxY(0)
+        , minZ(0)
+        , maxZ(0)
+    {}
+    constexpr Viewport(f32 width, f32 height)noexcept
+        : minX(0)
+        , maxX(width)
+        , minY(0)
+        , maxY(height)
+        , minZ(0)
+        , maxZ(1)
+    {}
     constexpr Viewport(f32 minXValue, f32 maxXValue, f32 minYValue, f32 maxYValue, f32 minZValue, f32 maxZValue)noexcept
         : minX(minXValue)
         , maxX(maxXValue)
@@ -211,15 +240,30 @@ struct Rect{
     i32 minX, maxX;
     i32 minY, maxY;
 
-    constexpr Rect()noexcept : minX(0), maxX(0), minY(0), maxY(0) {}
-    constexpr Rect(i32 width, i32 height)noexcept : minX(0), maxX(width), minY(0), maxY(height) {}
+    constexpr Rect()noexcept
+        : minX(0)
+        , maxX(0)
+        , minY(0)
+        , maxY(0)
+    {}
+    constexpr Rect(i32 width, i32 height)noexcept
+        : minX(0)
+        , maxX(width)
+        , minY(0)
+        , maxY(height)
+    {}
     constexpr Rect(i32 minXValue, i32 maxXValue, i32 minYValue, i32 maxYValue)noexcept
         : minX(minXValue)
         , maxX(maxXValue)
         , minY(minYValue)
         , maxY(maxYValue)
     {}
-    explicit Rect(const Viewport& viewport)noexcept : minX(static_cast<i32>(Floor(viewport.minX))), maxX(static_cast<i32>(Ceil(viewport.maxX))), minY(static_cast<i32>(Floor(viewport.minY))), maxY(static_cast<i32>(Ceil(viewport.maxY))) {}
+    explicit Rect(const Viewport& viewport)noexcept
+        : minX(static_cast<i32>(Floor(viewport.minX)))
+        , maxX(static_cast<i32>(Ceil(viewport.maxX)))
+        , minY(static_cast<i32>(Floor(viewport.minY)))
+        , maxY(static_cast<i32>(Ceil(viewport.maxY)))
+    {}
 
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
@@ -1743,7 +1787,9 @@ struct RayTracingGeometryDesc{
     RayTracingGeometryFlags::Mask flags = RayTracingGeometryFlags::None;
     RayTracingGeometryType::Enum geometryType = RayTracingGeometryType::Triangles;
 
-    RayTracingGeometryDesc() : geometryData{} {}
+    RayTracingGeometryDesc()
+        : geometryData{}
+    {}
 
     RayTracingGeometryDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value){ flags = value; return *this; }
@@ -3730,7 +3776,9 @@ struct ShaderCompilerRequest{
 
 class IShaderCompiler : NoCopy{
 public:
-    IShaderCompiler(Alloc::CustomArena& memoryArena) : m_memoryArena(memoryArena){}
+    IShaderCompiler(Alloc::CustomArena& memoryArena)
+        : m_memoryArena(memoryArena)
+    {}
     virtual ~IShaderCompiler() = default;
 
 

@@ -161,10 +161,14 @@ public:
     CustomAllocator()noexcept
         : m_arena(CustomAllocatorDetail::DefaultArena())
     {}
-    constexpr CustomAllocator(CustomArena& arena)noexcept : m_arena(arena){}
+    constexpr CustomAllocator(CustomArena& arena)noexcept
+        : m_arena(arena)
+    {}
     constexpr CustomAllocator(const CustomAllocator&)noexcept = default;
     template<class F>
-    constexpr CustomAllocator(const CustomAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
+    constexpr CustomAllocator(const CustomAllocator<F>& rhs)noexcept
+        : m_arena(rhs.m_arena)
+    {}
 
     constexpr ~CustomAllocator() = default;
     constexpr CustomAllocator& operator=(const CustomAllocator&)noexcept{ return *this; }
@@ -220,10 +224,14 @@ public:
     CustomCacheAlignedAllocator()noexcept
         : m_arena(CustomAllocatorDetail::DefaultArena())
     {}
-    constexpr CustomCacheAlignedAllocator(CustomArena& arena)noexcept : m_arena(arena){}
+    constexpr CustomCacheAlignedAllocator(CustomArena& arena)noexcept
+        : m_arena(arena)
+    {}
     constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator&)noexcept = default;
     template<class F>
-    constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator<F>& rhs)noexcept : m_arena(rhs.m_arena){}
+    constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator<F>& rhs)noexcept
+        : m_arena(rhs.m_arena)
+    {}
 
     constexpr ~CustomCacheAlignedAllocator() = default;
     constexpr CustomCacheAlignedAllocator& operator=(const CustomCacheAlignedAllocator&)noexcept{ return *this; }
@@ -282,9 +290,13 @@ struct ArenaRefDeleter{
     NWB::Core::Alloc::CustomArena* arena = nullptr;
 
     constexpr ArenaRefDeleter()noexcept = default;
-    constexpr explicit ArenaRefDeleter(NWB::Core::Alloc::CustomArena* a)noexcept : arena(a){}
+    constexpr explicit ArenaRefDeleter(NWB::Core::Alloc::CustomArena* a)noexcept
+        : arena(a)
+    {}
     template<typename U>
-    ArenaRefDeleter(const ArenaRefDeleter<U>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept : arena(other.arena){}
+    ArenaRefDeleter(const ArenaRefDeleter<U>& other, typename EnableIf<IsConvertible<U*, T*>::value>::type* = 0)noexcept
+        : arena(other.arena)
+    {}
 
     void operator()(T* p)const noexcept{
         if(p && arena){

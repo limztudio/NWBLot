@@ -96,7 +96,6 @@ private:
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
                 m_readBuffer.push_back(Move(*message));
-                message.reset();
                 hasMessage = m_pending.try_pop(message);
             }
         }
@@ -107,7 +106,6 @@ private:
             PendingMessage message;
             bool hasMessage = m_pending.try_pop(message);
             while(hasMessage){
-                message.reset();
                 hasMessage = m_pending.try_pop(message);
             }
         }

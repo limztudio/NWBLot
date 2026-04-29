@@ -76,7 +76,6 @@ private:
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
     Vector<ComponentAccess> m_access;
-    bool m_enabled = true;
 };
 
 
@@ -92,7 +91,7 @@ private:
 
 public:
     explicit SystemScheduler(Alloc::CustomArena& arena);
-    ~SystemScheduler();
+    ~SystemScheduler() = default;
 
 
 public:

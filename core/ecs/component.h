@@ -125,11 +125,12 @@ public:
         if(index >= static_cast<u32>(m_sparse.size()))
             m_sparse.resize(static_cast<usize>(index) + 1, ~0u);
 
-        m_sparse[index] = static_cast<u32>(m_dense.size());
+        const u32 denseIndex = static_cast<u32>(m_dense.size());
+        m_sparse[index] = denseIndex;
         m_dense.push_back(entityId);
         m_components.emplace_back(Forward<Args>(args)...);
 
-        return m_components.back();
+        return m_components[denseIndex];
     }
 
     inline T& get(EntityID entityId){

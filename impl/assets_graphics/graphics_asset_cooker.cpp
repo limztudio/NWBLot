@@ -2934,6 +2934,9 @@ static bool AppendPreparedShadersToVolume(
     Vector<Core::ShaderArchive::Record>& outShaderIndexRecords
 ){
     Vector<u8> cookedBytecode;
+    Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{
+        Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)
+    };
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
@@ -2952,7 +2955,6 @@ static bool AppendPreparedShadersToVolume(
         const AString shaderSafeName = BuildSafeCacheName(entry.name);
         const AString stageSafeName = BuildSafeCacheName(entry.archiveStage.view());
 
-        Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)};
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations)){
             NWB_LOGGER_ERROR(
                 NWB_TEXT("GraphicsAssetCooker: variant combination count exceeds runtime limits for entry '{}'"),

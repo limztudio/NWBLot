@@ -749,6 +749,10 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     m_transferQueueFamily = -1;
     m_presentQueueFamily = -1;
 
+    const bool requirePresentQueue = !m_deviceParams.headlessDevice;
+    const bool requireComputeQueue = m_deviceParams.enableComputeQueue;
+    const bool requireTransferQueue = m_deviceParams.enableCopyQueue;
+
     for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
         const auto& queueFamily = props[i];
 
@@ -780,7 +784,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         }
 
 #ifdef NWB_PLATFORM_WINDOWS
-        if(m_presentQueueFamily == -1){
+        if(requirePresentQueue && m_presentQueueFamily == -1){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, i);
                 if(supported)
@@ -789,7 +793,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
         }
 #elif defined(NWB_PLATFORM_LINUX)
         VkResult res = VK_SUCCESS;
-        if(m_presentQueueFamily == -1 && m_windowSurface){
+        if(requirePresentQueue && m_presentQueueFamily == -1 && m_windowSurface){
             if(queueFamily.queueCount > 0){
                 VkBool32 supported = VK_FALSE;
                 res = vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, m_windowSurface, &supported);
@@ -798,13 +802,21 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             }
         }
 #endif
+
+        if(
+            m_graphicsQueueFamily != -1
+            && (!requirePresentQueue || m_presentQueueFamily != -1)
+            && (!requireComputeQueue || m_computeQueueFamily != -1)
+            && (!requireTransferQueue || m_transferQueueFamily != -1)
+        )
+            break;
     }
 
     if(
         m_graphicsQueueFamily == -1
-        || (m_presentQueueFamily == -1 && !m_deviceParams.headlessDevice)
-        || (m_computeQueueFamily == -1 && m_deviceParams.enableComputeQueue)
-        || (m_transferQueueFamily == -1 && m_deviceParams.enableCopyQueue)
+        || (m_presentQueueFamily == -1 && requirePresentQueue)
+        || (m_computeQueueFamily == -1 && requireComputeQueue)
+        || (m_transferQueueFamily == -1 && requireTransferQueue)
     )
         return false;
 

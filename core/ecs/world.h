@@ -164,6 +164,9 @@ private:
     T& addComponent(EntityID entityId, Args&&... args){
         NWB_ASSERT(m_entityManager.alive(entityId));
         auto* pool = assurePool<T>();
+        if(T* existing = pool->tryGet(entityId))
+            return *existing;
+
         T& component = pool->add(entityId, Forward<Args>(args)...);
         addEntityComponentType(entityId, ComponentType<T>(), *pool);
         return component;

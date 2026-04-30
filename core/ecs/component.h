@@ -118,7 +118,9 @@ public:
 public:
     template<typename... Args>
     T& add(EntityID entityId, Args&&... args){
-        NWB_ASSERT(!has(entityId));
+        u32 existingDenseIndex = 0u;
+        if(findDenseIndex(entityId, existingDenseIndex))
+            return m_components[existingDenseIndex];
 
         const u32 index = entityId.index();
 

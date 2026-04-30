@@ -98,10 +98,10 @@ void World::addEntityComponentType(EntityID entityId, ComponentTypeId typeId, IC
 
     const usize index = static_cast<usize>(entityId.index());
     u32& headNode = m_entityComponentHeads[index];
-#if NWB_OCCUR_ASSERT
-    for(u32 nodeIndex = headNode; nodeIndex != s_InvalidEntityComponentNode; nodeIndex = m_entityComponentNodes[nodeIndex].next)
-        NWB_ASSERT(m_entityComponentNodes[nodeIndex].typeId != typeId);
-#endif
+    for(u32 nodeIndex = headNode; nodeIndex != s_InvalidEntityComponentNode; nodeIndex = m_entityComponentNodes[nodeIndex].next){
+        if(m_entityComponentNodes[nodeIndex].typeId == typeId)
+            return;
+    }
 
     headNode = acquireEntityComponentNode(typeId, pool, headNode);
 }

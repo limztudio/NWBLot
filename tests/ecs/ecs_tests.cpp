@@ -247,6 +247,48 @@ static void TestSystemTick(TestContext& context){
     NWB_ECS_TEST_CHECK(context, testWorld.world.getSystem<CountingSystem>() == nullptr);
 }
 
+static void TestDuplicateComponentAddIsStable(TestContext& context){
+    TestWorld testWorld;
+
+    auto entity = testWorld.world.createEntity();
+    auto& first = entity.addComponent<PositionComponent>();
+    first.x = 9;
+    first.y = 4;
+
+    auto& second = entity.addComponent<PositionComponent>();
+    NWB_ECS_TEST_CHECK(context, &first == &second);
+    NWB_ECS_TEST_CHECK(context, second.x == 9);
+    NWB_ECS_TEST_CHECK(context, second.y == 4);
+
+    usize viewCount = 0u;
+    testWorld.world.view<PositionComponent>().each(
+        [&viewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+            ++viewCount;
+        }
+    );
+    NWB_ECS_TEST_CHECK(context, viewCount == 1u);
+
+    entity.removeComponent<PositionComponent>();
+    NWB_ECS_TEST_CHECK(context, !entity.hasComponent<PositionComponent>());
+}
+
+static void TestDuplicateSchedulerAddIsStable(TestContext& context){
+    TestWorld testWorld;
+
+    auto entity = testWorld.world.createEntity();
+    auto& position = entity.addComponent<PositionComponent>();
+    position.x = 1;
+
+    CountingSystem system(testWorld.arena);
+    NWB::Core::ECS::SystemScheduler scheduler(testWorld.arena);
+    scheduler.addSystem(system);
+    scheduler.addSystem(system);
+    scheduler.execute(testWorld.world, 0.5f);
+
+    NWB_ECS_TEST_CHECK(context, system.updates == 1u);
+    NWB_ECS_TEST_CHECK(context, position.x == 2);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -273,6 +315,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_tests::TestComponentLifetime(context);
         __hidden_ecs_tests::TestMessageBus(context);
         __hidden_ecs_tests::TestSystemTick(context);
+        __hidden_ecs_tests::TestDuplicateComponentAddIsStable(context);
+        __hidden_ecs_tests::TestDuplicateSchedulerAddIsStable(context);
     });
 }
 

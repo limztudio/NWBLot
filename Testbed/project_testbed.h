@@ -66,6 +66,10 @@ private:
     void updateSurfaceEditTarget(f32 delta);
     void updateSurfaceEditAccessories();
     [[nodiscard]] bool selectSurfaceEditTarget(usize targetIndex);
+    [[nodiscard]] bool selectSurfaceEditOperator(usize operatorIndex);
+    [[nodiscard]] bool selectSurfaceEditCameraView(usize cameraViewIndex);
+    void hideSurfaceEditPreviewMesh();
+    [[nodiscard]] bool refreshSurfaceEditPreviewMesh();
     void clearSurfaceEditPreview();
     void clearPendingSurfaceEditAccessory();
     bool refreshSurfaceEditPreview();
@@ -129,6 +133,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_surfaceEditTargetEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_surfaceEditPreviewEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECSGraphics::DeformableSurfaceEditState m_surfaceEditState;
     NWB::Core::ECSGraphics::DeformableSurfaceEditHistory m_surfaceEditHistory;
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession m_surfaceEditSession;
@@ -139,6 +144,8 @@ private:
     NWB::Core::ECSGraphics::DeformableHoleEditResult m_pendingSurfaceEditResult;
     NWB::Core::ECSGraphics::DeformableSurfaceEditRecord m_pendingSurfaceEditRecord;
     usize m_surfaceEditTargetIndex = 0u;
+    usize m_surfaceEditOperatorIndex = 0u;
+    usize m_surfaceEditCameraViewIndex = 0u;
     f32 m_surfaceEditTargetTime = 0.0f;
     f32 m_surfaceEditDisplacementScale = 1.0f;
     f32 m_surfaceEditRadius = 0.24f;

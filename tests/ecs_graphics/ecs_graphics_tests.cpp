@@ -512,6 +512,34 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     return MakeGridHoleInstance(4u, 4u);
 }
 
+static NWB::Impl::DeformableRuntimeMeshInstance MakeCurvedDepthGateHoleInstance(){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance(9u, 7u);
+    for(NWB::Impl::DeformableVertexRest& vertex : instance.restVertices){
+        const f32 x = vertex.position.x;
+        vertex.position.z = -0.03f * x * x;
+    }
+    return instance;
+}
+
+static NWB::Impl::DeformableRuntimeMeshInstance MakeDepthSeparatedGridHoleInstance(){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance(6u, 6u);
+    const usize frontVertexCount = instance.restVertices.size();
+    const usize frontIndexCount = instance.indices.size();
+
+    for(usize vertexIndex = 0u; vertexIndex < frontVertexCount; ++vertexIndex){
+        NWB::Impl::DeformableVertexRest vertex = instance.restVertices[vertexIndex];
+        vertex.position.z = -2.0f;
+        instance.restVertices.push_back(vertex);
+        instance.sourceSamples.push_back(instance.sourceSamples[vertexIndex]);
+    }
+
+    for(usize index = 0u; index < frontIndexCount; ++index)
+        instance.indices.push_back(instance.indices[index] + static_cast<u32>(frontVertexCount));
+
+    AssignSingleJointSkin(instance, 0u);
+    return instance;
+}
+
 static void ConfigureMinimalMilestonePayload(NWB::Impl::DeformableRuntimeMeshInstance& instance){
     instance.skeletonJointCount = 2u;
     instance.skin.resize(instance.restVertices.size());
@@ -600,6 +628,133 @@ static NWB::Impl::DeformableHoleEditParams MakeHoleEditParams(
 
 static NWB::Impl::DeformableHoleEditParams MakeGridHoleEditParams(const NWB::Impl::DeformableRuntimeMeshInstance& instance){
     return MakeHoleEditParams(instance, 8u, 0.48f, 0.25f);
+}
+
+static NWB::Impl::DeformableOperatorFootprint MakeBoxOperatorFootprint(){
+    NWB::Impl::DeformableOperatorFootprint footprint;
+    footprint.vertexCount = 4u;
+    footprint.vertices[0u] = Float2U(-1.0f, -1.0f);
+    footprint.vertices[1u] = Float2U(1.0f, -1.0f);
+    footprint.vertices[2u] = Float2U(1.0f, 1.0f);
+    footprint.vertices[3u] = Float2U(-1.0f, 1.0f);
+    return footprint;
+}
+
+static NWB::Impl::DeformableOperatorFootprint MakeTriangleOperatorFootprint(){
+    NWB::Impl::DeformableOperatorFootprint footprint;
+    footprint.vertexCount = 3u;
+    footprint.vertices[0u] = Float2U(1.0f, 0.0f);
+    footprint.vertices[1u] = Float2U(-0.5f, 0.866025f);
+    footprint.vertices[2u] = Float2U(-0.5f, -0.866025f);
+    return footprint;
+}
+
+static NWB::Impl::DeformableOperatorProfile MakeConeOperatorProfile(){
+    NWB::Impl::DeformableOperatorProfile profile;
+    profile.sampleCount = 2u;
+    profile.samples[0u].depth = 0.0f;
+    profile.samples[0u].scale = 1.0f;
+    profile.samples[0u].center = Float2U(0.0f, 0.0f);
+    profile.samples[1u].depth = 1.0f;
+    profile.samples[1u].scale = 0.0f;
+    profile.samples[1u].center = Float2U(0.0f, 0.0f);
+    return profile;
+}
+
+static NWB::Impl::GeometryVertex MakeOperatorGeometryVertex(const f32 x, const f32 y, const f32 z){
+    NWB::Impl::GeometryVertex vertex;
+    vertex.position = Float3U(x, y, z);
+    vertex.normal = Float3U(0.0f, 0.0f, 1.0f);
+    vertex.color0 = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
+    return vertex;
+}
+
+static bool OperatorFootprintHasPoint(
+    const NWB::Impl::DeformableOperatorFootprint& footprint,
+    const f32 x,
+    const f32 y
+){
+    constexpr f32 epsilon = 0.00001f;
+    for(u32 i = 0u; i < footprint.vertexCount; ++i){
+        if(Abs(footprint.vertices[i].x - x) <= epsilon && Abs(footprint.vertices[i].y - y) <= epsilon)
+            return true;
+    }
+    return false;
+}
+
+static f32 DistanceXYFrom(const Float3U& point, const Float3U& center){
+    const f32 dx = point.x - center.x;
+    const f32 dy = point.y - center.y;
+    return VectorGetX(VectorSqrt(VectorReplicate((dx * dx) + (dy * dy))));
+}
+
+struct CountedMeshEdge{
+    u32 a = 0u;
+    u32 b = 0u;
+    u32 count = 0u;
+};
+
+static void RegisterCountedMeshEdge(Vector<CountedMeshEdge>& edges, const u32 a, const u32 b){
+    if(a == b)
+        return;
+
+    const u32 lo = a < b ? a : b;
+    const u32 hi = a < b ? b : a;
+    for(CountedMeshEdge& edge : edges){
+        if(edge.a == lo && edge.b == hi){
+            ++edge.count;
+            return;
+        }
+    }
+
+    CountedMeshEdge edge;
+    edge.a = lo;
+    edge.b = hi;
+    edge.count = 1u;
+    edges.push_back(edge);
+}
+
+static bool VertexInRange(const u32 vertex, const u32 firstVertex, const u32 endVertex){
+    return vertex >= firstVertex && vertex < endVertex;
+}
+
+static u32 CountUnweldedEdgesTouchingVertexRange(
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const u32 firstVertex,
+    const u32 endVertex
+){
+    if(firstVertex > endVertex)
+        return Limit<u32>::s_Max;
+    if((instance.indices.size() % 3u) != 0u)
+        return Limit<u32>::s_Max;
+
+    Vector<CountedMeshEdge> edges;
+    edges.reserve(instance.indices.size());
+    for(usize indexBase = 0u; indexBase < instance.indices.size(); indexBase += 3u){
+        const u32 i0 = instance.indices[indexBase + 0u];
+        const u32 i1 = instance.indices[indexBase + 1u];
+        const u32 i2 = instance.indices[indexBase + 2u];
+        if(i0 >= instance.restVertices.size() || i1 >= instance.restVertices.size() || i2 >= instance.restVertices.size())
+            return Limit<u32>::s_Max;
+
+        RegisterCountedMeshEdge(edges, i0, i1);
+        RegisterCountedMeshEdge(edges, i1, i2);
+        RegisterCountedMeshEdge(edges, i2, i0);
+    }
+
+    u32 unweldedEdgeCount = 0u;
+    for(const CountedMeshEdge& edge : edges){
+        if(
+            edge.count == 1u
+            && (
+                VertexInRange(edge.a, firstVertex, endVertex)
+                || VertexInRange(edge.b, firstVertex, endVertex)
+            )
+        ){
+            ++unweldedEdgeCount;
+        }
+    }
+    return unweldedEdgeCount;
 }
 
 static void SimulateRuntimeMeshUpload(NWB::Impl::DeformableRuntimeMeshInstance& instance){
@@ -889,7 +1044,7 @@ static void CheckAddedTrianglesResolveToSample(
 }
 
 static u32 ExpectedCappedHoleAddedVertexCount(const u32 wallVertexCount, const u32 wallLoopCutCount){
-    return wallVertexCount * (wallLoopCutCount + 2u);
+    return wallVertexCount * (wallLoopCutCount + 1u);
 }
 
 static u32 ExpectedCappedHoleAddedTriangleCount(const u32 wallVertexCount, const u32 wallLoopCutCount){
@@ -2629,7 +2784,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitDeformableRestSpaceHole(instance, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedVertexCount == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.addedTriangleCount == 10u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.editRevision == 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 4u);
@@ -2637,7 +2792,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         context,
         (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::All) == NWB::Impl::RuntimeMeshDirtyFlag::All
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() == oldVertexCount + 4u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() == oldIndexCount - 6u + 30u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == instance.restVertices.size());
@@ -2656,8 +2811,8 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         if(NearlyEqual(vertex.position.z, -0.25f))
             ++bottomDepthVertexCount;
 
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.z, 0.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, FiniteFloat4(vertex.tangent));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, Abs(Abs(vertex.tangent.w) - 1.0f) <= 0.001f);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.x >= 0.0f && vertex.uv0.x < 1.0f);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, vertex.uv0.y == 0.0f || vertex.uv0.y == 1.0f);
         const f32 inwardDot = VectorGetX(
@@ -2668,13 +2823,18 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
         );
         NWB_ECS_GRAPHICS_TEST_CHECK(context, inwardDot > 0.0f);
     }
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, bottomDepthVertexCount == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, bottomDepthVertexCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountUnweldedEdgesTouchingVertexRange(
+            instance,
+            result.firstWallVertex,
+            static_cast<u32>(instance.restVertices.size())
+        ) == 0u
+    );
     for(usize vertexOffset = 0u; vertexOffset < static_cast<usize>(result.wallVertexCount); ++vertexOffset){
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(instance.restVertices[result.firstWallVertex + vertexOffset].normal.z, 0.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(
-            context,
-            NearlyEqual(instance.restVertices[result.firstWallVertex + result.wallVertexCount + vertexOffset].normal.z, 1.0f)
-        );
+        const f32 weldedCapNormalZ = instance.restVertices[result.firstWallVertex + vertexOffset].normal.z;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, weldedCapNormalZ > 0.0f && weldedCapNormalZ < 1.0f);
     }
     for(const u32 index : instance.indices)
         NWB_ECS_GRAPHICS_TEST_CHECK(context, index < instance.restVertices.size());
@@ -2703,7 +2863,7 @@ static void TestRestSpaceHoleEditCreatesPerInstancePatch(TestContext& context){
     }
 
     const usize capIndexBase = wallIndexBase + (wallTriangleCount * 3u);
-    const u32 firstCapVertex = result.firstWallVertex + result.wallVertexCount;
+    const u32 firstCapVertex = result.firstWallVertex;
     const usize capTriangleCount = static_cast<usize>(result.addedTriangleCount) - wallTriangleCount;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, capTriangleCount == 2u);
     for(usize capTriangle = 0u; capTriangle < capTriangleCount; ++capTriangle){
@@ -3034,12 +3194,20 @@ static void TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(TestContext
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.skin.size() == oldVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.sourceSamples.size() == oldVertexCount);
 
+    NWB::Impl::DeformableHolePreviewMesh previewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.vertices.size() >= 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.indices.size() >= 3u);
+
     NWB::Impl::DeformableHoleEditResult result;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.restVertices.size() > oldVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.indices.size() > oldIndexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision + 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex == oldVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.removedTriangleCount == result.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.wallVertexCount == result.wallVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         result.addedVertexCount == ExpectedCappedHoleAddedVertexCount(result.wallVertexCount, result.wallLoopCutCount)
@@ -3062,6 +3230,289 @@ static void TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(TestContext
             NearlyEqual(sample.bary[0] + sample.bary[1] + sample.bary[2], 1.0f)
         );
     }
+}
+
+static void TestSurfaceEditOperatorFootprintIsDerivedFromGeometry(TestContext& context){
+    Vector<NWB::Impl::GeometryVertex> vertices;
+    vertices.push_back(MakeOperatorGeometryVertex(-1.0f, -1.0f, 0.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(1.0f, -1.0f, 0.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(1.0f, 1.0f, 0.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(-1.0f, 1.0f, 0.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(0.0f, 0.0f, 0.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(-1.0f, -1.0f, -1.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(1.0f, -1.0f, -1.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(1.0f, 1.0f, -1.0f));
+    vertices.push_back(MakeOperatorGeometryVertex(-1.0f, 1.0f, -1.0f));
+
+    NWB::Impl::DeformableOperatorFootprint footprint;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildOperatorFootprintFromGeometry(vertices, footprint));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, footprint.vertexCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, OperatorFootprintHasPoint(footprint, -1.0f, -1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, OperatorFootprintHasPoint(footprint, 1.0f, -1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, OperatorFootprintHasPoint(footprint, 1.0f, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, OperatorFootprintHasPoint(footprint, -1.0f, 1.0f));
+
+    NWB::Impl::DeformableOperatorProfile boxProfile;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildOperatorProfileFromGeometry(vertices, boxProfile));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, boxProfile.sampleCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(boxProfile.samples[0u].scale, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(boxProfile.samples[1u].scale, 1.0f));
+
+    Vector<NWB::Impl::GeometryVertex> coneVertices;
+    coneVertices.push_back(MakeOperatorGeometryVertex(1.0f, 0.0f, 0.0f));
+    coneVertices.push_back(MakeOperatorGeometryVertex(0.0f, 1.0f, 0.0f));
+    coneVertices.push_back(MakeOperatorGeometryVertex(-1.0f, 0.0f, 0.0f));
+    coneVertices.push_back(MakeOperatorGeometryVertex(0.0f, -1.0f, 0.0f));
+    coneVertices.push_back(MakeOperatorGeometryVertex(0.0f, 0.0f, -1.0f));
+
+    NWB::Impl::DeformableOperatorProfile coneProfile;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildOperatorProfileFromGeometry(coneVertices, coneProfile));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, coneProfile.sampleCount == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(coneProfile.samples[0u].scale, 1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(coneProfile.samples[1u].scale, 0.0f));
+}
+
+static void TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance boxInstance = MakeGridHoleInstance(6u, 6u);
+    NWB::Impl::DeformableHoleEditParams boxParams =
+        MakeHoleEditParams(boxInstance, 24u, 0.25f, 0.25f, 0.5f, 1.25f, 0.25f)
+    ;
+    boxParams.operatorFootprint = MakeBoxOperatorFootprint();
+
+    NWB::Impl::DeformableRuntimeMeshInstance triangleInstance = MakeGridHoleInstance(6u, 6u);
+    NWB::Impl::DeformableHoleEditParams triangleParams =
+        MakeHoleEditParams(triangleInstance, 24u, 0.25f, 0.25f, 0.5f, 1.25f, 0.25f)
+    ;
+    triangleParams.operatorFootprint = MakeTriangleOperatorFootprint();
+    triangleParams.operatorProfile = MakeConeOperatorProfile();
+
+    NWB::Impl::DeformableHolePreviewMesh boxPreviewMesh;
+    NWB::Impl::DeformableHolePreviewMesh trianglePreviewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(boxInstance, boxParams, boxPreviewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(triangleInstance, triangleParams, trianglePreviewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, boxPreviewMesh.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, trianglePreviewMesh.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, boxPreviewMesh.removedTriangleCount != trianglePreviewMesh.removedTriangleCount);
+
+    NWB::Impl::DeformableSurfaceEditSession boxSession;
+    NWB::Impl::DeformableHolePreview boxPreview;
+    NWB::Impl::DeformableHoleEditResult boxResult;
+    NWB::Impl::DeformableSurfaceEditRecord boxRecord;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(boxInstance, boxParams.posedHit, boxSession));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(boxInstance, boxSession, boxParams, boxPreview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(boxInstance, boxSession, boxParams, &boxResult, &boxRecord));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, boxResult.removedTriangleCount == boxPreviewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, boxResult.wallVertexCount == boxPreviewMesh.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, boxRecord.hole.operatorFootprint.vertexCount == boxParams.operatorFootprint.vertexCount);
+
+    NWB::Impl::DeformableSurfaceEditSession triangleSession;
+    NWB::Impl::DeformableHolePreview trianglePreview;
+    NWB::Impl::DeformableHoleEditResult triangleResult;
+    NWB::Impl::DeformableSurfaceEditRecord triangleRecord;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(triangleInstance, triangleParams.posedHit, triangleSession));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(triangleInstance, triangleSession, triangleParams, trianglePreview));
+    NWB::Impl::DeformableHoleEditParams mismatchedTriangleParams = triangleParams;
+    mismatchedTriangleParams.operatorFootprint = boxParams.operatorFootprint;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::CommitHole(triangleInstance, triangleSession, mismatchedTriangleParams, &triangleResult, &triangleRecord)
+    );
+    mismatchedTriangleParams = triangleParams;
+    mismatchedTriangleParams.operatorProfile = NWB::Impl::DeformableOperatorProfile{};
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::CommitHole(triangleInstance, triangleSession, mismatchedTriangleParams, &triangleResult, &triangleRecord)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(triangleInstance, triangleSession, triangleParams, &triangleResult, &triangleRecord));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, triangleResult.removedTriangleCount == trianglePreviewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, triangleResult.wallVertexCount == trianglePreviewMesh.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        triangleRecord.hole.operatorFootprint.vertexCount == triangleParams.operatorFootprint.vertexCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        triangleRecord.hole.operatorProfile.sampleCount == triangleParams.operatorProfile.sampleCount
+    );
+}
+
+static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance(6u, 6u);
+    const usize oldVertexCount = instance.restVertices.size();
+    NWB::Impl::DeformableHoleEditParams params =
+        MakeHoleEditParams(instance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
+    ;
+    params.operatorFootprint = MakeBoxOperatorFootprint();
+    const Float3U holeCenter = RestHitPosition(instance, params);
+
+    NWB::Impl::DeformableHolePreviewMesh previewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
+
+    NWB::Impl::DeformableSurfaceEditSession session;
+    NWB::Impl::DeformableHolePreview preview;
+    NWB::Impl::DeformableHoleEditResult result;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.removedTriangleCount == result.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.wallVertexCount == result.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex > oldVertexCount);
+    const usize generatedSurfaceVertexCount = static_cast<usize>(result.firstWallVertex) - oldVertexCount;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, generatedSurfaceVertexCount > 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        instance.restVertices.size() == oldVertexCount + generatedSurfaceVertexCount + result.addedVertexCount
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CountUnweldedEdgesTouchingVertexRange(
+            instance,
+            result.firstWallVertex,
+            static_cast<u32>(instance.restVertices.size())
+        ) == 0u
+    );
+
+    const usize wallIndexBase = instance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u);
+    bool foundGeneratedRimVertex = false;
+    for(usize edgeIndex = 0u; edgeIndex < static_cast<usize>(result.wallVertexCount); ++edgeIndex){
+        const usize indexBase = wallIndexBase + (edgeIndex * 6u);
+        const u32 rimA = instance.indices[indexBase + 0u];
+        const u32 rimB = instance.indices[indexBase + 1u];
+        foundGeneratedRimVertex = foundGeneratedRimVertex
+            || (rimA >= oldVertexCount && rimA < result.firstWallVertex)
+            || (rimB >= oldVertexCount && rimB < result.firstWallVertex)
+        ;
+    }
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedRimVertex);
+
+    for(usize indexBase = 0u; indexBase < wallIndexBase; indexBase += 3u){
+        const u32 i0 = instance.indices[indexBase + 0u];
+        const u32 i1 = instance.indices[indexBase + 1u];
+        const u32 i2 = instance.indices[indexBase + 2u];
+        const Float3U& p0 = instance.restVertices[i0].position;
+        const Float3U& p1 = instance.restVertices[i1].position;
+        const Float3U& p2 = instance.restVertices[i2].position;
+        const f32 centroidX = (p0.x + p1.x + p2.x) / 3.0f;
+        const f32 centroidY = (p0.y + p1.y + p2.y) / 3.0f;
+        const f32 localX = (centroidX - holeCenter.x) / params.radius;
+        const f32 localY = (centroidY - holeCenter.y) / (params.radius * params.ellipseRatio);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, Abs(localX) >= 1.0f - 0.0001f || Abs(localY) >= 1.0f - 0.0001f);
+    }
+}
+
+static void TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance shallowInstance = MakeCurvedDepthGateHoleInstance();
+    NWB::Impl::DeformableHoleEditParams shallowParams =
+        MakeHoleEditParams(shallowInstance, 56u, 0.25f, 0.25f, 0.5f, 1.85f, 0.06f)
+    ;
+
+    NWB::Impl::DeformableRuntimeMeshInstance deepInstance = MakeCurvedDepthGateHoleInstance();
+    NWB::Impl::DeformableHoleEditParams deepParams =
+        MakeHoleEditParams(deepInstance, 56u, 0.25f, 0.25f, 0.5f, 1.85f, 0.35f)
+    ;
+
+    NWB::Impl::DeformableHolePreviewMesh shallowPreviewMesh;
+    NWB::Impl::DeformableHolePreviewMesh deepPreviewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(shallowInstance, shallowParams, shallowPreviewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(deepInstance, deepParams, deepPreviewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, shallowPreviewMesh.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, deepPreviewMesh.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, shallowPreviewMesh.removedTriangleCount < deepPreviewMesh.removedTriangleCount);
+
+    NWB::Impl::DeformableSurfaceEditSession shallowSession;
+    NWB::Impl::DeformableHolePreview shallowPreview;
+    NWB::Impl::DeformableHoleEditResult shallowResult;
+    NWB::Impl::DeformableSurfaceEditRecord shallowRecord;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(shallowInstance, shallowParams.posedHit, shallowSession));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(shallowInstance, shallowSession, shallowParams, shallowPreview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::CommitHole(shallowInstance, shallowSession, shallowParams, &shallowResult, &shallowRecord)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, shallowResult.removedTriangleCount == shallowPreviewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, shallowRecord.hole.depth == shallowParams.depth);
+}
+
+static void TestSurfaceEditOperatorRemeshIgnoresTrianglesOutsideDepth(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance frontInstance = MakeGridHoleInstance(6u, 6u);
+    NWB::Impl::DeformableHoleEditParams frontParams =
+        MakeHoleEditParams(frontInstance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
+    ;
+    frontParams.operatorFootprint = MakeBoxOperatorFootprint();
+
+    NWB::Impl::DeformableRuntimeMeshInstance layeredInstance = MakeDepthSeparatedGridHoleInstance();
+    NWB::Impl::DeformableHoleEditParams layeredParams =
+        MakeHoleEditParams(layeredInstance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
+    ;
+    layeredParams.operatorFootprint = MakeBoxOperatorFootprint();
+
+    NWB::Impl::DeformableHolePreviewMesh frontPreviewMesh;
+    NWB::Impl::DeformableHolePreviewMesh layeredPreviewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(frontInstance, frontParams, frontPreviewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(layeredInstance, layeredParams, layeredPreviewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, frontPreviewMesh.removedTriangleCount == layeredPreviewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, frontPreviewMesh.wallVertexCount == layeredPreviewMesh.wallVertexCount);
+
+    NWB::Impl::DeformableSurfaceEditSession session;
+    NWB::Impl::DeformableHolePreview preview;
+    NWB::Impl::DeformableHoleEditResult result;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(layeredInstance, layeredParams.posedHit, session));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(layeredInstance, session, layeredParams, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(layeredInstance, session, layeredParams, &result));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == frontPreviewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == frontPreviewMesh.wallVertexCount);
+}
+
+static void TestSurfaceEditOperatorProfileTapersWallGeometry(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance straightInstance = MakeGridHoleInstance(6u, 6u);
+    NWB::Impl::DeformableHoleEditParams straightParams =
+        MakeHoleEditParams(straightInstance, 24u, 0.25f, 0.25f, 0.5f, 1.25f, 0.25f)
+    ;
+    straightParams.operatorFootprint = MakeBoxOperatorFootprint();
+    const Float3U straightCenter = RestHitPosition(straightInstance, straightParams);
+
+    NWB::Impl::DeformableSurfaceEditSession straightSession;
+    NWB::Impl::DeformableHolePreview straightPreview;
+    NWB::Impl::DeformableHoleEditResult straightResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(straightInstance, straightParams.posedHit, straightSession));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(straightInstance, straightSession, straightParams, straightPreview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(straightInstance, straightSession, straightParams, &straightResult));
+
+    NWB::Impl::DeformableRuntimeMeshInstance taperedInstance = MakeGridHoleInstance(6u, 6u);
+    NWB::Impl::DeformableHoleEditParams taperedParams =
+        MakeHoleEditParams(taperedInstance, 24u, 0.25f, 0.25f, 0.5f, 1.25f, 0.25f)
+    ;
+    taperedParams.operatorFootprint = MakeBoxOperatorFootprint();
+    taperedParams.operatorProfile = MakeConeOperatorProfile();
+    const Float3U taperedCenter = RestHitPosition(taperedInstance, taperedParams);
+
+    NWB::Impl::DeformableSurfaceEditSession taperedSession;
+    NWB::Impl::DeformableHolePreview taperedPreview;
+    NWB::Impl::DeformableHoleEditResult taperedResult;
+    NWB::Impl::DeformableSurfaceEditRecord taperedRecord;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(taperedInstance, taperedParams.posedHit, taperedSession));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(taperedInstance, taperedSession, taperedParams, taperedPreview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::CommitHole(taperedInstance, taperedSession, taperedParams, &taperedResult, &taperedRecord)
+    );
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, taperedResult.removedTriangleCount == straightResult.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, taperedResult.wallVertexCount == straightResult.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, taperedRecord.hole.operatorProfile.sampleCount == taperedParams.operatorProfile.sampleCount);
+
+    const f32 straightWallDistance = DistanceXYFrom(
+        straightInstance.restVertices[straightResult.firstWallVertex].position,
+        straightCenter
+    );
+    const f32 taperedWallDistance = DistanceXYFrom(
+        taperedInstance.restVertices[taperedResult.firstWallVertex].position,
+        taperedCenter
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, straightWallDistance > 0.1f);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, taperedWallDistance < straightWallDistance * 0.25f);
 }
 
 static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestContext& context){
@@ -3341,13 +3792,13 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("wall_vertices=4") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("accessory_anchors=4") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("wall_basis(normal=8 tangent=8)") != AString::npos);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("skin_weight_lines=24") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("skin_weight_lines=20") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("max_skin_weight=1") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("morph_delta_lines=") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("points=8") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("removed_triangles=2") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("invalid_frames=0") != AString::npos);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("skin_vertices=24") != AString::npos);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("skin_vertices=20") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("max_skin_influences=2") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("morphs=1") != AString::npos);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, dump.find("displacement_mode=2") != AString::npos);
@@ -4904,7 +5355,7 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        editedInstance.restVertices.size() == cleanBase.restVertices.size() + static_cast<usize>(wallVertexCount) * 3u
+        editedInstance.restVertices.size() == cleanBase.restVertices.size() + static_cast<usize>(wallVertexCount) * 2u
     );
 
     NWB::Core::Scene::TransformComponent resolvedTransform;
@@ -5536,6 +5987,12 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::TestSurfaceEditMutatesOnlyTargetRuntimeInstance(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditMasksPreviewAndCommit(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditPreviewIsReadOnlyAndCommitMutatesTopology(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintIsDerivedFromGeometry(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshIgnoresTrianglesOutsideDepth(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorProfileTapersWallGeometry(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditFlowAttachesAndPersistsAccessory(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditStateReplayEmptyStateIsNoOp(context);

@@ -41,10 +41,19 @@ using DeformableMorphWeightsComponent = NWB::Impl::DeformableMorphWeightsCompone
 using DeformablePickingInputs = NWB::Impl::DeformablePickingInputs;
 using DeformablePickingRay = NWB::Impl::DeformablePickingRay;
 using DeformablePosedHit = NWB::Impl::DeformablePosedHit;
+inline constexpr u32 s_DeformableOperatorFootprintMaxVertexCount =
+    NWB::Impl::s_DeformableOperatorFootprintMaxVertexCount;
+inline constexpr u32 s_DeformableOperatorProfileMaxSampleCount =
+    NWB::Impl::s_DeformableOperatorProfileMaxSampleCount;
+using DeformableOperatorFootprint = NWB::Impl::DeformableOperatorFootprint;
+using DeformableOperatorProfileSample = NWB::Impl::DeformableOperatorProfileSample;
+using DeformableOperatorProfile = NWB::Impl::DeformableOperatorProfile;
 using DeformableHoleEditParams = NWB::Impl::DeformableHoleEditParams;
 using DeformableHoleEditResult = NWB::Impl::DeformableHoleEditResult;
 using DeformableSurfaceEditSession = NWB::Impl::DeformableSurfaceEditSession;
 using DeformableHolePreview = NWB::Impl::DeformableHolePreview;
+using DeformableHolePreviewMeshVertex = NWB::Impl::DeformableHolePreviewMeshVertex;
+using DeformableHolePreviewMesh = NWB::Impl::DeformableHolePreviewMesh;
 using DeformableSurfaceEditId = NWB::Impl::DeformableSurfaceEditId;
 using DeformableSurfaceEditRecord = NWB::Impl::DeformableSurfaceEditRecord;
 using DeformableSurfaceEditState = NWB::Impl::DeformableSurfaceEditState;
@@ -76,6 +85,10 @@ using NWB::Impl::BeginSurfaceEdit;
 using NWB::Impl::BuildSurfaceEditStateDebugDump;
 using NWB::Impl::BuildDeformableSurfaceEditDebugDump;
 using NWB::Impl::BuildDeformableSurfaceEditDebugSnapshot;
+using NWB::Impl::BuildOperatorFootprintFromGeometry;
+using NWB::Impl::BuildOperatorProfileFromGeometry;
+using NWB::Impl::BuildOperatorShapeFromGeometry;
+using NWB::Impl::BuildHolePreviewMesh;
 using NWB::Impl::CommitHole;
 using NWB::Impl::DeserializeSurfaceEditState;
 using NWB::Impl::AddSurfaceEditLoopCut;

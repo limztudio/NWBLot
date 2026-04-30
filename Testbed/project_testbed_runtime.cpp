@@ -4,8 +4,10 @@
 
 #include "project_testbed.h"
 
+#include <core/geometry/frame_math.h>
 #include <global/simplemath.h>
 #include <impl/assets_graphics/deformable_geometry_asset.h>
+#include <impl/assets_graphics/geometry_asset.h>
 #include <impl/ecs_ui/ecs_ui.h>
 #include <logger/client/logger.h>
 
@@ -54,6 +56,9 @@ static constexpr AStringView s_DeformableCsgCubePath = "project/characters/csg_c
 static constexpr AStringView s_DeformableCsgSpherePath = "project/characters/csg_sphere";
 static constexpr AStringView s_DeformableCsgTetrahedronPath = "project/characters/csg_tetrahedron";
 static constexpr AStringView s_DeformableMaterialPath = "project/materials/mat_deformable_uv";
+static constexpr AStringView s_SurfaceEditOperatorMaterialPath = "project/materials/mat_csg_subtract_preview";
+static constexpr f32 s_SurfaceEditOperatorSurfaceOffsetMin = 0.001f;
+static constexpr f32 s_SurfaceEditOperatorSurfaceOffsetRadiusScale = 0.025f;
 static constexpr AStringView s_AccessoryGeometryPath = "project/meshes/mock_earring";
 static constexpr AStringView s_AccessoryMaterialPath = "project/materials/mat_accessory_gold";
 
@@ -66,6 +71,18 @@ struct SurfaceEditTargetDesc{
     f32 editRadius = 0.24f;
     f32 yawRadians = 0.0f;
     bool animated = false;
+};
+
+struct SurfaceEditOperatorDesc{
+    AStringView label;
+    AStringView geometryPath;
+};
+
+struct SurfaceEditCameraViewDesc{
+    AStringView label;
+    f32 yawRadians = 0.0f;
+    f32 pitchRadians = 0.0f;
+    f32 distance = s_CameraStartDepth;
 };
 
 struct EditorClientSize{
@@ -82,6 +99,24 @@ static const SurfaceEditTargetDesc s_SurfaceEditTargets[] = {
 };
 static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) / sizeof(s_SurfaceEditTargets[0]);
 
+static const SurfaceEditOperatorDesc s_SurfaceEditOperators[] = {
+    { "cylinder", "project/meshes/csg_operator_cylinder" },
+    { "box", "project/meshes/csg_operator_box" },
+    { "triangle", "project/meshes/csg_operator_triangle" },
+    { "cone", "project/meshes/csg_operator_cone" },
+};
+static constexpr usize s_SurfaceEditOperatorCount = sizeof(s_SurfaceEditOperators) / sizeof(s_SurfaceEditOperators[0]);
+
+static const SurfaceEditCameraViewDesc s_SurfaceEditCameraViews[] = {
+    { "front", 0.0f, 0.0f, s_CameraStartDepth },
+    { "right high", -0.65f, 0.25f, 2.35f },
+    { "side", -1.18f, 0.08f, 2.45f },
+    { "left high", 0.7f, 0.34f, 2.45f },
+};
+static constexpr usize s_SurfaceEditCameraViewCount =
+    sizeof(s_SurfaceEditCameraViews) / sizeof(s_SurfaceEditCameraViews[0])
+;
+
 
 [[nodiscard]] static const char* SurfaceEditTargetLabel(const usize targetIndex){
     return
@@ -89,6 +124,58 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
             ? s_SurfaceEditTargets[targetIndex].label.data()
             : "invalid"
     ;
+}
+
+[[nodiscard]] static AStringView SurfaceEditOperatorLabelView(const usize operatorIndex){
+    return
+        operatorIndex < s_SurfaceEditOperatorCount
+            ? s_SurfaceEditOperators[operatorIndex].label
+            : AStringView("invalid")
+    ;
+}
+
+[[nodiscard]] static const char* SurfaceEditOperatorLabel(const usize operatorIndex){
+    return SurfaceEditOperatorLabelView(operatorIndex).data();
+}
+
+[[nodiscard]] static bool BuildSurfaceEditOperatorShape(
+    NWB::Core::Assets::AssetManager& assetManager,
+    const usize operatorIndex,
+    NWB::Core::ECSGraphics::DeformableOperatorFootprint& outFootprint,
+    NWB::Core::ECSGraphics::DeformableOperatorProfile& outProfile
+){
+    outFootprint = NWB::Core::ECSGraphics::DeformableOperatorFootprint{};
+    outProfile = NWB::Core::ECSGraphics::DeformableOperatorProfile{};
+    if(operatorIndex >= s_SurfaceEditOperatorCount)
+        return false;
+
+    const SurfaceEditOperatorDesc& desc = s_SurfaceEditOperators[operatorIndex];
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(
+        !assetManager.loadSync(NWB::Impl::Geometry::AssetTypeName(), Name(desc.geometryPath), loadedAsset)
+        || !loadedAsset
+        || loadedAsset->assetType() != NWB::Impl::Geometry::AssetTypeName()
+    )
+        return false;
+
+    const auto& geometry = static_cast<const NWB::Impl::Geometry&>(*loadedAsset);
+    return NWB::Core::ECSGraphics::BuildOperatorShapeFromGeometry(
+        geometry.vertices(),
+        outFootprint,
+        outProfile
+    );
+}
+
+[[nodiscard]] static AStringView SurfaceEditCameraViewLabelView(const usize cameraViewIndex){
+    return
+        cameraViewIndex < s_SurfaceEditCameraViewCount
+            ? s_SurfaceEditCameraViews[cameraViewIndex].label
+            : AStringView("invalid")
+    ;
+}
+
+[[nodiscard]] static const char* SurfaceEditCameraViewLabel(const usize cameraViewIndex){
+    return SurfaceEditCameraViewLabelView(cameraViewIndex).data();
 }
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -123,6 +210,98 @@ static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) /
     default:
         return NWB_TEXT("allowed");
     }
+}
+
+[[nodiscard]] static bool FiniteSurfaceEditOperatorVector3(const SIMDVector value){
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & 0x7u) == 0u;
+}
+
+[[nodiscard]] static SIMDVector BuildSurfaceEditOperatorRotation(
+    const SIMDVector worldTangent,
+    const SIMDVector worldBitangent,
+    const SIMDVector worldNormal
+){
+    SIMDMatrix basisAsRows{};
+    basisAsRows.v[0] = VectorAndInt(worldTangent, s_SIMDMask3);
+    basisAsRows.v[1] = VectorAndInt(worldBitangent, s_SIMDMask3);
+    basisAsRows.v[2] = VectorAndInt(worldNormal, s_SIMDMask3);
+    basisAsRows.v[3] = s_SIMDIdentityR3;
+    return QuaternionNormalize(QuaternionRotationMatrix(MatrixTranspose(basisAsRows)));
+}
+
+[[nodiscard]] static bool ResolveSurfaceEditOperatorTransform(
+    const NWB::Core::Scene::TransformComponent& targetTransform,
+    const NWB::Core::ECSGraphics::DeformableHolePreview& preview,
+    NWB::Core::Scene::TransformComponent& outTransform
+){
+    if(!preview.valid)
+        return false;
+
+    const SIMDVector targetRotation = QuaternionNormalize(LoadFloat(targetTransform.rotation));
+    if(QuaternionIsNaN(targetRotation) || QuaternionIsInfinite(targetRotation))
+        return false;
+
+    const SIMDVector targetScale = LoadFloat(targetTransform.scale);
+    const SIMDVector localCenter = LoadFloat(preview.center);
+    const SIMDVector localNormal = LoadFloat(preview.normal);
+    const SIMDVector localTangent = LoadFloat(preview.tangent);
+    const SIMDVector localBitangent = LoadFloat(preview.bitangent);
+    if(
+        !FiniteSurfaceEditOperatorVector3(targetScale)
+        || !FiniteSurfaceEditOperatorVector3(localCenter)
+        || !FiniteSurfaceEditOperatorVector3(localNormal)
+        || !FiniteSurfaceEditOperatorVector3(localTangent)
+        || !FiniteSurfaceEditOperatorVector3(localBitangent)
+        || !IsFinite(preview.radius)
+        || !IsFinite(preview.ellipseRatio)
+        || !IsFinite(preview.depth)
+        || preview.radius <= 0.0f
+        || preview.ellipseRatio <= 0.0f
+        || preview.depth <= 0.0f
+    )
+        return false;
+
+    const SIMDVector worldNormal = NWB::Core::Geometry::FrameNormalizeDirection(
+        Vector3Rotate(localNormal, targetRotation),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+    );
+    const SIMDVector worldTangent = NWB::Core::Geometry::FrameResolveTangent(
+        worldNormal,
+        Vector3Rotate(localTangent, targetRotation),
+        VectorSet(1.0f, 0.0f, 0.0f, 0.0f)
+    );
+    const SIMDVector worldBitangent = NWB::Core::Geometry::FrameNormalizeDirection(
+        Vector3Rotate(localBitangent, targetRotation),
+        Vector3Cross(worldNormal, worldTangent)
+    );
+    const SIMDVector operatorRotation = BuildSurfaceEditOperatorRotation(worldTangent, worldBitangent, worldNormal);
+    if(QuaternionIsNaN(operatorRotation) || QuaternionIsInfinite(operatorRotation))
+        return false;
+
+    const SIMDVector scaledLocalCenter = VectorMultiply(localCenter, targetScale);
+    const SIMDVector targetPosition = LoadFloat(targetTransform.position);
+    const f32 targetUniformScale = Max(Abs(targetTransform.scale.x), Max(Abs(targetTransform.scale.y), Abs(targetTransform.scale.z)));
+    const f32 surfaceOffset = Max(
+        s_SurfaceEditOperatorSurfaceOffsetMin,
+        preview.radius * s_SurfaceEditOperatorSurfaceOffsetRadiusScale
+    ) * targetUniformScale;
+    const SIMDVector worldPosition = VectorMultiplyAdd(
+        worldNormal,
+        VectorReplicate(surfaceOffset),
+        VectorAdd(Vector3Rotate(scaledLocalCenter, targetRotation), targetPosition)
+    );
+    if(!FiniteSurfaceEditOperatorVector3(worldPosition))
+        return false;
+
+    StoreFloat(VectorSetW(worldPosition, 0.0f), &outTransform.position);
+    StoreFloat(operatorRotation, &outTransform.rotation);
+    outTransform.scale = Float4(
+        preview.radius * Abs(targetTransform.scale.x),
+        preview.radius * preview.ellipseRatio * Abs(targetTransform.scale.y),
+        preview.depth * Abs(targetTransform.scale.z)
+    );
+    return FiniteSurfaceEditOperatorVector3(LoadFloat(outTransform.scale));
 }
 
 [[nodiscard]] static const NWB::Impl::DeformableDisplacementTexture* ResolveSurfaceEditDebugDisplacementTexture(
@@ -379,6 +558,43 @@ static void ApplyFlyCameraInputToMainCamera(
     );
 }
 
+[[nodiscard]] static bool ApplySurfaceEditCameraView(
+    NWB::Core::ECS::World& world,
+    const usize cameraViewIndex
+){
+    if(cameraViewIndex >= s_SurfaceEditCameraViewCount)
+        return false;
+
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return false;
+
+    const SurfaceEditCameraViewDesc& preset = s_SurfaceEditCameraViews[cameraViewIndex];
+    const SIMDVector rotation = QuaternionRotationRollPitchYaw(
+        preset.pitchRadians,
+        preset.yawRadians,
+        0.0f
+    );
+    if(QuaternionIsNaN(rotation) || QuaternionIsInfinite(rotation))
+        return false;
+
+    const SIMDVector forward = Vector3Rotate(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), rotation);
+    if(!FiniteVector3(forward))
+        return false;
+
+    const SIMDVector target = VectorSet(0.0f, s_SurfaceEditTargetY, 0.0f, 0.0f);
+    const SIMDVector position = VectorSubtract(
+        target,
+        VectorMultiply(forward, VectorReplicate(Max(0.5f, preset.distance)))
+    );
+    if(!FiniteVector3(position))
+        return false;
+
+    StoreFloat(rotation, &cameraView.transform->rotation);
+    StoreFloat(VectorSetW(position, 0.0f), &cameraView.transform->position);
+    return true;
+}
+
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
     auto& transform = cameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
@@ -528,6 +744,23 @@ static void UpdateProxySkeletonPose(
     return entity.id();
 }
 
+[[nodiscard]] static NWB::Core::ECS::EntityID CreateSurfaceEditSubtractPreviewEntity(NWB::Core::ECS::World& world){
+    TestbedGeometryRef geometry;
+    geometry.virtualPath = Name(s_SurfaceEditOperators[0].geometryPath);
+    TestbedMaterialRef material;
+    material.virtualPath = Name(s_SurfaceEditOperatorMaterialPath);
+
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
+    transform.scale = Float4(1.0f, 1.0f, 1.0f);
+
+    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    renderer.geometry = geometry;
+    renderer.material = material;
+    renderer.visible = false;
+    return entity.id();
+}
+
 static void ResolvePickingInputs(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
@@ -598,6 +831,34 @@ void ProjectTestbed::drawUiControls(){
                 m_pendingSurfaceEditTargetIndex = i;
                 m_pendingSurfaceEditTargetSelection = true;
             }
+            if(selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    const char* currentOperatorLabel =
+        __hidden_project_testbed_runtime::SurfaceEditOperatorLabel(m_surfaceEditOperatorIndex)
+    ;
+    if(ImGui::BeginCombo("Operator mesh", currentOperatorLabel)){
+        for(usize i = 0u; i < __hidden_project_testbed_runtime::s_SurfaceEditOperatorCount; ++i){
+            const bool selected = i == m_surfaceEditOperatorIndex;
+            if(ImGui::Selectable(__hidden_project_testbed_runtime::SurfaceEditOperatorLabel(i), selected))
+                static_cast<void>(selectSurfaceEditOperator(i));
+            if(selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
+
+    const char* currentCameraViewLabel =
+        __hidden_project_testbed_runtime::SurfaceEditCameraViewLabel(m_surfaceEditCameraViewIndex)
+    ;
+    if(ImGui::BeginCombo("Camera view", currentCameraViewLabel)){
+        for(usize i = 0u; i < __hidden_project_testbed_runtime::s_SurfaceEditCameraViewCount; ++i){
+            const bool selected = i == m_surfaceEditCameraViewIndex;
+            if(ImGui::Selectable(__hidden_project_testbed_runtime::SurfaceEditCameraViewLabel(i), selected))
+                static_cast<void>(selectSurfaceEditCameraView(i));
             if(selected)
                 ImGui::SetItemDefaultFocus();
         }
@@ -817,6 +1078,7 @@ bool ProjectTestbed::onStartup(){
         Float4(1.05f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
         0.4f
     );
+    m_surfaceEditPreviewEntity = __hidden_project_testbed_runtime::CreateSurfaceEditSubtractPreviewEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();
     auto& ui = uiEntity.addComponent<NWB::Core::ECSUI::UiComponent>();
@@ -952,6 +1214,69 @@ bool ProjectTestbed::selectSurfaceEditTarget(const usize targetIndex){
     return true;
 }
 
+bool ProjectTestbed::selectSurfaceEditOperator(const usize operatorIndex){
+    if(operatorIndex >= __hidden_project_testbed_runtime::s_SurfaceEditOperatorCount)
+        return false;
+
+    auto* renderer =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::RendererComponent>(m_surfaceEditPreviewEntity)
+    ;
+    if(!renderer)
+        return false;
+
+    const auto& desc = __hidden_project_testbed_runtime::s_SurfaceEditOperators[operatorIndex];
+    NWB::Core::ECSGraphics::DeformableOperatorFootprint footprint;
+    NWB::Core::ECSGraphics::DeformableOperatorProfile profile;
+    if(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+            m_context.assetManager,
+            operatorIndex,
+            footprint,
+            profile
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit operator: '{}' does not expose a valid mesh shape")
+            , StringConvert(__hidden_project_testbed_runtime::SurfaceEditOperatorLabelView(operatorIndex))
+        );
+        return false;
+    }
+
+    __hidden_project_testbed_runtime::TestbedGeometryRef geometry;
+    geometry.virtualPath = Name(desc.geometryPath);
+    renderer->geometry = geometry;
+    m_surfaceEditOperatorIndex = operatorIndex;
+    if(m_surfaceEditPreviewActive)
+        static_cast<void>(refreshSurfaceEditPreview());
+
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit operator: {} ({}/{}), footprint_vertices={} profile_samples={}"),
+        StringConvert(__hidden_project_testbed_runtime::SurfaceEditOperatorLabelView(operatorIndex)),
+        operatorIndex + 1u,
+        __hidden_project_testbed_runtime::s_SurfaceEditOperatorCount,
+        footprint.vertexCount,
+        profile.sampleCount
+    );
+    return true;
+}
+
+bool ProjectTestbed::selectSurfaceEditCameraView(const usize cameraViewIndex){
+    if(!__hidden_project_testbed_runtime::ApplySurfaceEditCameraView(*m_world, cameraViewIndex)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit camera: failed to apply view preset"));
+        return false;
+    }
+
+    m_surfaceEditCameraViewIndex = cameraViewIndex;
+    m_mouseLookActive = false;
+    m_mousePositionValid = false;
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit camera: {} ({}/{})"),
+        StringConvert(__hidden_project_testbed_runtime::SurfaceEditCameraViewLabelView(cameraViewIndex)),
+        cameraViewIndex + 1u,
+        __hidden_project_testbed_runtime::s_SurfaceEditCameraViewCount
+    );
+    return true;
+}
+
 void ProjectTestbed::updateMainCamera(const f32 delta){
     const f32 mouseDeltaX = m_pendingMouseDeltaX;
     const f32 mouseDeltaY = m_pendingMouseDeltaY;
@@ -1069,7 +1394,52 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
     );
 }
 
+void ProjectTestbed::hideSurfaceEditPreviewMesh(){
+    if(!m_surfaceEditPreviewEntity.valid())
+        return;
+
+    auto* renderer =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::RendererComponent>(m_surfaceEditPreviewEntity)
+    ;
+    if(renderer)
+        renderer->visible = false;
+}
+
+bool ProjectTestbed::refreshSurfaceEditPreviewMesh(){
+    if(!m_surfaceEditPreviewActive || !m_surfaceEditPreview.valid){
+        hideSurfaceEditPreviewMesh();
+        return false;
+    }
+
+    auto* previewTransform =
+        m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_surfaceEditPreviewEntity)
+    ;
+    auto* previewRenderer =
+        m_world->tryGetComponent<NWB::Core::ECSGraphics::RendererComponent>(m_surfaceEditPreviewEntity)
+    ;
+    const auto* targetTransform =
+        m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_surfaceEditTargetEntity)
+    ;
+    if(!previewTransform || !previewRenderer || !targetTransform){
+        hideSurfaceEditPreviewMesh();
+        return false;
+    }
+
+    if(!__hidden_project_testbed_runtime::ResolveSurfaceEditOperatorTransform(
+        *targetTransform,
+        m_surfaceEditPreview,
+        *previewTransform
+    )){
+        hideSurfaceEditPreviewMesh();
+        return false;
+    }
+
+    previewRenderer->visible = true;
+    return true;
+}
+
 void ProjectTestbed::clearSurfaceEditPreview(){
+    hideSurfaceEditPreviewMesh();
     m_surfaceEditSession = NWB::Core::ECSGraphics::DeformableSurfaceEditSession{};
     m_surfaceEditPreviewParams = NWB::Core::ECSGraphics::DeformableHoleEditParams{};
     m_surfaceEditPreview = NWB::Core::ECSGraphics::DeformableHolePreview{};
@@ -1098,6 +1468,18 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
     if(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+            m_context.assetManager,
+            m_surfaceEditOperatorIndex,
+            m_surfaceEditPreviewParams.operatorFootprint,
+            m_surfaceEditPreviewParams.operatorProfile
+        )
+    ){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: selected operator shape is invalid"));
+        return false;
+    }
+    if(
         !NWB::Core::ECSGraphics::PreviewHole(
             *instance,
             m_surfaceEditSession,
@@ -1107,6 +1489,12 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     ){
         clearSurfaceEditPreview();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview expired"));
+        return false;
+    }
+
+    if(!refreshSurfaceEditPreviewMesh()){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview visualization failed"));
         return false;
     }
 
@@ -1170,6 +1558,17 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     params.radius = m_surfaceEditRadius;
     params.ellipseRatio = m_surfaceEditEllipseRatio;
     params.depth = m_surfaceEditDepth;
+    if(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+            m_context.assetManager,
+            m_surfaceEditOperatorIndex,
+            params.operatorFootprint,
+            params.operatorProfile
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: selected operator shape is invalid"));
+        return;
+    }
 
     NWB::Core::ECSGraphics::DeformableSurfaceEditSession session;
     NWB::Core::ECSGraphics::DeformableHolePreview preview;
@@ -1186,6 +1585,11 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     m_surfaceEditPreview = preview;
     m_surfaceEditDebugRuntimeMesh = session.runtimeMesh;
     m_surfaceEditPreviewActive = true;
+    if(!refreshSurfaceEditPreviewMesh()){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview visualization failed for the selected deformable surface"));
+        return;
+    }
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit: selected preview radius={} ellipse={} depth={} rev={} permission={}, use the UI to commit"),
         m_surfaceEditPreview.radius,
@@ -1217,6 +1621,18 @@ void ProjectTestbed::commitSurfaceEditPreview(){
     m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
     m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
+    if(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+            m_context.assetManager,
+            m_surfaceEditOperatorIndex,
+            m_surfaceEditPreviewParams.operatorFootprint,
+            m_surfaceEditPreviewParams.operatorProfile
+        )
+    ){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: selected operator shape is invalid"));
+        return;
+    }
     NWB::Core::ECSGraphics::DeformableHoleEditResult result;
     NWB::Core::ECSGraphics::DeformableSurfaceEditRecord record;
     if(
@@ -1944,10 +2360,11 @@ void ProjectTestbed::logSurfaceEditControls()const{
         NWB_TEXT("Surface edit controls are available in the NWB Testbed UI panel")
     );
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: radius={} ellipse={} depth={}, choose a left-click viewport action in UI and use UI buttons for commit/replay/history/debug"),
+        NWB_TEXT("Surface edit: radius={} ellipse={} depth={} operator={}, choose a left-click viewport action in UI and use UI buttons for commit/replay/history/debug"),
         m_surfaceEditRadius,
         m_surfaceEditEllipseRatio,
-        m_surfaceEditDepth
+        m_surfaceEditDepth,
+        StringConvert(__hidden_project_testbed_runtime::SurfaceEditOperatorLabelView(m_surfaceEditOperatorIndex))
     );
 }
 
@@ -2012,6 +2429,32 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
 
     if(action == NWB::Core::InputAction::Release)
         setKeyState(key, false);
+
+    if(action == NWB::Core::InputAction::Press){
+        if(key >= NWB::Core::Key::Number1 && key <= NWB::Core::Key::Number9){
+            const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Number1);
+            if(targetIndex < __hidden_project_testbed_runtime::s_SurfaceEditTargetCount)
+                static_cast<void>(selectSurfaceEditTarget(targetIndex));
+        }
+        else if(key >= NWB::Core::Key::F1 && key <= NWB::Core::Key::F25){
+            if(key < NWB::Core::Key::F1 + static_cast<i32>(__hidden_project_testbed_runtime::s_SurfaceEditOperatorCount)){
+                const usize operatorIndex = static_cast<usize>(key - NWB::Core::Key::F1);
+                static_cast<void>(selectSurfaceEditOperator(operatorIndex));
+            }
+            else if(
+                key >= NWB::Core::Key::F5
+                && key < NWB::Core::Key::F5 + static_cast<i32>(__hidden_project_testbed_runtime::s_SurfaceEditCameraViewCount)
+            ){
+                const usize cameraViewIndex = static_cast<usize>(key - NWB::Core::Key::F5);
+                static_cast<void>(selectSurfaceEditCameraView(cameraViewIndex));
+            }
+        }
+        else if(key >= NWB::Core::Key::Keypad1 && key <= NWB::Core::Key::Keypad9){
+            const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Keypad1);
+            if(targetIndex < __hidden_project_testbed_runtime::s_SurfaceEditTargetCount)
+                static_cast<void>(selectSurfaceEditTarget(targetIndex));
+        }
+    }
 
     if(__hidden_project_testbed_runtime::UiWantsKeyboardCapture(*m_world))
         return false;

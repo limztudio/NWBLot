@@ -20,16 +20,50 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct GeometryVertex;
+
+static constexpr u32 s_DeformableOperatorFootprintMaxVertexCount = 32u;
+static constexpr u32 s_DeformableOperatorProfileMaxSampleCount = 8u;
+
+struct DeformableOperatorFootprint{
+    // Empty means the legacy analytic ellipse footprint.
+    u32 vertexCount = 0u;
+    Float2U vertices[s_DeformableOperatorFootprintMaxVertexCount] = {};
+};
+static_assert(IsStandardLayout_V<DeformableOperatorFootprint>, "DeformableOperatorFootprint must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<DeformableOperatorFootprint>, "DeformableOperatorFootprint must stay cheap to copy");
+
+struct DeformableOperatorProfileSample{
+    // Normalized inward distance from the operator top plane: 0 = surface, 1 = params.depth.
+    f32 depth = 0.0f;
+    // Radial scale relative to the operator's top cross-section.
+    f32 scale = 1.0f;
+    // Cross-section center in normalized operator XY.
+    Float2U center = Float2U(0.0f, 0.0f);
+};
+static_assert(IsStandardLayout_V<DeformableOperatorProfileSample>, "DeformableOperatorProfileSample must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<DeformableOperatorProfileSample>, "DeformableOperatorProfileSample must stay cheap to copy");
+
+struct DeformableOperatorProfile{
+    // Empty means a straight legacy extrusion from the active footprint.
+    u32 sampleCount = 0u;
+    DeformableOperatorProfileSample samples[s_DeformableOperatorProfileMaxSampleCount] = {};
+};
+static_assert(IsStandardLayout_V<DeformableOperatorProfile>, "DeformableOperatorProfile must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<DeformableOperatorProfile>, "DeformableOperatorProfile must stay cheap to copy");
+
 struct DeformableHoleEditParams{
     DeformablePosedHit posedHit;
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
+    DeformableOperatorFootprint operatorFootprint;
+    DeformableOperatorProfile operatorProfile;
 };
 
 struct DeformableHoleEditResult{
     u32 removedTriangleCount = 0;
-    // Total vertices added by the edit, including wall rings and the duplicated bottom cap ring.
+    // Total vertices added by the edit. The bottom cap reuses the deepest wall ring so the side is welded closed.
     u32 addedVertexCount = 0;
     // Total triangles added by the edit, including wall side faces and the bottom cap.
     u32 addedTriangleCount = 0;
@@ -76,6 +110,28 @@ static_assert(IsStandardLayout_V<DeformableHolePreview>, "DeformableHolePreview 
 static_assert(IsTriviallyCopyable_V<DeformableHolePreview>, "DeformableHolePreview must stay cheap to copy");
 static_assert(alignof(DeformableHolePreview) >= alignof(Float4), "DeformableHolePreview must stay SIMD-aligned");
 
+struct DeformableHolePreviewMeshVertex{
+    Float3U position = Float3U(0.0f, 0.0f, 0.0f);
+    Float3U normal = Float3U(0.0f, 0.0f, 1.0f);
+    Float4U color = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
+};
+static_assert(
+    IsStandardLayout_V<DeformableHolePreviewMeshVertex>,
+    "DeformableHolePreviewMeshVertex must stay layout-stable"
+);
+static_assert(
+    IsTriviallyCopyable_V<DeformableHolePreviewMeshVertex>,
+    "DeformableHolePreviewMeshVertex must stay cheap to copy"
+);
+
+struct DeformableHolePreviewMesh{
+    Vector<DeformableHolePreviewMeshVertex> vertices;
+    Vector<u32> indices;
+    u32 removedTriangleCount = 0;
+    u32 wallVertexCount = 0;
+    bool valid = false;
+};
+
 struct DeformableSurfaceHoleEditRecord{
     SourceSample restSample;
     Float3U restPosition = Float3U(0.0f, 0.0f, 0.0f);
@@ -84,6 +140,8 @@ struct DeformableSurfaceHoleEditRecord{
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
+    DeformableOperatorFootprint operatorFootprint;
+    DeformableOperatorProfile operatorProfile;
     u32 wallLoopCutCount = 0;
 };
 static_assert(IsStandardLayout_V<DeformableSurfaceHoleEditRecord>, "DeformableSurfaceHoleEditRecord must stay binary-serializable");
@@ -222,6 +280,24 @@ struct DeformableSurfaceEditReplayContext{
     DeformableSurfaceEditSession& session,
     const DeformableHoleEditParams& params,
     DeformableHolePreview& outPreview
+);
+[[nodiscard]] bool BuildOperatorFootprintFromGeometry(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorFootprint& outFootprint
+);
+[[nodiscard]] bool BuildOperatorProfileFromGeometry(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorProfile& outProfile
+);
+[[nodiscard]] bool BuildOperatorShapeFromGeometry(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorFootprint& outFootprint,
+    DeformableOperatorProfile& outProfile
+);
+[[nodiscard]] bool BuildHolePreviewMesh(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    DeformableHolePreviewMesh& outMesh
 );
 [[nodiscard]] bool CommitHole(
     DeformableRuntimeMeshInstance& instance,

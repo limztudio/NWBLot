@@ -41,10 +41,24 @@ using EdgeRecord = Core::Geometry::MeshTopologyEdge;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersion = 5u;
+static constexpr u32 s_SurfaceEditStateVersion = 8u;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
 static constexpr u32 s_MaxWallLoopCutCount = 8u;
 static constexpr f32 s_MinHoleBoundaryKeptFaceNormalDot = 0.5f;
+static constexpr f32 s_HolePreviewSurfaceOffsetMin = 0.001f;
+static constexpr f32 s_HolePreviewSurfaceOffsetRadiusScale = 0.025f;
+static constexpr f32 s_OperatorFootprintPlaneEpsilon = 0.0001f;
+static constexpr f32 s_OperatorFootprintPointEpsilonSq = 0.0000000001f;
+static constexpr f32 s_OperatorFootprintAreaEpsilon = 0.000001f;
+static constexpr f32 s_OperatorProfileDepthEpsilon = 0.00001f;
+static constexpr f32 s_OperatorProfileScaleEpsilon = 0.000001f;
+static constexpr f32 s_MinOperatorProfileWallScale = 0.05f;
+static constexpr f32 s_MaxOperatorProfileScale = 16.0f;
+static constexpr f32 s_SurfaceRemeshClipEpsilon = 0.00001f;
+static constexpr f32 s_SurfaceRemeshAreaEpsilon = 0.0000001f;
+static constexpr f32 s_SurfaceRemeshVertexMergeDistanceSq = 0.0000000001f;
+static constexpr f32 s_BottomCapTriangulationAreaEpsilon = 0.000001f;
+static constexpr Float4U s_HolePreviewColor = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
 
 struct HoleFrame{
     SIMDVector center = VectorZero();
@@ -53,8 +67,54 @@ struct HoleFrame{
     SIMDVector bitangent = VectorZero();
 };
 
+struct OperatorFootprintPoint{
+    f32 x = 0.0f;
+    f32 y = 0.0f;
+};
+
+struct SurfaceRemeshClipPoint{
+    Float2U local = Float2U(0.0f, 0.0f);
+    f32 bary[3] = {};
+    u32 originalVertex = Limit<u32>::s_Max;
+};
+
+struct SurfaceRemeshGeneratedVertex{
+    u32 vertex = Limit<u32>::s_Max;
+    u32 sourceTriangle = Limit<u32>::s_Max;
+    u32 sourceVertices[3] = {};
+    f32 bary[3] = {};
+    Float2U local = Float2U(0.0f, 0.0f);
+    Float3U position = Float3U(0.0f, 0.0f, 0.0f);
+};
+
+struct SurfaceRemeshTriangle{
+    u32 indices[3] = {};
+    u32 sourceTriangle = Limit<u32>::s_Max;
+};
+
 [[nodiscard]] bool FiniteVec3(const SIMDVector value){
     return DeformableValidation::FiniteVector(value, 0x7u);
+}
+
+[[nodiscard]] bool FiniteOperatorPosition(const Float3U& position){
+    return IsFinite(position.x) && IsFinite(position.y) && IsFinite(position.z);
+}
+
+[[nodiscard]] f32 OperatorFootprintCross(
+    const OperatorFootprintPoint& a,
+    const OperatorFootprintPoint& b,
+    const OperatorFootprintPoint& c
+){
+    return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
+}
+
+[[nodiscard]] f32 OperatorFootprintDistanceSq(
+    const OperatorFootprintPoint& a,
+    const OperatorFootprintPoint& b
+){
+    const f32 dx = b.x - a.x;
+    const f32 dy = b.y - a.y;
+    return (dx * dx) + (dy * dy);
 }
 
 void ResolveTangentBitangentVectors(
@@ -248,6 +308,433 @@ using MorphDeltaLookup = HashMap<
     ;
 }
 
+[[nodiscard]] bool ExactFloat2(const Float2U& lhs, const Float2U& rhs){
+    return ExactF32(lhs.x, rhs.x) && ExactF32(lhs.y, rhs.y);
+}
+
+[[nodiscard]] bool ExactOperatorFootprint(
+    const DeformableOperatorFootprint& lhs,
+    const DeformableOperatorFootprint& rhs
+){
+    if(lhs.vertexCount != rhs.vertexCount)
+        return false;
+    for(u32 i = 0u; i < lhs.vertexCount; ++i){
+        if(!ExactFloat2(lhs.vertices[i], rhs.vertices[i]))
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool ExactOperatorProfile(
+    const DeformableOperatorProfile& lhs,
+    const DeformableOperatorProfile& rhs
+){
+    if(lhs.sampleCount != rhs.sampleCount)
+        return false;
+    for(u32 i = 0u; i < lhs.sampleCount; ++i){
+        if(
+            !ExactF32(lhs.samples[i].depth, rhs.samples[i].depth)
+            || !ExactF32(lhs.samples[i].scale, rhs.samples[i].scale)
+            || !ExactFloat2(lhs.samples[i].center, rhs.samples[i].center)
+        )
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] f32 OperatorFootprintSignedArea(const DeformableOperatorFootprint& footprint){
+    f32 area = 0.0f;
+    for(u32 i = 0u; i < footprint.vertexCount; ++i){
+        const u32 next = (i + 1u) % footprint.vertexCount;
+        area +=
+            (footprint.vertices[i].x * footprint.vertices[next].y)
+            - (footprint.vertices[i].y * footprint.vertices[next].x)
+        ;
+    }
+    return area * 0.5f;
+}
+
+[[nodiscard]] bool ValidateOperatorFootprint(const DeformableOperatorFootprint& footprint){
+    if(footprint.vertexCount == 0u)
+        return true;
+    if(
+        footprint.vertexCount < 3u
+        || footprint.vertexCount > s_DeformableOperatorFootprintMaxVertexCount
+    )
+        return false;
+
+    for(u32 i = 0u; i < footprint.vertexCount; ++i){
+        const Float2U& point = footprint.vertices[i];
+        if(!IsFinite(point.x) || !IsFinite(point.y))
+            return false;
+    }
+
+    const f32 area = OperatorFootprintSignedArea(footprint);
+    return IsFinite(area) && Abs(area) > 0.000001f;
+}
+
+[[nodiscard]] bool ValidateOperatorProfile(const DeformableOperatorProfile& profile){
+    if(profile.sampleCount == 0u)
+        return true;
+    if(
+        profile.sampleCount < 2u
+        || profile.sampleCount > s_DeformableOperatorProfileMaxSampleCount
+    )
+        return false;
+
+    f32 previousDepth = -1.0f;
+    for(u32 i = 0u; i < profile.sampleCount; ++i){
+        const DeformableOperatorProfileSample& sample = profile.samples[i];
+        if(
+            !IsFinite(sample.depth)
+            || !IsFinite(sample.scale)
+            || !IsFinite(sample.center.x)
+            || !IsFinite(sample.center.y)
+            || sample.depth < -s_OperatorProfileDepthEpsilon
+            || sample.depth > 1.0f + s_OperatorProfileDepthEpsilon
+            || sample.scale < 0.0f
+            || sample.scale > s_MaxOperatorProfileScale
+        )
+            return false;
+        if(i == 0u){
+            if(Abs(sample.depth) > s_OperatorProfileDepthEpsilon || sample.scale <= s_OperatorProfileScaleEpsilon)
+                return false;
+        }
+        else if(sample.depth <= previousDepth + s_OperatorProfileDepthEpsilon)
+            return false;
+        previousDepth = sample.depth;
+    }
+
+    return Abs(profile.samples[profile.sampleCount - 1u].depth - 1.0f) <= s_OperatorProfileDepthEpsilon;
+}
+
+[[nodiscard]] bool AppendUniqueOperatorFootprintPoint(
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>>& points,
+    const f32 x,
+    const f32 y
+){
+    if(!IsFinite(x) || !IsFinite(y))
+        return false;
+
+    const OperatorFootprintPoint point{ x, y };
+    for(const OperatorFootprintPoint& existing : points){
+        if(OperatorFootprintDistanceSq(existing, point) <= s_OperatorFootprintPointEpsilonSq)
+            return true;
+    }
+
+    points.push_back(point);
+    return true;
+}
+
+[[nodiscard]] bool AppendOperatorFootprintHullPoint(
+    DeformableOperatorFootprint& footprint,
+    const OperatorFootprintPoint& point
+){
+    if(footprint.vertexCount >= s_DeformableOperatorFootprintMaxVertexCount)
+        return false;
+
+    footprint.vertices[footprint.vertexCount] = Float2U(point.x, point.y);
+    ++footprint.vertexCount;
+    return true;
+}
+
+[[nodiscard]] bool BuildConvexOperatorFootprint(
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>>& points,
+    DeformableOperatorFootprint& outFootprint,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outFootprint = DeformableOperatorFootprint{};
+    if(points.size() < 3u)
+        return false;
+
+    Sort(points.begin(), points.end(), [](const OperatorFootprintPoint& lhs, const OperatorFootprintPoint& rhs){
+        if(lhs.x != rhs.x)
+            return lhs.x < rhs.x;
+        return lhs.y < rhs.y;
+    });
+
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> lower{
+        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
+    };
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> upper{
+        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
+    };
+    lower.reserve(points.size());
+    upper.reserve(points.size());
+
+    for(const OperatorFootprintPoint& point : points){
+        while(
+            lower.size() >= 2u
+            && OperatorFootprintCross(lower[lower.size() - 2u], lower[lower.size() - 1u], point)
+                <= s_OperatorFootprintAreaEpsilon
+        )
+            lower.pop_back();
+        lower.push_back(point);
+    }
+
+    for(usize i = points.size(); i > 0u; --i){
+        const OperatorFootprintPoint& point = points[i - 1u];
+        while(
+            upper.size() >= 2u
+            && OperatorFootprintCross(upper[upper.size() - 2u], upper[upper.size() - 1u], point)
+                <= s_OperatorFootprintAreaEpsilon
+        )
+            upper.pop_back();
+        upper.push_back(point);
+    }
+
+    if(lower.size() < 2u || upper.size() < 2u)
+        return false;
+
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> hull{
+        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
+    };
+    hull.reserve(lower.size() + upper.size());
+    for(const OperatorFootprintPoint& point : lower)
+        hull.push_back(point);
+    for(usize i = 1u; i + 1u < upper.size(); ++i)
+        hull.push_back(upper[i]);
+
+    if(hull.size() < 3u)
+        return false;
+
+    if(hull.size() <= s_DeformableOperatorFootprintMaxVertexCount){
+        for(const OperatorFootprintPoint& point : hull){
+            if(!AppendOperatorFootprintHullPoint(outFootprint, point))
+                return false;
+        }
+    }
+    else{
+        for(u32 i = 0u; i < s_DeformableOperatorFootprintMaxVertexCount; ++i){
+            const usize hullIndex = (static_cast<usize>(i) * hull.size()) / s_DeformableOperatorFootprintMaxVertexCount;
+            if(hullIndex >= hull.size() || !AppendOperatorFootprintHullPoint(outFootprint, hull[hullIndex]))
+                return false;
+        }
+    }
+
+    return ValidateOperatorFootprint(outFootprint);
+}
+
+[[nodiscard]] bool BuildOperatorFootprintFromGeometryImpl(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorFootprint& outFootprint,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outFootprint = DeformableOperatorFootprint{};
+    if(vertices.empty())
+        return false;
+
+    f32 maxZ = 0.0f;
+    bool foundPosition = false;
+    for(const GeometryVertex& vertex : vertices){
+        if(!FiniteOperatorPosition(vertex.position))
+            return false;
+
+        if(!foundPosition || vertex.position.z > maxZ){
+            maxZ = vertex.position.z;
+            foundPosition = true;
+        }
+    }
+    if(!foundPosition)
+        return false;
+
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> points{
+        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
+    };
+    points.reserve(vertices.size());
+
+    const f32 planeEpsilon = Max(s_OperatorFootprintPlaneEpsilon, Abs(maxZ) * 0.00001f);
+    for(const GeometryVertex& vertex : vertices){
+        if(maxZ - vertex.position.z > planeEpsilon)
+            continue;
+        if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+            return false;
+    }
+
+    if(points.size() < 3u){
+        points.clear();
+        for(const GeometryVertex& vertex : vertices){
+            if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+                return false;
+        }
+    }
+
+    return BuildConvexOperatorFootprint(points, outFootprint, scratchArena);
+}
+
+[[nodiscard]] bool AppendUniqueOperatorProfileZ(
+    Vector<f32, Core::Alloc::ScratchAllocator<f32>>& zPlanes,
+    const f32 z
+){
+    if(!IsFinite(z))
+        return false;
+    for(const f32 existing : zPlanes){
+        if(Abs(existing - z) <= s_OperatorFootprintPlaneEpsilon)
+            return true;
+    }
+    zPlanes.push_back(z);
+    return true;
+}
+
+[[nodiscard]] bool BuildOperatorProfilePlaneSample(
+    const Vector<GeometryVertex>& vertices,
+    const f32 z,
+    const f32 minZ,
+    const f32 maxZ,
+    const f32 topRadius,
+    DeformableOperatorProfileSample& outSample,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> points{
+        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
+    };
+    points.reserve(vertices.size());
+
+    const f32 planeEpsilon = Max(s_OperatorFootprintPlaneEpsilon, Abs(maxZ - minZ) * 0.00001f);
+    for(const GeometryVertex& vertex : vertices){
+        if(Abs(vertex.position.z - z) > planeEpsilon)
+            continue;
+        if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+            return false;
+    }
+    if(points.empty())
+        return false;
+
+    f32 centerX = 0.0f;
+    f32 centerY = 0.0f;
+    for(const OperatorFootprintPoint& point : points){
+        centerX += point.x;
+        centerY += point.y;
+    }
+    const f32 invPointCount = 1.0f / static_cast<f32>(points.size());
+    centerX *= invPointCount;
+    centerY *= invPointCount;
+
+    f32 radius = 0.0f;
+    for(const OperatorFootprintPoint& point : points){
+        const f32 dx = point.x - centerX;
+        const f32 dy = point.y - centerY;
+        radius = Max(radius, VectorGetX(VectorSqrt(VectorReplicate((dx * dx) + (dy * dy)))));
+    }
+
+    const f32 depthSpan = maxZ - minZ;
+    if(!IsFinite(depthSpan) || depthSpan <= s_OperatorProfileDepthEpsilon || topRadius <= s_OperatorProfileScaleEpsilon)
+        return false;
+
+    outSample.depth = (maxZ - z) / depthSpan;
+    outSample.scale = radius / topRadius;
+    outSample.center = Float2U(centerX, centerY);
+    return
+        IsFinite(outSample.depth)
+        && IsFinite(outSample.scale)
+        && IsFinite(outSample.center.x)
+        && IsFinite(outSample.center.y)
+    ;
+}
+
+[[nodiscard]] bool BuildOperatorProfileFromGeometryImpl(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorProfile& outProfile,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outProfile = DeformableOperatorProfile{};
+    if(vertices.empty())
+        return false;
+
+    f32 minZ = 0.0f;
+    f32 maxZ = 0.0f;
+    bool foundPosition = false;
+    Vector<f32, Core::Alloc::ScratchAllocator<f32>> zPlanes{
+        Core::Alloc::ScratchAllocator<f32>(scratchArena)
+    };
+    zPlanes.reserve(vertices.size());
+    for(const GeometryVertex& vertex : vertices){
+        if(!FiniteOperatorPosition(vertex.position))
+            return false;
+        if(!foundPosition){
+            minZ = vertex.position.z;
+            maxZ = vertex.position.z;
+            foundPosition = true;
+        }
+        else{
+            minZ = Min(minZ, vertex.position.z);
+            maxZ = Max(maxZ, vertex.position.z);
+        }
+        if(!AppendUniqueOperatorProfileZ(zPlanes, vertex.position.z))
+            return false;
+    }
+    if(!foundPosition)
+        return false;
+
+    if(maxZ - minZ <= s_OperatorProfileDepthEpsilon)
+        return true;
+    if(zPlanes.size() < 2u)
+        return false;
+
+    Sort(zPlanes.begin(), zPlanes.end(), [](const f32 lhs, const f32 rhs){
+        return lhs > rhs;
+    });
+
+    DeformableOperatorProfileSample topSample;
+    if(
+        !BuildOperatorProfilePlaneSample(
+            vertices,
+            maxZ,
+            minZ,
+            maxZ,
+            1.0f,
+            topSample,
+            scratchArena
+        )
+        || topSample.scale <= s_OperatorProfileScaleEpsilon
+    )
+        return false;
+    const f32 topRadius = topSample.scale;
+
+    const usize sourcePlaneCount = zPlanes.size();
+    const usize sampleCount = Min(
+        sourcePlaneCount,
+        static_cast<usize>(s_DeformableOperatorProfileMaxSampleCount)
+    );
+    if(sampleCount < 2u)
+        return false;
+
+    for(usize sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
+        const usize planeIndex = sampleIndex + 1u == sampleCount
+            ? sourcePlaneCount - 1u
+            : (sampleIndex * (sourcePlaneCount - 1u)) / (sampleCount - 1u)
+        ;
+        if(planeIndex >= zPlanes.size())
+            return false;
+
+        DeformableOperatorProfileSample sample;
+        if(
+            !BuildOperatorProfilePlaneSample(
+                vertices,
+                zPlanes[planeIndex],
+                minZ,
+                maxZ,
+                topRadius,
+                sample,
+                scratchArena
+            )
+        )
+            return false;
+
+        if(sampleIndex == 0u){
+            sample.depth = 0.0f;
+            sample.scale = 1.0f;
+        }
+        else if(sampleIndex + 1u == sampleCount)
+            sample.depth = 1.0f;
+
+        outProfile.samples[outProfile.sampleCount] = sample;
+        ++outProfile.sampleCount;
+    }
+
+    return ValidateOperatorProfile(outProfile);
+}
+
 [[nodiscard]] bool ExactSourceSample(const SourceSample& lhs, const SourceSample& rhs){
     return
         lhs.sourceTri == rhs.sourceTri
@@ -280,6 +767,8 @@ using MorphDeltaLookup = HashMap<
         && ExactF32(lhs.radius, rhs.radius)
         && ExactF32(lhs.ellipseRatio, rhs.ellipseRatio)
         && ExactF32(lhs.depth, rhs.depth)
+        && ExactOperatorFootprint(lhs.operatorFootprint, rhs.operatorFootprint)
+        && ExactOperatorProfile(lhs.operatorProfile, rhs.operatorProfile)
     ;
 }
 
@@ -335,7 +824,11 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidateHoleShape(const DeformableHoleEditParams& params){
-    return ValidateHoleShapeValues(params.radius, params.ellipseRatio, params.depth);
+    return
+        ValidateHoleShapeValues(params.radius, params.ellipseRatio, params.depth)
+        && ValidateOperatorFootprint(params.operatorFootprint)
+        && ValidateOperatorProfile(params.operatorProfile)
+    ;
 }
 
 [[nodiscard]] bool ValidateParams(const DeformableRuntimeMeshInstance& instance, const DeformableHoleEditParams& params){
@@ -455,7 +948,7 @@ using MorphDeltaLookup = HashMap<
             && result.wallLoopCutCount == 0u
         ;
     const u32 wallBandCount = result.wallLoopCutCount + 1u;
-    const u32 addedRingCount = wallBandCount + 1u;
+    const u32 addedRingCount = wallBandCount;
     if(result.wallVertexCount > Limit<u32>::s_Max / addedRingCount)
         return false;
     const u32 expectedAddedVertexCount = result.wallVertexCount * addedRingCount;
@@ -564,6 +1057,8 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool ValidHoleRecord(const DeformableSurfaceHoleEditRecord& record){
     return
         ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
+        && ValidateOperatorFootprint(record.operatorFootprint)
+        && ValidateOperatorProfile(record.operatorProfile)
         && ValidWallLoopCutCount(record.wallLoopCutCount)
         && (record.wallLoopCutCount == 0u || record.depth > s_Epsilon)
         && record.baseEditRevision != Limit<u32>::s_Max
@@ -869,6 +1364,8 @@ using SurfaceEditRecordLookup = HashMap<
     outParams.radius = record.hole.radius;
     outParams.ellipseRatio = record.hole.ellipseRatio;
     outParams.depth = record.hole.depth;
+    outParams.operatorFootprint = record.hole.operatorFootprint;
+    outParams.operatorProfile = record.hole.operatorProfile;
     return ValidateParams(instance, outParams);
 }
 
@@ -1508,9 +2005,8 @@ template<typename PolygonAllocator>
 }
 
 template<typename PolygonAllocator>
-[[nodiscard]] bool RemoveCollinearCapVertices(Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon){
+[[nodiscard]] bool RemoveDuplicateCapVertices(Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon){
     constexpr f32 distanceEpsilonSq = 0.000000000001f;
-    constexpr f32 areaEpsilon = 0.0000001f;
     bool removed = true;
     while(removed && polygon.size() >= 3u){
         removed = false;
@@ -1523,7 +2019,6 @@ template<typename PolygonAllocator>
             if(
                 DistanceSq2D(previous, current) <= distanceEpsilonSq
                 || DistanceSq2D(current, next) <= distanceEpsilonSq
-                || Abs(Cross2D(previous, current, next)) <= areaEpsilon
             ){
                 polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
                 removed = true;
@@ -1557,14 +2052,17 @@ template<typename PolygonAllocator>
     const usize vertexIndex,
     const bool counterClockwise
 ){
-    constexpr f32 areaEpsilon = 0.0000001f;
     const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
     const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
     const BottomCapPolygonVertex& previous = polygon[previousVertexIndex];
     const BottomCapPolygonVertex& current = polygon[vertexIndex];
     const BottomCapPolygonVertex& next = polygon[nextVertexIndex];
     const f32 cross = Cross2D(previous, current, next);
-    if(counterClockwise ? cross <= areaEpsilon : cross >= -areaEpsilon)
+    if(
+        counterClockwise
+            ? cross <= s_BottomCapTriangulationAreaEpsilon
+            : cross >= -s_BottomCapTriangulationAreaEpsilon
+    )
         return false;
 
     for(usize testVertexIndex = 0u; testVertexIndex < polygon.size(); ++testVertexIndex){
@@ -1621,12 +2119,11 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
         polygon.push_back(polygonVertex);
     }
 
-    if(!RemoveCollinearCapVertices(polygon))
+    if(!RemoveDuplicateCapVertices(polygon))
         return false;
 
     const f32 signedArea = SignedArea2D(polygon);
-    constexpr f32 areaEpsilon = 0.0000001f;
-    if(!IsFinite(signedArea) || Abs(signedArea) <= areaEpsilon)
+    if(!IsFinite(signedArea) || Abs(signedArea) <= s_BottomCapTriangulationAreaEpsilon)
         return false;
 
     const bool counterClockwise = signedArea > 0.0f;
@@ -1683,18 +2180,1038 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     return true;
 }
 
-[[nodiscard]] bool TriangleInsideFootprint(
+[[nodiscard]] bool PointOnOperatorFootprintEdge(
+    const f32 x,
+    const f32 y,
+    const Float2U& a,
+    const Float2U& b
+){
+    constexpr f32 epsilon = 0.000001f;
+    const f32 edgeX = b.x - a.x;
+    const f32 edgeY = b.y - a.y;
+    const f32 pointX = x - a.x;
+    const f32 pointY = y - a.y;
+    const f32 cross = (pointX * edgeY) - (pointY * edgeX);
+    if(Abs(cross) > epsilon)
+        return false;
+
+    const f32 dot = (pointX * edgeX) + (pointY * edgeY);
+    if(dot < -epsilon)
+        return false;
+
+    const f32 edgeLengthSq = (edgeX * edgeX) + (edgeY * edgeY);
+    return dot <= edgeLengthSq + epsilon;
+}
+
+[[nodiscard]] bool PointInsideOperatorFootprint(
+    const DeformableOperatorFootprint& footprint,
+    const f32 x,
+    const f32 y
+){
+    bool inside = false;
+    u32 previous = footprint.vertexCount - 1u;
+    for(u32 current = 0u; current < footprint.vertexCount; ++current){
+        const Float2U& a = footprint.vertices[current];
+        const Float2U& b = footprint.vertices[previous];
+        if(PointOnOperatorFootprintEdge(x, y, a, b))
+            return true;
+
+        const bool crossesY = (a.y > y) != (b.y > y);
+        if(crossesY){
+            const f32 intersectX = a.x + ((y - a.y) * (b.x - a.x) / (b.y - a.y));
+            if(x <= intersectX + 0.000001f)
+                inside = !inside;
+        }
+        previous = current;
+    }
+    return inside;
+}
+
+[[nodiscard]] bool SampleOperatorProfile(
+    const DeformableOperatorProfile& profile,
+    const f32 rawDepth,
+    Float2U& outCenter,
+    f32& outScale
+){
+    outCenter = Float2U(0.0f, 0.0f);
+    outScale = 1.0f;
+    if(profile.sampleCount == 0u)
+        return true;
+    if(!ValidateOperatorProfile(profile) || !IsFinite(rawDepth))
+        return false;
+
+    const f32 depth = Min(Max(rawDepth, 0.0f), 1.0f);
+    if(depth <= profile.samples[0u].depth + s_OperatorProfileDepthEpsilon){
+        outCenter = profile.samples[0u].center;
+        outScale = profile.samples[0u].scale;
+        return true;
+    }
+
+    for(u32 i = 1u; i < profile.sampleCount; ++i){
+        const DeformableOperatorProfileSample& previous = profile.samples[i - 1u];
+        const DeformableOperatorProfileSample& next = profile.samples[i];
+        if(depth > next.depth + s_OperatorProfileDepthEpsilon)
+            continue;
+
+        const f32 depthSpan = next.depth - previous.depth;
+        if(depthSpan <= s_OperatorProfileDepthEpsilon)
+            return false;
+
+        const f32 t = (depth - previous.depth) / depthSpan;
+        outCenter = Float2U(
+            previous.center.x + ((next.center.x - previous.center.x) * t),
+            previous.center.y + ((next.center.y - previous.center.y) * t)
+        );
+        outScale = previous.scale + ((next.scale - previous.scale) * t);
+        return IsFinite(outCenter.x) && IsFinite(outCenter.y) && IsFinite(outScale);
+    }
+
+    const DeformableOperatorProfileSample& last = profile.samples[profile.sampleCount - 1u];
+    outCenter = last.center;
+    outScale = last.scale;
+    return true;
+}
+
+[[nodiscard]] bool PointInsideOperatorCrossSection(
+    const DeformableOperatorFootprint& operatorFootprint,
+    const f32 x,
+    const f32 y
+){
+    if(operatorFootprint.vertexCount != 0u)
+        return PointInsideOperatorFootprint(operatorFootprint, x, y);
+
+    return ((x * x) + (y * y)) <= 1.0f;
+}
+
+[[nodiscard]] bool PointInsideOperatorVolume(
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    const SIMDVector point
+){
+    const f32 radiusX = params.radius;
+    const f32 radiusY = params.radius * params.ellipseRatio;
+    if(radiusX <= s_Epsilon || radiusY <= s_Epsilon)
+        return false;
+
+    const SIMDVector offset = VectorSubtract(point, frame.center);
+    const f32 localX = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
+    const f32 localY = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
+    if(!IsFinite(localX) || !IsFinite(localY))
+        return false;
+
+    if(params.depth <= s_Epsilon)
+        return PointInsideOperatorCrossSection(params.operatorFootprint, localX, localY);
+
+    const f32 normalizedDepth = -VectorGetX(Vector3Dot(offset, frame.normal)) / params.depth;
+    if(
+        !IsFinite(normalizedDepth)
+        || normalizedDepth < -s_OperatorProfileDepthEpsilon
+        || normalizedDepth > 1.0f + s_OperatorProfileDepthEpsilon
+    )
+        return false;
+
+    Float2U center;
+    f32 scale = 1.0f;
+    if(!SampleOperatorProfile(params.operatorProfile, normalizedDepth, center, scale))
+        return false;
+    if(!IsFinite(scale) || scale < 0.0f)
+        return false;
+
+    if(scale <= s_OperatorProfileScaleEpsilon){
+        const f32 dx = localX - center.x;
+        const f32 dy = localY - center.y;
+        return ((dx * dx) + (dy * dy)) <= (s_OperatorProfileScaleEpsilon * s_OperatorProfileScaleEpsilon);
+    }
+
+    const Float2U topCenter = params.operatorProfile.sampleCount != 0u
+        ? params.operatorProfile.samples[0u].center
+        : Float2U(0.0f, 0.0f)
+    ;
+    const f32 topX = topCenter.x + ((localX - center.x) / scale);
+    const f32 topY = topCenter.y + ((localY - center.y) / scale);
+    if(!IsFinite(topX) || !IsFinite(topY))
+        return false;
+
+    return PointInsideOperatorCrossSection(params.operatorFootprint, topX, topY);
+}
+
+[[nodiscard]] bool TriangleCentroidInsideOperatorVolume(
     const DeformableRuntimeMeshInstance& instance,
     const HoleFrame& frame,
-    const f32 radiusX,
-    const f32 radiusY,
+    const DeformableHoleEditParams& params,
     const u32 (&triangleIndices)[3]
 ){
-    const SIMDVector centroid = TriangleCentroid(instance, triangleIndices);
-    const SIMDVector offset = VectorSubtract(centroid, frame.center);
-    const f32 x = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
-    const f32 y = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
-    return ((x * x) + (y * y)) <= 1.0f;
+    return PointInsideOperatorVolume(frame, params, TriangleCentroid(instance, triangleIndices));
+}
+
+using SurfaceRemeshClipPolygon = Vector<
+    SurfaceRemeshClipPoint,
+    Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>
+>;
+using SurfaceRemeshClipPolygonList = Vector<
+    SurfaceRemeshClipPolygon,
+    Core::Alloc::ScratchAllocator<SurfaceRemeshClipPolygon>
+>;
+
+[[nodiscard]] bool UseOperatorSurfaceRemesh(const DeformableHoleEditParams& params){
+    return params.operatorFootprint.vertexCount >= 3u && params.depth > DeformableRuntime::s_Epsilon;
+}
+
+[[nodiscard]] f32 SurfaceRemeshHalfPlaneDistance(
+    const Float2U& edgeA,
+    const Float2U& edgeB,
+    const SurfaceRemeshClipPoint& point,
+    const f32 orientation
+){
+    const f32 edgeX = edgeB.x - edgeA.x;
+    const f32 edgeY = edgeB.y - edgeA.y;
+    const f32 pointX = point.local.x - edgeA.x;
+    const f32 pointY = point.local.y - edgeA.y;
+    return orientation * ((edgeX * pointY) - (edgeY * pointX));
+}
+
+[[nodiscard]] bool SurfaceRemeshKeepHalfPlanePoint(const f32 distance, const bool keepInside){
+    return keepInside
+        ? distance >= -s_SurfaceRemeshClipEpsilon
+        : distance <= s_SurfaceRemeshClipEpsilon
+    ;
+}
+
+[[nodiscard]] f32 SurfaceRemeshPointDistanceSq(
+    const SurfaceRemeshClipPoint& lhs,
+    const SurfaceRemeshClipPoint& rhs
+){
+    const f32 dx = rhs.local.x - lhs.local.x;
+    const f32 dy = rhs.local.y - lhs.local.y;
+    return (dx * dx) + (dy * dy);
+}
+
+[[nodiscard]] bool NormalizeSurfaceRemeshClipPoint(SurfaceRemeshClipPoint& point){
+    if(
+        !IsFinite(point.local.x)
+        || !IsFinite(point.local.y)
+        || !DeformableValidation::NormalizeSourceBarycentric(point.bary, point.bary)
+    )
+        return false;
+
+    return true;
+}
+
+[[nodiscard]] bool AppendSurfaceRemeshClipPoint(
+    SurfaceRemeshClipPolygon& polygon,
+    SurfaceRemeshClipPoint point
+){
+    if(!NormalizeSurfaceRemeshClipPoint(point))
+        return false;
+    if(
+        !polygon.empty()
+        && SurfaceRemeshPointDistanceSq(polygon.back(), point) <= s_SurfaceRemeshVertexMergeDistanceSq
+    )
+        return true;
+
+    polygon.push_back(point);
+    return true;
+}
+
+[[nodiscard]] SurfaceRemeshClipPoint InterpolateSurfaceRemeshClipPoint(
+    const SurfaceRemeshClipPoint& a,
+    const SurfaceRemeshClipPoint& b,
+    const f32 rawT
+){
+    const f32 t = Min(Max(rawT, 0.0f), 1.0f);
+    SurfaceRemeshClipPoint point;
+    point.local = Float2U(
+        a.local.x + ((b.local.x - a.local.x) * t),
+        a.local.y + ((b.local.y - a.local.y) * t)
+    );
+    for(u32 i = 0u; i < 3u; ++i)
+        point.bary[i] = a.bary[i] + ((b.bary[i] - a.bary[i]) * t);
+    point.originalVertex = Limit<u32>::s_Max;
+    return point;
+}
+
+[[nodiscard]] bool ClipSurfaceRemeshPolygonHalfPlane(
+    const SurfaceRemeshClipPolygon& input,
+    const Float2U& edgeA,
+    const Float2U& edgeB,
+    const f32 orientation,
+    const bool keepInside,
+    SurfaceRemeshClipPolygon& output
+){
+    output.clear();
+    if(input.empty())
+        return true;
+
+    SurfaceRemeshClipPoint previous = input.back();
+    f32 previousDistance = SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, previous, orientation);
+    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, keepInside);
+    for(const SurfaceRemeshClipPoint& current : input){
+        const f32 currentDistance = SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, current, orientation);
+        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, keepInside);
+        if(currentKept != previousKept){
+            const f32 denominator = previousDistance - currentDistance;
+            if(!IsFinite(denominator) || Abs(denominator) <= s_SurfaceRemeshClipEpsilon)
+                return false;
+
+            const f32 t = previousDistance / denominator;
+            if(!AppendSurfaceRemeshClipPoint(output, InterpolateSurfaceRemeshClipPoint(previous, current, t)))
+                return false;
+        }
+        if(currentKept && !AppendSurfaceRemeshClipPoint(output, current))
+            return false;
+
+        previous = current;
+        previousDistance = currentDistance;
+        previousKept = currentKept;
+    }
+    return true;
+}
+
+[[nodiscard]] f32 SurfaceRemeshPolygonSignedArea(const SurfaceRemeshClipPolygon& polygon){
+    f32 area = 0.0f;
+    for(usize i = 0u; i < polygon.size(); ++i){
+        const usize next = (i + 1u) % polygon.size();
+        area +=
+            (polygon[i].local.x * polygon[next].local.y)
+            - (polygon[i].local.y * polygon[next].local.x)
+        ;
+    }
+    return area * 0.5f;
+}
+
+[[nodiscard]] bool RemoveCollinearSurfaceRemeshClipPoints(SurfaceRemeshClipPolygon& polygon){
+    if(polygon.size() < 3u)
+        return false;
+
+    if(
+        SurfaceRemeshPointDistanceSq(polygon.front(), polygon.back())
+        <= s_SurfaceRemeshVertexMergeDistanceSq
+    )
+        polygon.pop_back();
+
+    bool removed = true;
+    while(removed && polygon.size() >= 3u){
+        removed = false;
+        for(usize i = 0u; i < polygon.size(); ++i){
+            const usize previous = i == 0u ? polygon.size() - 1u : i - 1u;
+            const usize next = (i + 1u) % polygon.size();
+            const SurfaceRemeshClipPoint& a = polygon[previous];
+            const SurfaceRemeshClipPoint& b = polygon[i];
+            const SurfaceRemeshClipPoint& c = polygon[next];
+            const f32 abDistanceSq = SurfaceRemeshPointDistanceSq(a, b);
+            const f32 bcDistanceSq = SurfaceRemeshPointDistanceSq(b, c);
+            const f32 cross =
+                ((b.local.x - a.local.x) * (c.local.y - a.local.y))
+                - ((b.local.y - a.local.y) * (c.local.x - a.local.x))
+            ;
+            if(
+                abDistanceSq <= s_SurfaceRemeshVertexMergeDistanceSq
+                || bcDistanceSq <= s_SurfaceRemeshVertexMergeDistanceSq
+                || Abs(cross) <= s_SurfaceRemeshAreaEpsilon
+            ){
+                polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(i));
+                removed = true;
+                break;
+            }
+        }
+    }
+
+    return polygon.size() >= 3u && Abs(SurfaceRemeshPolygonSignedArea(polygon)) > s_SurfaceRemeshAreaEpsilon;
+}
+
+[[nodiscard]] bool BuildSurfaceRemeshTriangleClipPoint(
+    const DeformableRuntimeMeshInstance& instance,
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    const u32 vertex,
+    const u32 baryIndex,
+    SurfaceRemeshClipPoint& outPoint
+){
+    if(vertex >= instance.restVertices.size() || baryIndex >= 3u)
+        return false;
+
+    const f32 radiusX = params.radius;
+    const f32 radiusY = params.radius * params.ellipseRatio;
+    if(radiusX <= s_Epsilon || radiusY <= s_Epsilon)
+        return false;
+
+    const SIMDVector offset = VectorSubtract(LoadRestVertexPosition(instance.restVertices[vertex]), frame.center);
+    const f32 localX = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
+    const f32 localY = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
+    if(!IsFinite(localX) || !IsFinite(localY))
+        return false;
+
+    outPoint = SurfaceRemeshClipPoint{};
+    outPoint.local = Float2U(localX, localY);
+    outPoint.bary[baryIndex] = 1.0f;
+    outPoint.originalVertex = vertex;
+    return true;
+}
+
+[[nodiscard]] SIMDVector SurfaceRemeshPointPosition(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 (&triangleIndices)[3],
+    const SurfaceRemeshClipPoint& point
+){
+    return BarycentricPoint(instance, triangleIndices, point.bary);
+}
+
+[[nodiscard]] bool GetOrCreateSurfaceRemeshVertex(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 sourceTriangle,
+    const u32 (&triangleIndices)[3],
+    const SurfaceRemeshClipPoint& point,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices,
+    u32& outVertex
+){
+    outVertex = Limit<u32>::s_Max;
+    if(point.originalVertex != Limit<u32>::s_Max){
+        if(point.originalVertex >= instance.restVertices.size())
+            return false;
+        outVertex = point.originalVertex;
+        return true;
+    }
+
+    const SIMDVector position = SurfaceRemeshPointPosition(instance, triangleIndices, point);
+    if(!FiniteVec3(position))
+        return false;
+
+    Float3U storedPosition;
+    StoreFloat(position, &storedPosition);
+    for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
+        const f32 localDx = generated.local.x - point.local.x;
+        const f32 localDy = generated.local.y - point.local.y;
+        const SIMDVector generatedDelta = VectorSubtract(LoadFloat(generated.position), position);
+        if(
+            (localDx * localDx) + (localDy * localDy) <= s_SurfaceRemeshVertexMergeDistanceSq
+            && VectorGetX(Vector3LengthSq(generatedDelta)) <= s_SurfaceRemeshVertexMergeDistanceSq
+        ){
+            outVertex = generated.vertex;
+            return true;
+        }
+    }
+
+    if(restPositions.size() >= static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    SurfaceRemeshGeneratedVertex generated;
+    generated.vertex = static_cast<u32>(restPositions.size());
+    generated.sourceTriangle = sourceTriangle;
+    for(u32 i = 0u; i < 3u; ++i){
+        generated.sourceVertices[i] = triangleIndices[i];
+        generated.bary[i] = point.bary[i];
+    }
+    generated.local = point.local;
+    generated.position = storedPosition;
+    generatedVertices.push_back(generated);
+    restPositions.push_back(storedPosition);
+    outVertex = generated.vertex;
+    return true;
+}
+
+[[nodiscard]] bool AppendSurfaceRemeshTriangle(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    const SIMDVector sourceNormal,
+    const u32 a,
+    const u32 b,
+    const u32 c,
+    const u32 sourceTriangle,
+    Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>>& surfaceTriangles
+){
+    if(a == b || a == c || b == c || a >= restPositions.size() || b >= restPositions.size() || c >= restPositions.size())
+        return true;
+
+    const SIMDVector p0 = LoadFloat(restPositions[a]);
+    const SIMDVector p1 = LoadFloat(restPositions[b]);
+    const SIMDVector p2 = LoadFloat(restPositions[c]);
+    const SIMDVector areaVector = Vector3Cross(VectorSubtract(p1, p0), VectorSubtract(p2, p0));
+    const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVector));
+    if(!IsFinite(areaLengthSq))
+        return false;
+    if(areaLengthSq <= DeformableValidation::s_TriangleAreaLengthSquaredEpsilon)
+        return true;
+
+    SurfaceRemeshTriangle triangle;
+    triangle.indices[0u] = a;
+    if(VectorGetX(Vector3Dot(areaVector, sourceNormal)) >= 0.0f){
+        triangle.indices[1u] = b;
+        triangle.indices[2u] = c;
+    }
+    else{
+        triangle.indices[1u] = c;
+        triangle.indices[2u] = b;
+    }
+    triangle.sourceTriangle = sourceTriangle;
+    surfaceTriangles.push_back(triangle);
+    return true;
+}
+
+[[nodiscard]] bool AppendSurfaceRemeshPolygonTriangles(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 sourceTriangle,
+    const u32 (&triangleIndices)[3],
+    const SIMDVector sourceNormal,
+    const SurfaceRemeshClipPolygon& polygon,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices,
+    Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>>& surfaceTriangles,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    if(polygon.size() < 3u)
+        return true;
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    vertices.reserve(polygon.size());
+    for(const SurfaceRemeshClipPoint& point : polygon){
+        u32 vertex = Limit<u32>::s_Max;
+        if(!GetOrCreateSurfaceRemeshVertex(instance, sourceTriangle, triangleIndices, point, restPositions, generatedVertices, vertex))
+            return false;
+        vertices.push_back(vertex);
+    }
+
+    for(usize i = 1u; i + 1u < vertices.size(); ++i){
+        if(
+            !AppendSurfaceRemeshTriangle(
+                restPositions,
+                sourceNormal,
+                vertices[0u],
+                vertices[i],
+                vertices[i + 1u],
+                sourceTriangle,
+                surfaceTriangles
+            )
+        )
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool SurfaceRemeshEdgeContainsVertex(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    const u32 edgeA,
+    const u32 edgeB,
+    const u32 vertex
+){
+    if(edgeA == edgeB || vertex == edgeA || vertex == edgeB)
+        return false;
+    if(edgeA >= restPositions.size() || edgeB >= restPositions.size() || vertex >= restPositions.size())
+        return false;
+
+    const SIMDVector a = LoadFloat(restPositions[edgeA]);
+    const SIMDVector b = LoadFloat(restPositions[edgeB]);
+    const SIMDVector p = LoadFloat(restPositions[vertex]);
+    const SIMDVector ab = VectorSubtract(b, a);
+    const f32 lengthSq = VectorGetX(Vector3LengthSq(ab));
+    if(!IsFinite(lengthSq) || lengthSq <= s_SurfaceRemeshVertexMergeDistanceSq)
+        return false;
+
+    const f32 t = VectorGetX(Vector3Dot(VectorSubtract(p, a), ab)) / lengthSq;
+    if(!IsFinite(t) || t <= s_SurfaceRemeshClipEpsilon || t >= 1.0f - s_SurfaceRemeshClipEpsilon)
+        return false;
+
+    const SIMDVector closest = VectorMultiplyAdd(ab, VectorReplicate(t), a);
+    const f32 distanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(p, closest)));
+    return IsFinite(distanceSq) && distanceSq <= s_SurfaceRemeshVertexMergeDistanceSq;
+}
+
+[[nodiscard]] bool SurfaceRemeshTriangleAreaValid(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    const u32 a,
+    const u32 b,
+    const u32 c
+){
+    if(a == b || a == c || b == c || a >= restPositions.size() || b >= restPositions.size() || c >= restPositions.size())
+        return false;
+
+    const SIMDVector p0 = LoadFloat(restPositions[a]);
+    const SIMDVector p1 = LoadFloat(restPositions[b]);
+    const SIMDVector p2 = LoadFloat(restPositions[c]);
+    const f32 areaLengthSq = VectorGetX(Vector3LengthSq(Vector3Cross(VectorSubtract(p1, p0), VectorSubtract(p2, p0))));
+    return IsFinite(areaLengthSq) && areaLengthSq > DeformableValidation::s_TriangleAreaLengthSquaredEpsilon;
+}
+
+[[nodiscard]] bool ResolveSurfaceRemeshTriangleDepthRange(
+    const DeformableRuntimeMeshInstance& instance,
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    const u32 (&triangleIndices)[3],
+    f32& outMinDepth,
+    f32& outMaxDepth
+){
+    outMinDepth = 0.0f;
+    outMaxDepth = 0.0f;
+    if(params.depth <= s_Epsilon)
+        return false;
+
+    bool foundDepth = false;
+    for(const u32 vertex : triangleIndices){
+        if(vertex >= instance.restVertices.size())
+            return false;
+
+        const SIMDVector offset = VectorSubtract(LoadRestVertexPosition(instance.restVertices[vertex]), frame.center);
+        const f32 normalizedDepth = -VectorGetX(Vector3Dot(offset, frame.normal)) / params.depth;
+        if(!IsFinite(normalizedDepth))
+            return false;
+
+        if(!foundDepth){
+            outMinDepth = normalizedDepth;
+            outMaxDepth = normalizedDepth;
+            foundDepth = true;
+        }
+        else{
+            outMinDepth = Min(outMinDepth, normalizedDepth);
+            outMaxDepth = Max(outMaxDepth, normalizedDepth);
+        }
+    }
+
+    return foundDepth;
+}
+
+[[nodiscard]] bool SurfaceRemeshTriangleDepthIntersectsOperator(
+    const DeformableRuntimeMeshInstance& instance,
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    const u32 (&triangleIndices)[3],
+    bool& outIntersectsDepth
+){
+    outIntersectsDepth = false;
+
+    f32 minDepth = 0.0f;
+    f32 maxDepth = 0.0f;
+    if(!ResolveSurfaceRemeshTriangleDepthRange(instance, frame, params, triangleIndices, minDepth, maxDepth))
+        return false;
+
+    outIntersectsDepth =
+        maxDepth >= -s_OperatorProfileDepthEpsilon
+        && minDepth <= 1.0f + s_OperatorProfileDepthEpsilon
+    ;
+    return true;
+}
+
+[[nodiscard]] bool SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    const Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices,
+    Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>>& surfaceTriangles
+){
+    if(generatedVertices.empty() || surfaceTriangles.empty())
+        return true;
+
+    bool splitTriangle = true;
+    while(splitTriangle){
+        splitTriangle = false;
+        const usize triangleCount = surfaceTriangles.size();
+        for(usize triangleIndex = 0u; triangleIndex < triangleCount && !splitTriangle; ++triangleIndex){
+            const SurfaceRemeshTriangle triangle = surfaceTriangles[triangleIndex];
+            for(u32 edgeIndex = 0u; edgeIndex < 3u && !splitTriangle; ++edgeIndex){
+                const u32 edgeA = triangle.indices[edgeIndex];
+                const u32 edgeB = triangle.indices[(edgeIndex + 1u) % 3u];
+                const u32 opposite = triangle.indices[(edgeIndex + 2u) % 3u];
+                for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
+                    const u32 splitVertex = generated.vertex;
+                    if(!SurfaceRemeshEdgeContainsVertex(restPositions, edgeA, edgeB, splitVertex))
+                        continue;
+                    if(
+                        !SurfaceRemeshTriangleAreaValid(restPositions, opposite, edgeA, splitVertex)
+                        || !SurfaceRemeshTriangleAreaValid(restPositions, opposite, splitVertex, edgeB)
+                    )
+                        return false;
+                    if(surfaceTriangles.size() >= static_cast<usize>(Limit<u32>::s_Max))
+                        return false;
+
+                    SurfaceRemeshTriangle first = triangle;
+                    first.indices[0u] = opposite;
+                    first.indices[1u] = edgeA;
+                    first.indices[2u] = splitVertex;
+
+                    SurfaceRemeshTriangle second = triangle;
+                    second.indices[0u] = opposite;
+                    second.indices[1u] = splitVertex;
+                    second.indices[2u] = edgeB;
+
+                    surfaceTriangles[triangleIndex] = first;
+                    surfaceTriangles.push_back(second);
+                    splitTriangle = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool RegisterSurfaceRemeshBoundaryEdge(
+    HashMap<
+        u64,
+        EdgeRecord,
+        Hasher<u64>,
+        EqualTo<u64>,
+        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>
+    >& boundaryEdges,
+    const u32 a,
+    const u32 b
+){
+    if(a == b)
+        return true;
+
+    const u32 lo = a < b ? a : b;
+    const u32 hi = a < b ? b : a;
+    const u64 edgeKey = (static_cast<u64>(lo) << 32u) | static_cast<u64>(hi);
+    auto [it, inserted] = boundaryEdges.emplace(edgeKey, EdgeRecord{});
+    EdgeRecord& edge = it.value();
+    if(inserted){
+        edge.a = a;
+        edge.b = b;
+    }
+    if(edge.fullCount == Limit<u32>::s_Max)
+        return false;
+
+    ++edge.fullCount;
+    edge.removedCount = 1u;
+    return true;
+}
+
+[[nodiscard]] bool BuildOperatorSurfaceRemeshPlan(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    HoleFrame& outFrame,
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outOrderedBoundaryEdges,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& outRestPositions,
+    Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>>& outSurfaceTriangles,
+    Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& outGeneratedVertices,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& outAffectedTriangles,
+    u32& outAffectedTriangleCount,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outFrame = HoleFrame{};
+    outOrderedBoundaryEdges.clear();
+    outRestPositions.clear();
+    outSurfaceTriangles.clear();
+    outGeneratedVertices.clear();
+    outAffectedTriangles.clear();
+    outAffectedTriangleCount = 0u;
+
+    if(!UseOperatorSurfaceRemesh(params) || !ValidateOperatorFootprint(params.operatorFootprint))
+        return false;
+
+    const usize triangleCount = instance.indices.size() / 3u;
+    if(triangleCount == 0u || triangleCount > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    u32 hitTriangleIndices[3] = {};
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
+        return false;
+
+    f32 hitBary[3] = {};
+    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
+        return false;
+    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame))
+        return false;
+
+    if(!PointInsideOperatorCrossSection(params.operatorFootprint, 0.0f, 0.0f))
+        return false;
+
+    outRestPositions.reserve(instance.restVertices.size());
+    for(const DeformableVertexRest& vertex : instance.restVertices)
+        outRestPositions.push_back(vertex.position);
+
+    outAffectedTriangles.resize(triangleCount, 0u);
+
+    using BoundaryEdgeMap = HashMap<
+        u64,
+        EdgeRecord,
+        Hasher<u64>,
+        EqualTo<u64>,
+        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>
+    >;
+    BoundaryEdgeMap boundaryEdgeMap(
+        0,
+        Hasher<u64>(),
+        EqualTo<u64>(),
+        Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
+    );
+    boundaryEdgeMap.reserve(triangleCount * 3u);
+
+    const f32 footprintArea = OperatorFootprintSignedArea(params.operatorFootprint);
+    if(!IsFinite(footprintArea) || Abs(footprintArea) <= s_OperatorFootprintAreaEpsilon)
+        return false;
+    const f32 orientation = footprintArea >= 0.0f ? 1.0f : -1.0f;
+
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        const usize indexBase = triangle * 3u;
+        const u32 triangleIndices[3] = {
+            instance.indices[indexBase + 0u],
+            instance.indices[indexBase + 1u],
+            instance.indices[indexBase + 2u],
+        };
+        if(
+            triangleIndices[0u] >= instance.restVertices.size()
+            || triangleIndices[1u] >= instance.restVertices.size()
+            || triangleIndices[2u] >= instance.restVertices.size()
+        )
+            return false;
+
+        SIMDVector triangleNormal;
+        if(!BuildTriangleNormal(instance, triangleIndices, triangleNormal))
+            return false;
+
+        bool intersectsOperatorDepth = false;
+        if(
+            !SurfaceRemeshTriangleDepthIntersectsOperator(
+                instance,
+                outFrame,
+                params,
+                triangleIndices,
+                intersectsOperatorDepth
+            )
+        )
+            return false;
+        if(!intersectsOperatorDepth){
+            if(
+                !AppendSurfaceRemeshTriangle(
+                    outRestPositions,
+                    triangleNormal,
+                    triangleIndices[0u],
+                    triangleIndices[1u],
+                    triangleIndices[2u],
+                    static_cast<u32>(triangle),
+                    outSurfaceTriangles
+                )
+            )
+                return false;
+            continue;
+        }
+
+        SurfaceRemeshClipPolygon active{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
+        };
+        active.reserve(8u);
+        for(u32 vertexIndex = 0u; vertexIndex < 3u; ++vertexIndex){
+            SurfaceRemeshClipPoint point;
+            if(
+                !BuildSurfaceRemeshTriangleClipPoint(
+                    instance,
+                    outFrame,
+                    params,
+                    triangleIndices[vertexIndex],
+                    vertexIndex,
+                    point
+                )
+                || !AppendSurfaceRemeshClipPoint(active, point)
+            )
+                return false;
+        }
+
+        SurfaceRemeshClipPolygonList outsidePieces{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPolygon>(scratchArena)
+        };
+        outsidePieces.reserve(params.operatorFootprint.vertexCount);
+        bool clippedAway = false;
+        for(u32 edgeIndex = 0u; edgeIndex < params.operatorFootprint.vertexCount; ++edgeIndex){
+            const u32 nextEdgeIndex = (edgeIndex + 1u) % params.operatorFootprint.vertexCount;
+            const Float2U& edgeA = params.operatorFootprint.vertices[edgeIndex];
+            const Float2U& edgeB = params.operatorFootprint.vertices[nextEdgeIndex];
+
+            SurfaceRemeshClipPolygon outside{
+                Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
+            };
+            SurfaceRemeshClipPolygon inside{
+                Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
+            };
+            outside.reserve(active.size() + 1u);
+            inside.reserve(active.size() + 1u);
+            if(
+                !ClipSurfaceRemeshPolygonHalfPlane(active, edgeA, edgeB, orientation, false, outside)
+                || !ClipSurfaceRemeshPolygonHalfPlane(active, edgeA, edgeB, orientation, true, inside)
+            )
+                return false;
+
+            if(RemoveCollinearSurfaceRemeshClipPoints(outside)){
+                outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
+                outsidePieces.back().assign(outside.begin(), outside.end());
+            }
+
+            if(!RemoveCollinearSurfaceRemeshClipPoints(inside)){
+                clippedAway = true;
+                break;
+            }
+
+            active.assign(inside.begin(), inside.end());
+        }
+
+        if(clippedAway || !RemoveCollinearSurfaceRemeshClipPoints(active)){
+            if(
+                !AppendSurfaceRemeshTriangle(
+                    outRestPositions,
+                    triangleNormal,
+                    triangleIndices[0u],
+                    triangleIndices[1u],
+                    triangleIndices[2u],
+                    static_cast<u32>(triangle),
+                    outSurfaceTriangles
+                )
+            )
+                return false;
+            continue;
+        }
+
+        outAffectedTriangles[triangle] = 1u;
+        ++outAffectedTriangleCount;
+
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> insideVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        insideVertices.reserve(active.size());
+        for(const SurfaceRemeshClipPoint& point : active){
+            u32 vertex = Limit<u32>::s_Max;
+            if(
+                !GetOrCreateSurfaceRemeshVertex(
+                    instance,
+                    static_cast<u32>(triangle),
+                    triangleIndices,
+                    point,
+                    outRestPositions,
+                    outGeneratedVertices,
+                    vertex
+                )
+            )
+                return false;
+            insideVertices.push_back(vertex);
+        }
+        for(usize vertexIndex = 0u; vertexIndex < insideVertices.size(); ++vertexIndex){
+            const usize nextVertexIndex = (vertexIndex + 1u) % insideVertices.size();
+            if(!RegisterSurfaceRemeshBoundaryEdge(boundaryEdgeMap, insideVertices[vertexIndex], insideVertices[nextVertexIndex]))
+                return false;
+        }
+
+        for(const SurfaceRemeshClipPolygon& outside : outsidePieces){
+            if(
+                !AppendSurfaceRemeshPolygonTriangles(
+                    instance,
+                    static_cast<u32>(triangle),
+                    triangleIndices,
+                    triangleNormal,
+                    outside,
+                    outRestPositions,
+                    outGeneratedVertices,
+                    outSurfaceTriangles,
+                    scratchArena
+                )
+            )
+                return false;
+        }
+    }
+
+    if(!SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(outRestPositions, outGeneratedVertices, outSurfaceTriangles))
+        return false;
+
+    if(
+        outAffectedTriangleCount == 0u
+        || outAffectedTriangleCount >= static_cast<u32>(triangleCount)
+        || params.posedHit.triangle >= outAffectedTriangles.size()
+        || outAffectedTriangles[params.posedHit.triangle] == 0u
+        || outSurfaceTriangles.empty()
+    )
+        return false;
+
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> boundaryEdges{
+        Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
+    };
+    boundaryEdges.reserve(boundaryEdgeMap.size());
+    for(const auto& [edgeKey, edge] : boundaryEdgeMap){
+        static_cast<void>(edgeKey);
+        if(edge.fullCount == 0u || edge.fullCount > 2u)
+            return false;
+        if(edge.fullCount == 1u)
+            boundaryEdges.push_back(edge);
+    }
+    if(boundaryEdges.size() < s_MinWallLoopVertexCount)
+        return false;
+
+    Core::Geometry::MeshTopologyBoundaryLoopFrame topologyFrame;
+    StoreFloat(outFrame.center, &topologyFrame.center);
+    StoreFloat(outFrame.tangent, &topologyFrame.tangent);
+    StoreFloat(outFrame.bitangent, &topologyFrame.bitangent);
+    if(
+        !Core::Geometry::BuildOrderedBoundaryLoop(
+            boundaryEdges,
+            outRestPositions,
+            topologyFrame,
+            outOrderedBoundaryEdges
+        )
+    )
+        return false;
+
+    return outOrderedBoundaryEdges.size() >= s_MinWallLoopVertexCount;
+}
+
+template<typename EdgeVector, typename PositionVector>
+[[nodiscard]] bool ApplyOperatorProfileToWallVertexPlan(
+    const EdgeVector& orderedBoundaryEdges,
+    const PositionVector& restPositions,
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    Core::Geometry::SurfacePatchWallVertex* wallVertices,
+    const usize wallVertexCount
+){
+    if(params.operatorProfile.sampleCount == 0u)
+        return true;
+    if(
+        !ValidateOperatorProfile(params.operatorProfile)
+        || orderedBoundaryEdges.empty()
+        || wallVertexCount == 0u
+        || (wallVertexCount % orderedBoundaryEdges.size()) != 0u
+        || !wallVertices
+        || params.radius <= s_Epsilon
+        || params.radius * params.ellipseRatio <= s_Epsilon
+        || params.depth <= s_Epsilon
+    )
+        return false;
+
+    const usize boundaryVertexCount = orderedBoundaryEdges.size();
+    const usize wallBandCount = wallVertexCount / boundaryVertexCount;
+    const f32 radiusX = params.radius;
+    const f32 radiusY = params.radius * params.ellipseRatio;
+    const Float2U topCenter = params.operatorProfile.samples[0u].center;
+
+    for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
+        const f32 wallV = static_cast<f32>(ringIndex + 1u) / static_cast<f32>(wallBandCount);
+        Float2U center;
+        f32 scale = 1.0f;
+        if(!SampleOperatorProfile(params.operatorProfile, wallV, center, scale))
+            return false;
+        scale = Max(scale, s_MinOperatorProfileWallScale);
+
+        const usize vertexBase = ringIndex * boundaryVertexCount;
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
+            if(edge.a >= restPositions.size())
+                return false;
+
+            const SIMDVector sourcePosition = LoadFloat(restPositions[edge.a]);
+            const SIMDVector sourceOffset = VectorSubtract(sourcePosition, frame.center);
+            const f32 localX = VectorGetX(Vector3Dot(sourceOffset, frame.tangent)) / radiusX;
+            const f32 localY = VectorGetX(Vector3Dot(sourceOffset, frame.bitangent)) / radiusY;
+            if(!IsFinite(localX) || !IsFinite(localY))
+                return false;
+
+            const f32 profiledX = center.x + ((localX - topCenter.x) * scale);
+            const f32 profiledY = center.y + ((localY - topCenter.y) * scale);
+            SIMDVector position = frame.center;
+            position = VectorMultiplyAdd(frame.tangent, VectorReplicate(profiledX * radiusX), position);
+            position = VectorMultiplyAdd(frame.bitangent, VectorReplicate(profiledY * radiusY), position);
+            position = VectorMultiplyAdd(frame.normal, VectorReplicate(-params.depth * wallV), position);
+            if(!FiniteVec3(position))
+                return false;
+
+            StoreFloat(position, &wallVertices[vertexBase + edgeIndex].position);
+        }
+    }
+
+    return true;
 }
 
 [[nodiscard]] bool BoundaryKeptFacesSupportHoleExtrusion(
@@ -2202,6 +3719,225 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     );
 }
 
+[[nodiscard]] bool BuildWholeTriangleHolePreviewBoundaryPlan(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    HoleFrame& outFrame,
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outOrderedBoundaryEdges,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& outRestPositions,
+    u32& outRemovedTriangleCount,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outFrame = HoleFrame{};
+    outOrderedBoundaryEdges.clear();
+    outRestPositions.clear();
+    outRemovedTriangleCount = 0u;
+
+    const usize triangleCount = instance.indices.size() / 3u;
+    u32 hitTriangleIndices[3] = {};
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
+        return false;
+
+    f32 hitBary[3] = {};
+    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
+        return false;
+    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame))
+        return false;
+
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> candidateTriangle{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    candidateTriangle.resize(triangleCount, 0u);
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> removeTriangle{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    removeTriangle.resize(triangleCount, 0u);
+    for(usize triangle = 0; triangle < triangleCount; ++triangle){
+        const usize indexBase = triangle * 3u;
+        const u32 indices[3] = {
+            instance.indices[indexBase + 0u],
+            instance.indices[indexBase + 1u],
+            instance.indices[indexBase + 2u],
+        };
+
+        const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
+        if(
+            selectedTriangle
+            || TriangleCentroidInsideOperatorVolume(instance, outFrame, params, indices)
+        ){
+            candidateTriangle[triangle] = 1u;
+        }
+    }
+
+    if(
+        !KeepConnectedCandidateTriangles(
+            instance.indices,
+            params.posedHit.triangle,
+            candidateTriangle,
+            removeTriangle,
+            scratchArena
+        )
+    )
+        return false;
+
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> boundaryEdges{
+        Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
+    };
+    if(
+        !BuildHoleBoundaryEdgesFromRemovedTriangles(
+            instance.indices,
+            instance.restVertices,
+            outFrame.normal,
+            removeTriangle,
+            boundaryEdges,
+            &outRemovedTriangleCount,
+            scratchArena
+        )
+    )
+        return false;
+
+    outRestPositions.reserve(instance.restVertices.size());
+    for(const DeformableVertexRest& vertex : instance.restVertices)
+        outRestPositions.push_back(vertex.position);
+
+    Core::Geometry::MeshTopologyBoundaryLoopFrame topologyFrame;
+    StoreFloat(outFrame.center, &topologyFrame.center);
+    StoreFloat(outFrame.tangent, &topologyFrame.tangent);
+    StoreFloat(outFrame.bitangent, &topologyFrame.bitangent);
+    if(
+        !Core::Geometry::BuildOrderedBoundaryLoop(
+            boundaryEdges,
+            outRestPositions,
+            topologyFrame,
+            outOrderedBoundaryEdges
+        )
+    )
+        return false;
+
+    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
+    if(addWall && !BoundaryKeptFacesSupportHoleExtrusion(instance, outFrame.normal, removeTriangle, outOrderedBoundaryEdges))
+        return false;
+
+    return outOrderedBoundaryEdges.size() >= s_MinWallLoopVertexCount;
+}
+
+[[nodiscard]] bool BuildHolePreviewBoundaryPlan(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    HoleFrame& outFrame,
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>>& outOrderedBoundaryEdges,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& outRestPositions,
+    u32& outRemovedTriangleCount,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    if(UseOperatorSurfaceRemesh(params)){
+        Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>> surfaceTriangles{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>(scratchArena)
+        };
+        Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>> generatedVertices{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>(scratchArena)
+        };
+        Vector<u8, Core::Alloc::ScratchAllocator<u8>> affectedTriangles{
+            Core::Alloc::ScratchAllocator<u8>(scratchArena)
+        };
+        return BuildOperatorSurfaceRemeshPlan(
+            instance,
+            params,
+            outFrame,
+            outOrderedBoundaryEdges,
+            outRestPositions,
+            surfaceTriangles,
+            generatedVertices,
+            affectedTriangles,
+            outRemovedTriangleCount,
+            scratchArena
+        );
+    }
+
+    return BuildWholeTriangleHolePreviewBoundaryPlan(
+        instance,
+        params,
+        outFrame,
+        outOrderedBoundaryEdges,
+        outRestPositions,
+        outRemovedTriangleCount,
+        scratchArena
+    );
+}
+
+[[nodiscard]] bool AppendHolePreviewMeshVertex(
+    DeformableHolePreviewMesh& mesh,
+    const Float3U& position,
+    const Float3U& normal,
+    const Float4U& color,
+    u32& outVertexIndex
+){
+    outVertexIndex = Limit<u32>::s_Max;
+    if(mesh.vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    DeformableHolePreviewMeshVertex vertex;
+    vertex.position = position;
+    vertex.normal = normal;
+    vertex.color = color;
+    outVertexIndex = static_cast<u32>(mesh.vertices.size());
+    mesh.vertices.push_back(vertex);
+    return true;
+}
+
+[[nodiscard]] bool AppendHolePreviewCap(
+    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
+    const SIMDVector normal,
+    const SIMDVector tangent,
+    const SIMDVector bitangent,
+    DeformableHolePreviewMesh& mesh,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    if(positions.size() < s_MinWallLoopVertexCount)
+        return false;
+    if(positions.size() > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+    if(mesh.vertices.size() > static_cast<usize>(Limit<u32>::s_Max) - positions.size())
+        return false;
+
+    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>> capRestVertices{
+        Core::Alloc::ScratchAllocator<DeformableVertexRest>(scratchArena)
+    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    capRestVertices.reserve(positions.size());
+    capVertices.reserve(positions.size());
+    for(usize i = 0u; i < positions.size(); ++i){
+        DeformableVertexRest vertex;
+        vertex.position = positions[i];
+        capRestVertices.push_back(vertex);
+        capVertices.push_back(static_cast<u32>(i));
+    }
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> capIndices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    if(!AppendBottomCapTriangles(capVertices, capRestVertices, tangent, bitangent, capIndices, nullptr))
+        return false;
+
+    const u32 vertexBase = static_cast<u32>(mesh.vertices.size());
+    Float3U capNormal;
+    StoreFloat(normal, &capNormal);
+    for(const Float3U& position : positions){
+        u32 ignoredVertex = Limit<u32>::s_Max;
+        if(!AppendHolePreviewMeshVertex(mesh, position, capNormal, s_HolePreviewColor, ignoredVertex))
+            return false;
+    }
+
+    if(capIndices.size() > static_cast<usize>(Limit<u32>::s_Max) - mesh.indices.size())
+        return false;
+    mesh.indices.reserve(mesh.indices.size() + capIndices.size());
+    for(const u32 capIndex : capIndices)
+        mesh.indices.push_back(vertexBase + capIndex);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -2249,9 +3985,36 @@ bool PreviewHole(
     )
         return false;
 
+    Core::Alloc::ScratchArena<> scratchArena;
     __hidden_deformable_surface_edit::HoleFrame frame;
-    if(!__hidden_deformable_surface_edit::BuildPreviewFrame(instance, params, frame))
+    Vector<
+        __hidden_deformable_surface_edit::EdgeRecord,
+        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>
+    > orderedBoundaryEdges{
+        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>(scratchArena)
+    };
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
+        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
+    };
+    u32 removedTriangleCount = 0u;
+    if(
+        !__hidden_deformable_surface_edit::BuildHolePreviewBoundaryPlan(
+            instance,
+            params,
+            frame,
+            orderedBoundaryEdges,
+            restPositions,
+            removedTriangleCount,
+            scratchArena
+        )
+    )
         return false;
+
+    if(__hidden_deformable_surface_edit::UseOperatorSurfaceRemesh(params)){
+        DeformableHolePreviewMesh previewMesh;
+        if(!BuildHolePreviewMesh(instance, params, previewMesh))
+            return false;
+    }
 
     StoreFloat(VectorSetW(frame.center, 1.0f), &outPreview.center);
     StoreFloat(VectorSetW(frame.normal, 0.0f), &outPreview.normal);
@@ -2267,6 +4030,253 @@ bool PreviewHole(
     session.previewParams = params;
     session.previewed = true;
     return true;
+}
+
+bool BuildOperatorFootprintFromGeometry(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorFootprint& outFootprint
+){
+    Core::Alloc::ScratchArena<> scratchArena;
+    return __hidden_deformable_surface_edit::BuildOperatorFootprintFromGeometryImpl(
+        vertices,
+        outFootprint,
+        scratchArena
+    );
+}
+
+bool BuildOperatorProfileFromGeometry(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorProfile& outProfile
+){
+    Core::Alloc::ScratchArena<> scratchArena;
+    return __hidden_deformable_surface_edit::BuildOperatorProfileFromGeometryImpl(
+        vertices,
+        outProfile,
+        scratchArena
+    );
+}
+
+bool BuildOperatorShapeFromGeometry(
+    const Vector<GeometryVertex>& vertices,
+    DeformableOperatorFootprint& outFootprint,
+    DeformableOperatorProfile& outProfile
+){
+    outFootprint = DeformableOperatorFootprint{};
+    outProfile = DeformableOperatorProfile{};
+    Core::Alloc::ScratchArena<> scratchArena;
+    return
+        __hidden_deformable_surface_edit::BuildOperatorFootprintFromGeometryImpl(
+            vertices,
+            outFootprint,
+            scratchArena
+        )
+        && __hidden_deformable_surface_edit::BuildOperatorProfileFromGeometryImpl(
+            vertices,
+            outProfile,
+            scratchArena
+        )
+    ;
+}
+
+bool BuildHolePreviewMesh(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    DeformableHolePreviewMesh& outMesh
+){
+    outMesh = DeformableHolePreviewMesh{};
+    if(
+        !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
+        || !__hidden_deformable_surface_edit::ValidateParams(instance, params)
+    )
+        return false;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    __hidden_deformable_surface_edit::HoleFrame frame;
+    Vector<
+        __hidden_deformable_surface_edit::EdgeRecord,
+        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>
+    > orderedBoundaryEdges{
+        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>(scratchArena)
+    };
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
+        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
+    };
+    u32 removedTriangleCount = 0u;
+    if(
+        !__hidden_deformable_surface_edit::BuildHolePreviewBoundaryPlan(
+            instance,
+            params,
+            frame,
+            orderedBoundaryEdges,
+            restPositions,
+            removedTriangleCount,
+            scratchArena
+        )
+    )
+        return false;
+
+    const usize boundaryVertexCount = orderedBoundaryEdges.size();
+    if(
+        boundaryVertexCount < __hidden_deformable_surface_edit::s_MinWallLoopVertexCount
+        || boundaryVertexCount > static_cast<usize>(Limit<u32>::s_Max / 4u)
+    )
+        return false;
+
+    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
+    const usize sideVertexCount = addWall ? boundaryVertexCount * 2u : 0u;
+    const usize bottomCapVertexCount = addWall ? boundaryVertexCount : 0u;
+    if(
+        boundaryVertexCount > Limit<usize>::s_Max - sideVertexCount
+        || boundaryVertexCount + sideVertexCount > Limit<usize>::s_Max - bottomCapVertexCount
+    )
+        return false;
+
+    const usize vertexReserve = boundaryVertexCount + sideVertexCount + bottomCapVertexCount;
+    outMesh.vertices.reserve(vertexReserve);
+
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> topCapPositions{
+        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
+    };
+    topCapPositions.reserve(boundaryVertexCount);
+    const f32 surfaceOffset = Max(
+        __hidden_deformable_surface_edit::s_HolePreviewSurfaceOffsetMin,
+        params.radius * __hidden_deformable_surface_edit::s_HolePreviewSurfaceOffsetRadiusScale
+    );
+    for(const __hidden_deformable_surface_edit::EdgeRecord& edge : orderedBoundaryEdges){
+        if(edge.a >= restPositions.size())
+            return false;
+
+        Float3U topPosition;
+        StoreFloat(
+            VectorMultiplyAdd(
+                frame.normal,
+                VectorReplicate(surfaceOffset),
+                LoadFloat(restPositions[edge.a])
+            ),
+            &topPosition
+        );
+        topCapPositions.push_back(topPosition);
+    }
+
+    if(
+        !__hidden_deformable_surface_edit::AppendHolePreviewCap(
+            topCapPositions,
+            frame.normal,
+            frame.tangent,
+            frame.bitangent,
+            outMesh,
+            scratchArena
+        )
+    )
+        return false;
+
+    if(addWall){
+        Core::Geometry::MeshTopologyBoundaryLoopFrame topologyFrame;
+        StoreFloat(frame.center, &topologyFrame.center);
+        StoreFloat(frame.tangent, &topologyFrame.tangent);
+        StoreFloat(frame.bitangent, &topologyFrame.bitangent);
+
+        Vector<
+            Core::Geometry::SurfacePatchWallVertex,
+            Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>
+        > wallVertexPlan{
+            Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>(scratchArena)
+        };
+        wallVertexPlan.resize(boundaryVertexCount);
+        if(
+            !Core::Geometry::BuildSurfacePatchWallVertices(
+                orderedBoundaryEdges,
+                restPositions,
+                topologyFrame,
+                frame.normal,
+                params.depth,
+                1u,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        )
+            return false;
+        if(
+            !__hidden_deformable_surface_edit::ApplyOperatorProfileToWallVertexPlan(
+                orderedBoundaryEdges,
+                restPositions,
+                frame,
+                params,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        )
+            return false;
+
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> sideTopVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> sideBottomVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> bottomCapPositions{
+            Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
+        };
+        sideTopVertices.reserve(boundaryVertexCount);
+        sideBottomVertices.reserve(boundaryVertexCount);
+        bottomCapPositions.reserve(boundaryVertexCount);
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            u32 topVertex = Limit<u32>::s_Max;
+            u32 bottomVertex = Limit<u32>::s_Max;
+            if(
+                !__hidden_deformable_surface_edit::AppendHolePreviewMeshVertex(
+                    outMesh,
+                    topCapPositions[edgeIndex],
+                    wallVertexPlan[edgeIndex].normal,
+                    __hidden_deformable_surface_edit::s_HolePreviewColor,
+                    topVertex
+                )
+                || !__hidden_deformable_surface_edit::AppendHolePreviewMeshVertex(
+                    outMesh,
+                    wallVertexPlan[edgeIndex].position,
+                    wallVertexPlan[edgeIndex].normal,
+                    __hidden_deformable_surface_edit::s_HolePreviewColor,
+                    bottomVertex
+                )
+            )
+                return false;
+
+            sideTopVertices.push_back(topVertex);
+            sideBottomVertices.push_back(bottomVertex);
+            bottomCapPositions.push_back(wallVertexPlan[edgeIndex].position);
+        }
+
+        if(boundaryVertexCount > (static_cast<usize>(Limit<u32>::s_Max) - outMesh.indices.size()) / 6u)
+            return false;
+
+        outMesh.indices.reserve(outMesh.indices.size() + boundaryVertexCount * 6u);
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+            const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
+            outMesh.indices.push_back(sideTopVertices[edgeIndex]);
+            outMesh.indices.push_back(sideTopVertices[nextEdgeIndex]);
+            outMesh.indices.push_back(sideBottomVertices[nextEdgeIndex]);
+            outMesh.indices.push_back(sideTopVertices[edgeIndex]);
+            outMesh.indices.push_back(sideBottomVertices[nextEdgeIndex]);
+            outMesh.indices.push_back(sideBottomVertices[edgeIndex]);
+        }
+
+        if(
+            !__hidden_deformable_surface_edit::AppendHolePreviewCap(
+                bottomCapPositions,
+                frame.normal,
+                frame.tangent,
+                frame.bitangent,
+                outMesh,
+                scratchArena
+            )
+        )
+            return false;
+    }
+
+    outMesh.removedTriangleCount = removedTriangleCount;
+    outMesh.wallVertexCount = static_cast<u32>(boundaryVertexCount);
+    outMesh.valid = !outMesh.vertices.empty() && !outMesh.indices.empty();
+    return outMesh.valid;
 }
 
 bool CommitHole(
@@ -2338,6 +4348,8 @@ bool CommitHole(
         outRecord->hole.radius = params.radius;
         outRecord->hole.ellipseRatio = params.ellipseRatio;
         outRecord->hole.depth = params.depth;
+        outRecord->hole.operatorFootprint = params.operatorFootprint;
+        outRecord->hole.operatorProfile = params.operatorProfile;
         outRecord->hole.wallLoopCutCount = result.wallLoopCutCount;
         outRecord->result = result;
     }
@@ -2758,7 +4770,7 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
     for(usize i = 0u; i < state.edits.size(); ++i){
         const DeformableSurfaceEditRecord& record = state.edits[i];
         outDump += StringFormat(
-            "edit[{}] id={} type=hole base_revision={} result_revision={} source_tri={} bary=({},{},{}) rest_position=({},{},{}) rest_normal=({},{},{}) radius={} ellipse={} depth={} loop_cuts={} wall_span=({},{}) removed_triangles={} added_vertices={} added_triangles={}\n",
+            "edit[{}] id={} type=hole base_revision={} result_revision={} source_tri={} bary=({},{},{}) rest_position=({},{},{}) rest_normal=({},{},{}) radius={} ellipse={} depth={} operator_footprint_vertices={} operator_profile_samples={} loop_cuts={} wall_span=({},{}) removed_triangles={} added_vertices={} added_triangles={}\n",
             i,
             record.editId,
             record.hole.baseEditRevision,
@@ -2776,6 +4788,8 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
             record.hole.radius,
             record.hole.ellipseRatio,
             record.hole.depth,
+            record.hole.operatorFootprint.vertexCount,
+            record.hole.operatorProfile.sampleCount,
             record.hole.wallLoopCutCount,
             record.result.firstWallVertex,
             record.result.wallVertexCount,
@@ -2816,6 +4830,754 @@ namespace __hidden_deformable_surface_edit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<usize sourceCount>
+[[nodiscard]] bool BuildBlendedSourceSample(
+    const Vector<SourceSample>& sourceSamples,
+    const u32 (&sourceVertices)[sourceCount],
+    const f32 (&sourceWeights)[sourceCount],
+    const SourceSample& fallbackSample,
+    const u32 sourceTriangleCount,
+    SourceSample& outSample
+){
+    static_assert(sourceCount > 0u, "source sample transfer requires source samples");
+    outSample = SourceSample{};
+    if(sourceSamples.empty() || sourceTriangleCount == 0u)
+        return false;
+
+    bool foundSource = false;
+    bool sameSourceTriangle = true;
+    u32 sourceTriangle = Limit<u32>::s_Max;
+    f32 bary[3] = {};
+    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
+        const f32 weight = sourceWeights[sourceIndex];
+        if(!IsFinite(weight) || weight < 0.0f)
+            return false;
+        if(!DeformableValidation::ActiveWeight(weight))
+            continue;
+
+        const u32 vertex = sourceVertices[sourceIndex];
+        if(vertex >= sourceSamples.size())
+            return false;
+
+        const SourceSample& sample = sourceSamples[vertex];
+        if(!DeformableValidation::ValidSourceSample(sample, sourceTriangleCount))
+            return false;
+        if(!foundSource){
+            sourceTriangle = sample.sourceTri;
+            foundSource = true;
+        }
+        else if(sample.sourceTri != sourceTriangle)
+            sameSourceTriangle = false;
+
+        for(u32 baryIndex = 0u; baryIndex < 3u; ++baryIndex)
+            bary[baryIndex] += sample.bary[baryIndex] * weight;
+    }
+
+    if(!foundSource)
+        return false;
+
+    if(!sameSourceTriangle){
+        outSample = fallbackSample;
+        return DeformableValidation::ValidSourceSample(outSample, sourceTriangleCount);
+    }
+
+    outSample.sourceTri = sourceTriangle;
+    return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
+}
+
+[[nodiscard]] bool AppendSurfaceRemeshGeneratedRestVertex(
+    const DeformableRuntimeMeshInstance& instance,
+    const SurfaceRemeshGeneratedVertex& generated,
+    const SourceSample& fallbackSourceSample,
+    const SIMDVector fallbackNormal,
+    const SIMDVector fallbackTangent,
+    Vector<DeformableVertexRest>& newRestVertices,
+    Vector<SkinInfluence4>& newSkin,
+    Vector<SourceSample>& newSourceSamples
+){
+    if(
+        generated.vertex != newRestVertices.size()
+        || generated.sourceTriangle == Limit<u32>::s_Max
+        || generated.sourceTriangle >= instance.indices.size() / 3u
+    )
+        return false;
+
+    DeformableVertexRest vertex;
+    vertex.position = generated.position;
+
+    SIMDVector rawNormal = VectorZero();
+    SIMDVector rawTangent = VectorZero();
+    SIMDVector rawUv = VectorZero();
+    for(u32 i = 0u; i < 3u; ++i){
+        const u32 sourceVertex = generated.sourceVertices[i];
+        const f32 weight = generated.bary[i];
+        if(sourceVertex >= instance.restVertices.size() || !IsFinite(weight) || weight < 0.0f)
+            return false;
+
+        const DeformableVertexRest& source = instance.restVertices[sourceVertex];
+        const SIMDVector weightVector = VectorReplicate(weight);
+        rawNormal = VectorMultiplyAdd(LoadRestVertexNormal(source), weightVector, rawNormal);
+        rawTangent = VectorMultiplyAdd(VectorSetW(LoadRestVertexTangent(source), 0.0f), weightVector, rawTangent);
+        rawUv = VectorMultiplyAdd(LoadRestVertexUv0(source), weightVector, rawUv);
+    }
+
+    const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(rawNormal, fallbackNormal);
+    SIMDVector tangent;
+    SIMDVector bitangent;
+    ResolveTangentBitangentVectors(normal, rawTangent, fallbackTangent, tangent, bitangent);
+    if(!FiniteVec3(normal) || !FiniteVec3(tangent))
+        return false;
+
+    StoreFloat(normal, &vertex.normal);
+    StoreFloat(VectorSetW(tangent, 1.0f), &vertex.tangent);
+    StoreFloat(rawUv, &vertex.uv0);
+    if(
+        !BuildBlendedVertexColor(
+            instance.restVertices,
+            generated.sourceVertices,
+            generated.bary,
+            vertex.color0
+        )
+    )
+        return false;
+    if(!DeformableValidation::ValidRestVertexFrame(vertex))
+        return false;
+
+    if(!newSkin.empty()){
+        SkinInfluence4 skin;
+        if(
+            !BuildBlendedSkinInfluence(
+                instance.skin,
+                generated.sourceVertices,
+                generated.bary,
+                skin
+            )
+        )
+            return false;
+        newSkin.push_back(skin);
+    }
+
+    if(!newSourceSamples.empty()){
+        SourceSample sample;
+        if(
+            !BuildBlendedSourceSample(
+                instance.sourceSamples,
+                generated.sourceVertices,
+                generated.bary,
+                fallbackSourceSample,
+                instance.sourceTriangleCount,
+                sample
+            )
+        )
+            return false;
+        newSourceSamples.push_back(sample);
+    }
+
+    newRestVertices.push_back(vertex);
+    return true;
+}
+
+[[nodiscard]] bool TransferSurfaceRemeshMorphDeltas(
+    Vector<DeformableMorph>& morphs,
+    const Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices
+){
+    if(morphs.empty() || generatedVertices.empty())
+        return true;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    MorphDeltaLookup lookup(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Core::Alloc::ScratchAllocator<Pair<const u32, usize>>(scratchArena)
+    );
+    for(DeformableMorph& morph : morphs){
+        const usize sourceDeltaCount = morph.deltas.size();
+        if(sourceDeltaCount == 0u)
+            continue;
+        if(
+            generatedVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+            || morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max) - generatedVertices.size()
+        )
+            return false;
+        if(!BuildMorphDeltaLookup(morph, sourceDeltaCount, lookup))
+            return false;
+
+        morph.deltas.reserve(morph.deltas.size() + generatedVertices.size());
+        for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
+            if(
+                !AppendBlendedMorphDelta(
+                    morph.deltas,
+                    morph,
+                    lookup,
+                    generated.sourceVertices,
+                    generated.bary,
+                    generated.vertex
+                )
+            )
+                return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CommitDeformableRestSpaceHoleRemeshedImpl(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    const bool requireUploadedRuntimePayload,
+    const u32 wallLoopCutCount,
+    DeformableHoleEditResult* outResult
+){
+    if(outResult)
+        *outResult = DeformableHoleEditResult{};
+
+    const bool validPayload = requireUploadedRuntimePayload
+        ? ValidateUploadedRuntimePayload(instance)
+        : ValidateRuntimePayload(instance)
+    ;
+    const bool validParams = ValidateParams(instance, params);
+    const bool validWallLoopCutCount = ValidWallLoopCutCount(wallLoopCutCount);
+    const bool validWallLoopDepth = wallLoopCutCount == 0u || params.depth > DeformableRuntime::s_Epsilon;
+    if(!validPayload || !validParams || !validWallLoopCutCount || !validWallLoopDepth || !UseOperatorSurfaceRemesh(params)){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole validation failed (entity={} runtime_mesh={} uploaded_required={} valid_payload={} valid_params={} valid_loop_cuts={} valid_loop_depth={} dirty_flags={} revision={} triangle={})")
+            , instance.entity.id
+            , instance.handle.value
+            , requireUploadedRuntimePayload ? 1u : 0u
+            , validPayload ? 1u : 0u
+            , validParams ? 1u : 0u
+            , validWallLoopCutCount ? 1u : 0u
+            , validWallLoopDepth ? 1u : 0u
+            , static_cast<u32>(instance.dirtyFlags)
+            , instance.editRevision
+            , params.posedHit.triangle
+        );
+        return false;
+    }
+
+    u32 hitTriangleIndices[3] = {};
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
+        return false;
+
+    f32 hitBary[3] = {};
+    if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
+        return false;
+
+    SourceSample wallSourceSample{};
+    if(!ResolveDeformableRestSurfaceSample(instance, params.posedHit.triangle, hitBary, wallSourceSample))
+        return false;
+
+    if(instance.sourceSamples.empty() || instance.sourceSamples.size() != instance.restVertices.size() || instance.sourceTriangleCount == 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole source samples are invalid (entity={} runtime_mesh={} vertices={} source_samples={} source_triangles={})")
+            , instance.entity.id
+            , instance.handle.value
+            , instance.restVertices.size()
+            , instance.sourceSamples.size()
+            , instance.sourceTriangleCount
+        );
+        return false;
+    }
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    HoleFrame frame;
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> orderedBoundaryEdges{
+        Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
+    };
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
+        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
+    };
+    Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>> surfaceTriangles{
+        Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>(scratchArena)
+    };
+    Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>> generatedVertices{
+        Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>(scratchArena)
+    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> affectedTriangles{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    u32 affectedTriangleCount = 0u;
+    if(
+        !BuildOperatorSurfaceRemeshPlan(
+            instance,
+            params,
+            frame,
+            orderedBoundaryEdges,
+            restPositions,
+            surfaceTriangles,
+            generatedVertices,
+            affectedTriangles,
+            affectedTriangleCount,
+            scratchArena
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole plan failed (entity={} runtime_mesh={} hit_triangle={} radius={} ellipse={} depth={} footprint_vertices={})")
+            , instance.entity.id
+            , instance.handle.value
+            , params.posedHit.triangle
+            , params.radius
+            , params.ellipseRatio
+            , params.depth
+            , params.operatorFootprint.vertexCount
+        );
+        return false;
+    }
+
+    const usize triangleCount = instance.indices.size() / 3u;
+    const bool hasEditMaskPerTriangle = !instance.editMaskPerTriangle.empty();
+    auto resolveValidatedEditMask = [&instance, hasEditMaskPerTriangle](const usize triangle){
+        return
+            hasEditMaskPerTriangle
+                ? instance.editMaskPerTriangle[triangle]
+                : s_DeformableEditMaskDefault
+        ;
+    };
+
+    DeformableEditMaskFlags removedEditMaskFlags = 0u;
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        if(affectedTriangles[triangle] == 0u)
+            continue;
+
+        const DeformableEditMaskFlags editMaskFlags = resolveValidatedEditMask(triangle);
+        if(!DeformableEditMaskAllowsCommit(editMaskFlags))
+            return false;
+
+        removedEditMaskFlags = static_cast<DeformableEditMaskFlags>(removedEditMaskFlags | editMaskFlags);
+    }
+    if(removedEditMaskFlags == 0u)
+        removedEditMaskFlags = s_DeformableEditMaskDefault;
+
+    const bool addWall = params.depth > DeformableRuntime::s_Epsilon;
+    const usize wallBandCount = addWall ? static_cast<usize>(wallLoopCutCount) + 1u : 0u;
+    usize wallVertexCount = 0u;
+    usize totalWallVertexCount = 0u;
+    usize capTriangleCount = 0u;
+    if(addWall){
+        if(
+            wallBandCount == 0u
+            || wallBandCount > Limit<usize>::s_Max / 6u
+            || orderedBoundaryEdges.size() > Limit<usize>::s_Max / (6u * wallBandCount)
+        )
+            return false;
+
+        wallVertexCount = orderedBoundaryEdges.size();
+        if(wallVertexCount < 3u || wallVertexCount > Limit<usize>::s_Max / wallBandCount)
+            return false;
+        totalWallVertexCount = wallVertexCount * wallBandCount;
+        capTriangleCount = wallVertexCount - 2u;
+    }
+
+    const usize surfaceIndexCount = surfaceTriangles.size() * 3u;
+    const usize wallIndexCount = addWall ? wallVertexCount * 6u * wallBandCount : 0u;
+    const usize capIndexCount = capTriangleCount * 3u;
+    if(
+        surfaceTriangles.size() > static_cast<usize>(Limit<u32>::s_Max / 3u)
+        || wallIndexCount > Limit<usize>::s_Max - capIndexCount
+        || wallIndexCount + capIndexCount > Limit<usize>::s_Max - surfaceIndexCount
+        || surfaceIndexCount + wallIndexCount + capIndexCount > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+
+    usize reservedVertexCount = instance.restVertices.size();
+    if(generatedVertices.size() > Limit<usize>::s_Max - reservedVertexCount)
+        return false;
+    reservedVertexCount += generatedVertices.size();
+    if(totalWallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
+        return false;
+    reservedVertexCount += totalWallVertexCount;
+    if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    Vector<DeformableVertexRest> newRestVertices;
+    Vector<SkinInfluence4> newSkin;
+    Vector<SourceSample> newSourceSamples;
+    Vector<DeformableEditMaskFlags> newEditMaskPerTriangle;
+    Vector<DeformableMorph> newMorphs;
+    newRestVertices.reserve(reservedVertexCount);
+    newRestVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
+    if(!instance.skin.empty()){
+        newSkin.reserve(reservedVertexCount);
+        newSkin.assign(instance.skin.begin(), instance.skin.end());
+    }
+    if(!instance.sourceSamples.empty()){
+        newSourceSamples.reserve(reservedVertexCount);
+        newSourceSamples.assign(instance.sourceSamples.begin(), instance.sourceSamples.end());
+    }
+    newMorphs = instance.morphs;
+    if(hasEditMaskPerTriangle)
+        newEditMaskPerTriangle.reserve((surfaceIndexCount + wallIndexCount + capIndexCount) / 3u);
+
+    for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
+        if(
+            !AppendSurfaceRemeshGeneratedRestVertex(
+                instance,
+                generated,
+                wallSourceSample,
+                frame.normal,
+                frame.tangent,
+                newRestVertices,
+                newSkin,
+                newSourceSamples
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while appending generated surface vertex (entity={} runtime_mesh={} generated_vertex={} source_triangle={})")
+                , instance.entity.id
+                , instance.handle.value
+                , generated.vertex
+                , generated.sourceTriangle
+            );
+            return false;
+        }
+    }
+    if(!TransferSurfaceRemeshMorphDeltas(newMorphs, generatedVertices)){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while transferring generated surface morph deltas (entity={} runtime_mesh={} generated_vertices={} morphs={})")
+            , instance.entity.id
+            , instance.handle.value
+            , generatedVertices.size()
+            , newMorphs.size()
+        );
+        return false;
+    }
+
+    Vector<u32> newIndices;
+    newIndices.reserve(surfaceIndexCount + wallIndexCount + capIndexCount);
+    for(const SurfaceRemeshTriangle& triangle : surfaceTriangles){
+        if(
+            triangle.sourceTriangle >= triangleCount
+            || triangle.indices[0u] >= newRestVertices.size()
+            || triangle.indices[1u] >= newRestVertices.size()
+            || triangle.indices[2u] >= newRestVertices.size()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole produced an invalid surface triangle (entity={} runtime_mesh={} source_triangle={} vertices=({},{},{}))")
+                , instance.entity.id
+                , instance.handle.value
+                , triangle.sourceTriangle
+                , triangle.indices[0u]
+                , triangle.indices[1u]
+                , triangle.indices[2u]
+            );
+            return false;
+        }
+
+        newIndices.push_back(triangle.indices[0u]);
+        newIndices.push_back(triangle.indices[1u]);
+        newIndices.push_back(triangle.indices[2u]);
+        if(hasEditMaskPerTriangle)
+            newEditMaskPerTriangle.push_back(resolveValidatedEditMask(triangle.sourceTriangle));
+    }
+
+    u32 addedTriangleCount = 0u;
+    u32 addedVertexCount = 0u;
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 addedWallVertexCount = 0u;
+    if(addWall){
+        const usize boundaryVertexCount = orderedBoundaryEdges.size();
+        firstWallVertex = static_cast<u32>(
+            newRestVertices.size() + ((wallBandCount - 1u) * boundaryVertexCount)
+        );
+        addedWallVertexCount = static_cast<u32>(boundaryVertexCount);
+
+        Core::Geometry::MeshTopologyBoundaryLoopFrame topologyFrame;
+        StoreFloat(frame.center, &topologyFrame.center);
+        StoreFloat(frame.tangent, &topologyFrame.tangent);
+        StoreFloat(frame.bitangent, &topologyFrame.bitangent);
+
+        Vector<Core::Geometry::SurfacePatchWallVertex, Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>> wallVertexPlan{
+            Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>(scratchArena)
+        };
+        wallVertexPlan.resize(totalWallVertexCount);
+        if(
+            !Core::Geometry::BuildSurfacePatchWallVertices(
+                orderedBoundaryEdges,
+                restPositions,
+                topologyFrame,
+                frame.normal,
+                params.depth,
+                wallBandCount,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while building wall vertices (entity={} runtime_mesh={} boundary_vertices={} wall_bands={})")
+                , instance.entity.id
+                , instance.handle.value
+                , orderedBoundaryEdges.size()
+                , wallBandCount
+            );
+            return false;
+        }
+        if(
+            !ApplyOperatorProfileToWallVertexPlan(
+                orderedBoundaryEdges,
+                restPositions,
+                frame,
+                params,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while applying operator profile to wall vertices (entity={} runtime_mesh={} boundary_vertices={} profile_samples={})")
+                , instance.entity.id
+                , instance.handle.value
+                , orderedBoundaryEdges.size()
+                , params.operatorProfile.sampleCount
+            );
+            return false;
+        }
+
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> wallVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        wallVertices.resize(totalWallVertexCount, 0u);
+
+        auto appendPlannedVertex = [&](
+            const Core::Geometry::SurfacePatchWallVertex& plannedVertex,
+            const SIMDVector normal,
+            const SIMDVector tangent,
+            const Float2U& uv0,
+            u32& outVertex){
+            if(!newSourceSamples.empty())
+                newSourceSamples[plannedVertex.sourceVertex] = wallSourceSample;
+
+            Float4U innerColor;
+            if(
+                !BuildBlendedVertexColor(
+                    newRestVertices,
+                    plannedVertex.attributeVertices,
+                    s_WallInnerInpaintWeights,
+                    innerColor
+                )
+            )
+                return false;
+
+            SkinInfluence4 innerSkin;
+            const SkinInfluence4* innerSkinPtr = nullptr;
+            if(!newSkin.empty()){
+                if(
+                    !BuildBlendedSkinInfluence(
+                        newSkin,
+                        plannedVertex.attributeVertices,
+                        s_WallInnerInpaintWeights,
+                        innerSkin
+                    )
+                )
+                    return false;
+
+                innerSkinPtr = &innerSkin;
+            }
+
+            if(
+                !AppendWallVertex(
+                    newRestVertices,
+                    newSkin,
+                    newSourceSamples,
+                    plannedVertex.sourceVertex,
+                    innerSkinPtr,
+                    wallSourceSample,
+                    innerColor,
+                    LoadFloat(plannedVertex.position),
+                    normal,
+                    tangent,
+                    uv0.x,
+                    uv0.y,
+                    outVertex
+                )
+            )
+                return false;
+
+            addedVertexCount += 1u;
+            return true;
+        };
+
+        for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
+            const usize wallVertexBase = ringIndex * boundaryVertexCount;
+            for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+                const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[wallVertexBase + edgeIndex];
+                if(
+                    !appendPlannedVertex(
+                        plannedVertex,
+                        LoadFloat(plannedVertex.normal),
+                        LoadFloat(plannedVertex.tangent),
+                        plannedVertex.uv0,
+                        wallVertices[wallVertexBase + edgeIndex]
+                    )
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while appending wall vertex (entity={} runtime_mesh={} ring={} edge={} source_vertex={})")
+                        , instance.entity.id
+                        , instance.handle.value
+                        , ringIndex
+                        , edgeIndex
+                        , plannedVertex.sourceVertex
+                    );
+                    return false;
+                }
+            }
+        }
+
+        Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> bandOuterEdges = orderedBoundaryEdges;
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        ringVertices.reserve(boundaryVertexCount);
+        for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
+            const usize wallVertexBase = ringIndex * boundaryVertexCount;
+            ringVertices.clear();
+            for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
+                ringVertices.push_back(wallVertices[wallVertexBase + edgeIndex]);
+
+            if(!TransferWallMorphDeltas(newMorphs, orderedBoundaryEdges, ringVertices)){
+                NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while transferring wall morph deltas (entity={} runtime_mesh={} ring={} morphs={})")
+                    , instance.entity.id
+                    , instance.handle.value
+                    , ringIndex
+                    , newMorphs.size()
+                );
+                return false;
+            }
+
+            u32 wallAddedTriangleCount = 0u;
+            if(!Core::Geometry::AppendWallTrianglePairs(bandOuterEdges, ringVertices, newIndices, &wallAddedTriangleCount)){
+                NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while appending wall triangles (entity={} runtime_mesh={} ring={} boundary_vertices={})")
+                    , instance.entity.id
+                    , instance.handle.value
+                    , ringIndex
+                    , boundaryVertexCount
+                );
+                return false;
+            }
+            if(hasEditMaskPerTriangle){
+                for(u32 triangleOffset = 0u; triangleOffset < wallAddedTriangleCount; ++triangleOffset)
+                    newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+            }
+            addedTriangleCount += wallAddedTriangleCount;
+
+            if(ringIndex + 1u < wallBandCount){
+                if(
+                    !Core::Geometry::BuildSurfacePatchRingEdges(
+                        wallVertices.data() + wallVertexBase,
+                        boundaryVertexCount,
+                        bandOuterEdges
+                    )
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while building wall ring edges (entity={} runtime_mesh={} ring={} boundary_vertices={})")
+                        , instance.entity.id
+                        , instance.handle.value
+                        , ringIndex
+                        , boundaryVertexCount
+                    );
+                    return false;
+                }
+            }
+        }
+
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
+            Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        };
+        capVertices.reserve(boundaryVertexCount);
+        const usize capSourceVertexBase = (wallBandCount - 1u) * boundaryVertexCount;
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
+            capVertices.push_back(wallVertices[capSourceVertexBase + edgeIndex]);
+
+        u32 capAddedTriangleCount = 0u;
+        if(
+            !AppendBottomCapTriangles(
+                capVertices,
+                newRestVertices,
+                frame.tangent,
+                frame.bitangent,
+                newIndices,
+                &capAddedTriangleCount
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while triangulating bottom cap (entity={} runtime_mesh={} cap_vertices={})")
+                , instance.entity.id
+                , instance.handle.value
+                , capVertices.size()
+            );
+            return false;
+        }
+        if(hasEditMaskPerTriangle){
+            for(u32 triangleOffset = 0u; triangleOffset < capAddedTriangleCount; ++triangleOffset)
+                newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+        }
+        addedTriangleCount += capAddedTriangleCount;
+    }
+
+    for(usize indexBase = 0u; indexBase < newIndices.size(); indexBase += 3u){
+        const u32 i0 = newIndices[indexBase + 0u];
+        const u32 i1 = newIndices[indexBase + 1u];
+        const u32 i2 = newIndices[indexBase + 2u];
+        if(
+            i0 >= newRestVertices.size()
+            || i1 >= newRestVertices.size()
+            || i2 >= newRestVertices.size()
+            || !DeformableValidation::ValidTriangle(newRestVertices, i0, i1, i2)
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole produced degenerate triangle before tangent rebuild (entity={} runtime_mesh={} triangle={} vertices=({},{},{}))")
+                , instance.entity.id
+                , instance.handle.value
+                , indexBase / 3u
+                , i0
+                , i1
+                , i2
+            );
+            return false;
+        }
+    }
+
+    Vector<DeformableVertexRest> rebuiltRestVertices = newRestVertices;
+    if(DeformableValidation::RebuildRestVertexTangentFrames(rebuiltRestVertices, newIndices))
+        newRestVertices = Move(rebuiltRestVertices);
+
+    if(
+        !DeformableValidation::ValidRuntimePayloadArrays(
+            newRestVertices,
+            newIndices,
+            instance.sourceTriangleCount,
+            instance.skeletonJointCount,
+            newSkin,
+            instance.inverseBindMatrices,
+            newSourceSamples,
+            hasEditMaskPerTriangle ? newEditMaskPerTriangle : instance.editMaskPerTriangle,
+            newMorphs
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole produced invalid runtime payload arrays (entity={} runtime_mesh={} vertices={} triangles={} skin={} source_samples={} edit_masks={} morphs={})")
+            , instance.entity.id
+            , instance.handle.value
+            , newRestVertices.size()
+            , newIndices.size() / 3u
+            , newSkin.size()
+            , newSourceSamples.size()
+            , newEditMaskPerTriangle.size()
+            , newMorphs.size()
+        );
+        return false;
+    }
+
+    instance.restVertices = Move(newRestVertices);
+    instance.skin = Move(newSkin);
+    instance.sourceSamples = Move(newSourceSamples);
+    instance.morphs = Move(newMorphs);
+    if(hasEditMaskPerTriangle)
+        instance.editMaskPerTriangle = Move(newEditMaskPerTriangle);
+    instance.indices = Move(newIndices);
+    ++instance.editRevision;
+    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance.dirtyFlags | RuntimeMeshDirtyFlag::All);
+
+    if(outResult){
+        outResult->removedTriangleCount = affectedTriangleCount;
+        outResult->addedVertexCount = addedVertexCount;
+        outResult->addedTriangleCount = addedTriangleCount;
+        outResult->editRevision = instance.editRevision;
+        outResult->firstWallVertex = firstWallVertex;
+        outResult->wallVertexCount = addedWallVertexCount;
+        outResult->wallLoopCutCount = wallLoopCutCount;
+    }
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool CommitDeformableRestSpaceHoleImpl(
     DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
@@ -2825,6 +5587,16 @@ namespace __hidden_deformable_surface_edit{
 ){
     if(outResult)
         *outResult = DeformableHoleEditResult{};
+    if(UseOperatorSurfaceRemesh(params)){
+        return CommitDeformableRestSpaceHoleRemeshedImpl(
+            instance,
+            params,
+            requireUploadedRuntimePayload,
+            wallLoopCutCount,
+            outResult
+        );
+    }
+
     const bool validPayload = requireUploadedRuntimePayload
         ? ValidateUploadedRuntimePayload(instance)
         : ValidateRuntimePayload(instance)
@@ -2865,8 +5637,6 @@ namespace __hidden_deformable_surface_edit{
     if(!ResolveDeformableRestSurfaceSample(instance, params.posedHit.triangle, hitBary, wallSourceSample))
         return false;
 
-    const f32 radiusX = params.radius;
-    const f32 radiusY = params.radius * params.ellipseRatio;
     const bool hasEditMaskPerTriangle = !instance.editMaskPerTriangle.empty();
     auto resolveValidatedEditMask = [&instance, hasEditMaskPerTriangle](const usize triangle){
         return
@@ -2896,7 +5666,7 @@ namespace __hidden_deformable_surface_edit{
         const bool selectedTriangle = triangle == static_cast<usize>(params.posedHit.triangle);
         if(
             selectedTriangle
-            || TriangleInsideFootprint(instance, frame, radiusX, radiusY, indices)
+            || TriangleCentroidInsideOperatorVolume(instance, frame, params, indices)
         ){
             candidateTriangle[triangle] = 1u;
         }
@@ -3020,7 +5790,6 @@ namespace __hidden_deformable_surface_edit{
     const usize wallBandCount = addWall ? static_cast<usize>(wallLoopCutCount) + 1u : 0u;
     usize wallVertexCount = 0u;
     usize totalWallVertexCount = 0u;
-    usize capVertexCount = 0u;
     usize capTriangleCount = 0u;
     if(addWall){
         if(
@@ -3038,7 +5807,6 @@ namespace __hidden_deformable_surface_edit{
             return false;
         if(instance.restVertices.size() + totalWallVertexCount > static_cast<usize>(Limit<u32>::s_Max))
             return false;
-        capVertexCount = wallVertexCount;
         capTriangleCount = wallVertexCount - 2u;
     }
 
@@ -3060,9 +5828,6 @@ namespace __hidden_deformable_surface_edit{
     if(totalWallVertexCount > Limit<usize>::s_Max - reservedVertexCount)
         return false;
     reservedVertexCount += totalWallVertexCount;
-    if(capVertexCount > Limit<usize>::s_Max - reservedVertexCount)
-        return false;
-    reservedVertexCount += capVertexCount;
     if(reservedVertexCount > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
@@ -3123,6 +5888,17 @@ namespace __hidden_deformable_surface_edit{
                 frame.normal,
                 params.depth,
                 wallBandCount,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        )
+            return false;
+        if(
+            !ApplyOperatorProfileToWallVertexPlan(
+                orderedBoundaryEdges,
+                restPositions,
+                frame,
+                params,
                 wallVertexPlan.data(),
                 wallVertexPlan.size()
             )
@@ -3262,24 +6038,10 @@ namespace __hidden_deformable_surface_edit{
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        capVertices.resize(boundaryVertexCount, 0u);
+        capVertices.reserve(boundaryVertexCount);
         const usize capSourceVertexBase = (wallBandCount - 1u) * boundaryVertexCount;
-        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
-            const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[capSourceVertexBase + edgeIndex];
-            if(plannedVertex.sourceVertex >= newRestVertices.size())
-                return false;
-
-            if(
-                !appendPlannedVertex(
-                    plannedVertex,
-                    frame.normal,
-                    frame.tangent,
-                    newRestVertices[plannedVertex.sourceVertex].uv0,
-                    capVertices[edgeIndex]
-                )
-            )
-                return false;
-        }
+        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
+            capVertices.push_back(wallVertices[capSourceVertexBase + edgeIndex]);
 
         u32 capAddedTriangleCount = 0u;
         if(

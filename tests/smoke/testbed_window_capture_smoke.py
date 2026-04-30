@@ -451,6 +451,8 @@ class LinuxX11Capture:
         self.x11.XFlush.restype = ctypes.c_int
         self.x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         self.x11.XKeysymToKeycode.restype = ctypes.c_uint
+        self.x11.XStringToKeysym.argtypes = [ctypes.c_char_p]
+        self.x11.XStringToKeysym.restype = ctypes.c_ulong
         self.x11.XRaiseWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         self.x11.XRaiseWindow.restype = ctypes.c_int
         self.x11.XSetInputFocus.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
@@ -635,10 +637,14 @@ class LinuxX11Capture:
             raise SmokeFailure("failed to send CSG key event")
         self.x11.XFlush(self.display)
 
-    def select_surface_edit_target(self, window, target_key):
-        keycode = self.x11.XKeysymToKeycode(self.display, ord(str(target_key)))
+    def send_named_key(self, window, key_name):
+        keysym = self.x11.XStringToKeysym(str(key_name).encode("ascii"))
+        if keysym == 0:
+            raise SmokeFailure(f"could not resolve key symbol '{key_name}'")
+
+        keycode = self.x11.XKeysymToKeycode(self.display, keysym)
         if keycode == 0:
-            raise SmokeFailure(f"could not resolve target keycode '{target_key}'")
+            raise SmokeFailure(f"could not resolve keycode '{key_name}'")
 
         self.x11.XRaiseWindow(self.display, window)
         self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
@@ -647,6 +653,58 @@ class LinuxX11Capture:
         self.send_key_event(window, self.KEY_PRESS, keycode)
         time.sleep(0.05)
         self.send_key_event(window, self.KEY_RELEASE, keycode)
+
+    def select_surface_edit_target(self, window, target_key):
+        self.send_named_key(window, str(target_key))
+
+    def select_surface_edit_operator(self, window, operator_key):
+        self.send_named_key(window, f"F{operator_key}")
+
+    def select_surface_edit_camera_view(self, window, camera_view_key):
+        self.send_named_key(window, f"F{camera_view_key + 4}")
+
+    def preview_surface_edit(self, window, relative_x, relative_y):
+        attributes = self.get_attributes(window)
+        if not attributes:
+            raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
+        if attributes.width <= 0 or attributes.height <= 0:
+            raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
+
+        click_x = min(max(int(attributes.width * relative_x), 0), attributes.width - 1)
+        click_y = min(max(int(attributes.height * relative_y), 0), attributes.height - 1)
+
+        self.x11.XRaiseWindow(self.display, window)
+        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
+        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, click_x, click_y)
+        self.x11.XFlush(self.display)
+        time.sleep(0.1)
+
+        self.send_motion_event(window, click_x, click_y)
+        time.sleep(0.05)
+        self.send_button_event(window, self.BUTTON_PRESS, click_x, click_y)
+        time.sleep(0.05)
+        self.send_button_event(window, self.BUTTON_RELEASE, click_x, click_y)
+
+    def commit_surface_edit_preview(self, window, commit_relative_x, commit_relative_y):
+        attributes = self.get_attributes(window)
+        if not attributes:
+            raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
+        if attributes.width <= 0 or attributes.height <= 0:
+            raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
+
+        commit_x = min(max(int(attributes.width * commit_relative_x), 0), attributes.width - 1)
+        commit_y = min(max(int(attributes.height * commit_relative_y), 0), attributes.height - 1)
+
+        self.x11.XRaiseWindow(self.display, window)
+        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
+        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, commit_x, commit_y)
+        self.x11.XFlush(self.display)
+        time.sleep(0.05)
+        self.send_motion_event(window, commit_x, commit_y)
+        time.sleep(0.05)
+        self.send_button_event(window, self.BUTTON_PRESS, commit_x, commit_y)
+        time.sleep(0.05)
+        self.send_button_event(window, self.BUTTON_RELEASE, commit_x, commit_y)
 
     def exercise_surface_edit(self, window, relative_x, relative_y, commit_relative_x, commit_relative_y):
         attributes = self.get_attributes(window)
@@ -778,6 +836,10 @@ class WindowsCapture:
     DIB_RGB_COLORS = 0
     MK_LBUTTON = 0x0001
     VK_RETURN = 0x0D
+    VIRTUAL_KEYS = {
+        **{str(index): 0x30 + index for index in range(0, 10)},
+        **{f"F{index}": 0x6F + index for index in range(1, 13)},
+    }
     WM_KEYDOWN = 0x0100
     WM_KEYUP = 0x0101
     WM_MOUSEMOVE = 0x0200
@@ -924,11 +986,65 @@ class WindowsCapture:
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, commit_lparam)
 
     def select_surface_edit_target(self, hwnd, target_key):
+        self.send_named_key(hwnd, str(target_key))
+
+    def select_surface_edit_operator(self, hwnd, operator_key):
+        self.send_named_key(hwnd, f"F{operator_key}")
+
+    def select_surface_edit_camera_view(self, hwnd, camera_view_key):
+        self.send_named_key(hwnd, f"F{camera_view_key + 4}")
+
+    def send_named_key(self, hwnd, key_name):
+        virtual_key = self.VIRTUAL_KEYS.get(str(key_name))
+        if virtual_key is None:
+            raise SmokeFailure(f"could not resolve virtual key '{key_name}'")
+
         self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
-        virtual_key = 0x30 + target_key
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYDOWN, virtual_key, 0)
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)
+
+    def preview_surface_edit(self, hwnd, relative_x, relative_y):
+        rect = self._window_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
+
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
+        if width <= 0 or height <= 0:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
+
+        click_x = min(max(int(width * relative_x), 0), width - 1)
+        click_y = min(max(int(height * relative_y), 0), height - 1)
+        lparam = (click_y << 16) | click_x
+
+        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, lparam)
+        time.sleep(0.1)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, lparam)
+        time.sleep(0.05)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
+
+    def commit_surface_edit_preview(self, hwnd, commit_relative_x, commit_relative_y):
+        rect = self._window_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
+
+        width = rect.right - rect.left
+        height = rect.bottom - rect.top
+        if width <= 0 or height <= 0:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
+
+        commit_x = min(max(int(width * commit_relative_x), 0), width - 1)
+        commit_y = min(max(int(height * commit_relative_y), 0), height - 1)
+        commit_lparam = (commit_y << 16) | commit_x
+
+        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, commit_lparam)
+        time.sleep(0.05)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, commit_lparam)
+        time.sleep(0.05)
+        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, commit_lparam)
 
     def capture_window(self, hwnd, output_path):
         rect = self._window_rect(hwnd)
@@ -1049,11 +1165,30 @@ def capture_existing_handle(args, backend):
         backend.select_surface_edit_target(args.window_handle, args.surface_edit_target_key)
         time.sleep(args.target_settle_seconds)
 
-    if args.exercise_csg:
-        backend.exercise_surface_edit(
+    if args.surface_edit_operator_key is not None:
+        backend.select_surface_edit_operator(args.window_handle, args.surface_edit_operator_key)
+        time.sleep(args.target_settle_seconds)
+
+    if args.camera_view_key is not None:
+        backend.select_surface_edit_camera_view(args.window_handle, args.camera_view_key)
+        time.sleep(args.target_settle_seconds)
+
+    if args.preview_csg:
+        backend.preview_surface_edit(
             args.window_handle,
             args.csg_click_x,
             args.csg_click_y,
+        )
+        time.sleep(args.csg_settle_seconds)
+    elif args.exercise_csg:
+        backend.preview_surface_edit(
+            args.window_handle,
+            args.csg_click_x,
+            args.csg_click_y,
+        )
+        time.sleep(args.csg_settle_seconds)
+        backend.commit_surface_edit_preview(
+            args.window_handle,
             args.csg_commit_click_x,
             args.csg_commit_click_y,
         )
@@ -1097,11 +1232,57 @@ def launch_and_capture(args, backend):
                 tail = read_process_tail(testbed_process)
                 raise SmokeFailure(f"testbed exited after target selection (exit {testbed_process.returncode})\n{tail}")
 
-        if args.exercise_csg:
-            backend.exercise_surface_edit(
+        if args.surface_edit_operator_key is not None:
+            backend.select_surface_edit_operator(handle, args.surface_edit_operator_key)
+            time.sleep(args.target_settle_seconds)
+            if testbed_process.poll() is not None:
+                tail = read_process_tail(testbed_process)
+                raise SmokeFailure(f"testbed exited after operator selection (exit {testbed_process.returncode})\n{tail}")
+
+        if args.camera_view_key is not None:
+            backend.select_surface_edit_camera_view(handle, args.camera_view_key)
+            time.sleep(args.target_settle_seconds)
+            if testbed_process.poll() is not None:
+                tail = read_process_tail(testbed_process)
+                raise SmokeFailure(f"testbed exited after camera view selection (exit {testbed_process.returncode})\n{tail}")
+
+        if args.preview_csg:
+            backend.preview_surface_edit(
                 handle,
                 args.csg_click_x,
                 args.csg_click_y,
+            )
+            if log_directory:
+                wait_for_log_message(
+                    log_directory,
+                    log_baseline,
+                    "logserver_*.log",
+                    "Surface edit: selected preview radius=",
+                    args.csg_log_timeout,
+                )
+            time.sleep(args.csg_settle_seconds)
+            if testbed_process.poll() is not None:
+                tail = read_process_tail(testbed_process)
+                raise SmokeFailure(f"testbed exited after CSG preview (exit {testbed_process.returncode})\n{tail}")
+        elif args.exercise_csg:
+            backend.preview_surface_edit(
+                handle,
+                args.csg_click_x,
+                args.csg_click_y,
+            )
+            if log_directory:
+                wait_for_log_message(
+                    log_directory,
+                    log_baseline,
+                    "logserver_*.log",
+                    "Surface edit: selected preview radius=",
+                    args.csg_log_timeout,
+                )
+            else:
+                time.sleep(args.csg_settle_seconds)
+
+            backend.commit_surface_edit_preview(
+                handle,
                 args.csg_commit_click_x,
                 args.csg_commit_click_y,
             )
@@ -1140,12 +1321,15 @@ def parse_args(argv):
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
     parser.add_argument("--surface-edit-target-key", type=int, choices=range(1, 10), help="Number key to press before capture/CSG.")
+    parser.add_argument("--surface-edit-operator-key", type=int, choices=range(1, 5), help="F-key operator mesh to press before capture/CSG: 1 cylinder, 2 box, 3 triangle, 4 cone.")
+    parser.add_argument("--camera-view-key", type=int, choices=range(1, 5), help="F5-F8 camera preset index to press before capture/CSG.")
     parser.add_argument("--target-settle-seconds", type=float, default=0.3, help="Seconds to wait after target selection.")
+    parser.add_argument("--preview-csg", action="store_true", help="Click the editable deformable surface and capture the operator preview without committing.")
     parser.add_argument("--exercise-csg", action="store_true", help="Click the editable deformable surface and commit the preview before capture.")
     parser.add_argument("--csg-click-x", type=float, default=0.5, help="Relative window X coordinate for the CSG smoke click.")
     parser.add_argument("--csg-click-y", type=float, default=0.42, help="Relative window Y coordinate for the CSG smoke click.")
     parser.add_argument("--csg-commit-click-x", type=float, default=0.062, help="Relative window X coordinate for the Commit Preview button.")
-    parser.add_argument("--csg-commit-click-y", type=float, default=0.333, help="Relative window Y coordinate for the Commit Preview button.")
+    parser.add_argument("--csg-commit-click-y", type=float, default=0.384, help="Relative window Y coordinate for the Commit Preview button.")
     parser.add_argument("--csg-settle-seconds", type=float, default=1.0, help="Seconds to wait after CSG input before capture.")
     parser.add_argument("--csg-log-timeout", type=float, default=10.0, help="Seconds to wait for the committed CSG log message.")
     parser.add_argument(
@@ -1172,6 +1356,8 @@ def parse_args(argv):
         parser.error("--csg-settle-seconds must not be negative")
     if args.csg_log_timeout <= 0.0:
         parser.error("--csg-log-timeout must be positive")
+    if args.preview_csg and args.exercise_csg:
+        parser.error("--preview-csg and --exercise-csg are mutually exclusive")
     if args.csg_click_x < 0.0 or args.csg_click_x > 1.0:
         parser.error("--csg-click-x must be between 0.0 and 1.0")
     if args.csg_click_y < 0.0 or args.csg_click_y > 1.0:

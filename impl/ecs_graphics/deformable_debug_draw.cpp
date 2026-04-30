@@ -205,7 +205,7 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
 
 [[nodiscard]] bool ResolveDisplacementDebugOffset(
     const DeformableDisplacement& displacement,
-    const DeformableDisplacementTexture* texture,
+    const DeformableDisplacementTexture* validatedTexture,
     const DeformableVertexRest& vertex,
     SIMDVector& outOffset){
     outOffset = VectorZero();
@@ -221,10 +221,10 @@ void ResetSnapshotPreservingOutputStorage(DeformableSurfaceEditDebugSnapshot& sn
         return DeformableValidation::FiniteVector(outOffset, 0x7u);
     }
 
-    if(!DeformableRuntime::ValidateDisplacementTexture(displacement, texture))
+    if(!validatedTexture)
         return false;
 
-    const Float4U sample = DeformableRuntime::SampleDisplacementTexture(displacement, *texture, vertex.uv0);
+    const Float4U sample = DeformableRuntime::SampleDisplacementTexture(displacement, *validatedTexture, vertex.uv0);
     if(displacement.mode == DeformableDisplacementMode::ScalarTexture){
         const f32 scalarOffset = (sample.x + displacement.bias) * displacement.amplitude;
         if(!IsFinite(scalarOffset))
@@ -392,12 +392,20 @@ void AppendDisplacementMagnitudeDebug(
     )
         return;
 
+    const bool usesTexture = DeformableDisplacementModeUsesTexture(instance.displacement.mode);
+    const DeformableDisplacementTexture* validatedTexture = nullptr;
+    if(usesTexture){
+        if(!DeformableRuntime::ValidateDisplacementTexture(instance.displacement, displacementTexture))
+            return;
+        validatedTexture = displacementTexture;
+    }
+
     for(const DeformableVertexRest& vertex : instance.restVertices){
         if(!DeformableValidation::ValidRestVertexFrame(vertex))
             continue;
 
         SIMDVector displacementOffset = VectorZero();
-        if(!ResolveDisplacementDebugOffset(instance.displacement, displacementTexture, vertex, displacementOffset))
+        if(!ResolveDisplacementDebugOffset(instance.displacement, validatedTexture, vertex, displacementOffset))
             continue;
 
         const f32 displacementMagnitude = Length3(displacementOffset);

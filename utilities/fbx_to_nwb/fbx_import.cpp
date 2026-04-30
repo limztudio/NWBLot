@@ -119,6 +119,8 @@ bool AppendInstanceGeometry(
 
     inOutTriangleIndices.resize(static_cast<usize>(mesh->max_face_triangles) * 3u);
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
+    const bool importUvs = IsDeformableGeometryKind(options.assetKind) && mesh->vertex_uv.exists;
+    const bool importColors = options.importColors && mesh->vertex_color.exists;
 
     for(usize faceIndex = 0; faceIndex < mesh->num_faces; ++faceIndex){
         const ufbx_face face = mesh->faces.data[faceIndex];
@@ -168,13 +170,13 @@ bool AppendInstanceGeometry(
                     vertex.normal = Vec3{ 0.0f, 0.0f, 1.0f };
 
                 vertex.uv0 = Vec2{};
-                if(IsDeformableGeometryKind(options.assetKind) && mesh->vertex_uv.exists){
+                if(importUvs){
                     vertex.uv0 = ToVec2(ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex));
                     inOutSawVertexUvs = true;
                 }
 
                 vertex.color = defaultColor;
-                if(options.importColors && mesh->vertex_color.exists){
+                if(importColors){
                     vertex.color = ToVec4(ufbx_get_vertex_vec4(&mesh->vertex_color, cornerIndex));
                     inOutSawVertexColors = true;
                 }

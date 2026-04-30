@@ -35,6 +35,7 @@ bld/
 __build_obj/
 __exec/
 __cmake/
+__artifacts/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

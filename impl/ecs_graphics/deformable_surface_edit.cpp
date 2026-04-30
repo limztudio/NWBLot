@@ -2440,6 +2440,49 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     return true;
 }
 
+[[nodiscard]] bool BlendDeepestWallRingCapFrames(
+    Vector<DeformableVertexRest>& restVertices,
+    const u32 firstWallVertex,
+    const u32 wallVertexCount,
+    const SIMDVector capNormal,
+    const SIMDVector fallbackTangent
+){
+    if(!ValidWallVertexSpan(firstWallVertex, wallVertexCount))
+        return false;
+
+    const usize first = static_cast<usize>(firstWallVertex);
+    const usize count = static_cast<usize>(wallVertexCount);
+    if(first >= restVertices.size() || count > restVertices.size() - first)
+        return false;
+
+    const SIMDVector safeCapNormal = Core::Geometry::FrameNormalizeDirection(capNormal, s_SIMDIdentityR2);
+    if(!FiniteVec3(safeCapNormal))
+        return false;
+
+    for(usize vertexOffset = 0u; vertexOffset < count; ++vertexOffset){
+        DeformableVertexRest& vertex = restVertices[first + vertexOffset];
+        const SIMDVector sideNormal = LoadRestVertexNormal(vertex);
+        const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
+            VectorAdd(sideNormal, safeCapNormal),
+            safeCapNormal
+        );
+        const SIMDVector tangent = Core::Geometry::FrameResolveTangent(
+            normal,
+            VectorSetW(LoadRestVertexTangent(vertex), 0.0f),
+            fallbackTangent
+        );
+        StoreFloat(normal, &vertex.normal);
+        StoreFloat(
+            VectorSetW(tangent, Core::Geometry::FrameTangentHandedness(vertex.tangent.w, 1.0f)),
+            &vertex.tangent
+        );
+        if(!DeformableValidation::ValidRestVertexFrame(vertex))
+            return false;
+    }
+
+    return true;
+}
+
 using SurfaceRemeshClipPolygon = Vector<
     SurfaceRemeshClipPoint,
     Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>
@@ -5146,6 +5189,15 @@ template<usize sourceCount>
                 newEditMaskPerTriangle.push_back(removedEditMaskFlags);
         }
         addedTriangleCount += capAddedTriangleCount;
+        if(!BlendDeepestWallRingCapFrames(newRestVertices, firstWallVertex, addedWallVertexCount, frame.normal, frame.tangent)){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while blending cap frames (entity={} runtime_mesh={} first_wall_vertex={} wall_vertices={})")
+                , instance.entity.id
+                , instance.handle.value
+                , firstWallVertex
+                , addedWallVertexCount
+            );
+            return false;
+        }
     }
 
     for(usize indexBase = 0u; indexBase < newIndices.size(); indexBase += 3u){
@@ -5171,7 +5223,13 @@ template<usize sourceCount>
     }
 
     Vector<DeformableVertexRest> rebuiltRestVertices = newRestVertices;
-    if(DeformableValidation::RebuildRestVertexTangentFrames(rebuiltRestVertices, newIndices))
+    Core::Geometry::TangentFrameRebuildResult rebuildResult;
+    // Continuation wall UVs can be degenerate by design; keep the authored remesh frames when the global rebuild falls back.
+    if(
+        DeformableValidation::RebuildRestVertexTangentFrames(rebuiltRestVertices, newIndices, &rebuildResult)
+        && rebuildResult.degenerateUvTriangleCount == 0u
+        && rebuildResult.fallbackTangentVertexCount == 0u
+    )
         newRestVertices = Move(rebuiltRestVertices);
 
     if(

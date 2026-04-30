@@ -3441,6 +3441,13 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
         const Float2U expectedUv0 = ExpectedPlanarSurfaceUv0(vertex.position);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedUv0.x));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, expectedUv0.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.x, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.y, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.z, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.x, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.y, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.z, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, 1.0f));
     }
 
     for(usize vertexOffset = 0u; vertexOffset < static_cast<usize>(result.wallVertexCount); ++vertexOffset){

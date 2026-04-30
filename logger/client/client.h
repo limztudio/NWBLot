@@ -119,8 +119,7 @@ protected:
     bool internalUpdate();
 
 protected:
-    inline void enqueue(MessageType&& data){ UpdateBaseType::enqueue(Move(data)); }
-    inline void enqueue(const MessageType& data){ UpdateBaseType::enqueue(data); }
+    using UpdateBaseType::enqueue;
 
 
 private:

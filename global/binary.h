@@ -37,9 +37,21 @@ inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const 
     if(byteCount == 0u)
         return;
 
-    const usize offset = outBinary.size();
-    outBinary.resize(offset + byteCount);
-    NWB_MEMCPY(outBinary.data() + offset, byteCount, bytes, byteCount);
+    NWB_ASSERT(bytes);
+
+    using ByteType = typename Container::value_type;
+    const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
+
+    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
+        outBinary.reserve(outBinary.size() + byteCount);
+
+    if constexpr(requires(Container& c, const ByteType* p){ c.insert(c.end(), p, p); })
+        outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
+    else{
+        const usize offset = outBinary.size();
+        outBinary.resize(offset + byteCount);
+        NWB_MEMCPY(outBinary.data() + offset, byteCount, bytes, byteCount);
+    }
 }
 
 template<typename Container>

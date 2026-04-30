@@ -710,7 +710,7 @@ static bool OperatorFootprintHasPoint(
 static f32 DistanceXYFrom(const Float3U& point, const Float3U& center){
     const f32 dx = point.x - center.x;
     const f32 dy = point.y - center.y;
-    return VectorGetX(VectorSqrt(VectorReplicate((dx * dx) + (dy * dy))));
+    return Sqrt((dx * dx) + (dy * dy));
 }
 
 struct CountedMeshEdge{
@@ -3920,6 +3920,16 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, signedZeroMismatchedHitParams));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
 
+    NWB::Impl::DeformableHoleEditParams positionWMismatchedHitParams = params;
+    positionWMismatchedHitParams.posedHit.position.w = 0.0f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, positionWMismatchedHitParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
+
+    NWB::Impl::DeformableHoleEditParams normalWMismatchedHitParams = params;
+    normalWMismatchedHitParams.posedHit.normal.w = 1.0f;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::CommitHole(instance, session, normalWMismatchedHitParams));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == 0u);
+
     NWB::Impl::DeformableHoleEditResult result;
     NWB::Impl::DeformableSurfaceEditRecord record;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result, &record));
@@ -5976,7 +5986,19 @@ static void TestRestSpaceHoleEditRejectsStaleOrMismatchedHit(TestContext& contex
     CheckGridHoleEditRejectsParamMutation(
         context,
         [](NWB::Impl::DeformableHoleEditParams& params){
+            params.posedHit.position.w = 0.0f;
+        }
+    );
+    CheckGridHoleEditRejectsParamMutation(
+        context,
+        [](NWB::Impl::DeformableHoleEditParams& params){
             params.posedHit.setNormal(Float3U(0.0f, 0.0f, 0.0f));
+        }
+    );
+    CheckGridHoleEditRejectsParamMutation(
+        context,
+        [](NWB::Impl::DeformableHoleEditParams& params){
+            params.posedHit.normal.w = 1.0f;
         }
     );
     CheckGridHoleEditRejectsParamMutation(

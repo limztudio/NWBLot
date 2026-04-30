@@ -1,0 +1,30 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#ifndef NWB_AVBOIT_EXTINCTION_COMMON_GLSLI
+#define NWB_AVBOIT_EXTINCTION_COMMON_GLSLI
+
+#include "avboit_constants.glsli"
+
+uint nwbAvboitPhysicalExtinctionWordCount(){
+    return (nwbAvboitPhysicalSliceCount() + NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u) / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
+}
+
+uint nwbAvboitExtinctionWordIndex(uvec2 lowPixel, uint physicalSlice){
+    const uint physicalWord = physicalSlice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
+    return (physicalWord * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
+}
+
+uint nwbAvboitExtinctionByteShift(uint physicalSlice){
+    return (physicalSlice & (NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u)) << 3u;
+}
+
+float nwbAvboitUnpackExtinctionByte(uint packedWord, uint physicalSlice){
+    const uint packedByte = (packedWord >> nwbAvboitExtinctionByteShift(physicalSlice)) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
+    return float(packedByte) / nwbAvboitExtinctionFixedScale();
+}
+
+#endif
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

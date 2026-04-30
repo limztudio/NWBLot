@@ -128,26 +128,16 @@ inline CustomArena& DefaultArena(){
 
 
 template<typename T>
-class CustomAllocator : public AllocDetail::ArenaAllocatorOperations<CustomAllocator<T>, T>{
-    template<typename F>
-    friend class CustomAllocator;
-
-
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CustomAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::CustomAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::CustomAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
+class CustomAllocator
+    : public AllocDetail::ArenaAllocatorOperations<CustomAllocator<T>, T>
+    , public AllocDetail::AllocatorValueTraits<T, FalseType>
+    , public AllocDetail::ArenaReferenceStorage<CustomArena>
+{
+private:
+    using ArenaStorage = AllocDetail::ArenaReferenceStorage<CustomArena>;
 
 public:
     using _From_primary = CustomAllocator;
-    using value_type = T;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = FalseType;
 
 
 public:
@@ -159,27 +149,19 @@ public:
 
 public:
     CustomAllocator()noexcept
-        : m_arena(CustomAllocatorDetail::DefaultArena())
+        : ArenaStorage(CustomAllocatorDetail::DefaultArena())
     {}
     constexpr CustomAllocator(CustomArena& arena)noexcept
-        : m_arena(arena)
+        : ArenaStorage(arena)
     {}
     constexpr CustomAllocator(const CustomAllocator&)noexcept = default;
     template<class F>
     constexpr CustomAllocator(const CustomAllocator<F>& rhs)noexcept
-        : m_arena(rhs.m_arena)
+        : ArenaStorage(rhs.arena())
     {}
 
     constexpr ~CustomAllocator() = default;
     constexpr CustomAllocator& operator=(const CustomAllocator&)noexcept{ return *this; }
-
-
-public:
-    [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
-
-
-private:
-    CustomArena& m_arena;
 };
 template<typename T, typename F>
 inline bool operator==(const CustomAllocator<T>& lhs, const CustomAllocator<F>& rhs)noexcept{ return &lhs.arena() == &rhs.arena(); }
@@ -191,26 +173,16 @@ inline bool operator!=(const CustomAllocator<T>& lhs, const CustomAllocator<F>& 
 
 
 template<typename T>
-class CustomCacheAlignedAllocator : public AllocDetail::CacheAlignedArenaAllocatorOperations<CustomCacheAlignedAllocator<T>, T>{
-    template<typename F>
-    friend class CustomCacheAlignedAllocator;
-
-
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CustomCacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::CustomCacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::CustomCacheAlignedAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
+class CustomCacheAlignedAllocator
+    : public AllocDetail::CacheAlignedArenaAllocatorOperations<CustomCacheAlignedAllocator<T>, T>
+    , public AllocDetail::AllocatorValueTraits<T, FalseType>
+    , public AllocDetail::ArenaReferenceStorage<CustomArena>
+{
+private:
+    using ArenaStorage = AllocDetail::ArenaReferenceStorage<CustomArena>;
 
 public:
     using _From_primary = CustomCacheAlignedAllocator;
-    using value_type = T;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = FalseType;
 
 
 public:
@@ -222,27 +194,19 @@ public:
 
 public:
     CustomCacheAlignedAllocator()noexcept
-        : m_arena(CustomAllocatorDetail::DefaultArena())
+        : ArenaStorage(CustomAllocatorDetail::DefaultArena())
     {}
     constexpr CustomCacheAlignedAllocator(CustomArena& arena)noexcept
-        : m_arena(arena)
+        : ArenaStorage(arena)
     {}
     constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator&)noexcept = default;
     template<class F>
     constexpr CustomCacheAlignedAllocator(const CustomCacheAlignedAllocator<F>& rhs)noexcept
-        : m_arena(rhs.m_arena)
+        : ArenaStorage(rhs.arena())
     {}
 
     constexpr ~CustomCacheAlignedAllocator() = default;
     constexpr CustomCacheAlignedAllocator& operator=(const CustomCacheAlignedAllocator&)noexcept{ return *this; }
-
-
-public:
-    [[nodiscard]] constexpr CustomArena& arena()const noexcept{ return m_arena; }
-
-
-private:
-    CustomArena& m_arena;
 };
 template<typename T, typename F>
 inline bool operator==(const CustomCacheAlignedAllocator<T>& lhs, const CustomCacheAlignedAllocator<F>& rhs)noexcept{ return &lhs.arena() == &rhs.arena(); }

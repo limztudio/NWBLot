@@ -4,10 +4,7 @@
 #ifndef NWB_AVBOIT_COMPUTE_COMMON_GLSLI
 #define NWB_AVBOIT_COMPUTE_COMMON_GLSLI
 
-const uint NWB_AVBOIT_WARP_INVALID = 0xffffffffu;
-const uint NWB_AVBOIT_OVERFLOW_INVALID = 0xffffffffu;
-const uint NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD = 4u;
-const uint NWB_AVBOIT_EXTINCTION_BYTE_MASK = 0xffu;
+#include "avboit_constants.glsli"
 
 layout(push_constant) uniform NwbAvboitComputePushConstants{
     uvec4 nwbAvboitFrame;
@@ -51,23 +48,7 @@ float nwbAvboitExtinctionFixedScale(){
     return max(g_NwbAvboitCompute.nwbAvboitParams.y, 1.0);
 }
 
-uint nwbAvboitPhysicalExtinctionWordCount(){
-    return (nwbAvboitPhysicalSliceCount() + NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u) / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
-}
-
-uint nwbAvboitExtinctionWordIndex(uvec2 lowPixel, uint physicalSlice){
-    const uint physicalWord = physicalSlice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
-    return (physicalWord * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
-}
-
-uint nwbAvboitExtinctionByteShift(uint physicalSlice){
-    return (physicalSlice & (NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u)) << 3u;
-}
-
-float nwbAvboitUnpackExtinctionByte(uint packedWord, uint physicalSlice){
-    const uint packedByte = (packedWord >> nwbAvboitExtinctionByteShift(physicalSlice)) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    return float(packedByte) / nwbAvboitExtinctionFixedScale();
-}
+#include "avboit_extinction_common.glsli"
 
 #endif
 

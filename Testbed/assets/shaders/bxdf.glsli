@@ -12,15 +12,7 @@
 #define NWB_PROJECT_TINT 0
 #endif
 
-#ifndef NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED
-#define NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED 1
-layout(std140, binding = 4) uniform NwbMeshViewBuffer{
-    mat4 g_NwbMeshWorldToClip;
-    vec4 g_NwbMeshDirectionalLightDirection;
-    vec4 g_NwbMeshDirectionalLightColorIntensity;
-    vec4 g_NwbMeshCameraPosition;
-};
-#endif
+#include "mesh_view_buffer.glsli"
 
 mediump vec3 nwbProjectApplyBxdf(mediump vec3 color){
 #if NWB_PROJECT_BXDF == 0

@@ -24,10 +24,9 @@ namespace AllocDetail{
 
 
 template<template<typename> class Allocator, typename T>
-struct StatelessAllocatorTraits{
+struct StatelessAllocatorTraits : AllocatorValueTraits<T, TrueType>{
 public:
     using _From_primary = Allocator<T>;
-    using value_type = T;
 
     using pointer = T*;
     using const_pointer = const T*;
@@ -37,12 +36,6 @@ public:
 
     using reference = T&;
     using const_reference = const T&;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
 
 
 public:
@@ -64,12 +57,6 @@ public:
 
 template<typename T>
 class GeneralAllocator : public AllocDetail::StatelessAllocatorTraits<GeneralAllocator, T>{
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::GeneralAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
-
 public:
     constexpr GeneralAllocator()noexcept{}
     constexpr GeneralAllocator(const GeneralAllocator&)noexcept = default;
@@ -128,12 +115,6 @@ inline bool operator!=(const GeneralAllocator<T>&, const GeneralAllocator<F>&)no
 
 template<typename T>
 class CacheAlignedAllocator : public AllocDetail::StatelessAllocatorTraits<CacheAlignedAllocator, T>{
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::CacheAlignedAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
-
 public:
     constexpr CacheAlignedAllocator()noexcept{}
     constexpr CacheAlignedAllocator(const CacheAlignedAllocator&)noexcept = default;

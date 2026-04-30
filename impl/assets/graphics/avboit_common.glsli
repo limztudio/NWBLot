@@ -4,10 +4,8 @@
 #ifndef NWB_AVBOIT_COMMON_GLSLI
 #define NWB_AVBOIT_COMMON_GLSLI
 
-const uint NWB_AVBOIT_WARP_INVALID = 0xffffffffu;
-const uint NWB_AVBOIT_OVERFLOW_INVALID = 0xffffffffu;
-const uint NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD = 4u;
-const uint NWB_AVBOIT_EXTINCTION_BYTE_MASK = 0xffu;
+#include "avboit_constants.glsli"
+
 const float NWB_AVBOIT_ALPHA_EPSILON = 0.0001;
 const float NWB_AVBOIT_SPLAT_WEIGHT_EPSILON = 0.00001;
 
@@ -89,18 +87,7 @@ uint nwbAvboitLowPixelIndex(uvec2 lowPixel){
     return lowPixel.y * nwbAvboitLowWidth() + lowPixel.x;
 }
 
-uint nwbAvboitPhysicalExtinctionWordCount(){
-    return (nwbAvboitPhysicalSliceCount() + NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u) / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
-}
-
-uint nwbAvboitExtinctionWordIndex(uvec2 lowPixel, uint physicalSlice){
-    const uint physicalWord = physicalSlice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
-    return (physicalWord * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
-}
-
-uint nwbAvboitExtinctionByteShift(uint physicalSlice){
-    return (physicalSlice & (NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u)) << 3u;
-}
+#include "avboit_extinction_common.glsli"
 
 uvec2 nwbAvboitLowPixelFromFragCoord(vec2 fragCoord){
     const vec2 normalized = clamp(fragCoord / max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0)), vec2(0.0), vec2(0.999999));
@@ -145,11 +132,6 @@ bool nwbAvboitAcceptLowDepthFragment(texture2D opaqueDepth, sampler pointSampler
 
     outVirtualSlice = nwbAvboitVirtualSliceFromDepth(gl_FragCoord.z);
     return true;
-}
-
-float nwbAvboitUnpackExtinctionByte(uint packedWord, uint physicalSlice){
-    const uint packedByte = (packedWord >> nwbAvboitExtinctionByteShift(physicalSlice)) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    return float(packedByte) / nwbAvboitExtinctionFixedScale();
 }
 
 float nwbAvboitUnpackTransmittance(uint packedValue){

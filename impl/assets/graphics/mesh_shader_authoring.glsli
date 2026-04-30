@@ -85,15 +85,7 @@ layout(push_constant) uniform NwbMeshPushConstants{
     vec4 scissorRect;
 } g_NwbMeshPushConstants;
 
-#ifndef NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED
-#define NWB_PROJECT_MESH_VIEW_BUFFER_DEFINED 1
-layout(std140, binding = 4) uniform NwbMeshViewBuffer{
-    mat4 g_NwbMeshWorldToClip;
-    vec4 g_NwbMeshDirectionalLightDirection;
-    vec4 g_NwbMeshDirectionalLightColorIntensity;
-    vec4 g_NwbMeshCameraPosition;
-};
-#endif
+#include "mesh_view_buffer.glsli"
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 layout(std430, binding = 2) buffer NwbMeshGeneratedVerticesBuffer{

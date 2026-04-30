@@ -84,26 +84,16 @@ private:
 
 
 template<typename T>
-class MemoryAllocator : public AllocDetail::ArenaAllocatorOperations<MemoryAllocator<T>, T>{
-    template<typename F>
-    friend class MemoryAllocator;
-
-
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::MemoryAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
+class MemoryAllocator
+    : public AllocDetail::ArenaAllocatorOperations<MemoryAllocator<T>, T>
+    , public AllocDetail::AllocatorValueTraits<T, TrueType>
+    , public AllocDetail::ArenaReferenceStorage<MemoryArena>
+{
+private:
+    using ArenaStorage = AllocDetail::ArenaReferenceStorage<MemoryArena>;
 
 public:
     using _From_primary = MemoryAllocator;
-    using value_type = T;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
 
 
 public:
@@ -115,24 +105,16 @@ public:
 
 public:
     constexpr MemoryAllocator(MemoryArena& arena)noexcept
-        : m_arena(arena)
+        : ArenaStorage(arena)
     {}
     constexpr MemoryAllocator(const MemoryAllocator&)noexcept = default;
     template<class F>
     constexpr MemoryAllocator(const MemoryAllocator<F>& rhs)noexcept
-        : m_arena(rhs.m_arena)
+        : ArenaStorage(rhs.arena())
     {}
 
     constexpr ~MemoryAllocator() = default;
-    constexpr MemoryAllocator& operator=(const MemoryAllocator&) = default;
-
-
-public:
-    [[nodiscard]] constexpr MemoryArena& arena()const noexcept{ return m_arena; }
-
-
-private:
-    MemoryArena& m_arena;
+    constexpr MemoryAllocator& operator=(const MemoryAllocator&)noexcept{ return *this; }
 };
 template<typename T, typename F>
 inline bool operator==(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noexcept{ return true; }
@@ -144,26 +126,16 @@ inline bool operator!=(const MemoryAllocator<T>&, const MemoryAllocator<F>&)noex
 
 
 template<typename T>
-class MemoryCacheAlignedAllocator : public AllocDetail::CacheAlignedArenaAllocatorOperations<MemoryCacheAlignedAllocator<T>, T>{
-    template<typename F>
-    friend class MemoryCacheAlignedAllocator;
-
-
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::MemoryCacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::MemoryCacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::MemoryCacheAlignedAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
+class MemoryCacheAlignedAllocator
+    : public AllocDetail::CacheAlignedArenaAllocatorOperations<MemoryCacheAlignedAllocator<T>, T>
+    , public AllocDetail::AllocatorValueTraits<T, TrueType>
+    , public AllocDetail::ArenaReferenceStorage<MemoryArena>
+{
+private:
+    using ArenaStorage = AllocDetail::ArenaReferenceStorage<MemoryArena>;
 
 public:
     using _From_primary = MemoryCacheAlignedAllocator;
-    using value_type = T;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
 
 
 public:
@@ -175,24 +147,16 @@ public:
 
 public:
     constexpr MemoryCacheAlignedAllocator(MemoryArena& arena)noexcept
-        : m_arena(arena)
+        : ArenaStorage(arena)
     {}
     constexpr MemoryCacheAlignedAllocator(const MemoryCacheAlignedAllocator&)noexcept = default;
     template<class F>
     constexpr MemoryCacheAlignedAllocator(const MemoryCacheAlignedAllocator<F>& rhs)noexcept
-        : m_arena(rhs.m_arena)
+        : ArenaStorage(rhs.arena())
     {}
 
     constexpr ~MemoryCacheAlignedAllocator() = default;
     constexpr MemoryCacheAlignedAllocator& operator=(const MemoryCacheAlignedAllocator&)noexcept{ return *this; }
-
-
-public:
-    [[nodiscard]] constexpr MemoryArena& arena()const noexcept{ return m_arena; }
-
-
-private:
-    MemoryArena& m_arena;
 };
 template<typename T, typename F>
 inline bool operator==(const MemoryCacheAlignedAllocator<T>&, const MemoryCacheAlignedAllocator<F>&)noexcept{ return true; }

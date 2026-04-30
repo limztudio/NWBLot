@@ -93,6 +93,46 @@ namespace AllocDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename T>
+struct AllocatorElementRequirements{
+    static_assert(!IsConst_V<T>, "NWB allocators forbid containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsFunction_V<T>, "NWB allocators forbid allocators for function elements because of [allocator.requirements].");
+    static_assert(!IsReference_V<T>, "NWB allocators forbid allocators for reference elements because of [allocator.requirements].");
+};
+
+template<typename T, typename IsAlwaysEqualT>
+struct AllocatorValueTraits : AllocatorElementRequirements<T>{
+    using value_type = T;
+
+    using size_type = usize;
+    using difference_type = isize;
+
+    using propagate_on_container_move_assignment = TrueType;
+    using is_always_equal = IsAlwaysEqualT;
+};
+
+template<typename Arena>
+class ArenaReferenceStorage{
+protected:
+    constexpr explicit ArenaReferenceStorage(Arena& arena)noexcept
+        : m_arena(arena)
+    {}
+    constexpr ArenaReferenceStorage(const ArenaReferenceStorage&)noexcept = default;
+    constexpr ArenaReferenceStorage& operator=(const ArenaReferenceStorage&)noexcept{ return *this; }
+
+
+public:
+    [[nodiscard]] constexpr Arena& arena()const noexcept{ return m_arena; }
+
+
+private:
+    Arena& m_arena;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T, typename Arena>
 [[nodiscard]] inline T* AllocateTyped(Arena& arena, const usize count){
     static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");

@@ -204,26 +204,15 @@ private:
 
 
 template<typename T, usize maxAlignSize = s_MaxAlignSize>
-class ScratchAllocator{
-    template<typename F, usize>
-    friend class ScratchAllocator;
-
-
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::ScratchAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
+class ScratchAllocator
+    : public AllocDetail::AllocatorValueTraits<T, TrueType>
+    , public AllocDetail::ArenaReferenceStorage<ScratchArena<maxAlignSize>>
+{
+private:
+    using ArenaStorage = AllocDetail::ArenaReferenceStorage<ScratchArena<maxAlignSize>>;
 
 public:
     using _From_primary = ScratchAllocator;
-    using value_type = T;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
 
 
 public:
@@ -235,16 +224,16 @@ public:
 
 public:
     constexpr ScratchAllocator(ScratchArena<maxAlignSize>& arena)noexcept
-        : m_arena(arena)
+        : ArenaStorage(arena)
     {}
     constexpr ScratchAllocator(const ScratchAllocator&)noexcept = default;
     template<class F>
     constexpr ScratchAllocator(const ScratchAllocator<F, maxAlignSize>& rhs)noexcept
-        : m_arena(rhs.m_arena)
+        : ArenaStorage(rhs.arena())
     {}
 
     constexpr ~ScratchAllocator() = default;
-    constexpr ScratchAllocator& operator=(const ScratchAllocator&) = default;
+    constexpr ScratchAllocator& operator=(const ScratchAllocator&)noexcept{ return *this; }
 
 
 public:
@@ -253,15 +242,11 @@ public:
     }
 
     constexpr NWB_ALLOCATOR_PREFIX T* allocate(const usize count) NWB_ALLOCATOR_SUFFIX{
-        return m_arena.template allocate<T>(count);
+        return this->arena().template allocate<T>(count);
     }
 #if _HAS_CXX23
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
 #endif
-
-
-private:
-    ScratchArena<maxAlignSize>& m_arena;
 };
 template<typename T, typename F, usize maxAlignSize>
 inline bool operator==(const ScratchAllocator<T, maxAlignSize>&, const ScratchAllocator<F, maxAlignSize>&)noexcept{ return true; }
@@ -273,26 +258,15 @@ inline bool operator!=(const ScratchAllocator<T, maxAlignSize>&, const ScratchAl
 
 
 template<typename T, usize maxAlignSize = s_MaxAlignSize>
-class ScratchCacheAlignedAllocator{
-    template<typename F, usize>
-    friend class ScratchCacheAlignedAllocator;
-
-
-public:
-    static_assert(!IsConst_V<T>, "NWB::Core::Alloc::ScratchCacheAlignedAllocator forbids containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB::Core::Alloc::ScratchCacheAlignedAllocator forbids allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB::Core::Alloc::ScratchCacheAlignedAllocator forbids allocators for reference elements because of [allocator.requirements].");
-
+class ScratchCacheAlignedAllocator
+    : public AllocDetail::AllocatorValueTraits<T, TrueType>
+    , public AllocDetail::ArenaReferenceStorage<ScratchArena<maxAlignSize>>
+{
+private:
+    using ArenaStorage = AllocDetail::ArenaReferenceStorage<ScratchArena<maxAlignSize>>;
 
 public:
     using _From_primary = ScratchCacheAlignedAllocator;
-    using value_type = T;
-
-    using size_type = usize;
-    using difference_type = isize;
-
-    using propagate_on_container_move_assignment = TrueType;
-    using is_always_equal = TrueType;
 
 
 public:
@@ -304,21 +278,21 @@ public:
 
 public:
     constexpr ScratchCacheAlignedAllocator(ScratchArena<maxAlignSize>& arena)noexcept
-        : m_arena(arena)
+        : ArenaStorage(arena)
     {}
     constexpr ScratchCacheAlignedAllocator(const ScratchCacheAlignedAllocator&)noexcept = default;
     template<class F>
     constexpr ScratchCacheAlignedAllocator(const ScratchCacheAlignedAllocator<F, maxAlignSize>& rhs)noexcept
-        : m_arena(rhs.m_arena)
+        : ArenaStorage(rhs.arena())
     {}
 
     constexpr ~ScratchCacheAlignedAllocator() = default;
-    constexpr ScratchCacheAlignedAllocator& operator=(const ScratchCacheAlignedAllocator&) = default;
+    constexpr ScratchCacheAlignedAllocator& operator=(const ScratchCacheAlignedAllocator&)noexcept{ return *this; }
 
 
 public:
     usize max_size()const noexcept{
-        return (~usize(0) - CachelineSize()) / sizeof(value_type);
+        return (~usize(0) - CachelineSize()) / sizeof(T);
     }
 
     constexpr void deallocate(T* const buffer, const usize count)noexcept{
@@ -333,15 +307,11 @@ public:
         const usize alignSize = Max(CachelineSize(), static_cast<usize>(alignof(T)));
         NWB_ASSERT_MSG(alignSize <= maxAlignSize, NWB_TEXT("ScratchCacheAlignedAllocator alignment exceeds ScratchArena bucket capacity"));
 
-        return reinterpret_cast<T*>(m_arena.allocate(alignSize, bytes));
+        return reinterpret_cast<T*>(this->arena().allocate(alignSize, bytes));
     }
 #if _HAS_CXX23
     constexpr AllocationResult<T*> allocate_at_least(const usize count){ return { allocate(count), count }; }
 #endif
-
-
-private:
-    ScratchArena<maxAlignSize>& m_arena;
 };
 template<typename T, typename F, usize maxAlignSize>
 inline bool operator==(const ScratchCacheAlignedAllocator<T, maxAlignSize>&, const ScratchCacheAlignedAllocator<F, maxAlignSize>&)noexcept{ return true; }

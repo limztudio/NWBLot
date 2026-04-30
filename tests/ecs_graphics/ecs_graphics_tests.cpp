@@ -3304,6 +3304,7 @@ static void TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(TestContext& 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, boxResult.removedTriangleCount == boxPreviewMesh.removedTriangleCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, boxResult.wallVertexCount == boxPreviewMesh.wallVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, boxRecord.hole.operatorFootprint.vertexCount == boxParams.operatorFootprint.vertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(boxRecord.hole.operatorUp.y, 1.0f));
 
     NWB::Impl::DeformableSurfaceEditSession triangleSession;
     NWB::Impl::DeformableHolePreview trianglePreview;
@@ -3334,6 +3335,7 @@ static void TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(TestContext& 
         context,
         triangleRecord.hole.operatorProfile.sampleCount == triangleParams.operatorProfile.sampleCount
     );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(triangleRecord.hole.operatorUp.y, 1.0f));
 }
 
 static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestContext& context){
@@ -3343,6 +3345,7 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
         MakeHoleEditParams(instance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
     ;
     params.operatorFootprint = MakeBoxOperatorFootprint();
+    params.operatorUp = Float3U(1.0f, 0.0f, 0.0f);
     const Float3U holeCenter = RestHitPosition(instance, params);
 
     NWB::Impl::DeformableHolePreviewMesh previewMesh;
@@ -3352,9 +3355,11 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
     NWB::Impl::DeformableSurfaceEditSession session;
     NWB::Impl::DeformableHolePreview preview;
     NWB::Impl::DeformableHoleEditResult result;
+    NWB::Impl::DeformableSurfaceEditRecord record;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result, &record));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(record.hole.operatorUp.x, 1.0f));
 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.removedTriangleCount == result.removedTriangleCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.wallVertexCount == result.wallVertexCount);
@@ -3386,6 +3391,16 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
         ;
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedRimVertex);
+
+    for(usize vertexOffset = 0u; vertexOffset < static_cast<usize>(result.wallVertexCount); ++vertexOffset){
+        const NWB::Impl::DeformableVertexRest& vertex =
+            instance.restVertices[static_cast<usize>(result.firstWallVertex) + vertexOffset]
+        ;
+        const f32 expectedU = 0.5f - ((vertex.position.y - holeCenter.y) / (params.radius * 2.0f));
+        const f32 expectedV = 0.5f + ((vertex.position.x - holeCenter.x) / (params.radius * 2.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedU));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, expectedV));
+    }
 
     for(usize indexBase = 0u; indexBase < wallIndexBase; indexBase += 3u){
         const u32 i0 = instance.indices[indexBase + 0u];

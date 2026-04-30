@@ -41,7 +41,7 @@ using EdgeRecord = Core::Geometry::MeshTopologyEdge;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersion = 8u;
+static constexpr u32 s_SurfaceEditStateVersion = 9u;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
 static constexpr u32 s_MaxWallLoopCutCount = 8u;
 static constexpr f32 s_MinHoleBoundaryKeptFaceNormalDot = 0.5f;
@@ -94,6 +94,16 @@ struct SurfaceRemeshTriangle{
 
 [[nodiscard]] bool FiniteVec3(const SIMDVector value){
     return DeformableValidation::FiniteVector(value, 0x7u);
+}
+
+[[nodiscard]] bool ValidOperatorUpVector(const Float3U& operatorUp){
+    const SIMDVector up = LoadFloat(operatorUp);
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(up));
+    return
+        DeformableValidation::FiniteVector(up, 0x7u)
+        && IsFinite(lengthSquared)
+        && lengthSquared > Core::Geometry::s_FrameDirectionEpsilon
+    ;
 }
 
 [[nodiscard]] bool FiniteOperatorPosition(const Float3U& position){
@@ -225,6 +235,7 @@ using MorphDeltaLookup = HashMap<
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&triangleIndices)[3],
     const f32 (&bary)[3],
+    const Float3U& operatorUp,
     HoleFrame& outFrame
 ){
     const SIMDVector a = LoadRestVertexPosition(instance.restVertices[triangleIndices[0]]);
@@ -254,7 +265,31 @@ using MorphDeltaLookup = HashMap<
         VectorReplicate(bary[2]),
         tangentVector
     );
-    ResolveTangentBitangentVectors(outFrame.normal, tangentVector, edge0, outFrame.tangent, outFrame.bitangent);
+    const SIMDVector fallbackTangent = Core::Geometry::FrameResolveTangent(
+        outFrame.normal,
+        tangentVector,
+        edge0
+    );
+    const SIMDVector fallbackBitangent = Core::Geometry::FrameResolveBitangent(
+        outFrame.normal,
+        fallbackTangent,
+        s_SIMDIdentityR1
+    );
+    const SIMDVector operatorBitangent = Core::Geometry::FrameResolveTangent(
+        outFrame.normal,
+        LoadFloat(operatorUp),
+        fallbackBitangent
+    );
+    outFrame.tangent = Core::Geometry::FrameResolveTangent(
+        outFrame.normal,
+        Vector3Cross(operatorBitangent, outFrame.normal),
+        fallbackTangent
+    );
+    outFrame.bitangent = Core::Geometry::FrameResolveBitangent(
+        outFrame.normal,
+        outFrame.tangent,
+        operatorBitangent
+    );
     return
         VectorGetX(Vector3LengthSq(outFrame.normal)) > Core::Geometry::s_FrameDirectionEpsilon
         && VectorGetX(Vector3LengthSq(outFrame.tangent)) > Core::Geometry::s_FrameDirectionEpsilon
@@ -767,6 +802,7 @@ using MorphDeltaLookup = HashMap<
         && ExactF32(lhs.radius, rhs.radius)
         && ExactF32(lhs.ellipseRatio, rhs.ellipseRatio)
         && ExactF32(lhs.depth, rhs.depth)
+        && ExactFloat3(lhs.operatorUp, rhs.operatorUp)
         && ExactOperatorFootprint(lhs.operatorFootprint, rhs.operatorFootprint)
         && ExactOperatorProfile(lhs.operatorProfile, rhs.operatorProfile)
     ;
@@ -826,6 +862,7 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool ValidateHoleShape(const DeformableHoleEditParams& params){
     return
         ValidateHoleShapeValues(params.radius, params.ellipseRatio, params.depth)
+        && ValidOperatorUpVector(params.operatorUp)
         && ValidateOperatorFootprint(params.operatorFootprint)
         && ValidateOperatorProfile(params.operatorProfile)
     ;
@@ -896,7 +933,7 @@ using MorphDeltaLookup = HashMap<
     f32 hitBary[3] = {};
     if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
         return false;
-    return BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame);
+    return BuildHoleFrame(instance, hitTriangleIndices, hitBary, params.operatorUp, outFrame);
 }
 
 [[nodiscard]] bool ValidWallVertexSpan(const u32 firstVertex, const u32 vertexCount){
@@ -1057,6 +1094,7 @@ using MorphDeltaLookup = HashMap<
 [[nodiscard]] bool ValidHoleRecord(const DeformableSurfaceHoleEditRecord& record){
     return
         ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
+        && ValidOperatorUpVector(record.operatorUp)
         && ValidateOperatorFootprint(record.operatorFootprint)
         && ValidateOperatorProfile(record.operatorProfile)
         && ValidWallLoopCutCount(record.wallLoopCutCount)
@@ -1364,6 +1402,7 @@ using SurfaceEditRecordLookup = HashMap<
     outParams.radius = record.hole.radius;
     outParams.ellipseRatio = record.hole.ellipseRatio;
     outParams.depth = record.hole.depth;
+    outParams.operatorUp = record.hole.operatorUp;
     outParams.operatorFootprint = record.hole.operatorFootprint;
     outParams.operatorProfile = record.hole.operatorProfile;
     return ValidateParams(instance, outParams);
@@ -2335,6 +2374,64 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     return PointInsideOperatorCrossSection(params.operatorFootprint, topX, topY);
 }
 
+[[nodiscard]] bool BuildOperatorProjectionUv(
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    const SIMDVector position,
+    Float2U& outUv
+){
+    const f32 radiusX = params.radius;
+    const f32 radiusY = params.radius * params.ellipseRatio;
+    if(radiusX <= s_Epsilon || radiusY <= s_Epsilon)
+        return false;
+
+    const SIMDVector offset = VectorSubtract(position, frame.center);
+    const f32 localX = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
+    const f32 localY = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
+    if(!IsFinite(localX) || !IsFinite(localY))
+        return false;
+
+    outUv = Float2U(0.5f + (localX * 0.5f), 0.5f + (localY * 0.5f));
+    return IsFinite(outUv.x) && IsFinite(outUv.y);
+}
+
+template<typename EdgeVector, typename PositionVector>
+[[nodiscard]] bool ApplyOperatorProjectionUvsToBoundaryVertices(
+    const EdgeVector& orderedBoundaryEdges,
+    const PositionVector& restPositions,
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    Vector<DeformableVertexRest>& restVertices
+){
+    for(const EdgeRecord& edge : orderedBoundaryEdges){
+        if(edge.a >= restPositions.size() || edge.a >= restVertices.size())
+            return false;
+
+        Float2U uv0;
+        if(!BuildOperatorProjectionUv(frame, params, LoadFloat(restPositions[edge.a]), uv0))
+            return false;
+
+        restVertices[edge.a].uv0 = uv0;
+    }
+    return true;
+}
+
+[[nodiscard]] bool ApplyOperatorProjectionUvsToWallVertexPlan(
+    const HoleFrame& frame,
+    const DeformableHoleEditParams& params,
+    Core::Geometry::SurfacePatchWallVertex* wallVertices,
+    const usize wallVertexCount
+){
+    if(!wallVertices)
+        return false;
+
+    for(usize i = 0u; i < wallVertexCount; ++i){
+        if(!BuildOperatorProjectionUv(frame, params, LoadFloat(wallVertices[i].position), wallVertices[i].uv0))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TriangleCentroidInsideOperatorVolume(
     const DeformableRuntimeMeshInstance& instance,
     const HoleFrame& frame,
@@ -2908,7 +3005,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     f32 hitBary[3] = {};
     if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
         return false;
-    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame))
+    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, params.operatorUp, outFrame))
         return false;
 
     if(!PointInsideOperatorCrossSection(params.operatorFootprint, 0.0f, 0.0f))
@@ -3741,7 +3838,7 @@ static_assert(IsTriviallyCopyable_V<EdgeAdjacencyEntry>, "EdgeAdjacencyEntry mus
     f32 hitBary[3] = {};
     if(!DeformableValidation::NormalizeSourceBarycentric(params.posedHit.bary.values, hitBary))
         return false;
-    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, outFrame))
+    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, params.operatorUp, outFrame))
         return false;
 
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> candidateTriangle{
@@ -4348,6 +4445,7 @@ bool CommitHole(
         outRecord->hole.radius = params.radius;
         outRecord->hole.ellipseRatio = params.ellipseRatio;
         outRecord->hole.depth = params.depth;
+        outRecord->hole.operatorUp = params.operatorUp;
         outRecord->hole.operatorFootprint = params.operatorFootprint;
         outRecord->hole.operatorProfile = params.operatorProfile;
         outRecord->hole.wallLoopCutCount = result.wallLoopCutCount;
@@ -4770,7 +4868,7 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
     for(usize i = 0u; i < state.edits.size(); ++i){
         const DeformableSurfaceEditRecord& record = state.edits[i];
         outDump += StringFormat(
-            "edit[{}] id={} type=hole base_revision={} result_revision={} source_tri={} bary=({},{},{}) rest_position=({},{},{}) rest_normal=({},{},{}) radius={} ellipse={} depth={} operator_footprint_vertices={} operator_profile_samples={} loop_cuts={} wall_span=({},{}) removed_triangles={} added_vertices={} added_triangles={}\n",
+            "edit[{}] id={} type=hole base_revision={} result_revision={} source_tri={} bary=({},{},{}) rest_position=({},{},{}) rest_normal=({},{},{}) operator_up=({},{},{}) radius={} ellipse={} depth={} operator_footprint_vertices={} operator_profile_samples={} loop_cuts={} wall_span=({},{}) removed_triangles={} added_vertices={} added_triangles={}\n",
             i,
             record.editId,
             record.hole.baseEditRevision,
@@ -4785,6 +4883,9 @@ bool BuildSurfaceEditStateDebugDump(const DeformableSurfaceEditState& state, ASt
             record.hole.restNormal.x,
             record.hole.restNormal.y,
             record.hole.restNormal.z,
+            record.hole.operatorUp.x,
+            record.hole.operatorUp.y,
+            record.hole.operatorUp.z,
             record.hole.radius,
             record.hole.ellipseRatio,
             record.hole.depth,
@@ -4891,6 +4992,8 @@ template<usize sourceCount>
     const SourceSample& fallbackSourceSample,
     const SIMDVector fallbackNormal,
     const SIMDVector fallbackTangent,
+    const HoleFrame& projectionFrame,
+    const DeformableHoleEditParams& params,
     Vector<DeformableVertexRest>& newRestVertices,
     Vector<SkinInfluence4>& newSkin,
     Vector<SourceSample>& newSourceSamples
@@ -4907,7 +5010,6 @@ template<usize sourceCount>
 
     SIMDVector rawNormal = VectorZero();
     SIMDVector rawTangent = VectorZero();
-    SIMDVector rawUv = VectorZero();
     for(u32 i = 0u; i < 3u; ++i){
         const u32 sourceVertex = generated.sourceVertices[i];
         const f32 weight = generated.bary[i];
@@ -4918,7 +5020,6 @@ template<usize sourceCount>
         const SIMDVector weightVector = VectorReplicate(weight);
         rawNormal = VectorMultiplyAdd(LoadRestVertexNormal(source), weightVector, rawNormal);
         rawTangent = VectorMultiplyAdd(VectorSetW(LoadRestVertexTangent(source), 0.0f), weightVector, rawTangent);
-        rawUv = VectorMultiplyAdd(LoadRestVertexUv0(source), weightVector, rawUv);
     }
 
     const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(rawNormal, fallbackNormal);
@@ -4928,9 +5029,13 @@ template<usize sourceCount>
     if(!FiniteVec3(normal) || !FiniteVec3(tangent))
         return false;
 
+    Float2U projectedUv;
+    if(!BuildOperatorProjectionUv(projectionFrame, params, LoadFloat(generated.position), projectedUv))
+        return false;
+
     StoreFloat(normal, &vertex.normal);
     StoreFloat(VectorSetW(tangent, 1.0f), &vertex.tangent);
-    StoreFloat(rawUv, &vertex.uv0);
+    vertex.uv0 = projectedUv;
     if(
         !BuildBlendedVertexColor(
             instance.restVertices,
@@ -5213,6 +5318,8 @@ template<usize sourceCount>
                 wallSourceSample,
                 frame.normal,
                 frame.tangent,
+                frame,
+                params,
                 newRestVertices,
                 newSkin,
                 newSourceSamples
@@ -5226,6 +5333,22 @@ template<usize sourceCount>
             );
             return false;
         }
+    }
+    if(
+        !ApplyOperatorProjectionUvsToBoundaryVertices(
+            orderedBoundaryEdges,
+            restPositions,
+            frame,
+            params,
+            newRestVertices
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while assigning boundary projection UVs (entity={} runtime_mesh={} boundary_vertices={})")
+            , instance.entity.id
+            , instance.handle.value
+            , orderedBoundaryEdges.size()
+        );
+        return false;
     }
     if(!TransferSurfaceRemeshMorphDeltas(newMorphs, generatedVertices)){
         NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while transferring generated surface morph deltas (entity={} runtime_mesh={} generated_vertices={} morphs={})")
@@ -5319,6 +5442,21 @@ template<usize sourceCount>
                 , instance.handle.value
                 , orderedBoundaryEdges.size()
                 , params.operatorProfile.sampleCount
+            );
+            return false;
+        }
+        if(
+            !ApplyOperatorProjectionUvsToWallVertexPlan(
+                frame,
+                params,
+                wallVertexPlan.data(),
+                wallVertexPlan.size()
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while assigning wall projection UVs (entity={} runtime_mesh={} wall_vertices={})")
+                , instance.entity.id
+                , instance.handle.value
+                , wallVertexPlan.size()
             );
             return false;
         }
@@ -5630,7 +5768,7 @@ template<usize sourceCount>
         return false;
 
     HoleFrame frame;
-    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, frame))
+    if(!BuildHoleFrame(instance, hitTriangleIndices, hitBary, params.operatorUp, frame))
         return false;
 
     SourceSample wallSourceSample{};

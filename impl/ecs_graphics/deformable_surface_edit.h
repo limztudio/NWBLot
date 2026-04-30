@@ -57,6 +57,8 @@ struct DeformableHoleEditParams{
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;
     f32 depth = 0.0f;
+    // Preferred operator-local +Y axis, usually the editor view up vector.
+    Float3U operatorUp = Float3U(0.0f, 1.0f, 0.0f);
     DeformableOperatorFootprint operatorFootprint;
     DeformableOperatorProfile operatorProfile;
 };
@@ -136,6 +138,7 @@ struct DeformableSurfaceHoleEditRecord{
     SourceSample restSample;
     Float3U restPosition = Float3U(0.0f, 0.0f, 0.0f);
     Float3U restNormal = Float3U(0.0f, 0.0f, 1.0f);
+    Float3U operatorUp = Float3U(0.0f, 1.0f, 0.0f);
     u32 baseEditRevision = 0;
     f32 radius = 0.0f;
     f32 ellipseRatio = 1.0f;

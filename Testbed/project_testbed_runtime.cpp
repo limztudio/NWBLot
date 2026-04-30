@@ -473,6 +473,33 @@ static void ResolveFlyCameraAnglesFromTransform(
     return true;
 }
 
+[[nodiscard]] static bool ResolveEditorViewUp(
+    NWB::Core::ECS::World& world,
+    Float3U& outViewUp
+){
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    if(!cameraView.valid())
+        return false;
+
+    const SIMDVector viewUp = Vector3Rotate(
+        VectorSet(0.0f, 1.0f, 0.0f, 0.0f),
+        LoadFloat(cameraView.transform->rotation)
+    );
+    if(!FiniteVector3(viewUp))
+        return false;
+
+    const EditorVec3 normalizedViewUp = NormalizeVec3(viewUp, EditorVec3{ 0.0f, 1.0f, 0.0f });
+    outViewUp = Float3U(normalizedViewUp.x, normalizedViewUp.y, normalizedViewUp.z);
+    return true;
+}
+
+[[nodiscard]] static bool ApplySurfaceEditOperatorUp(
+    NWB::Core::ECS::World& world,
+    NWB::Core::ECSGraphics::DeformableHoleEditParams& params
+){
+    return ResolveEditorViewUp(world, params.operatorUp);
+}
+
 static void ApplyFlyCameraInput(
     NWB::Core::Scene::TransformComponent& transform,
     f32& yawRadians,
@@ -1467,6 +1494,11 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
     m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
     m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
+    if(!__hidden_project_testbed_runtime::ApplySurfaceEditOperatorUp(*m_world, m_surfaceEditPreviewParams)){
+        clearSurfaceEditPreview();
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not resolve editor view up"));
+        return false;
+    }
     if(
         !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
             m_context.assetManager,
@@ -1558,6 +1590,10 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     params.radius = m_surfaceEditRadius;
     params.ellipseRatio = m_surfaceEditEllipseRatio;
     params.depth = m_surfaceEditDepth;
+    if(!__hidden_project_testbed_runtime::ApplySurfaceEditOperatorUp(*m_world, params)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not resolve editor view up"));
+        return;
+    }
     if(
         !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
             m_context.assetManager,

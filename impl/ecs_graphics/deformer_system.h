@@ -121,7 +121,7 @@ private:
         const DeformableMorphWeightsComponent* morphWeights,
         const DeformableJointPaletteComponent* jointPalette,
         const DeformableSkeletonPoseComponent* skeletonPose,
-        const DeformableDisplacementComponent* displacement
+        const DeformableDisplacement& resolvedDisplacement
     );
     [[nodiscard]] bool copyRestToDeformed(Core::ICommandList& commandList, DeformableRuntimeMeshInstance& instance);
     [[nodiscard]] bool ensureRuntimeResources(

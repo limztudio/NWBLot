@@ -7,6 +7,7 @@
 #include <core/ecs/world.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>
+#include <global/text_utils.h>
 #include <impl/assets_graphics/shader_asset.h>
 #include <logger/client/logger.h>
 
@@ -51,6 +52,23 @@ static const Name& UiVertexBufferName(){
 static const Name& UiIndexBufferName(){
     static const Name s("ecs_ui/imgui_indices");
     return s;
+}
+
+static Name UiTextureName(const usize uniqueId){
+    static constexpr AStringView s_Prefix("ecs_ui/imgui_texture_");
+    char idBuffer[32] = {};
+    const AStringView idText = FormatDecimal(uniqueId, idBuffer);
+    if(idText.empty())
+        return Name("ecs_ui/imgui_texture");
+
+    char nameBuffer[64] = {};
+    const usize nameSize = s_Prefix.size() + idText.size();
+    if(nameSize > sizeof(nameBuffer))
+        return Name("ecs_ui/imgui_texture");
+
+    NWB_MEMCPY(nameBuffer, sizeof(nameBuffer), s_Prefix.data(), s_Prefix.size());
+    NWB_MEMCPY(nameBuffer + s_Prefix.size(), sizeof(nameBuffer) - s_Prefix.size(), idText.data(), idText.size());
+    return Name(AStringView(nameBuffer, nameSize));
 }
 
 static usize NextCapacity(const usize currentCapacity, const usize requiredCapacity, const usize defaultCapacity){
@@ -751,7 +769,7 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
             .setFormat(Core::Format::RGBA8_UNORM)
             .setInitialState(Core::ResourceStates::ShaderResource)
             .setKeepInitialState(true)
-            .setName(Name(StringFormat("ecs_ui/imgui_texture_{}", textureData.UniqueID)))
+            .setName(__hidden_ecs_ui::UiTextureName(static_cast<usize>(textureData.UniqueID)))
         ;
 
         createdResource->texture = m_graphics.createTexture(textureDesc);

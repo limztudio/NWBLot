@@ -2602,6 +2602,9 @@ template<typename DistanceFunc>
     if(generatedVertices.empty() || surfaceTriangles.empty())
         return true;
 
+    if(generatedVertices.size() <= Limit<usize>::s_Max - surfaceTriangles.size())
+        surfaceTriangles.reserve(surfaceTriangles.size() + generatedVertices.size());
+
     bool splitTriangle = true;
     while(splitTriangle){
         splitTriangle = false;

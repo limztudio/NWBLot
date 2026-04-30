@@ -170,10 +170,9 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
         Core::CoreDetail::HashCombine(outSignature, weight);
         Core::CoreDetail::HashCombine(outSignature, static_cast<u32>(morph.deltas.size()));
 
-        if(blendedDeltas.empty()){
+        if(blendedDeltas.empty())
             blendedDeltas.resize(vertexCount);
-            touchedVertices.reserve(vertexCount);
-        }
+        touchedVertices.reserve(Min(vertexCount, activeInputDeltaCount));
         for(const DeformableMorphDelta& delta : morph.deltas){
             if(!DeformableValidation::ValidMorphDelta(delta, vertexCount)){
                 NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta")

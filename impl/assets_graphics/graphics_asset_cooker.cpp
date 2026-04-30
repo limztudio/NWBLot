@@ -642,6 +642,22 @@ static bool ParseMaterialParameters(
     return true;
 }
 
+static bool BuildDiscoveredAssetVirtualPath(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Value& asset,
+    const AStringView assetLabel,
+    Name& outVirtualPath
+){
+    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, assetLabel))
+        return false;
+    return Core::Assets::BuildDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        outVirtualPath
+    );
+}
+
 static bool ParseMaterialMeta(
     Core::ShaderCook& shaderCook,
     const DiscoveredNwbFile& discoveredFile,
@@ -656,9 +672,7 @@ static bool ParseMaterialMeta(
         return false;
     }
 
-    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Material"))
-        return false;
-    if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
+    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "Material", outEntry.virtualPath))
         return false;
 
     if(!ParseVariantField(shaderCook, discoveredFile.filePath, asset, "shader_variant", Core::ShaderArchive::s_DefaultVariant, outEntry.shaderVariant))
@@ -1034,9 +1048,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     }
 
-    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "Geometry"))
-        return false;
-    if(!Core::Assets::BuildDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, outEntry.virtualPath))
+    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "Geometry", outEntry.virtualPath))
         return false;
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
@@ -1864,16 +1876,7 @@ static bool ParseDeformableGeometryMeta(
         return false;
     }
 
-    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "DeformableGeometry"))
-        return false;
-    if(
-        !Core::Assets::BuildDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        outEntry.virtualPath
-        )
-    )
+    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "DeformableGeometry", outEntry.virtualPath))
         return false;
 
     if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
@@ -1997,16 +2000,7 @@ static bool ParseDeformableDisplacementTextureMeta(
         return false;
     }
 
-    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, "DeformableDisplacementTexture"))
-        return false;
-    if(
-        !Core::Assets::BuildDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        outEntry.virtualPath
-        )
-    )
+    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "DeformableDisplacementTexture", outEntry.virtualPath))
         return false;
 
     const Core::Metascript::Value* width = FindField(asset, "width");

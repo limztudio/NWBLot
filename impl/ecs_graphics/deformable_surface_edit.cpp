@@ -2006,23 +2006,22 @@ using SurfaceRemeshClipPolygonList = Vector<
     return point;
 }
 
-[[nodiscard]] bool ClipSurfaceRemeshPolygonHalfPlane(
+template<typename DistanceFunc>
+[[nodiscard]] bool ClipSurfaceRemeshPolygonByDistance(
     const SurfaceRemeshClipPolygon& input,
-    const Float2U& edgeA,
-    const Float2U& edgeB,
-    const f32 orientation,
     const SurfaceRemeshClipSide::Enum clipSide,
-    SurfaceRemeshClipPolygon& output
+    SurfaceRemeshClipPolygon& output,
+    DistanceFunc&& distanceFunc
 ){
     output.clear();
     if(input.empty())
         return true;
 
     SurfaceRemeshClipPoint previous = input.back();
-    f32 previousDistance = SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, previous, orientation);
+    f32 previousDistance = distanceFunc(previous);
     bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, clipSide);
     for(const SurfaceRemeshClipPoint& current : input){
-        const f32 currentDistance = SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, current, orientation);
+        const f32 currentDistance = distanceFunc(current);
         const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, clipSide);
         if(currentKept != previousKept){
             const f32 denominator = previousDistance - currentDistance;
@@ -2041,6 +2040,24 @@ using SurfaceRemeshClipPolygonList = Vector<
         previousKept = currentKept;
     }
     return true;
+}
+
+[[nodiscard]] bool ClipSurfaceRemeshPolygonHalfPlane(
+    const SurfaceRemeshClipPolygon& input,
+    const Float2U& edgeA,
+    const Float2U& edgeB,
+    const f32 orientation,
+    const SurfaceRemeshClipSide::Enum clipSide,
+    SurfaceRemeshClipPolygon& output
+){
+    return ClipSurfaceRemeshPolygonByDistance(
+        input,
+        clipSide,
+        output,
+        [&](const SurfaceRemeshClipPoint& point){
+            return SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, point, orientation);
+        }
+    );
 }
 
 [[nodiscard]] f32 SurfaceRemeshDepthPlaneDistance(
@@ -2056,33 +2073,14 @@ using SurfaceRemeshClipPolygonList = Vector<
     const SurfaceRemeshClipSide::Enum clipSide,
     SurfaceRemeshClipPolygon& output
 ){
-    output.clear();
-    if(input.empty())
-        return true;
-
-    SurfaceRemeshClipPoint previous = input.back();
-    f32 previousDistance = SurfaceRemeshDepthPlaneDistance(previous, depthPlane);
-    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, clipSide);
-    for(const SurfaceRemeshClipPoint& current : input){
-        const f32 currentDistance = SurfaceRemeshDepthPlaneDistance(current, depthPlane);
-        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, clipSide);
-        if(currentKept != previousKept){
-            const f32 denominator = previousDistance - currentDistance;
-            if(!IsFinite(denominator) || Abs(denominator) <= s_SurfaceRemeshClipEpsilon)
-                return false;
-
-            const f32 t = previousDistance / denominator;
-            if(!AppendSurfaceRemeshClipPoint(output, InterpolateSurfaceRemeshClipPoint(previous, current, t)))
-                return false;
+    return ClipSurfaceRemeshPolygonByDistance(
+        input,
+        clipSide,
+        output,
+        [&](const SurfaceRemeshClipPoint& point){
+            return SurfaceRemeshDepthPlaneDistance(point, depthPlane);
         }
-        if(currentKept && !AppendSurfaceRemeshClipPoint(output, current))
-            return false;
-
-        previous = current;
-        previousDistance = currentDistance;
-        previousKept = currentKept;
-    }
-    return true;
+    );
 }
 
 [[nodiscard]] f32 SurfaceRemeshClipPointCrossLengthSq(
@@ -2772,6 +2770,18 @@ using SurfaceRemeshClipPolygonList = Vector<
         if(!BuildTriangleNormal(instance, triangleIndices, triangleNormal))
             return false;
 
+        const auto appendOriginalTriangle = [&](){
+            return AppendSurfaceRemeshTriangle(
+                outRestPositions,
+                triangleNormal,
+                triangleIndices[0u],
+                triangleIndices[1u],
+                triangleIndices[2u],
+                static_cast<u32>(triangle),
+                outSurfaceTriangles
+            );
+        };
+
         bool intersectsOperatorDepth = false;
         if(
             !SurfaceRemeshTriangleDepthIntersectsOperator(
@@ -2784,17 +2794,7 @@ using SurfaceRemeshClipPolygonList = Vector<
         )
             return false;
         if(!intersectsOperatorDepth){
-            if(
-                !AppendSurfaceRemeshTriangle(
-                    outRestPositions,
-                    triangleNormal,
-                    triangleIndices[0u],
-                    triangleIndices[1u],
-                    triangleIndices[2u],
-                    static_cast<u32>(triangle),
-                    outSurfaceTriangles
-                )
-            )
+            if(!appendOriginalTriangle())
                 return false;
             continue;
         }
@@ -2822,17 +2822,7 @@ using SurfaceRemeshClipPolygonList = Vector<
         if(!BuildSurfaceRemeshClipPointLocalBounds(triangleClipPoints, 3u, triangleBounds))
             return false;
         if(!SurfaceRemeshLocalBoundsOverlap(triangleBounds, footprintBounds)){
-            if(
-                !AppendSurfaceRemeshTriangle(
-                    outRestPositions,
-                    triangleNormal,
-                    triangleIndices[0u],
-                    triangleIndices[1u],
-                    triangleIndices[2u],
-                    static_cast<u32>(triangle),
-                    outSurfaceTriangles
-                )
-            )
+            if(!appendOriginalTriangle())
                 return false;
             continue;
         }
@@ -2953,17 +2943,7 @@ using SurfaceRemeshClipPolygonList = Vector<
             return false;
 
         if(clippedAway || !RemoveCollinearSurfaceRemeshClipPoints(active, areaMode)){
-            if(
-                !AppendSurfaceRemeshTriangle(
-                    outRestPositions,
-                    triangleNormal,
-                    triangleIndices[0u],
-                    triangleIndices[1u],
-                    triangleIndices[2u],
-                    static_cast<u32>(triangle),
-                    outSurfaceTriangles
-                )
-            )
+            if(!appendOriginalTriangle())
                 return false;
             continue;
         }
@@ -3418,6 +3398,27 @@ struct HolePreviewPlan{
     return outMesh.valid;
 }
 
+[[nodiscard]] bool BuildHolePreviewPlanAndMesh(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    Core::Alloc::ScratchArena<>& scratchArena,
+    HolePreviewPlan& plan,
+    DeformableHolePreviewMesh& outMesh
+){
+    if(!BuildHolePreviewPlan(instance, params, scratchArena, plan))
+        return false;
+
+    return BuildHolePreviewMeshFromPlan(
+        params,
+        plan.frame,
+        plan.orderedBoundaryEdges,
+        plan.restPositions,
+        plan.removedTriangleCount,
+        outMesh,
+        scratchArena
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -3479,26 +3480,14 @@ bool PreviewHole(
 
     Core::Alloc::ScratchArena<> scratchArena;
     __hidden_deformable_surface_edit::HolePreviewPlan plan(scratchArena);
+    DeformableHolePreviewMesh previewMesh;
     if(
-        !__hidden_deformable_surface_edit::BuildHolePreviewPlan(
+        !__hidden_deformable_surface_edit::BuildHolePreviewPlanAndMesh(
             instance,
             params,
             scratchArena,
-            plan
-        )
-    )
-        return false;
-
-    DeformableHolePreviewMesh previewMesh;
-    if(
-        !__hidden_deformable_surface_edit::BuildHolePreviewMeshFromPlan(
-            params,
-            plan.frame,
-            plan.orderedBoundaryEdges,
-            plan.restPositions,
-            plan.removedTriangleCount,
-            previewMesh,
-            scratchArena
+            plan,
+            previewMesh
         )
     )
         return false;
@@ -3533,24 +3522,12 @@ bool BuildHolePreviewMesh(
 
     Core::Alloc::ScratchArena<> scratchArena;
     __hidden_deformable_surface_edit::HolePreviewPlan plan(scratchArena);
-    if(
-        !__hidden_deformable_surface_edit::BuildHolePreviewPlan(
-            instance,
-            params,
-            scratchArena,
-            plan
-        )
-    )
-        return false;
-
-    return __hidden_deformable_surface_edit::BuildHolePreviewMeshFromPlan(
+    return __hidden_deformable_surface_edit::BuildHolePreviewPlanAndMesh(
+        instance,
         params,
-        plan.frame,
-        plan.orderedBoundaryEdges,
-        plan.restPositions,
-        plan.removedTriangleCount,
-        outMesh,
-        scratchArena
+        scratchArena,
+        plan,
+        outMesh
     );
 }
 

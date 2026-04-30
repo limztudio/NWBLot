@@ -44,54 +44,99 @@ struct AssetsGraphicsTestAllocatorTag;
 using AssetsGraphicsTestAllocator = NWB::Tests::CountingTestAllocator<AssetsGraphicsTestAllocatorTag>;
 using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
+#define NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 R"(asset.index_type = "u16";
 
-static constexpr AStringView s_MinimalGeometryMeta = R"(geometry asset;
+)"
 
-asset.index_type = "u16";
+#define NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32 R"(asset.index_type = "u32";
 
-asset.positions = [
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS R"(asset.positions = [
     [-0.5, -0.5, 0.0],
     [ 0.5, -0.5, 0.0],
     [ 0.0,  0.5, 0.0],
 ];
 
-asset.normals = [
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS R"(asset.normals = [
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
 ];
 
-asset.colors = [
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS R"(asset.tangents = [
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 R"(asset.uv0 = [
+    [0.0, 0.0],
+    [1.0, 0.0],
+    [0.5, 1.0],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES R"(asset.indices = [
+    [0, 1, 2],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX \
+    "deformable_geometry asset;\n\n" \
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+
+#define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, 0.0, 1.0],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS R"(asset.tangents = [
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+    [1.0, 0.0, 0.0, 1.0],
+];
+
+)"
+
+
+static constexpr AStringView s_MinimalGeometryMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    R"(asset.colors = [
     [1.0, 0.0, 0.0, 1.0],
     [0.0, 1.0, 0.0, 1.0],
     [0.0, 0.0, 1.0, 1.0],
 ];
 
-asset.indices = [
-    [0, 1, 2],
-];
-)";
+)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-static constexpr AStringView s_DefaultColorGeometryMeta = R"(geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-)";
+static constexpr AStringView s_DefaultColorGeometryMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 #if defined(NWB_FINAL)
 static constexpr AStringView s_UnsupportedGeometryFieldsMeta = R"(geometry asset;
@@ -110,196 +155,59 @@ asset.index_data = [
 ];
 )";
 
-static constexpr AStringView s_MismatchedGeometryMeta = R"(geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
+static constexpr AStringView s_MismatchedGeometryMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    R"(asset.normals = [
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
 ];
 
-asset.indices = [
-    [0, 1, 2],
-];
-)";
+)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 #endif
 
 
-static constexpr AStringView s_MinimalDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.source_samples = {};
+static constexpr AStringView s_MinimalDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.source_samples = {};
 asset.skin = {};
 asset.morphs = {};
 )";
 
-static constexpr AStringView s_GeneratedFrameDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.skin = {};
+static constexpr AStringView s_GeneratedFrameDeformableMeta =
+    "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+    R"(asset.skin = {};
 asset.morphs = {};
 )";
 
-static constexpr AStringView s_U32IndexTypeDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u32";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.skin = {};
+static constexpr AStringView s_U32IndexTypeDeformableMeta =
+    "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+    R"(asset.skin = {};
 asset.morphs = {};
 )";
 
-static constexpr AStringView s_EmptyListOptionalDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.colors = [];
+static constexpr AStringView s_EmptyListOptionalDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.colors = [];
 asset.source_samples = [];
 asset.skin = [];
 asset.morphs = [];
 )";
 
-static constexpr AStringView s_EmptyMapOptionalDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.colors = {};
+static constexpr AStringView s_EmptyMapOptionalDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.colors = {};
 asset.source_samples = {};
 asset.skin = {};
 asset.morphs = {};
@@ -316,21 +224,9 @@ asset.positions = [
     [-0.5,  0.5, 0.0],
 ];
 
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
+)" NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
+    R"(asset.uv0 = [
     [0.0, 0.0],
     [1.0, 0.0],
     [1.0, 1.0],
@@ -419,39 +315,9 @@ asset.morphs = {
 };
 )";
 
-static constexpr AStringView s_NonnormalizedSkinDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.skeleton_joint_count = 2;
+static constexpr AStringView s_NonnormalizedSkinDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.skeleton_joint_count = 2;
 
 asset.skin = {
     "joints0": [
@@ -468,102 +334,30 @@ asset.skin = {
 )";
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_MismatchedDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
+static constexpr AStringView s_MismatchedDeformableMeta =
+    "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    R"(asset.normals = [
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
 ];
 
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
+)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
+static constexpr AStringView s_MissingIndexTypeDeformableMeta =
+    "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-asset.indices = [
-    [0, 1, 2],
-];
-)";
-
-static constexpr AStringView s_MissingIndexTypeDeformableMeta = R"(deformable_geometry asset;
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-)";
-
-static constexpr AStringView s_MismatchedSkinDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.skin = {
+static constexpr AStringView s_MismatchedSkinDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.skin = {
     "joints0": [
         [0, 0, 0, 0],
         [0, 0, 0, 0],
@@ -576,39 +370,9 @@ asset.skin = {
 };
 )";
 
-static constexpr AStringView s_MismatchedSourceSamplesDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.source_samples = {
+static constexpr AStringView s_MismatchedSourceSamplesDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.source_samples = {
     "source_tri": [0, 0, 0],
     "bary": [
         [1.0, 0.0, 0.0],
@@ -628,21 +392,9 @@ asset.positions = [
     [ 2.0,  2.0, 0.0],
 ];
 
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
+)" NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
+    R"(asset.uv0 = [
     [0.0, 0.0],
     [1.0, 0.0],
     [0.5, 1.0],
@@ -654,39 +406,9 @@ asset.indices = [
 ];
 )";
 
-static constexpr AStringView s_MismatchedMorphDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.morphs = {
+static constexpr AStringView s_MismatchedMorphDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.morphs = {
     "lift": {
         "vertex_ids": [1, 2],
         "delta_position": [
@@ -704,39 +426,9 @@ asset.morphs = {
 };
 )";
 
-static constexpr AStringView s_MissingMorphTangentDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.morphs = {
+static constexpr AStringView s_MissingMorphTangentDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.morphs = {
     "lift": {
         "vertex_ids": [1, 2],
         "delta_position": [
@@ -759,41 +451,23 @@ asset.source = {
 };
 )";
 
-static constexpr AStringView s_MismatchedEditMaskDeformableMeta = R"(deformable_geometry asset;
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-];
-
-asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.edit_masks = [1, 1];
+static constexpr AStringView s_MismatchedEditMaskDeformableMeta =
+    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    R"(asset.edit_masks = [1, 1];
 )";
 #endif
+
+
+#undef NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
+#undef NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
+#undef NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+#undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
+#undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
 
 
 static bool PrepareCleanDirectory(const Path& directory){

@@ -365,14 +365,7 @@ static u32 FloatBits(const f32 value){
 }
 
 static bool EqualsAsciiToken(const AStringView text, const AStringView expected){
-    if(text.size() != expected.size())
-        return false;
-
-    for(usize i = 0; i < text.size(); ++i){
-        if(text[i] != expected[i])
-            return false;
-    }
-    return true;
+    return text == expected;
 }
 
 static bool ParseMaterialParameterTypeText(
@@ -857,6 +850,8 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
 }
 
 static bool EqualsAsciiTokenIgnoreCase(const AStringView text, const AStringView expected){
+    if(text == expected)
+        return true;
     if(text.size() != expected.size())
         return false;
 

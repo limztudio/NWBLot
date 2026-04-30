@@ -3753,6 +3753,18 @@ template<typename EdgeVector, typename PositionVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] bool CommitRemeshedHoleImpl(
+    DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    bool requireUploadedRuntimePayload,
+    u32 wallLoopCutCount,
+    DeformableHoleEditResult* outResult
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -3990,7 +4002,15 @@ bool CommitHole(
     }
 
     DeformableHoleEditResult result;
-    if(!CommitDeformableRestSpaceHole(instance, params, &result)){
+    if(
+        !__hidden_deformable_surface_edit::CommitRemeshedHoleImpl(
+            instance,
+            params,
+            true,
+            0u,
+            &result
+        )
+    ){
         NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed while applying rest-space hole (entity={} runtime_mesh={} triangle={} radius={} ellipse={} depth={})")
             , instance.entity.id
             , instance.handle.value
@@ -4697,7 +4717,7 @@ template<usize sourceCount>
     return true;
 }
 
-[[nodiscard]] bool CommitDeformableRestSpaceHoleRemeshedImpl(
+[[nodiscard]] bool CommitRemeshedHoleImpl(
     DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
     const bool requireUploadedRuntimePayload,
@@ -5283,29 +5303,6 @@ template<usize sourceCount>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CommitDeformableRestSpaceHoleImpl(
-    DeformableRuntimeMeshInstance& instance,
-    const DeformableHoleEditParams& params,
-    const bool requireUploadedRuntimePayload,
-    const u32 wallLoopCutCount,
-    DeformableHoleEditResult* outResult
-){
-    if(outResult)
-        *outResult = DeformableHoleEditResult{};
-
-    return CommitDeformableRestSpaceHoleRemeshedImpl(
-        instance,
-        params,
-        requireUploadedRuntimePayload,
-        wallLoopCutCount,
-        outResult
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace ReplayResultValidation{
 enum Enum : u8{
     None,
@@ -5348,7 +5345,7 @@ enum Enum : u8{
         DeformableRuntimeMeshInstance candidateInstance = replayInstance;
         DeformableHoleEditResult candidateResult;
         if(
-            !CommitDeformableRestSpaceHoleImpl(
+            !CommitRemeshedHoleImpl(
                 candidateInstance,
                 params,
                 false,
@@ -5827,18 +5824,6 @@ template<typename MutateRecordFunc>
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool CommitDeformableRestSpaceHole(
-    DeformableRuntimeMeshInstance& instance,
-    const DeformableHoleEditParams& params,
-    DeformableHoleEditResult* outResult
-){
-    return __hidden_deformable_surface_edit::CommitDeformableRestSpaceHoleImpl(instance, params, true, 0u, outResult);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

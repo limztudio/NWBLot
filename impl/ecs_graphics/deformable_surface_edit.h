@@ -395,11 +395,6 @@ struct DeformableSurfaceEditReplayContext{
     DeformableSurfaceEditId editId,
     DeformableSurfaceEditLoopCutResult* outResult = nullptr
 );
-[[nodiscard]] bool CommitDeformableRestSpaceHole(
-    DeformableRuntimeMeshInstance& instance,
-    const DeformableHoleEditParams& params,
-    DeformableHoleEditResult* outResult = nullptr
-);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

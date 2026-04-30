@@ -5147,15 +5147,8 @@ template<usize sourceCount>
         }
     }
 
-    Vector<DeformableVertexRest> rebuiltRestVertices = newRestVertices;
-    Core::Geometry::TangentFrameRebuildResult rebuildResult;
     // Continuation wall UVs can be degenerate by design; keep the authored remesh frames when the global rebuild falls back.
-    if(
-        DeformableValidation::RebuildRestVertexTangentFrames(rebuiltRestVertices, newIndices, &rebuildResult)
-        && rebuildResult.degenerateUvTriangleCount == 0u
-        && rebuildResult.fallbackTangentVertexCount == 0u
-    )
-        newRestVertices = Move(rebuiltRestVertices);
+    DeformableValidation::ApplyCleanRestVertexTangentFrameRebuildIfPossible(newRestVertices, newIndices);
 
     if(
         !DeformableValidation::ValidRuntimePayloadArrays(

@@ -335,24 +335,25 @@ bool SelectMeshInstances(
         return true;
     }
 
+    UtilityVector<usize> partialSelection;
     outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
         const AString nodeName = ToLower(__hidden_fbx_import::FromUfbxString(instance.node->name));
         const AString meshName = ToLower(__hidden_fbx_import::FromUfbxString(instance.mesh->name));
         if(nodeName == normalized || meshName == normalized)
             outSelection.push_back(instance.index);
+        else if(nodeName.find(normalized) != AString::npos || meshName.find(normalized) != AString::npos){
+            if(partialSelection.empty())
+                partialSelection.reserve(instances.size());
+            partialSelection.push_back(instance.index);
+        }
     }
     if(!outSelection.empty())
         return true;
-
-    for(const MeshInstance& instance : instances){
-        const AString nodeName = ToLower(__hidden_fbx_import::FromUfbxString(instance.node->name));
-        const AString meshName = ToLower(__hidden_fbx_import::FromUfbxString(instance.mesh->name));
-        if(nodeName.find(normalized) != AString::npos || meshName.find(normalized) != AString::npos)
-            outSelection.push_back(instance.index);
-    }
-    if(!outSelection.empty())
+    if(!partialSelection.empty()){
+        outSelection = Move(partialSelection);
         return true;
+    }
 
     outError = "mesh selector did not match any node or mesh";
     return false;

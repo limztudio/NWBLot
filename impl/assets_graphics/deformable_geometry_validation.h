@@ -152,6 +152,51 @@ namespace RestVertexPayloadFailure{
     return FindRestVertexPayloadFailure(vertex) == RestVertexPayloadFailure::None;
 }
 
+template<typename RebuildAllocator>
+inline void BuildRestVertexTangentFrameRebuildInput(
+    const Vector<DeformableVertexRest>& vertices,
+    Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& outRebuildVertices){
+    outRebuildVertices.clear();
+    outRebuildVertices.reserve(vertices.size());
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        const DeformableVertexRest& vertex = vertices[vertexIndex];
+        outRebuildVertices.push_back(Core::Geometry::TangentFrameRebuildVertex{
+            vertex.position,
+            vertex.uv0,
+            vertex.normal,
+            vertex.tangent,
+        });
+    }
+}
+
+template<typename RebuildAllocator>
+[[nodiscard]] inline bool ValidRestVertexTangentFrameRebuild(
+    const Vector<DeformableVertexRest>& vertices,
+    const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
+    if(rebuildVertices.size() != vertices.size())
+        return false;
+
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        DeformableVertexRest rebuiltVertex = vertices[vertexIndex];
+        rebuiltVertex.normal = rebuildVertices[vertexIndex].normal;
+        rebuiltVertex.tangent = rebuildVertices[vertexIndex].tangent;
+        if(!ValidRestVertexFrame(rebuiltVertex))
+            return false;
+    }
+    return true;
+}
+
+template<typename RebuildAllocator>
+inline void ApplyRestVertexTangentFrameRebuild(
+    Vector<DeformableVertexRest>& vertices,
+    const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        DeformableVertexRest& vertex = vertices[vertexIndex];
+        vertex.normal = rebuildVertices[vertexIndex].normal;
+        vertex.tangent = rebuildVertices[vertexIndex].tangent;
+    }
+}
+
 [[nodiscard]] inline bool RebuildRestVertexTangentFrames(
     Vector<DeformableVertexRest>& vertices,
     const Vector<u32>& indices,
@@ -160,28 +205,36 @@ namespace RestVertexPayloadFailure{
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
     using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
     Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
-    rebuildVertices.reserve(vertices.size());
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        const DeformableVertexRest& vertex = vertices[vertexIndex];
-        rebuildVertices.push_back(RebuildVertex{
-            vertex.position,
-            vertex.uv0,
-            vertex.normal,
-            vertex.tangent,
-        });
-    }
+    BuildRestVertexTangentFrameRebuildInput(vertices, rebuildVertices);
 
     if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, outResult))
         return false;
 
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        DeformableVertexRest& vertex = vertices[vertexIndex];
-        vertex.normal = rebuildVertices[vertexIndex].normal;
-        vertex.tangent = rebuildVertices[vertexIndex].tangent;
-        if(!ValidRestVertexFrame(vertex))
-            return false;
-    }
+    if(!ValidRestVertexTangentFrameRebuild(vertices, rebuildVertices))
+        return false;
+
+    ApplyRestVertexTangentFrameRebuild(vertices, rebuildVertices);
     return true;
+}
+
+inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
+    Vector<DeformableVertexRest>& vertices,
+    const Vector<u32>& indices){
+    Core::Alloc::ScratchArena<> scratchArena;
+    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
+    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
+    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
+    BuildRestVertexTangentFrameRebuildInput(vertices, rebuildVertices);
+
+    Core::Geometry::TangentFrameRebuildResult rebuildResult;
+    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, &rebuildResult))
+        return;
+    if(rebuildResult.degenerateUvTriangleCount != 0u || rebuildResult.fallbackTangentVertexCount != 0u)
+        return;
+    if(!ValidRestVertexTangentFrameRebuild(vertices, rebuildVertices))
+        return;
+
+    ApplyRestVertexTangentFrameRebuild(vertices, rebuildVertices);
 }
 
 [[nodiscard]] inline bool ValidBarycentric(SIMDVector baryVector, const f32 minimumBarycentric){

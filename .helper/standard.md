@@ -53,6 +53,9 @@ Updated: 2026-04-27
   - Wrong: `name() const;`, `assetType() const override;`
   - This applies to declarations, definitions, and multiline signatures alike (e.g., `)const{`, `)const override{`, `)const = 0;`).
 - Keep control statements compact; single-line guard clauses are common.
+- Prefer single-line control-statement conditions when the expression is still easy to scan, including compact calls with inline lambdas:
+  - Correct: `if(FindIf(items.begin(), items.end(), [&value](Item* item){ return item == &value; }) != items.end())`
+  - Wrong: splitting the same short condition into `if(` on its own line just because it contains an inline lambda.
 - Constructor initializer lists are split across lines with leading commas.
 - Heavy use of visual separators and blank lines between logical blocks.
 - Long slash separator lines (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) are flush-left file-scope separators. Do not indent them to split categories inside a class, struct, namespace body, or function.

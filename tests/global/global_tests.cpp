@@ -21,7 +21,7 @@ namespace __hidden_global_tests{
 using TestContext = NWB::Tests::TestContext;
 
 
-#define NWB_GLOBAL_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_GLOBAL_TEST_CHECK NWB_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -55,6 +55,102 @@ struct ConnectionInfo{
     usize size = 0u;
 };
 
+static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
+
+[[nodiscard]] bool ValidMessageType(const Type::Enum type){
+    switch(type){
+    case Type::Info:
+    case Type::EssentialInfo:
+    case Type::Warning:
+    case Type::CriticalWarning:
+    case Type::Error:
+    case Type::Fatal:
+        return true;
+    }
+    return false;
+}
+
+static void EnqueueServerMessage(Server& server, const tchar* message, const Type::Enum type){
+    server.enqueue(StringFormat(NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
+}
+
+[[nodiscard]] bool ParseReceivedMessage(
+    const void* contents,
+    const usize totalSize,
+    MessageType& outMessage,
+    const tchar*& outError
+){
+    outMessage = MessageType{};
+    outError = nullptr;
+
+    if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
+        outError = NWB_TEXT("Received a truncated message");
+        return false;
+    }
+    if(!contents){
+        outError = NWB_TEXT("Received a malformed message payload");
+        return false;
+    }
+
+    const auto* ptr = static_cast<const u8*>(contents);
+    usize sizeLeft = totalSize;
+
+    Timer time{};
+    NWB_MEMCPY(&time, sizeof(time), ptr, sizeof(time));
+    ptr += sizeof(time);
+    sizeLeft -= sizeof(time);
+
+    Type::Enum type{};
+    NWB_MEMCPY(&type, sizeof(type), ptr, sizeof(type));
+    ptr += sizeof(type);
+    sizeLeft -= sizeof(type);
+
+    if(!ValidMessageType(type)){
+        outError = NWB_TEXT("Received a message with an invalid type");
+        return false;
+    }
+
+    if(sizeLeft < sizeof(tchar) || (sizeLeft % sizeof(tchar)) != 0u){
+        outError = NWB_TEXT("Received a malformed message payload");
+        return false;
+    }
+
+    const auto* msgText = reinterpret_cast<const tchar*>(ptr);
+    const usize msgCharCount = sizeLeft / sizeof(tchar);
+    if(msgText[msgCharCount - 1u] != 0){
+        outError = NWB_TEXT("Received a non-null-terminated message");
+        return false;
+    }
+
+    outMessage = MakeTuple(Move(time), type, TString(msgText, msgCharCount - 1u));
+    return true;
+}
+
+[[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection){
+    static char s_EmptyResponse[] = "";
+
+    auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
+    if(!response){
+        EnqueueServerMessage(server, NWB_TEXT("Failed to create a response"), Type::Fatal);
+        return MHD_NO;
+    }
+
+    const auto ret = MHD_queue_response(&connection, MHD_HTTP_OK, response);
+    MHD_destroy_response(response);
+    return ret;
+}
+
+[[nodiscard]] MHD_Result FinishConnectionUpload(
+    Server& server,
+    MHD_Connection& connection,
+    ConnectionInfo*& info,
+    void*& conCls
+){
+    const MHD_Result ret = QueueEmptyResponse(server, connection);
+    DestroyConnectionInfo(info, conCls);
+    return ret;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -122,50 +218,10 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     const auto conClsPtr = MakeNotNull(con_cls);
     auto& conCls = *conClsPtr;
 
-    auto receivedCallback = [thisPtr](const void* contents, usize totalSize){
-        const auto* ptr = reinterpret_cast<const u8*>(contents);
-        usize sizeLeft = totalSize;
-
-        if(sizeLeft < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a truncated message on {}"), SERVER_NAME), Type::Error);
-            return;
-        }
-
-        Timer time{};
-        {
-            NWB_MEMCPY(&time, sizeof(decltype(time)), ptr, sizeof(decltype(time)));
-            ptr += sizeof(decltype(time));
-            sizeLeft -= sizeof(decltype(time));
-        }
-
-        Type::Enum type{};
-        {
-            NWB_MEMCPY(&type, sizeof(decltype(type)), ptr, sizeof(decltype(type)));
-            ptr += sizeof(decltype(type));
-            sizeLeft -= sizeof(decltype(type));
-        }
-
-        if(sizeLeft < sizeof(tchar) || (sizeLeft % sizeof(tchar)) != 0){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a malformed message payload on {}"), SERVER_NAME), Type::Error);
-            return;
-        }
-
-        const auto* msgText = reinterpret_cast<const tchar*>(ptr);
-        const usize msgCharCount = sizeLeft / sizeof(tchar);
-        if(msgText[msgCharCount - 1] != 0){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a non-null-terminated message on {}"), SERVER_NAME), Type::Error);
-            return;
-        }
-
-        TString strMsg(msgText, msgCharCount - 1);
-
-        thisPtr->enqueue(MakeTuple(Move(time), type, Move(strMsg)));
-    };
-
     if(!conCls){
         auto* info = __hidden_logger_server::CreateConnectionInfo();
         if(!info){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to allocate on {}"), SERVER_NAME), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to allocate"), Type::Fatal);
             return MHD_NO;
         }
 
@@ -177,21 +233,21 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     if(uploadDataSize){
         if(!upload_data){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Received a malformed upload chunk on {}"), SERVER_NAME), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Type::Error);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
         const auto uploadDataPtr = MakeNotNull(upload_data);
         if(uploadDataSize > static_cast<size_t>(Limit<usize>::s_Max) || info->size > Limit<usize>::s_Max - static_cast<usize>(uploadDataSize)){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Received an oversized message on {}"), SERVER_NAME), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Type::Error);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(uploadDataPtr, appendSize)){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to reallocate a buffer on {}"), SERVER_NAME), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to reallocate a buffer"), Type::Fatal);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
         }
@@ -199,24 +255,20 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         uploadDataSize = 0;
         return MHD_YES;
     }
+
+    MessageType message;
+    const tchar* error = nullptr;
+    if(__hidden_logger_server::ParseReceivedMessage(info->buffer, info->size, message, error))
+        thisPtr->enqueue(Move(message));
     else{
-        receivedCallback(info->buffer, info->size);
-
-        char nullStr[] = "";
-        auto* response = MHD_create_response_from_buffer(0, nullStr, MHD_RESPMEM_PERSISTENT);
-        if(!response){
-            thisPtr->enqueue(StringFormat(NWB_TEXT("Failed to create a response on {}"), SERVER_NAME), Type::Fatal);
-            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
-            return MHD_NO;
-        }
-
-        const auto ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
-        MHD_destroy_response(response);
-
-        __hidden_logger_server::DestroyConnectionInfo(info, conCls);
-
-        return ret;
+        __hidden_logger_server::EnqueueServerMessage(
+            *thisPtr,
+            error ? error : NWB_TEXT("Received a malformed message"),
+            Type::Error
+        );
     }
+
+    return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, conCls);
 }
 
 

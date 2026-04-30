@@ -42,7 +42,7 @@ using SurfacePatchWallVertex = NWB::Core::Geometry::SurfacePatchWallVertex;
 using TangentFrameRebuildVertex = NWB::Core::Geometry::TangentFrameRebuildVertex;
 
 
-#define NWB_GEOMETRY_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_GEOMETRY_TEST_CHECK NWB_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

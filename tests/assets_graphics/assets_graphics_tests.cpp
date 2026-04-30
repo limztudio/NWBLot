@@ -37,36 +37,12 @@ using NWB::Tests::MakeSourceSample;
 using NWB::Tests::MakeTriangleIndices;
 
 
-#define NWB_ASSETS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_ASSETS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
 
 
-static void* AssetsGraphicsTestAlloc(usize size){
-    return NWB::Core::Alloc::CoreAlloc(size, "NWB::Tests::AssetsGraphics::Alloc");
-}
-
-static void AssetsGraphicsTestFree(void* ptr){
-    NWB::Core::Alloc::CoreFree(ptr, "NWB::Tests::AssetsGraphics::Free");
-}
-
-static void* AssetsGraphicsTestAllocAligned(usize size, usize align){
-    return NWB::Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::AssetsGraphics::AllocAligned");
-}
-
-static void AssetsGraphicsTestFreeAligned(void* ptr){
-    NWB::Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::AssetsGraphics::FreeAligned");
-}
-
-struct TestArena{
-    NWB::Core::Alloc::CustomArena arena;
-
-    TestArena()
-        : arena(
-            &AssetsGraphicsTestAlloc,
-            &AssetsGraphicsTestFree,
-            &AssetsGraphicsTestAllocAligned,
-            &AssetsGraphicsTestFreeAligned
-        ){}
-};
+struct AssetsGraphicsTestAllocatorTag;
+using AssetsGraphicsTestAllocator = NWB::Tests::CountingTestAllocator<AssetsGraphicsTestAllocatorTag>;
+using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
 
 static constexpr AStringView s_MinimalGeometryMeta = R"(geometry asset;

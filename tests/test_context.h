@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <core/alloc/core.h>
+#include <core/alloc/custom.h>
 #include <core/common/common.h>
 
 #include <global/global.h>
@@ -38,6 +40,53 @@ struct TestContext{
         ++failed;
         NWB_CERR << file << '(' << line << "): check failed: " << expression << '\n';
     }
+};
+
+#define NWB_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+
+template<typename Tag>
+struct CountingTestAllocator{
+    inline static usize allocationCalls = 0u;
+
+    static void resetAllocationCalls(){
+        allocationCalls = 0u;
+    }
+
+    [[nodiscard]] static usize allocationCallCount(){
+        return allocationCalls;
+    }
+
+    static void* allocate(usize size){
+        ++allocationCalls;
+        return Core::Alloc::CoreAlloc(size, "NWB::Tests::CountingTestAllocator::allocate");
+    }
+
+    static void free(void* ptr){
+        Core::Alloc::CoreFree(ptr, "NWB::Tests::CountingTestAllocator::free");
+    }
+
+    static void* allocateAligned(usize size, usize align){
+        ++allocationCalls;
+        return Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::CountingTestAllocator::allocateAligned");
+    }
+
+    static void freeAligned(void* ptr){
+        Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::CountingTestAllocator::freeAligned");
+    }
+};
+
+template<typename AllocatorHooks>
+struct TestArena{
+    Core::Alloc::CustomArena arena;
+
+    TestArena()
+        : arena(
+            &AllocatorHooks::allocate,
+            &AllocatorHooks::free,
+            &AllocatorHooks::allocateAligned,
+            &AllocatorHooks::freeAligned
+        )
+    {}
 };
 
 inline Vector<u32> MakeTriangleIndices(){

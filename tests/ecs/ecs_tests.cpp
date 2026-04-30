@@ -23,35 +23,12 @@ namespace __hidden_ecs_tests{
 using TestContext = NWB::Tests::TestContext;
 
 
-#define NWB_ECS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_ECS_TEST_CHECK NWB_TEST_CHECK
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static usize s_ECSTestAllocationCalls = 0;
-
-
-static void* ECSTestAlloc(usize size){
-    ++s_ECSTestAllocationCalls;
-    return NWB::Core::Alloc::CoreAlloc(size, "NWB::Tests::ECS::Alloc");
-}
-
-static void ECSTestFree(void* ptr){
-    NWB::Core::Alloc::CoreFree(ptr, "NWB::Tests::ECS::Free");
-}
-
-static void* ECSTestAllocAligned(usize size, usize align){
-    ++s_ECSTestAllocationCalls;
-    return NWB::Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::ECS::AllocAligned");
-}
-
-static void ECSTestFreeAligned(void* ptr){
-    NWB::Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::ECS::FreeAligned");
-}
-
-
-using TestWorld = NWB::Tests::EcsTestWorld<&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned>;
+struct ECSTestAllocatorTag;
+using ECSTestAllocator = NWB::Tests::CountingTestAllocator<ECSTestAllocatorTag>;
+using TestWorld = NWB::Tests::EcsTestWorldWithAllocator<ECSTestAllocator>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +125,7 @@ static void TestComponentStorageAndView(TestContext& context){
 static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
     TestWorld testWorld;
 
-    const usize allocationCallsBefore = s_ECSTestAllocationCalls;
+    const usize allocationCallsBefore = ECSTestAllocator::allocationCallCount();
     usize singleViewCount = 0;
     usize multiViewCount = 0;
 
@@ -165,7 +142,7 @@ static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
 
     NWB_ECS_TEST_CHECK(context, singleViewCount == 0);
     NWB_ECS_TEST_CHECK(context, multiViewCount == 0);
-    NWB_ECS_TEST_CHECK(context, s_ECSTestAllocationCalls == allocationCallsBefore);
+    NWB_ECS_TEST_CHECK(context, ECSTestAllocator::allocationCallCount() == allocationCallsBefore);
 }
 
 static void TestComponentLifetime(TestContext& context){

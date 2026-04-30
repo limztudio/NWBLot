@@ -45,7 +45,7 @@ using NWB::Tests::MakeSourceSample;
 using NWB::Tests::MakeTriangleIndices;
 
 
-#define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_ECS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
 
 
 static constexpr AStringView s_MockAccessoryGeometryPath = "project/meshes/mock_earring";
@@ -63,23 +63,9 @@ static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& co
 }
 
 
-static void* ECSTestAlloc(usize size){
-    return NWB::Core::Alloc::CoreAlloc(size, "NWB::Tests::ECSGraphics::Alloc");
-}
-
-static void ECSTestFree(void* ptr){
-    NWB::Core::Alloc::CoreFree(ptr, "NWB::Tests::ECSGraphics::Free");
-}
-
-static void* ECSTestAllocAligned(usize size, usize align){
-    return NWB::Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::ECSGraphics::AllocAligned");
-}
-
-static void ECSTestFreeAligned(void* ptr){
-    NWB::Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::ECSGraphics::FreeAligned");
-}
-
-using TestWorld = NWB::Tests::EcsTestWorld<&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned>;
+struct ECSGraphicsTestAllocatorTag;
+using ECSGraphicsTestAllocator = NWB::Tests::CountingTestAllocator<ECSGraphicsTestAllocatorTag>;
+using TestWorld = NWB::Tests::EcsTestWorldWithAllocator<ECSGraphicsTestAllocator>;
 
 template<typename AssetT>
 class TestAssetCodec final : public NWB::Core::Assets::TypedAssetCodec<AssetT>{
@@ -166,7 +152,12 @@ struct TestAssetManager{
     NWB::Core::Assets::AssetManager manager;
 
     TestAssetManager()
-        : arena(&ECSTestAlloc, &ECSTestFree, &ECSTestAllocAligned, &ECSTestFreeAligned)
+        : arena(
+            &ECSGraphicsTestAllocator::allocate,
+            &ECSGraphicsTestAllocator::free,
+            &ECSGraphicsTestAllocator::allocateAligned,
+            &ECSGraphicsTestAllocator::freeAligned
+        )
         , registry(arena)
         , manager(arena, registry, binarySource)
     {

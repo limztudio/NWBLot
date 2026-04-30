@@ -24,30 +24,12 @@ namespace __hidden_scene_tests{
 using TestContext = NWB::Tests::TestContext;
 
 
-#define NWB_SCENE_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_SCENE_TEST_CHECK NWB_TEST_CHECK
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void* SceneTestAlloc(usize size){
-    return NWB::Core::Alloc::CoreAlloc(size, "NWB::Tests::Scene::Alloc");
-}
-
-static void SceneTestFree(void* ptr){
-    NWB::Core::Alloc::CoreFree(ptr, "NWB::Tests::Scene::Free");
-}
-
-static void* SceneTestAllocAligned(usize size, usize align){
-    return NWB::Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::Scene::AllocAligned");
-}
-
-static void SceneTestFreeAligned(void* ptr){
-    NWB::Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::Scene::FreeAligned");
-}
-
-
-using TestWorld = NWB::Tests::EcsTestWorld<&SceneTestAlloc, &SceneTestFree, &SceneTestAllocAligned, &SceneTestFreeAligned>;
+struct SceneTestAllocatorTag;
+using SceneTestAllocator = NWB::Tests::CountingTestAllocator<SceneTestAllocatorTag>;
+using TestWorld = NWB::Tests::EcsTestWorldWithAllocator<SceneTestAllocator>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

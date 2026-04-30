@@ -9,6 +9,8 @@
 #include <core/alloc/thread.h>
 #include <core/ecs/world.h>
 
+#include <tests/test_context.h>
+
 #include <global/global.h>
 
 
@@ -39,6 +41,24 @@ struct EcsTestWorld{
 
     EcsTestWorld()
         : arena(Alloc, Free, AllocAligned, FreeAligned)
+        , threadPool(0)
+        , world(arena, threadPool)
+    {}
+};
+
+template<typename AllocatorHooks>
+struct EcsTestWorldWithAllocator{
+    Core::Alloc::CustomArena arena;
+    Core::Alloc::ThreadPool threadPool;
+    Core::ECS::World world;
+
+    EcsTestWorldWithAllocator()
+        : arena(
+            &AllocatorHooks::allocate,
+            &AllocatorHooks::free,
+            &AllocatorHooks::allocateAligned,
+            &AllocatorHooks::freeAligned
+        )
         , threadPool(0)
         , world(arena, threadPool)
     {}

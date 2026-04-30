@@ -24,7 +24,7 @@ namespace __hidden_math_tests{
 using TestContext = NWB::Tests::TestContext;
 
 
-#define NWB_MATH_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
+#define NWB_MATH_TEST_CHECK NWB_TEST_CHECK
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

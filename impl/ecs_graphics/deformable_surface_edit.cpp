@@ -2524,6 +2524,36 @@ using SurfaceRemeshClipPolygonList = Vector<
     return true;
 }
 
+[[nodiscard]] bool BuildSurfaceRemeshClipPointLocalBounds(
+    const SurfaceRemeshClipPoint* points,
+    const usize pointCount,
+    SurfaceRemeshLocalBounds& outBounds
+){
+    outBounds = SurfaceRemeshLocalBounds{};
+    if(!points || pointCount == 0u)
+        return false;
+
+    const Float2U& firstPoint = points[0u].local;
+    if(!IsFinite(firstPoint.x) || !IsFinite(firstPoint.y))
+        return false;
+
+    outBounds.minX = firstPoint.x;
+    outBounds.maxX = firstPoint.x;
+    outBounds.minY = firstPoint.y;
+    outBounds.maxY = firstPoint.y;
+    for(usize i = 1u; i < pointCount; ++i){
+        const Float2U& point = points[i].local;
+        if(!IsFinite(point.x) || !IsFinite(point.y))
+            return false;
+
+        outBounds.minX = Min(outBounds.minX, point.x);
+        outBounds.minY = Min(outBounds.minY, point.y);
+        outBounds.maxX = Max(outBounds.maxX, point.x);
+        outBounds.maxY = Max(outBounds.maxY, point.y);
+    }
+    return true;
+}
+
 [[nodiscard]] bool SurfaceRemeshLocalBoundsOverlap(
     const SurfaceRemeshLocalBounds& lhs,
     const SurfaceRemeshLocalBounds& rhs
@@ -3076,6 +3106,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     outRestPositions.reserve(instance.restVertices.size());
     for(const DeformableVertexRest& vertex : instance.restVertices)
         outRestPositions.push_back(vertex.position);
+    outSurfaceTriangles.reserve(triangleCount);
 
     using BoundaryEdgeMap = HashMap<
         u64,
@@ -3150,12 +3181,8 @@ using SurfaceRemeshClipPolygonList = Vector<
             continue;
         }
 
-        SurfaceRemeshClipPolygon active{
-            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
-        };
-        active.reserve(8u);
+        SurfaceRemeshClipPoint triangleClipPoints[3] = {};
         for(u32 vertexIndex = 0u; vertexIndex < 3u; ++vertexIndex){
-            SurfaceRemeshClipPoint point;
             if(
                 !BuildSurfaceRemeshTriangleClipPoint(
                     instance,
@@ -3163,15 +3190,14 @@ using SurfaceRemeshClipPolygonList = Vector<
                     params,
                     triangleIndices[vertexIndex],
                     vertexIndex,
-                    point
+                    triangleClipPoints[vertexIndex]
                 )
-                || !AppendSurfaceRemeshClipPoint(active, point)
             )
                 return false;
         }
 
         SurfaceRemeshLocalBounds triangleBounds;
-        if(!BuildSurfaceRemeshClipPolygonLocalBounds(active, triangleBounds))
+        if(!BuildSurfaceRemeshClipPointLocalBounds(triangleClipPoints, 3u, triangleBounds))
             return false;
         if(!SurfaceRemeshLocalBoundsOverlap(triangleBounds, footprintBounds)){
             if(
@@ -3187,6 +3213,15 @@ using SurfaceRemeshClipPolygonList = Vector<
             )
                 return false;
             continue;
+        }
+
+        SurfaceRemeshClipPolygon active{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
+        };
+        active.reserve(8u);
+        for(const SurfaceRemeshClipPoint& point : triangleClipPoints){
+            if(!AppendSurfaceRemeshClipPoint(active, point))
+                return false;
         }
 
         SurfaceRemeshClipPolygonList outsidePieces{

@@ -780,6 +780,10 @@ public:
 
 
 private:
+    [[nodiscard]] VkSpecializationInfo makeSpecializationInfo()const;
+
+
+private:
     ShaderDesc m_desc;
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
@@ -787,7 +791,7 @@ private:
     AString m_entryPointName;
 
     Vector<VkSpecializationMapEntry, Alloc::CustomAllocator<VkSpecializationMapEntry>> m_specializationEntries;
-    Vector<u8, Alloc::CustomAllocator<u8>> m_specializationData;
+    Vector<u32, Alloc::CustomAllocator<u32>> m_specializationData;
 
     const VulkanContext& m_context;
 };

@@ -220,7 +220,7 @@ Shader::Shader(const VulkanContext& context)
     : RefCounter<IShader>(context.threadPool)
     , m_bytecode(Alloc::CustomAllocator<u8>(context.objectArena))
     , m_specializationEntries(Alloc::CustomAllocator<VkSpecializationMapEntry>(context.objectArena))
-    , m_specializationData(Alloc::CustomAllocator<u8>(context.objectArena))
+    , m_specializationData(Alloc::CustomAllocator<u32>(context.objectArena))
     , m_context(context)
 {}
 Shader::~Shader(){
@@ -228,6 +228,15 @@ Shader::~Shader(){
         vkDestroyShaderModule(m_context.device, m_shaderModule, m_context.allocationCallbacks);
         m_shaderModule = VK_NULL_HANDLE;
     }
+}
+
+VkSpecializationInfo Shader::makeSpecializationInfo()const{
+    VkSpecializationInfo specInfo{};
+    specInfo.mapEntryCount = static_cast<u32>(m_specializationEntries.size());
+    specInfo.pMapEntries = m_specializationEntries.data();
+    specInfo.dataSize = m_specializationData.size() * sizeof(u32);
+    specInfo.pData = m_specializationData.data();
+    return specInfo;
 }
 
 
@@ -354,7 +363,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
         return nullptr;
     }
-    if(numConstants > UINT32_MAX / sizeof(uint32_t)){
+    if(numConstants > Limit<u32>::s_Max / sizeof(u32)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constant count {} is too large"), numConstants);
         return nullptr;
     }
@@ -386,16 +395,16 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     }
 
     if(constants && numConstants > 0){
-        shader->m_specializationData.resize(numConstants * sizeof(uint32_t));
+        shader->m_specializationData.resize(numConstants);
         shader->m_specializationEntries.resize(numConstants);
 
         auto fillConstant = [&](usize i){
             VkSpecializationMapEntry& entry = shader->m_specializationEntries[i];
             entry.constantID = constants[i].constantID;
-            entry.offset = static_cast<uint32_t>(i * sizeof(uint32_t));
-            entry.size = sizeof(uint32_t);
+            entry.offset = static_cast<u32>(i * sizeof(u32));
+            entry.size = sizeof(u32);
 
-            NWB_MEMCPY(shader->m_specializationData.data() + entry.offset, sizeof(uint32_t), &constants[i].value, sizeof(uint32_t));
+            NWB_MEMCPY(shader->m_specializationData.data() + i, sizeof(u32), &constants[i].value, sizeof(u32));
         };
 
         if(taskPool().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)

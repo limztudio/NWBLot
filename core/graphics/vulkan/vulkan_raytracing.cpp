@@ -1124,12 +1124,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         if(s->m_specializationEntries.empty())
             return;
 
-        VkSpecializationInfo specInfo{};
-        specInfo.mapEntryCount = static_cast<u32>(s->m_specializationEntries.size());
-        specInfo.pMapEntries = s->m_specializationEntries.data();
-        specInfo.dataSize = s->m_specializationData.size();
-        specInfo.pData = s->m_specializationData.data();
-        specInfos.push_back(specInfo);
+        specInfos.push_back(s->makeSpecializationInfo());
         stageInfo.pSpecializationInfo = &specInfos.back();
     };
 

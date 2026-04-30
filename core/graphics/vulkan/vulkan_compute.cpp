@@ -62,10 +62,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     VkSpecializationInfo specInfo{};
     if(!cs->m_specializationEntries.empty()){
-        specInfo.mapEntryCount = static_cast<u32>(cs->m_specializationEntries.size());
-        specInfo.pMapEntries = cs->m_specializationEntries.data();
-        specInfo.dataSize = cs->m_specializationData.size();
-        specInfo.pData = cs->m_specializationData.data();
+        specInfo = cs->makeSpecializationInfo();
         shaderStage.pSpecializationInfo = &specInfo;
     }
 

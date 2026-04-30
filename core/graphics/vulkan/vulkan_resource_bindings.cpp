@@ -593,12 +593,7 @@ void Device::appendPipelineShaderStage(
     stageInfo.pName = s->m_entryPointName.c_str();
 
     if(!s->m_specializationEntries.empty()){
-        VkSpecializationInfo specInfo{};
-        specInfo.mapEntryCount = static_cast<u32>(s->m_specializationEntries.size());
-        specInfo.pMapEntries = s->m_specializationEntries.data();
-        specInfo.dataSize = s->m_specializationData.size();
-        specInfo.pData = s->m_specializationData.data();
-        specializationInfos.push_back(specInfo);
+        specializationInfos.push_back(s->makeSpecializationInfo());
         stageInfo.pSpecializationInfo = &specializationInfos.back();
     }
 

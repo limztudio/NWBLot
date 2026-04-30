@@ -46,13 +46,7 @@ static constexpr u32 s_MinWallLoopVertexCount = 3u;
 static constexpr u32 s_MaxWallLoopCutCount = 8u;
 static constexpr f32 s_HolePreviewSurfaceOffsetMin = 0.001f;
 static constexpr f32 s_HolePreviewSurfaceOffsetRadiusScale = 0.025f;
-static constexpr f32 s_OperatorFootprintPlaneEpsilon = 0.0001f;
-static constexpr f32 s_OperatorFootprintPointEpsilonSq = 0.0000000001f;
-static constexpr f32 s_OperatorFootprintAreaEpsilon = 0.000001f;
-static constexpr f32 s_OperatorProfileDepthEpsilon = 0.00001f;
-static constexpr f32 s_OperatorProfileScaleEpsilon = 0.000001f;
 static constexpr f32 s_MinOperatorProfileWallScale = 0.05f;
-static constexpr f32 s_MaxOperatorProfileScale = 16.0f;
 static constexpr f32 s_SurfaceRemeshClipEpsilon = 0.00001f;
 static constexpr f32 s_SurfaceRemeshAreaEpsilon = 0.0000001f;
 static constexpr f32 s_SurfaceRemeshVertexMergeDistanceSq = 0.0000000001f;
@@ -65,11 +59,6 @@ struct HoleFrame{
     SIMDVector normal = VectorZero();
     SIMDVector tangent = VectorZero();
     SIMDVector bitangent = VectorZero();
-};
-
-struct OperatorFootprintPoint{
-    f32 x = 0.0f;
-    f32 y = 0.0f;
 };
 
 struct SurfaceRemeshClipPoint{
@@ -113,27 +102,6 @@ struct SurfaceRemeshTriangle{
         && IsFinite(lengthSquared)
         && lengthSquared > Core::Geometry::s_FrameDirectionEpsilon
     ;
-}
-
-[[nodiscard]] bool FiniteOperatorPosition(const Float3U& position){
-    return IsFinite(position.x) && IsFinite(position.y) && IsFinite(position.z);
-}
-
-[[nodiscard]] f32 OperatorFootprintCross(
-    const OperatorFootprintPoint& a,
-    const OperatorFootprintPoint& b,
-    const OperatorFootprintPoint& c
-){
-    return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
-}
-
-[[nodiscard]] f32 OperatorFootprintDistanceSq(
-    const OperatorFootprintPoint& a,
-    const OperatorFootprintPoint& b
-){
-    const f32 dx = b.x - a.x;
-    const f32 dy = b.y - a.y;
-    return (dx * dx) + (dy * dy);
 }
 
 void ResolveTangentBitangentVectors(
@@ -367,402 +335,6 @@ using MorphDeltaLookup = HashMap<
             return false;
     }
     return true;
-}
-
-[[nodiscard]] f32 OperatorFootprintSignedArea(const DeformableOperatorFootprint& footprint){
-    f32 area = 0.0f;
-    for(u32 i = 0u; i < footprint.vertexCount; ++i){
-        const u32 next = (i + 1u) % footprint.vertexCount;
-        area +=
-            (footprint.vertices[i].x * footprint.vertices[next].y)
-            - (footprint.vertices[i].y * footprint.vertices[next].x)
-        ;
-    }
-    return area * 0.5f;
-}
-
-[[nodiscard]] bool ValidateOperatorFootprint(const DeformableOperatorFootprint& footprint){
-    if(
-        footprint.vertexCount < 3u
-        || footprint.vertexCount > s_DeformableOperatorFootprintMaxVertexCount
-    )
-        return false;
-
-    for(u32 i = 0u; i < footprint.vertexCount; ++i){
-        const Float2U& point = footprint.vertices[i];
-        if(!IsFinite(point.x) || !IsFinite(point.y))
-            return false;
-    }
-
-    const f32 area = OperatorFootprintSignedArea(footprint);
-    return IsFinite(area) && Abs(area) > 0.000001f;
-}
-
-[[nodiscard]] bool ValidateOperatorProfile(const DeformableOperatorProfile& profile){
-    if(
-        profile.sampleCount < 2u
-        || profile.sampleCount > s_DeformableOperatorProfileMaxSampleCount
-    )
-        return false;
-
-    f32 previousDepth = -1.0f;
-    for(u32 i = 0u; i < profile.sampleCount; ++i){
-        const DeformableOperatorProfileSample& sample = profile.samples[i];
-        if(
-            !IsFinite(sample.depth)
-            || !IsFinite(sample.scale)
-            || !IsFinite(sample.center.x)
-            || !IsFinite(sample.center.y)
-            || sample.depth < -s_OperatorProfileDepthEpsilon
-            || sample.depth > 1.0f + s_OperatorProfileDepthEpsilon
-            || sample.scale < 0.0f
-            || sample.scale > s_MaxOperatorProfileScale
-        )
-            return false;
-        if(i == 0u){
-            if(Abs(sample.depth) > s_OperatorProfileDepthEpsilon || sample.scale <= s_OperatorProfileScaleEpsilon)
-                return false;
-        }
-        else if(sample.depth <= previousDepth + s_OperatorProfileDepthEpsilon)
-            return false;
-        previousDepth = sample.depth;
-    }
-
-    return Abs(profile.samples[profile.sampleCount - 1u].depth - 1.0f) <= s_OperatorProfileDepthEpsilon;
-}
-
-[[nodiscard]] bool ValidateHoleOperatorShape(
-    const DeformableOperatorFootprint& footprint,
-    const DeformableOperatorProfile& profile
-){
-    return ValidateOperatorFootprint(footprint) && ValidateOperatorProfile(profile);
-}
-
-[[nodiscard]] bool AppendUniqueOperatorFootprintPoint(
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>>& points,
-    const f32 x,
-    const f32 y
-){
-    if(!IsFinite(x) || !IsFinite(y))
-        return false;
-
-    const OperatorFootprintPoint point{ x, y };
-    for(const OperatorFootprintPoint& existing : points){
-        if(OperatorFootprintDistanceSq(existing, point) <= s_OperatorFootprintPointEpsilonSq)
-            return true;
-    }
-
-    points.push_back(point);
-    return true;
-}
-
-[[nodiscard]] bool AppendOperatorFootprintHullPoint(
-    DeformableOperatorFootprint& footprint,
-    const OperatorFootprintPoint& point
-){
-    if(footprint.vertexCount >= s_DeformableOperatorFootprintMaxVertexCount)
-        return false;
-
-    footprint.vertices[footprint.vertexCount] = Float2U(point.x, point.y);
-    ++footprint.vertexCount;
-    return true;
-}
-
-[[nodiscard]] bool BuildConvexOperatorFootprint(
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>>& points,
-    DeformableOperatorFootprint& outFootprint,
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    outFootprint = DeformableOperatorFootprint{};
-    if(points.size() < 3u)
-        return false;
-
-    Sort(points.begin(), points.end(), [](const OperatorFootprintPoint& lhs, const OperatorFootprintPoint& rhs){
-        if(lhs.x != rhs.x)
-            return lhs.x < rhs.x;
-        return lhs.y < rhs.y;
-    });
-
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> lower{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> upper{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    lower.reserve(points.size());
-    upper.reserve(points.size());
-
-    for(const OperatorFootprintPoint& point : points){
-        while(
-            lower.size() >= 2u
-            && OperatorFootprintCross(lower[lower.size() - 2u], lower[lower.size() - 1u], point)
-                <= s_OperatorFootprintAreaEpsilon
-        )
-            lower.pop_back();
-        lower.push_back(point);
-    }
-
-    for(usize i = points.size(); i > 0u; --i){
-        const OperatorFootprintPoint& point = points[i - 1u];
-        while(
-            upper.size() >= 2u
-            && OperatorFootprintCross(upper[upper.size() - 2u], upper[upper.size() - 1u], point)
-                <= s_OperatorFootprintAreaEpsilon
-        )
-            upper.pop_back();
-        upper.push_back(point);
-    }
-
-    if(lower.size() < 2u || upper.size() < 2u)
-        return false;
-
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> hull{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    hull.reserve(lower.size() + upper.size());
-    for(const OperatorFootprintPoint& point : lower)
-        hull.push_back(point);
-    for(usize i = 1u; i + 1u < upper.size(); ++i)
-        hull.push_back(upper[i]);
-
-    if(hull.size() < 3u)
-        return false;
-
-    if(hull.size() <= s_DeformableOperatorFootprintMaxVertexCount){
-        for(const OperatorFootprintPoint& point : hull){
-            if(!AppendOperatorFootprintHullPoint(outFootprint, point))
-                return false;
-        }
-    }
-    else{
-        for(u32 i = 0u; i < s_DeformableOperatorFootprintMaxVertexCount; ++i){
-            const usize hullIndex = (static_cast<usize>(i) * hull.size()) / s_DeformableOperatorFootprintMaxVertexCount;
-            if(hullIndex >= hull.size() || !AppendOperatorFootprintHullPoint(outFootprint, hull[hullIndex]))
-                return false;
-        }
-    }
-
-    return ValidateOperatorFootprint(outFootprint);
-}
-
-[[nodiscard]] bool BuildOperatorFootprintFromGeometryImpl(
-    const Vector<GeometryVertex>& vertices,
-    DeformableOperatorFootprint& outFootprint,
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    outFootprint = DeformableOperatorFootprint{};
-    if(vertices.empty())
-        return false;
-
-    f32 maxZ = 0.0f;
-    bool foundPosition = false;
-    for(const GeometryVertex& vertex : vertices){
-        if(!FiniteOperatorPosition(vertex.position))
-            return false;
-
-        if(!foundPosition || vertex.position.z > maxZ){
-            maxZ = vertex.position.z;
-            foundPosition = true;
-        }
-    }
-    if(!foundPosition)
-        return false;
-
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> points{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    points.reserve(vertices.size());
-
-    const f32 planeEpsilon = Max(s_OperatorFootprintPlaneEpsilon, Abs(maxZ) * 0.00001f);
-    for(const GeometryVertex& vertex : vertices){
-        if(maxZ - vertex.position.z > planeEpsilon)
-            continue;
-        if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
-            return false;
-    }
-
-    if(points.size() < 3u){
-        points.clear();
-        for(const GeometryVertex& vertex : vertices){
-            if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
-                return false;
-        }
-    }
-
-    return BuildConvexOperatorFootprint(points, outFootprint, scratchArena);
-}
-
-[[nodiscard]] bool AppendUniqueOperatorProfileZ(
-    Vector<f32, Core::Alloc::ScratchAllocator<f32>>& zPlanes,
-    const f32 z
-){
-    if(!IsFinite(z))
-        return false;
-    for(const f32 existing : zPlanes){
-        if(Abs(existing - z) <= s_OperatorFootprintPlaneEpsilon)
-            return true;
-    }
-    zPlanes.push_back(z);
-    return true;
-}
-
-[[nodiscard]] bool BuildOperatorProfilePlaneSample(
-    const Vector<GeometryVertex>& vertices,
-    const f32 z,
-    const f32 minZ,
-    const f32 maxZ,
-    const f32 topRadius,
-    DeformableOperatorProfileSample& outSample,
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> points{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    points.reserve(vertices.size());
-
-    const f32 planeEpsilon = Max(s_OperatorFootprintPlaneEpsilon, Abs(maxZ - minZ) * 0.00001f);
-    for(const GeometryVertex& vertex : vertices){
-        if(Abs(vertex.position.z - z) > planeEpsilon)
-            continue;
-        if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
-            return false;
-    }
-    if(points.empty())
-        return false;
-
-    f32 centerX = 0.0f;
-    f32 centerY = 0.0f;
-    for(const OperatorFootprintPoint& point : points){
-        centerX += point.x;
-        centerY += point.y;
-    }
-    const f32 invPointCount = 1.0f / static_cast<f32>(points.size());
-    centerX *= invPointCount;
-    centerY *= invPointCount;
-
-    f32 radiusSquared = 0.0f;
-    for(const OperatorFootprintPoint& point : points){
-        const f32 dx = point.x - centerX;
-        const f32 dy = point.y - centerY;
-        radiusSquared = Max(radiusSquared, (dx * dx) + (dy * dy));
-    }
-
-    const f32 depthSpan = maxZ - minZ;
-    if(!IsFinite(depthSpan) || depthSpan <= s_OperatorProfileDepthEpsilon || topRadius <= s_OperatorProfileScaleEpsilon)
-        return false;
-
-    outSample.depth = (maxZ - z) / depthSpan;
-    outSample.scale = Sqrt(radiusSquared) / topRadius;
-    outSample.center = Float2U(centerX, centerY);
-    return
-        IsFinite(outSample.depth)
-        && IsFinite(outSample.scale)
-        && IsFinite(outSample.center.x)
-        && IsFinite(outSample.center.y)
-    ;
-}
-
-[[nodiscard]] bool BuildOperatorProfileFromGeometryImpl(
-    const Vector<GeometryVertex>& vertices,
-    DeformableOperatorProfile& outProfile,
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    outProfile = DeformableOperatorProfile{};
-    if(vertices.empty())
-        return false;
-
-    f32 minZ = 0.0f;
-    f32 maxZ = 0.0f;
-    bool foundPosition = false;
-    Vector<f32, Core::Alloc::ScratchAllocator<f32>> zPlanes{
-        Core::Alloc::ScratchAllocator<f32>(scratchArena)
-    };
-    zPlanes.reserve(vertices.size());
-    for(const GeometryVertex& vertex : vertices){
-        if(!FiniteOperatorPosition(vertex.position))
-            return false;
-        if(!foundPosition){
-            minZ = vertex.position.z;
-            maxZ = vertex.position.z;
-            foundPosition = true;
-        }
-        else{
-            minZ = Min(minZ, vertex.position.z);
-            maxZ = Max(maxZ, vertex.position.z);
-        }
-        if(!AppendUniqueOperatorProfileZ(zPlanes, vertex.position.z))
-            return false;
-    }
-    if(!foundPosition)
-        return false;
-
-    if(maxZ - minZ <= s_OperatorProfileDepthEpsilon)
-        return false;
-    if(zPlanes.size() < 2u)
-        return false;
-
-    Sort(zPlanes.begin(), zPlanes.end(), [](const f32 lhs, const f32 rhs){
-        return lhs > rhs;
-    });
-
-    DeformableOperatorProfileSample topSample;
-    if(
-        !BuildOperatorProfilePlaneSample(
-            vertices,
-            maxZ,
-            minZ,
-            maxZ,
-            1.0f,
-            topSample,
-            scratchArena
-        )
-        || topSample.scale <= s_OperatorProfileScaleEpsilon
-    )
-        return false;
-    const f32 topRadius = topSample.scale;
-
-    const usize sourcePlaneCount = zPlanes.size();
-    const usize sampleCount = Min(
-        sourcePlaneCount,
-        static_cast<usize>(s_DeformableOperatorProfileMaxSampleCount)
-    );
-    if(sampleCount < 2u)
-        return false;
-
-    for(usize sampleIndex = 0u; sampleIndex < sampleCount; ++sampleIndex){
-        const usize planeIndex = sampleIndex + 1u == sampleCount
-            ? sourcePlaneCount - 1u
-            : (sampleIndex * (sourcePlaneCount - 1u)) / (sampleCount - 1u)
-        ;
-        if(planeIndex >= zPlanes.size())
-            return false;
-
-        DeformableOperatorProfileSample sample;
-        if(
-            !BuildOperatorProfilePlaneSample(
-                vertices,
-                zPlanes[planeIndex],
-                minZ,
-                maxZ,
-                topRadius,
-                sample,
-                scratchArena
-            )
-        )
-            return false;
-
-        if(sampleIndex == 0u){
-            sample.depth = 0.0f;
-            sample.scale = 1.0f;
-        }
-        else if(sampleIndex + 1u == sampleCount)
-            sample.depth = 1.0f;
-
-        outProfile.samples[outProfile.sampleCount] = sample;
-        ++outProfile.sampleCount;
-    }
-
-    return ValidateOperatorProfile(outProfile);
 }
 
 [[nodiscard]] bool ExactSourceSample(const SourceSample& lhs, const SourceSample& rhs){
@@ -2319,96 +1891,6 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     return true;
 }
 
-[[nodiscard]] bool PointOnOperatorFootprintEdge(
-    const f32 x,
-    const f32 y,
-    const Float2U& a,
-    const Float2U& b
-){
-    constexpr f32 epsilon = 0.000001f;
-    const f32 edgeX = b.x - a.x;
-    const f32 edgeY = b.y - a.y;
-    const f32 pointX = x - a.x;
-    const f32 pointY = y - a.y;
-    const f32 cross = (pointX * edgeY) - (pointY * edgeX);
-    if(Abs(cross) > epsilon)
-        return false;
-
-    const f32 dot = (pointX * edgeX) + (pointY * edgeY);
-    if(dot < -epsilon)
-        return false;
-
-    const f32 edgeLengthSq = (edgeX * edgeX) + (edgeY * edgeY);
-    return dot <= edgeLengthSq + epsilon;
-}
-
-[[nodiscard]] bool PointInsideOperatorFootprint(
-    const DeformableOperatorFootprint& footprint,
-    const f32 x,
-    const f32 y
-){
-    bool inside = false;
-    u32 previous = footprint.vertexCount - 1u;
-    for(u32 current = 0u; current < footprint.vertexCount; ++current){
-        const Float2U& a = footprint.vertices[current];
-        const Float2U& b = footprint.vertices[previous];
-        if(PointOnOperatorFootprintEdge(x, y, a, b))
-            return true;
-
-        const bool crossesY = (a.y > y) != (b.y > y);
-        if(crossesY){
-            const f32 intersectX = a.x + ((y - a.y) * (b.x - a.x) / (b.y - a.y));
-            if(x <= intersectX + 0.000001f)
-                inside = !inside;
-        }
-        previous = current;
-    }
-    return inside;
-}
-
-[[nodiscard]] bool SampleOperatorProfile(
-    const DeformableOperatorProfile& profile,
-    const f32 rawDepth,
-    Float2U& outCenter,
-    f32& outScale
-){
-    outCenter = Float2U(0.0f, 0.0f);
-    outScale = 1.0f;
-    if(!ValidateOperatorProfile(profile) || !IsFinite(rawDepth))
-        return false;
-
-    const f32 depth = Min(Max(rawDepth, 0.0f), 1.0f);
-    if(depth <= profile.samples[0u].depth + s_OperatorProfileDepthEpsilon){
-        outCenter = profile.samples[0u].center;
-        outScale = profile.samples[0u].scale;
-        return true;
-    }
-
-    for(u32 i = 1u; i < profile.sampleCount; ++i){
-        const DeformableOperatorProfileSample& previous = profile.samples[i - 1u];
-        const DeformableOperatorProfileSample& next = profile.samples[i];
-        if(depth > next.depth + s_OperatorProfileDepthEpsilon)
-            continue;
-
-        const f32 depthSpan = next.depth - previous.depth;
-        if(depthSpan <= s_OperatorProfileDepthEpsilon)
-            return false;
-
-        const f32 t = (depth - previous.depth) / depthSpan;
-        outCenter = Float2U(
-            previous.center.x + ((next.center.x - previous.center.x) * t),
-            previous.center.y + ((next.center.y - previous.center.y) * t)
-        );
-        outScale = previous.scale + ((next.scale - previous.scale) * t);
-        return IsFinite(outCenter.x) && IsFinite(outCenter.y) && IsFinite(outScale);
-    }
-
-    const DeformableOperatorProfileSample& last = profile.samples[profile.sampleCount - 1u];
-    outCenter = last.center;
-    outScale = last.scale;
-    return true;
-}
-
 [[nodiscard]] bool PointInsideOperatorCrossSection(
     const DeformableOperatorFootprint& operatorFootprint,
     const f32 x,
@@ -3205,8 +2687,8 @@ using SurfaceRemeshClipPolygonList = Vector<
         return false;
 
     outIntersectsDepth =
-        maxDepth >= -s_OperatorProfileDepthEpsilon
-        && minDepth <= 1.0f + s_OperatorProfileDepthEpsilon
+        maxDepth >= -s_DeformableOperatorProfileDepthEpsilon
+        && minDepth <= 1.0f + s_DeformableOperatorProfileDepthEpsilon
     ;
     return true;
 }
@@ -3358,8 +2840,10 @@ using SurfaceRemeshClipPolygonList = Vector<
     );
     boundaryEdgeMap.reserve(boundaryEdgeReserve);
 
+    if(!ValidateOperatorFootprint(params.operatorFootprint))
+        return false;
     const f32 footprintArea = OperatorFootprintSignedArea(params.operatorFootprint);
-    if(!IsFinite(footprintArea) || Abs(footprintArea) <= s_OperatorFootprintAreaEpsilon)
+    if(!IsFinite(footprintArea))
         return false;
     const f32 orientation = footprintArea >= 0.0f ? 1.0f : -1.0f;
     SurfaceRemeshLocalBounds footprintBounds;
@@ -4098,52 +3582,6 @@ bool PreviewHole(
     session.previewParams = params;
     session.previewed = true;
     return true;
-}
-
-bool BuildOperatorFootprintFromGeometry(
-    const Vector<GeometryVertex>& vertices,
-    DeformableOperatorFootprint& outFootprint
-){
-    Core::Alloc::ScratchArena<> scratchArena;
-    return __hidden_deformable_surface_edit::BuildOperatorFootprintFromGeometryImpl(
-        vertices,
-        outFootprint,
-        scratchArena
-    );
-}
-
-bool BuildOperatorProfileFromGeometry(
-    const Vector<GeometryVertex>& vertices,
-    DeformableOperatorProfile& outProfile
-){
-    Core::Alloc::ScratchArena<> scratchArena;
-    return __hidden_deformable_surface_edit::BuildOperatorProfileFromGeometryImpl(
-        vertices,
-        outProfile,
-        scratchArena
-    );
-}
-
-bool BuildOperatorShapeFromGeometry(
-    const Vector<GeometryVertex>& vertices,
-    DeformableOperatorFootprint& outFootprint,
-    DeformableOperatorProfile& outProfile
-){
-    outFootprint = DeformableOperatorFootprint{};
-    outProfile = DeformableOperatorProfile{};
-    Core::Alloc::ScratchArena<> scratchArena;
-    return
-        __hidden_deformable_surface_edit::BuildOperatorFootprintFromGeometryImpl(
-            vertices,
-            outFootprint,
-            scratchArena
-        )
-        && __hidden_deformable_surface_edit::BuildOperatorProfileFromGeometryImpl(
-            vertices,
-            outProfile,
-            scratchArena
-        )
-    ;
 }
 
 bool BuildHolePreviewMesh(

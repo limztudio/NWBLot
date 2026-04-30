@@ -7,6 +7,7 @@
 
 #include "components.h"
 #include "deformable_debug_draw.h"
+#include "deformable_operator_shape.h"
 #include "deformable_picking.h"
 #include "deformable_surface_edit.h"
 #include "deformer_system.h"

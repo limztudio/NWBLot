@@ -3,6 +3,8 @@ target_sources(nwb_ecs_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deformable_debug_draw.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_debug_draw.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_displacement_runtime.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_operator_shape.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_operator_shape.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_picking.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_picking.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_helpers.h"

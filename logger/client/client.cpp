@@ -39,7 +39,7 @@ static bool BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
     outPayload.reserve(payloadSize);
     AppendPOD(outPayload, time);
     AppendPOD(outPayload, type);
-    ::BinaryDetail::AppendBytesUnchecked(outPayload, str.c_str(), strBytes);
+    ::BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, str.c_str(), strBytes);
     constexpr tchar nullTerminator = 0;
     AppendPOD(outPayload, nullTerminator);
     NWB_ASSERT(outPayload.size() == payloadSize);

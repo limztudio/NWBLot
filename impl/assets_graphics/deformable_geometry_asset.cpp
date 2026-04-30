@@ -177,7 +177,7 @@ template<typename T, typename Allocator>
         return false;
     }
 
-    ::BinaryDetail::AppendBytesUnchecked(outBinary, values.data(), payloadBytes);
+    ::BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, values.data(), payloadBytes);
     return true;
 }
 

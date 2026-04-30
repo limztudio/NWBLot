@@ -1671,7 +1671,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     };
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
-    ::BinaryDetail::AppendBytesUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
+    ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
     metadataBuffer.resize(static_cast<usize>(m_metadataBytes), 0u);
 
     if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size()))

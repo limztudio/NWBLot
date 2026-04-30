@@ -32,7 +32,7 @@ template<typename Container>
 }
 
 template<typename Container>
-inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const usize byteCount){
+inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* bytes, const usize byteCount){
     RequireByteContainer<Container>();
     if(byteCount == 0u)
         return;
@@ -42,9 +42,6 @@ inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const 
     using ByteType = typename Container::value_type;
     const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
 
-    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
-        outBinary.reserve(outBinary.size() + byteCount);
-
     if constexpr(requires(Container& c, const ByteType* p){ c.insert(c.end(), p, p); })
         outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
     else{
@@ -52,6 +49,18 @@ inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const 
         outBinary.resize(offset + byteCount);
         NWB_MEMCPY(outBinary.data() + offset, byteCount, bytes, byteCount);
     }
+}
+
+template<typename Container>
+inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const usize byteCount){
+    RequireByteContainer<Container>();
+    if(byteCount == 0u)
+        return;
+
+    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
+        outBinary.reserve(outBinary.size() + byteCount);
+
+    AppendBytesNoReserveUnchecked(outBinary, bytes, byteCount);
 }
 
 template<typename Container>
@@ -95,8 +104,10 @@ template<typename Container>
 
 template<typename Container, typename PodType>
 inline void AppendPOD(Container& outBinary, const PodType& value){
-    if(!BinaryDetail::AppendBytes(outBinary, &value, sizeof(PodType)))
+    if(!BinaryDetail::CanAppendBytes(outBinary, sizeof(PodType)))
         throw RuntimeException("AppendPOD size overflow");
+
+    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, &value, sizeof(PodType));
 }
 
 template<typename Container, typename PodType>
@@ -180,8 +191,8 @@ template<typename Container>
 
     BinaryDetail::RequireByteContainer<Container>();
     outBinary.reserve(outBinary.size() + byteCount);
-    BinaryDetail::AppendBytesUnchecked(outBinary, &textLength, sizeof(textLength));
-    BinaryDetail::AppendBytesUnchecked(outBinary, text.data(), textLength);
+    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, &textLength, sizeof(textLength));
+    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, text.data(), textLength);
     return true;
 }
 
@@ -284,7 +295,7 @@ template<typename Container>
     outOffset = static_cast<u32>(beginOffset);
     BinaryDetail::RequireByteContainer<Container>();
     outStringTable.reserve(reserveBytes);
-    BinaryDetail::AppendBytesUnchecked(outStringTable, text.data(), text.size());
+    BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
     outStringTable.push_back(typename Container::value_type{});
     return true;
 }

@@ -84,7 +84,7 @@ bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<Value
         return false;
     }
 
-    ::BinaryDetail::AppendBytesUnchecked(outBinary, values.data(), byteCount);
+    ::BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, values.data(), byteCount);
     return true;
 }
 

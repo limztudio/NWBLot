@@ -267,6 +267,21 @@ static NWB::Impl::DeformableVertexRest MakeVertex(const f32 x, const f32 y, cons
     return vertex;
 }
 
+static NWB::Impl::DeformableVertexRest MakeSurfaceVertex(
+    const Float3U& position,
+    const Float3U& normal,
+    const Float4U& tangent,
+    const Float2U& uv0
+){
+    NWB::Impl::DeformableVertexRest vertex;
+    vertex.position = position;
+    vertex.normal = normal;
+    vertex.tangent = tangent;
+    vertex.uv0 = uv0;
+    vertex.color0 = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
+    return vertex;
+}
+
 static NWB::Impl::DeformableJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
     NWB::Impl::DeformableJointMatrix joint = NWB::Impl::MakeIdentityDeformableJointMatrix();
     joint.rows[3] = Float4(x, y, z, 1.0f);
@@ -558,6 +573,93 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeDepthSeparatedGridHoleInstan
         instance.indices.push_back(instance.indices[index] + static_cast<u32>(frontVertexCount));
 
     AssignSingleJointSkin(instance, 0u);
+    return instance;
+}
+
+static NWB::Impl::DeformableRuntimeMeshInstance MakeSplitCubeCornerHoleInstance(){
+    NWB::Impl::DeformableRuntimeMeshInstance instance;
+    instance.entity = NWB::Core::ECS::EntityID(34u, 0u);
+    instance.handle.value = 634u;
+    instance.editRevision = 5u;
+    instance.sourceTriangleCount = 1u;
+    instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
+
+    auto appendQuad = [&instance](
+        const Float3U& a,
+        const Float3U& b,
+        const Float3U& c,
+        const Float3U& d,
+        const Float3U& normal,
+        const Float4U& tangent
+    ){
+        const u32 base = static_cast<u32>(instance.restVertices.size());
+        instance.restVertices.push_back(MakeSurfaceVertex(a, normal, tangent, Float2U(0.0f, 0.0f)));
+        instance.restVertices.push_back(MakeSurfaceVertex(b, normal, tangent, Float2U(1.0f, 0.0f)));
+        instance.restVertices.push_back(MakeSurfaceVertex(c, normal, tangent, Float2U(1.0f, 1.0f)));
+        instance.restVertices.push_back(MakeSurfaceVertex(d, normal, tangent, Float2U(0.0f, 1.0f)));
+        instance.indices.push_back(base + 0u);
+        instance.indices.push_back(base + 1u);
+        instance.indices.push_back(base + 2u);
+        instance.indices.push_back(base + 0u);
+        instance.indices.push_back(base + 2u);
+        instance.indices.push_back(base + 3u);
+    };
+
+    appendQuad(
+        Float3U(-1.0f, -1.0f, 0.0f),
+        Float3U(1.0f, -1.0f, 0.0f),
+        Float3U(1.0f, 1.0f, 0.0f),
+        Float3U(-1.0f, 1.0f, 0.0f),
+        Float3U(0.0f, 0.0f, 1.0f),
+        Float4U(1.0f, 0.0f, 0.0f, 1.0f)
+    );
+    appendQuad(
+        Float3U(-1.0f, -1.0f, -1.0f),
+        Float3U(-1.0f, 1.0f, -1.0f),
+        Float3U(1.0f, 1.0f, -1.0f),
+        Float3U(1.0f, -1.0f, -1.0f),
+        Float3U(0.0f, 0.0f, -1.0f),
+        Float4U(1.0f, 0.0f, 0.0f, 1.0f)
+    );
+    appendQuad(
+        Float3U(1.0f, -1.0f, 0.0f),
+        Float3U(1.0f, -1.0f, -1.0f),
+        Float3U(1.0f, 1.0f, -1.0f),
+        Float3U(1.0f, 1.0f, 0.0f),
+        Float3U(1.0f, 0.0f, 0.0f),
+        Float4U(0.0f, 1.0f, 0.0f, 1.0f)
+    );
+    appendQuad(
+        Float3U(-1.0f, 1.0f, 0.0f),
+        Float3U(1.0f, 1.0f, 0.0f),
+        Float3U(1.0f, 1.0f, -1.0f),
+        Float3U(-1.0f, 1.0f, -1.0f),
+        Float3U(0.0f, 1.0f, 0.0f),
+        Float4U(1.0f, 0.0f, 0.0f, 1.0f)
+    );
+    appendQuad(
+        Float3U(-1.0f, -1.0f, 0.0f),
+        Float3U(-1.0f, 1.0f, 0.0f),
+        Float3U(-1.0f, 1.0f, -1.0f),
+        Float3U(-1.0f, -1.0f, -1.0f),
+        Float3U(-1.0f, 0.0f, 0.0f),
+        Float4U(0.0f, 1.0f, 0.0f, 1.0f)
+    );
+    appendQuad(
+        Float3U(-1.0f, -1.0f, 0.0f),
+        Float3U(-1.0f, -1.0f, -1.0f),
+        Float3U(1.0f, -1.0f, -1.0f),
+        Float3U(1.0f, -1.0f, 0.0f),
+        Float3U(0.0f, -1.0f, 0.0f),
+        Float4U(1.0f, 0.0f, 0.0f, 1.0f)
+    );
+
+    AssignSingleJointSkin(instance, 0u);
+
+    instance.sourceSamples.resize(instance.restVertices.size());
+    for(NWB::Impl::SourceSample& sample : instance.sourceSamples)
+        sample = MakeSourceSample(0u, 1.0f, 0.0f, 0.0f);
+
     return instance;
 }
 
@@ -3556,6 +3658,42 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
     }
 }
 
+static void TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeSplitCubeCornerHoleInstance();
+    const usize oldVertexCount = instance.restVertices.size();
+    NWB::Impl::DeformableHoleEditParams params =
+        MakeHoleEditParams(instance, 0u, 0.175f, 0.05f, 0.775f, 0.55f, 0.60f)
+    ;
+    params.operatorFootprint = MakeBoxOperatorFootprint();
+    params.operatorProfile = MakeBoxOperatorProfile();
+
+    NWB::Impl::DeformableHolePreviewMesh previewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
+
+    NWB::Impl::DeformableSurfaceEditSession session;
+    NWB::Impl::DeformableHolePreview preview;
+    NWB::Impl::DeformableHoleEditResult result;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == previewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == previewMesh.wallVertexCount);
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount > 2u);
+    if(result.firstWallVertex > instance.restVertices.size())
+        return;
+
+    bool foundGeneratedVerticalFaceRim = false;
+    for(usize vertexIndex = oldVertexCount; vertexIndex < static_cast<usize>(result.firstWallVertex); ++vertexIndex){
+        const Float3U& position = instance.restVertices[vertexIndex].position;
+        foundGeneratedVerticalFaceRim = foundGeneratedVerticalFaceRim
+            || (position.z < -0.0001f && position.z > -params.depth - 0.0001f)
+        ;
+    }
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedVerticalFaceRim);
+}
+
 static void TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance shallowInstance = MakeCurvedDepthGateHoleInstance();
     NWB::Impl::DeformableHoleEditParams shallowParams =
@@ -6159,6 +6297,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintIsDerivedFromGeometry(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshIgnoresTrianglesOutsideDepth(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorProfileTapersWallGeometry(context);

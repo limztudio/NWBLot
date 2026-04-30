@@ -3685,13 +3685,116 @@ static void TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(TestContex
         return;
 
     bool foundGeneratedVerticalFaceRim = false;
+    bool foundGeneratedRightFaceRim = false;
+    bool foundGeneratedBackFaceRim = false;
     for(usize vertexIndex = oldVertexCount; vertexIndex < static_cast<usize>(result.firstWallVertex); ++vertexIndex){
         const Float3U& position = instance.restVertices[vertexIndex].position;
         foundGeneratedVerticalFaceRim = foundGeneratedVerticalFaceRim
             || (position.z < -0.0001f && position.z > -params.depth - 0.0001f)
         ;
+        foundGeneratedRightFaceRim = foundGeneratedRightFaceRim
+            || (
+                NearlyEqual(position.x, 1.0f, 0.0001f)
+                && position.z < -0.0001f
+                && position.z > -params.depth - 0.0001f
+            )
+        ;
+        foundGeneratedBackFaceRim = foundGeneratedBackFaceRim
+            || (
+                NearlyEqual(position.y, 1.0f, 0.0001f)
+                && position.z < -0.0001f
+                && position.z > -params.depth - 0.0001f
+            )
+        ;
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedVerticalFaceRim);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedRightFaceRim);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedBackFaceRim);
+
+    const usize wallIndexBase = instance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u);
+    for(usize indexBase = 0u; indexBase < wallIndexBase; indexBase += 3u){
+        const u32 i0 = instance.indices[indexBase + 0u];
+        const u32 i1 = instance.indices[indexBase + 1u];
+        const u32 i2 = instance.indices[indexBase + 2u];
+        const Float3U& p0 = instance.restVertices[i0].position;
+        const Float3U& p1 = instance.restVertices[i1].position;
+        const Float3U& p2 = instance.restVertices[i2].position;
+        const Float3U& n0 = instance.restVertices[i0].normal;
+        const Float3U& n1 = instance.restVertices[i1].normal;
+        const Float3U& n2 = instance.restVertices[i2].normal;
+        const f32 centroidX = (p0.x + p1.x + p2.x) / 3.0f;
+        const f32 centroidY = (p0.y + p1.y + p2.y) / 3.0f;
+        const f32 centroidZ = (p0.z + p1.z + p2.z) / 3.0f;
+
+        if(NearlyEqual(centroidX, 1.0f, 0.0001f) && centroidZ < -0.0001f){
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, n0.x > 0.9f);
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, n1.x > 0.9f);
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, n2.x > 0.9f);
+        }
+        if(NearlyEqual(centroidY, 1.0f, 0.0001f) && centroidZ < -0.0001f){
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, n0.y > 0.9f);
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, n1.y > 0.9f);
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, n2.y > 0.9f);
+        }
+    }
+}
+
+static void TestSurfaceEditOperatorRemeshCutsCornerFromSideFaceHit(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeSplitCubeCornerHoleInstance();
+    const usize oldVertexCount = instance.restVertices.size();
+    NWB::Impl::DeformableHoleEditParams params =
+        MakeHoleEditParams(instance, 5u, 0.10f, 0.10f, 0.80f, 0.55f, 0.60f)
+    ;
+    params.operatorFootprint = MakeBoxOperatorFootprint();
+    params.operatorProfile = MakeBoxOperatorProfile();
+    params.operatorUp = Float3U(0.0f, 1.0f, 0.0f);
+
+    NWB::Impl::DeformableHolePreviewMesh previewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
+
+    NWB::Impl::DeformableSurfaceEditSession session;
+    NWB::Impl::DeformableHolePreview preview;
+    NWB::Impl::DeformableHoleEditResult result;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == previewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == previewMesh.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount > 2u);
+    if(result.firstWallVertex > instance.restVertices.size())
+        return;
+
+    bool foundRightFaceRim = false;
+    bool foundBackFaceRim = false;
+    bool foundTopFaceRim = false;
+    for(usize vertexIndex = oldVertexCount; vertexIndex < static_cast<usize>(result.firstWallVertex); ++vertexIndex){
+        const Float3U& position = instance.restVertices[vertexIndex].position;
+        foundRightFaceRim = foundRightFaceRim
+            || (
+                NearlyEqual(position.x, 1.0f, 0.0001f)
+                && position.z < -0.0001f
+                && position.z > -1.0f + 0.0001f
+            )
+        ;
+        foundBackFaceRim = foundBackFaceRim
+            || (
+                NearlyEqual(position.y, 1.0f, 0.0001f)
+                && position.x < 1.0f - 0.0001f
+                && position.x > 1.0f - params.depth - 0.0001f
+            )
+        ;
+        foundTopFaceRim = foundTopFaceRim
+            || (
+                NearlyEqual(position.z, 0.0f, 0.0001f)
+                && position.x < 1.0f - 0.0001f
+                && position.x > 1.0f - params.depth - 0.0001f
+            )
+        ;
+    }
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundRightFaceRim);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundBackFaceRim);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, foundTopFaceRim);
 }
 
 static void TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(TestContext& context){
@@ -6298,6 +6401,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshCutsCornerFromSideFaceHit(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshIgnoresTrianglesOutsideDepth(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorProfileTapersWallGeometry(context);

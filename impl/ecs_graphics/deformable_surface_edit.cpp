@@ -56,6 +56,7 @@ static constexpr f32 s_MaxOperatorProfileScale = 16.0f;
 static constexpr f32 s_SurfaceRemeshClipEpsilon = 0.00001f;
 static constexpr f32 s_SurfaceRemeshAreaEpsilon = 0.0000001f;
 static constexpr f32 s_SurfaceRemeshVertexMergeDistanceSq = 0.0000000001f;
+static constexpr f32 s_SurfaceRemeshAttributeMergeDistanceSq = 0.00000001f;
 static constexpr f32 s_BottomCapTriangulationAreaEpsilon = 0.000001f;
 static constexpr Float4U s_HolePreviewColor = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -2881,23 +2882,76 @@ using SurfaceRemeshClipPolygonList = Vector<
     return BarycentricPoint(instance, triangleIndices, point.bary);
 }
 
-[[nodiscard]] u32 FindCanonicalSurfaceRemeshOriginalVertex(
-    const DeformableRuntimeMeshInstance& instance,
-    const u32 vertex
+[[nodiscard]] bool BlendSurfaceRemeshSourceDirection(
+    const Vector<DeformableVertexRest>& vertices,
+    const u32 (&sourceVertices)[3],
+    const f32 (&sourceWeights)[3],
+    const bool tangent,
+    SIMDVector& outDirection
 ){
-    if(vertex >= instance.restVertices.size())
-        return Limit<u32>::s_Max;
+    outDirection = VectorZero();
+    for(u32 sourceIndex = 0u; sourceIndex < 3u; ++sourceIndex){
+        const f32 sourceWeight = sourceWeights[sourceIndex];
+        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
+            return false;
+        if(!DeformableValidation::ActiveWeight(sourceWeight))
+            continue;
 
-    const SIMDVector position = LoadRestVertexPosition(instance.restVertices[vertex]);
-    const usize upperBound = Min(static_cast<usize>(vertex), instance.restVertices.size());
-    for(usize candidate = 0u; candidate < upperBound; ++candidate){
-        const SIMDVector delta = VectorSubtract(position, LoadRestVertexPosition(instance.restVertices[candidate]));
-        const f32 distanceSq = VectorGetX(Vector3LengthSq(delta));
-        if(IsFinite(distanceSq) && distanceSq <= s_SurfaceRemeshVertexMergeDistanceSq)
-            return static_cast<u32>(candidate);
+        const u32 vertex = sourceVertices[sourceIndex];
+        if(vertex >= vertices.size())
+            return false;
+
+        const DeformableVertexRest& source = vertices[vertex];
+        const SIMDVector sourceDirection = tangent
+            ? VectorSetW(LoadRestVertexTangent(source), 0.0f)
+            : LoadRestVertexNormal(source)
+        ;
+        outDirection = VectorMultiplyAdd(sourceDirection, VectorReplicate(sourceWeight), outDirection);
     }
 
-    return vertex;
+    return FiniteVec3(outDirection);
+}
+
+[[nodiscard]] bool SurfaceRemeshAttributeSourcesMatch(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 (&lhsSourceVertices)[3],
+    const f32 (&lhsSourceWeights)[3],
+    const u32 (&rhsSourceVertices)[3],
+    const f32 (&rhsSourceWeights)[3]
+){
+    Float2U lhsUv0;
+    Float2U rhsUv0;
+    if(
+        !BuildBlendedVertexUv0(instance.restVertices, lhsSourceVertices, lhsSourceWeights, lhsUv0)
+        || !BuildBlendedVertexUv0(instance.restVertices, rhsSourceVertices, rhsSourceWeights, rhsUv0)
+    )
+        return false;
+
+    const f32 uvDx = rhsUv0.x - lhsUv0.x;
+    const f32 uvDy = rhsUv0.y - lhsUv0.y;
+    if((uvDx * uvDx) + (uvDy * uvDy) > s_SurfaceRemeshAttributeMergeDistanceSq)
+        return false;
+
+    SIMDVector lhsNormal;
+    SIMDVector rhsNormal;
+    if(
+        !BlendSurfaceRemeshSourceDirection(instance.restVertices, lhsSourceVertices, lhsSourceWeights, false, lhsNormal)
+        || !BlendSurfaceRemeshSourceDirection(instance.restVertices, rhsSourceVertices, rhsSourceWeights, false, rhsNormal)
+    )
+        return false;
+    const f32 normalDistanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(lhsNormal, rhsNormal)));
+    if(!IsFinite(normalDistanceSq) || normalDistanceSq > s_SurfaceRemeshAttributeMergeDistanceSq)
+        return false;
+
+    SIMDVector lhsTangent;
+    SIMDVector rhsTangent;
+    if(
+        !BlendSurfaceRemeshSourceDirection(instance.restVertices, lhsSourceVertices, lhsSourceWeights, true, lhsTangent)
+        || !BlendSurfaceRemeshSourceDirection(instance.restVertices, rhsSourceVertices, rhsSourceWeights, true, rhsTangent)
+    )
+        return false;
+    const f32 tangentDistanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(lhsTangent, rhsTangent)));
+    return IsFinite(tangentDistanceSq) && tangentDistanceSq <= s_SurfaceRemeshAttributeMergeDistanceSq;
 }
 
 [[nodiscard]] bool GetOrCreateSurfaceRemeshVertex(
@@ -2913,9 +2967,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     if(point.originalVertex != Limit<u32>::s_Max){
         if(point.originalVertex >= instance.restVertices.size())
             return false;
-        outVertex = FindCanonicalSurfaceRemeshOriginalVertex(instance, point.originalVertex);
-        if(outVertex == Limit<u32>::s_Max)
-            return false;
+        outVertex = point.originalVertex;
         return true;
     }
 
@@ -2923,12 +2975,15 @@ using SurfaceRemeshClipPolygonList = Vector<
     if(!FiniteVec3(position))
         return false;
 
-    for(usize candidate = 0u; candidate < instance.restVertices.size(); ++candidate){
+    for(const u32 candidate : triangleIndices){
+        if(candidate >= instance.restVertices.size())
+            return false;
+
         const SIMDVector delta = VectorSubtract(position, LoadRestVertexPosition(instance.restVertices[candidate]));
         const f32 distanceSq = VectorGetX(Vector3LengthSq(delta));
         if(IsFinite(distanceSq) && distanceSq <= s_SurfaceRemeshVertexMergeDistanceSq){
-            outVertex = FindCanonicalSurfaceRemeshOriginalVertex(instance, static_cast<u32>(candidate));
-            return outVertex != Limit<u32>::s_Max;
+            outVertex = candidate;
+            return true;
         }
     }
 
@@ -2943,6 +2998,13 @@ using SurfaceRemeshClipPolygonList = Vector<
             (localDx * localDx) + (localDy * localDy) + (localDz * localDz)
                 <= s_SurfaceRemeshVertexMergeDistanceSq
             && VectorGetX(Vector3LengthSq(generatedDelta)) <= s_SurfaceRemeshVertexMergeDistanceSq
+            && SurfaceRemeshAttributeSourcesMatch(
+                instance,
+                generated.sourceVertices,
+                generated.bary,
+                triangleIndices,
+                point.bary
+            )
         ){
             outVertex = generated.vertex;
             return true;

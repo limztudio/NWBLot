@@ -32,7 +32,9 @@ namespace __hidden_assets_graphics_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
+using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeSourceSample;
+using NWB::Tests::MakeTriangleIndices;
 
 
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -1226,13 +1228,7 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     vertices.push_back(MakeRestVertex(0.5f, 0.5f, 1.f, 1.f));
     vertices.push_back(MakeRestVertex(-0.5f, 0.5f, 0.f, 1.f));
 
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
-    indices.push_back(0u);
-    indices.push_back(2u);
-    indices.push_back(3u);
+    Vector<u32> indices = MakeQuadTriangleIndices();
 
     Vector<NWB::Impl::SkinInfluence4> skin;
     skin.resize(vertices.size());
@@ -1296,10 +1292,7 @@ static NWB::Impl::DeformableGeometry BuildMinimalDeformableGeometry(){
     vertices.push_back(MakeRestVertex(0.5f, -0.5f, 1.f, 0.f));
     vertices.push_back(MakeRestVertex(0.f, 0.5f, 0.5f, 1.f));
 
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
+    Vector<u32> indices = MakeTriangleIndices();
 
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
@@ -1332,10 +1325,7 @@ static NWB::Impl::Geometry BuildMinimalGeometry(){
         vertices.push_back(vertex);
     }
 
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
+    Vector<u32> indices = MakeTriangleIndices();
 
     geometry.setVertices(Move(vertices));
     geometry.setIndices(Move(indices));

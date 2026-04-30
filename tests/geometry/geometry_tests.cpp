@@ -27,6 +27,8 @@ namespace __hidden_geometry_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using NWB::Tests::MakeQuadTriangleIndices;
+using NWB::Tests::MakeTriangleIndices;
 using MeshletBuildConfig = NWB::Core::Geometry::MeshletBuildConfig;
 using MeshletBounds = NWB::Core::Geometry::MeshletBounds;
 using MeshletCluster = NWB::Core::Geometry::MeshletCluster;
@@ -115,6 +117,24 @@ static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 
     vertex.normal = Float3U(0.0f, 0.0f, 0.0f);
     vertex.tangent = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
     return vertex;
+}
+
+static Vector<TangentFrameRebuildVertex> MakeFlatQuadVertices(){
+    Vector<TangentFrameRebuildVertex> vertices;
+    vertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f, 0.0f));
+    vertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 1.0f, 0.0f));
+    vertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f, 1.0f, 1.0f));
+    vertices.push_back(MakeVertex(-1.0f, 1.0f, 0.0f, 0.0f, 1.0f));
+    return vertices;
+}
+
+static Vector<Float3U> MakeFlatQuadPositions(){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
+    return positions;
 }
 
 static SkinInfluence4 MakeSkinInfluence(
@@ -259,19 +279,8 @@ static void TestBlendMorphDeltaRejectsInvalidInput(TestContext& context){
 }
 
 static void TestRebuildsFlatQuadFrame(TestContext& context){
-    Vector<TangentFrameRebuildVertex> vertices;
-    vertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f, 0.0f));
-    vertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 1.0f, 0.0f));
-    vertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f, 1.0f, 1.0f));
-    vertices.push_back(MakeVertex(-1.0f, 1.0f, 0.0f, 0.0f, 1.0f));
-
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
-    indices.push_back(0u);
-    indices.push_back(2u);
-    indices.push_back(3u);
+    Vector<TangentFrameRebuildVertex> vertices = MakeFlatQuadVertices();
+    Vector<u32> indices = MakeQuadTriangleIndices();
 
     NWB::Core::Geometry::TangentFrameRebuildResult result;
     NWB_GEOMETRY_TEST_CHECK(context, NWB::Core::Geometry::RebuildTangentFrames(vertices, indices, &result));
@@ -292,10 +301,7 @@ static void TestDegenerateUvsUseStableTangentFallback(TestContext& context){
     for(TangentFrameRebuildVertex& vertex : vertices)
         vertex.tangent = Float4U(0.0f, 1.0f, 0.0f, -1.0f);
 
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
+    Vector<u32> indices = MakeTriangleIndices();
 
     NWB::Core::Geometry::TangentFrameRebuildResult result;
     NWB_GEOMETRY_TEST_CHECK(context, NWB::Core::Geometry::RebuildTangentFrames(vertices, indices, &result));
@@ -314,10 +320,7 @@ static void TestRejectsDegenerateTriangle(TestContext& context){
     vertices.push_back(MakeVertex(1.0f, 0.0f, 0.0f, 1.0f, 0.0f));
     vertices.push_back(MakeVertex(2.0f, 0.0f, 0.0f, 1.0f, 1.0f));
 
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
+    Vector<u32> indices = MakeTriangleIndices();
 
     NWB_GEOMETRY_TEST_CHECK(context, !NWB::Core::Geometry::RebuildTangentFrames(vertices, indices));
 }
@@ -440,13 +443,7 @@ static void TestBuildsBoundaryEdgesFromRemovedTriangles(TestContext& context){
 }
 
 static void TestRejectsMalformedRemovedTriangleBoundaries(TestContext& context){
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
-    indices.push_back(0u);
-    indices.push_back(2u);
-    indices.push_back(3u);
+    Vector<u32> indices = MakeQuadTriangleIndices();
 
     Vector<u8> removedTriangles;
     removedTriangles.resize(2u, 0u);
@@ -826,19 +823,8 @@ static void TestRejectsMalformedSurfacePatchWallVertices(TestContext& context){
 }
 
 static void TestBuildsSingleQuadMeshlet(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
-    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
-
-    Vector<u32> indices;
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(2u);
-    indices.push_back(0u);
-    indices.push_back(2u);
-    indices.push_back(3u);
+    Vector<Float3U> positions = MakeFlatQuadPositions();
+    Vector<u32> indices = MakeQuadTriangleIndices();
 
     Vector<MeshletCluster> meshlets;
     Vector<u32> vertexIndices;

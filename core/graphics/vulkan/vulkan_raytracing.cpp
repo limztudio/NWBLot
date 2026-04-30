@@ -794,19 +794,11 @@ RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& dev
     , m_device(device)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
-    VulkanDetail::DestroyPipelineAndOwnedLayout(
-        m_context.device,
-        m_context.allocationCallbacks,
-        m_pipeline,
-        m_pipelineLayout,
-        m_ownsPipelineLayout
-    );
+    VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
 
 Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(m_pipeline);
-    return Object(nullptr);
+    return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 
 
@@ -1212,18 +1204,16 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
 
     if(
-        !configurePipelineBindings(
+        !configurePipelineBindingsOrDestroy(
             desc.globalBindingLayouts,
             NWB_TEXT("ray tracing pipeline"),
             stages,
             descriptorHeapScratch,
-            *pso,
+            pso,
             scratchArena
         )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
+    )
         return nullptr;
-    }
 
     const bool enableSpherePipelineFlags = desc.allowSpheres || desc.allowLinearSweptSpheres;
     auto pipelineFlags2 = VulkanDetail::MakeVkStruct<VkPipelineCreateFlags2CreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO);

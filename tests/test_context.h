@@ -40,6 +40,22 @@ struct TestContext{
     }
 };
 
+inline Vector<u32> MakeTriangleIndices(){
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    return indices;
+}
+
+inline Vector<u32> MakeQuadTriangleIndices(){
+    Vector<u32> indices = MakeTriangleIndices();
+    indices.push_back(0u);
+    indices.push_back(2u);
+    indices.push_back(3u);
+    return indices;
+}
+
 template<typename RunTests>
 [[nodiscard]] inline int RunTestSuite(const char* suiteName, RunTests&& runTests){
     Core::Common::InitializerGuard commonInitializerGuard;

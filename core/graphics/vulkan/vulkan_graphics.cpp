@@ -73,18 +73,10 @@ GraphicsPipeline::GraphicsPipeline(const VulkanContext& context)
     , m_context(context)
 {}
 GraphicsPipeline::~GraphicsPipeline(){
-    VulkanDetail::DestroyPipelineAndOwnedLayout(
-        m_context.device,
-        m_context.allocationCallbacks,
-        m_pipeline,
-        m_pipelineLayout,
-        m_ownsPipelineLayout
-    );
+    VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
 Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(m_pipeline);
-    return Object(nullptr);
+    return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 
 void CommandList::setViewportState(const ViewportState& viewportState){
@@ -222,18 +214,16 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     if(
-        !configurePipelineBindings(
+        !configurePipelineBindingsOrDestroy(
             desc.bindingLayouts,
             NWB_TEXT("graphics pipeline"),
             shaderStages,
             descriptorHeapScratch,
-            *pso,
+            pso,
             scratchArena
         )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
+    )
         return nullptr;
-    }
 
     // Step 2: Vertex input state from InputLayout
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);

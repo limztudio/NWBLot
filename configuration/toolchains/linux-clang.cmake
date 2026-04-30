@@ -27,21 +27,12 @@ nwb_toolchain_find_required_program(_nwb_llvm_ranlib
     HINTS ${_nwb_llvm_hints}
 )
 
-if(DEFINED ENV{NWB_NINJA} AND EXISTS "$ENV{NWB_NINJA}")
-    file(TO_CMAKE_PATH "$ENV{NWB_NINJA}" _nwb_ninja)
-else()
-    nwb_toolchain_append_existing_roots(_nwb_ninja_roots
-        "$ENV{NWB_NINJA_ROOT}"
+nwb_toolchain_find_ninja(_nwb_ninja
+    ROOTS
         "$ENV{NWB_LLVM_ROOT}"
         "$ENV{LLVM_ROOT}"
-    )
-    nwb_toolchain_make_hints(_nwb_ninja_hints ${_nwb_ninja_roots})
-    nwb_toolchain_find_required_program(_nwb_ninja
-        DESCRIPTION "ninja"
-        NAMES ninja
-        HINTS ${_nwb_ninja_hints}
-    )
-endif()
+    NAMES ninja
+)
 
 set(CMAKE_MAKE_PROGRAM "${_nwb_ninja}" CACHE FILEPATH "" FORCE)
 set(CMAKE_C_COMPILER "${_nwb_clang}" CACHE FILEPATH "" FORCE)

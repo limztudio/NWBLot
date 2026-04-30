@@ -21,19 +21,11 @@ ComputePipeline::ComputePipeline(const VulkanContext& context)
     , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){
-    VulkanDetail::DestroyPipelineAndOwnedLayout(
-        m_context.device,
-        m_context.allocationCallbacks,
-        m_pipeline,
-        m_pipelineLayout,
-        m_ownsPipelineLayout
-    );
+    VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
 
 Object ComputePipeline::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(m_pipeline);
-    return Object(nullptr);
+    return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 
 
@@ -71,18 +63,16 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
     if(
-        !configurePipelineBindings(
-        desc.bindingLayouts,
-        NWB_TEXT("compute pipeline"),
-        shaderStages,
-        descriptorHeapScratch,
-        *pso,
-        scratchArena
+        !configurePipelineBindingsOrDestroy(
+            desc.bindingLayouts,
+            NWB_TEXT("compute pipeline"),
+            shaderStages,
+            descriptorHeapScratch,
+            pso,
+            scratchArena
         )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
+    )
         return nullptr;
-    }
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)

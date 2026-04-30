@@ -40,7 +40,9 @@ namespace __hidden_ecs_graphics_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
+using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeSourceSample;
+using NWB::Tests::MakeTriangleIndices;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
@@ -379,9 +381,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeTriangleInstance(){
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 0.5f));
     instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 1.0f));
-    instance.indices.push_back(0u);
-    instance.indices.push_back(1u);
-    instance.indices.push_back(2u);
+    instance.indices = MakeTriangleIndices();
     instance.sourceSamples.push_back(MakeSourceSample(9u, 1.0f, 0.0f, 0.0f));
     instance.sourceSamples.push_back(MakeSourceSample(9u, 0.0f, 1.0f, 0.0f));
     instance.sourceSamples.push_back(MakeSourceSample(9u, 0.0f, 0.0f, 1.0f));
@@ -443,12 +443,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeQuadMixedProvenanceInstance(
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(-1.0f, 1.0f, 0.0f));
-    instance.indices.push_back(0u);
-    instance.indices.push_back(1u);
-    instance.indices.push_back(2u);
-    instance.indices.push_back(0u);
-    instance.indices.push_back(2u);
-    instance.indices.push_back(3u);
+    instance.indices = MakeQuadTriangleIndices();
     instance.sourceSamples.push_back(MakeSourceSample(0u, 1.0f, 0.0f, 0.0f));
     instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 1.0f, 0.0f));
     instance.sourceSamples.push_back(MakeSourceSample(0u, 0.0f, 0.0f, 1.0f));

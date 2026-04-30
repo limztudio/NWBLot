@@ -973,6 +973,26 @@ struct PipelineBindingState{
     u32 m_pushConstantByteSize = 0;
 };
 
+namespace VulkanDetail{
+
+inline void DestroyPipelineResource(const VulkanContext& context, PipelineBindingState& state, VkPipeline& pipeline){
+    DestroyPipelineAndOwnedLayout(
+        context.device,
+        context.allocationCallbacks,
+        pipeline,
+        state.m_pipelineLayout,
+        state.m_ownsPipelineLayout
+    );
+}
+
+inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectType objectType){
+    if(objectType == ObjectTypes::VK_Pipeline)
+        return Object(pipeline);
+    return Object(nullptr);
+}
+
+};
+
 class DescriptorHeapManager final : NoCopy{
 private:
     struct FreeRange{
@@ -1828,6 +1848,21 @@ private:
         PipelineBindingState& outBindings,
         Alloc::ScratchArena<>& scratchArena
     )const;
+    template<typename PipelineT>
+    [[nodiscard]] bool configurePipelineBindingsOrDestroy(
+        const BindingLayoutVector& bindingLayouts,
+        const tchar* operationName,
+        PipelineShaderStageVector& shaderStages,
+        PipelineDescriptorHeapScratch& descriptorHeapScratch,
+        PipelineT* pipeline,
+        Alloc::ScratchArena<>& scratchArena
+    )const{
+        if(configurePipelineBindings(bindingLayouts, operationName, shaderStages, descriptorHeapScratch, *pipeline, scratchArena))
+            return true;
+
+        DestroyArenaObject(m_context.objectArena, pipeline);
+        return false;
+    }
     void appendPipelineShaderStage(
         IShader* shader,
         VkShaderStageFlagBits stage,

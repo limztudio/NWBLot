@@ -21,18 +21,10 @@ MeshletPipeline::MeshletPipeline(const VulkanContext& context)
     , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
-    VulkanDetail::DestroyPipelineAndOwnedLayout(
-        m_context.device,
-        m_context.allocationCallbacks,
-        m_pipeline,
-        m_pipelineLayout,
-        m_ownsPipelineLayout
-    );
+    VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);
 }
 Object MeshletPipeline::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Pipeline)
-        return Object(m_pipeline);
-    return Object(nullptr);
+    return VulkanDetail::GetPipelineNativeHandle(m_pipeline, objectType);
 }
 
 
@@ -83,18 +75,16 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(
-        !configurePipelineBindings(
+        !configurePipelineBindingsOrDestroy(
             desc.bindingLayouts,
             NWB_TEXT("meshlet pipeline"),
             shaderStages,
             descriptorHeapScratch,
-            *pso,
+            pso,
             scratchArena
         )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
+    )
         return nullptr;
-    }
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
         desc.renderState.rasterState,

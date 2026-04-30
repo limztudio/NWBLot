@@ -68,14 +68,6 @@ struct BoundaryVertexEdges{
     ;
 }
 
-[[nodiscard]] bool ValidEdge(const MeshTopologyEdge& edge, const usize vertexCount){
-    return
-        edge.a < vertexCount
-        && edge.b < vertexCount
-        && edge.a != edge.b
-    ;
-}
-
 [[nodiscard]] u64 MakeEdgeKey(const u32 a, const u32 b){
     const u32 lo = a < b ? a : b;
     const u32 hi = a < b ? b : a;
@@ -243,7 +235,7 @@ bool BuildOrderedBoundaryLoopImpl(
     for(usize edgeIndex = 0u; edgeIndex < boundaryEdges.size(); ++edgeIndex){
         const MeshTopologyEdge& edge = boundaryEdges[edgeIndex];
         if(
-            !ValidEdge(edge, positions.size())
+            !ValidMeshTopologyEdge(edge, positions.size())
             || !RegisterBoundaryVertexEdge(vertexEdges, edge.a, edgeIndex)
             || !RegisterBoundaryVertexEdge(vertexEdges, edge.b, edgeIndex)
         )
@@ -450,8 +442,8 @@ bool BuildBoundaryLoopVertexFrameImpl(
     if(
         positions.empty()
         || !ValidLoopFrame(frame)
-        || !ValidEdge(previousEdge, positions.size())
-        || !ValidEdge(currentEdge, positions.size())
+        || !ValidMeshTopologyEdge(previousEdge, positions.size())
+        || !ValidMeshTopologyEdge(currentEdge, positions.size())
         || previousEdge.b != currentEdge.a
     )
         return false;

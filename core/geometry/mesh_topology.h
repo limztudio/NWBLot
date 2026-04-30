@@ -47,6 +47,18 @@ static_assert(IsTriviallyCopyable_V<MeshTopologyLoopVertexFrame>, "MeshTopologyL
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline bool ValidMeshTopologyEdge(const MeshTopologyEdge& edge, const usize vertexCount){
+    return
+        edge.a < vertexCount
+        && edge.b < vertexCount
+        && edge.a != edge.b
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool BuildOrderedBoundaryLoop(
     const Vector<MeshTopologyEdge>& boundaryEdges,
     const Vector<Float3U>& positions,

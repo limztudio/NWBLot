@@ -24,14 +24,6 @@ namespace __hidden_geometry_surface_patch_edit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidEdge(const MeshTopologyEdge& edge, const usize vertexCount){
-    return
-        edge.a < vertexCount
-        && edge.b < vertexCount
-        && edge.a != edge.b
-    ;
-}
-
 [[nodiscard]] bool NormalizeFrameNormal(const SIMDVector inputNormal, SIMDVector& outNormal){
     if(!FrameValidDirection(inputNormal))
         return false;
@@ -72,7 +64,7 @@ bool BuildSurfacePatchLoopDistancesWithNormalImpl(
     for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
         const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
         const MeshTopologyEdge& edge = orderedBoundaryEdges[edgeIndex];
-        if(!ValidEdge(edge, positions.size()) || edge.b != orderedBoundaryEdges[nextEdgeIndex].a)
+        if(!ValidMeshTopologyEdge(edge, positions.size()) || edge.b != orderedBoundaryEdges[nextEdgeIndex].a)
             return false;
 
         outLoopDistances[edgeIndex] = outLoopLength;

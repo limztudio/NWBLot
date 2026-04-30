@@ -78,6 +78,13 @@ struct SurfaceRemeshClipPoint{
     u32 originalVertex = Limit<u32>::s_Max;
 };
 
+struct SurfaceRemeshLocalBounds{
+    f32 minX = 0.0f;
+    f32 minY = 0.0f;
+    f32 maxX = 0.0f;
+    f32 maxY = 0.0f;
+};
+
 struct SurfaceRemeshGeneratedVertex{
     u32 vertex = Limit<u32>::s_Max;
     u32 sourceTriangle = Limit<u32>::s_Max;
@@ -2493,6 +2500,76 @@ using SurfaceRemeshClipPolygonList = Vector<
     ;
 }
 
+[[nodiscard]] bool BuildOperatorFootprintLocalBounds(
+    const DeformableOperatorFootprint& footprint,
+    SurfaceRemeshLocalBounds& outBounds
+){
+    outBounds = SurfaceRemeshLocalBounds{};
+    if(footprint.vertexCount == 0u || footprint.vertexCount > s_DeformableOperatorFootprintMaxVertexCount)
+        return false;
+
+    const Float2U& firstPoint = footprint.vertices[0u];
+    if(!IsFinite(firstPoint.x) || !IsFinite(firstPoint.y))
+        return false;
+
+    outBounds.minX = firstPoint.x;
+    outBounds.maxX = firstPoint.x;
+    outBounds.minY = firstPoint.y;
+    outBounds.maxY = firstPoint.y;
+    for(u32 i = 1u; i < footprint.vertexCount; ++i){
+        const Float2U& point = footprint.vertices[i];
+        if(!IsFinite(point.x) || !IsFinite(point.y))
+            return false;
+
+        outBounds.minX = Min(outBounds.minX, point.x);
+        outBounds.minY = Min(outBounds.minY, point.y);
+        outBounds.maxX = Max(outBounds.maxX, point.x);
+        outBounds.maxY = Max(outBounds.maxY, point.y);
+    }
+    return true;
+}
+
+[[nodiscard]] bool BuildSurfaceRemeshClipPolygonLocalBounds(
+    const SurfaceRemeshClipPolygon& polygon,
+    SurfaceRemeshLocalBounds& outBounds
+){
+    outBounds = SurfaceRemeshLocalBounds{};
+    if(polygon.empty())
+        return false;
+
+    const Float2U& firstPoint = polygon.front().local;
+    if(!IsFinite(firstPoint.x) || !IsFinite(firstPoint.y))
+        return false;
+
+    outBounds.minX = firstPoint.x;
+    outBounds.maxX = firstPoint.x;
+    outBounds.minY = firstPoint.y;
+    outBounds.maxY = firstPoint.y;
+    for(usize i = 1u; i < polygon.size(); ++i){
+        const Float2U& point = polygon[i].local;
+        if(!IsFinite(point.x) || !IsFinite(point.y))
+            return false;
+
+        outBounds.minX = Min(outBounds.minX, point.x);
+        outBounds.minY = Min(outBounds.minY, point.y);
+        outBounds.maxX = Max(outBounds.maxX, point.x);
+        outBounds.maxY = Max(outBounds.maxY, point.y);
+    }
+    return true;
+}
+
+[[nodiscard]] bool SurfaceRemeshLocalBoundsOverlap(
+    const SurfaceRemeshLocalBounds& lhs,
+    const SurfaceRemeshLocalBounds& rhs
+){
+    return
+        lhs.maxX >= rhs.minX - s_SurfaceRemeshClipEpsilon
+        && lhs.minX <= rhs.maxX + s_SurfaceRemeshClipEpsilon
+        && lhs.maxY >= rhs.minY - s_SurfaceRemeshClipEpsilon
+        && lhs.minY <= rhs.maxY + s_SurfaceRemeshClipEpsilon
+    ;
+}
+
 [[nodiscard]] f32 SurfaceRemeshPointDistanceSq(
     const SurfaceRemeshClipPoint& lhs,
     const SurfaceRemeshClipPoint& rhs
@@ -3055,6 +3132,9 @@ using SurfaceRemeshClipPolygonList = Vector<
     if(!IsFinite(footprintArea) || Abs(footprintArea) <= s_OperatorFootprintAreaEpsilon)
         return false;
     const f32 orientation = footprintArea >= 0.0f ? 1.0f : -1.0f;
+    SurfaceRemeshLocalBounds footprintBounds;
+    if(!BuildOperatorFootprintLocalBounds(params.operatorFootprint, footprintBounds))
+        return false;
 
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         const usize indexBase = triangle * 3u;
@@ -3121,22 +3201,43 @@ using SurfaceRemeshClipPolygonList = Vector<
                 return false;
         }
 
+        SurfaceRemeshLocalBounds triangleBounds;
+        if(!BuildSurfaceRemeshClipPolygonLocalBounds(active, triangleBounds))
+            return false;
+        if(!SurfaceRemeshLocalBoundsOverlap(triangleBounds, footprintBounds)){
+            if(
+                !AppendSurfaceRemeshTriangle(
+                    outRestPositions,
+                    triangleNormal,
+                    triangleIndices[0u],
+                    triangleIndices[1u],
+                    triangleIndices[2u],
+                    static_cast<u32>(triangle),
+                    outSurfaceTriangles
+                )
+            )
+                return false;
+            continue;
+        }
+
         SurfaceRemeshClipPolygonList outsidePieces{
             Core::Alloc::ScratchAllocator<SurfaceRemeshClipPolygon>(scratchArena)
         };
         outsidePieces.reserve(params.operatorFootprint.vertexCount);
+        SurfaceRemeshClipPolygon outside{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
+        };
+        SurfaceRemeshClipPolygon inside{
+            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
+        };
+        outside.reserve(active.size() + 1u);
+        inside.reserve(active.size() + 1u);
         bool clippedAway = false;
         for(u32 edgeIndex = 0u; edgeIndex < params.operatorFootprint.vertexCount; ++edgeIndex){
             const u32 nextEdgeIndex = (edgeIndex + 1u) % params.operatorFootprint.vertexCount;
             const Float2U& edgeA = params.operatorFootprint.vertices[edgeIndex];
             const Float2U& edgeB = params.operatorFootprint.vertices[nextEdgeIndex];
 
-            SurfaceRemeshClipPolygon outside{
-                Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
-            };
-            SurfaceRemeshClipPolygon inside{
-                Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
-            };
             outside.reserve(active.size() + 1u);
             inside.reserve(active.size() + 1u);
             if(

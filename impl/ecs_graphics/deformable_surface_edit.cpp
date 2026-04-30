@@ -1960,6 +1960,49 @@ template<usize sourceCount>
     return Core::Geometry::BlendFloat4(sources, activeSourceCount, outColor);
 }
 
+template<usize sourceCount>
+[[nodiscard]] bool BuildBlendedVertexUv0(
+    const Vector<DeformableVertexRest>& vertices,
+    const u32 (&sourceVertices)[sourceCount],
+    const f32 (&sourceWeights)[sourceCount],
+    Float2U& outUv0
+){
+    static_assert(sourceCount > 0u, "uv transfer requires source samples");
+    outUv0 = Float2U(0.0f, 0.0f);
+
+    f32 u = 0.0f;
+    f32 v = 0.0f;
+    f32 weightSum = 0.0f;
+    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
+        const f32 sourceWeight = sourceWeights[sourceIndex];
+        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
+            return false;
+        if(!DeformableValidation::ActiveWeight(sourceWeight))
+            continue;
+
+        const u32 vertex = sourceVertices[sourceIndex];
+        if(vertex >= vertices.size())
+            return false;
+
+        const Float2U& sourceUv0 = vertices[vertex].uv0;
+        if(!IsFinite(sourceUv0.x) || !IsFinite(sourceUv0.y))
+            return false;
+
+        u += sourceUv0.x * sourceWeight;
+        v += sourceUv0.y * sourceWeight;
+        weightSum += sourceWeight;
+        if(!IsFinite(u) || !IsFinite(v) || !IsFinite(weightSum))
+            return false;
+    }
+
+    if(!DeformableValidation::ActiveWeight(weightSum))
+        return false;
+
+    const f32 invWeightSum = 1.0f / weightSum;
+    outUv0 = Float2U(u * invWeightSum, v * invWeightSum);
+    return IsFinite(outUv0.x) && IsFinite(outUv0.y);
+}
+
 [[nodiscard]] bool AppendWallVertex(
     Vector<DeformableVertexRest>& vertices,
     Vector<SkinInfluence4>& skin,
@@ -2375,51 +2418,8 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     return PointInsideOperatorCrossSection(params.operatorFootprint, topX, topY);
 }
 
-[[nodiscard]] bool BuildOperatorProjectionUv(
-    const HoleFrame& frame,
-    const DeformableHoleEditParams& params,
-    const SIMDVector position,
-    Float2U& outUv
-){
-    const f32 radiusX = params.radius;
-    const f32 radiusY = params.radius * params.ellipseRatio;
-    if(radiusX <= s_Epsilon || radiusY <= s_Epsilon)
-        return false;
-
-    const SIMDVector offset = VectorSubtract(position, frame.center);
-    const f32 localX = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
-    const f32 localY = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
-    if(!IsFinite(localX) || !IsFinite(localY))
-        return false;
-
-    outUv = Float2U(0.5f + (localX * 0.5f), 0.5f + (localY * 0.5f));
-    return IsFinite(outUv.x) && IsFinite(outUv.y);
-}
-
-template<typename EdgeVector, typename PositionVector>
-[[nodiscard]] bool ApplyOperatorProjectionUvsToBoundaryVertices(
-    const EdgeVector& orderedBoundaryEdges,
-    const PositionVector& restPositions,
-    const HoleFrame& frame,
-    const DeformableHoleEditParams& params,
-    Vector<DeformableVertexRest>& restVertices
-){
-    for(const EdgeRecord& edge : orderedBoundaryEdges){
-        if(edge.a >= restPositions.size() || edge.a >= restVertices.size())
-            return false;
-
-        Float2U uv0;
-        if(!BuildOperatorProjectionUv(frame, params, LoadFloat(restPositions[edge.a]), uv0))
-            return false;
-
-        restVertices[edge.a].uv0 = uv0;
-    }
-    return true;
-}
-
-[[nodiscard]] bool ApplyOperatorProjectionUvsToWallVertexPlan(
-    const HoleFrame& frame,
-    const DeformableHoleEditParams& params,
+[[nodiscard]] bool ApplySourceContinuationUvsToWallVertexPlan(
+    const Vector<DeformableVertexRest>& restVertices,
     Core::Geometry::SurfacePatchWallVertex* wallVertices,
     const usize wallVertexCount
 ){
@@ -2427,8 +2427,15 @@ template<typename EdgeVector, typename PositionVector>
         return false;
 
     for(usize i = 0u; i < wallVertexCount; ++i){
-        if(!BuildOperatorProjectionUv(frame, params, LoadFloat(wallVertices[i].position), wallVertices[i].uv0))
+        const u32 sourceVertex = wallVertices[i].sourceVertex;
+        if(sourceVertex >= restVertices.size())
             return false;
+
+        const Float2U& sourceUv0 = restVertices[sourceVertex].uv0;
+        if(!IsFinite(sourceUv0.x) || !IsFinite(sourceUv0.y))
+            return false;
+
+        wallVertices[i].uv0 = sourceUv0;
     }
     return true;
 }
@@ -4511,8 +4518,6 @@ template<usize sourceCount>
     const SourceSample& fallbackSourceSample,
     const SIMDVector fallbackNormal,
     const SIMDVector fallbackTangent,
-    const HoleFrame& projectionFrame,
-    const DeformableHoleEditParams& params,
     Vector<DeformableVertexRest>& newRestVertices,
     Vector<SkinInfluence4>& newSkin,
     Vector<SourceSample>& newSourceSamples
@@ -4548,13 +4553,17 @@ template<usize sourceCount>
     if(!FiniteVec3(normal) || !FiniteVec3(tangent))
         return false;
 
-    Float2U projectedUv;
-    if(!BuildOperatorProjectionUv(projectionFrame, params, LoadFloat(generated.position), projectedUv))
-        return false;
-
     StoreFloat(normal, &vertex.normal);
     StoreFloat(VectorSetW(tangent, 1.0f), &vertex.tangent);
-    vertex.uv0 = projectedUv;
+    if(
+        !BuildBlendedVertexUv0(
+            instance.restVertices,
+            generated.sourceVertices,
+            generated.bary,
+            vertex.uv0
+        )
+    )
+        return false;
     if(
         !BuildBlendedVertexColor(
             instance.restVertices,
@@ -4837,8 +4846,6 @@ template<usize sourceCount>
                 wallSourceSample,
                 frame.normal,
                 frame.tangent,
-                frame,
-                params,
                 newRestVertices,
                 newSkin,
                 newSourceSamples
@@ -4852,22 +4859,6 @@ template<usize sourceCount>
             );
             return false;
         }
-    }
-    if(
-        !ApplyOperatorProjectionUvsToBoundaryVertices(
-            orderedBoundaryEdges,
-            restPositions,
-            frame,
-            params,
-            newRestVertices
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while assigning boundary projection UVs (entity={} runtime_mesh={} boundary_vertices={})")
-            , instance.entity.id
-            , instance.handle.value
-            , orderedBoundaryEdges.size()
-        );
-        return false;
     }
     if(!TransferSurfaceRemeshMorphDeltas(newMorphs, generatedVertices)){
         NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while transferring generated surface morph deltas (entity={} runtime_mesh={} generated_vertices={} morphs={})")
@@ -4965,14 +4956,13 @@ template<usize sourceCount>
             return false;
         }
         if(
-            !ApplyOperatorProjectionUvsToWallVertexPlan(
-                frame,
-                params,
+            !ApplySourceContinuationUvsToWallVertexPlan(
+                newRestVertices,
                 wallVertexPlan.data(),
                 wallVertexPlan.size()
             )
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while assigning wall projection UVs (entity={} runtime_mesh={} wall_vertices={})")
+            NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while assigning wall continuation UVs (entity={} runtime_mesh={} wall_vertices={})")
                 , instance.entity.id
                 , instance.handle.value
                 , wallVertexPlan.size()

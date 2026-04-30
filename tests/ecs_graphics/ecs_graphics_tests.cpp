@@ -512,6 +512,15 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeGridHoleInstance(){
     return MakeGridHoleInstance(4u, 4u);
 }
 
+static Float2U ExpectedPlanarSurfaceUv0(const Float3U& position){
+    return Float2U((position.x * 0.37f) + 0.13f, (position.y * -0.21f) + 0.77f);
+}
+
+static void AssignPlanarSurfaceUv0(NWB::Impl::DeformableRuntimeMeshInstance& instance){
+    for(NWB::Impl::DeformableVertexRest& vertex : instance.restVertices)
+        vertex.uv0 = ExpectedPlanarSurfaceUv0(vertex.position);
+}
+
 static NWB::Impl::DeformableRuntimeMeshInstance MakeCurvedDepthGateHoleInstance(){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance(9u, 7u);
     for(NWB::Impl::DeformableVertexRest& vertex : instance.restVertices){
@@ -3361,6 +3370,7 @@ static void TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(TestContext& 
 
 static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance(6u, 6u);
+    AssignPlanarSurfaceUv0(instance);
     const usize oldVertexCount = instance.restVertices.size();
     NWB::Impl::DeformableHoleEditParams params =
         MakeHoleEditParams(instance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
@@ -3414,14 +3424,20 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedRimVertex);
 
+    for(usize vertexIndex = 0u; vertexIndex < static_cast<usize>(result.firstWallVertex); ++vertexIndex){
+        const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[vertexIndex];
+        const Float2U expectedUv0 = ExpectedPlanarSurfaceUv0(vertex.position);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedUv0.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, expectedUv0.y));
+    }
+
     for(usize vertexOffset = 0u; vertexOffset < static_cast<usize>(result.wallVertexCount); ++vertexOffset){
         const NWB::Impl::DeformableVertexRest& vertex =
             instance.restVertices[static_cast<usize>(result.firstWallVertex) + vertexOffset]
         ;
-        const f32 expectedU = 0.5f - ((vertex.position.y - holeCenter.y) / (params.radius * 2.0f));
-        const f32 expectedV = 0.5f + ((vertex.position.x - holeCenter.x) / (params.radius * 2.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedU));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, expectedV));
+        const Float2U expectedUv0 = ExpectedPlanarSurfaceUv0(vertex.position);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedUv0.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, expectedUv0.y));
     }
 
     for(usize indexBase = 0u; indexBase < wallIndexBase; indexBase += 3u){

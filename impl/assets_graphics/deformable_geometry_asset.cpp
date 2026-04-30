@@ -177,10 +177,7 @@ template<typename T, typename Allocator>
         return false;
     }
 
-    if(payloadBytes > 0){
-        const u8* payloadBegin = reinterpret_cast<const u8*>(values.data());
-        outBinary.insert(outBinary.end(), payloadBegin, payloadBegin + payloadBytes);
-    }
+    ::BinaryDetail::AppendBytesUnchecked(outBinary, values.data(), payloadBytes);
     return true;
 }
 

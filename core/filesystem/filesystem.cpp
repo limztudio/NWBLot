@@ -9,6 +9,7 @@
 #include <logger/client/logger.h>
 #include <core/alloc/core.h>
 #include <core/alloc/scratch.h>
+#include <global/binary.h>
 
 #include <cerrno>
 
@@ -1670,8 +1671,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     };
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
-    if(!indexBytes.empty())
-        metadataBuffer.insert(metadataBuffer.end(), indexBytes.begin(), indexBytes.end());
+    ::BinaryDetail::AppendBytesUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
     metadataBuffer.resize(static_cast<usize>(m_metadataBytes), 0u);
 
     if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size()))

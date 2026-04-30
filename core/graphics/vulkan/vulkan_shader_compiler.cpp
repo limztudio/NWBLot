@@ -12,6 +12,7 @@
 
 #include <shaderc/shaderc.hpp>
 
+#include <global/binary.h>
 #include <logger/client/logger.h>
 
 
@@ -277,9 +278,8 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         return false;
     }
 
-    const u8* spirvBytes = reinterpret_cast<const u8*>(result.cbegin());
     outBytecode.clear();
-    outBytecode.insert(outBytecode.end(), spirvBytes, spirvBytes + spirvSize);
+    ::BinaryDetail::AppendBytesUnchecked(outBytecode, result.cbegin(), spirvSize);
     return true;
 }
 

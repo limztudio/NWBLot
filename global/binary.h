@@ -33,12 +33,13 @@ template<typename Container>
 
 template<typename Container>
 inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const usize byteCount){
+    RequireByteContainer<Container>();
     if(byteCount == 0u)
         return;
 
-    using ByteType = typename Container::value_type;
-    const ByteType* first = reinterpret_cast<const ByteType*>(bytes);
-    outBinary.insert(outBinary.end(), first, first + byteCount);
+    const usize offset = outBinary.size();
+    outBinary.resize(offset + byteCount);
+    NWB_MEMCPY(outBinary.data() + offset, byteCount, bytes, byteCount);
 }
 
 template<typename Container>

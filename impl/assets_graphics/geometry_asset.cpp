@@ -4,6 +4,7 @@
 
 #include "geometry_asset.h"
 
+#include <global/binary.h>
 #include <logger/client/logger.h>
 #include <core/assets/asset_auto_registration.h>
 
@@ -83,10 +84,7 @@ bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<Value
         return false;
     }
 
-    if(byteCount > 0u){
-        const u8* bytes = reinterpret_cast<const u8*>(values.data());
-        outBinary.insert(outBinary.end(), bytes, bytes + byteCount);
-    }
+    ::BinaryDetail::AppendBytesUnchecked(outBinary, values.data(), byteCount);
     return true;
 }
 

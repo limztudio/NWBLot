@@ -113,14 +113,14 @@ static AString NormalizeVariantName(const Core::ShaderCook::ShaderEntry& entry, 
 
 
 struct ResolvedCookPaths{
-    explicit ResolvedCookPaths(Core::ShaderCook::CookArena& arena)
-        : assetRoots(Core::ShaderCook::CookAllocator<Path>(arena))
-    {}
-
     Path repoRoot;
     Core::ShaderCook::CookVector<Path> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
+
+    explicit ResolvedCookPaths(Core::ShaderCook::CookArena& arena)
+        : assetRoots(Core::ShaderCook::CookAllocator<Path>(arena))
+    {}
 };
 struct DiscoveredNwbFile{
     Path assetRoot;
@@ -162,6 +162,11 @@ struct MaterialEntry{
     using StageShaderMap = Core::ShaderCook::CookMap<Name, Core::Assets::AssetRef<Shader>>;
     using ParameterMap = Core::ShaderCook::CookMap<CompactString, CompactString>;
 
+    Name virtualPath = NAME_NONE;
+    AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
+    StageShaderMap stageShaders;
+    ParameterMap parameters;
+
     explicit MaterialEntry(Core::ShaderCook::CookArena& arena)
         : stageShaders(Core::ShaderCook::CookAllocator<Pair<const Name, Core::Assets::AssetRef<Shader>>>(arena))
         , parameters(Core::ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
@@ -173,11 +178,6 @@ struct MaterialEntry{
         stageShaders.clear();
         parameters.clear();
     }
-
-    Name virtualPath = NAME_NONE;
-    AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
-    StageShaderMap stageShaders;
-    ParameterMap parameters;
 };
 struct PreparedShaderKey{
     Name shaderName = NAME_NONE;

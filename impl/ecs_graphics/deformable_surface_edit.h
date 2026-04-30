@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/assets_graphics/deformable_operator_shape.h>
+#include "deformable_operator_shape.h"
 #include "deformable_picking.h"
 
 #include <core/assets/asset.h>

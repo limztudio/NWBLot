@@ -342,7 +342,7 @@ bool SelectMeshInstances(
         const AString meshName = ToLower(__hidden_fbx_import::FromUfbxString(instance.mesh->name));
         if(nodeName == normalized || meshName == normalized)
             outSelection.push_back(instance.index);
-        else if(nodeName.find(normalized) != AString::npos || meshName.find(normalized) != AString::npos){
+        else if(outSelection.empty() && (nodeName.find(normalized) != AString::npos || meshName.find(normalized) != AString::npos)){
             if(partialSelection.empty())
                 partialSelection.reserve(instances.size());
             partialSelection.push_back(instance.index);

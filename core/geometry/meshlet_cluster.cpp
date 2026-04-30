@@ -182,6 +182,20 @@ template<typename VertexAllocator>
     return IsFinite(radius) && radius >= 0.0f;
 }
 
+template<typename DestinationAllocator>
+void AppendMeshletIndices(
+    const PendingMeshlet::ScratchIndexVector& source,
+    Vector<u32, DestinationAllocator>& destination
+){
+    if(source.empty())
+        return;
+
+    const usize offset = destination.size();
+    const usize byteCount = source.size() * sizeof(u32);
+    destination.resize(offset + source.size());
+    NWB_MEMCPY(destination.data() + offset, byteCount, source.data(), byteCount);
+}
+
 template<typename MeshletAllocator, typename VertexIndexAllocator, typename LocalIndexAllocator>
 [[nodiscard]] bool FlushMeshlet(
     const Vector<Float3U>& positions,
@@ -211,8 +225,8 @@ template<typename MeshletAllocator, typename VertexIndexAllocator, typename Loca
         return false;
 
     outMeshlets.push_back(cluster);
-    outVertexIndices.insert(outVertexIndices.end(), pending.vertices.begin(), pending.vertices.end());
-    outLocalIndices.insert(outLocalIndices.end(), pending.indices.begin(), pending.indices.end());
+    AppendMeshletIndices(pending.vertices, outVertexIndices);
+    AppendMeshletIndices(pending.indices, outLocalIndices);
 
     pending.vertices.clear();
     pending.indices.clear();

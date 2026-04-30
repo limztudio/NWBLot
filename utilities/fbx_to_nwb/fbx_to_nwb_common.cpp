@@ -57,7 +57,7 @@ bool IsDeformableGeometryKind(const AString& value){
 
 bool ValidateAssetKind(AString& inOutValue, AString& outError){
     inOutValue = NormalizeAssetKind(Move(inOutValue));
-    if(IsStaticGeometryKind(inOutValue) || IsDeformableGeometryKind(inOutValue))
+    if(inOutValue == "geometry" || inOutValue == "deformable_geometry")
         return true;
 
     outError = "NWB geometry type must be geometry or deformable_geometry";
@@ -154,11 +154,9 @@ Path PathFromUtf8(const AString& value){
 
 AString PathToUtf8(const Path& path){
     const auto text = path.generic_u8string();
-    AString output;
-    output.reserve(text.size());
-    for(const auto ch : text){
-        output.push_back(static_cast<char>(ch));
-    }
+    AString output(text.size(), '\0');
+    for(usize i = 0u; i < text.size(); ++i)
+        output[i] = static_cast<char>(text[i]);
     return output;
 }
 

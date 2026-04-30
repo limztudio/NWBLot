@@ -328,11 +328,10 @@ bool ComputeMeshletDeformationBounds(
         return false;
 
     const bool hasVertexExpansion = !vertexExpansionRadii.empty();
-    SIMDVector minimum = VectorZero();
-    SIMDVector maximum = VectorZero();
-    bool initialized = false;
-    for(u32 index = 0u; index < meshlet.vertexCount; ++index){
-        const u32 vertex = meshletVertexIndices[meshlet.firstVertex + index];
+    const usize meshletVertexBegin = static_cast<usize>(meshlet.firstVertex);
+    const usize meshletVertexEnd = meshletVertexBegin + static_cast<usize>(meshlet.vertexCount);
+    const auto loadExpandedVertexBounds = [&](const usize meshletVertexIndex, SIMDVector& outMinimum, SIMDVector& outMaximum) -> bool{
+        const u32 vertex = meshletVertexIndices[meshletVertexIndex];
         if(vertex >= positions.size())
             return false;
 
@@ -355,19 +354,24 @@ bool ComputeMeshletDeformationBounds(
         if(!FiniteVector(expandedMinimum, 0x7u) || !FiniteVector(expandedMaximum, 0x7u))
             return false;
 
-        if(!initialized){
-            minimum = expandedMinimum;
-            maximum = expandedMaximum;
-            initialized = true;
-        }
-        else{
-            minimum = VectorMin(minimum, expandedMinimum);
-            maximum = VectorMax(maximum, expandedMaximum);
-        }
-    }
+        outMinimum = expandedMinimum;
+        outMaximum = expandedMaximum;
+        return true;
+    };
 
-    if(!initialized)
+    SIMDVector minimum = VectorZero();
+    SIMDVector maximum = VectorZero();
+    if(!loadExpandedVertexBounds(meshletVertexBegin, minimum, maximum))
         return false;
+    for(usize meshletVertexIndex = meshletVertexBegin + 1u; meshletVertexIndex < meshletVertexEnd; ++meshletVertexIndex){
+        SIMDVector expandedMinimum = VectorZero();
+        SIMDVector expandedMaximum = VectorZero();
+        if(!loadExpandedVertexBounds(meshletVertexIndex, expandedMinimum, expandedMaximum))
+            return false;
+
+        minimum = VectorMin(minimum, expandedMinimum);
+        maximum = VectorMax(maximum, expandedMaximum);
+    }
 
     const SIMDVector center = VectorScale(VectorAdd(minimum, maximum), 0.5f);
     if(!FiniteVector(center, 0x7u))
@@ -375,8 +379,8 @@ bool ComputeMeshletDeformationBounds(
 
     if(!hasVertexExpansion){
         f32 radiusSquared = 0.0f;
-        for(u32 index = 0u; index < meshlet.vertexCount; ++index){
-            const u32 vertex = meshletVertexIndices[meshlet.firstVertex + index];
+        for(usize meshletVertexIndex = meshletVertexBegin; meshletVertexIndex < meshletVertexEnd; ++meshletVertexIndex){
+            const u32 vertex = meshletVertexIndices[meshletVertexIndex];
             const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), center);
             const f32 offsetLengthSquared = VectorGetX(Vector3LengthSq(offset));
             if(!IsFinite(offsetLengthSquared))
@@ -394,8 +398,8 @@ bool ComputeMeshletDeformationBounds(
     }
 
     f32 radius = 0.0f;
-    for(u32 index = 0u; index < meshlet.vertexCount; ++index){
-        const u32 vertex = meshletVertexIndices[meshlet.firstVertex + index];
+    for(usize meshletVertexIndex = meshletVertexBegin; meshletVertexIndex < meshletVertexEnd; ++meshletVertexIndex){
+        const u32 vertex = meshletVertexIndices[meshletVertexIndex];
         const f32 expansionRadius = uniformExpansionRadius + vertexExpansionRadii[vertex];
 
         const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), center);

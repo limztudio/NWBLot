@@ -41,7 +41,7 @@ using EdgeRecord = Core::Geometry::MeshTopologyEdge;
 
 static constexpr f32 s_WallInnerInpaintWeights[3] = { 0.25f, 0.5f, 0.25f };
 static constexpr u32 s_SurfaceEditStateMagic = 0x53454631u; // SEF1
-static constexpr u32 s_SurfaceEditStateVersion = 9u;
+static constexpr u32 s_SurfaceEditStateVersion = 10u;
 static constexpr u32 s_MinWallLoopVertexCount = 3u;
 static constexpr u32 s_MaxWallLoopCutCount = 8u;
 static constexpr f32 s_MinHoleBoundaryKeptFaceNormalDot = 0.5f;
@@ -390,8 +390,6 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidateOperatorFootprint(const DeformableOperatorFootprint& footprint){
-    if(footprint.vertexCount == 0u)
-        return true;
     if(
         footprint.vertexCount < 3u
         || footprint.vertexCount > s_DeformableOperatorFootprintMaxVertexCount
@@ -409,8 +407,6 @@ using MorphDeltaLookup = HashMap<
 }
 
 [[nodiscard]] bool ValidateOperatorProfile(const DeformableOperatorProfile& profile){
-    if(profile.sampleCount == 0u)
-        return true;
     if(
         profile.sampleCount < 2u
         || profile.sampleCount > s_DeformableOperatorProfileMaxSampleCount
@@ -441,6 +437,23 @@ using MorphDeltaLookup = HashMap<
     }
 
     return Abs(profile.samples[profile.sampleCount - 1u].depth - 1.0f) <= s_OperatorProfileDepthEpsilon;
+}
+
+[[nodiscard]] bool UseAnalyticHoleShape(
+    const DeformableOperatorFootprint& footprint,
+    const DeformableOperatorProfile& profile
+){
+    return footprint.vertexCount == 0u && profile.sampleCount == 0u;
+}
+
+[[nodiscard]] bool ValidateHoleOperatorShape(
+    const DeformableOperatorFootprint& footprint,
+    const DeformableOperatorProfile& profile
+){
+    if(UseAnalyticHoleShape(footprint, profile))
+        return true;
+
+    return ValidateOperatorFootprint(footprint) && ValidateOperatorProfile(profile);
 }
 
 [[nodiscard]] bool AppendUniqueOperatorFootprintPoint(
@@ -702,7 +715,7 @@ using MorphDeltaLookup = HashMap<
         return false;
 
     if(maxZ - minZ <= s_OperatorProfileDepthEpsilon)
-        return true;
+        return false;
     if(zPlanes.size() < 2u)
         return false;
 
@@ -863,8 +876,7 @@ using MorphDeltaLookup = HashMap<
     return
         ValidateHoleShapeValues(params.radius, params.ellipseRatio, params.depth)
         && ValidOperatorUpVector(params.operatorUp)
-        && ValidateOperatorFootprint(params.operatorFootprint)
-        && ValidateOperatorProfile(params.operatorProfile)
+        && ValidateHoleOperatorShape(params.operatorFootprint, params.operatorProfile)
     ;
 }
 
@@ -1095,8 +1107,7 @@ using MorphDeltaLookup = HashMap<
     return
         ValidateHoleShapeValues(record.radius, record.ellipseRatio, record.depth)
         && ValidOperatorUpVector(record.operatorUp)
-        && ValidateOperatorFootprint(record.operatorFootprint)
-        && ValidateOperatorProfile(record.operatorProfile)
+        && ValidateHoleOperatorShape(record.operatorFootprint, record.operatorProfile)
         && ValidWallLoopCutCount(record.wallLoopCutCount)
         && (record.wallLoopCutCount == 0u || record.depth > s_Epsilon)
         && record.baseEditRevision != Limit<u32>::s_Max
@@ -2274,8 +2285,6 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
 ){
     outCenter = Float2U(0.0f, 0.0f);
     outScale = 1.0f;
-    if(profile.sampleCount == 0u)
-        return true;
     if(!ValidateOperatorProfile(profile) || !IsFinite(rawDepth))
         return false;
 
@@ -2316,9 +2325,10 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     const f32 x,
     const f32 y
 ){
-    if(operatorFootprint.vertexCount != 0u)
-        return PointInsideOperatorFootprint(operatorFootprint, x, y);
+    return PointInsideOperatorFootprint(operatorFootprint, x, y);
+}
 
+[[nodiscard]] bool PointInsideAnalyticCrossSection(const f32 x, const f32 y){
     return ((x * x) + (y * y)) <= 1.0f;
 }
 
@@ -2338,8 +2348,13 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     if(!IsFinite(localX) || !IsFinite(localY))
         return false;
 
+    const bool useAnalyticShape = UseAnalyticHoleShape(params.operatorFootprint, params.operatorProfile);
+
     if(params.depth <= s_Epsilon)
-        return PointInsideOperatorCrossSection(params.operatorFootprint, localX, localY);
+        return useAnalyticShape
+            ? PointInsideAnalyticCrossSection(localX, localY)
+            : PointInsideOperatorCrossSection(params.operatorFootprint, localX, localY)
+        ;
 
     const f32 normalizedDepth = -VectorGetX(Vector3Dot(offset, frame.normal)) / params.depth;
     if(
@@ -2348,6 +2363,9 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
         || normalizedDepth > 1.0f + s_OperatorProfileDepthEpsilon
     )
         return false;
+
+    if(useAnalyticShape)
+        return PointInsideAnalyticCrossSection(localX, localY);
 
     Float2U center;
     f32 scale = 1.0f;
@@ -2362,10 +2380,7 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
         return ((dx * dx) + (dy * dy)) <= (s_OperatorProfileScaleEpsilon * s_OperatorProfileScaleEpsilon);
     }
 
-    const Float2U topCenter = params.operatorProfile.sampleCount != 0u
-        ? params.operatorProfile.samples[0u].center
-        : Float2U(0.0f, 0.0f)
-    ;
+    const Float2U topCenter = params.operatorProfile.samples[0u].center;
     const f32 topX = topCenter.x + ((localX - center.x) / scale);
     const f32 topY = topCenter.y + ((localY - center.y) / scale);
     if(!IsFinite(topX) || !IsFinite(topY))
@@ -2451,7 +2466,11 @@ using SurfaceRemeshClipPolygonList = Vector<
 >;
 
 [[nodiscard]] bool UseOperatorSurfaceRemesh(const DeformableHoleEditParams& params){
-    return params.operatorFootprint.vertexCount >= 3u && params.depth > DeformableRuntime::s_Epsilon;
+    return
+        params.operatorFootprint.vertexCount >= 3u
+        && params.operatorProfile.sampleCount >= 2u
+        && params.depth > DeformableRuntime::s_Epsilon
+    ;
 }
 
 [[nodiscard]] f32 SurfaceRemeshHalfPlaneDistance(
@@ -2991,7 +3010,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     outAffectedTriangles.clear();
     outAffectedTriangleCount = 0u;
 
-    if(!UseOperatorSurfaceRemesh(params) || !ValidateOperatorFootprint(params.operatorFootprint))
+    if(!UseOperatorSurfaceRemesh(params) || !ValidateHoleOperatorShape(params.operatorFootprint, params.operatorProfile))
         return false;
 
     const usize triangleCount = instance.indices.size() / 3u;
@@ -3254,7 +3273,7 @@ template<typename EdgeVector, typename PositionVector>
     Core::Geometry::SurfacePatchWallVertex* wallVertices,
     const usize wallVertexCount
 ){
-    if(params.operatorProfile.sampleCount == 0u)
+    if(UseAnalyticHoleShape(params.operatorFootprint, params.operatorProfile))
         return true;
     if(
         !ValidateOperatorProfile(params.operatorProfile)

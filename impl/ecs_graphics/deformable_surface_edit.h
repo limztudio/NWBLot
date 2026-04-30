@@ -26,7 +26,6 @@ static constexpr u32 s_DeformableOperatorFootprintMaxVertexCount = 32u;
 static constexpr u32 s_DeformableOperatorProfileMaxSampleCount = 8u;
 
 struct DeformableOperatorFootprint{
-    // Empty means the legacy analytic ellipse footprint.
     u32 vertexCount = 0u;
     Float2U vertices[s_DeformableOperatorFootprintMaxVertexCount] = {};
 };
@@ -45,7 +44,6 @@ static_assert(IsStandardLayout_V<DeformableOperatorProfileSample>, "DeformableOp
 static_assert(IsTriviallyCopyable_V<DeformableOperatorProfileSample>, "DeformableOperatorProfileSample must stay cheap to copy");
 
 struct DeformableOperatorProfile{
-    // Empty means a straight legacy extrusion from the active footprint.
     u32 sampleCount = 0u;
     DeformableOperatorProfileSample samples[s_DeformableOperatorProfileMaxSampleCount] = {};
 };
@@ -59,6 +57,7 @@ struct DeformableHoleEditParams{
     f32 depth = 0.0f;
     // Preferred operator-local +Y axis, usually the editor view up vector.
     Float3U operatorUp = Float3U(0.0f, 1.0f, 0.0f);
+    // Leave both empty for the analytic ellipse path, or populate both for an explicit operator shape.
     DeformableOperatorFootprint operatorFootprint;
     DeformableOperatorProfile operatorProfile;
 };

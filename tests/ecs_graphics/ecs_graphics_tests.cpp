@@ -649,6 +649,18 @@ static NWB::Impl::DeformableOperatorFootprint MakeTriangleOperatorFootprint(){
     return footprint;
 }
 
+static NWB::Impl::DeformableOperatorProfile MakeBoxOperatorProfile(){
+    NWB::Impl::DeformableOperatorProfile profile;
+    profile.sampleCount = 2u;
+    profile.samples[0u].depth = 0.0f;
+    profile.samples[0u].scale = 1.0f;
+    profile.samples[0u].center = Float2U(0.0f, 0.0f);
+    profile.samples[1u].depth = 1.0f;
+    profile.samples[1u].scale = 1.0f;
+    profile.samples[1u].center = Float2U(0.0f, 0.0f);
+    return profile;
+}
+
 static NWB::Impl::DeformableOperatorProfile MakeConeOperatorProfile(){
     NWB::Impl::DeformableOperatorProfile profile;
     profile.sampleCount = 2u;
@@ -3278,6 +3290,14 @@ static void TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(TestContext& 
         MakeHoleEditParams(boxInstance, 24u, 0.25f, 0.25f, 0.5f, 1.25f, 0.25f)
     ;
     boxParams.operatorFootprint = MakeBoxOperatorFootprint();
+    boxParams.operatorProfile = MakeBoxOperatorProfile();
+    NWB::Impl::DeformableHoleEditParams footprintOnlyParams = boxParams;
+    footprintOnlyParams.operatorProfile = NWB::Impl::DeformableOperatorProfile{};
+    NWB::Impl::DeformableHolePreviewMesh footprintOnlyPreviewMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        !NWB::Impl::BuildHolePreviewMesh(boxInstance, footprintOnlyParams, footprintOnlyPreviewMesh)
+    );
 
     NWB::Impl::DeformableRuntimeMeshInstance triangleInstance = MakeGridHoleInstance(6u, 6u);
     NWB::Impl::DeformableHoleEditParams triangleParams =
@@ -3345,6 +3365,7 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
         MakeHoleEditParams(instance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
     ;
     params.operatorFootprint = MakeBoxOperatorFootprint();
+    params.operatorProfile = MakeBoxOperatorProfile();
     params.operatorUp = Float3U(1.0f, 0.0f, 0.0f);
     const Float3U holeCenter = RestHitPosition(instance, params);
 
@@ -3456,12 +3477,14 @@ static void TestSurfaceEditOperatorRemeshIgnoresTrianglesOutsideDepth(TestContex
         MakeHoleEditParams(frontInstance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
     ;
     frontParams.operatorFootprint = MakeBoxOperatorFootprint();
+    frontParams.operatorProfile = MakeBoxOperatorProfile();
 
     NWB::Impl::DeformableRuntimeMeshInstance layeredInstance = MakeDepthSeparatedGridHoleInstance();
     NWB::Impl::DeformableHoleEditParams layeredParams =
         MakeHoleEditParams(layeredInstance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
     ;
     layeredParams.operatorFootprint = MakeBoxOperatorFootprint();
+    layeredParams.operatorProfile = MakeBoxOperatorProfile();
 
     NWB::Impl::DeformableHolePreviewMesh frontPreviewMesh;
     NWB::Impl::DeformableHolePreviewMesh layeredPreviewMesh;
@@ -3486,6 +3509,7 @@ static void TestSurfaceEditOperatorProfileTapersWallGeometry(TestContext& contex
         MakeHoleEditParams(straightInstance, 24u, 0.25f, 0.25f, 0.5f, 1.25f, 0.25f)
     ;
     straightParams.operatorFootprint = MakeBoxOperatorFootprint();
+    straightParams.operatorProfile = MakeBoxOperatorProfile();
     const Float3U straightCenter = RestHitPosition(straightInstance, straightParams);
 
     NWB::Impl::DeformableSurfaceEditSession straightSession;

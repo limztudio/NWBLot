@@ -2074,6 +2074,21 @@ template<usize sourceCount>
     return true;
 }
 
+void RestoreStableOriginalSurfaceAttributes(
+    const Vector<DeformableVertexRest>& originalRestVertices,
+    Vector<DeformableVertexRest>& editedRestVertices
+){
+    const usize stableVertexCount = Min(originalRestVertices.size(), editedRestVertices.size());
+    for(usize vertexIndex = 0u; vertexIndex < stableVertexCount; ++vertexIndex){
+        const DeformableVertexRest& original = originalRestVertices[vertexIndex];
+        DeformableVertexRest& edited = editedRestVertices[vertexIndex];
+        edited.normal = original.normal;
+        edited.tangent = original.tangent;
+        edited.uv0 = original.uv0;
+        edited.color0 = original.color0;
+    }
+}
+
 struct BottomCapPolygonVertex{
     u32 vertex = 0u;
     f32 x = 0.0f;
@@ -4951,9 +4966,6 @@ template<usize sourceCount>
             const SIMDVector tangent,
             const Float2U& uv0,
             u32& outVertex){
-            if(!newSourceSamples.empty())
-                newSourceSamples[plannedVertex.sourceVertex] = wallSourceSample;
-
             Float4U innerColor;
             if(
                 !BuildBlendedVertexColor(
@@ -5151,6 +5163,7 @@ template<usize sourceCount>
 
     // Continuation wall UVs can be degenerate by design; keep the authored remesh frames when the global rebuild falls back.
     DeformableValidation::ApplyCleanRestVertexTangentFrameRebuildIfPossible(newRestVertices, newIndices);
+    RestoreStableOriginalSurfaceAttributes(instance.restVertices, newRestVertices);
 
     if(
         !DeformableValidation::ValidRuntimePayloadArrays(

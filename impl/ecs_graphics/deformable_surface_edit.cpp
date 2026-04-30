@@ -56,6 +56,7 @@ static constexpr f32 s_MaxOperatorProfileScale = 16.0f;
 static constexpr f32 s_SurfaceRemeshClipEpsilon = 0.00001f;
 static constexpr f32 s_SurfaceRemeshAreaEpsilon = 0.0000001f;
 static constexpr f32 s_SurfaceRemeshVertexMergeDistanceSq = 0.0000000001f;
+static constexpr f32 s_SurfaceRemeshAttributeMergeDistanceSq = 0.00000001f;
 static constexpr f32 s_BottomCapTriangulationAreaEpsilon = 0.000001f;
 static constexpr Float4U s_HolePreviewColor = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -73,6 +74,7 @@ struct OperatorFootprintPoint{
 
 struct SurfaceRemeshClipPoint{
     Float2U local = Float2U(0.0f, 0.0f);
+    f32 depth = 0.0f;
     f32 bary[3] = {};
     u32 originalVertex = Limit<u32>::s_Max;
 };
@@ -90,6 +92,7 @@ struct SurfaceRemeshGeneratedVertex{
     u32 sourceVertices[3] = {};
     f32 bary[3] = {};
     Float2U local = Float2U(0.0f, 0.0f);
+    f32 depth = 0.0f;
     Float3U position = Float3U(0.0f, 0.0f, 0.0f);
 };
 
@@ -2592,13 +2595,15 @@ using SurfaceRemeshClipPolygonList = Vector<
 ){
     const f32 dx = rhs.local.x - lhs.local.x;
     const f32 dy = rhs.local.y - lhs.local.y;
-    return (dx * dx) + (dy * dy);
+    const f32 dz = rhs.depth - lhs.depth;
+    return (dx * dx) + (dy * dy) + (dz * dz);
 }
 
 [[nodiscard]] bool NormalizeSurfaceRemeshClipPoint(SurfaceRemeshClipPoint& point){
     if(
         !IsFinite(point.local.x)
         || !IsFinite(point.local.y)
+        || !IsFinite(point.depth)
         || !DeformableValidation::NormalizeSourceBarycentric(point.bary, point.bary)
     )
         return false;
@@ -2633,6 +2638,7 @@ using SurfaceRemeshClipPolygonList = Vector<
         a.local.x + ((b.local.x - a.local.x) * t),
         a.local.y + ((b.local.y - a.local.y) * t)
     );
+    point.depth = a.depth + ((b.depth - a.depth) * t);
     for(u32 i = 0u; i < 3u; ++i)
         point.bary[i] = a.bary[i] + ((b.bary[i] - a.bary[i]) * t);
     point.originalVertex = Limit<u32>::s_Max;
@@ -2676,7 +2682,101 @@ using SurfaceRemeshClipPolygonList = Vector<
     return true;
 }
 
-[[nodiscard]] f32 SurfaceRemeshPolygonSignedArea(const SurfaceRemeshClipPolygon& polygon){
+[[nodiscard]] f32 SurfaceRemeshDepthPlaneDistance(
+    const SurfaceRemeshClipPoint& point,
+    const bool minDepthPlane
+){
+    return minDepthPlane ? point.depth : 1.0f - point.depth;
+}
+
+[[nodiscard]] bool ClipSurfaceRemeshPolygonDepthPlane(
+    const SurfaceRemeshClipPolygon& input,
+    const bool minDepthPlane,
+    const bool keepInside,
+    SurfaceRemeshClipPolygon& output
+){
+    output.clear();
+    if(input.empty())
+        return true;
+
+    SurfaceRemeshClipPoint previous = input.back();
+    f32 previousDistance = SurfaceRemeshDepthPlaneDistance(previous, minDepthPlane);
+    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, keepInside);
+    for(const SurfaceRemeshClipPoint& current : input){
+        const f32 currentDistance = SurfaceRemeshDepthPlaneDistance(current, minDepthPlane);
+        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, keepInside);
+        if(currentKept != previousKept){
+            const f32 denominator = previousDistance - currentDistance;
+            if(!IsFinite(denominator) || Abs(denominator) <= s_SurfaceRemeshClipEpsilon)
+                return false;
+
+            const f32 t = previousDistance / denominator;
+            if(!AppendSurfaceRemeshClipPoint(output, InterpolateSurfaceRemeshClipPoint(previous, current, t)))
+                return false;
+        }
+        if(currentKept && !AppendSurfaceRemeshClipPoint(output, current))
+            return false;
+
+        previous = current;
+        previousDistance = currentDistance;
+        previousKept = currentKept;
+    }
+    return true;
+}
+
+[[nodiscard]] f32 SurfaceRemeshClipPointCrossLengthSq(
+    const SurfaceRemeshClipPoint& a,
+    const SurfaceRemeshClipPoint& b,
+    const SurfaceRemeshClipPoint& c
+){
+    const f32 abX = b.local.x - a.local.x;
+    const f32 abY = b.local.y - a.local.y;
+    const f32 abZ = b.depth - a.depth;
+    const f32 acX = c.local.x - a.local.x;
+    const f32 acY = c.local.y - a.local.y;
+    const f32 acZ = c.depth - a.depth;
+    const f32 crossX = (abY * acZ) - (abZ * acY);
+    const f32 crossY = (abZ * acX) - (abX * acZ);
+    const f32 crossZ = (abX * acY) - (abY * acX);
+    return (crossX * crossX) + (crossY * crossY) + (crossZ * crossZ);
+}
+
+[[nodiscard]] f32 SurfaceRemeshClipPointCross2D(
+    const SurfaceRemeshClipPoint& a,
+    const SurfaceRemeshClipPoint& b,
+    const SurfaceRemeshClipPoint& c
+){
+    return
+        ((b.local.x - a.local.x) * (c.local.y - a.local.y))
+        - ((b.local.y - a.local.y) * (c.local.x - a.local.x))
+    ;
+}
+
+[[nodiscard]] f32 SurfaceRemeshPolygonAreaLengthSq(const SurfaceRemeshClipPolygon& polygon){
+    if(polygon.size() < 3u)
+        return 0.0f;
+
+    f32 areaX = 0.0f;
+    f32 areaY = 0.0f;
+    f32 areaZ = 0.0f;
+    const SurfaceRemeshClipPoint& origin = polygon[0u];
+    for(usize i = 1u; i + 1u < polygon.size(); ++i){
+        const SurfaceRemeshClipPoint& b = polygon[i];
+        const SurfaceRemeshClipPoint& c = polygon[i + 1u];
+        const f32 abX = b.local.x - origin.local.x;
+        const f32 abY = b.local.y - origin.local.y;
+        const f32 abZ = b.depth - origin.depth;
+        const f32 acX = c.local.x - origin.local.x;
+        const f32 acY = c.local.y - origin.local.y;
+        const f32 acZ = c.depth - origin.depth;
+        areaX += (abY * acZ) - (abZ * acY);
+        areaY += (abZ * acX) - (abX * acZ);
+        areaZ += (abX * acY) - (abY * acX);
+    }
+    return (areaX * areaX) + (areaY * areaY) + (areaZ * areaZ);
+}
+
+[[nodiscard]] f32 SurfaceRemeshPolygonSignedArea2D(const SurfaceRemeshClipPolygon& polygon){
     f32 area = 0.0f;
     for(usize i = 0u; i < polygon.size(); ++i){
         const usize next = (i + 1u) % polygon.size();
@@ -2688,7 +2788,14 @@ using SurfaceRemeshClipPolygonList = Vector<
     return area * 0.5f;
 }
 
-[[nodiscard]] bool RemoveCollinearSurfaceRemeshClipPoints(SurfaceRemeshClipPolygon& polygon){
+[[nodiscard]] bool SurfaceRemeshTriangleProjectionIsDegenerate(const SurfaceRemeshClipPoint (&points)[3]){
+    return Abs(SurfaceRemeshClipPointCross2D(points[0u], points[1u], points[2u])) <= s_SurfaceRemeshAreaEpsilon;
+}
+
+[[nodiscard]] bool RemoveCollinearSurfaceRemeshClipPoints(
+    SurfaceRemeshClipPolygon& polygon,
+    const bool allowDepthArea
+){
     if(polygon.size() < 3u)
         return false;
 
@@ -2709,14 +2816,15 @@ using SurfaceRemeshClipPolygonList = Vector<
             const SurfaceRemeshClipPoint& c = polygon[next];
             const f32 abDistanceSq = SurfaceRemeshPointDistanceSq(a, b);
             const f32 bcDistanceSq = SurfaceRemeshPointDistanceSq(b, c);
-            const f32 cross =
-                ((b.local.x - a.local.x) * (c.local.y - a.local.y))
-                - ((b.local.y - a.local.y) * (c.local.x - a.local.x))
-            ;
             if(
                 abDistanceSq <= s_SurfaceRemeshVertexMergeDistanceSq
                 || bcDistanceSq <= s_SurfaceRemeshVertexMergeDistanceSq
-                || Abs(cross) <= s_SurfaceRemeshAreaEpsilon
+                || (
+                    allowDepthArea
+                        ? SurfaceRemeshClipPointCrossLengthSq(a, b, c)
+                            <= s_SurfaceRemeshAreaEpsilon * s_SurfaceRemeshAreaEpsilon
+                        : Abs(SurfaceRemeshClipPointCross2D(a, b, c)) <= s_SurfaceRemeshAreaEpsilon
+                )
             ){
                 polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(i));
                 removed = true;
@@ -2725,7 +2833,14 @@ using SurfaceRemeshClipPolygonList = Vector<
         }
     }
 
-    return polygon.size() >= 3u && Abs(SurfaceRemeshPolygonSignedArea(polygon)) > s_SurfaceRemeshAreaEpsilon;
+    return
+        polygon.size() >= 3u
+        && (
+            allowDepthArea
+                ? SurfaceRemeshPolygonAreaLengthSq(polygon) > s_SurfaceRemeshAreaEpsilon * s_SurfaceRemeshAreaEpsilon
+                : Abs(SurfaceRemeshPolygonSignedArea2D(polygon)) > s_SurfaceRemeshAreaEpsilon
+        )
+    ;
 }
 
 [[nodiscard]] bool BuildSurfaceRemeshTriangleClipPoint(
@@ -2747,11 +2862,13 @@ using SurfaceRemeshClipPolygonList = Vector<
     const SIMDVector offset = VectorSubtract(LoadRestVertexPosition(instance.restVertices[vertex]), frame.center);
     const f32 localX = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
     const f32 localY = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
-    if(!IsFinite(localX) || !IsFinite(localY))
+    const f32 normalizedDepth = -VectorGetX(Vector3Dot(offset, frame.normal)) / params.depth;
+    if(!IsFinite(localX) || !IsFinite(localY) || !IsFinite(normalizedDepth))
         return false;
 
     outPoint = SurfaceRemeshClipPoint{};
     outPoint.local = Float2U(localX, localY);
+    outPoint.depth = normalizedDepth;
     outPoint.bary[baryIndex] = 1.0f;
     outPoint.originalVertex = vertex;
     return true;
@@ -2763,6 +2880,78 @@ using SurfaceRemeshClipPolygonList = Vector<
     const SurfaceRemeshClipPoint& point
 ){
     return BarycentricPoint(instance, triangleIndices, point.bary);
+}
+
+[[nodiscard]] bool BlendSurfaceRemeshSourceDirection(
+    const Vector<DeformableVertexRest>& vertices,
+    const u32 (&sourceVertices)[3],
+    const f32 (&sourceWeights)[3],
+    const bool tangent,
+    SIMDVector& outDirection
+){
+    outDirection = VectorZero();
+    for(u32 sourceIndex = 0u; sourceIndex < 3u; ++sourceIndex){
+        const f32 sourceWeight = sourceWeights[sourceIndex];
+        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
+            return false;
+        if(!DeformableValidation::ActiveWeight(sourceWeight))
+            continue;
+
+        const u32 vertex = sourceVertices[sourceIndex];
+        if(vertex >= vertices.size())
+            return false;
+
+        const DeformableVertexRest& source = vertices[vertex];
+        const SIMDVector sourceDirection = tangent
+            ? VectorSetW(LoadRestVertexTangent(source), 0.0f)
+            : LoadRestVertexNormal(source)
+        ;
+        outDirection = VectorMultiplyAdd(sourceDirection, VectorReplicate(sourceWeight), outDirection);
+    }
+
+    return FiniteVec3(outDirection);
+}
+
+[[nodiscard]] bool SurfaceRemeshAttributeSourcesMatch(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 (&lhsSourceVertices)[3],
+    const f32 (&lhsSourceWeights)[3],
+    const u32 (&rhsSourceVertices)[3],
+    const f32 (&rhsSourceWeights)[3]
+){
+    Float2U lhsUv0;
+    Float2U rhsUv0;
+    if(
+        !BuildBlendedVertexUv0(instance.restVertices, lhsSourceVertices, lhsSourceWeights, lhsUv0)
+        || !BuildBlendedVertexUv0(instance.restVertices, rhsSourceVertices, rhsSourceWeights, rhsUv0)
+    )
+        return false;
+
+    const f32 uvDx = rhsUv0.x - lhsUv0.x;
+    const f32 uvDy = rhsUv0.y - lhsUv0.y;
+    if((uvDx * uvDx) + (uvDy * uvDy) > s_SurfaceRemeshAttributeMergeDistanceSq)
+        return false;
+
+    SIMDVector lhsNormal;
+    SIMDVector rhsNormal;
+    if(
+        !BlendSurfaceRemeshSourceDirection(instance.restVertices, lhsSourceVertices, lhsSourceWeights, false, lhsNormal)
+        || !BlendSurfaceRemeshSourceDirection(instance.restVertices, rhsSourceVertices, rhsSourceWeights, false, rhsNormal)
+    )
+        return false;
+    const f32 normalDistanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(lhsNormal, rhsNormal)));
+    if(!IsFinite(normalDistanceSq) || normalDistanceSq > s_SurfaceRemeshAttributeMergeDistanceSq)
+        return false;
+
+    SIMDVector lhsTangent;
+    SIMDVector rhsTangent;
+    if(
+        !BlendSurfaceRemeshSourceDirection(instance.restVertices, lhsSourceVertices, lhsSourceWeights, true, lhsTangent)
+        || !BlendSurfaceRemeshSourceDirection(instance.restVertices, rhsSourceVertices, rhsSourceWeights, true, rhsTangent)
+    )
+        return false;
+    const f32 tangentDistanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(lhsTangent, rhsTangent)));
+    return IsFinite(tangentDistanceSq) && tangentDistanceSq <= s_SurfaceRemeshAttributeMergeDistanceSq;
 }
 
 [[nodiscard]] bool GetOrCreateSurfaceRemeshVertex(
@@ -2786,15 +2975,36 @@ using SurfaceRemeshClipPolygonList = Vector<
     if(!FiniteVec3(position))
         return false;
 
+    for(const u32 candidate : triangleIndices){
+        if(candidate >= instance.restVertices.size())
+            return false;
+
+        const SIMDVector delta = VectorSubtract(position, LoadRestVertexPosition(instance.restVertices[candidate]));
+        const f32 distanceSq = VectorGetX(Vector3LengthSq(delta));
+        if(IsFinite(distanceSq) && distanceSq <= s_SurfaceRemeshVertexMergeDistanceSq){
+            outVertex = candidate;
+            return true;
+        }
+    }
+
     Float3U storedPosition;
     StoreFloat(position, &storedPosition);
     for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
         const f32 localDx = generated.local.x - point.local.x;
         const f32 localDy = generated.local.y - point.local.y;
+        const f32 localDz = generated.depth - point.depth;
         const SIMDVector generatedDelta = VectorSubtract(LoadFloat(generated.position), position);
         if(
-            (localDx * localDx) + (localDy * localDy) <= s_SurfaceRemeshVertexMergeDistanceSq
+            (localDx * localDx) + (localDy * localDy) + (localDz * localDz)
+                <= s_SurfaceRemeshVertexMergeDistanceSq
             && VectorGetX(Vector3LengthSq(generatedDelta)) <= s_SurfaceRemeshVertexMergeDistanceSq
+            && SurfaceRemeshAttributeSourcesMatch(
+                instance,
+                generated.sourceVertices,
+                generated.bary,
+                triangleIndices,
+                point.bary
+            )
         ){
             outVertex = generated.vertex;
             return true;
@@ -2812,6 +3022,7 @@ using SurfaceRemeshClipPolygonList = Vector<
         generated.bary[i] = point.bary[i];
     }
     generated.local = point.local;
+    generated.depth = point.depth;
     generated.position = storedPosition;
     generatedVertices.push_back(generated);
     restPositions.push_back(storedPosition);
@@ -3215,6 +3426,7 @@ using SurfaceRemeshClipPolygonList = Vector<
             )
                 return false;
         }
+        const bool depthAwareClip = SurfaceRemeshTriangleProjectionIsDegenerate(triangleClipPoints);
 
         SurfaceRemeshLocalBounds triangleBounds;
         if(!BuildSurfaceRemeshClipPointLocalBounds(triangleClipPoints, 3u, triangleBounds))
@@ -3270,12 +3482,12 @@ using SurfaceRemeshClipPolygonList = Vector<
             )
                 return false;
 
-            if(RemoveCollinearSurfaceRemeshClipPoints(outside)){
+            if(RemoveCollinearSurfaceRemeshClipPoints(outside, depthAwareClip)){
                 outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
                 outsidePieces.back().assign(outside.begin(), outside.end());
             }
 
-            if(!RemoveCollinearSurfaceRemeshClipPoints(inside)){
+            if(!RemoveCollinearSurfaceRemeshClipPoints(inside, depthAwareClip)){
                 clippedAway = true;
                 break;
             }
@@ -3283,7 +3495,47 @@ using SurfaceRemeshClipPolygonList = Vector<
             active.assign(inside.begin(), inside.end());
         }
 
-        if(clippedAway || !RemoveCollinearSurfaceRemeshClipPoints(active)){
+        auto clipActiveByDepthPlane = [&](const bool minDepthPlane){
+            bool hasStrictOutside = false;
+            for(const SurfaceRemeshClipPoint& point : active){
+                if(SurfaceRemeshDepthPlaneDistance(point, minDepthPlane) < -s_SurfaceRemeshClipEpsilon){
+                    hasStrictOutside = true;
+                    break;
+                }
+            }
+
+            outside.reserve(active.size() + 1u);
+            inside.reserve(active.size() + 1u);
+            if(
+                !ClipSurfaceRemeshPolygonDepthPlane(active, minDepthPlane, false, outside)
+                || !ClipSurfaceRemeshPolygonDepthPlane(active, minDepthPlane, true, inside)
+            )
+                return false;
+
+            if(hasStrictOutside && RemoveCollinearSurfaceRemeshClipPoints(outside, true)){
+                outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
+                outsidePieces.back().assign(outside.begin(), outside.end());
+            }
+
+            if(!RemoveCollinearSurfaceRemeshClipPoints(inside, true)){
+                clippedAway = true;
+                return true;
+            }
+
+            active.assign(inside.begin(), inside.end());
+            return true;
+        };
+        if(
+            depthAwareClip
+            && !clippedAway
+            && (
+                !clipActiveByDepthPlane(true)
+                || (!clippedAway && !clipActiveByDepthPlane(false))
+            )
+        )
+            return false;
+
+        if(clippedAway || !RemoveCollinearSurfaceRemeshClipPoints(active, depthAwareClip)){
             if(
                 !AppendSurfaceRemeshTriangle(
                     outRestPositions,
@@ -3324,10 +3576,12 @@ using SurfaceRemeshClipPolygonList = Vector<
                 return false;
             insideVertices.push_back(vertex);
         }
-        for(usize vertexIndex = 0u; vertexIndex < insideVertices.size(); ++vertexIndex){
-            const usize nextVertexIndex = (vertexIndex + 1u) % insideVertices.size();
-            if(!RegisterSurfaceRemeshBoundaryEdge(boundaryEdgeMap, insideVertices[vertexIndex], insideVertices[nextVertexIndex]))
-                return false;
+        if(!depthAwareClip){
+            for(usize vertexIndex = 0u; vertexIndex < insideVertices.size(); ++vertexIndex){
+                const usize nextVertexIndex = (vertexIndex + 1u) % insideVertices.size();
+                if(!RegisterSurfaceRemeshBoundaryEdge(boundaryEdgeMap, insideVertices[vertexIndex], insideVertices[nextVertexIndex]))
+                    return false;
+            }
         }
 
         for(const SurfaceRemeshClipPolygon& outside : outsidePieces){

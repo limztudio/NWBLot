@@ -117,6 +117,35 @@ static void TestInvalidStringTableReads(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, !ReadStringTableText(emptyText, 0u, emptyText.size(), 0u, parsed));
 }
 
+static void TestBinaryVectorPayloadRoundTrip(TestContext& context){
+    Vector<u8> binary;
+    Vector<u16> source;
+    source.push_back(1u);
+    source.push_back(2u);
+    source.push_back(static_cast<u16>(0xBEEFu));
+
+    NWB_GLOBAL_TEST_CHECK(context, AppendBinaryVectorPayload(binary, source) == BinaryVectorPayloadFailure::None);
+
+    usize cursor = 0u;
+    Vector<u16> parsed;
+    NWB_GLOBAL_TEST_CHECK(context, ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed) == BinaryVectorPayloadFailure::None);
+    NWB_GLOBAL_TEST_CHECK(context, cursor == binary.size());
+    NWB_GLOBAL_TEST_CHECK(context, parsed == source);
+}
+
+static void TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(TestContext& context){
+    Vector<u8> truncated;
+    const u32 source = 0x12345678u;
+    AppendPOD(truncated, source);
+
+    usize cursor = 0u;
+    Vector<u32> parsed;
+    parsed.push_back(0xAABBCCDDu);
+    NWB_GLOBAL_TEST_CHECK(context, ReadBinaryVectorPayload(truncated, cursor, 2u, parsed) == BinaryVectorPayloadFailure::SourceTruncated);
+    NWB_GLOBAL_TEST_CHECK(context, cursor == 0u);
+    NWB_GLOBAL_TEST_CHECK(context, parsed.empty());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -143,6 +172,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_global_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
         __hidden_global_tests::TestStringTableText(context);
         __hidden_global_tests::TestInvalidStringTableReads(context);
+        __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
+        __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
     });
 }
 

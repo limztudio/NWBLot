@@ -229,6 +229,84 @@ template<typename Container>
     return true;
 }
 
+struct BinaryVectorPayloadFailure{
+    enum Enum{
+        None,
+        CountOverflow,
+        SourceTruncated,
+        OutputOverflow
+    };
+};
+
+template<typename ValueType>
+[[nodiscard]] inline bool ComputeBinaryVectorPayloadBytes(const u64 count, usize& outBytes){
+    static_assert(IsTriviallyCopyable_V<ValueType>, "binary vector payloads require trivially-copyable elements");
+
+    outBytes = 0u;
+    if(count > static_cast<u64>(Limit<usize>::s_Max / sizeof(ValueType)))
+        return false;
+
+    outBytes = static_cast<usize>(count) * sizeof(ValueType);
+    return true;
+}
+
+template<typename Container, typename ValueContainer>
+[[nodiscard]] inline BinaryVectorPayloadFailure::Enum ReadBinaryVectorPayload(
+    const Container& binary,
+    usize& inOutOffset,
+    const u64 count,
+    ValueContainer& outValues,
+    const typename ValueContainer::value_type& initialValue
+){
+    BinaryDetail::RequireByteContainer<Container>();
+
+    using ValueType = typename ValueContainer::value_type;
+    outValues.clear();
+
+    usize byteCount = 0u;
+    if(!ComputeBinaryVectorPayloadBytes<ValueType>(count, byteCount))
+        return BinaryVectorPayloadFailure::CountOverflow;
+
+    if(!BinaryDetail::CanReadBytes(binary, inOutOffset, byteCount))
+        return BinaryVectorPayloadFailure::SourceTruncated;
+
+    outValues.resize(static_cast<usize>(count), initialValue);
+    if(byteCount > 0u)
+        NWB_MEMCPY(outValues.data(), byteCount, binary.data() + inOutOffset, byteCount);
+    inOutOffset += byteCount;
+    return BinaryVectorPayloadFailure::None;
+}
+
+template<typename Container, typename ValueContainer>
+[[nodiscard]] inline BinaryVectorPayloadFailure::Enum ReadBinaryVectorPayload(
+    const Container& binary,
+    usize& inOutOffset,
+    const u64 count,
+    ValueContainer& outValues
+){
+    using ValueType = typename ValueContainer::value_type;
+    return ReadBinaryVectorPayload(binary, inOutOffset, count, outValues, ValueType{});
+}
+
+template<typename Container, typename ValueContainer>
+[[nodiscard]] inline BinaryVectorPayloadFailure::Enum AppendBinaryVectorPayload(
+    Container& outBinary,
+    const ValueContainer& values
+){
+    BinaryDetail::RequireByteContainer<Container>();
+
+    using ValueType = typename ValueContainer::value_type;
+    usize byteCount = 0u;
+    if(!ComputeBinaryVectorPayloadBytes<ValueType>(static_cast<u64>(values.size()), byteCount))
+        return BinaryVectorPayloadFailure::CountOverflow;
+
+    if(!BinaryDetail::CanAppendBytes(outBinary, byteCount))
+        return BinaryVectorPayloadFailure::OutputOverflow;
+
+    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, values.data(), byteCount);
+    return BinaryVectorPayloadFailure::None;
+}
+
 [[nodiscard]] inline bool AddBinaryReserveBytes(usize& inOutBytes, const usize additionalBytes){
     if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
         return false;

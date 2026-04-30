@@ -50,42 +50,35 @@ bool ReadVectorPayload(
     Vector<ValueT>& outValues,
     const tchar* label
 ){
-    outValues.clear();
-    if(count > static_cast<u64>(Limit<usize>::s_Max / sizeof(ValueT))){
+    const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
+    if(failure == BinaryVectorPayloadFailure::None)
+        return true;
+
+    if(failure == BinaryVectorPayloadFailure::CountOverflow){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: '{}' payload byte size overflows"), label);
-        return false;
     }
-
-    const usize typedCount = static_cast<usize>(count);
-    const usize byteCount = typedCount * sizeof(ValueT);
-    if(inOutCursor > binary.size() || byteCount > binary.size() - inOutCursor){
+    else{
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed '{}' payload"), label);
-        return false;
     }
 
-    outValues.resize(typedCount);
-    if(byteCount > 0u)
-        NWB_MEMCPY(outValues.data(), byteCount, binary.data() + inOutCursor, byteCount);
-    inOutCursor += byteCount;
-    return true;
+    return false;
 }
 
 #if defined(NWB_COOK)
 template<typename ValueT>
 bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<ValueT>& values, const tchar* label){
-    if(values.size() > Limit<usize>::s_Max / sizeof(ValueT)){
+    const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
+    if(failure == BinaryVectorPayloadFailure::None)
+        return true;
+
+    if(failure == BinaryVectorPayloadFailure::CountOverflow){
         NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
-        return false;
     }
-
-    const usize byteCount = values.size() * sizeof(ValueT);
-    if(byteCount > Limit<usize>::s_Max - outBinary.size()){
+    else{
         NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: '{}' payload overflows output binary"), label);
-        return false;
     }
 
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, values.data(), byteCount);
-    return true;
+    return false;
 }
 
 #endif

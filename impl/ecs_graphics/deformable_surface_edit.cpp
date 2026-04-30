@@ -4513,7 +4513,8 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
         AppendPOD(outBinary, record);
     for(const __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary& binaryRecord : accessoryRecords)
         AppendPOD(outBinary, binaryRecord);
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, stringTable.data(), stringTable.size());
+    if(::AppendBinaryVectorPayload(outBinary, stringTable) != BinaryVectorPayloadFailure::None)
+        return false;
     return outBinary.size() == binarySize;
 }
 

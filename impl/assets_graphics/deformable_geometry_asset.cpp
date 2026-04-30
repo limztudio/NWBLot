@@ -119,27 +119,6 @@ Core::Assets::AssetCodecAutoRegistrar s_DeformableDisplacementTextureAssetCodecA
 
 
 template<typename T>
-[[nodiscard]] bool ComputePayloadBytes(const u64 count, usize& outBytes, const tchar* label){
-    outBytes = 0;
-    if(count > static_cast<u64>(Limit<usize>::s_Max / sizeof(T))){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry: '{}' payload byte size overflows"), label);
-        return false;
-    }
-
-    outBytes = static_cast<usize>(count) * sizeof(T);
-    return true;
-}
-
-template<typename T>
-static void ResizeVectorPayload(Vector<T>& outValues, const usize count){
-    outValues.resize(count);
-}
-
-static void ResizeVectorPayload(Vector<DeformableJointMatrix>& outValues, const usize count){
-    outValues.resize(count, DeformableJointMatrix{});
-}
-
-template<typename T>
 [[nodiscard]] bool ReadVectorPayload(
     const Core::Assets::AssetBytes& binary,
     usize& inOutCursor,
@@ -147,38 +126,34 @@ template<typename T>
     Vector<T>& outValues,
     const tchar* label
 ){
-    usize payloadBytes = 0;
-    if(!ComputePayloadBytes<T>(count, payloadBytes, label))
-        return false;
-    if(inOutCursor > binary.size() || payloadBytes > binary.size() - inOutCursor){
+    const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
+    if(failure == BinaryVectorPayloadFailure::None)
+        return true;
+
+    if(failure == BinaryVectorPayloadFailure::CountOverflow){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry: '{}' payload byte size overflows"), label);
+    }
+    else{
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed '{}' payload"), label);
-        return false;
     }
 
-    ResizeVectorPayload(outValues, static_cast<usize>(count));
-    if(payloadBytes > 0)
-        NWB_MEMCPY(outValues.data(), payloadBytes, binary.data() + inOutCursor, payloadBytes);
-    inOutCursor += payloadBytes;
-    return true;
+    return false;
 }
 
 template<typename T, typename Allocator>
 [[nodiscard]] bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<T, Allocator>& values, const tchar* label){
-    static_assert(IsTriviallyCopyable_V<T>, "AppendVectorPayload requires trivially-copyable payload elements");
-    if(values.size() > Limit<usize>::s_Max / sizeof(T)){
+    const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
+    if(failure == BinaryVectorPayloadFailure::None)
+        return true;
+
+    if(failure == BinaryVectorPayloadFailure::CountOverflow){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
-        return false;
     }
-
-    const usize beginOffset = outBinary.size();
-    const usize payloadBytes = values.size() * sizeof(T);
-    if(payloadBytes > Limit<usize>::s_Max - beginOffset){
+    else{
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry serialize failed: '{}' payload overflows"), label);
-        return false;
     }
 
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, values.data(), payloadBytes);
-    return true;
+    return false;
 }
 
 void LogGeometryMorphPayloadFailure(

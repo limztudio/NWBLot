@@ -3434,6 +3434,13 @@ static void TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(TestContext& 
 static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeGridHoleInstance(6u, 6u);
     AssignPlanarSurfaceUv0(instance);
+    for(usize vertexIndex = 0u; vertexIndex < instance.sourceSamples.size(); ++vertexIndex){
+        const f32 sourceMix = static_cast<f32>(vertexIndex + 1u) / static_cast<f32>(instance.sourceSamples.size() + 1u);
+        instance.sourceSamples[vertexIndex] = MakeSourceSample(0u, sourceMix, 1.0f - sourceMix, 0.0f);
+    }
+    instance.restVertices[0u].tangent = Float4U(0.0f, 1.0f, 0.0f, 1.0f);
+    const Vector<NWB::Impl::DeformableVertexRest> oldRestVertices = instance.restVertices;
+    const Vector<NWB::Impl::SourceSample> oldSourceSamples = instance.sourceSamples;
     const usize oldVertexCount = instance.restVertices.size();
     NWB::Impl::DeformableHoleEditParams params =
         MakeHoleEditParams(instance, 24u, 0.25f, 0.25f, 0.5f, 0.55f, 0.25f)
@@ -3487,7 +3494,31 @@ static void TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(TestCon
     }
     NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedRimVertex);
 
-    for(usize vertexIndex = 0u; vertexIndex < static_cast<usize>(result.firstWallVertex); ++vertexIndex){
+    for(usize vertexIndex = 0u; vertexIndex < oldVertexCount; ++vertexIndex){
+        const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[vertexIndex];
+        const NWB::Impl::DeformableVertexRest& oldVertex = oldRestVertices[vertexIndex];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.position.x, oldVertex.position.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.position.y, oldVertex.position.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.position.z, oldVertex.position.z));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, oldVertex.uv0.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, oldVertex.uv0.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.x, oldVertex.normal.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.y, oldVertex.normal.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.normal.z, oldVertex.normal.z));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.x, oldVertex.tangent.x));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.y, oldVertex.tangent.y));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.z, oldVertex.tangent.z));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.tangent.w, oldVertex.tangent.w));
+
+        const NWB::Impl::SourceSample& sample = instance.sourceSamples[vertexIndex];
+        const NWB::Impl::SourceSample& oldSample = oldSourceSamples[vertexIndex];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.sourceTri == oldSample.sourceTri);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0], oldSample.bary[0]));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[1], oldSample.bary[1]));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], oldSample.bary[2]));
+    }
+
+    for(usize vertexIndex = oldVertexCount; vertexIndex < static_cast<usize>(result.firstWallVertex); ++vertexIndex){
         const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[vertexIndex];
         const Float2U expectedUv0 = ExpectedPlanarSurfaceUv0(vertex.position);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedUv0.x));

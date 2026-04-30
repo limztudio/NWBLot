@@ -57,7 +57,7 @@ struct DeformableHoleEditParams{
     f32 depth = 0.0f;
     // Preferred operator-local +Y axis, usually the editor view up vector.
     Float3U operatorUp = Float3U(0.0f, 1.0f, 0.0f);
-    // Leave both empty for the analytic ellipse path, or populate both for an explicit operator shape.
+    // Explicit edits require both a footprint and a profile.
     DeformableOperatorFootprint operatorFootprint;
     DeformableOperatorProfile operatorProfile;
 };

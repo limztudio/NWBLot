@@ -273,7 +273,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 
     // Step 7: Depth/stencil state
     auto depthStencil = VulkanDetail::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
-    VulkanDetail::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, true, depthStencil);
+    VulkanDetail::ConfigurePipelineDepthStencilState(
+        desc.renderState.depthStencilState,
+        VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
+        depthStencil
+    );
 
     // Step 8: Color blend state
     PipelineColorBlendAttachmentVector blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
@@ -365,7 +369,7 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = checked_cast<Texture*>(fbDesc.colorAttachments[i].texture);
 
-            const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_desc, true);
+            const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_desc, TextureSubresourceMipResolve::Single);
             TextureDimension::Enum viewDimension = tex->m_desc.dimension;
             if(resolvedColorSubresources.numArraySlices == 1)
                 viewDimension = TextureDimension::Texture2D;
@@ -400,7 +404,7 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
 
     if(fbDesc.depthAttachment.texture){
         auto* depthTex = checked_cast<Texture*>(fbDesc.depthAttachment.texture);
-        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, true);
+        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, TextureSubresourceMipResolve::Single);
         const TextureDimension::Enum depthViewDimension =
             resolvedDepthSubresources.numArraySlices == 1
             ? TextureDimension::Texture2D
@@ -655,7 +659,17 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     Buffer* indirectBuffer = nullptr;
-    if(!prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndirectArguments), NWB_TEXT("draw indirect"), NWB_TEXT("drawIndirect"), false, indirectBuffer))
+    if(
+        !prepareDrawIndirect(
+            offsetBytes,
+            drawCount,
+            sizeof(DrawIndirectArguments),
+            NWB_TEXT("draw indirect"),
+            NWB_TEXT("drawIndirect"),
+            VulkanDetail::IndirectDrawIndexMode::NonIndexed,
+            indirectBuffer
+        )
+    )
         return;
 
     vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));

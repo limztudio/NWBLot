@@ -31,6 +31,31 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace AccelStructCompactionMode{
+    enum Enum : u8{
+        Disabled = 0u,
+        Allowed = 1u,
+    };
+};
+
+namespace PipelineStencilFaceMode{
+    enum Enum : u8{
+        DepthOnly = 0u,
+        IncludeStencilFaces = 1u,
+    };
+};
+
+namespace IndirectDrawIndexMode{
+    enum Enum : u8{
+        NonIndexed = 0u,
+        Indexed = 1u,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
 VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state);
 VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
@@ -52,7 +77,7 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
 void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, bool allowCompaction);
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, AccelStructCompactionMode::Enum compactionMode);
 bool BuildClusterOperationInputInfo(
     const RayTracingClusterOperationParams& params,
     VkClusterAccelerationStructureInputInfoNV& outInputInfo,
@@ -221,7 +246,7 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
 }
 
 bool ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, VkPipelineMultisampleStateCreateInfo& outState, const tchar* operationName);
-void ConfigurePipelineDepthStencilState(const DepthStencilState& state, bool includeStencilFaces, VkPipelineDepthStencilStateCreateInfo& outState);
+void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState);
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
 
 inline void CopyHostMemory(
@@ -1649,7 +1674,7 @@ private:
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
-    bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, bool requireIndexBuffer, Buffer*& outIndirectBuffer)const;
+    bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
     bool buildTopLevelAccelStructFromInstanceData(
         IRayTracingAccelStruct* asInterface,

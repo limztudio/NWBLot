@@ -257,12 +257,12 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
 }
 
 
-TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bool singleMipLevel)const{
+TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const{
     TextureSubresourceSet ret;
     ret.baseMipLevel = baseMipLevel;
 
     const u32 availableMipLevels = baseMipLevel < desc.mipLevels ? desc.mipLevels - baseMipLevel : 0;
-    if(singleMipLevel)
+    if(mipResolve == TextureSubresourceMipResolve::Single)
         ret.numMipLevels = availableMipLevels > 0 ? 1 : 0;
     else if(numMipLevels == AllMipLevels)
         ret.numMipLevels = static_cast<MipLevel>(availableMipLevels);
@@ -293,7 +293,7 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, bo
     return ret;
 }
 bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
-    const TextureSubresourceSet resolved = resolve(desc, false);
+    const TextureSubresourceSet resolved = resolve(desc, TextureSubresourceMipResolve::Range);
 
     if(resolved.baseMipLevel > 0u || resolved.numMipLevels < desc.mipLevels)
         return false;
@@ -370,7 +370,7 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
 
 static bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
     const TextureDesc& textureDesc = attachment.texture->getDescription();
-    TextureSubresourceSet const subresources = attachment.subresources.resolve(textureDesc, true);
+    TextureSubresourceSet const subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
     if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
         outWidth = 0;
         outHeight = 0;

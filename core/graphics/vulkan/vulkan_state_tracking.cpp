@@ -195,7 +195,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
         return;
 
     auto* texture = checked_cast<Texture*>(textureResource);
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set texture state: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to set texture state: invalid subresource range"));
@@ -570,7 +570,7 @@ void StateTracker::beginTrackingTransientTexture(ITexture* texture, TextureSubre
         return;
 
     const TextureDesc& desc = texture->getDescription();
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, false);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);

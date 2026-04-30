@@ -1009,7 +1009,12 @@ u64 VolumeFileSystem::wastedBytes()const{
 }
 
 
-bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data, const usize bytes, const bool flushMetadataAfterWrite){
+bool VolumeFileSystem::writeFileLocked(
+    const Name& virtualPath,
+    const void* data,
+    const usize bytes,
+    const MetadataFlushMode::Enum flushMode
+){
     if(!m_mounted || !m_writable){
         __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "filesystem is not mounted in writable mode");
         return false;
@@ -1063,7 +1068,7 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
     m_files.insert_or_assign(virtualPath, FileRecord{ writeOffset, byteCount });
     m_nextFreeOffset = newFileEnd;
 
-    if(!flushMetadataAfterWrite)
+    if(flushMode == MetadataFlushMode::Deferred)
         return true;
 
     if(flushMetadataLocked())
@@ -1080,12 +1085,12 @@ bool VolumeFileSystem::writeFileLocked(const Name& virtualPath, const void* data
 
 bool VolumeFileSystem::writeFile(const Name& virtualPath, const void* data, const usize bytes){
     ScopedLock lock(m_mutex);
-    return writeFileLocked(virtualPath, data, bytes, true);
+    return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Immediate);
 }
 
 bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* data, const usize bytes){
     ScopedLock lock(m_mutex);
-    return writeFileLocked(virtualPath, data, bytes, false);
+    return writeFileLocked(virtualPath, data, bytes, MetadataFlushMode::Deferred);
 }
 
 bool VolumeFileSystem::flushMetadata(){

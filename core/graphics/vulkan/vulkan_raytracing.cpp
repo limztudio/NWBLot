@@ -609,12 +609,18 @@ bool FillBlasGeometryForSizeQuery(
     return true;
 }
 
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, bool allowCompaction){
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(
+    RayTracingAccelStructBuildFlags::Mask buildFlags,
+    AccelStructCompactionMode::Enum compactionMode
+){
     VkBuildAccelerationStructureFlagsKHR flags = 0;
 
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    if(allowCompaction && (buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction))
+    if(
+        compactionMode == AccelStructCompactionMode::Allowed
+        && (buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
+    )
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
@@ -833,7 +839,10 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
         auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
-        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags, false);
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+            desc.buildFlags,
+            VulkanDetail::AccelStructCompactionMode::Disabled
+        );
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildInfo.geometryCount = 1;
         buildInfo.pGeometries = &geometry;
@@ -881,7 +890,10 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
         auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
-        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags, true);
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+            desc.buildFlags,
+            VulkanDetail::AccelStructCompactionMode::Allowed
+        );
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildInfo.geometryCount = static_cast<u32>(geometries.size());
         buildInfo.pGeometries = geometries.data();
@@ -1736,7 +1748,10 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, true);
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+        buildFlags,
+        VulkanDetail::AccelStructCompactionMode::Allowed
+    );
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = static_cast<u32>(geometries.size());

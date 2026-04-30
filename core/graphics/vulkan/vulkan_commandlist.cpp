@@ -182,7 +182,7 @@ bool CommandList::prepareDrawIndirect(
     const u64 commandSizeBytes,
     const tchar* operationLabel,
     const tchar* commandName,
-    const bool requireIndexBuffer,
+    VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
     Buffer*& outIndirectBuffer
 )const{
     outIndirectBuffer = nullptr;
@@ -193,7 +193,7 @@ bool CommandList::prepareDrawIndirect(
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
         return false;
     }
-    if(requireIndexBuffer && !m_currentGraphicsState.indexBuffer.buffer){
+    if(indexMode == VulkanDetail::IndirectDrawIndexMode::Indexed && !m_currentGraphicsState.indexBuffer.buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: no index buffer is bound"), operationLabel);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no index buffer is bound"), operationLabel);
         return false;

@@ -156,6 +156,16 @@ private:
     using ChannelVector = Vector<MessageChannelPtr, ChannelVectorAllocator>;
 
 
+private:
+    static ChannelLock readChannelLock(SharedMutex& mutex){
+        return ChannelLock(mutex, false);
+    }
+
+    static ChannelLock writeChannelLock(SharedMutex& mutex){
+        return ChannelLock(mutex, true);
+    }
+
+
 public:
     explicit MessageBus(Alloc::CustomArena& arena)
         : m_arena(arena)
@@ -219,7 +229,7 @@ private:
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return;
 
-        ChannelLock lock(m_channelsMutex, false);
+        ChannelLock lock = readChannelLock(m_channelsMutex);
 
         for(auto& channel : m_channels){
             if(!channel)
@@ -233,7 +243,7 @@ private:
         const MessageTypeId typeId = MessageType<T>();
 
         if(m_hasChannels.load(MemoryOrder::acquire)){
-            ChannelLock readLock(m_channelsMutex, false);
+            ChannelLock readLock = readChannelLock(m_channelsMutex);
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
                 if(channel)
@@ -241,7 +251,7 @@ private:
             }
         }
 
-        ChannelLock writeLock(m_channelsMutex, true);
+        ChannelLock writeLock = writeChannelLock(m_channelsMutex);
         if(typeId >= m_channels.size())
             m_channels.resize(typeId + 1u);
 
@@ -263,7 +273,7 @@ private:
 
         const MessageTypeId typeId = MessageType<T>();
 
-        ChannelLock lock(m_channelsMutex, false);
+        ChannelLock lock = readChannelLock(m_channelsMutex);
 
         if(typeId >= m_channels.size())
             return nullptr;

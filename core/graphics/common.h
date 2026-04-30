@@ -660,6 +660,13 @@ struct TextureSlice{
     constexpr TextureSlice& setArraySlice(ArraySlice slice){ arraySlice = slice; return *this; }
 };
 
+namespace TextureSubresourceMipResolve{
+    enum Enum : u8{
+        Range = 0u,
+        Single = 1u,
+    };
+};
+
 struct TextureSubresourceSet{
     static constexpr auto AllMipLevels = static_cast<MipLevel>(-1);
     static constexpr auto AllArraySlices = static_cast<ArraySlice>(-1);
@@ -669,7 +676,7 @@ struct TextureSubresourceSet{
     ArraySlice baseArraySlice = 0;
     ArraySlice numArraySlices = 1;
 
-    [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, bool singleMipLevel)const;
+    [[nodiscard]] TextureSubresourceSet resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const;
     [[nodiscard]] bool isEntireTexture(const TextureDesc& desc)const;
 
     constexpr TextureSubresourceSet() = default;

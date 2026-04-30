@@ -234,7 +234,7 @@ bool PrepareColorTextureClear(ITexture* textureResource, const TextureSubresourc
         return false;
     }
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(textureDesc, false);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(textureDesc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture: invalid subresource range"));
@@ -338,7 +338,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     if(format == Format::UNKNOWN)
         format = m_desc.format;
 
-    TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, false);
+    TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
@@ -727,7 +727,7 @@ void CommandList::clearDepthStencilTexture(ITexture* textureResource, TextureSub
         return;
     }
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, false);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture->m_desc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture: invalid subresource range"));
@@ -1020,8 +1020,8 @@ void CommandList::resolveTexture(ITexture* destResource, const TextureSubresourc
         return;
     }
 
-    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src->m_desc, false);
-    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest->m_desc, false);
+    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src->m_desc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest->m_desc, TextureSubresourceMipResolve::Range);
     if(resolvedSrc.numMipLevels == 0 || resolvedSrc.numArraySlices == 0 || resolvedDst.numMipLevels == 0 || resolvedDst.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: invalid subresource range"));

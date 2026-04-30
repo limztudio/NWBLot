@@ -2067,10 +2067,10 @@ bool ProjectTestbed::prepareSurfaceEditMutation(
 void ProjectTestbed::finishSurfaceEditMutation(
     const tchar* action,
     const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
-    const bool clearRedo){
+    const SurfaceEditRedoStackMode::Enum redoStackMode){
     clearSurfaceEditPreview();
     clearPendingSurfaceEditAccessory();
-    if(clearRedo)
+    if(redoStackMode == SurfaceEditRedoStackMode::Clear)
         m_surfaceEditHistory.redoStack.clear();
     m_surfaceEditDebugRuntimeMesh = runtimeMesh;
     if(!restoreSurfaceEditAccessoryEntities())
@@ -2144,7 +2144,7 @@ void ProjectTestbed::undoSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("undo"), editContext.runtimeMesh, false);
+    finishSurfaceEditMutation(NWB_TEXT("undo"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Keep);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit undo: edit={} removed_accessories={} remaining_edits={} revision={}"),
@@ -2179,7 +2179,7 @@ void ProjectTestbed::redoSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("redo"), editContext.runtimeMesh, false);
+    finishSurfaceEditMutation(NWB_TEXT("redo"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Keep);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit redo: edit={} restored_accessories={} edits={} revision={}"),
@@ -2217,7 +2217,7 @@ void ProjectTestbed::healLatestSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("heal"), editContext.runtimeMesh, true);
+    finishSurfaceEditMutation(NWB_TEXT("heal"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Clear);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit heal: edit={} removed_accessories={} remaining_edits={} revision={}"),
@@ -2258,7 +2258,7 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("resize"), editContext.runtimeMesh, true);
+    finishSurfaceEditMutation(NWB_TEXT("resize"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Clear);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit resize: edit={} radius {}->{} ellipse {}->{} depth {}->{} revision={}"),
@@ -2305,7 +2305,7 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("move"), editContext.runtimeMesh, true);
+    finishSurfaceEditMutation(NWB_TEXT("move"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Clear);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit move: edit={} position ({},{},{}) -> ({},{},{}) revision={}"),
@@ -2355,7 +2355,7 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("patch"), editContext.runtimeMesh, true);
+    finishSurfaceEditMutation(NWB_TEXT("patch"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Clear);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit patch: edit={} position ({},{},{}) -> ({},{},{}) radius {}->{} ellipse {}->{} depth {}->{} revision={}"),
@@ -2403,7 +2403,7 @@ void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
         return;
     }
 
-    finishSurfaceEditMutation(NWB_TEXT("loop cut"), editContext.runtimeMesh, true);
+    finishSurfaceEditMutation(NWB_TEXT("loop cut"), editContext.runtimeMesh, SurfaceEditRedoStackMode::Clear);
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("Surface edit loop cut: edit={} wall_loop_cuts {}->{} revision={}"),

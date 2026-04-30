@@ -176,7 +176,14 @@ public:
 
 
 private:
-    bool writeFileLocked(const Name& virtualPath, const void* data, usize bytes, bool flushMetadataAfterWrite);
+    struct MetadataFlushMode{
+        enum Enum : u8{
+            Deferred = 0u,
+            Immediate = 1u,
+        };
+    };
+
+    bool writeFileLocked(const Name& virtualPath, const void* data, usize bytes, MetadataFlushMode::Enum flushMode);
     bool scanSegmentsLocked();
 
     bool createSegmentLocked(usize segmentIndex);

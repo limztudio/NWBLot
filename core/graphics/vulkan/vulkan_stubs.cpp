@@ -117,7 +117,17 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     Buffer* indirectBuffer = nullptr;
-    if(!prepareDrawIndirect(offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments), NWB_TEXT("draw indexed indirect"), NWB_TEXT("drawIndexedIndirect"), true, indirectBuffer))
+    if(
+        !prepareDrawIndirect(
+            offsetBytes,
+            drawCount,
+            sizeof(DrawIndexedIndirectArguments),
+            NWB_TEXT("draw indexed indirect"),
+            NWB_TEXT("drawIndexedIndirect"),
+            VulkanDetail::IndirectDrawIndexMode::Indexed,
+            indirectBuffer
+        )
+    )
         return;
 
     vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
@@ -145,7 +155,10 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, false);
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+        buildFlags,
+        VulkanDetail::AccelStructCompactionMode::Disabled
+    );
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
     buildInfo.geometryCount = 1;

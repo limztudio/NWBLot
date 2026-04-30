@@ -110,7 +110,11 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     }
 
     auto depthStencil = VulkanDetail::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
-    VulkanDetail::ConfigurePipelineDepthStencilState(desc.renderState.depthStencilState, false, depthStencil);
+    VulkanDetail::ConfigurePipelineDepthStencilState(
+        desc.renderState.depthStencilState,
+        VulkanDetail::PipelineStencilFaceMode::DepthOnly,
+        depthStencil
+    );
 
     PipelineColorBlendAttachmentVector blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
     auto colorBlending = VulkanDetail::BuildPipelineColorBlendState(fbinfo, desc.renderState.blendState, blendAttachments);

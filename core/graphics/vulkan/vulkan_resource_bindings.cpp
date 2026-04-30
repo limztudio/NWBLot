@@ -103,7 +103,7 @@ bool ConfigurePipelineMultisampleState(
 
 void ConfigurePipelineDepthStencilState(
     const DepthStencilState& state,
-    const bool includeStencilFaces,
+    PipelineStencilFaceMode::Enum stencilFaceMode,
     VkPipelineDepthStencilStateCreateInfo& outState
 ){
     outState = MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
@@ -112,7 +112,7 @@ void ConfigurePipelineDepthStencilState(
     outState.depthCompareOp = ConvertCompareOp(state.depthFunc);
     outState.depthBoundsTestEnable = VK_FALSE;
     outState.stencilTestEnable = state.stencilEnable ? VK_TRUE : VK_FALSE;
-    if(includeStencilFaces){
+    if(stencilFaceMode == PipelineStencilFaceMode::IncludeStencilFaces){
         outState.front = ConvertStencilOpState(state, state.frontFaceStencil);
         outState.back = ConvertStencilOpState(state, state.backFaceStencil);
     }
@@ -406,7 +406,7 @@ bool BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item, VkIm
     const TextureDesc& textureDesc = texture.getDescription();
     TextureDimension::Enum dimension = item.dimension != TextureDimension::Unknown ? item.dimension : textureDesc.dimension;
     Format::Enum format = item.format != Format::UNKNOWN ? item.format : textureDesc.format;
-    TextureSubresourceSet subresources = item.subresources.resolve(textureDesc, false);
+    TextureSubresourceSet subresources = item.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Range);
     if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: subresource range is invalid"));
         return false;
@@ -1037,7 +1037,7 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
             auto* texture = checked_cast<Texture*>(item.resourceHandle);
             if(!texture)
                 return false;
-            const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), false);
+            const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), TextureSubresourceMipResolve::Range);
             if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
                 return false;
             if(!VulkanDetail::BuildImageViewCreateInfo(*texture, item, imageViewInfo))

@@ -47,6 +47,13 @@ private:
         };
     };
 
+    struct SurfaceEditRedoStackMode{
+        enum Enum : u8{
+            Keep = 0u,
+            Clear = 1u,
+        };
+    };
+
     struct SurfaceEditMutationContext{
         NWB::Core::ECSGraphics::RendererSystem* rendererSystem = nullptr;
         NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh;
@@ -97,7 +104,7 @@ private:
     void finishSurfaceEditMutation(
         const tchar* action,
         NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
-        bool clearRedo
+        SurfaceEditRedoStackMode::Enum redoStackMode
     );
     [[nodiscard]] bool pickSurfaceEditMutationTarget(
         const tchar* action,

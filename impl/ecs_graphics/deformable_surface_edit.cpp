@@ -90,6 +90,41 @@ struct SurfaceRemeshTriangle{
     u32 sourceTriangle = Limit<u32>::s_Max;
 };
 
+namespace HoleResultWallMode{
+    enum Enum : u8{
+        Optional = 0u,
+        Required = 1u,
+    };
+};
+
+namespace SurfaceRemeshClipSide{
+    enum Enum : u8{
+        Outside = 0u,
+        Inside = 1u,
+    };
+};
+
+namespace SurfaceRemeshDepthPlane{
+    enum Enum : u8{
+        Min = 0u,
+        Max = 1u,
+    };
+};
+
+namespace SurfaceRemeshAreaMode{
+    enum Enum : u8{
+        Projected2D = 0u,
+        DepthAware = 1u,
+    };
+};
+
+namespace SurfaceRemeshDirection{
+    enum Enum : u8{
+        Normal = 0u,
+        Tangent = 1u,
+    };
+};
+
 [[nodiscard]] bool FiniteVec3(const SIMDVector value){
     return DeformableValidation::FiniteVector(value, 0x7u);
 }
@@ -538,7 +573,10 @@ using MorphDeltaLookup = HashMap<
     ;
 }
 
-[[nodiscard]] bool ValidHoleEditResult(const DeformableHoleEditResult& result, const bool requireWall){
+[[nodiscard]] bool ValidHoleEditResult(
+    const DeformableHoleEditResult& result,
+    const HoleResultWallMode::Enum wallMode
+){
     if(result.editRevision == 0u || result.removedTriangleCount == 0u)
         return false;
     if(!ValidWallLoopCutCount(result.wallLoopCutCount))
@@ -547,7 +585,7 @@ using MorphDeltaLookup = HashMap<
         return false;
     if(result.wallVertexCount == 0u)
         return
-            !requireWall
+            wallMode == HoleResultWallMode::Optional
             && result.addedVertexCount == 0u
             && result.addedTriangleCount == 0u
             && result.wallLoopCutCount == 0u
@@ -643,7 +681,7 @@ using MorphDeltaLookup = HashMap<
     const DeformableHoleEditResult& result
 ){
     return
-        ValidHoleEditResult(result, true)
+        ValidHoleEditResult(result, HoleResultWallMode::Required)
         && RuntimeMeshHasWallTrianglePairs(instance, result.firstWallVertex, result.wallVertexCount)
     ;
 }
@@ -684,7 +722,7 @@ using MorphDeltaLookup = HashMap<
         return false;
     if(record.result.wallLoopCutCount != record.hole.wallLoopCutCount)
         return false;
-    if(!ValidHoleEditResult(record.result, true))
+    if(!ValidHoleEditResult(record.result, HoleResultWallMode::Required))
         return false;
     return true;
 }
@@ -1993,8 +2031,11 @@ using SurfaceRemeshClipPolygonList = Vector<
     return orientation * ((edgeX * pointY) - (edgeY * pointX));
 }
 
-[[nodiscard]] bool SurfaceRemeshKeepHalfPlanePoint(const f32 distance, const bool keepInside){
-    return keepInside
+[[nodiscard]] bool SurfaceRemeshKeepHalfPlanePoint(
+    const f32 distance,
+    const SurfaceRemeshClipSide::Enum clipSide
+){
+    return clipSide == SurfaceRemeshClipSide::Inside
         ? distance >= -s_SurfaceRemeshClipEpsilon
         : distance <= s_SurfaceRemeshClipEpsilon
     ;
@@ -2132,7 +2173,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     const Float2U& edgeA,
     const Float2U& edgeB,
     const f32 orientation,
-    const bool keepInside,
+    const SurfaceRemeshClipSide::Enum clipSide,
     SurfaceRemeshClipPolygon& output
 ){
     output.clear();
@@ -2141,10 +2182,10 @@ using SurfaceRemeshClipPolygonList = Vector<
 
     SurfaceRemeshClipPoint previous = input.back();
     f32 previousDistance = SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, previous, orientation);
-    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, keepInside);
+    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, clipSide);
     for(const SurfaceRemeshClipPoint& current : input){
         const f32 currentDistance = SurfaceRemeshHalfPlaneDistance(edgeA, edgeB, current, orientation);
-        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, keepInside);
+        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, clipSide);
         if(currentKept != previousKept){
             const f32 denominator = previousDistance - currentDistance;
             if(!IsFinite(denominator) || Abs(denominator) <= s_SurfaceRemeshClipEpsilon)
@@ -2166,15 +2207,15 @@ using SurfaceRemeshClipPolygonList = Vector<
 
 [[nodiscard]] f32 SurfaceRemeshDepthPlaneDistance(
     const SurfaceRemeshClipPoint& point,
-    const bool minDepthPlane
+    const SurfaceRemeshDepthPlane::Enum depthPlane
 ){
-    return minDepthPlane ? point.depth : 1.0f - point.depth;
+    return depthPlane == SurfaceRemeshDepthPlane::Min ? point.depth : 1.0f - point.depth;
 }
 
 [[nodiscard]] bool ClipSurfaceRemeshPolygonDepthPlane(
     const SurfaceRemeshClipPolygon& input,
-    const bool minDepthPlane,
-    const bool keepInside,
+    const SurfaceRemeshDepthPlane::Enum depthPlane,
+    const SurfaceRemeshClipSide::Enum clipSide,
     SurfaceRemeshClipPolygon& output
 ){
     output.clear();
@@ -2182,11 +2223,11 @@ using SurfaceRemeshClipPolygonList = Vector<
         return true;
 
     SurfaceRemeshClipPoint previous = input.back();
-    f32 previousDistance = SurfaceRemeshDepthPlaneDistance(previous, minDepthPlane);
-    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, keepInside);
+    f32 previousDistance = SurfaceRemeshDepthPlaneDistance(previous, depthPlane);
+    bool previousKept = SurfaceRemeshKeepHalfPlanePoint(previousDistance, clipSide);
     for(const SurfaceRemeshClipPoint& current : input){
-        const f32 currentDistance = SurfaceRemeshDepthPlaneDistance(current, minDepthPlane);
-        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, keepInside);
+        const f32 currentDistance = SurfaceRemeshDepthPlaneDistance(current, depthPlane);
+        const bool currentKept = SurfaceRemeshKeepHalfPlanePoint(currentDistance, clipSide);
         if(currentKept != previousKept){
             const f32 denominator = previousDistance - currentDistance;
             if(!IsFinite(denominator) || Abs(denominator) <= s_SurfaceRemeshClipEpsilon)
@@ -2276,7 +2317,7 @@ using SurfaceRemeshClipPolygonList = Vector<
 
 [[nodiscard]] bool RemoveCollinearSurfaceRemeshClipPoints(
     SurfaceRemeshClipPolygon& polygon,
-    const bool allowDepthArea
+    const SurfaceRemeshAreaMode::Enum areaMode
 ){
     if(polygon.size() < 3u)
         return false;
@@ -2302,7 +2343,7 @@ using SurfaceRemeshClipPolygonList = Vector<
                 abDistanceSq <= s_SurfaceRemeshVertexMergeDistanceSq
                 || bcDistanceSq <= s_SurfaceRemeshVertexMergeDistanceSq
                 || (
-                    allowDepthArea
+                    areaMode == SurfaceRemeshAreaMode::DepthAware
                         ? SurfaceRemeshClipPointCrossLengthSq(a, b, c)
                             <= s_SurfaceRemeshAreaEpsilon * s_SurfaceRemeshAreaEpsilon
                         : Abs(SurfaceRemeshClipPointCross2D(a, b, c)) <= s_SurfaceRemeshAreaEpsilon
@@ -2318,7 +2359,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     return
         polygon.size() >= 3u
         && (
-            allowDepthArea
+            areaMode == SurfaceRemeshAreaMode::DepthAware
                 ? SurfaceRemeshPolygonAreaLengthSq(polygon) > s_SurfaceRemeshAreaEpsilon * s_SurfaceRemeshAreaEpsilon
                 : Abs(SurfaceRemeshPolygonSignedArea2D(polygon)) > s_SurfaceRemeshAreaEpsilon
         )
@@ -2368,7 +2409,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     const Vector<DeformableVertexRest>& vertices,
     const u32 (&sourceVertices)[3],
     const f32 (&sourceWeights)[3],
-    const bool tangent,
+    const SurfaceRemeshDirection::Enum direction,
     SIMDVector& outDirection
 ){
     outDirection = VectorZero();
@@ -2384,7 +2425,7 @@ using SurfaceRemeshClipPolygonList = Vector<
             return false;
 
         const DeformableVertexRest& source = vertices[vertex];
-        const SIMDVector sourceDirection = tangent
+        const SIMDVector sourceDirection = direction == SurfaceRemeshDirection::Tangent
             ? VectorSetW(LoadRestVertexTangent(source), 0.0f)
             : LoadRestVertexNormal(source)
         ;
@@ -2417,8 +2458,20 @@ using SurfaceRemeshClipPolygonList = Vector<
     SIMDVector lhsNormal;
     SIMDVector rhsNormal;
     if(
-        !BlendSurfaceRemeshSourceDirection(instance.restVertices, lhsSourceVertices, lhsSourceWeights, false, lhsNormal)
-        || !BlendSurfaceRemeshSourceDirection(instance.restVertices, rhsSourceVertices, rhsSourceWeights, false, rhsNormal)
+        !BlendSurfaceRemeshSourceDirection(
+            instance.restVertices,
+            lhsSourceVertices,
+            lhsSourceWeights,
+            SurfaceRemeshDirection::Normal,
+            lhsNormal
+        )
+        || !BlendSurfaceRemeshSourceDirection(
+            instance.restVertices,
+            rhsSourceVertices,
+            rhsSourceWeights,
+            SurfaceRemeshDirection::Normal,
+            rhsNormal
+        )
     )
         return false;
     const f32 normalDistanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(lhsNormal, rhsNormal)));
@@ -2428,8 +2481,20 @@ using SurfaceRemeshClipPolygonList = Vector<
     SIMDVector lhsTangent;
     SIMDVector rhsTangent;
     if(
-        !BlendSurfaceRemeshSourceDirection(instance.restVertices, lhsSourceVertices, lhsSourceWeights, true, lhsTangent)
-        || !BlendSurfaceRemeshSourceDirection(instance.restVertices, rhsSourceVertices, rhsSourceWeights, true, rhsTangent)
+        !BlendSurfaceRemeshSourceDirection(
+            instance.restVertices,
+            lhsSourceVertices,
+            lhsSourceWeights,
+            SurfaceRemeshDirection::Tangent,
+            lhsTangent
+        )
+        || !BlendSurfaceRemeshSourceDirection(
+            instance.restVertices,
+            rhsSourceVertices,
+            rhsSourceWeights,
+            SurfaceRemeshDirection::Tangent,
+            rhsTangent
+        )
     )
         return false;
     const f32 tangentDistanceSq = VectorGetX(Vector3LengthSq(VectorSubtract(lhsTangent, rhsTangent)));
@@ -2910,7 +2975,10 @@ using SurfaceRemeshClipPolygonList = Vector<
             )
                 return false;
         }
-        const bool depthAwareClip = SurfaceRemeshTriangleProjectionIsDegenerate(triangleClipPoints);
+        const SurfaceRemeshAreaMode::Enum areaMode = SurfaceRemeshTriangleProjectionIsDegenerate(triangleClipPoints)
+            ? SurfaceRemeshAreaMode::DepthAware
+            : SurfaceRemeshAreaMode::Projected2D
+        ;
 
         SurfaceRemeshLocalBounds triangleBounds;
         if(!BuildSurfaceRemeshClipPointLocalBounds(triangleClipPoints, 3u, triangleBounds))
@@ -2961,17 +3029,31 @@ using SurfaceRemeshClipPolygonList = Vector<
             outside.reserve(active.size() + 1u);
             inside.reserve(active.size() + 1u);
             if(
-                !ClipSurfaceRemeshPolygonHalfPlane(active, edgeA, edgeB, orientation, false, outside)
-                || !ClipSurfaceRemeshPolygonHalfPlane(active, edgeA, edgeB, orientation, true, inside)
+                !ClipSurfaceRemeshPolygonHalfPlane(
+                    active,
+                    edgeA,
+                    edgeB,
+                    orientation,
+                    SurfaceRemeshClipSide::Outside,
+                    outside
+                )
+                || !ClipSurfaceRemeshPolygonHalfPlane(
+                    active,
+                    edgeA,
+                    edgeB,
+                    orientation,
+                    SurfaceRemeshClipSide::Inside,
+                    inside
+                )
             )
                 return false;
 
-            if(RemoveCollinearSurfaceRemeshClipPoints(outside, depthAwareClip)){
+            if(RemoveCollinearSurfaceRemeshClipPoints(outside, areaMode)){
                 outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
                 outsidePieces.back().assign(outside.begin(), outside.end());
             }
 
-            if(!RemoveCollinearSurfaceRemeshClipPoints(inside, depthAwareClip)){
+            if(!RemoveCollinearSurfaceRemeshClipPoints(inside, areaMode)){
                 clippedAway = true;
                 break;
             }
@@ -2979,10 +3061,10 @@ using SurfaceRemeshClipPolygonList = Vector<
             active.assign(inside.begin(), inside.end());
         }
 
-        auto clipActiveByDepthPlane = [&](const bool minDepthPlane){
+        auto clipActiveByDepthPlane = [&](const SurfaceRemeshDepthPlane::Enum depthPlane){
             bool hasStrictOutside = false;
             for(const SurfaceRemeshClipPoint& point : active){
-                if(SurfaceRemeshDepthPlaneDistance(point, minDepthPlane) < -s_SurfaceRemeshClipEpsilon){
+                if(SurfaceRemeshDepthPlaneDistance(point, depthPlane) < -s_SurfaceRemeshClipEpsilon){
                     hasStrictOutside = true;
                     break;
                 }
@@ -2991,17 +3073,27 @@ using SurfaceRemeshClipPolygonList = Vector<
             outside.reserve(active.size() + 1u);
             inside.reserve(active.size() + 1u);
             if(
-                !ClipSurfaceRemeshPolygonDepthPlane(active, minDepthPlane, false, outside)
-                || !ClipSurfaceRemeshPolygonDepthPlane(active, minDepthPlane, true, inside)
+                !ClipSurfaceRemeshPolygonDepthPlane(
+                    active,
+                    depthPlane,
+                    SurfaceRemeshClipSide::Outside,
+                    outside
+                )
+                || !ClipSurfaceRemeshPolygonDepthPlane(
+                    active,
+                    depthPlane,
+                    SurfaceRemeshClipSide::Inside,
+                    inside
+                )
             )
                 return false;
 
-            if(hasStrictOutside && RemoveCollinearSurfaceRemeshClipPoints(outside, true)){
+            if(hasStrictOutside && RemoveCollinearSurfaceRemeshClipPoints(outside, SurfaceRemeshAreaMode::DepthAware)){
                 outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
                 outsidePieces.back().assign(outside.begin(), outside.end());
             }
 
-            if(!RemoveCollinearSurfaceRemeshClipPoints(inside, true)){
+            if(!RemoveCollinearSurfaceRemeshClipPoints(inside, SurfaceRemeshAreaMode::DepthAware)){
                 clippedAway = true;
                 return true;
             }
@@ -3010,16 +3102,19 @@ using SurfaceRemeshClipPolygonList = Vector<
             return true;
         };
         if(
-            depthAwareClip
+            areaMode == SurfaceRemeshAreaMode::DepthAware
             && !clippedAway
             && (
-                !clipActiveByDepthPlane(true)
-                || (!clippedAway && !clipActiveByDepthPlane(false))
+                !clipActiveByDepthPlane(SurfaceRemeshDepthPlane::Min)
+                || (
+                    !clippedAway
+                    && !clipActiveByDepthPlane(SurfaceRemeshDepthPlane::Max)
+                )
             )
         )
             return false;
 
-        if(clippedAway || !RemoveCollinearSurfaceRemeshClipPoints(active, depthAwareClip)){
+        if(clippedAway || !RemoveCollinearSurfaceRemeshClipPoints(active, areaMode)){
             if(
                 !AppendSurfaceRemeshTriangle(
                     outRestPositions,
@@ -3060,7 +3155,7 @@ using SurfaceRemeshClipPolygonList = Vector<
                 return false;
             insideVertices.push_back(vertex);
         }
-        if(!depthAwareClip){
+        if(areaMode != SurfaceRemeshAreaMode::DepthAware){
             for(usize vertexIndex = 0u; vertexIndex < insideVertices.size(); ++vertexIndex){
                 const usize nextVertexIndex = (vertexIndex + 1u) % insideVertices.size();
                 if(!RegisterSurfaceRemeshBoundaryEdge(boundaryEdgeMap, insideVertices[vertexIndex], insideVertices[nextVertexIndex]))

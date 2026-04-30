@@ -3092,7 +3092,11 @@ using SurfaceRemeshClipPolygonList = Vector<
         EqualTo<u64>(),
         Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
     );
-    boundaryEdgeMap.reserve(triangleCount * 3u);
+    const usize boundaryEdgeReserve = Min(
+        triangleCount * 3u,
+        Max(static_cast<usize>(params.operatorFootprint.vertexCount) * 8u, static_cast<usize>(64u))
+    );
+    boundaryEdgeMap.reserve(boundaryEdgeReserve);
 
     const f32 footprintArea = OperatorFootprintSignedArea(params.operatorFootprint);
     if(!IsFinite(footprintArea) || Abs(footprintArea) <= s_OperatorFootprintAreaEpsilon)

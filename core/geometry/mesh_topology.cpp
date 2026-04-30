@@ -83,23 +83,32 @@ struct BoundaryVertexEdges{
 }
 
 template<typename EdgeMap>
-void RegisterTriangleEdge(EdgeMap& edges, const u32 a, const u32 b, const bool removed){
+[[nodiscard]] bool RegisterRemovedTriangleEdge(EdgeMap& edges, const u32 a, const u32 b){
     auto [it, inserted] = edges.emplace(MakeEdgeKey(a, b), MeshTopologyEdge{});
     MeshTopologyEdge& record = it.value();
     if(inserted){
         record.a = a;
         record.b = b;
     }
-    ++record.fullCount;
+    if(record.removedCount == Limit<u32>::s_Max)
+        return false;
 
-    if(!removed)
-        return;
-
-    if(record.removedCount == 0u){
-        record.a = a;
-        record.b = b;
-    }
     ++record.removedCount;
+    return true;
+}
+
+template<typename EdgeMap>
+[[nodiscard]] bool IncrementTrackedEdgeFullCount(EdgeMap& edges, const u32 a, const u32 b){
+    auto found = edges.find(MakeEdgeKey(a, b));
+    if(found == edges.end())
+        return true;
+
+    MeshTopologyEdge& record = found.value();
+    if(record.fullCount == Limit<u32>::s_Max)
+        return false;
+
+    ++record.fullCount;
+    return true;
 }
 
 template<typename VertexDegreeMap>
@@ -344,8 +353,6 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
         EqualTo<u64>(),
         Core::Alloc::ScratchAllocator<Pair<const u64, MeshTopologyEdge>>(scratchArena)
     );
-    edges.reserve(indices.size());
-
     const usize triangleCount = indices.size() / 3u;
     u32 removedTriangleCount = 0u;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
@@ -357,12 +364,11 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
             return false;
 
         const bool removed = removedTriangles[triangle] != 0u;
-        RegisterTriangleEdge(edges, a, b, removed);
-        RegisterTriangleEdge(edges, b, c, removed);
-        RegisterTriangleEdge(edges, c, a, removed);
-
-        if(removed)
+        if(removed){
+            if(removedTriangleCount == Limit<u32>::s_Max)
+                return false;
             ++removedTriangleCount;
+        }
     }
     if(removedTriangleCount == 0u || removedTriangleCount >= triangleCount)
         return false;
@@ -371,6 +377,30 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
         outBoundaryEdges.clear();
         return false;
     };
+
+    edges.reserve(static_cast<usize>(removedTriangleCount) * 3u);
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        if(removedTriangles[triangle] == 0u)
+            continue;
+
+        const usize indexBase = triangle * 3u;
+        if(
+            !RegisterRemovedTriangleEdge(edges, indices[indexBase + 0u], indices[indexBase + 1u])
+            || !RegisterRemovedTriangleEdge(edges, indices[indexBase + 1u], indices[indexBase + 2u])
+            || !RegisterRemovedTriangleEdge(edges, indices[indexBase + 2u], indices[indexBase + 0u])
+        )
+            return fail();
+    }
+
+    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
+        const usize indexBase = triangle * 3u;
+        if(
+            !IncrementTrackedEdgeFullCount(edges, indices[indexBase + 0u], indices[indexBase + 1u])
+            || !IncrementTrackedEdgeFullCount(edges, indices[indexBase + 1u], indices[indexBase + 2u])
+            || !IncrementTrackedEdgeFullCount(edges, indices[indexBase + 2u], indices[indexBase + 0u])
+        )
+            return fail();
+    }
 
     outBoundaryEdges.reserve(static_cast<usize>(removedTriangleCount) * 3u);
     VertexDegreeMap boundaryDegrees(
@@ -385,7 +415,7 @@ bool BuildBoundaryEdgesFromRemovedTrianglesImpl(
         static_cast<void>(edgeKey);
         if(edge.removedCount == 0u)
             continue;
-        if(edge.removedCount > edge.fullCount || edge.fullCount > 2u)
+        if(edge.fullCount == 0u || edge.removedCount > edge.fullCount || edge.fullCount > 2u)
             return fail();
         if(edge.removedCount == 1u){
             if(edge.fullCount != 2u)

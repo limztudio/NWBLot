@@ -196,6 +196,96 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
 }
 #endif
 
+template<u32 Lane>
+NWB_INLINE f32 SIMDCALL GetLane(SIMDVector value)noexcept{
+    static_assert(Lane < 4u);
+#if defined(NWB_HAS_SCALAR)
+    return value.f[Lane];
+#elif defined(NWB_HAS_NEON)
+    return vgetq_lane_f32(value, Lane);
+#else
+    if constexpr(Lane == 0u)
+        return _mm_cvtss_f32(value);
+    else{
+#if defined(NWB_HAS_AVX2)
+        return _mm_cvtss_f32(_mm_permute_ps(value, _MM_SHUFFLE(Lane, Lane, Lane, Lane)));
+#else
+        return _mm_cvtss_f32(_mm_shuffle_ps(value, value, _MM_SHUFFLE(Lane, Lane, Lane, Lane)));
+#endif
+    }
+#endif
+}
+
+template<u32 Lane>
+NWB_INLINE u32 SIMDCALL GetIntLane(SIMDVector value)noexcept{
+    static_assert(Lane < 4u);
+#if defined(NWB_HAS_SCALAR)
+    return value.u[Lane];
+#elif defined(NWB_HAS_NEON)
+    return vgetq_lane_u32(vreinterpretq_u32_f32(value), Lane);
+#else
+    if constexpr(Lane == 0u)
+        return static_cast<u32>(_mm_cvtsi128_si32(_mm_castps_si128(value)));
+    else
+        return static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), Lane));
+#endif
+}
+
+template<u32 Lane>
+NWB_INLINE void SIMDCALL StoreLane(f32* out, SIMDVector value)noexcept{
+    static_assert(Lane < 4u);
+    NWB_ASSERT(out != nullptr);
+#if defined(NWB_HAS_SCALAR)
+    *out = value.f[Lane];
+#elif defined(NWB_HAS_NEON)
+    vst1q_lane_f32(out, value, Lane);
+#else
+    if constexpr(Lane == 0u)
+        _mm_store_ss(out, value);
+    else
+        *reinterpret_cast<i32*>(out) = _mm_extract_ps(value, Lane);
+#endif
+}
+
+template<u32 Lane>
+NWB_INLINE void SIMDCALL StoreIntLane(u32* out, SIMDVector value)noexcept{
+    static_assert(Lane < 4u);
+    NWB_ASSERT(out != nullptr);
+#if defined(NWB_HAS_SCALAR)
+    *out = value.u[Lane];
+#elif defined(NWB_HAS_NEON)
+    vst1q_lane_u32(out, vreinterpretq_u32_f32(value), Lane);
+#else
+    if constexpr(Lane == 0u)
+        _mm_store_ss(reinterpret_cast<f32*>(out), value);
+    else
+        *out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), Lane));
+#endif
+}
+
+template<u32 Lane>
+NWB_INLINE SIMDVector SIMDCALL SplatLane(SIMDVector value)noexcept{
+    static_assert(Lane < 4u);
+#if defined(NWB_HAS_SCALAR)
+    const f32 laneValue = value.f[Lane];
+    return SIMDConvertDetail::MakeF32(laneValue, laneValue, laneValue, laneValue);
+#elif defined(NWB_HAS_NEON)
+    if constexpr(Lane < 2u)
+        return vdupq_lane_f32(vget_low_f32(value), Lane);
+    else
+        return vdupq_lane_f32(vget_high_f32(value), Lane - 2u);
+#elif defined(__AVX2__) || defined(_M_AVX2)
+    if constexpr(Lane == 0u)
+        return _mm_broadcastss_ps(value);
+    else
+        return _mm_permute_ps(value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));
+#elif defined(NWB_HAS_AVX2)
+    return _mm_permute_ps(value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));
+#else
+    return _mm_shuffle_ps(value, value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));
+#endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // column-vector transforms over row-stored matrices
@@ -458,51 +548,10 @@ NWB_INLINE SIMDVector SIMDCALL VectorFalseInt()noexcept{
 #endif
 }
 
-NWB_INLINE f32 SIMDCALL VectorGetX(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.f[0];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_f32(value, 0);
-#else
-    return _mm_cvtss_f32(value);
-#endif
-}
-
-NWB_INLINE f32 SIMDCALL VectorGetY(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.f[1];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_f32(value, 1);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_cvtss_f32(_mm_permute_ps(value, _MM_SHUFFLE(1, 1, 1, 1)));
-#else
-    return _mm_cvtss_f32(_mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 1, 1, 1)));
-#endif
-}
-
-NWB_INLINE f32 SIMDCALL VectorGetZ(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.f[2];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_f32(value, 2);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_cvtss_f32(_mm_permute_ps(value, _MM_SHUFFLE(2, 2, 2, 2)));
-#else
-    return _mm_cvtss_f32(_mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 2, 2, 2)));
-#endif
-}
-
-NWB_INLINE f32 SIMDCALL VectorGetW(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.f[3];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_f32(value, 3);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_cvtss_f32(_mm_permute_ps(value, _MM_SHUFFLE(3, 3, 3, 3)));
-#else
-    return _mm_cvtss_f32(_mm_shuffle_ps(value, value, _MM_SHUFFLE(3, 3, 3, 3)));
-#endif
-}
+NWB_INLINE f32 SIMDCALL VectorGetX(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<0u>(value); }
+NWB_INLINE f32 SIMDCALL VectorGetY(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<1u>(value); }
+NWB_INLINE f32 SIMDCALL VectorGetZ(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<2u>(value); }
+NWB_INLINE f32 SIMDCALL VectorGetW(SIMDVector value)noexcept{ return SIMDVectorDetail::GetLane<3u>(value); }
 
 NWB_INLINE f32 SIMDCALL VectorGetByIndex(SIMDVector value, usize index)noexcept{
     NWB_ASSERT(index < 4);
@@ -535,89 +584,15 @@ NWB_INLINE void SIMDCALL VectorGetByIndexPtr(f32* out, SIMDVector value, usize i
 #endif
 }
 
-NWB_INLINE void SIMDCALL VectorGetXPtr(f32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetX(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_f32(out, value, 0);
-#else
-    _mm_store_ss(out, value);
-#endif
-}
+NWB_INLINE void SIMDCALL VectorGetXPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<0u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetYPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<1u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetZPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<2u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetWPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<3u>(out, value); }
 
-NWB_INLINE void SIMDCALL VectorGetYPtr(f32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetY(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_f32(out, value, 1);
-#else
-    *reinterpret_cast<i32*>(out) = _mm_extract_ps(value, 1);
-#endif
-}
-
-NWB_INLINE void SIMDCALL VectorGetZPtr(f32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetZ(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_f32(out, value, 2);
-#else
-    *reinterpret_cast<i32*>(out) = _mm_extract_ps(value, 2);
-#endif
-}
-
-NWB_INLINE void SIMDCALL VectorGetWPtr(f32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetW(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_f32(out, value, 3);
-#else
-    *reinterpret_cast<i32*>(out) = _mm_extract_ps(value, 3);
-#endif
-}
-
-NWB_INLINE u32 SIMDCALL VectorGetIntX(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.u[0];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_u32(vreinterpretq_u32_f32(value), 0);
-#else
-    return static_cast<u32>(_mm_cvtsi128_si32(_mm_castps_si128(value)));
-#endif
-}
-
-NWB_INLINE u32 SIMDCALL VectorGetIntY(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.u[1];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_u32(vreinterpretq_u32_f32(value), 1);
-#else
-    return static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), 1));
-#endif
-}
-
-NWB_INLINE u32 SIMDCALL VectorGetIntZ(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.u[2];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_u32(vreinterpretq_u32_f32(value), 2);
-#else
-    return static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), 2));
-#endif
-}
-
-NWB_INLINE u32 SIMDCALL VectorGetIntW(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return value.u[3];
-#elif defined(NWB_HAS_NEON)
-    return vgetq_lane_u32(vreinterpretq_u32_f32(value), 3);
-#else
-    return static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), 3));
-#endif
-}
+NWB_INLINE u32 SIMDCALL VectorGetIntX(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<0u>(value); }
+NWB_INLINE u32 SIMDCALL VectorGetIntY(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<1u>(value); }
+NWB_INLINE u32 SIMDCALL VectorGetIntZ(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<2u>(value); }
+NWB_INLINE u32 SIMDCALL VectorGetIntW(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<3u>(value); }
 
 NWB_INLINE u32 SIMDCALL VectorGetIntByIndex(SIMDVector value, usize index)noexcept{
     NWB_ASSERT(index < 4);
@@ -650,49 +625,10 @@ NWB_INLINE void SIMDCALL VectorGetIntByIndexPtr(u32* out, SIMDVector value, usiz
 #endif
 }
 
-NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetIntX(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_u32(out, vreinterpretq_u32_f32(value), 0);
-#else
-    _mm_store_ss(reinterpret_cast<f32*>(out), value);
-#endif
-}
-
-NWB_INLINE void SIMDCALL VectorGetIntYPtr(u32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetIntY(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_u32(out, vreinterpretq_u32_f32(value), 1);
-#else
-    *out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), 1));
-#endif
-}
-
-NWB_INLINE void SIMDCALL VectorGetIntZPtr(u32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetIntZ(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_u32(out, vreinterpretq_u32_f32(value), 2);
-#else
-    *out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), 2));
-#endif
-}
-
-NWB_INLINE void SIMDCALL VectorGetIntWPtr(u32* out, SIMDVector value)noexcept{
-    NWB_ASSERT(out != nullptr);
-#if defined(NWB_HAS_SCALAR)
-    *out = VectorGetIntW(value);
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_u32(out, vreinterpretq_u32_f32(value), 3);
-#else
-    *out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), 3));
-#endif
-}
+NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<0u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntYPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<1u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntZPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<2u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntWPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<3u>(out, value); }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetX(SIMDVector value, f32 x)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -956,55 +892,10 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetIntWPtr(SIMDVector value, const u32* w)n
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSplatX(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorReplicate(value.f[0]);
-#elif defined(NWB_HAS_NEON)
-    return vdupq_lane_f32(vget_low_f32(value), 0);
-#elif defined(__AVX2__) || defined(_M_AVX2)
-    return _mm_broadcastss_ps(value);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_permute_ps(value, _MM_SHUFFLE(0, 0, 0, 0));
-#else
-    return _mm_shuffle_ps(value, value, _MM_SHUFFLE(0, 0, 0, 0));
-#endif
-}
-
-NWB_INLINE SIMDVector SIMDCALL VectorSplatY(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorReplicate(value.f[1]);
-#elif defined(NWB_HAS_NEON)
-    return vdupq_lane_f32(vget_low_f32(value), 1);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_permute_ps(value, _MM_SHUFFLE(1, 1, 1, 1));
-#else
-    return _mm_shuffle_ps(value, value, _MM_SHUFFLE(1, 1, 1, 1));
-#endif
-}
-
-NWB_INLINE SIMDVector SIMDCALL VectorSplatZ(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorReplicate(value.f[2]);
-#elif defined(NWB_HAS_NEON)
-    return vdupq_lane_f32(vget_high_f32(value), 0);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_permute_ps(value, _MM_SHUFFLE(2, 2, 2, 2));
-#else
-    return _mm_shuffle_ps(value, value, _MM_SHUFFLE(2, 2, 2, 2));
-#endif
-}
-
-NWB_INLINE SIMDVector SIMDCALL VectorSplatW(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return VectorReplicate(value.f[3]);
-#elif defined(NWB_HAS_NEON)
-    return vdupq_lane_f32(vget_high_f32(value), 1);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_permute_ps(value, _MM_SHUFFLE(3, 3, 3, 3));
-#else
-    return _mm_shuffle_ps(value, value, _MM_SHUFFLE(3, 3, 3, 3));
-#endif
-}
+NWB_INLINE SIMDVector SIMDCALL VectorSplatX(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<0u>(value); }
+NWB_INLINE SIMDVector SIMDCALL VectorSplatY(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<1u>(value); }
+NWB_INLINE SIMDVector SIMDCALL VectorSplatZ(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<2u>(value); }
+NWB_INLINE SIMDVector SIMDCALL VectorSplatW(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<3u>(value); }
 NWB_INLINE SIMDVector SIMDCALL VectorSplatOne()noexcept{ return s_SIMDOne; }
 NWB_INLINE SIMDVector SIMDCALL VectorSplatInfinity()noexcept{ return s_SIMDInfinity; }
 NWB_INLINE SIMDVector SIMDCALL VectorSplatQNaN()noexcept{ return s_SIMDQNaN; }

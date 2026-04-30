@@ -493,11 +493,28 @@ static void ResolveFlyCameraAnglesFromTransform(
     return true;
 }
 
-[[nodiscard]] static bool ApplySurfaceEditOperatorUp(
-    NWB::Core::ECS::World& world,
+static void ApplySurfaceEditScalarParams(
+    NWB::Core::ECSGraphics::DeformableHoleEditParams& params,
+    const f32 radius,
+    const f32 ellipseRatio,
+    const f32 depth
+){
+    params.radius = radius;
+    params.ellipseRatio = ellipseRatio;
+    params.depth = depth;
+}
+
+[[nodiscard]] static bool BuildSurfaceEditOperatorShapeForParams(
+    NWB::Core::Assets::AssetManager& assetManager,
+    const usize operatorIndex,
     NWB::Core::ECSGraphics::DeformableHoleEditParams& params
 ){
-    return ResolveEditorViewUp(world, params.operatorUp);
+    return BuildSurfaceEditOperatorShape(
+        assetManager,
+        operatorIndex,
+        params.operatorFootprint,
+        params.operatorProfile
+    );
 }
 
 static void ApplyFlyCameraInput(
@@ -1491,20 +1508,22 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
         return false;
     }
 
-    m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
-    m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
-    m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
-    if(!__hidden_project_testbed_runtime::ApplySurfaceEditOperatorUp(*m_world, m_surfaceEditPreviewParams)){
+    __hidden_project_testbed_runtime::ApplySurfaceEditScalarParams(
+        m_surfaceEditPreviewParams,
+        m_surfaceEditRadius,
+        m_surfaceEditEllipseRatio,
+        m_surfaceEditDepth
+    );
+    if(!__hidden_project_testbed_runtime::ResolveEditorViewUp(*m_world, m_surfaceEditPreviewParams.operatorUp)){
         clearSurfaceEditPreview();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not resolve editor view up"));
         return false;
     }
     if(
-        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShapeForParams(
             m_context.assetManager,
             m_surfaceEditOperatorIndex,
-            m_surfaceEditPreviewParams.operatorFootprint,
-            m_surfaceEditPreviewParams.operatorProfile
+            m_surfaceEditPreviewParams
         )
     ){
         clearSurfaceEditPreview();
@@ -1587,19 +1606,21 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
 
     NWB::Core::ECSGraphics::DeformableHoleEditParams params;
     params.posedHit = hit;
-    params.radius = m_surfaceEditRadius;
-    params.ellipseRatio = m_surfaceEditEllipseRatio;
-    params.depth = m_surfaceEditDepth;
-    if(!__hidden_project_testbed_runtime::ApplySurfaceEditOperatorUp(*m_world, params)){
+    __hidden_project_testbed_runtime::ApplySurfaceEditScalarParams(
+        params,
+        m_surfaceEditRadius,
+        m_surfaceEditEllipseRatio,
+        m_surfaceEditDepth
+    );
+    if(!__hidden_project_testbed_runtime::ResolveEditorViewUp(*m_world, params.operatorUp)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not resolve editor view up"));
         return;
     }
     if(
-        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShapeForParams(
             m_context.assetManager,
             m_surfaceEditOperatorIndex,
-            params.operatorFootprint,
-            params.operatorProfile
+            params
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: selected operator shape is invalid"));
@@ -1654,15 +1675,17 @@ void ProjectTestbed::commitSurfaceEditPreview(){
         return;
     }
 
-    m_surfaceEditPreviewParams.radius = m_surfaceEditRadius;
-    m_surfaceEditPreviewParams.ellipseRatio = m_surfaceEditEllipseRatio;
-    m_surfaceEditPreviewParams.depth = m_surfaceEditDepth;
+    __hidden_project_testbed_runtime::ApplySurfaceEditScalarParams(
+        m_surfaceEditPreviewParams,
+        m_surfaceEditRadius,
+        m_surfaceEditEllipseRatio,
+        m_surfaceEditDepth
+    );
     if(
-        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
+        !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShapeForParams(
             m_context.assetManager,
             m_surfaceEditOperatorIndex,
-            m_surfaceEditPreviewParams.operatorFootprint,
-            m_surfaceEditPreviewParams.operatorProfile
+            m_surfaceEditPreviewParams
         )
     ){
         clearSurfaceEditPreview();

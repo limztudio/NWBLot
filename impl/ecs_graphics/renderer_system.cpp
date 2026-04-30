@@ -92,17 +92,7 @@ struct MeshViewGpuData{
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
-struct MeshViewState{
-    Float4 worldToClip[4] = {
-        Float4(1.f, 0.f, 0.f, 0.f),
-        Float4(0.f, 1.f, 0.f, 0.f),
-        Float4(0.f, 0.f, 1.f, 0.f),
-        Float4(0.f, 0.f, 0.f, 1.f),
-    };
-    Float4 directionalLightDirection = Float4(0.f, 0.f, -1.f, 0.f);
-    Float4 directionalLightColorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
-    Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
-};
+using MeshViewState = MeshViewGpuData;
 
 struct MeshViewBasis{
     Float4 right = Float4(1.f, 0.f, 0.f, 0.f);
@@ -2175,16 +2165,10 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
     const __hidden_ecs_graphics::MeshViewState viewState =
         __hidden_ecs_graphics::ResolveMeshViewState(m_world, fallbackAspectRatio)
     ;
-    __hidden_ecs_graphics::MeshViewGpuData viewData;
-    for(usize i = 0; i < 4u; ++i)
-        viewData.worldToClip[i] = viewState.worldToClip[i];
-    viewData.directionalLightDirection = viewState.directionalLightDirection;
-    viewData.directionalLightColorIntensity = viewState.directionalLightColorIntensity;
-    viewData.cameraPosition = viewState.cameraPosition;
 
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(m_meshViewBuffer.get(), &viewData, sizeof(viewData));
+    commandList.writeBuffer(m_meshViewBuffer.get(), &viewState, sizeof(viewState));
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
     return true;

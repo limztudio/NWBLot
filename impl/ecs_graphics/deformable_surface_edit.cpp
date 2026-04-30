@@ -1697,6 +1697,53 @@ template<typename StringTable>
     );
 }
 
+void StoreAccessoryAttachmentTransform(
+    const SIMDVector accessoryPosition,
+    const SIMDVector tangent,
+    const SIMDVector normal,
+    const f32 uniformScale,
+    Core::Scene::TransformComponent& outTransform
+){
+    StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
+    StoreFloat(RotationFromFrame(tangent, normal), &outTransform.rotation);
+    outTransform.scale = Float4(uniformScale, uniformScale, uniformScale);
+}
+
+[[nodiscard]] bool TryStoreAccessoryAttachmentFrameTransform(
+    const SIMDVector anchorPosition,
+    const SIMDVector innerPosition,
+    const SIMDVector tangentReference,
+    const f32 normalOffset,
+    const f32 uniformScale,
+    Core::Scene::TransformComponent& outTransform
+){
+    const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
+        VectorSubtract(anchorPosition, innerPosition),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+    );
+    if(
+        !FiniteVec3(normal)
+        || VectorGetX(Vector3LengthSq(normal)) <= Core::Geometry::s_FrameDirectionEpsilon
+    )
+        return false;
+
+    const SIMDVector accessoryPosition = VectorMultiplyAdd(
+        normal,
+        VectorReplicate(normalOffset),
+        anchorPosition
+    );
+    if(!FiniteVec3(accessoryPosition))
+        return false;
+
+    const SIMDVector tangent = Core::Geometry::FrameResolveTangent(
+        normal,
+        tangentReference,
+        Core::Geometry::FrameFallbackTangent(normal)
+    );
+    StoreAccessoryAttachmentTransform(accessoryPosition, tangent, normal, uniformScale, outTransform);
+    return true;
+}
+
 [[nodiscard]] bool BuildMorphDeltaLookup(
     const DeformableMorph& morph,
     const usize sourceDeltaCount,
@@ -4094,38 +4141,14 @@ bool ResolveAccessoryAttachmentTransform(
         const SIMDVector alpha = VectorReplicate(pairAlpha);
         const SIMDVector rimPosition = VectorMultiplyAdd(VectorSubtract(rimB, rimA), alpha, rimA);
         const SIMDVector innerPosition = VectorMultiplyAdd(VectorSubtract(innerB, innerA), alpha, innerA);
-        SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
-            VectorSubtract(rimPosition, innerPosition),
-            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        );
-        if(
-            !__hidden_deformable_surface_edit::FiniteVec3(normal)
-            || VectorGetX(Vector3LengthSq(normal)) <= Core::Geometry::s_FrameDirectionEpsilon
-        )
-            return false;
-
-        const SIMDVector accessoryPosition = VectorMultiplyAdd(
-            normal,
-            VectorReplicate(attachment.normalOffset()),
-            rimPosition
-        );
-        if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
-            return false;
-
-        const SIMDVector tangent = Core::Geometry::FrameResolveTangent(
-            normal,
+        return __hidden_deformable_surface_edit::TryStoreAccessoryAttachmentFrameTransform(
+            rimPosition,
+            innerPosition,
             VectorSubtract(rimB, rimA),
-            Core::Geometry::FrameFallbackTangent(normal)
+            attachment.normalOffset(),
+            attachment.uniformScale(),
+            outTransform
         );
-
-        StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
-        StoreFloat(
-            __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal),
-            &outTransform.rotation
-        );
-        const f32 uniformScale = attachment.uniformScale();
-        outTransform.scale = Float4(uniformScale, uniformScale, uniformScale);
-        return true;
     }
 
     SIMDVector rimCenter = VectorZero();
@@ -4155,38 +4178,14 @@ bool ResolveAccessoryAttachmentTransform(
     const f32 invWallVertexCount = 1.0f / static_cast<f32>(wallVertexCount);
     rimCenter = VectorScale(rimCenter, invWallVertexCount);
     innerCenter = VectorScale(innerCenter, invWallVertexCount);
-    SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
-        VectorSubtract(rimCenter, innerCenter),
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-    );
-    if(
-        !__hidden_deformable_surface_edit::FiniteVec3(normal)
-        || VectorGetX(Vector3LengthSq(normal)) <= Core::Geometry::s_FrameDirectionEpsilon
-    )
-        return false;
-
-    const SIMDVector accessoryPosition = VectorMultiplyAdd(
-        normal,
-        VectorReplicate(attachment.normalOffset()),
-        rimCenter
-    );
-    if(!__hidden_deformable_surface_edit::FiniteVec3(accessoryPosition))
-        return false;
-
-    const SIMDVector tangent = Core::Geometry::FrameResolveTangent(
-        normal,
+    return __hidden_deformable_surface_edit::TryStoreAccessoryAttachmentFrameTransform(
+        rimCenter,
+        innerCenter,
         VectorSubtract(firstRimPosition, rimCenter),
-        Core::Geometry::FrameFallbackTangent(normal)
+        attachment.normalOffset(),
+        attachment.uniformScale(),
+        outTransform
     );
-
-    StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
-    StoreFloat(
-        __hidden_deformable_surface_edit::RotationFromFrame(tangent, normal),
-        &outTransform.rotation
-    );
-    const f32 uniformScale = attachment.uniformScale();
-    outTransform.scale = Float4(uniformScale, uniformScale, uniformScale);
-    return true;
 }
 
 bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::Assets::AssetBytes& outBinary){
@@ -6089,3 +6088,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -19,7 +19,16 @@ void main(){
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, alpha, virtualSlice))
         discard;
 
-    atomicOr(g_CoverageWords[virtualSlice >> 5u], 1u << (virtualSlice & 31u));
+    uint virtualSlice0;
+    uint virtualSlice1;
+    float sliceWeight0;
+    float sliceWeight1;
+    nwbAvboitLinearVirtualSlicesFromDepth(gl_FragCoord.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
+
+    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
+        atomicOr(g_CoverageWords[virtualSlice0 >> 5u], 1u << (virtualSlice0 & 31u));
+    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
+        atomicOr(g_CoverageWords[virtualSlice1 >> 5u], 1u << (virtualSlice1 & 31u));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

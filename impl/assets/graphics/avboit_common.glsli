@@ -5,7 +5,11 @@
 #define NWB_AVBOIT_COMMON_GLSLI
 
 const uint NWB_AVBOIT_WARP_INVALID = 0xffffffffu;
+const uint NWB_AVBOIT_OVERFLOW_INVALID = 0xffffffffu;
+const uint NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD = 4u;
+const uint NWB_AVBOIT_EXTINCTION_BYTE_MASK = 0xffu;
 const float NWB_AVBOIT_ALPHA_EPSILON = 0.0001;
+const float NWB_AVBOIT_SPLAT_WEIGHT_EPSILON = 0.00001;
 
 layout(push_constant) uniform NwbAvboitDrawPushConstants{
     uvec4 nwbMeshDispatch;
@@ -40,7 +44,7 @@ uint nwbAvboitPhysicalSliceCount(){
     return g_NwbAvboitDraw.nwbAvboitVolume.y;
 }
 
-uint nwbAvboitVolumeVoxelCount(){
+uint nwbAvboitExtinctionWordCount(){
     return g_NwbAvboitDraw.nwbAvboitVolume.z;
 }
 
@@ -56,6 +60,10 @@ float nwbAvboitExtinctionFixedScale(){
     return max(g_NwbAvboitDraw.nwbAvboitParams.y, 1.0);
 }
 
+float nwbAvboitExtinctionSaturation(){
+    return float(NWB_AVBOIT_EXTINCTION_BYTE_MASK) / nwbAvboitExtinctionFixedScale();
+}
+
 float nwbAvboitSelfOcclusionSliceBias(){
     return max(g_NwbAvboitDraw.nwbAvboitParams.z, 0.0);
 }
@@ -65,12 +73,33 @@ uint nwbAvboitVirtualSliceFromDepth(float depth){
     return min(uint(floor(clampedDepth * float(nwbAvboitVirtualSliceCount()))), nwbAvboitVirtualSliceCount() - 1u);
 }
 
+void nwbAvboitLinearVirtualSlicesFromDepth(float depth, out uint outSlice0, out uint outSlice1, out float outWeight0, out float outWeight1){
+    const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
+    const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
+    const float slicePosition = clamp(depth * float(virtualSliceCount), 0.0, virtualSliceMax);
+    const float sliceBase = floor(slicePosition);
+
+    outSlice0 = uint(sliceBase);
+    outSlice1 = min(outSlice0 + 1u, virtualSliceCount - 1u);
+    outWeight1 = outSlice1 != outSlice0 ? slicePosition - sliceBase : 0.0;
+    outWeight0 = 1.0 - outWeight1;
+}
+
 uint nwbAvboitLowPixelIndex(uvec2 lowPixel){
     return lowPixel.y * nwbAvboitLowWidth() + lowPixel.x;
 }
 
-uint nwbAvboitVolumeIndex(uvec2 lowPixel, uint physicalSlice){
-    return (physicalSlice * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
+uint nwbAvboitPhysicalExtinctionWordCount(){
+    return (nwbAvboitPhysicalSliceCount() + NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u) / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
+}
+
+uint nwbAvboitExtinctionWordIndex(uvec2 lowPixel, uint physicalSlice){
+    const uint physicalWord = physicalSlice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
+    return (physicalWord * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
+}
+
+uint nwbAvboitExtinctionByteShift(uint physicalSlice){
+    return (physicalSlice & (NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u)) << 3u;
 }
 
 uvec2 nwbAvboitLowPixelFromFragCoord(vec2 fragCoord){
@@ -101,8 +130,8 @@ float nwbAvboitExtinctionFromAlpha(float alpha){
     return -log(max(1.0 - clamp(alpha, 0.0, 1.0), NWB_AVBOIT_ALPHA_EPSILON));
 }
 
-uint nwbAvboitPackExtinction(float extinction){
-    return uint(clamp(ceil(extinction * nwbAvboitExtinctionFixedScale()), 0.0, 65535.0));
+uint nwbAvboitPackExtinctionByte(float extinction){
+    return uint(clamp(ceil(extinction * nwbAvboitExtinctionFixedScale()), 0.0, float(NWB_AVBOIT_EXTINCTION_BYTE_MASK)));
 }
 
 bool nwbAvboitAcceptLowDepthFragment(texture2D opaqueDepth, sampler pointSampler, out float outAlpha, out uint outVirtualSlice){
@@ -118,8 +147,9 @@ bool nwbAvboitAcceptLowDepthFragment(texture2D opaqueDepth, sampler pointSampler
     return true;
 }
 
-float nwbAvboitUnpackExtinction(uint packedValue){
-    return float(packedValue) / nwbAvboitExtinctionFixedScale();
+float nwbAvboitUnpackExtinctionByte(uint packedWord, uint physicalSlice){
+    const uint packedByte = (packedWord >> nwbAvboitExtinctionByteShift(physicalSlice)) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
+    return float(packedByte) / nwbAvboitExtinctionFixedScale();
 }
 
 float nwbAvboitUnpackTransmittance(uint packedValue){

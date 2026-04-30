@@ -174,16 +174,18 @@ public:
         Core::Format::Enum lowRasterFormat = Core::Format::UNKNOWN;
         Core::Format::Enum accumColorFormat = Core::Format::UNKNOWN;
         Core::Format::Enum accumExtinctionFormat = Core::Format::UNKNOWN;
+        Core::Format::Enum transmittanceFormat = Core::Format::UNKNOWN;
         Core::TextureHandle lowRasterTarget;
         Core::TextureHandle accumColor;
         Core::TextureHandle accumExtinction;
+        Core::TextureHandle transmittanceTexture;
         Core::FramebufferHandle lowFramebuffer;
         Core::FramebufferHandle accumulationFramebuffer;
         Core::BufferHandle coverageBuffer;
         Core::BufferHandle depthWarpBuffer;
         Core::BufferHandle controlBuffer;
         Core::BufferHandle extinctionBuffer;
-        Core::BufferHandle transmittanceBuffer;
+        Core::BufferHandle extinctionOverflowBuffer;
         Core::BindingSetHandle occupancyBindingSet;
         Core::BindingSetHandle depthWarpBindingSet;
         Core::BindingSetHandle extinctionBindingSet;
@@ -201,16 +203,18 @@ public:
                 && lowRasterFormat != Core::Format::UNKNOWN
                 && accumColorFormat != Core::Format::UNKNOWN
                 && accumExtinctionFormat != Core::Format::UNKNOWN
+                && transmittanceFormat != Core::Format::UNKNOWN
                 && lowRasterTarget != nullptr
                 && accumColor != nullptr
                 && accumExtinction != nullptr
+                && transmittanceTexture != nullptr
                 && lowFramebuffer != nullptr
                 && accumulationFramebuffer != nullptr
                 && coverageBuffer != nullptr
                 && depthWarpBuffer != nullptr
                 && controlBuffer != nullptr
                 && extinctionBuffer != nullptr
-                && transmittanceBuffer != nullptr
+                && extinctionOverflowBuffer != nullptr
                 && occupancyBindingSet != nullptr
                 && depthWarpBindingSet != nullptr
                 && extinctionBindingSet != nullptr
@@ -394,6 +398,7 @@ private:
     Core::BindingLayoutHandle m_avboitIntegrateBindingLayout;
     Core::BindingLayoutHandle m_avboitAccumulateBindingLayout;
     Core::SamplerHandle m_deferredSampler;
+    Core::SamplerHandle m_avboitLinearSampler;
     Core::BufferHandle m_instanceBuffer;
     Core::BufferHandle m_materialParameterBuffer;
     Core::BufferHandle m_meshViewBuffer;

@@ -7,6 +7,7 @@
 #include "deformer_morph_payload.h"
 #include "deformer_skin_payload.h"
 #include "deformable_displacement_runtime.h"
+#include "deformable_runtime_names.h"
 #include "renderer_system.h"
 #include "shader_asset_loader.h"
 
@@ -739,27 +740,15 @@ bool DeformerSystem::ensureRuntimeResources(
     Name rangeBufferName = NAME_NONE;
     Name deltaBufferName = NAME_NONE;
     if(hasActiveMorphs){
-        rangeBufferName = DeriveName(
-            instance.source.name(),
-            StringFormat(":runtime_{}_revision_{}_deformer_ranges", instance.handle.value, instance.editRevision)
-        );
-        deltaBufferName = DeriveName(
-            instance.source.name(),
-            StringFormat(":runtime_{}_revision_{}_deformer_deltas", instance.handle.value, instance.editRevision)
-        );
+        rangeBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "deformer_ranges");
+        deltaBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "deformer_deltas");
     }
 
     Name skinBufferName = NAME_NONE;
     Name jointPaletteBufferName = NAME_NONE;
     if(hasActiveSkin){
-        skinBufferName = DeriveName(
-            instance.source.name(),
-            StringFormat(":runtime_{}_revision_{}_deformer_skin", instance.handle.value, instance.editRevision)
-        );
-        jointPaletteBufferName = DeriveName(
-            instance.source.name(),
-            StringFormat(":runtime_{}_revision_{}_deformer_joints", instance.handle.value, instance.editRevision)
-        );
+        skinBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "deformer_skin");
+        jointPaletteBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "deformer_joints");
     }
 
     if(

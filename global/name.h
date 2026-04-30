@@ -364,25 +364,44 @@ inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
 };
 
 
-template<typename CharT>
-[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
-    if(!baseName || suffix.empty())
-        return NAME_NONE;
+[[nodiscard]] inline bool BeginDerivedNameHash(const Name& baseName, NameHash& outDerivedHash){
+    outDerivedHash = {};
+    if(!baseName)
+        return false;
 
-    NameHash derivedHash = {};
     const NameHash& baseHash = baseName.hash();
     const u64 derivePrefixHash = UpdateFnv64(
         FNV64_OFFSET_BASIS,
         reinterpret_cast<const u8*>(NameDetail::s_DerivePrefix),
         sizeof(NameDetail::s_DerivePrefix) - 1u
     );
-    for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
-        derivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(derivePrefixHash, baseHash.qwords[lane]);
-    }
-    if(!NameDetail::UpdateCanonicalNameHashText(derivedHash, suffix))
+    for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane)
+        outDerivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(derivePrefixHash, baseHash.qwords[lane]);
+
+    return true;
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool UpdateDerivedNameHashText(NameHash& inOutDerivedHash, const BasicStringView<CharT> text){
+    return NameDetail::UpdateCanonicalNameHashText(inOutDerivedHash, text);
+}
+
+[[nodiscard]] inline Name FinishDerivedNameHash(const NameHash& derivedHash){
+    return Name(derivedHash);
+}
+
+template<typename CharT>
+[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
+    if(!baseName || suffix.empty())
         return NAME_NONE;
 
-    return Name(derivedHash);
+    NameHash derivedHash = {};
+    if(!BeginDerivedNameHash(baseName, derivedHash))
+        return NAME_NONE;
+    if(!UpdateDerivedNameHashText(derivedHash, suffix))
+        return NAME_NONE;
+
+    return FinishDerivedNameHash(derivedHash);
 }
 template<typename CharT>
 [[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicString<CharT>& suffix){

@@ -6,6 +6,7 @@ target_sources(nwb_ecs_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deformable_picking.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_picking.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_helpers.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_mesh_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_mesh_cache.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_surface_edit.cpp"

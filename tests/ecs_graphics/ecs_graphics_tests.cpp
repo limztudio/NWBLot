@@ -4,6 +4,7 @@
 
 #include <impl/ecs_graphics/deformable_debug_draw.h>
 #include <impl/ecs_graphics/deformable_picking.h>
+#include <impl/ecs_graphics/deformable_runtime_names.h>
 #include <impl/ecs_graphics/deformable_surface_edit.h>
 #include <impl/ecs_graphics/deformer_morph_payload.h>
 #include <impl/ecs_graphics/deformer_skin_payload.h>
@@ -47,6 +48,17 @@ using NWB::Tests::MakeSourceSample;
 
 static constexpr AStringView s_MockAccessoryGeometryPath = "project/meshes/mock_earring";
 static constexpr AStringView s_MockAccessoryMaterialPath = "project/materials/mat_test";
+
+
+static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& context){
+    const Name sourceName("project/meshes/deformable_source");
+    const AString suffix = NWB::Impl::BuildRuntimeResourceSuffix(42u, 17u, "deformer_ranges");
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, suffix == AStringView(":runtime_42_revision_17_deformer_ranges"));
+
+    const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "deformer_ranges");
+    const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_deformer_ranges"));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, builtName == formattedName);
+}
 
 
 static void* ECSTestAlloc(usize size){
@@ -6045,6 +6057,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::CapturingLogger logger;
         NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
+        __hidden_ecs_graphics_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
         __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
         __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsAmbiguousRestTriangle(context);
         __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(context);

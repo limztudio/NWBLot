@@ -4,6 +4,8 @@
 
 #include "deformable_runtime_mesh_cache.h"
 
+#include "deformable_runtime_names.h"
+
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
 #include <impl/assets_graphics/deformable_geometry_asset.h>
@@ -650,13 +652,7 @@ void DeformableRuntimeMeshCache::eraseUnusedSource(const Name& sourceName){
 }
 
 Name DeformableRuntimeMeshCache::deriveRuntimeBufferName(const DeformableRuntimeMeshInstance& instance, const AStringView suffix)const{
-    const AString derivedSuffix = StringFormat(
-        ":runtime_{}_revision_{}_{}",
-        instance.entity.id,
-        instance.editRevision,
-        suffix
-    );
-    return DeriveName(instance.source.name(), derivedSuffix);
+    return DeriveRuntimeResourceName(instance.source.name(), instance.entity.id, instance.editRevision, suffix);
 }
 
 bool DeformableRuntimeMeshCache::computePayloadBytes(

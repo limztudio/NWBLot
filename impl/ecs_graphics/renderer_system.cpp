@@ -4,6 +4,7 @@
 
 #include "renderer_system.h"
 
+#include "deformable_runtime_names.h"
 #include "shader_asset_loader.h"
 
 #include <core/ecs/world.h>
@@ -2619,12 +2620,7 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
         return false;
     }
 
-    const AString runtimeSuffix = StringFormat(
-        ":runtime_{}_revision_{}_deformed_draw",
-        instance.handle.value,
-        instance.editRevision
-    );
-    const Name geometryKey = DeriveName(instance.source.name(), runtimeSuffix);
+    const Name geometryKey = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "deformed_draw");
     if(!geometryKey){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive draw resource key for deformable runtime mesh '{}'"), instance.handle.value);
         return false;

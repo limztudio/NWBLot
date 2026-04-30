@@ -51,7 +51,6 @@ static constexpr f32 s_SurfaceRemeshClipEpsilon = 0.00001f;
 static constexpr f32 s_SurfaceRemeshAreaEpsilon = 0.0000001f;
 static constexpr f32 s_SurfaceRemeshVertexMergeDistanceSq = 0.0000000001f;
 static constexpr f32 s_SurfaceRemeshAttributeMergeDistanceSq = 0.00000001f;
-static constexpr f32 s_BottomCapTriangulationAreaEpsilon = 0.000001f;
 static constexpr Float4U s_HolePreviewColor = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
 
 struct HoleFrame{
@@ -1702,132 +1701,6 @@ void RestoreStableOriginalSurfaceAttributes(
     }
 }
 
-struct BottomCapPolygonVertex{
-    u32 vertex = 0u;
-    f32 x = 0.0f;
-    f32 y = 0.0f;
-};
-
-[[nodiscard]] f32 Cross2D(
-    const BottomCapPolygonVertex& a,
-    const BottomCapPolygonVertex& b,
-    const BottomCapPolygonVertex& c
-){
-    return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
-}
-
-[[nodiscard]] f32 DistanceSq2D(const BottomCapPolygonVertex& a, const BottomCapPolygonVertex& b){
-    const f32 dx = b.x - a.x;
-    const f32 dy = b.y - a.y;
-    return (dx * dx) + (dy * dy);
-}
-
-template<typename PolygonAllocator>
-[[nodiscard]] f32 SignedArea2D(const Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon){
-    f32 area = 0.0f;
-    for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
-        const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
-        area +=
-            (polygon[vertexIndex].x * polygon[nextVertexIndex].y)
-            - (polygon[vertexIndex].y * polygon[nextVertexIndex].x)
-        ;
-    }
-    return area * 0.5f;
-}
-
-[[nodiscard]] bool PointInsideTriangle2D(
-    const BottomCapPolygonVertex& point,
-    const BottomCapPolygonVertex& a,
-    const BottomCapPolygonVertex& b,
-    const BottomCapPolygonVertex& c,
-    const bool counterClockwise
-){
-    constexpr f32 epsilon = 0.0000001f;
-    const f32 ab = Cross2D(a, b, point);
-    const f32 bc = Cross2D(b, c, point);
-    const f32 ca = Cross2D(c, a, point);
-    return
-        counterClockwise
-            ? ab >= -epsilon && bc >= -epsilon && ca >= -epsilon
-            : ab <= epsilon && bc <= epsilon && ca <= epsilon
-    ;
-}
-
-template<typename PolygonAllocator>
-[[nodiscard]] bool RemoveDuplicateCapVertices(Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon){
-    constexpr f32 distanceEpsilonSq = 0.000000000001f;
-    bool removed = true;
-    while(removed && polygon.size() >= 3u){
-        removed = false;
-        for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
-            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
-            const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
-            const BottomCapPolygonVertex& previous = polygon[previousVertexIndex];
-            const BottomCapPolygonVertex& current = polygon[vertexIndex];
-            const BottomCapPolygonVertex& next = polygon[nextVertexIndex];
-            if(
-                DistanceSq2D(previous, current) <= distanceEpsilonSq
-                || DistanceSq2D(current, next) <= distanceEpsilonSq
-            ){
-                polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
-                removed = true;
-                break;
-            }
-        }
-    }
-    return polygon.size() >= 3u;
-}
-
-template<typename IndexAllocator>
-[[nodiscard]] bool AppendBottomCapTriangle(
-    const BottomCapPolygonVertex& a,
-    const BottomCapPolygonVertex& b,
-    const BottomCapPolygonVertex& c,
-    const bool counterClockwise,
-    Vector<u32, IndexAllocator>& outIndices
-){
-    if(a.vertex == b.vertex || a.vertex == c.vertex || b.vertex == c.vertex)
-        return false;
-
-    outIndices.push_back(a.vertex);
-    outIndices.push_back(counterClockwise ? b.vertex : c.vertex);
-    outIndices.push_back(counterClockwise ? c.vertex : b.vertex);
-    return true;
-}
-
-template<typename PolygonAllocator>
-[[nodiscard]] bool IsBottomCapEar(
-    const Vector<BottomCapPolygonVertex, PolygonAllocator>& polygon,
-    const usize vertexIndex,
-    const bool counterClockwise
-){
-    const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
-    const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
-    const BottomCapPolygonVertex& previous = polygon[previousVertexIndex];
-    const BottomCapPolygonVertex& current = polygon[vertexIndex];
-    const BottomCapPolygonVertex& next = polygon[nextVertexIndex];
-    const f32 cross = Cross2D(previous, current, next);
-    if(
-        counterClockwise
-            ? cross <= s_BottomCapTriangulationAreaEpsilon
-            : cross >= -s_BottomCapTriangulationAreaEpsilon
-    )
-        return false;
-
-    for(usize testVertexIndex = 0u; testVertexIndex < polygon.size(); ++testVertexIndex){
-        if(
-            testVertexIndex == previousVertexIndex
-            || testVertexIndex == vertexIndex
-            || testVertexIndex == nextVertexIndex
-        )
-            continue;
-
-        if(PointInsideTriangle2D(polygon[testVertexIndex], previous, current, next, counterClockwise))
-            return false;
-    }
-    return true;
-}
-
 template<typename VertexAllocator, typename RestVertexAllocator, typename IndexAllocator>
 [[nodiscard]] bool AppendBottomCapTriangles(
     const Vector<u32, VertexAllocator>& capVertices,
@@ -1843,89 +1716,54 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
         capVertices.size() < 3u
         || capVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || capVertices.size() - 2u > static_cast<usize>(Limit<u32>::s_Max)
-        || ((capVertices.size() - 2u) * 3u) > Limit<usize>::s_Max - outIndices.size()
     )
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<BottomCapPolygonVertex, Core::Alloc::ScratchAllocator<BottomCapPolygonVertex>> polygon{
-        Core::Alloc::ScratchAllocator<BottomCapPolygonVertex>(scratchArena)
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> capPositions{
+        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
     };
-    polygon.reserve(capVertices.size());
-    const SIMDVector origin = LoadRestVertexPosition(restVertices[capVertices[0u]]);
-    for(const u32 capVertex : capVertices){
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapVertices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapIndices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    capPositions.reserve(capVertices.size());
+    localCapVertices.reserve(capVertices.size());
+    for(usize capVertexIndex = 0u; capVertexIndex < capVertices.size(); ++capVertexIndex){
+        const u32 capVertex = capVertices[capVertexIndex];
         if(capVertex >= restVertices.size())
             return false;
 
-        const SIMDVector offset = VectorSubtract(LoadRestVertexPosition(restVertices[capVertex]), origin);
-        BottomCapPolygonVertex polygonVertex;
-        polygonVertex.vertex = capVertex;
-        polygonVertex.x = VectorGetX(Vector3Dot(offset, tangent));
-        polygonVertex.y = VectorGetX(Vector3Dot(offset, bitangent));
-        if(!IsFinite(polygonVertex.x) || !IsFinite(polygonVertex.y))
-            return false;
-
-        polygon.push_back(polygonVertex);
-    }
-
-    if(!RemoveDuplicateCapVertices(polygon))
-        return false;
-
-    const f32 signedArea = SignedArea2D(polygon);
-    if(!IsFinite(signedArea) || Abs(signedArea) <= s_BottomCapTriangulationAreaEpsilon)
-        return false;
-
-    const bool counterClockwise = signedArea > 0.0f;
-    const usize capTriangleCount = polygon.size() - 2u;
-    outIndices.reserve(outIndices.size() + capTriangleCount * 3u);
-
-    u32 addedTriangleCount = 0u;
-    while(polygon.size() > 3u){
-        bool clippedEar = false;
-        for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
-            if(!IsBottomCapEar(polygon, vertexIndex, counterClockwise))
-                continue;
-
-            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
-            const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
-            if(
-                !AppendBottomCapTriangle(
-                    polygon[previousVertexIndex],
-                    polygon[vertexIndex],
-                    polygon[nextVertexIndex],
-                    counterClockwise,
-                    outIndices
-                )
-            )
-                return false;
-
-            polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
-            addedTriangleCount += 1u;
-            clippedEar = true;
-            break;
-        }
-
-        if(!clippedEar)
-            return false;
+        capPositions.push_back(restVertices[capVertex].position);
+        localCapVertices.push_back(static_cast<u32>(capVertexIndex));
     }
 
     if(
-        !AppendBottomCapTriangle(
-            polygon[0u],
-            polygon[1u],
-            polygon[2u],
-            counterClockwise,
-            outIndices
+        !Core::Geometry::AppendSurfacePatchCapTriangles(
+            localCapVertices.data(),
+            localCapVertices.size(),
+            capPositions.data(),
+            capPositions.size(),
+            tangent,
+            bitangent,
+            localCapIndices,
+            outAddedTriangleCount
         )
     )
         return false;
-    addedTriangleCount += 1u;
 
-    if(addedTriangleCount != capTriangleCount || addedTriangleCount > static_cast<u32>(Limit<u32>::s_Max))
+    if(localCapIndices.size() > Limit<usize>::s_Max - outIndices.size())
         return false;
 
-    if(outAddedTriangleCount)
-        *outAddedTriangleCount = addedTriangleCount;
+    outIndices.reserve(outIndices.size() + localCapIndices.size());
+    for(const u32 localCapIndex : localCapIndices){
+        if(localCapIndex >= capVertices.size())
+            return false;
+
+        outIndices.push_back(capVertices[localCapIndex]);
+    }
     return true;
 }
 
@@ -3383,25 +3221,27 @@ struct HolePreviewPlan{
     if(mesh.vertices.size() > static_cast<usize>(Limit<u32>::s_Max) - positions.size())
         return false;
 
-    Vector<DeformableVertexRest, Core::Alloc::ScratchAllocator<DeformableVertexRest>> capRestVertices{
-        Core::Alloc::ScratchAllocator<DeformableVertexRest>(scratchArena)
-    };
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    capRestVertices.reserve(positions.size());
     capVertices.reserve(positions.size());
-    for(usize i = 0u; i < positions.size(); ++i){
-        DeformableVertexRest vertex;
-        vertex.position = positions[i];
-        capRestVertices.push_back(vertex);
+    for(usize i = 0u; i < positions.size(); ++i)
         capVertices.push_back(static_cast<u32>(i));
-    }
 
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> capIndices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    if(!AppendBottomCapTriangles(capVertices, capRestVertices, tangent, bitangent, capIndices, nullptr))
+    if(
+        !Core::Geometry::AppendSurfacePatchCapTriangles(
+            capVertices.data(),
+            capVertices.size(),
+            positions.data(),
+            positions.size(),
+            tangent,
+            bitangent,
+            capIndices
+        )
+    )
         return false;
 
     const u32 vertexBase = static_cast<u32>(mesh.vertices.size());

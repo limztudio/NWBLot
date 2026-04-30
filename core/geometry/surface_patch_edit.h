@@ -54,6 +54,28 @@ static_assert(IsTriviallyCopyable_V<SurfacePatchWallVertex>, "SurfacePatchWallVe
     Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outEdges
 );
 
+[[nodiscard]] bool AppendSurfacePatchCapTriangles(
+    const u32* capVertices,
+    usize capVertexCount,
+    const Float3U* positions,
+    usize positionCount,
+    const Float3U& tangent,
+    const Float3U& bitangent,
+    Vector<u32>& outIndices,
+    u32* outAddedTriangleCount = nullptr
+);
+
+[[nodiscard]] bool AppendSurfacePatchCapTriangles(
+    const u32* capVertices,
+    usize capVertexCount,
+    const Float3U* positions,
+    usize positionCount,
+    SIMDVector tangent,
+    SIMDVector bitangent,
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>>& outIndices,
+    u32* outAddedTriangleCount = nullptr
+);
+
 [[nodiscard]] bool BuildSurfacePatchWallVertices(
     const Vector<MeshTopologyEdge>& orderedBoundaryEdges,
     const Vector<Float3U>& positions,

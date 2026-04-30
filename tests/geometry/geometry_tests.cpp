@@ -822,6 +822,73 @@ static void TestRejectsMalformedSurfacePatchWallVertices(TestContext& context){
     );
 }
 
+static void TestAppendsSurfacePatchCapTriangles(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
+    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
+
+    const u32 capVertices[] = { 0u, 1u, 2u, 3u };
+    Vector<u32> indices;
+    u32 addedTriangleCount = 0u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::AppendSurfacePatchCapTriangles(
+            capVertices,
+            LengthOf(capVertices),
+            positions.data(),
+            positions.size(),
+            Float3U(1.0f, 0.0f, 0.0f),
+            Float3U(0.0f, 1.0f, 0.0f),
+            indices,
+            &addedTriangleCount
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, addedTriangleCount == 2u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices.size() == 6u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices[0u] == 3u && indices[1u] == 0u && indices[2u] == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, indices[3u] == 1u && indices[4u] == 2u && indices[5u] == 3u);
+}
+
+static void TestRejectsMalformedSurfacePatchCapTriangles(TestContext& context){
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
+    positions.push_back(Float3U(2.0f, 0.0f, 0.0f));
+
+    const u32 collinearVertices[] = { 0u, 1u, 2u };
+    Vector<u32> indices;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::AppendSurfacePatchCapTriangles(
+            collinearVertices,
+            LengthOf(collinearVertices),
+            positions.data(),
+            positions.size(),
+            Float3U(1.0f, 0.0f, 0.0f),
+            Float3U(0.0f, 1.0f, 0.0f),
+            indices
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
+
+    const u32 invalidVertices[] = { 0u, 1u, 3u };
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::AppendSurfacePatchCapTriangles(
+            invalidVertices,
+            LengthOf(invalidVertices),
+            positions.data(),
+            positions.size(),
+            Float3U(1.0f, 0.0f, 0.0f),
+            Float3U(0.0f, 1.0f, 0.0f),
+            indices
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
+}
+
 static void TestBuildsSingleQuadMeshlet(TestContext& context){
     Vector<Float3U> positions = MakeFlatQuadPositions();
     Vector<u32> indices = MakeQuadTriangleIndices();
@@ -1225,6 +1292,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_geometry_tests::TestRejectsMalformedSurfacePatchRingEdges(context);
         __hidden_geometry_tests::TestBuildsSurfacePatchWallVertices(context);
         __hidden_geometry_tests::TestRejectsMalformedSurfacePatchWallVertices(context);
+        __hidden_geometry_tests::TestAppendsSurfacePatchCapTriangles(context);
+        __hidden_geometry_tests::TestRejectsMalformedSurfacePatchCapTriangles(context);
         __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
         __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
         __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);

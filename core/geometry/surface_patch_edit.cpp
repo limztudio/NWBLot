@@ -24,6 +24,18 @@ namespace __hidden_geometry_surface_patch_edit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f32 s_CapTriangulationAreaEpsilon = 0.000001f;
+
+struct CapPolygonVertex{
+    u32 vertex = 0u;
+    f32 x = 0.0f;
+    f32 y = 0.0f;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool NormalizeFrameNormal(const SIMDVector inputNormal, SIMDVector& outNormal){
     if(!FrameValidDirection(inputNormal))
         return false;
@@ -134,6 +146,227 @@ bool BuildSurfacePatchRingEdgesImpl(
         edge.removedCount = 1u;
         outEdges.push_back(edge);
     }
+    return true;
+}
+
+[[nodiscard]] f32 Cross2D(
+    const CapPolygonVertex& a,
+    const CapPolygonVertex& b,
+    const CapPolygonVertex& c
+){
+    return ((b.x - a.x) * (c.y - a.y)) - ((b.y - a.y) * (c.x - a.x));
+}
+
+[[nodiscard]] f32 DistanceSq2D(const CapPolygonVertex& a, const CapPolygonVertex& b){
+    const f32 dx = b.x - a.x;
+    const f32 dy = b.y - a.y;
+    return (dx * dx) + (dy * dy);
+}
+
+template<typename PolygonAllocator>
+[[nodiscard]] f32 SignedArea2D(const Vector<CapPolygonVertex, PolygonAllocator>& polygon){
+    f32 area = 0.0f;
+    for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
+        const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+        area +=
+            (polygon[vertexIndex].x * polygon[nextVertexIndex].y)
+            - (polygon[vertexIndex].y * polygon[nextVertexIndex].x)
+        ;
+    }
+    return area * 0.5f;
+}
+
+[[nodiscard]] bool PointInsideTriangle2D(
+    const CapPolygonVertex& point,
+    const CapPolygonVertex& a,
+    const CapPolygonVertex& b,
+    const CapPolygonVertex& c,
+    const bool counterClockwise
+){
+    constexpr f32 epsilon = 0.0000001f;
+    const f32 ab = Cross2D(a, b, point);
+    const f32 bc = Cross2D(b, c, point);
+    const f32 ca = Cross2D(c, a, point);
+    return
+        counterClockwise
+            ? ab >= -epsilon && bc >= -epsilon && ca >= -epsilon
+            : ab <= epsilon && bc <= epsilon && ca <= epsilon
+    ;
+}
+
+template<typename PolygonAllocator>
+[[nodiscard]] bool RemoveDuplicateCapVertices(Vector<CapPolygonVertex, PolygonAllocator>& polygon){
+    constexpr f32 distanceEpsilonSq = 0.000000000001f;
+    bool removed = true;
+    while(removed && polygon.size() >= 3u){
+        removed = false;
+        for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
+            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
+            const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+            const CapPolygonVertex& previous = polygon[previousVertexIndex];
+            const CapPolygonVertex& current = polygon[vertexIndex];
+            const CapPolygonVertex& next = polygon[nextVertexIndex];
+            if(
+                DistanceSq2D(previous, current) <= distanceEpsilonSq
+                || DistanceSq2D(current, next) <= distanceEpsilonSq
+            ){
+                polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
+                removed = true;
+                break;
+            }
+        }
+    }
+    return polygon.size() >= 3u;
+}
+
+template<typename IndexAllocator>
+[[nodiscard]] bool AppendCapTriangle(
+    const CapPolygonVertex& a,
+    const CapPolygonVertex& b,
+    const CapPolygonVertex& c,
+    const bool counterClockwise,
+    Vector<u32, IndexAllocator>& outIndices
+){
+    if(a.vertex == b.vertex || a.vertex == c.vertex || b.vertex == c.vertex)
+        return false;
+
+    outIndices.push_back(a.vertex);
+    outIndices.push_back(counterClockwise ? b.vertex : c.vertex);
+    outIndices.push_back(counterClockwise ? c.vertex : b.vertex);
+    return true;
+}
+
+template<typename PolygonAllocator>
+[[nodiscard]] bool IsCapEar(
+    const Vector<CapPolygonVertex, PolygonAllocator>& polygon,
+    const usize vertexIndex,
+    const bool counterClockwise
+){
+    const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
+    const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+    const CapPolygonVertex& previous = polygon[previousVertexIndex];
+    const CapPolygonVertex& current = polygon[vertexIndex];
+    const CapPolygonVertex& next = polygon[nextVertexIndex];
+    const f32 cross = Cross2D(previous, current, next);
+    if(
+        counterClockwise
+            ? cross <= s_CapTriangulationAreaEpsilon
+            : cross >= -s_CapTriangulationAreaEpsilon
+    )
+        return false;
+
+    for(usize testVertexIndex = 0u; testVertexIndex < polygon.size(); ++testVertexIndex){
+        if(
+            testVertexIndex == previousVertexIndex
+            || testVertexIndex == vertexIndex
+            || testVertexIndex == nextVertexIndex
+        )
+            continue;
+
+        if(PointInsideTriangle2D(polygon[testVertexIndex], previous, current, next, counterClockwise))
+            return false;
+    }
+    return true;
+}
+
+template<typename IndexAllocator>
+[[nodiscard]] bool AppendSurfacePatchCapTrianglesImpl(
+    const u32* capVertices,
+    const usize capVertexCount,
+    const Float3U* positions,
+    const usize positionCount,
+    const SIMDVector tangent,
+    const SIMDVector bitangent,
+    Vector<u32, IndexAllocator>& outIndices,
+    u32* outAddedTriangleCount
+){
+    if(outAddedTriangleCount)
+        *outAddedTriangleCount = 0u;
+    if(
+        !capVertices
+        || !positions
+        || capVertexCount < 3u
+        || capVertexCount > static_cast<usize>(Limit<u32>::s_Max)
+        || capVertexCount - 2u > static_cast<usize>(Limit<u32>::s_Max)
+        || ((capVertexCount - 2u) * 3u) > Limit<usize>::s_Max - outIndices.size()
+    )
+        return false;
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<CapPolygonVertex, Core::Alloc::ScratchAllocator<CapPolygonVertex>> polygon{
+        Core::Alloc::ScratchAllocator<CapPolygonVertex>(scratchArena)
+    };
+    polygon.reserve(capVertexCount);
+    if(capVertices[0u] >= positionCount)
+        return false;
+
+    const SIMDVector origin = LoadFloat(positions[capVertices[0u]]);
+    for(usize capVertexIndex = 0u; capVertexIndex < capVertexCount; ++capVertexIndex){
+        const u32 capVertex = capVertices[capVertexIndex];
+        if(capVertex >= positionCount)
+            return false;
+
+        const SIMDVector offset = VectorSubtract(LoadFloat(positions[capVertex]), origin);
+        CapPolygonVertex polygonVertex;
+        polygonVertex.vertex = capVertex;
+        polygonVertex.x = VectorGetX(Vector3Dot(offset, tangent));
+        polygonVertex.y = VectorGetX(Vector3Dot(offset, bitangent));
+        if(!IsFinite(polygonVertex.x) || !IsFinite(polygonVertex.y))
+            return false;
+
+        polygon.push_back(polygonVertex);
+    }
+
+    if(!RemoveDuplicateCapVertices(polygon))
+        return false;
+
+    const f32 signedArea = SignedArea2D(polygon);
+    if(!IsFinite(signedArea) || Abs(signedArea) <= s_CapTriangulationAreaEpsilon)
+        return false;
+
+    const bool counterClockwise = signedArea > 0.0f;
+    const usize capTriangleCount = polygon.size() - 2u;
+    outIndices.reserve(outIndices.size() + capTriangleCount * 3u);
+
+    u32 addedTriangleCount = 0u;
+    while(polygon.size() > 3u){
+        bool clippedEar = false;
+        for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
+            if(!IsCapEar(polygon, vertexIndex, counterClockwise))
+                continue;
+
+            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
+            const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+            if(
+                !AppendCapTriangle(
+                    polygon[previousVertexIndex],
+                    polygon[vertexIndex],
+                    polygon[nextVertexIndex],
+                    counterClockwise,
+                    outIndices
+                )
+            )
+                return false;
+
+            polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
+            addedTriangleCount += 1u;
+            clippedEar = true;
+            break;
+        }
+
+        if(!clippedEar)
+            return false;
+    }
+
+    if(!AppendCapTriangle(polygon[0u], polygon[1u], polygon[2u], counterClockwise, outIndices))
+        return false;
+    addedTriangleCount += 1u;
+
+    if(addedTriangleCount != capTriangleCount || addedTriangleCount > static_cast<u32>(Limit<u32>::s_Max))
+        return false;
+
+    if(outAddedTriangleCount)
+        *outAddedTriangleCount = addedTriangleCount;
     return true;
 }
 
@@ -301,6 +534,50 @@ bool BuildSurfacePatchRingEdges(
     Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& outEdges
 ){
     return __hidden_geometry_surface_patch_edit::BuildSurfacePatchRingEdgesImpl(ringVertices, ringVertexCount, outEdges);
+}
+
+bool AppendSurfacePatchCapTriangles(
+    const u32* capVertices,
+    const usize capVertexCount,
+    const Float3U* positions,
+    const usize positionCount,
+    const Float3U& tangent,
+    const Float3U& bitangent,
+    Vector<u32>& outIndices,
+    u32* outAddedTriangleCount
+){
+    return __hidden_geometry_surface_patch_edit::AppendSurfacePatchCapTrianglesImpl(
+        capVertices,
+        capVertexCount,
+        positions,
+        positionCount,
+        LoadFloat(tangent),
+        LoadFloat(bitangent),
+        outIndices,
+        outAddedTriangleCount
+    );
+}
+
+bool AppendSurfacePatchCapTriangles(
+    const u32* capVertices,
+    const usize capVertexCount,
+    const Float3U* positions,
+    const usize positionCount,
+    const SIMDVector tangent,
+    const SIMDVector bitangent,
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>>& outIndices,
+    u32* outAddedTriangleCount
+){
+    return __hidden_geometry_surface_patch_edit::AppendSurfacePatchCapTrianglesImpl(
+        capVertices,
+        capVertexCount,
+        positions,
+        positionCount,
+        tangent,
+        bitangent,
+        outIndices,
+        outAddedTriangleCount
+    );
 }
 
 bool BuildSurfacePatchWallVertices(

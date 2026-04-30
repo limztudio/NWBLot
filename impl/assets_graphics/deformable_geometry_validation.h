@@ -108,68 +108,6 @@ namespace RestVertexPayloadFailure{
     return (VectorMoveMask(invalid) & activeMask) == 0u;
 }
 
-[[nodiscard]] inline bool ValidRestVertex(const DeformableVertexRest& vertex){
-    const SIMDVector position = LoadRestVertexPosition(vertex);
-    const SIMDVector normal = LoadRestVertexNormal(vertex);
-    const SIMDVector tangent = LoadRestVertexTangent(vertex);
-    const SIMDVector uv0 = LoadRestVertexUv0(vertex);
-    const SIMDVector color0 = LoadRestVertexColor0(vertex);
-    return
-        FiniteVector(position, 0x7u)
-        && FiniteVector(normal, 0x7u)
-        && FiniteVector(tangent, 0xFu)
-        && FiniteVector(uv0, 0x3u)
-        && FiniteVector(color0, 0xFu)
-    ;
-}
-
-[[nodiscard]] inline bool ValidRestVertexFrameImpl(const DeformableVertexRest& vertex, const bool requireUnitFrame){
-    const SIMDVector position = LoadRestVertexPosition(vertex);
-    const SIMDVector normal = LoadRestVertexNormal(vertex);
-    const SIMDVector tangent = LoadRestVertexTangent(vertex);
-    const SIMDVector uv0 = LoadRestVertexUv0(vertex);
-    const SIMDVector color0 = LoadRestVertexColor0(vertex);
-    if(
-        !FiniteVector(position, 0x7u)
-        || !FiniteVector(normal, 0x7u)
-        || !FiniteVector(tangent, 0xFu)
-        || !FiniteVector(uv0, 0x3u)
-        || !FiniteVector(color0, 0xFu)
-    )
-        return false;
-
-    const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
-    const f32 tangentLengthSquared = VectorGetX(Vector3LengthSq(tangent));
-    const f32 tangentHandedness = Abs(VectorGetW(tangent));
-    const f32 frameCrossLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(normal, tangent)));
-    if(
-        normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentHandedness <= s_TangentHandednessEpsilon
-        || Abs(tangentHandedness - 1.0f) > s_TangentHandednessUnitEpsilon
-        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
-    )
-        return false;
-
-    if(!requireUnitFrame)
-        return true;
-
-    const f32 frameDot = VectorGetX(Vector3Dot(normal, tangent));
-    return
-        Abs(normalLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
-        && Abs(tangentLengthSquared - 1.0f) <= s_RestFrameUnitLengthSquaredEpsilon
-        && Abs(frameDot) <= s_RestFrameOrthogonalityEpsilon
-    ;
-}
-
-[[nodiscard]] inline bool ValidRestVertexFrameBasis(const DeformableVertexRest& vertex){
-    return ValidRestVertexFrameImpl(vertex, false);
-}
-
-[[nodiscard]] inline bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
-    return ValidRestVertexFrameImpl(vertex, true);
-}
-
 [[nodiscard]] inline RestVertexPayloadFailure::Enum FindRestVertexPayloadFailure(const DeformableVertexRest& vertex){
     const SIMDVector position = LoadRestVertexPosition(vertex);
     const SIMDVector normal = LoadRestVertexNormal(vertex);
@@ -208,6 +146,10 @@ namespace RestVertexPayloadFailure{
         return RestVertexPayloadFailure::InvalidFrame;
 
     return RestVertexPayloadFailure::None;
+}
+
+[[nodiscard]] inline bool ValidRestVertexFrame(const DeformableVertexRest& vertex){
+    return FindRestVertexPayloadFailure(vertex) == RestVertexPayloadFailure::None;
 }
 
 [[nodiscard]] inline bool RebuildRestVertexTangentFrames(

@@ -196,24 +196,6 @@ using MorphDeltaLookup = HashMap<
     return position;
 }
 
-[[nodiscard]] SIMDVector TriangleCentroid(const DeformableRuntimeMeshInstance& instance, const u32 (&indices)[3]){
-    SIMDVector centroid = VectorAdd(
-        VectorAdd(LoadRestVertexPosition(instance.restVertices[indices[0]]), LoadRestVertexPosition(instance.restVertices[indices[1]])),
-        LoadRestVertexPosition(instance.restVertices[indices[2]])
-    );
-    return VectorScale(centroid, 1.0f / 3.0f);
-}
-
-[[nodiscard]] bool TriangleContainsEdge(const u32 (&indices)[3], const u32 a, const u32 b){
-    bool foundA = false;
-    bool foundB = false;
-    for(const u32 index : indices){
-        foundA = foundA || index == a;
-        foundB = foundB || index == b;
-    }
-    return foundA && foundB;
-}
-
 [[nodiscard]] bool BuildTriangleNormal(
     const DeformableRuntimeMeshInstance& instance,
     const u32 (&indices)[3],
@@ -2370,54 +2352,6 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     return PointInsideOperatorFootprint(operatorFootprint, x, y);
 }
 
-[[nodiscard]] bool PointInsideOperatorVolume(
-    const HoleFrame& frame,
-    const DeformableHoleEditParams& params,
-    const SIMDVector point
-){
-    const f32 radiusX = params.radius;
-    const f32 radiusY = params.radius * params.ellipseRatio;
-    if(radiusX <= s_Epsilon || radiusY <= s_Epsilon)
-        return false;
-
-    const SIMDVector offset = VectorSubtract(point, frame.center);
-    const f32 localX = VectorGetX(Vector3Dot(offset, frame.tangent)) / radiusX;
-    const f32 localY = VectorGetX(Vector3Dot(offset, frame.bitangent)) / radiusY;
-    if(!IsFinite(localX) || !IsFinite(localY))
-        return false;
-    if(params.depth <= s_Epsilon)
-        return false;
-
-    const f32 normalizedDepth = -VectorGetX(Vector3Dot(offset, frame.normal)) / params.depth;
-    if(
-        !IsFinite(normalizedDepth)
-        || normalizedDepth < -s_OperatorProfileDepthEpsilon
-        || normalizedDepth > 1.0f + s_OperatorProfileDepthEpsilon
-    )
-        return false;
-
-    Float2U center;
-    f32 scale = 1.0f;
-    if(!SampleOperatorProfile(params.operatorProfile, normalizedDepth, center, scale))
-        return false;
-    if(!IsFinite(scale) || scale < 0.0f)
-        return false;
-
-    if(scale <= s_OperatorProfileScaleEpsilon){
-        const f32 dx = localX - center.x;
-        const f32 dy = localY - center.y;
-        return ((dx * dx) + (dy * dy)) <= (s_OperatorProfileScaleEpsilon * s_OperatorProfileScaleEpsilon);
-    }
-
-    const Float2U topCenter = params.operatorProfile.samples[0u].center;
-    const f32 topX = topCenter.x + ((localX - center.x) / scale);
-    const f32 topY = topCenter.y + ((localY - center.y) / scale);
-    if(!IsFinite(topX) || !IsFinite(topY))
-        return false;
-
-    return PointInsideOperatorCrossSection(params.operatorFootprint, topX, topY);
-}
-
 [[nodiscard]] bool ApplySourceContinuationUvsToWallVertexPlan(
     const Vector<DeformableVertexRest>& restVertices,
     Core::Geometry::SurfacePatchWallVertex* wallVertices,
@@ -2537,35 +2471,6 @@ using SurfaceRemeshClipPolygonList = Vector<
     outBounds.maxY = firstPoint.y;
     for(u32 i = 1u; i < footprint.vertexCount; ++i){
         const Float2U& point = footprint.vertices[i];
-        if(!IsFinite(point.x) || !IsFinite(point.y))
-            return false;
-
-        outBounds.minX = Min(outBounds.minX, point.x);
-        outBounds.minY = Min(outBounds.minY, point.y);
-        outBounds.maxX = Max(outBounds.maxX, point.x);
-        outBounds.maxY = Max(outBounds.maxY, point.y);
-    }
-    return true;
-}
-
-[[nodiscard]] bool BuildSurfaceRemeshClipPolygonLocalBounds(
-    const SurfaceRemeshClipPolygon& polygon,
-    SurfaceRemeshLocalBounds& outBounds
-){
-    outBounds = SurfaceRemeshLocalBounds{};
-    if(polygon.empty())
-        return false;
-
-    const Float2U& firstPoint = polygon.front().local;
-    if(!IsFinite(firstPoint.x) || !IsFinite(firstPoint.y))
-        return false;
-
-    outBounds.minX = firstPoint.x;
-    outBounds.maxX = firstPoint.x;
-    outBounds.minY = firstPoint.y;
-    outBounds.maxY = firstPoint.y;
-    for(usize i = 1u; i < polygon.size(); ++i){
-        const Float2U& point = polygon[i].local;
         if(!IsFinite(point.x) || !IsFinite(point.y))
             return false;
 

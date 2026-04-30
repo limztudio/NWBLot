@@ -1007,6 +1007,38 @@ static bool FindSecondGridHoleTriangle(const NWB::Impl::DeformableRuntimeMeshIns
     return FindNearestUpFacingRestTriangle(instance, Float3U(1.0f, 0.0f, 0.0f), outTriangle);
 }
 
+struct RecordedTwoHoleAccessories{
+    RecordedHoleAccessory first;
+    RecordedHoleAccessory second;
+    u32 secondTriangle = Limit<u32>::s_Max;
+};
+
+static bool CommitTwoRecordedHoleAccessories(
+    TestContext& context,
+    NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    NWB::Impl::DeformableSurfaceEditState& state,
+    RecordedTwoHoleAccessories& outRecorded){
+    outRecorded = RecordedTwoHoleAccessories{};
+    const usize oldEditCount = state.edits.size();
+    const usize oldAccessoryCount = state.accessories.size();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHoleAccessory(instance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, outRecorded.first)
+    );
+    if(state.edits.size() != oldEditCount + 1u || state.accessories.size() != oldAccessoryCount + 1u)
+        return false;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, FindSecondGridHoleTriangle(instance, outRecorded.secondTriangle));
+    if(outRecorded.secondTriangle == Limit<u32>::s_Max)
+        return false;
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        CommitRecordedHoleAccessory(instance, outRecorded.secondTriangle, 0.48f, 0.25f, 0.16f, 0.18f, state, outRecorded.second)
+    );
+    return state.edits.size() == oldEditCount + 2u && state.accessories.size() == oldAccessoryCount + 2u;
+}
+
 static void CheckHoleEditUnchanged(
     TestContext& context,
     const NWB::Impl::DeformableRuntimeMeshInstance& instance,
@@ -4753,21 +4785,8 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
     ConfigureMinimalMilestonePayload(editedInstance);
     NWB::Impl::DeformableSurfaceEditState state;
 
-    RecordedHoleAccessory firstAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
-    );
-
-    u32 secondTriangle = Limit<u32>::s_Max;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, FindSecondGridHoleTriangle(editedInstance, secondTriangle));
-    RecordedHoleAccessory secondAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, secondTriangle, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 2u);
+    RecordedTwoHoleAccessories accessories;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitTwoRecordedHoleAccessories(context, editedInstance, state, accessories));
 
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance(6u, 4u);
     replayInstance.editRevision = 0u;
@@ -5063,28 +5082,17 @@ static void TestSurfaceEditRedoLastReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    RecordedHoleAccessory firstAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
-    );
-    const NWB::Impl::DeformableSurfaceEditId firstEditId = firstAccessory.editId;
-
-    u32 secondTriangle = Limit<u32>::s_Max;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, FindSecondGridHoleTriangle(editedInstance, secondTriangle));
-    RecordedHoleAccessory secondAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, secondTriangle, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
-    );
-    const NWB::Impl::DeformableSurfaceEditId secondEditId = secondAccessory.editId;
+    RecordedTwoHoleAccessories accessories;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitTwoRecordedHoleAccessories(context, editedInstance, state, accessories));
+    const NWB::Impl::DeformableSurfaceEditId firstEditId = accessories.first.editId;
+    const NWB::Impl::DeformableSurfaceEditId secondEditId = accessories.second.editId;
     NWB::Core::Scene::TransformComponent expectedSecondTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
             editedInstance,
             NWB::Impl::DeformablePickingInputs{},
-            secondAccessory.attachment,
+            accessories.second.attachment,
             expectedSecondTransform
         )
     );
@@ -5149,21 +5157,10 @@ static void TestSurfaceEditHealReplaysSurvivingEdits(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    RecordedHoleAccessory firstAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
-    );
-    const NWB::Impl::DeformableSurfaceEditId firstEditId = firstAccessory.editId;
-
-    u32 secondTriangle = Limit<u32>::s_Max;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, FindSecondGridHoleTriangle(editedInstance, secondTriangle));
-    RecordedHoleAccessory secondAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, secondTriangle, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
-    );
-    const NWB::Impl::DeformableSurfaceEditId secondEditId = secondAccessory.editId;
+    RecordedTwoHoleAccessories accessories;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitTwoRecordedHoleAccessories(context, editedInstance, state, accessories));
+    const NWB::Impl::DeformableSurfaceEditId firstEditId = accessories.first.editId;
+    const NWB::Impl::DeformableSurfaceEditId secondEditId = accessories.second.editId;
     const u32 oldSecondFirstWallVertex = state.accessories[1].firstWallVertex;
 
     NWB::Impl::DeformableSurfaceEditHealResult healResult;
@@ -5670,21 +5667,8 @@ static void TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(TestContext& c
     NWB::Impl::DeformableRuntimeMeshInstance editedInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditState state;
 
-    RecordedHoleAccessory firstAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
-    );
-
-    u32 secondTriangle = Limit<u32>::s_Max;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, FindSecondGridHoleTriangle(editedInstance, secondTriangle));
-    RecordedHoleAccessory secondAccessory;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        CommitRecordedHoleAccessory(editedInstance, secondTriangle, 0.48f, 0.25f, 0.16f, 0.18f, state, secondAccessory)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 2u);
+    RecordedTwoHoleAccessories accessories;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitTwoRecordedHoleAccessories(context, editedInstance, state, accessories));
 
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = cleanBase;
     replayInstance.handle.value = 744u;

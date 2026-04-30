@@ -287,24 +287,6 @@ bool BuildSurfacePatchLoopDistances(
     );
 }
 
-bool BuildSurfacePatchLoopDistances(
-    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
-    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
-    const Float3U& frameNormal,
-    f32* outLoopDistances,
-    const usize loopDistanceCount,
-    f32& outLoopLength
-){
-    return __hidden_geometry_surface_patch_edit::BuildSurfacePatchLoopDistancesImpl(
-        orderedBoundaryEdges,
-        positions,
-        frameNormal,
-        outLoopDistances,
-        loopDistanceCount,
-        outLoopLength
-    );
-}
-
 bool BuildSurfacePatchRingEdges(
     const u32* ringVertices,
     const usize ringVertexCount,
@@ -324,28 +306,6 @@ bool BuildSurfacePatchRingEdges(
 bool BuildSurfacePatchWallVertices(
     const Vector<MeshTopologyEdge>& orderedBoundaryEdges,
     const Vector<Float3U>& positions,
-    const MeshTopologyBoundaryLoopFrame& frame,
-    const Float3U& frameNormal,
-    const f32 depth,
-    const usize wallBandCount,
-    SurfacePatchWallVertex* outVertices,
-    const usize outVertexCount
-){
-    return __hidden_geometry_surface_patch_edit::BuildSurfacePatchWallVerticesImpl(
-        orderedBoundaryEdges,
-        positions,
-        frame,
-        LoadFloat(frameNormal),
-        depth,
-        wallBandCount,
-        outVertices,
-        outVertexCount
-    );
-}
-
-bool BuildSurfacePatchWallVertices(
-    const Vector<MeshTopologyEdge, Core::Alloc::ScratchAllocator<MeshTopologyEdge>>& orderedBoundaryEdges,
-    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,
     const Float3U& frameNormal,
     const f32 depth,

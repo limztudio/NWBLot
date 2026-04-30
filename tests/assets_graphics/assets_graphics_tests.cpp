@@ -949,10 +949,12 @@ static bool CookSingleGeometryMeta(
     );
 }
 
-static bool LoadCookedMinimalDeformable(
+template<typename AssetCodecT>
+static bool LoadCookedAsset(
     TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
+    const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
@@ -963,17 +965,31 @@ static bool LoadCookedMinimalDeformable(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
 
     NWB::Core::Assets::AssetBytes binary;
-    const bool loadedBinary = volumeSession.loadData(Name("project/characters/minimal_deformable"), binary);
+    const bool loadedBinary = volumeSession.loadData(assetName, binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
     if(!loadedBinary || binary.empty())
         return false;
 
-    NWB::Impl::DeformableGeometryAssetCodec codec;
-    const bool deserialized = codec.deserialize(Name("project/characters/minimal_deformable"), binary, outLoadedAsset);
+    AssetCodecT codec;
+    const bool deserialized = codec.deserialize(assetName, binary, outLoadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
     return deserialized && static_cast<bool>(outLoadedAsset);
+}
+
+static bool LoadCookedMinimalDeformable(
+    TestContext& context,
+    TestArena& testArena,
+    const Path& outputDirectory,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
+    return LoadCookedAsset<NWB::Impl::DeformableGeometryAssetCodec>(
+        context,
+        testArena,
+        outputDirectory,
+        Name("project/characters/minimal_deformable"),
+        outLoadedAsset
+    );
 }
 
 static bool LoadCookedMinimalGeometry(
@@ -981,43 +997,30 @@ static bool LoadCookedMinimalGeometry(
     TestArena& testArena,
     const Path& outputDirectory,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
-    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
-    if(!loadedVolume)
-        return false;
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
-
-    NWB::Core::Assets::AssetBytes binary;
-    const bool loadedBinary = volumeSession.loadData(Name("project/meshes/minimal_geometry"), binary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
-    if(!loadedBinary || binary.empty())
-        return false;
-
-    NWB::Impl::GeometryAssetCodec codec;
-    const bool deserialized = codec.deserialize(Name("project/meshes/minimal_geometry"), binary, outLoadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
-    return deserialized && static_cast<bool>(outLoadedAsset);
+    return LoadCookedAsset<NWB::Impl::GeometryAssetCodec>(
+        context,
+        testArena,
+        outputDirectory,
+        Name("project/meshes/minimal_geometry"),
+        outLoadedAsset
+    );
 }
 
-static bool CookAndLoadMinimalDeformable(
+using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
+using LoadCookedAssetFn = bool(*)(TestContext&, TestArena&, const Path&, UniquePtr<NWB::Core::Assets::IAsset>&);
+
+static bool CookAndLoadMinimalAsset(
     TestContext& context,
     TestArena& testArena,
     const AStringView metaText,
     const AStringView caseName,
     Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
+    CookSingleMetaFn cookSingleMeta,
+    LoadCookedAssetFn loadCookedAsset
+){
     Path outputDirectory;
-    const bool cooked = CookSingleDeformableMeta(
-        metaText,
-        caseName,
-        testArena,
-        outRoot,
-        outputDirectory
-    );
+    const bool cooked = cookSingleMeta(metaText, caseName, testArena, outRoot, outputDirectory);
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
     if(!cooked){
@@ -1026,12 +1029,32 @@ static bool CookAndLoadMinimalDeformable(
         return false;
     }
 
-    if(LoadCookedMinimalDeformable(context, testArena, outputDirectory, outLoadedAsset))
+    if(loadCookedAsset(context, testArena, outputDirectory, outLoadedAsset))
         return true;
 
     ErrorCode errorCode;
     static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
     return false;
+}
+
+static bool CookAndLoadMinimalDeformable(
+    TestContext& context,
+    TestArena& testArena,
+    const AStringView metaText,
+    const AStringView caseName,
+    Path& outRoot,
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
+){
+    return CookAndLoadMinimalAsset(
+        context,
+        testArena,
+        metaText,
+        caseName,
+        outRoot,
+        outLoadedAsset,
+        CookSingleDeformableMeta,
+        LoadCookedMinimalDeformable
+    );
 }
 
 static bool CookAndLoadMinimalGeometry(
@@ -1042,28 +1065,16 @@ static bool CookAndLoadMinimalGeometry(
     Path& outRoot,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
-    Path outputDirectory;
-    const bool cooked = CookSingleGeometryMeta(
+    return CookAndLoadMinimalAsset(
+        context,
+        testArena,
         metaText,
         caseName,
-        testArena,
         outRoot,
-        outputDirectory
+        outLoadedAsset,
+        CookSingleGeometryMeta,
+        LoadCookedMinimalGeometry
     );
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
-    if(!cooked){
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
-        return false;
-    }
-
-    if(LoadCookedMinimalGeometry(context, testArena, outputDirectory, outLoadedAsset))
-        return true;
-
-    ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(outRoot, errorCode));
-    return false;
 }
 
 static void CheckMinimalDeformableGeometryDefaults(

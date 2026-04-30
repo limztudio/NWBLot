@@ -3424,6 +3424,35 @@ template<typename EdgeVector, typename PositionVector>
     );
 }
 
+struct HolePreviewPlan{
+    HoleFrame frame;
+    Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> orderedBoundaryEdges;
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions;
+    u32 removedTriangleCount = 0u;
+
+    explicit HolePreviewPlan(Core::Alloc::ScratchArena<>& scratchArena)
+        : orderedBoundaryEdges(Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena))
+        , restPositions(Core::Alloc::ScratchAllocator<Float3U>(scratchArena))
+    {}
+};
+
+[[nodiscard]] bool BuildHolePreviewPlan(
+    const DeformableRuntimeMeshInstance& instance,
+    const DeformableHoleEditParams& params,
+    Core::Alloc::ScratchArena<>& scratchArena,
+    HolePreviewPlan& outPlan
+){
+    return BuildHolePreviewBoundaryPlan(
+        instance,
+        params,
+        outPlan.frame,
+        outPlan.orderedBoundaryEdges,
+        outPlan.restPositions,
+        outPlan.removedTriangleCount,
+        scratchArena
+    );
+}
+
 [[nodiscard]] bool AppendHolePreviewMeshVertex(
     DeformableHolePreviewMesh& mesh,
     const Float3U& position,
@@ -3714,26 +3743,13 @@ bool PreviewHole(
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    __hidden_deformable_surface_edit::HoleFrame frame;
-    Vector<
-        __hidden_deformable_surface_edit::EdgeRecord,
-        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>
-    > orderedBoundaryEdges{
-        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>(scratchArena)
-    };
-    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
-        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
-    };
-    u32 removedTriangleCount = 0u;
+    __hidden_deformable_surface_edit::HolePreviewPlan plan(scratchArena);
     if(
-        !__hidden_deformable_surface_edit::BuildHolePreviewBoundaryPlan(
+        !__hidden_deformable_surface_edit::BuildHolePreviewPlan(
             instance,
             params,
-            frame,
-            orderedBoundaryEdges,
-            restPositions,
-            removedTriangleCount,
-            scratchArena
+            scratchArena,
+            plan
         )
     )
         return false;
@@ -3742,20 +3758,20 @@ bool PreviewHole(
     if(
         !__hidden_deformable_surface_edit::BuildHolePreviewMeshFromPlan(
             params,
-            frame,
-            orderedBoundaryEdges,
-            restPositions,
-            removedTriangleCount,
+            plan.frame,
+            plan.orderedBoundaryEdges,
+            plan.restPositions,
+            plan.removedTriangleCount,
             previewMesh,
             scratchArena
         )
     )
         return false;
 
-    StoreFloat(VectorSetW(frame.center, 1.0f), &outPreview.center);
-    StoreFloat(VectorSetW(frame.normal, 0.0f), &outPreview.normal);
-    StoreFloat(VectorSetW(frame.tangent, 0.0f), &outPreview.tangent);
-    StoreFloat(VectorSetW(frame.bitangent, 0.0f), &outPreview.bitangent);
+    StoreFloat(VectorSetW(plan.frame.center, 1.0f), &outPreview.center);
+    StoreFloat(VectorSetW(plan.frame.normal, 0.0f), &outPreview.normal);
+    StoreFloat(VectorSetW(plan.frame.tangent, 0.0f), &outPreview.tangent);
+    StoreFloat(VectorSetW(plan.frame.bitangent, 0.0f), &outPreview.bitangent);
     outPreview.radius = params.radius;
     outPreview.ellipseRatio = params.ellipseRatio;
     outPreview.depth = params.depth;
@@ -3827,36 +3843,23 @@ bool BuildHolePreviewMesh(
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    __hidden_deformable_surface_edit::HoleFrame frame;
-    Vector<
-        __hidden_deformable_surface_edit::EdgeRecord,
-        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>
-    > orderedBoundaryEdges{
-        Core::Alloc::ScratchAllocator<__hidden_deformable_surface_edit::EdgeRecord>(scratchArena)
-    };
-    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
-        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
-    };
-    u32 removedTriangleCount = 0u;
+    __hidden_deformable_surface_edit::HolePreviewPlan plan(scratchArena);
     if(
-        !__hidden_deformable_surface_edit::BuildHolePreviewBoundaryPlan(
+        !__hidden_deformable_surface_edit::BuildHolePreviewPlan(
             instance,
             params,
-            frame,
-            orderedBoundaryEdges,
-            restPositions,
-            removedTriangleCount,
-            scratchArena
+            scratchArena,
+            plan
         )
     )
         return false;
 
     return __hidden_deformable_surface_edit::BuildHolePreviewMeshFromPlan(
         params,
-        frame,
-        orderedBoundaryEdges,
-        restPositions,
-        removedTriangleCount,
+        plan.frame,
+        plan.orderedBoundaryEdges,
+        plan.restPositions,
+        plan.removedTriangleCount,
         outMesh,
         scratchArena
     );

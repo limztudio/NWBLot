@@ -3041,7 +3041,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& outRestPositions,
     Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>>& outSurfaceTriangles,
     Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& outGeneratedVertices,
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& outAffectedTriangles,
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>>& outAffectedTriangleIndices,
     u32& outAffectedTriangleCount,
     Core::Alloc::ScratchArena<>& scratchArena
 ){
@@ -3050,7 +3050,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     outRestPositions.clear();
     outSurfaceTriangles.clear();
     outGeneratedVertices.clear();
-    outAffectedTriangles.clear();
+    outAffectedTriangleIndices.clear();
     outAffectedTriangleCount = 0u;
 
     if(!UseOperatorSurfaceRemesh(params) || !ValidateHoleOperatorShape(params.operatorFootprint, params.operatorProfile))
@@ -3076,8 +3076,6 @@ using SurfaceRemeshClipPolygonList = Vector<
     outRestPositions.reserve(instance.restVertices.size());
     for(const DeformableVertexRest& vertex : instance.restVertices)
         outRestPositions.push_back(vertex.position);
-
-    outAffectedTriangles.resize(triangleCount, 0u);
 
     using BoundaryEdgeMap = HashMap<
         u64,
@@ -3106,6 +3104,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     if(!BuildOperatorFootprintLocalBounds(params.operatorFootprint, footprintBounds))
         return false;
 
+    bool hitTriangleAffected = false;
     for(usize triangle = 0u; triangle < triangleCount; ++triangle){
         const usize indexBase = triangle * 3u;
         const u32 triangleIndices[3] = {
@@ -3245,8 +3244,10 @@ using SurfaceRemeshClipPolygonList = Vector<
             continue;
         }
 
-        outAffectedTriangles[triangle] = 1u;
+        const u32 affectedTriangleIndex = static_cast<u32>(triangle);
+        outAffectedTriangleIndices.push_back(affectedTriangleIndex);
         ++outAffectedTriangleCount;
+        hitTriangleAffected = hitTriangleAffected || affectedTriangleIndex == params.posedHit.triangle;
 
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> insideVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
@@ -3298,8 +3299,7 @@ using SurfaceRemeshClipPolygonList = Vector<
     if(
         outAffectedTriangleCount == 0u
         || outAffectedTriangleCount >= static_cast<u32>(triangleCount)
-        || params.posedHit.triangle >= outAffectedTriangles.size()
-        || outAffectedTriangles[params.posedHit.triangle] == 0u
+        || !hitTriangleAffected
         || outSurfaceTriangles.empty()
     )
         return false;
@@ -3414,8 +3414,8 @@ template<typename EdgeVector, typename PositionVector>
     Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>> generatedVertices{
         Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>(scratchArena)
     };
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> affectedTriangles{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> affectedTriangleIndices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
     return BuildOperatorSurfaceRemeshPlan(
         instance,
@@ -3425,7 +3425,7 @@ template<typename EdgeVector, typename PositionVector>
         outRestPositions,
         surfaceTriangles,
         generatedVertices,
-        affectedTriangles,
+        affectedTriangleIndices,
         outRemovedTriangleCount,
         scratchArena
     );
@@ -4665,8 +4665,8 @@ template<usize sourceCount>
     Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>> generatedVertices{
         Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>(scratchArena)
     };
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> affectedTriangles{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> affectedTriangleIndices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
     u32 affectedTriangleCount = 0u;
     if(
@@ -4678,7 +4678,7 @@ template<usize sourceCount>
             restPositions,
             surfaceTriangles,
             generatedVertices,
-            affectedTriangles,
+            affectedTriangleIndices,
             affectedTriangleCount,
             scratchArena
         )
@@ -4706,11 +4706,11 @@ template<usize sourceCount>
     };
 
     DeformableEditMaskFlags removedEditMaskFlags = 0u;
-    for(usize triangle = 0u; triangle < triangleCount; ++triangle){
-        if(affectedTriangles[triangle] == 0u)
-            continue;
+    for(const u32 affectedTriangleIndex : affectedTriangleIndices){
+        if(affectedTriangleIndex >= triangleCount)
+            return false;
 
-        const DeformableEditMaskFlags editMaskFlags = resolveValidatedEditMask(triangle);
+        const DeformableEditMaskFlags editMaskFlags = resolveValidatedEditMask(affectedTriangleIndex);
         if(!DeformableEditMaskAllowsCommit(editMaskFlags))
             return false;
 

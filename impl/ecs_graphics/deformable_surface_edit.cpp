@@ -3895,10 +3895,10 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     header.accessoryCount = static_cast<u64>(state.accessories.size());
     header.stringTableByteCount = static_cast<u64>(stringTable.size());
     AppendPOD(outBinary, header);
-    for(const DeformableSurfaceEditRecord& record : state.edits)
-        AppendPOD(outBinary, record);
-    for(const __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary& binaryRecord : accessoryRecords)
-        AppendPOD(outBinary, binaryRecord);
+    if(::AppendBinaryVectorPayload(outBinary, state.edits) != BinaryVectorPayloadFailure::None)
+        return false;
+    if(::AppendBinaryVectorPayload(outBinary, accessoryRecords) != BinaryVectorPayloadFailure::None)
+        return false;
     if(::AppendBinaryVectorPayload(outBinary, stringTable) != BinaryVectorPayloadFailure::None)
         return false;
     return outBinary.size() == binarySize;
@@ -3938,14 +3938,15 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
 
     const usize editRecordCount = static_cast<usize>(editCount);
     outState.edits.clear();
-    outState.edits.resize(editRecordCount);
+    if(::ReadBinaryVectorPayload(binary, cursor, editCount, outState.edits) != BinaryVectorPayloadFailure::None){
+        outState = DeformableSurfaceEditState{};
+        return false;
+    }
     for(usize i = 0u; i < editRecordCount; ++i){
-        DeformableSurfaceEditRecord record;
-        if(!ReadPOD(binary, cursor, record) || !__hidden_deformable_surface_edit::ValidEditRecord(record)){
+        if(!__hidden_deformable_surface_edit::ValidEditRecord(outState.edits[i])){
             outState = DeformableSurfaceEditState{};
             return false;
         }
-        outState.edits[i] = record;
     }
 
     const usize accessoryRecordCount = static_cast<usize>(accessoryCount);
@@ -3954,14 +3955,9 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
-    accessoryRecords.resize(accessoryRecordCount);
-    for(usize i = 0u; i < accessoryRecordCount; ++i){
-        AccessoryRecord binaryRecord;
-        if(!ReadPOD(binary, cursor, binaryRecord)){
-            outState = DeformableSurfaceEditState{};
-            return false;
-        }
-        accessoryRecords[i] = binaryRecord;
+    if(::ReadBinaryVectorPayload(binary, cursor, accessoryCount, accessoryRecords) != BinaryVectorPayloadFailure::None){
+        outState = DeformableSurfaceEditState{};
+        return false;
     }
 
     const usize stringTableOffset = cursor;

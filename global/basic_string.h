@@ -198,10 +198,9 @@ inline TString StringConvert(const In& raw){
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;
 #else
-    TString dst;
-    dst.reserve(src.size());
-    for(unsigned char ch : src)
-        dst.push_back(static_cast<wchar>(ch));
+    TString dst(src.size(), 0);
+    for(usize i = 0u; i < src.size(); ++i)
+        dst[i] = static_cast<wchar>(static_cast<unsigned char>(src[i]));
     return dst;
 #endif
 }

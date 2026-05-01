@@ -191,8 +191,18 @@ template<typename Container>
 
     BinaryDetail::RequireByteContainer<Container>();
     outBinary.reserve(outBinary.size() + byteCount);
-    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, &textLength, sizeof(textLength));
-    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, text.data(), textLength);
+    if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
+        const usize offset = outBinary.size();
+        outBinary.resize(offset + byteCount);
+        auto* const dst = outBinary.data() + offset;
+        NWB_MEMCPY(dst, byteCount, &textLength, sizeof(textLength));
+        if(textLength > 0u)
+            NWB_MEMCPY(dst + sizeof(textLength), byteCount - sizeof(textLength), text.data(), textLength);
+    }
+    else{
+        BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, &textLength, sizeof(textLength));
+        BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, text.data(), textLength);
+    }
     return true;
 }
 
@@ -373,8 +383,16 @@ template<typename Container>
     outOffset = static_cast<u32>(beginOffset);
     BinaryDetail::RequireByteContainer<Container>();
     outStringTable.reserve(reserveBytes);
-    BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
-    outStringTable.push_back(typename Container::value_type{});
+    if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
+        outStringTable.resize(reserveBytes);
+        if(!text.empty())
+            NWB_MEMCPY(outStringTable.data() + beginOffset, reserveBytes - beginOffset, text.data(), text.size());
+        outStringTable[reserveBytes - 1u] = typename Container::value_type{};
+    }
+    else{
+        BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
+        outStringTable.push_back(typename Container::value_type{});
+    }
     return true;
 }
 

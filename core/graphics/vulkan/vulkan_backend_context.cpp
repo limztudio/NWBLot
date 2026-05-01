@@ -373,32 +373,23 @@ bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
 
 void BackendContext::getEnabledInstanceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
-    extensions.resize(m_enabledExtensions.instance.size());
-    usize index = 0u;
-    for(const auto& ext : m_enabledExtensions.instance){
-        extensions[index] = ext;
-        ++index;
-    }
+    extensions.reserve(m_enabledExtensions.instance.size());
+    for(const auto& ext : m_enabledExtensions.instance)
+        extensions.push_back(ext);
 }
 
 void BackendContext::getEnabledDeviceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
-    extensions.resize(m_enabledExtensions.device.size());
-    usize index = 0u;
-    for(const auto& [name, _] : m_enabledExtensions.device){
-        extensions[index] = name;
-        ++index;
-    }
+    extensions.reserve(m_enabledExtensions.device.size());
+    for(const auto& [name, _] : m_enabledExtensions.device)
+        extensions.push_back(name);
 }
 
 void BackendContext::getEnabledLayers(Vector<AString>& layers)const{
     layers.clear();
-    layers.resize(m_enabledExtensions.layers.size());
-    usize index = 0u;
-    for(const auto& ext : m_enabledExtensions.layers){
-        layers[index] = ext;
-        ++index;
-    }
+    layers.reserve(m_enabledExtensions.layers.size());
+    for(const auto& ext : m_enabledExtensions.layers)
+        layers.push_back(ext);
 }
 
 ITexture* BackendContext::getCurrentBackBuffer(){

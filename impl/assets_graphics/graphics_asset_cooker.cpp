@@ -302,9 +302,8 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
         return false;
     }
 
-    outPaths.assetRoots.resize(environment.assetRoots.size());
-    for(usize assetRootIndex = 0u; assetRootIndex < environment.assetRoots.size(); ++assetRootIndex){
-        const Path& assetRoot = environment.assetRoots[assetRootIndex];
+    outPaths.assetRoots.reserve(environment.assetRoots.size());
+    for(const Path& assetRoot : environment.assetRoots){
         Path resolvedAssetRoot;
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(assetRoot), resolvedAssetRoot, errorCode)){
@@ -322,7 +321,7 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
             outPaths.assetRoots.clear();
             return false;
         }
-        outPaths.assetRoots[assetRootIndex] = Move(resolvedAssetRoot);
+        outPaths.assetRoots.push_back(Move(resolvedAssetRoot));
     }
 
     errorCode.clear();
@@ -827,7 +826,7 @@ static bool ParseMetadataFloatListField(
         return false;
 
     const auto& list = field->asList();
-    outValues.resize(list.size());
+    outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
         const AString label = MakeIndexedLabel(fieldName, i);
         alignas(16) f32 tuple[ComponentCount] = {};
@@ -843,7 +842,7 @@ static bool ParseMetadataFloatListField(
             element.z = tuple[2];
         if constexpr(ComponentCount >= 4u)
             element.w = tuple[3];
-        outValues[i] = element;
+        outValues.push_back(element);
     }
 
     if(outValues.empty()){
@@ -1061,12 +1060,13 @@ static bool BuildGeometryVertices(
     }
 
     outVertices.clear();
-    outVertices.resize(positions.size());
+    outVertices.reserve(positions.size());
     for(usize i = 0; i < positions.size(); ++i){
-        GeometryVertex& vertex = outVertices[i];
+        GeometryVertex vertex;
         vertex.position = positions[i];
         vertex.normal = normals[i];
         vertex.color0 = colors[i];
+        outVertices.push_back(vertex);
     }
     return true;
 }
@@ -1241,7 +1241,7 @@ static bool ParseU32ListField(
         return false;
 
     const auto& list = field->asList();
-    outValues.resize(list.size());
+    outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
         u32 value = 0;
         const AString label = MakeIndexedLabel(fieldName, i);
@@ -1249,7 +1249,7 @@ static bool ParseU32ListField(
             outValues.clear();
             return false;
         }
-        outValues[i] = value;
+        outValues.push_back(value);
     }
 
     return true;
@@ -1313,14 +1313,15 @@ static bool BuildDeformableRestVertices(
     }
 
     outVertices.clear();
-    outVertices.resize(positions.size());
+    outVertices.reserve(positions.size());
     for(usize i = 0; i < positions.size(); ++i){
-        DeformableVertexRest& vertex = outVertices[i];
+        DeformableVertexRest vertex;
         vertex.position = positions[i];
         vertex.normal = normals[i];
         vertex.tangent = tangents[i];
         vertex.uv0 = uv0[i];
         vertex.color0 = colors[i];
+        outVertices.push_back(vertex);
     }
     return true;
 }
@@ -1827,8 +1828,7 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
     }
 
     Vector<DeformableMorph> parsedMorphs;
-    parsedMorphs.resize(morphs->asMap().size());
-    usize morphIndex = 0u;
+    parsedMorphs.reserve(morphs->asMap().size());
     Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<u32> vertexIds{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
     ScratchVector<Float3U> deltaPositions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
@@ -1888,19 +1888,19 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
             );
             return false;
         }
-        morph.deltas.resize(vertexIds.size());
+        morph.deltas.reserve(vertexIds.size());
         for(usize i = 0; i < vertexIds.size(); ++i){
-            DeformableMorphDelta& delta = morph.deltas[i];
+            DeformableMorphDelta delta;
             delta.vertexId = vertexIds[i];
             delta.deltaPosition = deltaPositions[i];
             delta.deltaNormal = deltaNormals[i];
             delta.deltaTangent = deltaTangents[i];
+            morph.deltas.push_back(delta);
         }
-        parsedMorphs[morphIndex] = Move(morph);
-        ++morphIndex;
+        parsedMorphs.push_back(Move(morph));
     }
 
-    NWB_ASSERT(morphIndex == parsedMorphs.size());
+    NWB_ASSERT(parsedMorphs.size() == morphs->asMap().size());
     outMorphs = Move(parsedMorphs);
     return true;
 }
@@ -3223,9 +3223,9 @@ bool GraphicsAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     GraphicsCookEnvironment environment(m_arena);
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
-    environment.assetRoots.resize(options.assetRoots.size());
-    for(usize assetRootIndex = 0u; assetRootIndex < options.assetRoots.size(); ++assetRootIndex)
-        environment.assetRoots[assetRootIndex] = Path(options.assetRoots[assetRootIndex].c_str());
+    environment.assetRoots.reserve(options.assetRoots.size());
+    for(const AString& assetRoot : options.assetRoots)
+        environment.assetRoots.push_back(Path(assetRoot.c_str()));
     environment.outputDirectory = Path(options.outputDirectory.c_str());
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory.c_str());
 

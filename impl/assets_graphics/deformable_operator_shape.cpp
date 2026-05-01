@@ -254,44 +254,41 @@ template<typename PointAllocator>
     const f32 maxZ,
     const f32 topRadius,
     DeformableOperatorProfileSample& outSample,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>>& scratchPoints
 ){
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> points{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    points.reserve(vertices.size());
+    scratchPoints.clear();
 
     const f32 planeEpsilon = Max(s_OperatorFootprintPlaneEpsilon, Abs(maxZ - minZ) * 0.00001f);
     for(const GeometryVertex& vertex : vertices){
         if(Abs(vertex.position.z - z) > planeEpsilon)
             continue;
-        if(!AppendOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+        if(!AppendOperatorFootprintPoint(scratchPoints, vertex.position.x, vertex.position.y))
             return false;
     }
-    if(points.empty())
+    if(scratchPoints.empty())
         return false;
 
-    Sort(points.begin(), points.end(), [](const OperatorFootprintPoint& lhs, const OperatorFootprintPoint& rhs){
+    Sort(scratchPoints.begin(), scratchPoints.end(), [](const OperatorFootprintPoint& lhs, const OperatorFootprintPoint& rhs){
         if(lhs.x != rhs.x)
             return lhs.x < rhs.x;
         return lhs.y < rhs.y;
     });
-    CompactSortedOperatorFootprintPoints(points);
-    if(points.empty())
+    CompactSortedOperatorFootprintPoints(scratchPoints);
+    if(scratchPoints.empty())
         return false;
 
     f32 centerX = 0.0f;
     f32 centerY = 0.0f;
-    for(const OperatorFootprintPoint& point : points){
+    for(const OperatorFootprintPoint& point : scratchPoints){
         centerX += point.x;
         centerY += point.y;
     }
-    const f32 invPointCount = 1.0f / static_cast<f32>(points.size());
+    const f32 invPointCount = 1.0f / static_cast<f32>(scratchPoints.size());
     centerX *= invPointCount;
     centerY *= invPointCount;
 
     f32 radiusSquared = 0.0f;
-    for(const OperatorFootprintPoint& point : points){
+    for(const OperatorFootprintPoint& point : scratchPoints){
         const f32 dx = point.x - centerX;
         const f32 dy = point.y - centerY;
         radiusSquared = Max(radiusSquared, (dx * dx) + (dy * dy));
@@ -327,9 +324,8 @@ template<typename PointAllocator>
     Vector<f32, Core::Alloc::ScratchAllocator<f32>> zPlanes{
         Core::Alloc::ScratchAllocator<f32>(scratchArena)
     };
-    zPlanes.resize(vertices.size());
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        const GeometryVertex& vertex = vertices[vertexIndex];
+    zPlanes.reserve(vertices.size());
+    for(const GeometryVertex& vertex : vertices){
         if(!FiniteOperatorPosition(vertex.position))
             return false;
         if(!foundPosition){
@@ -341,7 +337,7 @@ template<typename PointAllocator>
             minZ = Min(minZ, vertex.position.z);
             maxZ = Max(maxZ, vertex.position.z);
         }
-        zPlanes[vertexIndex] = vertex.position.z;
+        zPlanes.push_back(vertex.position.z);
     }
     if(!foundPosition)
         return false;
@@ -366,6 +362,11 @@ template<typename PointAllocator>
     }
     zPlanes.resize(uniquePlaneCount);
 
+    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> samplePoints{
+        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
+    };
+    samplePoints.reserve(vertices.size());
+
     DeformableOperatorProfileSample topSample;
     if(
         !BuildOperatorProfilePlaneSample(
@@ -375,7 +376,7 @@ template<typename PointAllocator>
             maxZ,
             1.0f,
             topSample,
-            scratchArena
+            samplePoints
         )
         || topSample.scale <= s_OperatorProfileScaleEpsilon
     )
@@ -399,7 +400,10 @@ template<typename PointAllocator>
             return false;
 
         DeformableOperatorProfileSample sample;
-        if(
+        if(sampleIndex == 0u){
+            sample = topSample;
+        }
+        else if(
             !BuildOperatorProfilePlaneSample(
                 vertices,
                 zPlanes[planeIndex],
@@ -407,7 +411,7 @@ template<typename PointAllocator>
                 maxZ,
                 topRadius,
                 sample,
-                scratchArena
+                samplePoints
             )
         )
             return false;

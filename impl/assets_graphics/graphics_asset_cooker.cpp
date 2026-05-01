@@ -302,8 +302,9 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
         return false;
     }
 
-    outPaths.assetRoots.reserve(environment.assetRoots.size());
-    for(const Path& assetRoot : environment.assetRoots){
+    outPaths.assetRoots.resize(environment.assetRoots.size());
+    for(usize assetRootIndex = 0u; assetRootIndex < environment.assetRoots.size(); ++assetRootIndex){
+        const Path& assetRoot = environment.assetRoots[assetRootIndex];
         Path resolvedAssetRoot;
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, PathToString(assetRoot), resolvedAssetRoot, errorCode)){
@@ -318,9 +319,10 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
                     , PathToString<tchar>(assetRoot)
                 );
             }
+            outPaths.assetRoots.clear();
             return false;
         }
-        outPaths.assetRoots.push_back(Move(resolvedAssetRoot));
+        outPaths.assetRoots[assetRootIndex] = Move(resolvedAssetRoot);
     }
 
     errorCode.clear();
@@ -825,12 +827,14 @@ static bool ParseMetadataFloatListField(
         return false;
 
     const auto& list = field->asList();
-    outValues.reserve(list.size());
+    outValues.resize(list.size());
     for(usize i = 0; i < list.size(); ++i){
         const AString label = MakeIndexedLabel(fieldName, i);
-        f32 tuple[ComponentCount] = {};
-        if(!ParseMetadataF32Tuple(nwbFilePath, list[i], metaKind, label, tuple))
+        alignas(16) f32 tuple[ComponentCount] = {};
+        if(!ParseMetadataF32Tuple(nwbFilePath, list[i], metaKind, label, tuple)){
+            outValues.clear();
             return false;
+        }
 
         ElementT element;
         element.x = tuple[0];
@@ -839,7 +843,7 @@ static bool ParseMetadataFloatListField(
             element.z = tuple[2];
         if constexpr(ComponentCount >= 4u)
             element.w = tuple[3];
-        outValues.push_back(element);
+        outValues[i] = element;
     }
 
     if(outValues.empty()){
@@ -964,19 +968,20 @@ static bool ParseGeometryClassField(
 }
 
 template<typename IndexVectorT>
-static bool AppendMetadataIndexRecursive(
+static bool FillMetadataIndexRecursive(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const tchar* metaKind,
     const AStringView label,
     const bool use32BitIndices,
-    IndexVectorT& outIndices
+    IndexVectorT& outIndices,
+    usize& inOutIndex
 ){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0; i < list.size(); ++i){
             const AString childLabel = MakeIndexedLabel(label, i);
-            if(!AppendMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices))
+            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices, inOutIndex))
                 return false;
         }
         return true;
@@ -994,7 +999,9 @@ static bool AppendMetadataIndexRecursive(
         return false;
     }
 
-    outIndices.push_back(index);
+    using IndexValue = typename IndexVectorT::value_type;
+    outIndices[inOutIndex] = static_cast<IndexValue>(index);
+    ++inOutIndex;
     return true;
 }
 
@@ -1021,9 +1028,13 @@ static bool ParseMetadataIndexField(
         return false;
     }
 
-    outIndices.reserve(indexCount);
-    if(!AppendMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices))
+    outIndices.resize(indexCount);
+    usize writeIndex = 0u;
+    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices, writeIndex)){
+        outIndices.clear();
         return false;
+    }
+    NWB_ASSERT(writeIndex == indexCount);
     if(outIndices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;
@@ -1474,27 +1485,15 @@ static bool ParseInverseBindMatrices(
 
         DeformableJointMatrix matrix{};
         const auto& columns = matrixValue.asList();
-        f32 column[4] = {};
-        AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
-        AString columnLabel = MakeIndexedLabel(label, 0u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[0u], s_DeformableGeometryMetaKind, columnLabel, column))
-            return false;
-        matrix.rows[0] = Float4(column[0u], column[1u], column[2u], column[3u]);
-
-        columnLabel = MakeIndexedLabel(label, 1u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[1u], s_DeformableGeometryMetaKind, columnLabel, column))
-            return false;
-        matrix.rows[1] = Float4(column[0u], column[1u], column[2u], column[3u]);
-
-        columnLabel = MakeIndexedLabel(label, 2u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[2u], s_DeformableGeometryMetaKind, columnLabel, column))
-            return false;
-        matrix.rows[2] = Float4(column[0u], column[1u], column[2u], column[3u]);
-
-        columnLabel = MakeIndexedLabel(label, 3u);
-        if(!ParseMetadataF32Tuple(nwbFilePath, columns[3u], s_DeformableGeometryMetaKind, columnLabel, column))
-            return false;
-        matrix.rows[3] = Float4(column[0u], column[1u], column[2u], column[3u]);
+        const AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
+        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
+            alignas(16) f32 column[4] = {};
+            const AString columnLabel = MakeIndexedLabel(label, columnIndex);
+            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_DeformableGeometryMetaKind, columnLabel, column)){
+                return false;
+            }
+            matrix.rows[columnIndex] = Float4(column[0u], column[1u], column[2u], column[3u]);
+        }
 
         if(!DeformableValidation::ValidAffineJointMatrix(matrix)){
             NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
@@ -1827,7 +1826,9 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         return false;
     }
 
-    outMorphs.reserve(morphs->asMap().size());
+    Vector<DeformableMorph> parsedMorphs;
+    parsedMorphs.resize(morphs->asMap().size());
+    usize morphIndex = 0u;
     Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<u32> vertexIds{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
     ScratchVector<Float3U> deltaPositions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
@@ -1895,9 +1896,12 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
             delta.deltaNormal = deltaNormals[i];
             delta.deltaTangent = deltaTangents[i];
         }
-        outMorphs.push_back(Move(morph));
+        parsedMorphs[morphIndex] = Move(morph);
+        ++morphIndex;
     }
 
+    NWB_ASSERT(morphIndex == parsedMorphs.size());
+    outMorphs = Move(parsedMorphs);
     return true;
 }
 
@@ -2563,7 +2567,7 @@ static bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlanned
     return true;
 }
 
-static bool ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntries, Vector<Core::ShaderArchive::Record>& outShaderIndexRecords){
+static bool ResizeShaderIndexRecords(const PreparedShaderVector& preparedEntries, Vector<Core::ShaderArchive::Record>& outShaderIndexRecords){
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
@@ -2577,7 +2581,8 @@ static bool ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntrie
         return false;
     }
 
-    outShaderIndexRecords.reserve(static_cast<usize>(shaderRecordCount));
+    outShaderIndexRecords.clear();
+    outShaderIndexRecords.resize(static_cast<usize>(shaderRecordCount));
     return true;
 }
 
@@ -2901,6 +2906,7 @@ static bool AppendPreparedShadersToVolume(
     Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{
         Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)
     };
+    usize shaderRecordIndex = 0u;
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
@@ -2991,10 +2997,19 @@ static bool AppendPreparedShadersToVolume(
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
             record.virtualPathHash = virtualPathHash;
-            outShaderIndexRecords.push_back(Move(record));
+            if(shaderRecordIndex >= outShaderIndexRecords.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count exceeded prepared capacity"));
+                return false;
+            }
+            outShaderIndexRecords[shaderRecordIndex] = Move(record);
+            ++shaderRecordIndex;
         }
     }
 
+    if(shaderRecordIndex != outShaderIndexRecords.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count mismatch after cook"));
+        return false;
+    }
     return true;
 }
 
@@ -3291,7 +3306,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
 
     Vector<Core::ShaderArchive::Record> shaderIndexRecords;
-    if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords))
+    if(!__hidden_graphics_asset_cooker::ResizeShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords))
         return false;
 
     __hidden_graphics_asset_cooker::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};

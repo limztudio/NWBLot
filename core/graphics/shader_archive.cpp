@@ -296,7 +296,9 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
         return false;
     }
 
-    outRecords.reserve(header.recordCount);
+    Vector<Record> parsedRecords;
+    parsedRecords.resize(header.recordCount);
+    const Record* previousRecord = nullptr;
     for(u32 i = 0; i < header.recordCount; ++i){
         __hidden_shader_archive::RecordHeaderDisk recordHeader{};
         if(!ReadPOD(binary, cursor, recordHeader)){
@@ -322,19 +324,19 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: empty virtual path hash at record {}"), i);
             return false;
         }
-        if(!outRecords.empty()){
-            const Record& previous = outRecords.back();
-            if(__hidden_shader_archive::LessRecord(record, previous)){
+        if(previousRecord){
+            if(__hidden_shader_archive::LessRecord(record, *previousRecord)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: records are out of order at index {}"), i);
                 return false;
             }
-            if(__hidden_shader_archive::SameShaderVariantStage(previous, record)){
+            if(__hidden_shader_archive::SameShaderVariantStage(*previousRecord, record)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: duplicate shader+variant+stage key at record {}"), i);
                 return false;
             }
         }
 
-        outRecords.push_back(Move(record));
+        parsedRecords[i] = Move(record);
+        previousRecord = &parsedRecords[i];
     }
 
     if(cursor != binary.size()){
@@ -342,6 +344,7 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
         return false;
     }
 
+    outRecords = Move(parsedRecords);
     return true;
 }
 

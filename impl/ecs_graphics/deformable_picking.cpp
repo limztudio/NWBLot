@@ -165,9 +165,10 @@ template<typename SourceJointVector, typename PreparedJointPaletteVector>
     if(!ValidDeformableSkinningMode(skinningMode))
         return false;
 
-    outJointPalette.reserve(sourceJoints.size());
+    const usize jointCount = sourceJoints.size();
+    outJointPalette.reserve(jointCount);
     const bool requiresDualQuaternion = skinningMode == DeformableSkinningMode::DualQuaternion;
-    for(usize jointIndex = 0u; jointIndex < sourceJoints.size(); ++jointIndex){
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         PreparedJointPaletteEntry entry;
         if(
             !DeformableRuntime::ResolveSkinningJointMatrix(

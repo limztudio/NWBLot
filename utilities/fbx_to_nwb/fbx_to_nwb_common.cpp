@@ -19,7 +19,10 @@ AString Trim(AString value){
     if(trimmed.size() == value.size())
         return value;
 
-    return AString(trimmed);
+    const usize trimBegin = static_cast<usize>(trimmed.data() - value.data());
+    value.erase(trimBegin + trimmed.size());
+    value.erase(0u, trimBegin);
+    return value;
 }
 
 AString UnquotePath(AString value){
@@ -28,7 +31,8 @@ AString UnquotePath(AString value){
         const char first = value.front();
         const char last = value.back();
         if((first == '"' && last == '"') || (first == '\'' && last == '\'')){
-            value = value.substr(1u, value.size() - 2u);
+            value.erase(value.size() - 1u);
+            value.erase(0u, 1u);
         }
     }
     return value;

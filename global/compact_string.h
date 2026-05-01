@@ -76,8 +76,10 @@ public:
             return false;
 
         for(usize i = 0; i < textSize; ++i){
-            if(text[i] == '\0')
+            if(text[i] == '\0'){
+                clear();
                 return false;
+            }
             m_storage[i] = Canonicalize(text[i]);
         }
         m_size = static_cast<u8>(textSize);

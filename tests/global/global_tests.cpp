@@ -78,6 +78,16 @@ static void TestRejectedStringReadsDoNotAdvanceCursor(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, compact.view() == AStringView("unchanged"));
 }
 
+static void TestRejectedCompactStringAssignResetsText(TestContext& context){
+    CompactString compact("seed");
+    const char textWithNull[] = { 'a', '\0', 'b' };
+
+    NWB_GLOBAL_TEST_CHECK(context, !compact.assign(AStringView(textWithNull, sizeof(textWithNull))));
+    NWB_GLOBAL_TEST_CHECK(context, compact.empty());
+    NWB_GLOBAL_TEST_CHECK(context, compact.view().empty());
+    NWB_GLOBAL_TEST_CHECK(context, compact.c_str()[0] == '\0');
+}
+
 static void TestStringTableText(TestContext& context){
     Vector<u8> stringTable;
     u32 alphaOffset = Limit<u32>::s_Max;
@@ -170,6 +180,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_global_tests::TestPodRoundTrip(context);
         __hidden_global_tests::TestLengthPrefixedStringRoundTrip(context);
         __hidden_global_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
+        __hidden_global_tests::TestRejectedCompactStringAssignResetsText(context);
         __hidden_global_tests::TestStringTableText(context);
         __hidden_global_tests::TestInvalidStringTableReads(context);
         __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);

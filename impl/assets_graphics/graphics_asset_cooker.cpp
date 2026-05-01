@@ -2856,19 +2856,20 @@ static bool PrepareShaderEntriesForCook(
         if(!emitMeshComputeShadow)
             continue;
 
+        const PreparedShaderEntry& meshShaderEntry = outPreparedPlan.preparedEntries.back();
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
-        if(!BuildMeshComputeShadowEntry(outPreparedPlan.preparedEntries.back().entry, meshComputeShadowEntry.entry)){
+        if(!BuildMeshComputeShadowEntry(meshShaderEntry.entry, meshComputeShadowEntry.entry)){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build mesh-compute shadow entry for '{}'")
-                , StringConvert(outPreparedPlan.preparedEntries.back().entry.name)
+                , StringConvert(meshShaderEntry.entry.name)
             );
             return false;
         }
 
-        meshComputeShadowEntry.sourcePath = outPreparedPlan.preparedEntries.back().sourcePath;
-        meshComputeShadowEntry.includeDirectories = outPreparedPlan.preparedEntries.back().includeDirectories;
-        meshComputeShadowEntry.dependencies = outPreparedPlan.preparedEntries.back().dependencies;
-        meshComputeShadowEntry.dependencyChecksum = outPreparedPlan.preparedEntries.back().dependencyChecksum;
-        meshComputeShadowEntry.variantCount = outPreparedPlan.preparedEntries.back().variantCount;
+        meshComputeShadowEntry.sourcePath = meshShaderEntry.sourcePath;
+        meshComputeShadowEntry.includeDirectories = meshShaderEntry.includeDirectories;
+        meshComputeShadowEntry.dependencies = meshShaderEntry.dependencies;
+        meshComputeShadowEntry.dependencyChecksum = meshShaderEntry.dependencyChecksum;
+        meshComputeShadowEntry.variantCount = meshShaderEntry.variantCount;
 
         if(!AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
@@ -2990,6 +2991,56 @@ static bool AppendPreparedShadersToVolume(
     return true;
 }
 
+static bool RegisterVolumeAssetPath(
+    const tchar* assetKind,
+    const Name& virtualPath,
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
+){
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: invalid {} virtual path"), assetKind);
+        return false;
+    }
+
+    const NameHash virtualPathHash = virtualPath.hash();
+    if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate {} virtual path '{}'")
+            , assetKind
+            , StringConvert(virtualPath.c_str())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool PushSerializedAssetToVolume(
+    const tchar* assetKind,
+    const Name& virtualPath,
+    const Core::Assets::IAsset& asset,
+    const Core::Assets::IAssetCodec& codec,
+    Core::Filesystem::VolumeSession& volumeSession,
+    Core::Assets::AssetBytes& scratchBinary
+){
+    scratchBinary.clear();
+    if(!codec.serialize(asset, scratchBinary)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize {} '{}'")
+            , assetKind
+            , StringConvert(virtualPath.c_str())
+        );
+        return false;
+    }
+
+    if(!volumeSession.pushDataDeferred(virtualPath, scratchBinary)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push {} '{}'")
+            , assetKind
+            , StringConvert(virtualPath.c_str())
+        );
+        return false;
+    }
+
+    return true;
+}
+
 static bool AppendMaterialAssetsToVolume(
     const MaterialEntryVector& materialEntries,
     Core::Filesystem::VolumeSession& volumeSession,
@@ -2999,13 +3050,8 @@ static bool AppendMaterialAssetsToVolume(
     Vector<u8> materialBinary;
 
     for(const MaterialEntry& materialEntry : materialEntries){
-        const NameHash materialVirtualPathHash = materialEntry.virtualPath.hash();
-        if(!inOutSeenVirtualPathHashes.insert(materialVirtualPathHash).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate material virtual path '{}'")
-                , StringConvert(materialEntry.virtualPath.c_str())
-            );
+        if(!RegisterVolumeAssetPath(NWB_TEXT("material"), materialEntry.virtualPath, inOutSeenVirtualPathHashes))
             return false;
-        }
 
         Material cookedMaterial(materialEntry.virtualPath);
         cookedMaterial.setShaderVariant(materialEntry.shaderVariant);
@@ -3021,19 +3067,17 @@ static bool AppendMaterialAssetsToVolume(
             }
         }
 
-        if(!materialCodec.serialize(cookedMaterial, materialBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize material '{}'")
-                , StringConvert(materialEntry.virtualPath.c_str())
-            );
+        if(
+            !PushSerializedAssetToVolume(
+            NWB_TEXT("material"),
+            materialEntry.virtualPath,
+            cookedMaterial,
+            materialCodec,
+            volumeSession,
+            materialBinary
+            )
+        )
             return false;
-        }
-
-        if(!volumeSession.pushDataDeferred(materialEntry.virtualPath, materialBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push material '{}'")
-                , StringConvert(materialEntry.virtualPath.c_str())
-            );
-            return false;
-        }
     }
 
     return true;
@@ -3048,13 +3092,8 @@ static bool AppendGeometryAssetsToVolume(
     Vector<u8> geometryBinary;
 
     for(GeometryEntry& geometryEntry : geometryEntries){
-        const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
-        if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate geometry virtual path '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
+        if(!RegisterVolumeAssetPath(NWB_TEXT("geometry"), geometryEntry.virtualPath, inOutSeenVirtualPathHashes))
             return false;
-        }
 
         Geometry cookedGeometry;
         if(!BuildGeometryAsset(geometryEntry, cookedGeometry)){
@@ -3064,19 +3103,17 @@ static bool AppendGeometryAssetsToVolume(
             return false;
         }
 
-        if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize geometry '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
+        if(
+            !PushSerializedAssetToVolume(
+            NWB_TEXT("geometry"),
+            geometryEntry.virtualPath,
+            cookedGeometry,
+            geometryCodec,
+            volumeSession,
+            geometryBinary
+            )
+        )
             return false;
-        }
-
-        if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push geometry '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
-            return false;
-        }
     }
 
     return true;
@@ -3091,13 +3128,8 @@ static bool AppendDeformableGeometryAssetsToVolume(
     Vector<u8> geometryBinary;
 
     for(DeformableGeometryEntry& geometryEntry : geometryEntries){
-        const NameHash geometryVirtualPathHash = geometryEntry.virtualPath.hash();
-        if(!inOutSeenVirtualPathHashes.insert(geometryVirtualPathHash).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate deformable geometry virtual path '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
+        if(!RegisterVolumeAssetPath(NWB_TEXT("deformable geometry"), geometryEntry.virtualPath, inOutSeenVirtualPathHashes))
             return false;
-        }
 
         DeformableGeometry cookedGeometry;
         if(!BuildDeformableGeometryAsset(geometryEntry, cookedGeometry)){
@@ -3107,19 +3139,17 @@ static bool AppendDeformableGeometryAssetsToVolume(
             return false;
         }
 
-        if(!geometryCodec.serialize(cookedGeometry, geometryBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable geometry '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
+        if(
+            !PushSerializedAssetToVolume(
+            NWB_TEXT("deformable geometry"),
+            geometryEntry.virtualPath,
+            cookedGeometry,
+            geometryCodec,
+            volumeSession,
+            geometryBinary
+            )
+        )
             return false;
-        }
-
-        if(!volumeSession.pushDataDeferred(geometryEntry.virtualPath, geometryBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push deformable geometry '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
-            return false;
-        }
     }
 
     return true;
@@ -3134,31 +3164,24 @@ static bool AppendDeformableDisplacementTexturesToVolume(
     Vector<u8> textureBinary;
 
     for(DeformableDisplacementTextureEntry& textureEntry : textureEntries){
-        const NameHash textureVirtualPathHash = textureEntry.virtualPath.hash();
-        if(!inOutSeenVirtualPathHashes.insert(textureVirtualPathHash).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate deformable displacement texture virtual path '{}'")
-                , StringConvert(textureEntry.virtualPath.c_str())
-            );
+        if(!RegisterVolumeAssetPath(NWB_TEXT("deformable displacement texture"), textureEntry.virtualPath, inOutSeenVirtualPathHashes))
             return false;
-        }
 
         DeformableDisplacementTexture texture(textureEntry.virtualPath);
         texture.setSize(textureEntry.width, textureEntry.height);
         texture.setTexels(Move(textureEntry.texels));
 
-        if(!textureCodec.serialize(texture, textureBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to serialize deformable displacement texture '{}'")
-                , StringConvert(textureEntry.virtualPath.c_str())
-            );
+        if(
+            !PushSerializedAssetToVolume(
+            NWB_TEXT("deformable displacement texture"),
+            textureEntry.virtualPath,
+            texture,
+            textureCodec,
+            volumeSession,
+            textureBinary
+            )
+        )
             return false;
-        }
-
-        if(!volumeSession.pushDataDeferred(textureEntry.virtualPath, textureBinary)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to push deformable displacement texture '{}'")
-                , StringConvert(textureEntry.virtualPath.c_str())
-            );
-            return false;
-        }
     }
 
     return true;

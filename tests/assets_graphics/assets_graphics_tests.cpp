@@ -1302,6 +1302,29 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
 #endif
 }
 
+static void TestDeformableGeometryCodecRejectsUnusedStringTable(TestContext& context){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
+    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Core::Assets::AssetBytes binary;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, DeformableHeaderCountOffset(8u), 1u));
+    binary.push_back(0u);
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(geometry.virtualPath(), binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unexpected string table")));
+#else
+    static_cast<void>(context);
+#endif
+}
+
 static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
@@ -2121,6 +2144,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsUnusedStringTable(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);
         __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
         __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);

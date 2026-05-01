@@ -31,34 +31,34 @@ namespace __hidden_new{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] void* InternalOperatorNew(const std::size_t size, const char* log){
-    void* result = NWB::Core::Alloc::CoreAlloc(static_cast<usize>(size), log);
-#if TBB_USE_EXCEPTIONS
+template<typename AllocateFunc>
+[[nodiscard]] void* RetryOperatorNew(AllocateFunc allocate){
+    void* result = allocate();
     while(!result){
         const std::new_handler handler = std::get_new_handler();
-        if(handler)
-            (*handler)();
-        else
+        if(!handler)
             throw std::bad_alloc();
-        result = NWB::Core::Alloc::CoreAlloc(static_cast<usize>(size), log);
+
+        (*handler)();
+        result = allocate();
     }
-#endif
     return result;
 }
 
+[[nodiscard]] void* InternalOperatorNew(const std::size_t size, const char* log){
+    return RetryOperatorNew([size, log](){
+        return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(size), log);
+    });
+}
+
 [[nodiscard]] void* InternalOperatorNew(const std::size_t size, const std::size_t alignment, const char* log){
-    void* result = NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(size), static_cast<usize>(alignment), log);
-#if TBB_USE_EXCEPTIONS
-    while(!result){
-        const std::new_handler handler = std::get_new_handler();
-        if(handler)
-            (*handler)();
-        else
-            throw std::bad_alloc();
-        result = NWB::Core::Alloc::CoreAllocAligned(static_cast<usize>(size), static_cast<usize>(alignment), log);
-    }
-#endif
-    return result;
+    return RetryOperatorNew([size, alignment, log](){
+        return NWB::Core::Alloc::CoreAllocAligned(
+            static_cast<usize>(size),
+            static_cast<usize>(alignment),
+            log
+        );
+    });
 }
 
 

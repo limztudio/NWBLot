@@ -693,10 +693,6 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
         return false;
 
-    if(morphCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: morph count exceeds addressable size"));
-        return false;
-    }
     if(morphCount > 0u){
         constexpr usize minMorphHeaderBytes = sizeof(__hidden_deformable_geometry_asset::DeformableMorphHeaderBinary);
         const usize remainingBytes = cursor <= binary.size() ? binary.size() - cursor : 0u;
@@ -744,6 +740,18 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_displacement = __hidden_deformable_geometry_asset::BuildDisplacement(displacementBinary);
     if(!GeometryClassAllowsRuntimeDeform(m_geometryClass) && m_displacement.mode != DeformableDisplacementMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class cannot carry displacement payload"));
+        return false;
+    }
+    const bool requiresStringTable =
+        morphCount != 0u
+        || DeformableDisplacementModeUsesTexture(displacementBinary.mode)
+    ;
+    if(!requiresStringTable && stringTableByteCount != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unexpected string table"));
+        return false;
+    }
+    if(requiresStringTable && stringTableByteCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: missing string table"));
         return false;
     }
 

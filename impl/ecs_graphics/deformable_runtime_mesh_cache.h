@@ -43,6 +43,7 @@ struct DeformableRuntimeMeshInstance{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle handle;
     Core::Assets::AssetRef<DeformableGeometry> source;
+    u32 geometryClass = GeometryClass::StaticDeform;
     Vector<DeformableVertexRest> restVertices;
     Vector<u32> indices;
     u32 sourceTriangleCount = 0;

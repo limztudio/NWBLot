@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include "geometry_class.h"
 
 #include <core/assets/asset.h>
 
@@ -54,6 +55,7 @@ public:
 
     [[nodiscard]] const Vector<GeometryVertex>& vertices()const{ return m_vertices; }
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
+    [[nodiscard]] u32 geometryClass()const{ return GeometryClass::Static; }
 
 
 private:

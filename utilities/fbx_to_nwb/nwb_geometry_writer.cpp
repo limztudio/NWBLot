@@ -133,7 +133,12 @@ bool WriteNwbGeometry(
     file.precision(9);
 
     const bool writeDeformableGeometry = IsDeformableGeometryKind(assetKind);
+    if(IsSkinnedGeometryKind(assetKind)){
+        outError = "skinned and skinned_deform output require skeleton/skin export, which this converter does not write yet";
+        return false;
+    }
     file << (writeDeformableGeometry ? "deformable_geometry asset;\n\n" : "geometry asset;\n\n");
+    file << "asset.geometry_class = \"" << NormalizeAssetKind(assetKind) << "\";\n\n";
     file << "asset.index_type = \"" << outIndexType << "\";\n\n";
 
     file << "asset.positions = [\n";

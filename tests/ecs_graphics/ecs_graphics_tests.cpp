@@ -332,6 +332,7 @@ static NWB::Impl::SkinInfluence4 MakeTwoJointSkin(const u16 joint0, const f32 we
 }
 
 static void AssignSingleJointSkin(NWB::Impl::DeformableRuntimeMeshInstance& instance, const u16 joint){
+    instance.geometryClass = NWB::Impl::GeometryClass::SkinnedDeform;
     instance.skin.resize(instance.restVertices.size());
     for(NWB::Impl::SkinInfluence4& skin : instance.skin)
         skin = MakeSingleJointSkin(joint);
@@ -650,6 +651,7 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeSplitCubeCornerHoleInstance(
 }
 
 static void ConfigureMinimalMilestonePayload(NWB::Impl::DeformableRuntimeMeshInstance& instance){
+    instance.geometryClass = NWB::Impl::GeometryClass::SkinnedDeform;
     instance.skeletonJointCount = 2u;
     instance.skin.resize(instance.restVertices.size());
     for(usize vertexIndex = 0u; vertexIndex < instance.skin.size(); ++vertexIndex){

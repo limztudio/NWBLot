@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include "geometry_class.h"
 
 #include <core/assets/asset_ref.h>
 

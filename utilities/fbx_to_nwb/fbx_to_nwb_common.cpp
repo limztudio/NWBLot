@@ -44,23 +44,39 @@ AString ToLower(AString value){
 }
 
 AString NormalizeAssetKind(AString value){
-    return ToLower(Trim(Move(value)));
+    value = ToLower(Trim(Move(value)));
+    if(value == "geometry")
+        return AString("static");
+    if(value == "deformable_geometry")
+        return AString("static_deform");
+    return value;
 }
 
 bool IsStaticGeometryKind(const AString& value){
-    return NormalizeAssetKind(value) == "geometry";
+    return NormalizeAssetKind(value) == "static";
 }
 
 bool IsDeformableGeometryKind(const AString& value){
-    return NormalizeAssetKind(value) == "deformable_geometry";
+    const AString normalized = NormalizeAssetKind(value);
+    return normalized == "static_deform" || normalized == "skinned" || normalized == "skinned_deform";
+}
+
+bool IsSkinnedGeometryKind(const AString& value){
+    const AString normalized = NormalizeAssetKind(value);
+    return normalized == "skinned" || normalized == "skinned_deform";
 }
 
 bool ValidateAssetKind(AString& inOutValue, AString& outError){
     inOutValue = NormalizeAssetKind(Move(inOutValue));
-    if(inOutValue == "geometry" || inOutValue == "deformable_geometry")
+    if(
+        inOutValue == "static"
+        || inOutValue == "static_deform"
+        || inOutValue == "skinned"
+        || inOutValue == "skinned_deform"
+    )
         return true;
 
-    outError = "NWB geometry type must be geometry or deformable_geometry";
+    outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";
     return false;
 }
 

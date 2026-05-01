@@ -28,7 +28,7 @@ namespace __hidden_deformable_geometry_asset{
 
 
 static constexpr u32 s_DeformableGeometryMagic = 0x44474F31u; // DGO1
-static constexpr u32 s_DeformableGeometryVersion = 7u;
+static constexpr u32 s_DeformableGeometryVersion = 8u;
 static constexpr u32 s_DeformableDisplacementTextureMagic = 0x44445431u; // DDT1
 static constexpr u32 s_DeformableDisplacementTextureVersion = 1u;
 static constexpr u32 s_DeformableSkeletonJointLimit = static_cast<u32>(Limit<u16>::s_Max) + 1u;
@@ -36,6 +36,7 @@ static constexpr u32 s_DeformableSkeletonJointLimit = static_cast<u32>(Limit<u16
 static constexpr usize s_DeformableGeometryHeaderBytes =
     sizeof(u32) + // magic
     sizeof(u32) + // version
+    sizeof(u32) + // geometry class
     sizeof(u64) + // rest vertex count
     sizeof(u64) + // index count
     sizeof(u64) + // skin count
@@ -342,6 +343,13 @@ bool DeformableGeometry::validatePayload()const{
 
     const usize vertexCount = m_restVertices.size();
     const usize indexCount = m_indices.size();
+    if(!ValidGeometryClass(m_geometryClass) || !GeometryClassUsesDeformableRuntime(m_geometryClass)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")
+            , geometryPathText()
+            , StringConvert(GeometryClassText(m_geometryClass))
+        );
+        return false;
+    }
     if(m_restVertices.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has incomplete rest/index payload")
             , geometryPathText()
@@ -425,6 +433,30 @@ bool DeformableGeometry::validatePayload()const{
         }
     }
 
+    const bool hasSkin = !m_skin.empty();
+    if(GeometryClassUsesSkinning(m_geometryClass) != hasSkin){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' does not match skin payload")
+            , geometryPathText()
+            , StringConvert(GeometryClassText(m_geometryClass))
+        );
+        return false;
+    }
+    if(!GeometryClassAllowsRuntimeDeform(m_geometryClass)){
+        if(!m_sourceSamples.empty() || !m_editMaskPerTriangle.empty() || !m_morphs.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry surface edit or morph payload")
+                , geometryPathText()
+                , StringConvert(GeometryClassText(m_geometryClass))
+            );
+            return false;
+        }
+        if(m_displacement.mode != DeformableDisplacementMode::None){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry displacement payload")
+                , geometryPathText()
+                , StringConvert(GeometryClassText(m_geometryClass))
+            );
+            return false;
+        }
+    }
     if(!m_skin.empty() && m_skin.size() != vertexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skin count {} does not match vertex count {}")
             , geometryPathText()
@@ -558,6 +590,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
 
     m_restVertices.clear();
     m_indices.clear();
+    m_geometryClass = GeometryClass::StaticDeform;
     m_skin.clear();
     m_skeletonJointCount = 0u;
     m_inverseBindMatrices.clear();
@@ -570,6 +603,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0;
     u32 magic = 0;
     u32 version = 0;
+    u32 geometryClass = GeometryClass::StaticDeform;
     u64 vertexCount = 0;
     u64 indexCount = 0;
     u64 skinCount = 0;
@@ -582,6 +616,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(
         !ReadPOD(binary, cursor, magic)
         || !ReadPOD(binary, cursor, version)
+        || !ReadPOD(binary, cursor, geometryClass)
         || !ReadPOD(binary, cursor, vertexCount)
         || !ReadPOD(binary, cursor, indexCount)
         || !ReadPOD(binary, cursor, skinCount)
@@ -602,6 +637,10 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     if(version != __hidden_deformable_geometry_asset::s_DeformableGeometryVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported version {}"), version);
+        return false;
+    }
+    if(!ValidGeometryClass(geometryClass) || !GeometryClassUsesDeformableRuntime(geometryClass)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: invalid geometry class"));
         return false;
     }
     if(
@@ -651,6 +690,14 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: edit mask count must be empty or match triangle count"));
         return false;
     }
+    if(GeometryClassUsesSkinning(geometryClass) != (skinCount != 0u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class does not match skin payload"));
+        return false;
+    }
+    if(!GeometryClassAllowsRuntimeDeform(geometryClass) && (sourceSampleCount != 0u || editMaskCount != 0u || morphCount != 0u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class cannot carry surface edit or morph payload"));
+        return false;
+    }
 
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
         return false;
@@ -658,6 +705,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, skinCount, m_skin, NWB_TEXT("skin")))
         return false;
+    m_geometryClass = geometryClass;
     m_skeletonJointCount = static_cast<u32>(skeletonJointCount);
     if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
         return false;
@@ -715,6 +763,10 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     m_displacement = __hidden_deformable_geometry_asset::BuildDisplacement(displacementBinary);
+    if(!GeometryClassAllowsRuntimeDeform(m_geometryClass) && m_displacement.mode != DeformableDisplacementMode::None){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class cannot carry displacement payload"));
+        return false;
+    }
 
     if(
         cursor > binary.size()
@@ -857,6 +909,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
 
     AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryMagic);
     AppendPOD(outBinary, __hidden_deformable_geometry_asset::s_DeformableGeometryVersion);
+    AppendPOD(outBinary, geometry.geometryClass());
     AppendPOD(outBinary, static_cast<u64>(geometry.restVertices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.skin().size()));

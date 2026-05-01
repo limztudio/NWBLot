@@ -1969,6 +1969,7 @@ bool ProjectTestbed::buildSurfaceEditCleanBase(
     outCleanBase.entity = instance.entity;
     outCleanBase.handle = instance.handle;
     outCleanBase.source = instance.source;
+    outCleanBase.geometryClass = geometry.geometryClass();
     outCleanBase.restVertices = geometry.restVertices();
     outCleanBase.indices = geometry.indices();
     outCleanBase.sourceTriangleCount = static_cast<u32>(geometry.indices().size() / 3u);

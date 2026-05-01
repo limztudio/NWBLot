@@ -109,6 +109,12 @@ void LogRuntimeMorphPayloadFailure(
         );
         return false;
     }
+    if(!ValidGeometryClass(instance.geometryClass) || !GeometryClassUsesDeformableRuntime(instance.geometryClass)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has invalid geometry class")
+            , sourceText()
+        );
+        return false;
+    }
     const usize vertexCount = instance.restVertices.size();
     const usize indexCount = instance.indices.size();
     if(
@@ -182,6 +188,30 @@ void LogRuntimeMorphPayloadFailure(
         }
     }
 
+    const bool hasSkin = !instance.skin.empty();
+    if(GeometryClassUsesSkinning(instance.geometryClass) != hasSkin){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' does not match skin payload")
+            , sourceText()
+            , StringConvert(GeometryClassText(instance.geometryClass))
+        );
+        return false;
+    }
+    if(!GeometryClassAllowsRuntimeDeform(instance.geometryClass)){
+        if(!instance.sourceSamples.empty() || !instance.editMaskPerTriangle.empty() || !instance.morphs.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry surface edit or morph payload")
+                , sourceText()
+                , StringConvert(GeometryClassText(instance.geometryClass))
+            );
+            return false;
+        }
+        if(instance.displacement.mode != DeformableDisplacementMode::None){
+            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry displacement payload")
+                , sourceText()
+                , StringConvert(GeometryClassText(instance.geometryClass))
+            );
+            return false;
+        }
+    }
     if(!instance.skin.empty() && instance.skin.size() != vertexCount){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' skin count {} does not match vertex count {}")
             , sourceText()
@@ -455,6 +485,7 @@ bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, D
         return false;
     }
     instance.source = component.deformableGeometry;
+    instance.geometryClass = geometry->geometryClass();
     instance.restVertices = geometry->restVertices();
     instance.indices = geometry->indices();
     instance.sourceTriangleCount = static_cast<u32>(geometry->indices().size() / 3u);

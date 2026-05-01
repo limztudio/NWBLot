@@ -3455,6 +3455,8 @@ bool BeginSurfaceEdit(
     outSession = DeformableSurfaceEditSession{};
     if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance))
         return false;
+    if(!GeometryClassAllowsRuntimeDeform(instance.geometryClass))
+        return false;
     if(!__hidden_deformable_surface_edit::ValidateHitIdentity(instance, hit))
         return false;
 
@@ -3477,6 +3479,7 @@ bool PreviewHole(
     session.previewed = false;
     if(
         !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
+        || !GeometryClassAllowsRuntimeDeform(instance.geometryClass)
         || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
     )
         return false;
@@ -3519,6 +3522,7 @@ bool BuildHolePreviewMesh(
     outMesh = DeformableHolePreviewMesh{};
     if(
         !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
+        || !GeometryClassAllowsRuntimeDeform(instance.geometryClass)
         || !__hidden_deformable_surface_edit::ValidateParams(instance, params)
     )
         return false;
@@ -3554,6 +3558,14 @@ bool CommitHole(
             , static_cast<u32>(instance.dirtyFlags)
             , instance.restVertices.size()
             , instance.indices.size() / 3u
+        );
+        return false;
+    }
+    if(!GeometryClassAllowsRuntimeDeform(instance.geometryClass)){
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, geometry class is not runtime-deformable (entity={} runtime_mesh={} class={})")
+            , instance.entity.id
+            , instance.handle.value
+            , StringConvert(GeometryClassText(instance.geometryClass))
         );
         return false;
     }
@@ -5326,6 +5338,8 @@ template<typename MutateRecordFunc>
     if(
         cleanBaseInstance.editRevision != 0u
         || cleanBaseInstance.source.name() != instance.source.name()
+        || cleanBaseInstance.geometryClass != instance.geometryClass
+        || !GeometryClassAllowsRuntimeDeform(cleanBaseInstance.geometryClass)
         || !ValidateRuntimePayload(cleanBaseInstance)
     )
         return false;
@@ -5362,6 +5376,7 @@ bool ApplySurfaceEditState(
     if(
         !__hidden_deformable_surface_edit::ValidSurfaceEditState(state)
         || !__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
+        || !GeometryClassAllowsRuntimeDeform(instance.geometryClass)
         || instance.editRevision != 0u
         || !__hidden_deformable_surface_edit::ReplayContextTargetsInstance(instance, context)
     )

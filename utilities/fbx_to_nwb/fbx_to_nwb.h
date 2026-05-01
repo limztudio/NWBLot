@@ -38,7 +38,7 @@ static_assert(IsTriviallyCopyable_V<GeometryVertex>);
 struct ImportOptions{
     AString inputPath;
     AString outputPath;
-    AString assetKind = "geometry";
+    AString assetKind = "static";
     AString meshSelector = "all";
     AString indexType = "auto";
     AString defaultColorText = "1,1,1,1";
@@ -86,6 +86,7 @@ AString ToLower(AString value);
 AString NormalizeAssetKind(AString value);
 bool IsStaticGeometryKind(const AString& value);
 bool IsDeformableGeometryKind(const AString& value);
+bool IsSkinnedGeometryKind(const AString& value);
 bool ValidateAssetKind(AString& inOutValue, AString& outError);
 bool ParseColorText(const AString& text, Vec4& outColor);
 bool Normalize(Vec3& value);

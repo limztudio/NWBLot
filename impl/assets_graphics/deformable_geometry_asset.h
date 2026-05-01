@@ -73,6 +73,7 @@ public:
 public:
     void setRestVertices(Vector<DeformableVertexRest>&& vertices){ m_restVertices = Move(vertices); }
     void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
+    void setGeometryClass(u32 geometryClass){ m_geometryClass = geometryClass; }
     void setSkin(Vector<SkinInfluence4>&& skin){ m_skin = Move(skin); }
     void setSkeletonJointCount(u32 jointCount){ m_skeletonJointCount = jointCount; }
     void setInverseBindMatrices(Vector<DeformableJointMatrix>&& inverseBindMatrices){ m_inverseBindMatrices = Move(inverseBindMatrices); }
@@ -85,6 +86,7 @@ public:
 
     [[nodiscard]] const Vector<DeformableVertexRest>& restVertices()const{ return m_restVertices; }
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
+    [[nodiscard]] u32 geometryClass()const{ return m_geometryClass; }
     [[nodiscard]] const Vector<SkinInfluence4>& skin()const{ return m_skin; }
     [[nodiscard]] u32 skeletonJointCount()const{ return m_skeletonJointCount; }
     [[nodiscard]] const Vector<DeformableJointMatrix>& inverseBindMatrices()const{ return m_inverseBindMatrices; }
@@ -96,6 +98,7 @@ public:
 
 
 private:
+    u32 m_geometryClass = GeometryClass::StaticDeform;
     Vector<DeformableVertexRest> m_restVertices;
     Vector<u32> m_indices;
     Vector<SkinInfluence4> m_skin;

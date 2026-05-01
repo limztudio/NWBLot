@@ -147,6 +147,7 @@ struct DeformableAccessoryAttachmentRecord{
     f32 uniformScale = 1.0f;
     f32 wallLoopParameter = s_DeformableAccessoryCenteredWallLoopParameter;
 };
+static_assert(IsTriviallyCopyable_V<DeformableAccessoryAttachmentRecord>, "DeformableAccessoryAttachmentRecord must stay cheap to copy");
 
 struct DeformableSurfaceEditState{
     Vector<DeformableSurfaceEditRecord> edits;

@@ -66,6 +66,7 @@ struct SurfaceRemeshClipPoint{
     f32 bary[3] = {};
     u32 originalVertex = Limit<u32>::s_Max;
 };
+static_assert(IsTriviallyCopyable_V<SurfaceRemeshClipPoint>, "SurfaceRemeshClipPoint must stay cheap to copy");
 
 struct SurfaceRemeshLocalBounds{
     f32 minX = 0.0f;
@@ -2897,7 +2898,7 @@ template<typename DistanceFunc>
 
             if(RemoveCollinearSurfaceRemeshClipPoints(outside, areaMode)){
                 outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
-                outsidePieces.back().assign(outside.begin(), outside.end());
+                AssignTriviallyCopyableVector(outsidePieces.back(), outside);
             }
 
             if(!RemoveCollinearSurfaceRemeshClipPoints(inside, areaMode)){
@@ -2905,7 +2906,7 @@ template<typename DistanceFunc>
                 break;
             }
 
-            active.assign(inside.begin(), inside.end());
+            AssignTriviallyCopyableVector(active, inside);
         }
 
         auto clipActiveByDepthPlane = [&](const SurfaceRemeshDepthPlane::Enum depthPlane){
@@ -2937,7 +2938,7 @@ template<typename DistanceFunc>
 
             if(hasStrictOutside && RemoveCollinearSurfaceRemeshClipPoints(outside, SurfaceRemeshAreaMode::DepthAware)){
                 outsidePieces.emplace_back(Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena));
-                outsidePieces.back().assign(outside.begin(), outside.end());
+                AssignTriviallyCopyableVector(outsidePieces.back(), outside);
             }
 
             if(!RemoveCollinearSurfaceRemeshClipPoints(inside, SurfaceRemeshAreaMode::DepthAware)){
@@ -2945,7 +2946,7 @@ template<typename DistanceFunc>
                 return true;
             }
 
-            active.assign(inside.begin(), inside.end());
+            AssignTriviallyCopyableVector(active, inside);
             return true;
         };
         if(
@@ -5039,9 +5040,23 @@ void AccumulateSurfaceEditReplayResult(
     AssignTriviallyCopyableVector(outRedoState.edits, state.edits);
     outRedoState.edits.push_back(redoEntry.edit);
 
-    outRedoState.accessories.reserve(state.accessories.size() + redoEntry.accessories.size());
-    outRedoState.accessories.insert(outRedoState.accessories.end(), state.accessories.begin(), state.accessories.end());
-    outRedoState.accessories.insert(outRedoState.accessories.end(), redoEntry.accessories.begin(), redoEntry.accessories.end());
+    const usize stateAccessoryCount = state.accessories.size();
+    const usize redoAccessoryCount = redoEntry.accessories.size();
+    outRedoState.accessories.resize(stateAccessoryCount + redoAccessoryCount);
+    if(stateAccessoryCount > 0u)
+        NWB_MEMCPY(
+            outRedoState.accessories.data(),
+            stateAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord),
+            state.accessories.data(),
+            stateAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord)
+        );
+    if(redoAccessoryCount > 0u)
+        NWB_MEMCPY(
+            outRedoState.accessories.data() + stateAccessoryCount,
+            redoAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord),
+            redoEntry.accessories.data(),
+            redoAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord)
+        );
 
     outResult.redoneEditId = redoEntry.edit.editId;
     outResult.restoredAccessoryCount = static_cast<u32>(redoEntry.accessories.size());

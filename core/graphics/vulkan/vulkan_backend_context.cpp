@@ -418,7 +418,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
     VkResult res = VK_SUCCESS;
 
     clearSemaphores(semaphores);
-    semaphores.reserve(count);
+    semaphores.resize(count, VK_NULL_HANDLE);
 
     VkSemaphoreCreateInfo semInfo = {};
     semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -431,7 +431,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
             clearSemaphores(semaphores);
             return false;
         }
-        semaphores.push_back(sem);
+        semaphores[i] = sem;
     }
 
     return true;
@@ -1252,15 +1252,15 @@ bool BackendContext::createVulkanDevice(){
         uniqueQueueFamilies.insert(m_transferQueueFamily);
 
     f32 priority = 1.f;
-    Vector<VkDeviceQueueCreateInfo, Alloc::ScratchAllocator<VkDeviceQueueCreateInfo>> queueDesc((Alloc::ScratchAllocator<VkDeviceQueueCreateInfo>(scratchArena)));
-    queueDesc.reserve(uniqueQueueFamilies.size());
+    Vector<VkDeviceQueueCreateInfo, Alloc::ScratchAllocator<VkDeviceQueueCreateInfo>> queueDesc(uniqueQueueFamilies.size(), Alloc::ScratchAllocator<VkDeviceQueueCreateInfo>(scratchArena));
+    usize queueIndex = 0u;
     for(i32 queueFamily : uniqueQueueFamilies){
         VkDeviceQueueCreateInfo queueInfo = {};
         queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.queueFamilyIndex = static_cast<u32>(queueFamily);
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &priority;
-        queueDesc.push_back(queueInfo);
+        queueDesc[queueIndex++] = queueInfo;
     }
 
     VkPhysicalDeviceVulkan13Features vulkan13features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
@@ -1674,10 +1674,10 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    m_swapChainImages.reserve(imageCount);
+    m_swapChainImages.resize(imageCount);
     for(uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex){
         const VkImage image = images[imageIndex];
-        SwapChainImage sci;
+        SwapChainImage& sci = m_swapChainImages[imageIndex];
         sci.image = image;
 
         TextureDesc textureDesc;
@@ -1697,7 +1697,6 @@ bool BackendContext::createVulkanSwapChain(){
             return false;
         }
         checked_cast<Texture*>(sci.rhiHandle.get())->m_keepInitialStateKnown = false;
-        m_swapChainImages.push_back(sci);
     }
 
     m_swapChainIndex = 0;

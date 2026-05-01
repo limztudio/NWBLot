@@ -520,20 +520,22 @@ bool AppendWallTrianglePairsImpl(
             return false;
     }
 
-    outIndices.reserve(outIndices.size() + boundaryVertexCount * 6u);
+    const usize outputIndexBase = outIndices.size();
+    outIndices.resize(outputIndexBase + boundaryVertexCount * 6u);
     for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
         const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
+        const usize outputIndex = outputIndexBase + edgeIndex * 6u;
         const u32 rimA = orderedBoundaryEdges[edgeIndex].a;
         const u32 rimB = orderedBoundaryEdges[nextEdgeIndex].a;
         const u32 innerB = innerVertices[nextEdgeIndex];
         const u32 innerA = innerVertices[edgeIndex];
 
-        outIndices.push_back(rimA);
-        outIndices.push_back(rimB);
-        outIndices.push_back(innerB);
-        outIndices.push_back(rimA);
-        outIndices.push_back(innerB);
-        outIndices.push_back(innerA);
+        outIndices[outputIndex + 0u] = rimA;
+        outIndices[outputIndex + 1u] = rimB;
+        outIndices[outputIndex + 2u] = innerB;
+        outIndices[outputIndex + 3u] = rimA;
+        outIndices[outputIndex + 4u] = innerB;
+        outIndices[outputIndex + 5u] = innerA;
     }
 
     if(outAddedTriangleCount)

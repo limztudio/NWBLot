@@ -705,8 +705,8 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> morphNameOffsets{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    morphNameOffsets.reserve(static_cast<usize>(morphCount));
-    m_morphs.reserve(static_cast<usize>(morphCount));
+    morphNameOffsets.resize(static_cast<usize>(morphCount));
+    m_morphs.resize(static_cast<usize>(morphCount));
     for(u64 morphIndex = 0; morphIndex < morphCount; ++morphIndex){
         __hidden_deformable_geometry_asset::DeformableMorphHeaderBinary morphHeader;
         if(!ReadPOD(binary, cursor, morphHeader)){
@@ -722,11 +722,10 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         }
 
-        DeformableMorph morph;
+        DeformableMorph& morph = m_morphs[static_cast<usize>(morphIndex)];
         if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, morphHeader.deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
-        morphNameOffsets.push_back(morphHeader.nameOffset);
-        m_morphs.push_back(Move(morph));
+        morphNameOffsets[static_cast<usize>(morphIndex)] = morphHeader.nameOffset;
     }
     __hidden_deformable_geometry_asset::DeformableDisplacementBinary displacementBinary;
     if(!ReadPOD(binary, cursor, displacementBinary)){

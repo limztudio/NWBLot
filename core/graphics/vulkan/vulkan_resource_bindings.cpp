@@ -521,12 +521,13 @@ bool Device::createPipelineLayoutForBindingLayouts(
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
     }
 
-    descriptorSetLayouts.reserve(descriptorSetLayoutCount);
+    descriptorSetLayouts.resize(descriptorSetLayoutCount);
+    usize descriptorSetLayoutIndex = 0u;
     for(const auto& bindingLayout : bindingLayouts){
         auto* layout = checked_cast<BindingLayout*>(bindingLayout.get());
         NWB_ASSERT(layout != nullptr);
         for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
-            descriptorSetLayouts.push_back(descriptorSetLayout);
+            descriptorSetLayouts[descriptorSetLayoutIndex++] = descriptorSetLayout;
     }
 
     if(
@@ -651,13 +652,14 @@ bool DescriptorHeapManager::tryEnablePipeline(
             return false;
         if(heapBindings.size() > Limit<usize>::s_Max - outMappings.size())
             return false;
-        outMappings.reserve(outMappings.size() + heapBindings.size());
 
         const u32 pushDataBytes = static_cast<u32>(heapBindings.size() * sizeof(u32));
         if(outPushDataSize > UINT32_MAX - pushDataBytes)
             return false;
         if(outPushDataSize + pushDataBytes > context.descriptorHeapProperties.maxPushDataSize)
             return false;
+        const usize mappingBaseIndex = outMappings.size();
+        outMappings.resize(mappingBaseIndex + heapBindings.size());
 
         DescriptorHeapPushRange pushRange{};
         pushRange.bindingSetIndex = i;
@@ -679,7 +681,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
             mapping.sourceData.pushIndex.pushOffset = pushRange.pushOffsetBytes + static_cast<u32>(bindingIndex * sizeof(u32));
             mapping.sourceData.pushIndex.heapIndexStride = meta.descriptorStride;
             mapping.sourceData.pushIndex.heapArrayStride = meta.descriptorStride;
-            outMappings.push_back(mapping);
+            outMappings[mappingBaseIndex + bindingIndex] = mapping;
             hasAnyDescriptors = true;
         }
 
@@ -1385,9 +1387,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layout->m_bindlessDesc = desc;
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
-    bindings.reserve(desc.registerSpaces.size());
+    bindings.resize(desc.registerSpaces.size());
     Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
-    bindingFlags.reserve(desc.registerSpaces.size());
+    bindingFlags.resize(desc.registerSpaces.size());
     HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> registerSpaceSlots(
         0,
         Hasher<u32>(),
@@ -1420,10 +1422,10 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         binding.descriptorCount = maxCapacity;
         binding.stageFlags = VulkanDetail::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
-        bindings.push_back(binding);
+        bindings[i] = binding;
 
         VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-        bindingFlags.push_back(flags);
+        bindingFlags[i] = flags;
     }
 
     if(!bindingFlags.empty())
@@ -1924,8 +1926,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
 
     if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
         const usize descriptorHeapBindingCount = layout->m_descriptorHeapBindings.size();
-        bindingSet->m_descriptorHeapPushIndices.reserve(descriptorHeapBindingCount);
-        bindingSet->m_descriptorHeapAllocations.reserve(descriptorHeapBindingCount);
+        bindingSet->m_descriptorHeapPushIndices.resize(descriptorHeapBindingCount);
+        bindingSet->m_descriptorHeapAllocations.resize(descriptorHeapBindingCount);
 
         for(usize i = 0; i < descriptorHeapBindingCount; ++i){
             const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[i];
@@ -1942,8 +1944,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                 return nullptr;
             }
 
-            bindingSet->m_descriptorHeapAllocations.push_back(allocation);
-            bindingSet->m_descriptorHeapPushIndices.push_back(allocation.offsetBytes / meta.descriptorStride);
+            bindingSet->m_descriptorHeapAllocations[i] = allocation;
+            bindingSet->m_descriptorHeapPushIndices[i] = allocation.offsetBytes / meta.descriptorStride;
         }
     }
 

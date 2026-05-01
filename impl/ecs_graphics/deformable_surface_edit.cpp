@@ -2731,9 +2731,9 @@ template<typename DistanceFunc>
     if(!PointInsideOperatorCrossSection(params.operatorFootprint, 0.0f, 0.0f))
         return false;
 
-    outRestPositions.reserve(instance.restVertices.size());
-    for(const DeformableVertexRest& vertex : instance.restVertices)
-        outRestPositions.push_back(vertex.position);
+    outRestPositions.resize(instance.restVertices.size());
+    for(usize vertexIndex = 0u; vertexIndex < instance.restVertices.size(); ++vertexIndex)
+        outRestPositions[vertexIndex] = instance.restVertices[vertexIndex].position;
     outSurfaceTriangles.reserve(triangleCount);
 
     using BoundaryEdgeMap = HashMap<
@@ -3218,9 +3218,9 @@ struct HolePreviewPlan{
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    capVertices.reserve(positions.size());
+    capVertices.resize(positions.size());
     for(usize i = 0u; i < positions.size(); ++i)
-        capVertices.push_back(static_cast<u32>(i));
+        capVertices[i] = static_cast<u32>(i);
 
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> capIndices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
@@ -3247,11 +3247,20 @@ struct HolePreviewPlan{
             return false;
     }
 
-    if(capIndices.size() > static_cast<usize>(Limit<u32>::s_Max) - mesh.indices.size())
+    if(
+        mesh.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || capIndices.size() > static_cast<usize>(Limit<u32>::s_Max) - mesh.indices.size()
+    )
         return false;
-    mesh.indices.reserve(mesh.indices.size() + capIndices.size());
-    for(const u32 capIndex : capIndices)
-        mesh.indices.push_back(vertexBase + capIndex);
+    for(const u32 capIndex : capIndices){
+        if(capIndex >= capVertices.size())
+            return false;
+    }
+
+    const usize indexBase = mesh.indices.size();
+    mesh.indices.resize(indexBase + capIndices.size());
+    for(usize indexOffset = 0u; indexOffset < capIndices.size(); ++indexOffset)
+        mesh.indices[indexBase + indexOffset] = vertexBase + capIndices[indexOffset];
     return true;
 }
 
@@ -3388,18 +3397,23 @@ struct HolePreviewPlan{
             bottomCapPositions.push_back(wallVertexPlan[edgeIndex].position);
         }
 
-        if(boundaryVertexCount > (static_cast<usize>(Limit<u32>::s_Max) - outMesh.indices.size()) / 6u)
+        if(
+            outMesh.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+            || boundaryVertexCount > (static_cast<usize>(Limit<u32>::s_Max) - outMesh.indices.size()) / 6u
+        )
             return false;
 
-        outMesh.indices.reserve(outMesh.indices.size() + boundaryVertexCount * 6u);
+        const usize sideIndexBase = outMesh.indices.size();
+        outMesh.indices.resize(sideIndexBase + boundaryVertexCount * 6u);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
-            outMesh.indices.push_back(sideTopVertices[edgeIndex]);
-            outMesh.indices.push_back(sideTopVertices[nextEdgeIndex]);
-            outMesh.indices.push_back(sideBottomVertices[nextEdgeIndex]);
-            outMesh.indices.push_back(sideTopVertices[edgeIndex]);
-            outMesh.indices.push_back(sideBottomVertices[nextEdgeIndex]);
-            outMesh.indices.push_back(sideBottomVertices[edgeIndex]);
+            const usize sideIndex = sideIndexBase + edgeIndex * 6u;
+            outMesh.indices[sideIndex + 0u] = sideTopVertices[edgeIndex];
+            outMesh.indices[sideIndex + 1u] = sideTopVertices[nextEdgeIndex];
+            outMesh.indices[sideIndex + 2u] = sideBottomVertices[nextEdgeIndex];
+            outMesh.indices[sideIndex + 3u] = sideTopVertices[edgeIndex];
+            outMesh.indices[sideIndex + 4u] = sideBottomVertices[nextEdgeIndex];
+            outMesh.indices[sideIndex + 5u] = sideBottomVertices[edgeIndex];
         }
 
         if(!AppendHolePreviewCap(bottomCapPositions, frame.normal, frame.tangent, frame.bitangent, outMesh, scratchArena))
@@ -3843,7 +3857,7 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
-    accessoryRecords.reserve(state.accessories.size());
+    accessoryRecords.resize(state.accessories.size());
 
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
@@ -3859,13 +3873,14 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     if(canReserveStringTable)
         stringTable.reserve(stringTableReserveBytes);
 
-    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
+    for(usize accessoryIndex = 0u; accessoryIndex < state.accessories.size(); ++accessoryIndex){
+        const DeformableAccessoryAttachmentRecord& accessory = state.accessories[accessoryIndex];
         __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
         if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecord(accessory, binaryRecord, stringTable)){
             outBinary.clear();
             return false;
         }
-        accessoryRecords.push_back(binaryRecord);
+        accessoryRecords[accessoryIndex] = binaryRecord;
     }
 
     usize binarySize = 0u;
@@ -3928,14 +3943,14 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
 
     const usize editRecordCount = static_cast<usize>(editCount);
     outState.edits.clear();
-    outState.edits.reserve(editRecordCount);
+    outState.edits.resize(editRecordCount);
     for(usize i = 0u; i < editRecordCount; ++i){
         DeformableSurfaceEditRecord record;
         if(!ReadPOD(binary, cursor, record) || !__hidden_deformable_surface_edit::ValidEditRecord(record)){
             outState = DeformableSurfaceEditState{};
             return false;
         }
-        outState.edits.push_back(record);
+        outState.edits[i] = record;
     }
 
     const usize accessoryRecordCount = static_cast<usize>(accessoryCount);
@@ -3944,19 +3959,19 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
-    accessoryRecords.reserve(accessoryRecordCount);
+    accessoryRecords.resize(accessoryRecordCount);
     for(usize i = 0u; i < accessoryRecordCount; ++i){
         AccessoryRecord binaryRecord;
         if(!ReadPOD(binary, cursor, binaryRecord)){
             outState = DeformableSurfaceEditState{};
             return false;
         }
-        accessoryRecords.push_back(binaryRecord);
+        accessoryRecords[i] = binaryRecord;
     }
 
     const usize stringTableOffset = cursor;
     outState.accessories.clear();
-    outState.accessories.reserve(accessoryRecordCount);
+    outState.accessories.resize(accessoryRecordCount);
     for(usize i = 0u; i < accessoryRecords.size(); ++i){
         DeformableAccessoryAttachmentRecord accessory;
         if(
@@ -3971,7 +3986,7 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
             outState = DeformableSurfaceEditState{};
             return false;
         }
-        outState.accessories.push_back(Move(accessory));
+        outState.accessories[i] = Move(accessory);
     }
     cursor += static_cast<usize>(stringTableByteCount);
 

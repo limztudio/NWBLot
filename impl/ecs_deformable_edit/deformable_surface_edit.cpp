@@ -4904,14 +4904,27 @@ void AccumulateSurfaceEditReplayResult(
     DeformableSurfaceEditState& replayState,
     u32* outRemovedAccessoryCount
 ){
+    if(sourceState.accessories.empty())
+        return true;
+
     replayState.accessories.reserve(sourceState.accessories.size());
+    Core::Alloc::ScratchArena<> scratchArena;
+    SurfaceEditRecordLookup replayEditRecords(
+        0,
+        Hasher<DeformableSurfaceEditId>(),
+        EqualTo<DeformableSurfaceEditId>(),
+        Core::Alloc::ScratchAllocator<SurfaceEditRecordLookupPair>(scratchArena)
+    );
+    if(!BuildSurfaceEditRecordLookup(replayState, replayEditRecords))
+        return false;
+
     for(const DeformableAccessoryAttachmentRecord& accessory : sourceState.accessories){
         if(outRemovedAccessoryCount && accessory.anchorEditId == removedAnchorEditId){
             ++(*outRemovedAccessoryCount);
             continue;
         }
 
-        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(replayState, accessory.anchorEditId);
+        const DeformableSurfaceEditRecord* anchorEdit = FindEditRecordById(replayEditRecords, accessory.anchorEditId);
         if(!anchorEdit)
             return false;
 

@@ -40,14 +40,14 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
     NWB_ASSERT(bytes);
 
     using ByteType = typename Container::value_type;
-    const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
-    if constexpr(requires(Container& c, const ByteType* first, const ByteType* last){ c.insert(c.end(), first, last); }){
-        outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
-    }
-    else if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
+    if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
         const usize offset = outBinary.size();
         outBinary.resize(offset + byteCount);
         NWB_MEMCPY(outBinary.data() + offset, byteCount, bytes, byteCount);
+    }
+    else if constexpr(requires(Container& c, const ByteType* first, const ByteType* last){ c.insert(c.end(), first, last); }){
+        const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
+        outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
     }
 }
 

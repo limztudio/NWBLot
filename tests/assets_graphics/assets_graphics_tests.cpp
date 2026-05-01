@@ -52,6 +52,22 @@ using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
 )"
 
+#define NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS R"(asset.geometry_class = "static";
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS R"(asset.geometry_class = "static_deform";
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_CLASS R"(asset.geometry_class = "skinned";
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_CLASS R"(asset.geometry_class = "skinned_deform";
+
+)"
+
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS R"(asset.positions = [
     [-0.5, -0.5, 0.0],
     [ 0.5, -0.5, 0.0],
@@ -92,6 +108,27 @@ using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
 #define NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX \
     "deformable_geometry asset;\n\n" \
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS \
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX \
+    "deformable_geometry asset;\n\n" \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_CLASS \
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX \
+    "deformable_geometry asset;\n\n" \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_CLASS \
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
@@ -120,6 +157,7 @@ using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
 static constexpr AStringView s_MinimalGeometryMeta =
     "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
@@ -133,13 +171,23 @@ static constexpr AStringView s_MinimalGeometryMeta =
 
 static constexpr AStringView s_DefaultColorGeometryMeta =
     "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 #if defined(NWB_FINAL)
+static constexpr AStringView s_MissingGeometryClassMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
+
 static constexpr AStringView s_UnsupportedGeometryFieldsMeta = R"(geometry asset;
+
+asset.geometry_class = "static";
 
 asset.vertex_stride = 24;
 asset.index_type = "u16";
@@ -157,6 +205,7 @@ asset.index_data = [
 
 static constexpr AStringView s_MismatchedGeometryMeta =
     "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
@@ -177,6 +226,7 @@ asset.morphs = {};
 
 static constexpr AStringView s_GeneratedFrameDeformableMeta =
     "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
@@ -187,6 +237,7 @@ asset.morphs = {};
 
 static constexpr AStringView s_U32IndexTypeDeformableMeta =
     "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
@@ -214,6 +265,8 @@ asset.morphs = {};
 )";
 
 static constexpr AStringView s_NativeCharacterMockDeformableMeta = R"(deformable_geometry asset;
+
+asset.geometry_class = "skinned_deform";
 
 asset.index_type = "u16";
 
@@ -316,7 +369,7 @@ asset.morphs = {
 )";
 
 static constexpr AStringView s_NonnormalizedSkinDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX
     R"(asset.skeleton_joint_count = 2;
 
 asset.skin = {
@@ -334,10 +387,8 @@ asset.skin = {
 )";
 
 static constexpr AStringView s_SkinnedOnlyDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
-    R"(asset.geometry_class = "skinned";
-
-asset.skeleton_joint_count = 1;
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX
+    R"(asset.skeleton_joint_count = 1;
 
 asset.skin = {
     "joints0": [
@@ -354,8 +405,21 @@ asset.skin = {
 )";
 
 #if defined(NWB_FINAL)
+static constexpr AStringView s_MissingGeometryClassDeformableMeta =
+    "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+    R"(asset.skin = {};
+asset.morphs = {};
+)";
+
 static constexpr AStringView s_MismatchedDeformableMeta =
     "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
@@ -369,6 +433,7 @@ static constexpr AStringView s_MismatchedDeformableMeta =
 
 static constexpr AStringView s_MissingIndexTypeDeformableMeta =
     "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
@@ -376,7 +441,7 @@ static constexpr AStringView s_MissingIndexTypeDeformableMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 static constexpr AStringView s_MismatchedSkinDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX
     R"(asset.skin = {
     "joints0": [
         [0, 0, 0, 0],
@@ -402,6 +467,8 @@ static constexpr AStringView s_MismatchedSourceSamplesDeformableMeta =
 )";
 
 static constexpr AStringView s_UnreferencedVertexGeneratedSourceSampleDeformableMeta = R"(deformable_geometry asset;
+
+asset.geometry_class = "static_deform";
 
 asset.index_type = "u16";
 
@@ -465,6 +532,8 @@ static constexpr AStringView s_MissingMorphTangentDeformableMeta =
 
 static constexpr AStringView s_SourceImportDeformableMeta = R"(deformable_geometry asset;
 
+asset.geometry_class = "static_deform";
+
 asset.source = {
     "format": "external",
     "path": "mesh.bin",
@@ -480,12 +549,18 @@ static constexpr AStringView s_MismatchedEditMaskDeformableMeta =
 
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_CLASS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_CLASS
+#undef NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
+#undef NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
 #undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
 #undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
 
@@ -1374,9 +1449,11 @@ static void TestGeometryCookerValidationFailures(TestContext& context){
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
+    expectCookFailure(s_MissingGeometryClassMeta, "missing_geometry_class");
     expectCookFailure(s_UnsupportedGeometryFieldsMeta, "unsupported_geometry_fields");
     expectCookFailure(s_MismatchedGeometryMeta, "mismatched_geometry_streams");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported geometry fields are present")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex stream counts must match")));
 #else
@@ -1748,6 +1825,7 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
+    expectCookFailure(s_MissingGeometryClassDeformableMeta, "missing_geometry_class");
     expectCookFailure(s_MismatchedDeformableMeta, "mismatched_streams");
     expectCookFailure(s_MissingIndexTypeDeformableMeta, "missing_index_type");
     expectCookFailure(s_MismatchedSkinDeformableMeta, "mismatched_skin");
@@ -1757,7 +1835,8 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     expectCookFailure(s_MissingMorphTangentDeformableMeta, "missing_morph_tangent");
     expectCookFailure(s_SourceImportDeformableMeta, "source_import");
     expectCookFailure(s_MismatchedEditMaskDeformableMeta, "mismatched_edit_mask");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 9u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 10u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));

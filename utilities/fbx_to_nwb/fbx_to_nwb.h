@@ -84,7 +84,6 @@ AString Trim(AString value);
 AString UnquotePath(AString value);
 AString ToLower(AString value);
 AString NormalizeAssetKind(AString value);
-bool IsStaticGeometryKind(const AString& value);
 bool IsDeformableGeometryKind(const AString& value);
 bool IsSkinnedGeometryKind(const AString& value);
 bool ValidateAssetKind(AString& inOutValue, AString& outError);

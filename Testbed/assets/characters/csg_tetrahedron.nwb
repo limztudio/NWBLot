@@ -1,5 +1,7 @@
 deformable_geometry asset;
 
+asset.geometry_class = "static_deform";
+
 asset.index_type = "u16";
 
 asset.positions = [

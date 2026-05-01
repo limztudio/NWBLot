@@ -1,5 +1,7 @@
 geometry asset;
 
+asset.geometry_class = "static";
+
 asset.index_type = "u16";
 
 asset.positions = [

@@ -927,21 +927,20 @@ static bool ParseMetadataIndexType(
     return false;
 }
 
-static bool ParseOptionalGeometryClassField(
+static bool ParseGeometryClassField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const tchar* metaKind,
-    const u32 defaultGeometryClass,
-    u32& outGeometryClass,
-    bool& outProvided
+    u32& outGeometryClass
 ){
-    outGeometryClass = defaultGeometryClass;
-    outProvided = false;
-
     const Core::Metascript::Value* geometryClass = FindField(asset, "geometry_class");
-    if(!geometryClass)
-        return true;
-    outProvided = true;
+    if(!geometryClass){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'geometry_class' is required")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
 
     if(!geometryClass->isString()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'geometry_class' must be a string")
@@ -1091,19 +1090,15 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
     u32 geometryClass = GeometryClass::Static;
-    bool geometryClassProvided = false;
     if(
-        !ParseOptionalGeometryClassField(
+        !ParseGeometryClassField(
             discoveredFile.filePath,
             asset,
             s_GeometryMetaKind,
-            GeometryClass::Static,
-            geometryClass,
-            geometryClassProvided
+            geometryClass
         )
     )
         return false;
-    static_cast<void>(geometryClassProvided);
     if(geometryClass != GeometryClass::Static){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': geometry_class must be 'static' for geometry assets")
             , PathToString<tchar>(discoveredFile.filePath)
@@ -2005,19 +2000,15 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
         return false;
-    bool geometryClassProvided = false;
     if(
-        !ParseOptionalGeometryClassField(
+        !ParseGeometryClassField(
             discoveredFile.filePath,
             asset,
             s_DeformableGeometryMetaKind,
-            InferDeformableGeometryClass(!outEntry.skin.empty()),
-            outEntry.geometryClass,
-            geometryClassProvided
+            outEntry.geometryClass
         )
     )
         return false;
-    static_cast<void>(geometryClassProvided);
     if(!GeometryClassUsesDeformableRuntime(outEntry.geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class must be static_deform, skinned, or skinned_deform")
             , PathToString<tchar>(discoveredFile.filePath)

@@ -44,16 +44,7 @@ AString ToLower(AString value){
 }
 
 AString NormalizeAssetKind(AString value){
-    value = ToLower(Trim(Move(value)));
-    if(value == "geometry")
-        return AString("static");
-    if(value == "deformable_geometry")
-        return AString("static_deform");
-    return value;
-}
-
-bool IsStaticGeometryKind(const AString& value){
-    return NormalizeAssetKind(value) == "static";
+    return ToLower(Trim(Move(value)));
 }
 
 bool IsDeformableGeometryKind(const AString& value){

@@ -86,11 +86,6 @@ namespace GeometryClass{
     return false;
 }
 
-[[nodiscard]] inline u32 InferDeformableGeometryClass(const bool hasSkin){
-    return hasSkin ? GeometryClass::SkinnedDeform : GeometryClass::StaticDeform;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

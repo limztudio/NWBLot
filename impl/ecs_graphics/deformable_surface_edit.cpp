@@ -3359,17 +3359,9 @@ struct HolePreviewPlan{
         )
             return false;
 
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> sideTopVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> sideBottomVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
         Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> bottomCapPositions{
             Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
         };
-        sideTopVertices.resize(boundaryVertexCount);
-        sideBottomVertices.resize(boundaryVertexCount);
         bottomCapPositions.resize(boundaryVertexCount);
         const usize sideVertexBase = outMesh.vertices.size();
         outMesh.vertices.resize(sideVertexBase + sideVertexCount);
@@ -3387,8 +3379,6 @@ struct HolePreviewPlan{
                 s_HolePreviewColor
             );
 
-            sideTopVertices[edgeIndex] = static_cast<u32>(topVertexIndex);
-            sideBottomVertices[edgeIndex] = static_cast<u32>(bottomVertexIndex);
             bottomCapPositions[edgeIndex] = wallVertexPlan[edgeIndex].position;
         }
 
@@ -3403,12 +3393,16 @@ struct HolePreviewPlan{
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
             const usize sideIndex = sideIndexBase + edgeIndex * 6u;
-            outMesh.indices[sideIndex + 0u] = sideTopVertices[edgeIndex];
-            outMesh.indices[sideIndex + 1u] = sideTopVertices[nextEdgeIndex];
-            outMesh.indices[sideIndex + 2u] = sideBottomVertices[nextEdgeIndex];
-            outMesh.indices[sideIndex + 3u] = sideTopVertices[edgeIndex];
-            outMesh.indices[sideIndex + 4u] = sideBottomVertices[nextEdgeIndex];
-            outMesh.indices[sideIndex + 5u] = sideBottomVertices[edgeIndex];
+            const u32 topVertex = static_cast<u32>(sideVertexBase + edgeIndex * 2u);
+            const u32 nextTopVertex = static_cast<u32>(sideVertexBase + nextEdgeIndex * 2u);
+            const u32 bottomVertex = topVertex + 1u;
+            const u32 nextBottomVertex = nextTopVertex + 1u;
+            outMesh.indices[sideIndex + 0u] = topVertex;
+            outMesh.indices[sideIndex + 1u] = nextTopVertex;
+            outMesh.indices[sideIndex + 2u] = nextBottomVertex;
+            outMesh.indices[sideIndex + 3u] = topVertex;
+            outMesh.indices[sideIndex + 4u] = nextBottomVertex;
+            outMesh.indices[sideIndex + 5u] = bottomVertex;
         }
 
         if(!AppendHolePreviewCap(bottomCapPositions, frame.normal, frame.tangent, frame.bitangent, outMesh, scratchArena))
@@ -4597,10 +4591,11 @@ template<usize sourceCount>
             return false;
         }
 
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> wallVertices{
+        Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> bandOuterEdges = orderedBoundaryEdges;
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        wallVertices.resize(totalWallVertexCount, 0u);
+        ringVertices.resize(boundaryVertexCount);
 
         auto appendPlannedVertex = [&](
             const Core::Geometry::SurfacePatchWallVertex& plannedVertex,
@@ -4659,16 +4654,17 @@ template<usize sourceCount>
         };
 
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
-            const usize wallVertexBase = ringIndex * boundaryVertexCount;
+            const usize wallPlanBase = ringIndex * boundaryVertexCount;
             for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
-                const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[wallVertexBase + edgeIndex];
+                const Core::Geometry::SurfacePatchWallVertex& plannedVertex = wallVertexPlan[wallPlanBase + edgeIndex];
+                u32 wallVertex = 0u;
                 if(
                     !appendPlannedVertex(
                         plannedVertex,
                         LoadFloat(plannedVertex.normal),
                         LoadFloat(plannedVertex.tangent),
                         plannedVertex.uv0,
-                        wallVertices[wallVertexBase + edgeIndex]
+                        wallVertex
                     )
                 ){
                     NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while appending wall vertex (entity={} runtime_mesh={} ring={} edge={} source_vertex={})")
@@ -4680,18 +4676,8 @@ template<usize sourceCount>
                     );
                     return false;
                 }
+                ringVertices[edgeIndex] = wallVertex;
             }
-        }
-
-        Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> bandOuterEdges = orderedBoundaryEdges;
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
-        ringVertices.resize(boundaryVertexCount);
-        for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
-            const usize wallVertexBase = ringIndex * boundaryVertexCount;
-            for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
-                ringVertices[edgeIndex] = wallVertices[wallVertexBase + edgeIndex];
 
             if(!TransferWallMorphDeltas(newMorphs, orderedBoundaryEdges, ringVertices)){
                 NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while transferring wall morph deltas (entity={} runtime_mesh={} ring={} morphs={})")
@@ -4724,7 +4710,7 @@ template<usize sourceCount>
             if(ringIndex + 1u < wallBandCount){
                 if(
                     !Core::Geometry::BuildSurfacePatchRingEdges(
-                        wallVertices.data() + wallVertexBase,
+                        ringVertices.data(),
                         boundaryVertexCount,
                         bandOuterEdges
                     )
@@ -4740,18 +4726,10 @@ template<usize sourceCount>
             }
         }
 
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
-        capVertices.resize(boundaryVertexCount);
-        const usize capSourceVertexBase = (wallBandCount - 1u) * boundaryVertexCount;
-        for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
-            capVertices[edgeIndex] = wallVertices[capSourceVertexBase + edgeIndex];
-
         u32 capAddedTriangleCount = 0u;
         if(
             !AppendBottomCapTriangles(
-                capVertices,
+                ringVertices,
                 newRestVertices,
                 frame.tangent,
                 frame.bitangent,
@@ -4762,7 +4740,7 @@ template<usize sourceCount>
             NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while triangulating bottom cap (entity={} runtime_mesh={} cap_vertices={})")
                 , instance.entity.id
                 , instance.handle.value
-                , capVertices.size()
+                , ringVertices.size()
             );
             return false;
         }

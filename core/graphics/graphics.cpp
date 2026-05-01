@@ -5,7 +5,7 @@
 #include "graphics.h"
 
 #include <core/input/input.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include "vulkan/vulkan_backend_context.h"
 

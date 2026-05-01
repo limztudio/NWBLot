@@ -17,14 +17,9 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IClient{
+class IClient : public ILogger{
 public:
-    virtual ~IClient() = default;
-
-
-public:
-    virtual void enqueue(TString&& str, Type::Enum type = Type::Info) = 0;
-    virtual void enqueue(const TString& str, Type::Enum type = Type::Info) = 0;
+    virtual ~IClient()override = default;
 };
 
 

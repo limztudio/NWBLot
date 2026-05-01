@@ -34,8 +34,8 @@ add_subdirectory(3rd_parties)
 nwb_configure_external_dependencies()
 nwb_configure_internal_headers()
 
-add_subdirectory(logger/client)
 add_subdirectory(core)
+add_subdirectory(logger/client)
 add_subdirectory(impl)
 
 if(NWB_BUILD_LOGSERVER AND (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))

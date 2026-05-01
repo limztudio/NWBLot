@@ -3,11 +3,11 @@
 
 
 #include "alloc.h"
-#include <core/common/common.h>
 
 #include <global/thread.h>
 
 #include <cstddef>
+#include <mutex>
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_APPLE)
@@ -30,10 +30,10 @@ namespace __hidden_alloc{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CacheSize : Core::Common::Initializerable{
+struct CacheSize{
     usize m_size = 64;
 
-    virtual bool initialize()override{
+    void initialize(){
 #if defined(_WIN32)
         DWORD bufferSize = 0;
         GetLogicalProcessorInformation(nullptr, &bufferSize);
@@ -74,27 +74,32 @@ struct CacheSize : Core::Common::Initializerable{
                 m_size = cur;
         }
 #endif
-        return true;
     }
-    virtual void finalize()override{}
 } static s_CacheSize;
+
+static std::once_flag s_CacheSizeOnce;
+
+CacheSize& GetCacheSize(){
+    std::call_once(s_CacheSizeOnce, [](){
+        s_CacheSize.initialize();
+    });
+    return s_CacheSize;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AffinityMasks : Core::Common::Initializerable{
+struct AffinityMasks{
     u64 m_performance = 0;
     u64 m_efficiency = 0;
 
-    virtual bool initialize()override{
+    void initialize(){
 #if defined(NWB_PLATFORM_WINDOWS)
         queryMask(m_performance, CoreAffinity::Performance);
         queryMask(m_efficiency, CoreAffinity::Efficiency);
 #endif
-        return true;
     }
-    virtual void finalize()override{}
 
 #if defined(NWB_PLATFORM_WINDOWS)
     void queryMask(u64& outMask, CoreAffinity::Enum type){
@@ -155,6 +160,15 @@ struct AffinityMasks : Core::Common::Initializerable{
 
 } static s_AffinityMasks;
 
+static std::once_flag s_AffinityMasksOnce;
+
+AffinityMasks& GetAffinityMasks(){
+    std::call_once(s_AffinityMasksOnce, [](){
+        s_AffinityMasks.initialize();
+    });
+    return s_AffinityMasks;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -165,16 +179,17 @@ struct AffinityMasks : Core::Common::Initializerable{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize(){ return __hidden_alloc::s_CacheSize.m_size; }
+usize CachelineSize(){ return __hidden_alloc::GetCacheSize().m_size; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 u64 QueryAffinityMask(CoreAffinity::Enum type){
+    const auto& affinityMasks = __hidden_alloc::GetAffinityMasks();
     switch(type){
-    case CoreAffinity::Performance: return __hidden_alloc::s_AffinityMasks.m_performance;
-    case CoreAffinity::Efficiency: return __hidden_alloc::s_AffinityMasks.m_efficiency;
+    case CoreAffinity::Performance: return affinityMasks.m_performance;
+    case CoreAffinity::Efficiency: return affinityMasks.m_efficiency;
     default: return 0;
     }
 }

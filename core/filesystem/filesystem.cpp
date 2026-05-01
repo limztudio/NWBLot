@@ -6,7 +6,7 @@
 #include "volume_naming.h"
 
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 #include <core/alloc/core.h>
 #include <core/alloc/scratch.h>
 #include <global/binary.h>

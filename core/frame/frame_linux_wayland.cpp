@@ -5,7 +5,7 @@
 #include "frame_linux_platform.h"
 #include "frame_input_helpers.h"
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include <global/thread.h>
 

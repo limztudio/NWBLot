@@ -4,7 +4,7 @@
 
 #include "common.h"
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 #include <global/sync.h>
 
 

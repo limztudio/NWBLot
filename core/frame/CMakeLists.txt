@@ -32,4 +32,3 @@ target_link_libraries(nwb_frame PUBLIC
     nwb_alloc
     nwb_graphics
 )
-target_link_libraries(nwb_frame PRIVATE nwb_logclient)

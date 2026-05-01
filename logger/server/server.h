@@ -59,13 +59,13 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace LoggerDetail{
+namespace ServerLoggerDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-extern Server* g_Logger;
+extern Server* g_ServerLogger;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,13 +80,13 @@ extern Server* g_Logger;
 class ServerLoggerRegistrationGuard final : NoCopy{
 public:
     explicit ServerLoggerRegistrationGuard(Server& logger)
-        : m_previous(LoggerDetail::g_Logger)
+        : m_previous(ServerLoggerDetail::g_ServerLogger)
     {
-        LoggerDetail::g_Logger = &logger;
+        ServerLoggerDetail::g_ServerLogger = &logger;
     }
     ServerLoggerRegistrationGuard(ServerLoggerRegistrationGuard&&) = delete;
     ~ServerLoggerRegistrationGuard(){
-        LoggerDetail::g_Logger = m_previous;
+        ServerLoggerDetail::g_ServerLogger = m_previous;
     }
 
 

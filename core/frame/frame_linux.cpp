@@ -4,7 +4,7 @@
 
 #include "frame_linux_platform.h"
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include <cstdlib>
 

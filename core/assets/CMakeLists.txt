@@ -13,4 +13,4 @@ target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset_registry.h"
     "${CMAKE_CURRENT_LIST_DIR}/asset_manager.h"
 )
-target_link_libraries(nwb_assets PUBLIC nwb_common nwb_logclient)
+target_link_libraries(nwb_assets PUBLIC nwb_common)

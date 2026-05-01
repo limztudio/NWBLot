@@ -16,7 +16,7 @@
 #undef Button5
 #endif
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include <global/thread.h>
 

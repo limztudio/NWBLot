@@ -19,17 +19,6 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Type{
-    enum Enum : u8{
-        Info,
-        EssentialInfo,
-        Warning,
-        CriticalWarning,
-        Error,
-        Fatal,
-    };
-};
-
 using MessageType = Tuple<Timer, Type::Enum, TString>;
 using MessageQueue = ParallelQueue<MessageType>;
 

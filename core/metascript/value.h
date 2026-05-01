@@ -118,6 +118,8 @@ private:
     void destroy();
     void copyFrom(const Value& other);
     void moveFrom(Value&& other)noexcept;
+    Value& appendListCopy(const Value& val);
+    void appendListCopies(const ListType& values, usize count);
 
     [[nodiscard]] StringType makeArenaString(MStringView sv)const;
     [[nodiscard]] ListType* allocList()const;

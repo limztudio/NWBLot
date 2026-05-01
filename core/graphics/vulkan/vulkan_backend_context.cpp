@@ -32,12 +32,9 @@ template<typename Set>
 static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringSetToVector(const Set& set, Alloc::ScratchArena<>& arena){
     Alloc::ScratchAllocator<const char*> alloc(arena);
     Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
-    ret.resize(set.size());
-    usize index = 0u;
-    for(const auto& s : set){
-        ret[index] = s.c_str();
-        ++index;
-    }
+    ret.reserve(set.size());
+    for(const auto& s : set)
+        ret.push_back(s.c_str());
     return ret;
 }
 
@@ -45,11 +42,10 @@ template<typename Map>
 static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringMapKeysToVector(const Map& map, Alloc::ScratchArena<>& arena){
     Alloc::ScratchAllocator<const char*> alloc(arena);
     Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
-    ret.resize(map.size());
-    usize index = 0u;
+    ret.reserve(map.size());
     for(const auto& [key, val] : map){
-        ret[index] = key.c_str();
-        ++index;
+        static_cast<void>(val);
+        ret.push_back(key.c_str());
     }
     return ret;
 }

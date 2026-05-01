@@ -2508,12 +2508,9 @@ static bool GetVariantBytecode(
         );
         return false;
     }
-    compileDefines.resize(mergedDefines.size());
-    usize compileDefineIndex = 0u;
-    for(const auto& [defineName, value] : mergedDefines){
-        compileDefines[compileDefineIndex] = Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) };
-        ++compileDefineIndex;
-    }
+    compileDefines.reserve(mergedDefines.size());
+    for(const auto& [defineName, value] : mergedDefines)
+        compileDefines.push_back(Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) });
 
     const Core::ShaderCompilerRequest compileRequest = {
         entry.name,

@@ -1105,6 +1105,7 @@ bool VolumeFileSystem::flushMetadata(){
 
 bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)const{
     ScopedLock lock(m_mutex);
+    outData.clear();
     if(!m_mounted){
         __hidden_filesystem::LogFailure(m_volumeName, "readFile", "filesystem is not mounted");
         return false;
@@ -1136,7 +1137,6 @@ bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)con
     if(readBytesLocked(record.offset, outData.data(), record.size))
         return true;
 
-    outData.clear();
     __hidden_filesystem::LogFailure(m_volumeName, "readFile", "payload read failed");
     return false;
 }

@@ -116,8 +116,8 @@ Value Value::operator+(const Value& rhs)const{
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
-        dst.insert(dst.end(), m_data.m_list->begin(), m_data.m_list->end());
-        dst.insert(dst.end(), rhs.m_data.m_list->begin(), rhs.m_data.m_list->end());
+        v.appendListCopies(*m_data.m_list, m_data.m_list->size());
+        v.appendListCopies(*rhs.m_data.m_list, rhs.m_data.m_list->size());
         return v;
     }
 
@@ -213,15 +213,26 @@ Value& Value::operator+=(const Value& rhs){
                 NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
                 return *this;
             }
-            m_data.m_list->reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
-            m_data.m_list->insert(m_data.m_list->end(), rhs.m_data.m_list->begin(), rhs.m_data.m_list->end());
+            const usize appendCount = rhs.m_data.m_list->size();
+            m_data.m_list->reserve(m_data.m_list->size() + appendCount);
+            appendListCopies(*rhs.m_data.m_list, appendCount);
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
                 NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
                 return *this;
             }
-            m_data.m_list->push_back(rhs);
+            const usize listSize = m_data.m_list->size();
+            usize rhsIndex = listSize;
+            for(usize i = 0u; i < listSize; ++i){
+                if(&(*m_data.m_list)[i] == &rhs){
+                    rhsIndex = i;
+                    break;
+                }
+            }
+            const bool rhsInList = rhsIndex != listSize;
+            m_data.m_list->reserve(listSize + 1u);
+            appendListCopy(rhsInList ? (*m_data.m_list)[rhsIndex] : rhs);
         }
         return *this;
     }
@@ -404,9 +415,46 @@ const Value* Value::findField(MStringView name)const{
 }
 
 void Value::append(Value&& val){
+    Value selfCopy(m_arena);
+    const bool valIsSelf = &val == this;
+    if(valIsSelf)
+        selfCopy.copyFrom(val);
+
     if(m_type == ValueType::Null)
         makeList();
     NWB_ASSERT(m_type == ValueType::List);
+
+    if(valIsSelf){
+        if(m_data.m_list->size() == Limit<usize>::s_Max){
+            NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+            return;
+        }
+        appendListCopy(selfCopy);
+        return;
+    }
+
+    const usize listSize = m_data.m_list->size();
+    usize valIndex = listSize;
+    for(usize i = 0u; i < listSize; ++i){
+        if(&(*m_data.m_list)[i] == &val){
+            valIndex = i;
+            break;
+        }
+    }
+    const bool valInList = valIndex != listSize;
+    if(valInList){
+        m_data.m_list->reserve(listSize + 1u);
+        appendListCopy((*m_data.m_list)[valIndex]);
+        (*m_data.m_list)[valIndex].destroy();
+        return;
+    }
+
+    if(&m_arena != &val.m_arena){
+        appendListCopy(val);
+        val.destroy();
+        return;
+    }
+
     m_data.m_list->push_back(Move(val));
 }
 
@@ -453,15 +501,16 @@ void Value::copyFrom(const Value& other){
     case ValueType::List:{
         m_data.m_list = allocList();
         m_data.m_list->reserve(other.m_data.m_list->size());
-        for(const auto& elem : *other.m_data.m_list)
-            m_data.m_list->push_back(elem);
+        appendListCopies(*other.m_data.m_list, other.m_data.m_list->size());
         break;
     }
     case ValueType::Map:{
         m_data.m_map = allocMap();
         m_data.m_map->reserve(other.m_data.m_map->size());
-        for(const auto& [k, v] : *other.m_data.m_map)
-            m_data.m_map->emplace(StringType(k, MAllocator<MChar>(m_arena)), v);
+        for(const auto& [k, v] : *other.m_data.m_map){
+            auto result = m_data.m_map->emplace(StringType(k, MAllocator<MChar>(m_arena)), Value(m_arena));
+            result.first.value().copyFrom(v);
+        }
         break;
     }
     default:
@@ -470,11 +519,31 @@ void Value::copyFrom(const Value& other){
 }
 
 void Value::moveFrom(Value&& other)noexcept{
+    if(&m_arena != &other.m_arena){
+        copyFrom(other);
+        other.destroy();
+        return;
+    }
+
     m_type = other.m_type;
     m_data = other.m_data;
 
     other.m_type = ValueType::Null;
     other.m_data = {};
+}
+
+Value& Value::appendListCopy(const Value& val){
+    NWB_ASSERT(m_type == ValueType::List);
+    m_data.m_list->emplace_back(m_arena);
+    Value& dst = m_data.m_list->back();
+    dst.copyFrom(val);
+    return dst;
+}
+
+void Value::appendListCopies(const ListType& values, const usize count){
+    NWB_ASSERT(count <= values.size());
+    for(usize i = 0u; i < count; ++i)
+        appendListCopy(values[i]);
 }
 
 Value::StringType Value::makeArenaString(MStringView sv)const{

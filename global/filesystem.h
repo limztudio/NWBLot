@@ -284,7 +284,11 @@ struct StagedDirectoryPaths{
     if(stream.good())
         return true;
 
-    return stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize);
+    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize))
+        return true;
+
+    outText.clear();
+    return false;
 }
 
 [[nodiscard]] inline bool WriteTextFile(const Path& path, const AStringView content){
@@ -328,7 +332,11 @@ template<typename Container>
     if(stream.good())
         return true;
 
-    return stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize);
+    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize))
+        return true;
+
+    outBytes.clear();
+    return false;
 }
 
 template<typename Container>

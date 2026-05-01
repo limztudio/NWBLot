@@ -113,6 +113,10 @@ public:
     constexpr size_type size()const noexcept{ return m_currentSize; }
     constexpr size_type max_size()const noexcept{ return s_MaxElements; }
 
+    constexpr void clear()noexcept{
+        m_currentSize = 0;
+    }
+
     constexpr void fill(const T& value)noexcept{
         Base::fill(value);
         m_currentSize = s_MaxElements;

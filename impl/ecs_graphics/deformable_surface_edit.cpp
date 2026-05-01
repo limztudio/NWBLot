@@ -1733,15 +1733,15 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapIndices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    capPositions.resize(capVertices.size());
-    localCapVertices.resize(capVertices.size());
+    capPositions.reserve(capVertices.size());
+    localCapVertices.reserve(capVertices.size());
     for(usize capVertexIndex = 0u; capVertexIndex < capVertices.size(); ++capVertexIndex){
         const u32 capVertex = capVertices[capVertexIndex];
         if(capVertex >= restVertices.size())
             return false;
 
-        capPositions[capVertexIndex] = restVertices[capVertex].position;
-        localCapVertices[capVertexIndex] = static_cast<u32>(capVertexIndex);
+        capPositions.push_back(restVertices[capVertex].position);
+        localCapVertices.push_back(static_cast<u32>(capVertexIndex));
     }
 
     if(
@@ -1767,11 +1767,9 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
             return false;
     }
 
-    outIndices.resize(indexOffset + localCapIndices.size());
-    for(usize localIndex = 0u; localIndex < localCapIndices.size(); ++localIndex){
-        const u32 localCapIndex = localCapIndices[localIndex];
-        outIndices[indexOffset + localIndex] = capVertices[localCapIndex];
-    }
+    outIndices.reserve(indexOffset + localCapIndices.size());
+    for(const u32 localCapIndex : localCapIndices)
+        outIndices.push_back(capVertices[localCapIndex]);
     return true;
 }
 
@@ -2483,13 +2481,13 @@ template<typename DistanceFunc>
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    vertices.resize(polygon.size());
+    vertices.reserve(polygon.size());
     for(usize pointIndex = 0u; pointIndex < polygon.size(); ++pointIndex){
         const SurfaceRemeshClipPoint& point = polygon[pointIndex];
         u32 vertex = Limit<u32>::s_Max;
         if(!GetOrCreateSurfaceRemeshVertex(instance, sourceTriangle, triangleIndices, point, restPositions, generatedVertices, vertex))
             return false;
-        vertices[pointIndex] = vertex;
+        vertices.push_back(vertex);
     }
 
     for(usize i = 1u; i + 1u < vertices.size(); ++i){
@@ -2737,9 +2735,9 @@ template<typename DistanceFunc>
     if(!PointInsideOperatorCrossSection(params.operatorFootprint, 0.0f, 0.0f))
         return false;
 
-    outRestPositions.resize(instance.restVertices.size());
-    for(usize vertexIndex = 0u; vertexIndex < instance.restVertices.size(); ++vertexIndex)
-        outRestPositions[vertexIndex] = instance.restVertices[vertexIndex].position;
+    outRestPositions.reserve(instance.restVertices.size());
+    for(const DeformableVertexRest& restVertex : instance.restVertices)
+        outRestPositions.push_back(restVertex.position);
     outSurfaceTriangles.reserve(triangleCount);
 
     using BoundaryEdgeMap = HashMap<
@@ -2976,7 +2974,7 @@ template<typename DistanceFunc>
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> insideVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        insideVertices.resize(active.size());
+        insideVertices.reserve(active.size());
         for(usize pointIndex = 0u; pointIndex < active.size(); ++pointIndex){
             const SurfaceRemeshClipPoint& point = active[pointIndex];
             u32 vertex = Limit<u32>::s_Max;
@@ -2992,7 +2990,7 @@ template<typename DistanceFunc>
                 )
             )
                 return false;
-            insideVertices[pointIndex] = vertex;
+            insideVertices.push_back(vertex);
         }
         if(areaMode != SurfaceRemeshAreaMode::DepthAware){
             for(usize vertexIndex = 0u; vertexIndex < insideVertices.size(); ++vertexIndex){
@@ -3217,9 +3215,9 @@ struct HolePreviewPlan{
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    capVertices.resize(positions.size());
+    capVertices.reserve(positions.size());
     for(usize i = 0u; i < positions.size(); ++i)
-        capVertices[i] = static_cast<u32>(i);
+        capVertices.push_back(static_cast<u32>(i));
 
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> capIndices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
@@ -3241,13 +3239,13 @@ struct HolePreviewPlan{
     Float3U capNormal;
     StoreFloat(normal, &capNormal);
     const usize vertexBaseIndex = mesh.vertices.size();
-    mesh.vertices.resize(vertexBaseIndex + positions.size());
+    mesh.vertices.reserve(vertexBaseIndex + positions.size());
     for(usize positionIndex = 0u; positionIndex < positions.size(); ++positionIndex)
-        mesh.vertices[vertexBaseIndex + positionIndex] = MakeHolePreviewMeshVertex(
+        mesh.vertices.push_back(MakeHolePreviewMeshVertex(
             positions[positionIndex],
             capNormal,
             s_HolePreviewColor
-        );
+        ));
 
     if(
         mesh.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
@@ -3260,9 +3258,9 @@ struct HolePreviewPlan{
     }
 
     const usize indexBase = mesh.indices.size();
-    mesh.indices.resize(indexBase + capIndices.size());
-    for(usize indexOffset = 0u; indexOffset < capIndices.size(); ++indexOffset)
-        mesh.indices[indexBase + indexOffset] = vertexBase + capIndices[indexOffset];
+    mesh.indices.reserve(indexBase + capIndices.size());
+    for(const u32 capIndex : capIndices)
+        mesh.indices.push_back(vertexBase + capIndex);
     return true;
 }
 
@@ -3363,24 +3361,22 @@ struct HolePreviewPlan{
         Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> bottomCapPositions{
             Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
         };
-        bottomCapPositions.resize(boundaryVertexCount);
+        bottomCapPositions.reserve(boundaryVertexCount);
         const usize sideVertexBase = outMesh.vertices.size();
-        outMesh.vertices.resize(sideVertexBase + sideVertexCount);
+        outMesh.vertices.reserve(sideVertexBase + sideVertexCount);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
-            const usize topVertexIndex = sideVertexBase + edgeIndex * 2u;
-            const usize bottomVertexIndex = topVertexIndex + 1u;
-            outMesh.vertices[topVertexIndex] = MakeHolePreviewMeshVertex(
+            outMesh.vertices.push_back(MakeHolePreviewMeshVertex(
                 topCapPositions[edgeIndex],
                 wallVertexPlan[edgeIndex].normal,
                 s_HolePreviewColor
-            );
-            outMesh.vertices[bottomVertexIndex] = MakeHolePreviewMeshVertex(
+            ));
+            outMesh.vertices.push_back(MakeHolePreviewMeshVertex(
                 wallVertexPlan[edgeIndex].position,
                 wallVertexPlan[edgeIndex].normal,
                 s_HolePreviewColor
-            );
+            ));
 
-            bottomCapPositions[edgeIndex] = wallVertexPlan[edgeIndex].position;
+            bottomCapPositions.push_back(wallVertexPlan[edgeIndex].position);
         }
 
         if(
@@ -3390,20 +3386,19 @@ struct HolePreviewPlan{
             return false;
 
         const usize sideIndexBase = outMesh.indices.size();
-        outMesh.indices.resize(sideIndexBase + boundaryVertexCount * 6u);
+        outMesh.indices.reserve(sideIndexBase + boundaryVertexCount * 6u);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize nextEdgeIndex = (edgeIndex + 1u) % boundaryVertexCount;
-            const usize sideIndex = sideIndexBase + edgeIndex * 6u;
             const u32 topVertex = static_cast<u32>(sideVertexBase + edgeIndex * 2u);
             const u32 nextTopVertex = static_cast<u32>(sideVertexBase + nextEdgeIndex * 2u);
             const u32 bottomVertex = topVertex + 1u;
             const u32 nextBottomVertex = nextTopVertex + 1u;
-            outMesh.indices[sideIndex + 0u] = topVertex;
-            outMesh.indices[sideIndex + 1u] = nextTopVertex;
-            outMesh.indices[sideIndex + 2u] = nextBottomVertex;
-            outMesh.indices[sideIndex + 3u] = topVertex;
-            outMesh.indices[sideIndex + 4u] = nextBottomVertex;
-            outMesh.indices[sideIndex + 5u] = bottomVertex;
+            outMesh.indices.push_back(topVertex);
+            outMesh.indices.push_back(nextTopVertex);
+            outMesh.indices.push_back(nextBottomVertex);
+            outMesh.indices.push_back(topVertex);
+            outMesh.indices.push_back(nextBottomVertex);
+            outMesh.indices.push_back(bottomVertex);
         }
 
         if(!AppendHolePreviewCap(bottomCapPositions, frame.normal, frame.tangent, frame.bitangent, outMesh, scratchArena))
@@ -3957,7 +3952,7 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
 
     const usize stringTableOffset = cursor;
     outState.accessories.clear();
-    outState.accessories.resize(accessoryRecordCount);
+    outState.accessories.reserve(accessoryRecordCount);
     for(usize i = 0u; i < accessoryRecords.size(); ++i){
         DeformableAccessoryAttachmentRecord accessory;
         if(
@@ -3972,7 +3967,7 @@ bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, Deforma
             outState = DeformableSurfaceEditState{};
             return false;
         }
-        outState.accessories[i] = Move(accessory);
+        outState.accessories.push_back(Move(accessory));
     }
     cursor += static_cast<usize>(stringTableByteCount);
 
@@ -4489,9 +4484,6 @@ template<usize sourceCount>
 
     Vector<u32> newIndices;
     newIndices.reserve(surfaceIndexCount + wallIndexCount + capIndexCount);
-    newIndices.resize(surfaceIndexCount);
-    if(hasEditMaskPerTriangle)
-        newEditMaskPerTriangle.resize(surfaceTriangles.size());
     for(usize surfaceTriangleIndex = 0u; surfaceTriangleIndex < surfaceTriangles.size(); ++surfaceTriangleIndex){
         const SurfaceRemeshTriangle& triangle = surfaceTriangles[surfaceTriangleIndex];
         if(
@@ -4511,12 +4503,11 @@ template<usize sourceCount>
             return false;
         }
 
-        const usize indexOffset = surfaceTriangleIndex * 3u;
-        newIndices[indexOffset + 0u] = triangle.indices[0u];
-        newIndices[indexOffset + 1u] = triangle.indices[1u];
-        newIndices[indexOffset + 2u] = triangle.indices[2u];
+        newIndices.push_back(triangle.indices[0u]);
+        newIndices.push_back(triangle.indices[1u]);
+        newIndices.push_back(triangle.indices[2u]);
         if(hasEditMaskPerTriangle)
-            newEditMaskPerTriangle[surfaceTriangleIndex] = resolveValidatedEditMask(triangle.sourceTriangle);
+            newEditMaskPerTriangle.push_back(resolveValidatedEditMask(triangle.sourceTriangle));
     }
 
     u32 addedTriangleCount = 0u;
@@ -4701,10 +4692,8 @@ template<usize sourceCount>
                 return false;
             }
             if(hasEditMaskPerTriangle){
-                const usize editMaskOffset = newEditMaskPerTriangle.size();
-                newEditMaskPerTriangle.resize(editMaskOffset + wallAddedTriangleCount);
                 for(u32 triangleOffset = 0u; triangleOffset < wallAddedTriangleCount; ++triangleOffset)
-                    newEditMaskPerTriangle[editMaskOffset + triangleOffset] = removedEditMaskFlags;
+                    newEditMaskPerTriangle.push_back(removedEditMaskFlags);
             }
             addedTriangleCount += wallAddedTriangleCount;
 
@@ -4746,10 +4735,8 @@ template<usize sourceCount>
             return false;
         }
         if(hasEditMaskPerTriangle){
-            const usize editMaskOffset = newEditMaskPerTriangle.size();
-            newEditMaskPerTriangle.resize(editMaskOffset + capAddedTriangleCount);
             for(u32 triangleOffset = 0u; triangleOffset < capAddedTriangleCount; ++triangleOffset)
-                newEditMaskPerTriangle[editMaskOffset + triangleOffset] = removedEditMaskFlags;
+                newEditMaskPerTriangle.push_back(removedEditMaskFlags);
         }
         addedTriangleCount += capAddedTriangleCount;
         if(!BlendDeepestWallRingCapFrames(newRestVertices, firstWallVertex, addedWallVertexCount, frame.normal, frame.tangent)){

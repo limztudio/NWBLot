@@ -136,14 +136,15 @@ bool BuildSurfacePatchRingEdgesImpl(
             return false;
     }
 
-    outEdges.resize(ringVertexCount);
+    outEdges.reserve(ringVertexCount);
     for(usize vertexIndex = 0u; vertexIndex < ringVertexCount; ++vertexIndex){
         const usize nextVertexIndex = (vertexIndex + 1u) % ringVertexCount;
-        MeshTopologyEdge& edge = outEdges[vertexIndex];
+        MeshTopologyEdge edge;
         edge.a = ringVertices[vertexIndex];
         edge.b = ringVertices[nextVertexIndex];
         edge.fullCount = 2u;
         edge.removedCount = 1u;
+        outEdges.push_back(edge);
     }
     return true;
 }
@@ -430,10 +431,10 @@ bool BuildSurfacePatchWallVerticesImpl(
         Core::Alloc::ScratchAllocator<MeshTopologyLoopVertexFrame>(scratchArena)
     };
     if(cacheLoopVertexFrames){
-        cachedLoopVertexFrames.resize(boundaryVertexCount);
+        cachedLoopVertexFrames.reserve(boundaryVertexCount);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
-            MeshTopologyLoopVertexFrame& loopVertexFrame = cachedLoopVertexFrames[edgeIndex];
+            MeshTopologyLoopVertexFrame loopVertexFrame;
             if(
                 !BuildBoundaryLoopVertexFrame(
                     positions,
@@ -444,6 +445,7 @@ bool BuildSurfacePatchWallVerticesImpl(
                 )
             )
                 return false;
+            cachedLoopVertexFrames.push_back(loopVertexFrame);
         }
     }
 

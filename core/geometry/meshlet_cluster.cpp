@@ -121,19 +121,16 @@ struct TriangleLocalIndices{
         return false;
 
     const usize vertexBase = meshlet.vertices.size();
-    meshlet.vertices.resize(vertexBase + missingVertexCount);
     usize nextVertexOffset = 0u;
 
-    const usize indexBase = meshlet.indices.size();
-    meshlet.indices.resize(indexBase + 3u);
     for(u32 corner = 0u; corner < 3u; ++corner){
         u32 localIndex = localIndices.values[corner];
         if(localIndex == Limit<u32>::s_Max){
             localIndex = static_cast<u32>(vertexBase + nextVertexOffset);
-            meshlet.vertices[vertexBase + nextVertexOffset] = triangle.values[corner];
+            meshlet.vertices.push_back(triangle.values[corner]);
             ++nextVertexOffset;
         }
-        meshlet.indices[indexBase + static_cast<usize>(corner)] = localIndex;
+        meshlet.indices.push_back(localIndex);
     }
     return true;
 }

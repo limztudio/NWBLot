@@ -123,7 +123,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         }
     }
 
-    outSkinInfluences.resize(skinCount);
+    outSkinInfluences.reserve(skinCount);
     for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
         if(!DeformableValidation::ValidSkinInfluence(sourceSkin)){
@@ -151,7 +151,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             return false;
         }
 
-        DeformerSystem::DeformerSkinInfluenceGpu& gpuSkin = outSkinInfluences[vertexIndex];
+        DeformerSystem::DeformerSkinInfluenceGpu gpuSkin;
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
@@ -172,6 +172,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             sourceSkin.weight[2],
             sourceSkin.weight[3]
         );
+        outSkinInfluences.push_back(gpuSkin);
     }
 
     return true;

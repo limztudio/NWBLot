@@ -617,7 +617,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
     Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>>& outMappings,
     Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings
 ){
-    outPushRanges.resize(0);
+    outPushRanges.clear();
     outPushDataSize = 0;
     outMappings.clear();
     outStageMappings.clear();

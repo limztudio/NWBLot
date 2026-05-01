@@ -217,15 +217,15 @@ inline void BuildRestVertexTangentFrameRebuildInput(
     const Vector<DeformableVertexRest>& vertices,
     Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& outRebuildVertices){
     outRebuildVertices.clear();
-    outRebuildVertices.resize(vertices.size());
+    outRebuildVertices.reserve(vertices.size());
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         const DeformableVertexRest& vertex = vertices[vertexIndex];
-        outRebuildVertices[vertexIndex] = Core::Geometry::TangentFrameRebuildVertex{
+        outRebuildVertices.push_back(Core::Geometry::TangentFrameRebuildVertex{
             vertex.position,
             vertex.uv0,
             vertex.normal,
             vertex.tangent,
-        };
+        });
     }
 }
 

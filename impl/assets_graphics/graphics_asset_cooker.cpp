@@ -1423,17 +1423,18 @@ static bool ParseSkinInfluences(
         return false;
     }
 
-    outSkin.resize(vertexCount);
+    outSkin.reserve(vertexCount);
     for(usize i = 0; i < vertexCount; ++i){
         const AString jointLabel = MakeIndexedLabel("skin.joints0", i);
         const AString weightLabel = MakeIndexedLabel("skin.weights0", i);
-        SkinInfluence4& influence = outSkin[i];
+        SkinInfluence4 influence;
         if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, influence.joint))
             return false;
         if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, influence.weight))
             return false;
         if(!NormalizeSkinInfluenceWeights(nwbFilePath, weightLabel, influence))
             return false;
+        outSkin.push_back(influence);
     }
 
     return true;
@@ -1549,13 +1550,14 @@ static bool ParseSourceSamples(
     }
 
     outSourceSamples.clear();
-    outSourceSamples.resize(vertexCount);
+    outSourceSamples.reserve(vertexCount);
     for(usize i = 0; i < vertexCount; ++i){
-        SourceSample& sample = outSourceSamples[i];
+        SourceSample sample;
         sample.sourceTri = sourceTri[i];
         sample.bary[0] = bary[i].x;
         sample.bary[1] = bary[i].y;
         sample.bary[2] = bary[i].z;
+        outSourceSamples.push_back(sample);
     }
     return true;
 }
@@ -1647,7 +1649,7 @@ static bool ParseEditMasks(
         return false;
     }
 
-    outEditMaskPerTriangle.resize(parsedFlags.size());
+    outEditMaskPerTriangle.reserve(parsedFlags.size());
     for(usize i = 0; i < parsedFlags.size(); ++i){
         if(parsedFlags[i] > Limit<DeformableEditMaskFlags>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] exceeds u8")
@@ -1665,7 +1667,7 @@ static bool ParseEditMasks(
             );
             return false;
         }
-        outEditMaskPerTriangle[i] = flags;
+        outEditMaskPerTriangle.push_back(flags);
     }
     return true;
 }

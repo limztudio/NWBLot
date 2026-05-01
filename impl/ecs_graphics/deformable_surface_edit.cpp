@@ -4441,14 +4441,14 @@ template<usize sourceCount>
     Vector<DeformableEditMaskFlags> newEditMaskPerTriangle;
     Vector<DeformableMorph> newMorphs;
     newRestVertices.reserve(reservedVertexCount);
-    newRestVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
+    AssignTriviallyCopyableVector(newRestVertices, instance.restVertices);
     if(!instance.skin.empty()){
         newSkin.reserve(reservedVertexCount);
-        newSkin.assign(instance.skin.begin(), instance.skin.end());
+        AssignTriviallyCopyableVector(newSkin, instance.skin);
     }
     if(!instance.sourceSamples.empty()){
         newSourceSamples.reserve(reservedVertexCount);
-        newSourceSamples.assign(instance.sourceSamples.begin(), instance.sourceSamples.end());
+        AssignTriviallyCopyableVector(newSourceSamples, instance.sourceSamples);
     }
     newMorphs = instance.morphs;
     if(hasEditMaskPerTriangle)

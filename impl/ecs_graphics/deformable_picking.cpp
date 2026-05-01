@@ -625,10 +625,10 @@ template<typename VertexVector>
             return false;
         if(
             !__hidden_deformable_picking::BuildPreparedJointPaletteFromJointMatrices(
-            instance,
-            poseJoints,
-            skinningMode,
-            jointPalette
+                instance,
+                poseJoints,
+                skinningMode,
+                jointPalette
             )
         )
             return false;
@@ -638,8 +638,7 @@ template<typename VertexVector>
             return false;
     }
 
-    outVertices.reserve(instance.restVertices.size());
-    outVertices.assign(instance.restVertices.begin(), instance.restVertices.end());
+    AssignTriviallyCopyableVector(outVertices, instance.restVertices);
 
     if(!__hidden_deformable_picking::ApplyMorphs(instance, inputs.morphWeights, outVertices))
         return false;
@@ -655,11 +654,11 @@ template<typename VertexVector>
 
         if(
             !__hidden_deformable_picking::ApplySkin(
-            instance,
-            jointPalette,
-            skinningMode,
-            static_cast<u32>(vertexIndex),
-            vertex
+                instance,
+                jointPalette,
+                skinningMode,
+                static_cast<u32>(vertexIndex),
+                vertex
             )
         )
             return false;

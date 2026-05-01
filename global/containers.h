@@ -154,5 +154,21 @@ using Deque = std::deque<T, Alloc>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename DestinationVector, typename SourceVector>
+inline void AssignTriviallyCopyableVector(DestinationVector& destination, const SourceVector& source){
+    using DestinationValue = typename DestinationVector::value_type;
+    using SourceValue = typename SourceVector::value_type;
+    static_assert(IsSame_V<DestinationValue, SourceValue>, "vector value types must match");
+    static_assert(IsTriviallyCopyable_V<DestinationValue>, "vector value type must be trivially copyable");
+
+    destination.resize(source.size());
+    const usize byteCount = source.size() * sizeof(SourceValue);
+    if(byteCount == 0u || destination.data() == source.data())
+        return;
+
+    NWB_MEMCPY(destination.data(), destination.size() * sizeof(DestinationValue), source.data(), byteCount);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

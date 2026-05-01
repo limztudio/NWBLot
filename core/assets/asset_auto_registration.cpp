@@ -49,8 +49,7 @@ using ScratchFactoryVector = Vector<FactoryT, Alloc::ScratchAllocator<FactoryT>>
 
 template<typename FactoryT>
 void CopyQueuedFactories(const Vector<FactoryT>& queuedFactories, ScratchFactoryVector<FactoryT>& outFactories){
-    outFactories.reserve(queuedFactories.size());
-    outFactories.assign(queuedFactories.begin(), queuedFactories.end());
+    AssignTriviallyCopyableVector(outFactories, queuedFactories);
 }
 
 template<typename FactoryVector, typename CreateProduct, typename RegisterProduct, typename LogNullProduct, typename LogRegisterFailure>

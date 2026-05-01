@@ -65,12 +65,6 @@ inline bool CopySpirvWords(const void* binary, const usize binarySize, SpirvWord
         return false;
 
     const usize wordCount = binarySize / sizeof(u32);
-    if((reinterpret_cast<usize>(binary) & (alignof(u32) - 1u)) == 0u){
-        const auto* words = static_cast<const u32*>(binary);
-        outWords.assign(words, words + wordCount);
-        return true;
-    }
-
     outWords.resize(wordCount);
     NWB_MEMCPY(outWords.data(), binarySize, binary, binarySize);
     return true;
@@ -323,7 +317,8 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = d;
-    shader->m_bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
+    shader->m_bytecode.resize(binarySize);
+    NWB_MEMCPY(shader->m_bytecode.data(), shader->m_bytecode.size(), binary, binarySize);
 
     Alloc::ScratchArena<> scratchArena;
     __hidden_vulkan_shader::SpirvWordVector spirvWords{ Alloc::ScratchAllocator<u32>(scratchArena) };
@@ -425,7 +420,8 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
     }
 
     auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
-    lib->m_bytecode.assign(static_cast<const u8*>(binary), static_cast<const u8*>(binary) + binarySize);
+    lib->m_bytecode.resize(binarySize);
+    NWB_MEMCPY(lib->m_bytecode.data(), lib->m_bytecode.size(), binary, binarySize);
 
     return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -571,8 +567,11 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     }
 
     auto* layout = NewArenaObject<InputLayout>(m_context.objectArena, m_context);
-    if(attributeCount > 0)
-        layout->m_attributes.assign(d, d + attributeCount);
+    if(attributeCount > 0){
+        static_assert(IsTriviallyCopyable_V<VertexAttributeDesc>, "vertex attribute descriptors must be trivially copyable");
+        layout->m_attributes.resize(attributeCount);
+        NWB_MEMCPY(layout->m_attributes.data(), layout->m_attributes.size() * sizeof(VertexAttributeDesc), d, attributeCount * sizeof(VertexAttributeDesc));
+    }
 
     layout->m_bindings.reserve(bindingInfos.size());
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){

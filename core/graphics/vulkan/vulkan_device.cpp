@@ -88,7 +88,10 @@ static bool MountPipelineCacheVolume(
     return outVolume.mount(mountDesc);
 }
 
-static bool ValidatePipelineCacheData(const Vector<u8>& cacheData, const VkPhysicalDeviceProperties& properties){
+template<typename CacheDataVector>
+static bool ValidatePipelineCacheData(const CacheDataVector& cacheData, const VkPhysicalDeviceProperties& properties){
+    static_assert(IsSame_V<typename CacheDataVector::value_type, u8>, "pipeline cache data must be byte-addressable");
+
     if(cacheData.size() < sizeof(VkPipelineCacheHeaderVersionOne))
         return false;
 
@@ -109,7 +112,10 @@ static bool ValidatePipelineCacheData(const Vector<u8>& cacheData, const VkPhysi
     return true;
 }
 
-static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineCache, Vector<u8>& outData){
+template<typename CacheDataVector>
+static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineCache, CacheDataVector& outData){
+    static_assert(IsSame_V<typename CacheDataVector::value_type, u8>, "pipeline cache data must be byte-addressable");
+
     outData.clear();
 
     for(usize attempt = 0; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
@@ -599,7 +605,8 @@ void Device::savePipelineCacheData(){
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty() || !m_context.pipelineCache)
         return;
 
-    Vector<u8> cacheData;
+    Alloc::ScratchArena<> scratchArena;
+    Vector<u8, Alloc::ScratchAllocator<u8>> cacheData{ Alloc::ScratchAllocator<u8>(scratchArena) };
     if(!VulkanDetail::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
         return;
     if(cacheData.empty())

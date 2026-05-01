@@ -4985,8 +4985,10 @@ void AccumulateSurfaceEditReplayResult(
         return false;
 
     const DeformableSurfaceEditId undoneEditId = state.edits.back().editId;
-    if(outRedoEntry)
+    if(outRedoEntry){
         outRedoEntry->edit = state.edits.back();
+        outRedoEntry->accessories.reserve(state.accessories.size());
+    }
 
     outUndoState.edits.reserve(state.edits.size() - 1u);
     outUndoState.edits.insert(outUndoState.edits.end(), state.edits.begin(), state.edits.end() - 1u);

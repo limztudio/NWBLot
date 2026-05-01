@@ -58,6 +58,12 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
     return LessNameHash(lhs.virtualPathHash, rhs.virtualPathHash);
 }
 
+bool LessRecordPointer(const ShaderArchive::Record* lhs, const ShaderArchive::Record* rhs){
+    NWB_ASSERT(lhs != nullptr);
+    NWB_ASSERT(rhs != nullptr);
+    return LessRecord(*lhs, *rhs);
+}
+
 
 bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
     return
@@ -186,14 +192,15 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     }
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<Record, Alloc::ScratchAllocator<Record>> sortedRecords{Alloc::ScratchAllocator<Record>(scratchArena)};
+    Vector<const Record*, Alloc::ScratchAllocator<const Record*>> sortedRecords{Alloc::ScratchAllocator<const Record*>(scratchArena)};
     sortedRecords.reserve(records.size());
-    sortedRecords.insert(sortedRecords.end(), records.begin(), records.end());
-    Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecord);
+    for(const Record& record : records)
+        sortedRecords.push_back(&record);
+    Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecordPointer);
 
     usize variantTextBinaryBytes = 0;
     for(usize i = 0; i < sortedRecords.size(); ++i){
-        const Record& record = sortedRecords[i];
+        const Record& record = *sortedRecords[i];
         if(!__hidden_shader_archive::ValidateRecord(record))
             return false;
         if(record.variantName.size() > Limit<u32>::s_Max){
@@ -214,7 +221,7 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
         if(i == 0)
             continue;
 
-        if(__hidden_shader_archive::SameShaderVariantStage(sortedRecords[i - 1], record)){
+        if(__hidden_shader_archive::SameShaderVariantStage(*sortedRecords[i - 1], record)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: duplicate shader+variant+stage key detected (shader='{}', variant='{}', stage='{}')")
                 , StringConvert(record.shaderName.c_str())
                 , StringConvert(AStringView(record.variantName))
@@ -243,7 +250,8 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     outBinary.reserve(headerAndRecordBytes + variantTextBinaryBytes);
     AppendPOD(outBinary, header);
 
-    for(const Record& record : sortedRecords){
+    for(const Record* sortedRecord : sortedRecords){
+        const Record& record = *sortedRecord;
         __hidden_shader_archive::RecordHeaderDisk recordHeader;
         recordHeader.shaderName = record.shaderName.hash();
         recordHeader.stage = record.stage.hash();

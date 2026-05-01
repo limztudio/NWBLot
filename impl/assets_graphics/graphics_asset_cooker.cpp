@@ -2563,8 +2563,15 @@ static bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlanned
     return true;
 }
 
-static bool ReserveShaderIndexRecords(const u64 plannedFileCount, Vector<Core::ShaderArchive::Record>& outShaderIndexRecords){
-    const u64 shaderRecordCount = plannedFileCount > 0 ? plannedFileCount - 1 : 0;
+static bool ReserveShaderIndexRecords(const PreparedShaderVector& preparedEntries, Vector<Core::ShaderArchive::Record>& outShaderIndexRecords){
+    u64 shaderRecordCount = 0;
+    for(const PreparedShaderEntry& preparedEntry : preparedEntries){
+        if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count overflow"));
+            return false;
+        }
+        shaderRecordCount += preparedEntry.variantCount;
+    }
     if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count exceeds container capacity"));
         return false;
@@ -3284,7 +3291,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
 
     Vector<Core::ShaderArchive::Record> shaderIndexRecords;
-    if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.plannedFileCount, shaderIndexRecords))
+    if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords))
         return false;
 
     __hidden_graphics_asset_cooker::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};

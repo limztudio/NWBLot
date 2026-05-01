@@ -134,16 +134,19 @@ void AccumulateMorphDelta(
 
 
 bool ValidSkinInfluence4(const AttributeTransferSkinInfluence4& influence){
-    f32 weightSum = 0.0f;
-    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
-        const f32 weight = influence.weight[influenceIndex];
-        if(!IsFinite(weight) || weight < 0.0f)
-            return false;
+    const SIMDVector weights = VectorSet(
+        influence.weight[0],
+        influence.weight[1],
+        influence.weight[2],
+        influence.weight[3]
+    );
+    if(
+        !__hidden_geometry_attribute_transfer::FiniteVector(weights, 0xFu)
+        || !Vector4GreaterOrEqual(weights, VectorZero())
+    )
+        return false;
 
-        weightSum += weight;
-        if(!IsFinite(weightSum))
-            return false;
-    }
+    const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
     return Abs(weightSum - 1.0f) <= __hidden_geometry_attribute_transfer::s_SkinWeightSumEpsilon;
 }
 

@@ -770,10 +770,14 @@ bool ShaderCook::expandDefineCombinations(const CookMap<AString, DefineEntry>& d
         CookVector<DefineCombo> expanded{CookAllocator<DefineCombo>(m_memoryArena)};
         expanded.reserve(outCombinations.size() * values.size());
 
-        for(const DefineCombo& combo : outCombinations){
-            for(const AString& value : values){
-                expanded.push_back(cloneComboWithEntry(combo, defineName, value));
-            }
+        const usize copiedValueCount = values.size() - 1u;
+        for(DefineCombo& combo : outCombinations){
+            for(usize valueIndex = 0u; valueIndex < copiedValueCount; ++valueIndex)
+                expanded.push_back(cloneComboWithEntry(combo, defineName, values[valueIndex]));
+
+            combo.reserve(defineValues.size());
+            combo.try_emplace(defineName, values.back());
+            expanded.push_back(Move(combo));
         }
 
         outCombinations = Move(expanded);

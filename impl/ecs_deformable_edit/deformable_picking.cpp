@@ -525,7 +525,7 @@ void ApplyDisplacement(
     );
 }
 
-void ApplyTransform(const Core::ECSTransform::TransformComponent* transform, DeformableVertexRest& vertex){
+void ApplyTransform(const Core::Scene::TransformComponent* transform, DeformableVertexRest& vertex){
     if(!transform)
         return;
 
@@ -895,7 +895,7 @@ bool RaycastVisibleDeformableRenderers(
             inputs.jointPalette = world.tryGetComponent<DeformableJointPaletteComponent>(entity);
             inputs.skeletonPose = world.tryGetComponent<DeformableSkeletonPoseComponent>(entity);
             inputs.displacement = world.tryGetComponent<DeformableDisplacementComponent>(entity);
-            inputs.transform = world.tryGetComponent<Core::ECSTransform::TransformComponent>(entity);
+            inputs.transform = world.tryGetComponent<Core::Scene::TransformComponent>(entity);
 
             DeformablePosedHit hit;
             if(!RaycastDeformableRuntimeMesh(*instance, inputs, ray, hit))

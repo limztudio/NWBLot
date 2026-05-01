@@ -12,7 +12,7 @@
 #include <impl/ecs_deformable/ecs_deformable.h>
 #include <impl/ecs_deformable_edit/ecs_deformable_edit.h>
 #include <impl/ecs_render/ecs_render.h>
-#include <impl/ecs_scene/ecs_scene.h>
+#include <core/scene/scene.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

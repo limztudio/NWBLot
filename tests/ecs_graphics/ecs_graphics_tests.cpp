@@ -18,9 +18,9 @@
 #include <core/common/common.h>
 #include <core/ecs/ecs.h>
 #include <impl/ecs_deformable/components.h>
-#include <impl/ecs_lighting/components.h>
+#include <core/scene/light_component.h>
 #include <impl/ecs_render/components.h>
-#include <impl/ecs_transform/ecs_transform.h>
+#include <core/scene/transform_component.h>
 #include <impl/assets_geometry/deformable_geometry_asset.h>
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_material/material_asset.h>
@@ -74,12 +74,12 @@ static void TestLightComponents(TestContext& context){
     TestWorld testWorld;
 
     auto directionalEntity = testWorld.world.createEntity();
-    auto& directionalTransform = directionalEntity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
-    auto& directionalLight = directionalEntity.addComponent<NWB::Impl::LightComponent>();
+    auto& directionalTransform = directionalEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& directionalLight = directionalEntity.addComponent<NWB::Core::Scene::LightComponent>();
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::ECSTransform::TransformComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Impl::LightComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.type == NWB::Impl::LightType::Directional);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::Scene::TransformComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::Scene::LightComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.type == NWB::Core::Scene::LightType::Directional);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.color().x == 1.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.color().y == 1.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.color().z == 1.0f);
@@ -88,17 +88,17 @@ static void TestLightComponents(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalTransform.rotation.w == 1.0f);
 
     auto pointEntity = testWorld.world.createEntity();
-    auto& pointTransform = pointEntity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
-    auto& pointLight = pointEntity.addComponent<NWB::Impl::LightComponent>();
+    auto& pointTransform = pointEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& pointLight = pointEntity.addComponent<NWB::Core::Scene::LightComponent>();
     pointTransform.position = Float4(1.0f, 2.0f, 3.0f);
-    pointLight.type = NWB::Impl::LightType::Point;
+    pointLight.type = NWB::Core::Scene::LightType::Point;
     pointLight.setColor(Float4(1.0f, 0.75f, 0.5f));
     pointLight.setIntensity(4.0f);
     pointLight.range = 12.0f;
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::ECSTransform::TransformComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Impl::LightComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.type == NWB::Impl::LightType::Point);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::Scene::TransformComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::Scene::LightComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.type == NWB::Core::Scene::LightType::Point);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.color().x == 1.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.color().y == 0.75f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.color().z == 0.5f);
@@ -107,29 +107,29 @@ static void TestLightComponents(TestContext& context){
 
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        (reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Impl::LightComponent)) == 0
+        (reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Core::Scene::LightComponent)) == 0
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, (reinterpret_cast<usize>(&pointLight) % alignof(NWB::Impl::LightComponent)) == 0);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, (reinterpret_cast<usize>(&pointLight) % alignof(NWB::Core::Scene::LightComponent)) == 0);
 
     const NWB::Core::ECS::EntityID pointEntityId = pointEntity.id();
     usize lightViewCount = 0;
     usize directionalLightCount = 0;
     usize pointLightCount = 0;
     testWorld.world.view<
-        NWB::Core::ECSTransform::TransformComponent,
-        NWB::Impl::LightComponent
+        NWB::Core::Scene::TransformComponent,
+        NWB::Core::Scene::LightComponent
     >().each(
         [&context, &lightViewCount, &directionalLightCount, &pointLightCount, pointEntityId](
             NWB::Core::ECS::EntityID entityId,
-            NWB::Core::ECSTransform::TransformComponent& viewTransform,
-            NWB::Impl::LightComponent& viewLight
+            NWB::Core::Scene::TransformComponent& viewTransform,
+            NWB::Core::Scene::LightComponent& viewLight
         ){
             ++lightViewCount;
-            if(viewLight.type == NWB::Impl::LightType::Directional){
+            if(viewLight.type == NWB::Core::Scene::LightType::Directional){
                 ++directionalLightCount;
                 NWB_ECS_GRAPHICS_TEST_CHECK(context, viewLight.intensity() > 0.0f);
             }
-            else if(viewLight.type == NWB::Impl::LightType::Point){
+            else if(viewLight.type == NWB::Core::Scene::LightType::Point){
                 ++pointLightCount;
                 NWB_ECS_GRAPHICS_TEST_CHECK(context, entityId == pointEntityId);
                 NWB_ECS_GRAPHICS_TEST_CHECK(context, viewTransform.position.x == 1.0f);
@@ -1223,7 +1223,7 @@ static void ResolveRestoredAccessoryAttachmentTransform(
     NWB::Impl::DeformableRuntimeMeshInstance& editedInstance,
     const NWB::Impl::DeformableSurfaceEditState& state,
     const usize accessoryIndex,
-    NWB::Core::ECSTransform::TransformComponent& outTransform){
+    NWB::Core::Scene::TransformComponent& outTransform){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, accessoryIndex < state.accessories.size());
     if(accessoryIndex >= state.accessories.size())
         return;
@@ -1932,7 +1932,7 @@ static void TestPickingRejectsSkinJointOutsideSkeleton(TestContext& context){
 static void TestPickingUsesEntityTransform(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
-    NWB::Core::ECSTransform::TransformComponent transform;
+    NWB::Core::Scene::TransformComponent transform;
     transform.position = Float4(3.0f, 0.0f, 0.0f);
 
     NWB::Impl::DeformablePickingInputs inputs;
@@ -4490,7 +4490,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
         )
     );
 
-    NWB::Core::ECSTransform::TransformComponent baseTransform;
+    NWB::Core::Scene::TransformComponent baseTransform;
     instance.dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
         instance.dirtyFlags | NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty
     );
@@ -4536,7 +4536,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localAttachment.wallLoopParameter(), 0.25f));
 
-    NWB::Core::ECSTransform::TransformComponent localTransform;
+    NWB::Core::Scene::TransformComponent localTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -4624,7 +4624,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
 
     NWB::Impl::DeformablePickingInputs translatedInputs;
     translatedInputs.jointPalette = &joints;
-    NWB::Core::ECSTransform::TransformComponent translatedTransform;
+    NWB::Core::Scene::TransformComponent translatedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -4936,7 +4936,7 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, restoredAttachment.anchorEditId == loadedState.edits[0].editId);
 
     SimulateRuntimeMeshUpload(replayInstance);
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -5056,7 +5056,7 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits.size() == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 3u);
 
-    NWB::Core::ECSTransform::TransformComponent oldHoleTransform;
+    NWB::Core::Scene::TransformComponent oldHoleTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -5091,7 +5091,7 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
             if(restored.anchorEditId == replayFixture.loadedState.edits[1].editId)
                 ++secondEditAccessoryCount;
 
-            NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+            NWB::Core::Scene::TransformComponent resolvedTransform;
             NWB_ECS_GRAPHICS_TEST_CHECK(
                 context,
                 NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -5213,7 +5213,7 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
         [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
             ++accessoryCount;
 
-            NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+            NWB::Core::Scene::TransformComponent resolvedTransform;
             NWB_ECS_GRAPHICS_TEST_CHECK(
                 context,
                 NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -5424,7 +5424,7 @@ static void TestSurfaceEditRedoLastReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitTwoRecordedHoleAccessories(context, editedInstance, state, accessories));
     const NWB::Impl::DeformableSurfaceEditId firstEditId = accessories.first.editId;
     const NWB::Impl::DeformableSurfaceEditId secondEditId = accessories.second.editId;
-    NWB::Core::ECSTransform::TransformComponent expectedSecondTransform;
+    NWB::Core::Scene::TransformComponent expectedSecondTransform;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::ResolveAccessoryAttachmentTransform(
@@ -5472,7 +5472,7 @@ static void TestSurfaceEditRedoLastReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.indices.size() == fullIndexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 2u);
 
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     ResolveRestoredAccessoryAttachmentTransform(context, editedInstance, state, 1u, resolvedTransform);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.x, expectedSecondTransform.position.x));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.y, expectedSecondTransform.position.y));
@@ -5521,7 +5521,7 @@ static void TestSurfaceEditHealReplaysSurvivingEdits(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex != oldSecondFirstWallVertex);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     ResolveRestoredAccessoryAttachmentTransform(context, editedInstance, state, 0u, resolvedTransform);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedTransform.scale.x > 0.0f);
 
@@ -5584,7 +5584,7 @@ static void TestSurfaceEditResizeReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     ResolveRestoredAccessoryAttachmentTransform(context, editedInstance, state, 0u, resolvedTransform);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, 0.09f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.13f));
@@ -5659,7 +5659,7 @@ static void TestSurfaceEditMoveReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     ResolveRestoredAccessoryAttachmentTransform(context, editedInstance, state, 0u, resolvedTransform);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, 0.11f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.14f));
@@ -5742,7 +5742,7 @@ static void TestSurfaceEditPatchReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     ResolveRestoredAccessoryAttachmentTransform(context, editedInstance, state, 0u, resolvedTransform);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, 0.12f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.15f));
@@ -5823,7 +5823,7 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
             >= cleanBase.restVertices.size() + state.edits[0].result.addedVertexCount
     );
 
-    NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+    NWB::Core::Scene::TransformComponent resolvedTransform;
     ResolveRestoredAccessoryAttachmentTransform(context, editedInstance, state, 0u, resolvedTransform);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, 0.12f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.15f));
@@ -6033,7 +6033,7 @@ static void TestSurfaceEditReplayKeepsMorphSkinDisplacementUsable(TestContext& c
     replayFixture.world.world.view<NWB::Impl::DeformableAccessoryAttachmentComponent>().each(
         [&](NWB::Core::ECS::EntityID, NWB::Impl::DeformableAccessoryAttachmentComponent& restored){
             ++restoredAccessoryCount;
-            NWB::Core::ECSTransform::TransformComponent resolvedTransform;
+            NWB::Core::Scene::TransformComponent resolvedTransform;
             NWB_ECS_GRAPHICS_TEST_CHECK(
                 context,
                 NWB::Impl::ResolveAccessoryAttachmentTransform(

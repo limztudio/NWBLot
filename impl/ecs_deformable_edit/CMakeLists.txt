@@ -12,7 +12,7 @@ target_sources(nwb_ecs_deformable_edit PRIVATE
 target_link_libraries(nwb_ecs_deformable_edit PUBLIC
     nwb_ecs_deformable
     nwb_ecs_render
-    nwb_ecs_transform
+    nwb_scene
     nwb_assets_geometry
     nwb_assets_material
 )

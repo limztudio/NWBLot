@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ namespace __hidden_scene{
 }
 
 [[nodiscard]] bool TryBuildSceneCameraView(
-    const Core::ECS::EntityID entity,
+    const ECS::EntityID entity,
     TransformComponent& transform,
     CameraComponent& camera,
     const f32 fallbackAspectRatio,
@@ -65,7 +65,7 @@ namespace __hidden_scene{
     return true;
 }
 
-[[nodiscard]] Core::ECS::EntityID ResolveSceneMainCamera(Core::ECS::World& world){
+[[nodiscard]] ECS::EntityID ResolveSceneMainCamera(ECS::World& world){
     const auto sceneView = world.view<SceneComponent>();
     for(auto it = sceneView.begin(); it != sceneView.end(); ++it){
         auto&& [entity, scene] = *it;
@@ -73,7 +73,7 @@ namespace __hidden_scene{
         return scene.mainCamera;
     }
 
-    return Core::ECS::ENTITY_ID_INVALID;
+    return ECS::ENTITY_ID_INVALID;
 }
 
 
@@ -86,8 +86,8 @@ namespace __hidden_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio){
-    const Core::ECS::EntityID mainCamera = __hidden_scene::ResolveSceneMainCamera(world);
+SceneCameraView ResolveSceneCameraView(ECS::World& world, const f32 fallbackAspectRatio){
+    const ECS::EntityID mainCamera = __hidden_scene::ResolveSceneMainCamera(world);
     SceneCameraView fallbackCamera;
     SceneCameraView requestedCamera;
 
@@ -117,7 +117,7 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+NWB_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

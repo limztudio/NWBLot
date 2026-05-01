@@ -1,6 +1,7 @@
 add_subdirectory(common)
 add_subdirectory(alloc)
 add_subdirectory(geometry)
+add_subdirectory(scene)
 add_subdirectory(metascript)
 add_subdirectory(assets)
 add_subdirectory(filesystem)

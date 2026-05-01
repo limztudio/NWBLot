@@ -13,11 +13,11 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
-#include <impl/ecs_camera/ecs_camera.h>
+#include <core/scene/camera_component.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>
-#include <impl/ecs_lighting/components.h>
-#include <impl/ecs_scene/ecs_scene.h>
-#include <impl/ecs_transform/ecs_transform.h>
+#include <core/scene/light_component.h>
+#include <core/scene/scene.h>
+#include <core/scene/transform_component.h>
 #include <logger/client/logger.h>
 
 
@@ -590,7 +590,7 @@ static bool TryBuildMaterialParameterGpuData(
 }
 
 static InstanceGpuData BuildInstanceGpuData(
-    const Core::ECSTransform::TransformComponent* transform,
+    const Core::Scene::TransformComponent* transform,
     const u32 materialParameterOffset,
     const u32 materialParameterCount
 ){
@@ -631,7 +631,7 @@ static MeshViewBasis BuildDefaultMeshViewBasis(){
     return basis;
 }
 
-static MeshViewBasis BuildTransformMeshViewBasis(const Core::ECSTransform::TransformComponent& transform){
+static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformComponent& transform){
     MeshViewBasis basis;
     basis.positionDepthBias = transform.position;
     const SIMDVector rotation = LoadFloat(transform.rotation);
@@ -668,9 +668,9 @@ static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const 
 
 static bool TryApplyDirectionalLightMeshViewState(
     MeshViewState& state,
-    const Core::ECSTransform::TransformComponent& transform,
-    const LightComponent& light){
-    if(light.type != LightType::Directional)
+    const Core::Scene::TransformComponent& transform,
+    const Core::Scene::LightComponent& light){
+    if(light.type != Core::Scene::LightType::Directional)
         return false;
 
     const SIMDVector rotation = LoadFloat(transform.rotation);
@@ -702,15 +702,15 @@ static bool TryApplyDirectionalLightMeshViewState(
 }
 
 static void BuildCameraProjectionParams(
-    const Core::ECSCamera::CameraComponent& camera,
+    const Core::Scene::CameraComponent& camera,
     const f32 fallbackAspectRatio,
     Float4& outProjectionParams
 ){
-    if(Core::ECSCamera::TryBuildCameraProjectionParams(camera, fallbackAspectRatio, outProjectionParams))
+    if(Core::Scene::TryBuildCameraProjectionParams(camera, fallbackAspectRatio, outProjectionParams))
         return;
 
-    Core::ECSCamera::CameraComponent fallbackCamera;
-    if(Core::ECSCamera::TryBuildCameraProjectionParams(fallbackCamera, fallbackAspectRatio, outProjectionParams))
+    Core::Scene::CameraComponent fallbackCamera;
+    if(Core::Scene::TryBuildCameraProjectionParams(fallbackCamera, fallbackAspectRatio, outProjectionParams))
         return;
 
     outProjectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);
@@ -792,7 +792,7 @@ static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
 }
 
 static void ApplyDefaultCameraMeshViewState(MeshViewState& state, const MeshViewBasis& basis, const f32 fallbackAspectRatio){
-    Core::ECSCamera::CameraComponent camera;
+    Core::Scene::CameraComponent camera;
     Float4 projectionParams;
     BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
     StoreWorldToClipMatrix(state.worldToClip, basis, projectionParams);
@@ -801,8 +801,8 @@ static void ApplyDefaultCameraMeshViewState(MeshViewState& state, const MeshView
 
 static void ApplyCameraMeshViewState(
     MeshViewState& state,
-    const Core::ECSTransform::TransformComponent& transform,
-    const Core::ECSCamera::CameraProjectionData& projectionData
+    const Core::Scene::TransformComponent& transform,
+    const Core::Scene::CameraProjectionData& projectionData
 ){
     StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionData.projectionParams);
     StoreFloat(VectorSetW(LoadFloat(transform.position), 1.0f), &state.cameraPosition);
@@ -820,7 +820,7 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         return defaultBasis;
     };
 
-    const Core::ECSScene::SceneCameraView cameraView = Core::ECSScene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const Core::Scene::SceneCameraView cameraView = Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         __hidden_ecs_render::ApplyCameraMeshViewState(
             state,
@@ -837,7 +837,7 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
     }
 
     bool directionalLightApplied = false;
-    const auto lightView = world.view<Core::ECSTransform::TransformComponent, LightComponent>();
+    const auto lightView = world.view<Core::Scene::TransformComponent, Core::Scene::LightComponent>();
     for(auto it = lightView.begin(); it != lightView.end(); ++it){
         auto&& [entity, transform, light] = *it;
         static_cast<void>(entity);
@@ -1037,9 +1037,9 @@ RendererSystem::RendererSystem(
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
     , m_deformableRuntimeCache(Core::MakeCustomUnique<DeformableRuntimeMeshCache>(arena, arena, graphics, assetManager))
 {
-    readAccess<Core::ECSScene::SceneComponent>();
-    readAccess<Core::ECSTransform::TransformComponent>();
-    readAccess<Core::ECSCamera::CameraComponent>();
+    readAccess<Core::Scene::SceneComponent>();
+    readAccess<Core::Scene::TransformComponent>();
+    readAccess<Core::Scene::CameraComponent>();
     readAccess<RendererComponent>();
     writeAccess<DeformableRendererComponent>();
 }
@@ -2068,8 +2068,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!geometry.valid())
             return false;
 
-        const Core::ECSTransform::TransformComponent* transform =
-            m_world.tryGetComponent<Core::ECSTransform::TransformComponent>(entity)
+        const Core::Scene::TransformComponent* transform =
+            m_world.tryGetComponent<Core::Scene::TransformComponent>(entity)
         ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;

@@ -293,7 +293,7 @@ struct DeformableSurfaceEditReplayContext{
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    Core::ECSTransform::TransformComponent& outTransform
+    Core::Scene::TransformComponent& outTransform
 );
 [[nodiscard]] bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::Assets::AssetBytes& outBinary);
 [[nodiscard]] bool DeserializeSurfaceEditState(const Core::Assets::AssetBytes& binary, DeformableSurfaceEditState& outState);

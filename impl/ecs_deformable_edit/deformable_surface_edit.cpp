@@ -1104,7 +1104,7 @@ void RestoreReplayAccessories(
 
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         auto entity = context.world->createEntity();
-        auto& transform = entity.addComponent<Core::ECSTransform::TransformComponent>();
+        auto& transform = entity.addComponent<Core::Scene::TransformComponent>();
         transform.scale = Float4(accessory.uniformScale, accessory.uniformScale, accessory.uniformScale);
 
         auto& renderer = entity.addComponent<RendererComponent>();
@@ -1315,7 +1315,7 @@ void StoreAccessoryAttachmentTransform(
     const SIMDVector tangent,
     const SIMDVector normal,
     const f32 uniformScale,
-    Core::ECSTransform::TransformComponent& outTransform
+    Core::Scene::TransformComponent& outTransform
 ){
     StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
     StoreFloat(RotationFromFrame(tangent, normal), &outTransform.rotation);
@@ -1328,7 +1328,7 @@ void StoreAccessoryAttachmentTransform(
     const SIMDVector tangentReference,
     const f32 normalOffset,
     const f32 uniformScale,
-    Core::ECSTransform::TransformComponent& outTransform
+    Core::Scene::TransformComponent& outTransform
 ){
     const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
         VectorSubtract(anchorPosition, innerPosition),
@@ -3700,7 +3700,7 @@ bool ResolveAccessoryAttachmentTransform(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    Core::ECSTransform::TransformComponent& outTransform
+    Core::Scene::TransformComponent& outTransform
 ){
     if(
         !__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)

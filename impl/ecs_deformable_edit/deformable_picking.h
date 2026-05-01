@@ -7,7 +7,7 @@
 
 #include <core/alloc/scratch.h>
 #include <impl/ecs_deformable/deformable_runtime_mesh_cache.h>
-#include <impl/ecs_transform/ecs_transform.h>
+#include <core/scene/transform_component.h>
 
 #include <cstddef>
 
@@ -87,7 +87,7 @@ struct DeformablePickingInputs{
     const DeformableSkeletonPoseComponent* skeletonPose = nullptr;
     const DeformableDisplacementComponent* displacement = nullptr;
     const DeformableDisplacementTexture* displacementTexture = nullptr;
-    const Core::ECSTransform::TransformComponent* transform = nullptr;
+    const Core::Scene::TransformComponent* transform = nullptr;
 };
 
 struct alignas(Float4) DeformableHitBarycentric{

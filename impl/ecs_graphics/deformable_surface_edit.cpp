@@ -5008,8 +5008,14 @@ void AccumulateSurfaceEditReplayResult(
         outRedoEntry->accessories.reserve(state.accessories.size());
     }
 
-    outUndoState.edits.reserve(state.edits.size() - 1u);
-    outUndoState.edits.insert(outUndoState.edits.end(), state.edits.begin(), state.edits.end() - 1u);
+    outUndoState.edits.resize(state.edits.size() - 1u);
+    if(!outUndoState.edits.empty())
+        NWB_MEMCPY(
+            outUndoState.edits.data(),
+            outUndoState.edits.size() * sizeof(DeformableSurfaceEditRecord),
+            state.edits.data(),
+            outUndoState.edits.size() * sizeof(DeformableSurfaceEditRecord)
+        );
 
     outUndoState.accessories.reserve(state.accessories.size());
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
@@ -5056,7 +5062,7 @@ void AccumulateSurfaceEditReplayResult(
     }
 
     outRedoState.edits.reserve(state.edits.size() + 1u);
-    outRedoState.edits.insert(outRedoState.edits.end(), state.edits.begin(), state.edits.end());
+    AssignTriviallyCopyableVector(outRedoState.edits, state.edits);
     outRedoState.edits.push_back(redoEntry.edit);
 
     outRedoState.accessories.reserve(state.accessories.size() + redoEntry.accessories.size());

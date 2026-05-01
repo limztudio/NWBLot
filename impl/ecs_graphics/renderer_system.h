@@ -77,6 +77,7 @@ struct MaterialParameterGpuData{
 };
 static_assert(sizeof(MaterialParameterGpuData) == sizeof(u32) * 8u, "MaterialParameterGpuData layout must match the mesh shaders");
 static_assert(alignof(MaterialParameterGpuData) >= alignof(UInt4), "MaterialParameterGpuData must stay SIMD-aligned");
+static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParameterGpuData must stay cheap to upload");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

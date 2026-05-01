@@ -2050,7 +2050,15 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 materialParameters.capacity(),
                 requiredParameterCapacity
             ));
-        materialParameters.insert(materialParameters.end(), materialInfo.parameters.begin(), materialInfo.parameters.end());
+        const usize parameterWriteOffset = materialParameters.size();
+        materialParameters.resize(requiredParameterCapacity);
+        if(!materialInfo.parameters.empty())
+            NWB_MEMCPY(
+                materialParameters.data() + parameterWriteOffset,
+                materialInfo.parameters.size() * sizeof(MaterialParameterGpuData),
+                materialInfo.parameters.data(),
+                materialInfo.parameters.size() * sizeof(MaterialParameterGpuData)
+            );
 
         materialParameterBlocks.emplace(materialInfo.materialName, outBlock);
         return true;

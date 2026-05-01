@@ -193,10 +193,8 @@ void AppendMeshletIndices(
     if(source.empty())
         return;
 
-    const usize destinationOffset = destination.size();
-    const usize byteCount = source.size() * sizeof(u32);
-    destination.resize(destinationOffset + source.size());
-    NWB_MEMCPY(destination.data() + destinationOffset, byteCount, source.data(), byteCount);
+    destination.reserve(destination.size() + source.size());
+    destination.insert(destination.end(), source.begin(), source.end());
 }
 
 template<typename MeshletAllocator, typename VertexIndexAllocator, typename LocalIndexAllocator>

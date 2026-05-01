@@ -41,20 +41,21 @@ template<typename Run>
     const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
     Vector<AString> utf8Args;
     Vector<char*> utf8Argv;
-    utf8Args.resize(argCount);
-    utf8Argv.resize(argCount + 1u);
+    utf8Args.reserve(argCount);
+    utf8Argv.reserve(argCount + 1u);
 
     for(usize i = 0; i < argCount; ++i){
         if(argv == nullptr || argv[i] == nullptr){
-            utf8Argv[i] = nullptr;
+            utf8Args.emplace_back();
+            utf8Argv.push_back(nullptr);
             continue;
         }
 
-        utf8Args[i] = BasicStringDetail::WideToUtf8(WStringView(argv[i]));
-        utf8Argv[i] = utf8Args[i].data();
+        utf8Args.emplace_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
+        utf8Argv.push_back(utf8Args.back().data());
     }
 
-    utf8Argv[argCount] = nullptr;
+    utf8Argv.push_back(nullptr);
     return Forward<Run>(run)(static_cast<int>(argCount), utf8Argv.data());
 }
 #endif

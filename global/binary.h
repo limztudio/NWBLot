@@ -39,15 +39,15 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
 
     NWB_ASSERT(bytes);
 
-    if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
+    using ByteType = typename Container::value_type;
+    const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
+    if constexpr(requires(Container& c, const ByteType* first, const ByteType* last){ c.insert(c.end(), first, last); }){
+        outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
+    }
+    else if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
         const usize offset = outBinary.size();
         outBinary.resize(offset + byteCount);
         NWB_MEMCPY(outBinary.data() + offset, byteCount, bytes, byteCount);
-    }
-    else{
-        using ByteType = typename Container::value_type;
-        const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
-        outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
     }
 }
 
@@ -389,16 +389,8 @@ template<typename Container>
     outOffset = static_cast<u32>(beginOffset);
     BinaryDetail::RequireByteContainer<Container>();
     outStringTable.reserve(reserveBytes);
-    if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
-        outStringTable.resize(reserveBytes);
-        if(!text.empty())
-            NWB_MEMCPY(outStringTable.data() + beginOffset, reserveBytes - beginOffset, text.data(), text.size());
-        outStringTable[reserveBytes - 1u] = typename Container::value_type{};
-    }
-    else{
-        BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
-        outStringTable.push_back(typename Container::value_type{});
-    }
+    BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
+    outStringTable.push_back(typename Container::value_type{});
     return true;
 }
 

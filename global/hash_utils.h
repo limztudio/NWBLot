@@ -125,11 +125,11 @@ inline void AppendHexU64(const u64 value, BasicString<CharT>& outText){
     if(outputOffset > outText.max_size() - 16u)
         return;
 
-    outText.resize(outputOffset + 16u);
+    outText.reserve(outputOffset + 16u);
     for(u32 nibbleIndex = 0; nibbleIndex < 16u; ++nibbleIndex){
         const u32 shift = (15 - nibbleIndex) * 4;
         const usize nibble = static_cast<usize>((value >> shift) & 0xF);
-        outText[outputOffset + nibbleIndex] = s_HexDigits[nibble];
+        outText.push_back(s_HexDigits[nibble]);
     }
 }
 

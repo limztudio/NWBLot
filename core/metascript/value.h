@@ -103,12 +103,25 @@ public:
                 return false;
         }
 
+        constexpr bool canAppendString =
+            requires(Container& c, usize n){ c.reserve(n); }
+            && requires(Container& c, const MChar* data, usize size){ c.emplace_back(data, size); }
+        ;
         const usize listOffset = outList.size();
-        outList.resize(listOffset + list.size());
-        for(usize i = 0u; i < list.size(); ++i){
-            const auto& elem = list[i];
-            const MStringView text = elem.asString();
-            outList[listOffset + i].assign(text.data(), text.size());
+        if constexpr(canAppendString){
+            outList.reserve(listOffset + list.size());
+            for(const auto& elem : list){
+                const MStringView text = elem.asString();
+                outList.emplace_back(text.data(), text.size());
+            }
+        }
+        else{
+            outList.resize(listOffset + list.size());
+            for(usize i = 0u; i < list.size(); ++i){
+                const auto& elem = list[i];
+                const MStringView text = elem.asString();
+                outList[listOffset + i].assign(text.data(), text.size());
+            }
         }
         return true;
     }

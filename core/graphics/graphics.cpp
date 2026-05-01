@@ -212,8 +212,8 @@ static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize 
     if(!data || dataSize == 0)
         return bytes;
 
-    bytes.resize(dataSize);
-    NWB_MEMCPY(bytes.data(), dataSize, data, dataSize);
+    const u8* const byteData = static_cast<const u8*>(data);
+    bytes.assign(byteData, byteData + dataSize);
 
     return bytes;
 }
@@ -609,9 +609,9 @@ void Graphics::backBufferResized(){
 
     const u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.clear();
-    m_swapChainFramebuffers.resize(backBufferCount);
+    m_swapChainFramebuffers.reserve(backBufferCount);
     for(u32 index = 0; index < backBufferCount; ++index)
-        m_swapChainFramebuffers[index] = getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index)));
+        m_swapChainFramebuffers.push_back(getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index))));
 
     NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
 }

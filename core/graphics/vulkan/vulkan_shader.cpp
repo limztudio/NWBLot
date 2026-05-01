@@ -36,6 +36,12 @@ inline constexpr usize s_SpirvHeaderWords = 5;
 
 using SpirvWordVector = Vector<u32, Alloc::ScratchAllocator<u32>>;
 
+template<typename ByteVector>
+void AssignBytecode(const void* binary, const usize binarySize, ByteVector& outBytecode){
+    const u8* const byteData = static_cast<const u8*>(binary);
+    outBytecode.assign(byteData, byteData + binarySize);
+}
+
 inline bool ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u32 attributeIndex, u64& outBytes){
     outBytes = 0;
 
@@ -317,8 +323,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = d;
-    shader->m_bytecode.resize(binarySize);
-    NWB_MEMCPY(shader->m_bytecode.data(), shader->m_bytecode.size(), binary, binarySize);
+    __hidden_vulkan_shader::AssignBytecode(binary, binarySize, shader->m_bytecode);
 
     Alloc::ScratchArena<> scratchArena;
     __hidden_vulkan_shader::SpirvWordVector spirvWords{ Alloc::ScratchAllocator<u32>(scratchArena) };
@@ -420,8 +425,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
     }
 
     auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
-    lib->m_bytecode.resize(binarySize);
-    NWB_MEMCPY(lib->m_bytecode.data(), lib->m_bytecode.size(), binary, binarySize);
+    __hidden_vulkan_shader::AssignBytecode(binary, binarySize, lib->m_bytecode);
 
     return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -569,8 +573,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     auto* layout = NewArenaObject<InputLayout>(m_context.objectArena, m_context);
     if(attributeCount > 0){
         static_assert(IsTriviallyCopyable_V<VertexAttributeDesc>, "vertex attribute descriptors must be trivially copyable");
-        layout->m_attributes.resize(attributeCount);
-        NWB_MEMCPY(layout->m_attributes.data(), layout->m_attributes.size() * sizeof(VertexAttributeDesc), d, attributeCount * sizeof(VertexAttributeDesc));
+        layout->m_attributes.assign(d, d + attributeCount);
     }
 
     layout->m_bindings.reserve(bindingInfos.size());

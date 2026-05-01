@@ -865,20 +865,25 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>> spheresData{ Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>(scratchArena) };
         Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>> lssData{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>(scratchArena) };
         Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
-        geometries.resize(desc.bottomLevelGeometries.size());
-        spheresData.resize(desc.bottomLevelGeometries.size());
-        lssData.resize(desc.bottomLevelGeometries.size());
-        primitiveCounts.resize(desc.bottomLevelGeometries.size());
+        const usize geometryCount = desc.bottomLevelGeometries.size();
+        geometries.reserve(geometryCount);
+        spheresData.reserve(geometryCount);
+        lssData.reserve(geometryCount);
+        primitiveCounts.reserve(geometryCount);
 
-        for(usize i = 0; i < desc.bottomLevelGeometries.size(); ++i){
+        for(usize i = 0; i < geometryCount; ++i){
+            geometries.emplace_back();
+            spheresData.emplace_back();
+            lssData.emplace_back();
+            primitiveCounts.emplace_back();
             if(
                 !VulkanDetail::FillBlasGeometryForSizeQuery(
                     m_context,
                     desc.bottomLevelGeometries[i],
-                    geometries[i],
-                    spheresData[i],
-                    lssData[i],
-                    primitiveCounts[i],
+                    geometries.back(),
+                    spheresData.back(),
+                    lssData.back(),
+                    primitiveCounts.back(),
                     NWB_TEXT("create BLAS"),
                     false
                 )

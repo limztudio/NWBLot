@@ -1928,8 +1928,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
 
     if(layout->m_descriptorHeapCompatible && m_context.descriptorHeapManager){
         const usize descriptorHeapBindingCount = layout->m_descriptorHeapBindings.size();
-        bindingSet->m_descriptorHeapPushIndices.resize(descriptorHeapBindingCount);
-        bindingSet->m_descriptorHeapAllocations.resize(descriptorHeapBindingCount);
+        bindingSet->m_descriptorHeapPushIndices.reserve(descriptorHeapBindingCount);
+        bindingSet->m_descriptorHeapAllocations.reserve(descriptorHeapBindingCount);
 
         for(usize i = 0; i < descriptorHeapBindingCount; ++i){
             const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[i];
@@ -1946,8 +1946,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                 return nullptr;
             }
 
-            bindingSet->m_descriptorHeapAllocations[i] = allocation;
-            bindingSet->m_descriptorHeapPushIndices[i] = allocation.offsetBytes / meta.descriptorStride;
+            bindingSet->m_descriptorHeapAllocations.push_back(allocation);
+            bindingSet->m_descriptorHeapPushIndices.push_back(allocation.offsetBytes / meta.descriptorStride);
         }
     }
 

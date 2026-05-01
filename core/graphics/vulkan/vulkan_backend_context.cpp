@@ -1672,10 +1672,10 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    m_swapChainImages.resize(imageCount);
+    m_swapChainImages.reserve(imageCount);
     for(uint32_t imageIndex = 0; imageIndex < imageCount; ++imageIndex){
         const VkImage image = images[imageIndex];
-        SwapChainImage& sci = m_swapChainImages[imageIndex];
+        SwapChainImage sci;
         sci.image = image;
 
         TextureDesc textureDesc;
@@ -1695,6 +1695,7 @@ bool BackendContext::createVulkanSwapChain(){
             return false;
         }
         checked_cast<Texture*>(sci.rhiHandle.get())->m_keepInitialStateKnown = false;
+        m_swapChainImages.push_back(Move(sci));
     }
 
     m_swapChainIndex = 0;

@@ -427,8 +427,8 @@ bool BuildGeometry(
         return false;
     }
 
-    outIndices.resize(flatVertices.size());
     if(options.deduplicate){
+        outIndices.resize(flatVertices.size());
         ufbx_vertex_stream stream = {};
         stream.data = flatVertices.data();
         stream.vertex_count = flatVertices.size();
@@ -456,7 +456,8 @@ bool BuildGeometry(
         outVertices = Move(flatVertices);
     }
     else{
-        Iota(outIndices.begin(), outIndices.end(), u32{ 0 });
+        for(usize vertexIndex = 0u; vertexIndex < flatVertices.size(); ++vertexIndex)
+            outIndices.push_back(static_cast<u32>(vertexIndex));
         outVertices = Move(flatVertices);
     }
 

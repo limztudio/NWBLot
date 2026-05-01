@@ -212,9 +212,8 @@ static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize 
     if(!data || dataSize == 0)
         return bytes;
 
-    bytes.reserve(dataSize);
-    const auto* byteData = static_cast<const u8*>(data);
-    bytes.insert(bytes.end(), byteData, byteData + dataSize);
+    bytes.resize(dataSize);
+    NWB_MEMCPY(bytes.data(), dataSize, data, dataSize);
 
     return bytes;
 }

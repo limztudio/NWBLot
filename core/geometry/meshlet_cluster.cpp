@@ -86,25 +86,22 @@ struct TriangleLocalIndices{
     return IsFinite(areaLengthSquared) && areaLengthSquared > s_TriangleAreaEpsilon;
 }
 
-template<typename VertexAllocator>
-[[nodiscard]] bool FindLocalVertex(const Vector<u32, VertexAllocator>& vertices, const u32 vertex, u32& outLocalIndex){
-    for(usize index = 0u; index < vertices.size(); ++index){
-        if(vertices[index] == vertex){
-            outLocalIndex = static_cast<u32>(index);
-            return true;
-        }
-    }
-    return false;
-}
-
 [[nodiscard]] TriangleLocalIndices ResolveTriangleLocalIndices(const PendingMeshlet& meshlet, const TriangleVertices& triangle){
     TriangleLocalIndices output;
+
+    for(usize localIndex = 0u; localIndex < meshlet.vertices.size(); ++localIndex){
+        const u32 vertex = meshlet.vertices[localIndex];
+        for(u32 corner = 0u; corner < 3u; ++corner){
+            if(output.values[corner] != Limit<u32>::s_Max || triangle.values[corner] != vertex)
+                continue;
+
+            output.values[corner] = static_cast<u32>(localIndex);
+            break;
+        }
+    }
+
     for(u32 corner = 0u; corner < 3u; ++corner){
-        const u32 vertex = triangle.values[corner];
-        u32 localIndex = 0u;
-        if(FindLocalVertex(meshlet.vertices, vertex, localIndex))
-            output.values[corner] = localIndex;
-        else
+        if(output.values[corner] == Limit<u32>::s_Max)
             ++output.missingVertexCount;
     }
     return output;
@@ -190,8 +187,10 @@ void AppendMeshletIndices(
     if(source.empty())
         return;
 
-    destination.reserve(destination.size() + source.size());
-    destination.insert(destination.end(), source.begin(), source.end());
+    const usize destinationOffset = destination.size();
+    const usize byteCount = source.size() * sizeof(u32);
+    destination.resize(destinationOffset + source.size());
+    NWB_MEMCPY(destination.data() + destinationOffset, byteCount, source.data(), byteCount);
 }
 
 template<typename MeshletAllocator, typename VertexIndexAllocator, typename LocalIndexAllocator>

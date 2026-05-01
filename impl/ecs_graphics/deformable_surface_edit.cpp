@@ -1661,11 +1661,14 @@ template<usize sourceCount>
 ){
     if(sourceVertex >= vertices.size() || vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
         return false;
-    if(!skin.empty() && sourceVertex >= skin.size())
+
+    const bool appendSkin = !skin.empty();
+    const bool appendSourceSample = !sourceSamples.empty();
+    if(appendSkin && sourceVertex >= skin.size())
         return false;
-    if(!skin.empty() && (!wallSkin || !DeformableValidation::ValidSkinInfluence(*wallSkin)))
+    if(appendSkin && (!wallSkin || !DeformableValidation::ValidSkinInfluence(*wallSkin)))
         return false;
-    if(!sourceSamples.empty() && sourceVertex >= sourceSamples.size())
+    if(appendSourceSample && sourceVertex >= sourceSamples.size())
         return false;
 
     DeformableVertexRest wallVertex = vertices[sourceVertex];
@@ -1679,9 +1682,9 @@ template<usize sourceCount>
 
     outVertex = static_cast<u32>(vertices.size());
     vertices.push_back(wallVertex);
-    if(!skin.empty())
+    if(appendSkin)
         skin.push_back(*wallSkin);
-    if(!sourceSamples.empty())
+    if(appendSourceSample)
         sourceSamples.push_back(wallSourceSample);
     return true;
 }

@@ -462,6 +462,13 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     );
     seenMorphNames.reserve(morphs.size());
 
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
+        0,
+        Hasher<u32>(),
+        EqualTo<u32>(),
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    );
+
     for(usize morphIndex = 0; morphIndex < morphs.size(); ++morphIndex){
         const DeformableMorph& morph = morphs[morphIndex];
         if(!morph.name || morph.deltas.empty())
@@ -472,12 +479,7 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
         if(!morphNameInsert.second)
             return MakeMorphPayloadFailure(MorphPayloadFailure::DuplicateMorphName, morphIndex);
 
-        HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
-            0,
-            Hasher<u32>(),
-            EqualTo<u32>(),
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        );
+        seenDeltaVertices.clear();
         seenDeltaVertices.reserve(morph.deltas.size());
 
         for(usize deltaIndex = 0; deltaIndex < morph.deltas.size(); ++deltaIndex){
@@ -500,19 +502,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
         }
     }
     return {};
-}
-
-[[nodiscard]] inline bool ValidEditMaskPayload(const Vector<DeformableEditMaskFlags>& editMaskPerTriangle, const usize triangleCount){
-    if(editMaskPerTriangle.empty())
-        return true;
-    if(editMaskPerTriangle.size() != triangleCount)
-        return false;
-
-    for(const DeformableEditMaskFlags flags : editMaskPerTriangle){
-        if(!ValidDeformableEditMaskFlags(flags))
-            return false;
-    }
-    return true;
 }
 
 [[nodiscard]] inline bool ValidTriangleArea(const Vector<DeformableVertexRest>& restVertices, const u32 a, const u32 b, const u32 c){

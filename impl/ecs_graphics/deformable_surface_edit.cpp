@@ -2975,8 +2975,9 @@ template<typename DistanceFunc>
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> insideVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        insideVertices.reserve(active.size());
-        for(const SurfaceRemeshClipPoint& point : active){
+        insideVertices.resize(active.size());
+        for(usize pointIndex = 0u; pointIndex < active.size(); ++pointIndex){
+            const SurfaceRemeshClipPoint& point = active[pointIndex];
             u32 vertex = Limit<u32>::s_Max;
             if(
                 !GetOrCreateSurfaceRemeshVertex(
@@ -2990,7 +2991,7 @@ template<typename DistanceFunc>
                 )
             )
                 return false;
-            insideVertices.push_back(vertex);
+            insideVertices[pointIndex] = vertex;
         }
         if(areaMode != SurfaceRemeshAreaMode::DepthAware){
             for(usize vertexIndex = 0u; vertexIndex < insideVertices.size(); ++vertexIndex){
@@ -3185,24 +3186,16 @@ struct HolePreviewPlan{
     );
 }
 
-[[nodiscard]] bool AppendHolePreviewMeshVertex(
-    DeformableHolePreviewMesh& mesh,
+[[nodiscard]] DeformableHolePreviewMeshVertex MakeHolePreviewMeshVertex(
     const Float3U& position,
     const Float3U& normal,
-    const Float4U& color,
-    u32& outVertexIndex
+    const Float4U& color
 ){
-    outVertexIndex = Limit<u32>::s_Max;
-    if(mesh.vertices.size() >= static_cast<usize>(Limit<u32>::s_Max))
-        return false;
-
     DeformableHolePreviewMeshVertex vertex;
     vertex.position = position;
     vertex.normal = normal;
     vertex.color = color;
-    outVertexIndex = static_cast<u32>(mesh.vertices.size());
-    mesh.vertices.push_back(vertex);
-    return true;
+    return vertex;
 }
 
 [[nodiscard]] bool AppendHolePreviewCap(
@@ -3246,11 +3239,14 @@ struct HolePreviewPlan{
     const u32 vertexBase = static_cast<u32>(mesh.vertices.size());
     Float3U capNormal;
     StoreFloat(normal, &capNormal);
-    for(const Float3U& position : positions){
-        u32 ignoredVertex = Limit<u32>::s_Max;
-        if(!AppendHolePreviewMeshVertex(mesh, position, capNormal, s_HolePreviewColor, ignoredVertex))
-            return false;
-    }
+    const usize vertexBaseIndex = mesh.vertices.size();
+    mesh.vertices.resize(vertexBaseIndex + positions.size());
+    for(usize positionIndex = 0u; positionIndex < positions.size(); ++positionIndex)
+        mesh.vertices[vertexBaseIndex + positionIndex] = MakeHolePreviewMeshVertex(
+            positions[positionIndex],
+            capNormal,
+            s_HolePreviewColor
+        );
 
     if(
         mesh.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
@@ -3302,25 +3298,24 @@ struct HolePreviewPlan{
     Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> topCapPositions{
         Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
     };
-    topCapPositions.reserve(boundaryVertexCount);
+    topCapPositions.resize(boundaryVertexCount);
     const f32 surfaceOffset = Max(
         s_HolePreviewSurfaceOffsetMin,
         params.radius * s_HolePreviewSurfaceOffsetRadiusScale
     );
-    for(const EdgeRecord& edge : orderedBoundaryEdges){
+    for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
+        const EdgeRecord& edge = orderedBoundaryEdges[edgeIndex];
         if(edge.a >= restPositions.size())
             return false;
 
-        Float3U topPosition;
         StoreFloat(
             VectorMultiplyAdd(
                 frame.normal,
                 VectorReplicate(surfaceOffset),
                 LoadFloat(restPositions[edge.a])
             ),
-            &topPosition
+            &topCapPositions[edgeIndex]
         );
-        topCapPositions.push_back(topPosition);
     }
 
     if(!AppendHolePreviewCap(topCapPositions, frame.normal, frame.tangent, frame.bitangent, outMesh, scratchArena))
@@ -3373,33 +3368,28 @@ struct HolePreviewPlan{
         Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> bottomCapPositions{
             Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
         };
-        sideTopVertices.reserve(boundaryVertexCount);
-        sideBottomVertices.reserve(boundaryVertexCount);
-        bottomCapPositions.reserve(boundaryVertexCount);
+        sideTopVertices.resize(boundaryVertexCount);
+        sideBottomVertices.resize(boundaryVertexCount);
+        bottomCapPositions.resize(boundaryVertexCount);
+        const usize sideVertexBase = outMesh.vertices.size();
+        outMesh.vertices.resize(sideVertexBase + sideVertexCount);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
-            u32 topVertex = Limit<u32>::s_Max;
-            u32 bottomVertex = Limit<u32>::s_Max;
-            if(
-                !AppendHolePreviewMeshVertex(
-                    outMesh,
-                    topCapPositions[edgeIndex],
-                    wallVertexPlan[edgeIndex].normal,
-                    s_HolePreviewColor,
-                    topVertex
-                )
-                || !AppendHolePreviewMeshVertex(
-                    outMesh,
-                    wallVertexPlan[edgeIndex].position,
-                    wallVertexPlan[edgeIndex].normal,
-                    s_HolePreviewColor,
-                    bottomVertex
-                )
-            )
-                return false;
+            const usize topVertexIndex = sideVertexBase + edgeIndex * 2u;
+            const usize bottomVertexIndex = topVertexIndex + 1u;
+            outMesh.vertices[topVertexIndex] = MakeHolePreviewMeshVertex(
+                topCapPositions[edgeIndex],
+                wallVertexPlan[edgeIndex].normal,
+                s_HolePreviewColor
+            );
+            outMesh.vertices[bottomVertexIndex] = MakeHolePreviewMeshVertex(
+                wallVertexPlan[edgeIndex].position,
+                wallVertexPlan[edgeIndex].normal,
+                s_HolePreviewColor
+            );
 
-            sideTopVertices.push_back(topVertex);
-            sideBottomVertices.push_back(bottomVertex);
-            bottomCapPositions.push_back(wallVertexPlan[edgeIndex].position);
+            sideTopVertices[edgeIndex] = static_cast<u32>(topVertexIndex);
+            sideBottomVertices[edgeIndex] = static_cast<u32>(bottomVertexIndex);
+            bottomCapPositions[edgeIndex] = wallVertexPlan[edgeIndex].position;
         }
 
         if(

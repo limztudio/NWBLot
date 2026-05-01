@@ -1,4 +1,4 @@
-add_library(nwb_assets_graphics INTERFACE)
+nwb_declare_interface_library(nwb_assets_graphics)
 target_link_libraries(nwb_assets_graphics INTERFACE
     nwb_assets_geometry
     nwb_assets_material

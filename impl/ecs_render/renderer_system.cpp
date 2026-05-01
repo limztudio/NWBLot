@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs_graphics{
+namespace __hidden_ecs_render{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,17 +129,17 @@ static const Name& MeshEmulationVertexShaderName(){
 }
 
 static const Name& InstanceBufferName(){
-    static const Name s("ecs_graphics/instance_data");
+    static const Name s("ecs_render/instance_data");
     return s;
 }
 
 static const Name& MaterialParameterBufferName(){
-    static const Name s("ecs_graphics/material_parameter_data");
+    static const Name s("ecs_render/material_parameter_data");
     return s;
 }
 
 static const Name& MeshViewBufferName(){
-    static const Name s("ecs_graphics/mesh_view_data");
+    static const Name s("ecs_render/mesh_view_data");
     return s;
 }
 
@@ -822,14 +822,14 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
 
     const Core::ECSScene::SceneCameraView cameraView = Core::ECSScene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
-        __hidden_ecs_graphics::ApplyCameraMeshViewState(
+        __hidden_ecs_render::ApplyCameraMeshViewState(
             state,
             *cameraView.transform,
             cameraView.projectionData
         );
     }
     else{
-        __hidden_ecs_graphics::ApplyDefaultCameraMeshViewState(
+        __hidden_ecs_render::ApplyDefaultCameraMeshViewState(
             state,
             resolveDefaultBasis(),
             fallbackAspectRatio
@@ -847,7 +847,7 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         }
     }
     if(!directionalLightApplied)
-        __hidden_ecs_graphics::ApplyDefaultDirectionalLightMeshViewState(state, resolveDefaultBasis());
+        __hidden_ecs_render::ApplyDefaultDirectionalLightMeshViewState(state, resolveDefaultBasis());
 
     return state;
 }
@@ -1171,12 +1171,12 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     }
 
     Core::IDevice* device = m_graphics.getDevice();
-    const Core::Format::Enum albedoFormat = __hidden_ecs_graphics::SelectGBufferAlbedoFormat(*device);
-    const Core::Format::Enum depthFormat = __hidden_ecs_graphics::SelectGBufferDepthFormat(*device);
-    const Core::Format::Enum avboitLowRasterFormat = __hidden_ecs_graphics::SelectAvboitLowRasterFormat(*device);
-    const Core::Format::Enum avboitAccumColorFormat = __hidden_ecs_graphics::SelectAvboitAccumColorFormat(*device);
-    const Core::Format::Enum avboitAccumExtinctionFormat = __hidden_ecs_graphics::SelectAvboitAccumExtinctionFormat(*device);
-    const Core::Format::Enum avboitTransmittanceFormat = __hidden_ecs_graphics::SelectAvboitTransmittanceFormat(*device);
+    const Core::Format::Enum albedoFormat = __hidden_ecs_render::SelectGBufferAlbedoFormat(*device);
+    const Core::Format::Enum depthFormat = __hidden_ecs_render::SelectGBufferDepthFormat(*device);
+    const Core::Format::Enum avboitLowRasterFormat = __hidden_ecs_render::SelectAvboitLowRasterFormat(*device);
+    const Core::Format::Enum avboitAccumColorFormat = __hidden_ecs_render::SelectAvboitAccumColorFormat(*device);
+    const Core::Format::Enum avboitAccumExtinctionFormat = __hidden_ecs_render::SelectAvboitAccumExtinctionFormat(*device);
+    const Core::Format::Enum avboitTransmittanceFormat = __hidden_ecs_render::SelectAvboitTransmittanceFormat(*device);
     if(albedoFormat == Core::Format::UNKNOWN || depthFormat == Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
@@ -1227,7 +1227,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
         .setName("engine/deferred/gbuffer_albedo")
-        .setClearValue(__hidden_ecs_graphics::s_ClearColor)
+        .setClearValue(__hidden_ecs_render::s_ClearColor)
     ;
     createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
@@ -1251,8 +1251,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
 
     Core::FramebufferDesc framebufferDesc;
     framebufferDesc
-        .addColorAttachment(createdTargets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
-        .setDepthAttachment(createdTargets.depth.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
+        .addColorAttachment(createdTargets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources)
+        .setDepthAttachment(createdTargets.depth.get(), __hidden_ecs_render::s_FramebufferSubresources)
     ;
     createdTargets.framebuffer = device->createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
@@ -1265,11 +1265,11 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     avboitTargets.fullHeight = createdTargets.height;
     const u64 lowWidth = Max<u64>(
         1u,
-        DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(__hidden_ecs_graphics::s_AvboitDownsample))
+        DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(__hidden_ecs_render::s_AvboitDownsample))
     );
     const u64 lowHeight = Max<u64>(
         1u,
-        DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(__hidden_ecs_graphics::s_AvboitDownsample))
+        DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(__hidden_ecs_render::s_AvboitDownsample))
     );
     if(lowWidth > Limit<u32>::s_Max || lowHeight > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));
@@ -1277,8 +1277,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     }
     avboitTargets.lowWidth = static_cast<u32>(lowWidth);
     avboitTargets.lowHeight = static_cast<u32>(lowHeight);
-    avboitTargets.virtualSliceCount = __hidden_ecs_graphics::s_AvboitVirtualSlices;
-    avboitTargets.physicalSliceCount = __hidden_ecs_graphics::s_AvboitPhysicalSlices;
+    avboitTargets.virtualSliceCount = __hidden_ecs_render::s_AvboitVirtualSlices;
+    avboitTargets.physicalSliceCount = __hidden_ecs_render::s_AvboitPhysicalSlices;
     avboitTargets.lowRasterFormat = avboitLowRasterFormat;
     avboitTargets.accumColorFormat = avboitAccumColorFormat;
     avboitTargets.accumExtinctionFormat = avboitAccumExtinctionFormat;
@@ -1330,7 +1330,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     }
 
     Core::FramebufferDesc lowFramebufferDesc;
-    lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), __hidden_ecs_graphics::s_FramebufferSubresources);
+    lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), __hidden_ecs_render::s_FramebufferSubresources);
     avboitTargets.lowFramebuffer = device->createFramebuffer(lowFramebufferDesc);
     if(!avboitTargets.lowFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
@@ -1339,12 +1339,12 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
 
     Core::FramebufferDesc accumulationFramebufferDesc;
     accumulationFramebufferDesc
-        .addColorAttachment(avboitTargets.accumColor.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.accumExtinction.get(), __hidden_ecs_graphics::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.accumColor.get(), __hidden_ecs_render::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.accumExtinction.get(), __hidden_ecs_render::s_FramebufferSubresources)
         .setDepthAttachment(
             Core::FramebufferAttachment()
                 .setTexture(createdTargets.depth.get())
-                .setSubresources(__hidden_ecs_graphics::s_FramebufferSubresources)
+                .setSubresources(__hidden_ecs_render::s_FramebufferSubresources)
                 .setReadOnly(true)
         )
     ;
@@ -1364,7 +1364,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     }
     const u32 physicalExtinctionWordCount = DivideUp(
         avboitTargets.physicalSliceCount,
-        __hidden_ecs_graphics::s_AvboitExtinctionSlicesPerWord
+        __hidden_ecs_render::s_AvboitExtinctionSlicesPerWord
     );
     if(physicalExtinctionWordCount == 0 || lowPixelCount > static_cast<u64>(Limit<u32>::s_Max) / physicalExtinctionWordCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT packed extinction word count exceeds u32 limits"));
@@ -1402,7 +1402,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
 
     Core::BufferDesc controlDesc;
     controlDesc
-        .setByteSize(static_cast<u64>(__hidden_ecs_graphics::s_AvboitControlWordCount) * sizeof(u32))
+        .setByteSize(static_cast<u64>(__hidden_ecs_render::s_AvboitControlWordCount) * sizeof(u32))
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
         .setDebugName("engine/avboit/control")
@@ -1461,7 +1461,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         0,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
@@ -1487,7 +1487,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         0,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
@@ -1507,7 +1507,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         1,
         avboitTargets.transmittanceTexture.get(),
         avboitTargets.transmittanceFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
@@ -1524,7 +1524,7 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         1,
         avboitTargets.transmittanceTexture.get(),
         avboitTargets.transmittanceFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
@@ -1542,21 +1542,21 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         0,
         createdTargets.albedo.get(),
         createdTargets.albedoFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         1,
         createdTargets.avboit.accumColor.get(),
         createdTargets.avboit.accumColorFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         2,
         createdTargets.avboit.accumExtinction.get(),
         createdTargets.avboit.accumExtinctionFormat,
-        __hidden_ecs_graphics::s_FramebufferSubresources,
+        __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_deferredSampler.get()));
@@ -1599,24 +1599,24 @@ bool RendererSystem::ensureDeferredCompositeResources(){
         }
     }
 
-    if(!__hidden_ecs_graphics::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
+    if(!__hidden_ecs_render::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
         return false;
 
     if(!ensureShaderLoaded(
         m_deferredCompositeVertexShader,
-        __hidden_ecs_graphics::DeferredCompositeVertexShaderName(),
+        __hidden_ecs_render::DeferredCompositeVertexShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,
-        "ECSGraphics_DeferredCompositeVS"
+        "ECSRender_DeferredCompositeVS"
     ))
         return false;
 
     if(!ensureShaderLoaded(
         m_deferredCompositePixelShader,
-        __hidden_ecs_graphics::DeferredCompositePixelShaderName(),
+        __hidden_ecs_render::DeferredCompositePixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
-        "ECSGraphics_DeferredCompositePS"
+        "ECSRender_DeferredCompositePS"
     ))
         return false;
 
@@ -1638,7 +1638,7 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
     pipelineDesc
         .setVertexShader(m_deferredCompositeVertexShader)
         .setPixelShader(m_deferredCompositePixelShader)
-        .setRenderState(__hidden_ecs_graphics::BuildCompositeRenderState())
+        .setRenderState(__hidden_ecs_render::BuildCompositeRenderState())
         .addBindingLayout(m_deferredCompositeBindingLayout)
     ;
 
@@ -1655,9 +1655,9 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
 bool RendererSystem::ensureAvboitResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
-    if(!__hidden_ecs_graphics::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
+    if(!__hidden_ecs_render::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
         return false;
-    if(!__hidden_ecs_graphics::EnsureLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
+    if(!__hidden_ecs_render::EnsureLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
         return false;
 
     if(!m_avboitEmptyBindingLayout){
@@ -1677,7 +1677,7 @@ bool RendererSystem::ensureAvboitResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
 
         m_avboitOccupancyBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_avboitOccupancyBindingLayout){
@@ -1692,7 +1692,7 @@ bool RendererSystem::ensureAvboitResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::AvboitPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::AvboitPushConstants)));
 
         m_avboitDepthWarpBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_avboitDepthWarpBindingLayout){
@@ -1710,7 +1710,7 @@ bool RendererSystem::ensureAvboitResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(5, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
 
         m_avboitExtinctionBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_avboitExtinctionBindingLayout){
@@ -1726,7 +1726,7 @@ bool RendererSystem::ensureAvboitResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::AvboitPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::AvboitPushConstants)));
 
         m_avboitIntegrateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_avboitIntegrateBindingLayout){
@@ -1742,7 +1742,7 @@ bool RendererSystem::ensureAvboitResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
 
         m_avboitAccumulateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_avboitAccumulateBindingLayout){
@@ -1753,46 +1753,46 @@ bool RendererSystem::ensureAvboitResources(){
 
     if(!ensureShaderLoaded(
         m_avboitOccupancyPixelShader,
-        __hidden_ecs_graphics::AvboitOccupancyPixelShaderName(),
+        __hidden_ecs_render::AvboitOccupancyPixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
-        "ECSGraphics_AvboitOccupancyPS"
+        "ECSRender_AvboitOccupancyPS"
     ))
         return false;
 
     if(!ensureShaderLoaded(
         m_avboitDepthWarpComputeShader,
-        __hidden_ecs_graphics::AvboitDepthWarpComputeShaderName(),
+        __hidden_ecs_render::AvboitDepthWarpComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
-        "ECSGraphics_AvboitDepthWarpCS"
+        "ECSRender_AvboitDepthWarpCS"
     ))
         return false;
 
     if(!ensureShaderLoaded(
         m_avboitExtinctionPixelShader,
-        __hidden_ecs_graphics::AvboitExtinctionPixelShaderName(),
+        __hidden_ecs_render::AvboitExtinctionPixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
-        "ECSGraphics_AvboitExtinctionPS"
+        "ECSRender_AvboitExtinctionPS"
     ))
         return false;
 
     if(!ensureShaderLoaded(
         m_avboitIntegrateComputeShader,
-        __hidden_ecs_graphics::AvboitIntegrateComputeShaderName(),
+        __hidden_ecs_render::AvboitIntegrateComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
-        "ECSGraphics_AvboitIntegrateCS"
+        "ECSRender_AvboitIntegrateCS"
     ))
         return false;
 
     if(!ensureShaderLoaded(
         m_avboitAccumulatePixelShader,
-        __hidden_ecs_graphics::AvboitAccumulatePixelShaderName(),
+        __hidden_ecs_render::AvboitAccumulatePixelShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
-        "ECSGraphics_AvboitAccumulatePS"
+        "ECSRender_AvboitAccumulatePS"
     ))
         return false;
 
@@ -1836,23 +1836,23 @@ bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
 
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo){
-        commandList.setTextureState(targets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.depth){
-        commandList.setTextureState(targets.depth.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.depth.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.commitBarriers();
 
     if(targets.albedo){
-        commandList.clearTextureFloat(targets.albedo.get(), __hidden_ecs_graphics::s_FramebufferSubresources, __hidden_ecs_graphics::s_ClearColor);
+        commandList.clearTextureFloat(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, __hidden_ecs_render::s_ClearColor);
     }
 
     if(targets.depth){
         commandList.clearDepthStencilTexture(
             targets.depth.get(),
-            __hidden_ecs_graphics::s_FramebufferSubresources,
+            __hidden_ecs_render::s_FramebufferSubresources,
             true,
             Core::s_DepthClearValue,
             false,
@@ -1863,15 +1863,15 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
 
 void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets){
     if(targets.lowRasterTarget){
-        commandList.setTextureState(targets.lowRasterTarget.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.lowRasterTarget.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.accumColor){
-        commandList.setTextureState(targets.accumColor.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.accumColor.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.accumExtinction){
-        commandList.setTextureState(targets.accumExtinction.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.accumExtinction.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.coverageBuffer){
@@ -1895,21 +1895,21 @@ void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitF
     }
 
     if(targets.transmittanceTexture){
-        commandList.setTextureState(targets.transmittanceTexture.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.transmittanceTexture.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.commitBarriers();
 
     if(targets.lowRasterTarget){
-        commandList.clearTextureFloat(targets.lowRasterTarget.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.lowRasterTarget.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
     }
 
     if(targets.accumColor){
-        commandList.clearTextureFloat(targets.accumColor.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.accumColor.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
     }
 
     if(targets.accumExtinction){
-        commandList.clearTextureFloat(targets.accumExtinction.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.accumExtinction.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
     }
 
     if(targets.coverageBuffer){
@@ -1933,7 +1933,7 @@ void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitF
     }
 
     if(targets.transmittanceTexture){
-        commandList.clearTextureFloat(targets.transmittanceTexture.get(), __hidden_ecs_graphics::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
+        commandList.clearTextureFloat(targets.transmittanceTexture.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
     }
 }
 
@@ -1960,8 +1960,8 @@ void RendererSystem::renderMaterialPass(
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
     const f32 meshViewAspectRatio = avboitTargets
-        ? __hidden_ecs_graphics::ExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight)
-        : __hidden_ecs_graphics::FramebufferAspectRatio(*framebuffer)
+        ? __hidden_ecs_render::ExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight)
+        : __hidden_ecs_render::FramebufferAspectRatio(*framebuffer)
     ;
     if(!ensureMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
@@ -2005,10 +2005,10 @@ void RendererSystem::gatherMaterialPassDrawItems(
     instanceData.reserve(rendererCapacity);
     materialParameters.reserve(rendererCapacity);
 
-    using MaterialParameterBlockPair = Pair<Name, __hidden_ecs_graphics::MaterialParameterBlock>;
+    using MaterialParameterBlockPair = Pair<Name, __hidden_ecs_render::MaterialParameterBlock>;
     using MaterialParameterBlockMap = HashMap<
         Name,
-        __hidden_ecs_graphics::MaterialParameterBlock,
+        __hidden_ecs_render::MaterialParameterBlock,
         Hasher<Name>,
         EqualTo<Name>,
         Core::Alloc::ScratchAllocator<MaterialParameterBlockPair>
@@ -2025,7 +2025,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
     auto ensureMaterialParameterBlock = [&](
         const MaterialSurfaceInfo& materialInfo,
-        __hidden_ecs_graphics::MaterialParameterBlock& outBlock
+        __hidden_ecs_render::MaterialParameterBlock& outBlock
     ) -> bool{
         const auto foundBlock = materialParameterBlocks.find(materialInfo.materialName);
         if(foundBlock != materialParameterBlocks.end()){
@@ -2050,7 +2050,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         outBlock.count = static_cast<u32>(materialInfo.parameters.size());
         const usize requiredParameterCapacity = materialParameters.size() + materialInfo.parameters.size();
         if(requiredParameterCapacity > materialParameters.capacity())
-            materialParameters.reserve(__hidden_ecs_graphics::NextGrowingCapacity(
+            materialParameters.reserve(__hidden_ecs_render::NextGrowingCapacity(
                 materialParameters.capacity(),
                 requiredParameterCapacity
             ));
@@ -2095,12 +2095,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 return Limit<u32>::s_Max;
             }
 
-            __hidden_ecs_graphics::MaterialParameterBlock parameterBlock;
+            __hidden_ecs_render::MaterialParameterBlock parameterBlock;
             if(!ensureMaterialParameterBlock(*materialInfo, parameterBlock))
                 return Limit<u32>::s_Max;
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            instanceData.push_back(__hidden_ecs_graphics::BuildInstanceGpuData(
+            instanceData.push_back(__hidden_ecs_render::BuildInstanceGpuData(
                 transform,
                 parameterBlock.offset,
                 parameterBlock.count
@@ -2175,7 +2175,7 @@ bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
     if(m_instanceBuffer && m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = __hidden_ecs_graphics::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
+    const usize capacity = __hidden_ecs_render::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
         return false;
@@ -2185,7 +2185,7 @@ bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
-        .setDebugName(__hidden_ecs_graphics::InstanceBufferName())
+        .setDebugName(__hidden_ecs_render::InstanceBufferName())
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
@@ -2209,7 +2209,7 @@ bool RendererSystem::ensureMaterialParameterBufferCapacity(const usize parameter
     if(m_materialParameterBuffer && m_materialParameterBufferCapacity >= requiredCount)
         return true;
 
-    const usize capacity = __hidden_ecs_graphics::NextGrowingCapacity(m_materialParameterBufferCapacity, requiredCount);
+    const usize capacity = __hidden_ecs_render::NextGrowingCapacity(m_materialParameterBufferCapacity, requiredCount);
     if(capacity > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer capacity overflows addressable memory"));
         return false;
@@ -2219,7 +2219,7 @@ bool RendererSystem::ensureMaterialParameterBufferCapacity(const usize parameter
     materialParameterBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(MaterialParameterGpuData)))
         .setStructStride(sizeof(MaterialParameterGpuData))
-        .setDebugName(__hidden_ecs_graphics::MaterialParameterBufferName())
+        .setDebugName(__hidden_ecs_render::MaterialParameterBufferName())
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle materialParameterBuffer = m_graphics.createBuffer(materialParameterBufferDesc);
@@ -2238,9 +2238,9 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
     if(!m_meshViewBuffer){
         Core::BufferDesc meshViewBufferDesc;
         meshViewBufferDesc
-            .setByteSize(sizeof(__hidden_ecs_graphics::MeshViewGpuData))
+            .setByteSize(sizeof(__hidden_ecs_render::MeshViewGpuData))
             .setIsConstantBuffer(true)
-            .setDebugName(__hidden_ecs_graphics::MeshViewBufferName())
+            .setDebugName(__hidden_ecs_render::MeshViewBufferName())
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         Core::BufferHandle meshViewBuffer = m_graphics.createBuffer(meshViewBufferDesc);
@@ -2253,8 +2253,8 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
         invalidateGeometryBindingSets();
     }
 
-    const __hidden_ecs_graphics::MeshViewState viewState =
-        __hidden_ecs_graphics::ResolveMeshViewState(m_world, fallbackAspectRatio)
+    const __hidden_ecs_render::MeshViewState viewState =
+        __hidden_ecs_render::ResolveMeshViewState(m_world, fallbackAspectRatio)
     ;
 
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
@@ -2365,8 +2365,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.setMeshletState(meshletState);
 
         if(context.pass == MaterialPipelinePass::Opaque){
-            const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
+            const __hidden_ecs_render::ShaderDrivenPushConstants pushConstants =
+                __hidden_ecs_render::BuildShaderDrivenPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
@@ -2375,8 +2375,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
             context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
         else{
-            const __hidden_ecs_graphics::TransparentDrawPushConstants pushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
+            const __hidden_ecs_render::TransparentDrawPushConstants pushConstants =
+                __hidden_ecs_render::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
@@ -2420,8 +2420,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setComputeState(computeState);
 
-        const __hidden_ecs_graphics::ShaderDrivenPushConstants pushConstants =
-            __hidden_ecs_graphics::BuildShaderDrivenPushConstants(
+        const __hidden_ecs_render::ShaderDrivenPushConstants pushConstants =
+            __hidden_ecs_render::BuildShaderDrivenPushConstants(
                 geometry.triangleCount,
                 drawItem.instanceIndex,
                 geometry.sourceVertexLayout,
@@ -2449,8 +2449,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setGraphicsState(graphicsState);
 
         if(context.pass != MaterialPipelinePass::Opaque){
-            const __hidden_ecs_graphics::TransparentDrawPushConstants transparentPushConstants =
-                __hidden_ecs_graphics::BuildTransparentDrawPushConstants(
+            const __hidden_ecs_render::TransparentDrawPushConstants transparentPushConstants =
+                __hidden_ecs_render::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
@@ -2521,8 +2521,8 @@ void RendererSystem::dispatchAvboitDepthWarp(Core::ICommandList& commandList, Av
     computeState.addBindingSet(targets.depthWarpBindingSet.get());
     commandList.setComputeState(computeState);
 
-    const __hidden_ecs_graphics::AvboitPushConstants pushConstants =
-        __hidden_ecs_graphics::BuildAvboitPushConstants(targets, 1.f);
+    const __hidden_ecs_render::AvboitPushConstants pushConstants =
+        __hidden_ecs_render::BuildAvboitPushConstants(targets, 1.f);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(1, 1, 1);
 }
@@ -2539,12 +2539,12 @@ void RendererSystem::dispatchAvboitIntegration(Core::ICommandList& commandList, 
     computeState.addBindingSet(targets.integrateBindingSet.get());
     commandList.setComputeState(computeState);
 
-    const __hidden_ecs_graphics::AvboitPushConstants pushConstants =
-        __hidden_ecs_graphics::BuildAvboitPushConstants(targets, 1.f);
+    const __hidden_ecs_render::AvboitPushConstants pushConstants =
+        __hidden_ecs_render::BuildAvboitPushConstants(targets, 1.f);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
-    commandList.dispatch(__hidden_ecs_graphics::DispatchGroupCount1D(pixelCount, 64u), 1, 1);
+    commandList.dispatch(__hidden_ecs_render::DispatchGroupCount1D(pixelCount, 64u), 1, 1);
 }
 
 bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){
@@ -2602,7 +2602,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     GeometryResources createdGeometry;
     createdGeometry.geometryName = geometryPath;
-    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutGeometryVertex;
+    createdGeometry.sourceVertexLayout = __hidden_ecs_render::s_MeshSourceLayoutGeometryVertex;
 
     const usize indexCount = geometry.indices().size();
     if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
@@ -2620,7 +2620,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     }
 
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = __hidden_ecs_graphics::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    createdGeometry.dispatchGroupCount = __hidden_ecs_render::ComputeDispatchGroupCount(createdGeometry.triangleCount);
     if(createdGeometry.dispatchGroupCount == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"), StringConvert(geometryPath.c_str()));
         return false;
@@ -2636,7 +2636,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     Core::Graphics::BufferSetupDesc shaderVertexSetup;
     shaderVertexSetup.bufferDesc
         .setByteSize(static_cast<u64>(geometry.vertices().size() * sizeof(GeometryVertex)))
-        .setStructStride(__hidden_ecs_graphics::s_StaticGeometryVertexStride)
+        .setStructStride(__hidden_ecs_render::s_StaticGeometryVertexStride)
         .setDebugName(shaderVertexBufferName)
     ;
     shaderVertexSetup.data = geometry.vertices().data();
@@ -2713,8 +2713,8 @@ bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMe
     createdGeometry.shaderIndexBuffer = instance.indexBuffer;
     createdGeometry.indexCount = static_cast<u32>(instance.indices.size());
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = __hidden_ecs_graphics::ComputeDispatchGroupCount(createdGeometry.triangleCount);
-    createdGeometry.sourceVertexLayout = __hidden_ecs_graphics::s_MeshSourceLayoutDeformableVertex;
+    createdGeometry.dispatchGroupCount = __hidden_ecs_render::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    createdGeometry.sourceVertexLayout = __hidden_ecs_render::s_MeshSourceLayoutDeformableVertex;
     createdGeometry.runtimeMesh = instance.handle;
     createdGeometry.runtimeEditRevision = instance.editRevision;
     if(createdGeometry.dispatchGroupCount == 0){
@@ -2785,8 +2785,8 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     ;
     createdInfo.valid = true;
 
-    __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Pixel, createdInfo.pixelShader);
-    __hidden_ecs_graphics::TryFindShaderForStage(material, Core::ShaderType::Mesh, createdInfo.meshShader);
+    __hidden_ecs_render::TryFindShaderForStage(material, Core::ShaderType::Pixel, createdInfo.pixelShader);
+    __hidden_ecs_render::TryFindShaderForStage(material, Core::ShaderType::Mesh, createdInfo.meshShader);
 
     CompactString alphaText;
     u32 alphaPriority = Limit<u32>::s_Max;
@@ -2795,26 +2795,26 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 
     createdInfo.parameters.reserve(material.parameters().size());
     for(const auto& [key, value] : material.parameters()){
-        const u32 candidateAlphaPriority = __hidden_ecs_graphics::MaterialAlphaParameterPriority(key);
+        const u32 candidateAlphaPriority = __hidden_ecs_render::MaterialAlphaParameterPriority(key);
         if(candidateAlphaPriority < alphaPriority){
             alphaText = value;
             alphaPriority = candidateAlphaPriority;
         }
 
-        const u32 candidateModePriority = __hidden_ecs_graphics::MaterialModeParameterPriority(key);
+        const u32 candidateModePriority = __hidden_ecs_render::MaterialModeParameterPriority(key);
         if(candidateModePriority < modePriority){
             modeText = value;
             modePriority = candidateModePriority;
         }
 
         MaterialParameterGpuData parameter;
-        if(__hidden_ecs_graphics::TryBuildMaterialParameterGpuData(key, value, parameter))
+        if(__hidden_ecs_render::TryBuildMaterialParameterGpuData(key, value, parameter))
             createdInfo.parameters.push_back(parameter);
     }
 
     if(alphaPriority != Limit<u32>::s_Max){
         f32 parsedAlpha = 1.f;
-        if(__hidden_ecs_graphics::ParseAlphaValue(alphaText.view(), parsedAlpha))
+        if(__hidden_ecs_render::ParseAlphaValue(alphaText.view(), parsedAlpha))
             createdInfo.alpha = parsedAlpha;
         else{
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: material '{}' has invalid alpha '{}'; using 1.0")
@@ -2825,7 +2825,7 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     }
 
     if(modePriority != Limit<u32>::s_Max){
-        createdInfo.transparent = __hidden_ecs_graphics::IsTransparentText(modeText.view());
+        createdInfo.transparent = __hidden_ecs_render::IsTransparentText(modeText.view());
     }
     if(createdInfo.alpha < 0.999f)
         createdInfo.transparent = true;
@@ -2847,7 +2847,7 @@ bool RendererSystem::ensureMeshShaderResources(){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::TransparentDrawPushConstants)));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
     m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -2869,7 +2869,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_graphics::ShaderDrivenPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
         m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -2882,10 +2882,10 @@ bool RendererSystem::ensureComputeEmulationResources(){
     if(!m_emulationVertexShader){
         if(!ensureShaderLoaded(
             m_emulationVertexShader,
-            __hidden_ecs_graphics::MeshEmulationVertexShaderName(),
+            __hidden_ecs_render::MeshEmulationVertexShaderName(),
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
-            "ECSGraphics_MeshEmulationVS"
+            "ECSRender_MeshEmulationVS"
         ))
             return false;
     }
@@ -2896,42 +2896,42 @@ bool RendererSystem::ensureComputeEmulationResources(){
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(0)
-            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setName("POSITION")
         ;
         attributes[1]
             .setFormat(Core::Format::RGB32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 4u)
-            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setName("NORMAL")
         ;
         attributes[2]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 8u)
-            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setName("TANGENT")
         ;
         attributes[3]
             .setFormat(Core::Format::RG32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 12u)
-            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setName("TEXCOORD")
         ;
         attributes[4]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 16u)
-            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setName("COLOR")
         ;
         attributes[5]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 20u)
-            .setElementStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setName("POSITION1")
         ;
 
@@ -3044,8 +3044,8 @@ bool RendererSystem::ensureComputeBindingSet(GeometryResources& geometry){
 
         Core::BufferDesc emulationVertexBufferDesc;
         emulationVertexBufferDesc
-            .setByteSize(static_cast<u64>(geometry.indexCount) * __hidden_ecs_graphics::s_EmulatedVertexStride)
-            .setStructStride(__hidden_ecs_graphics::s_EmulatedVertexStride)
+            .setByteSize(static_cast<u64>(geometry.indexCount) * __hidden_ecs_render::s_EmulatedVertexStride)
+            .setStructStride(__hidden_ecs_render::s_EmulatedVertexStride)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
             .setDebugName(emulationVertexBufferName)
@@ -3161,7 +3161,7 @@ bool RendererSystem::ensureRendererPipeline(
     }
 
     Core::IDevice* device = m_graphics.getDevice();
-    const Core::RenderState renderState = __hidden_ecs_graphics::BuildRenderStateForPass(pass);
+    const Core::RenderState renderState = __hidden_ecs_render::BuildRenderStateForPass(pass);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!hasMeshShader)
@@ -3170,10 +3170,10 @@ bool RendererSystem::ensureRendererPipeline(
             return false;
         if(!ensureMeshShaderResources())
             return false;
-        if(!ensureShaderLoaded(resources.meshShader, materialInfo.meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSGraphics_RendererMesh"))
+        if(!ensureShaderLoaded(resources.meshShader, materialInfo.meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+            if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
         else{
@@ -3223,12 +3223,12 @@ bool RendererSystem::ensureRendererPipeline(
             materialInfo.meshShader.name(),
             shaderVariant,
             Core::ShaderType::Compute,
-            "ECSGraphics_RendererCS",
+            "ECSRender_RendererCS",
             &meshComputeArchiveStageName
         ))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSGraphics_RendererPS"))
+            if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
         else{

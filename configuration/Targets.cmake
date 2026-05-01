@@ -29,6 +29,21 @@ function(nwb_declare_static_library target)
     nwb_apply_internal_target_defaults(${target})
 endfunction()
 
+function(nwb_declare_interface_library target)
+    add_library(${target} INTERFACE)
+    target_include_directories(${target} INTERFACE
+        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
+    )
+    target_link_libraries(${target} INTERFACE
+        nwb::tsl_headers
+        nwb_internal_headers
+    )
+
+    if(WIN32)
+        target_compile_definitions(${target} INTERFACE UNICODE _UNICODE)
+    endif()
+endfunction()
+
 function(nwb_declare_executable target)
     add_executable(${target})
     if(target MATCHES "^nwb_(.+)$")

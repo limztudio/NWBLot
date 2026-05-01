@@ -386,7 +386,7 @@ bool DeformerSystem::ensurePipeline(){
         __hidden_deformer_system::DeformerComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
-        Name("ECSGraphics_DeformerCS")
+        Name("ECSDeformableRender_DeformerCS")
     ))
         return false;
 

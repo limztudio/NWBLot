@@ -6,6 +6,7 @@
 
 
 #include "generic.h"
+#include "limit.h"
 #include "type.h"
 
 #include <functional>
@@ -161,12 +162,37 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     static_assert(IsSame_V<DestinationValue, SourceValue>, "vector value types must match");
     static_assert(IsTriviallyCopyable_V<DestinationValue>, "vector value type must be trivially copyable");
 
-    destination.resize(source.size());
-    const usize byteCount = source.size() * sizeof(SourceValue);
-    if(byteCount == 0u || destination.data() == source.data())
+    if(source.empty()){
+        destination.clear();
+        return;
+    }
+    if(destination.data() == source.data())
         return;
 
-    NWB_MEMCPY(destination.data(), destination.size() * sizeof(DestinationValue), source.data(), byteCount);
+    destination.assign(source.begin(), source.end());
+}
+
+template<typename DestinationVector, typename SourceVector>
+inline void AppendTriviallyCopyableVector(DestinationVector& destination, const SourceVector& source){
+    using DestinationValue = typename DestinationVector::value_type;
+    using SourceValue = typename SourceVector::value_type;
+    static_assert(IsSame_V<DestinationValue, SourceValue>, "vector value types must match");
+    static_assert(IsTriviallyCopyable_V<DestinationValue>, "vector value type must be trivially copyable");
+
+    if(source.empty())
+        return;
+
+    const usize destinationSize = destination.size();
+    const usize sourceSize = source.size();
+    NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
+    destination.reserve(destinationSize + sourceSize);
+    if(destination.data() == source.data()){
+        for(usize i = 0; i < sourceSize; ++i)
+            destination.push_back(source[i]);
+        return;
+    }
+
+    destination.insert(destination.end(), source.begin(), source.end());
 }
 
 

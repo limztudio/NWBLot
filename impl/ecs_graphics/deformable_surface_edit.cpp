@@ -4971,14 +4971,8 @@ void AccumulateSurfaceEditReplayResult(
         outRedoEntry->accessories.reserve(state.accessories.size());
     }
 
-    outUndoState.edits.resize(state.edits.size() - 1u);
-    if(!outUndoState.edits.empty())
-        NWB_MEMCPY(
-            outUndoState.edits.data(),
-            outUndoState.edits.size() * sizeof(DeformableSurfaceEditRecord),
-            state.edits.data(),
-            outUndoState.edits.size() * sizeof(DeformableSurfaceEditRecord)
-        );
+    outUndoState.edits.reserve(state.edits.size() - 1u);
+    outUndoState.edits.insert(outUndoState.edits.end(), state.edits.begin(), state.edits.end() - 1u);
 
     outUndoState.accessories.reserve(state.accessories.size());
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
@@ -5028,23 +5022,9 @@ void AccumulateSurfaceEditReplayResult(
     AssignTriviallyCopyableVector(outRedoState.edits, state.edits);
     outRedoState.edits.push_back(redoEntry.edit);
 
-    const usize stateAccessoryCount = state.accessories.size();
-    const usize redoAccessoryCount = redoEntry.accessories.size();
-    outRedoState.accessories.resize(stateAccessoryCount + redoAccessoryCount);
-    if(stateAccessoryCount > 0u)
-        NWB_MEMCPY(
-            outRedoState.accessories.data(),
-            stateAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord),
-            state.accessories.data(),
-            stateAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord)
-        );
-    if(redoAccessoryCount > 0u)
-        NWB_MEMCPY(
-            outRedoState.accessories.data() + stateAccessoryCount,
-            redoAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord),
-            redoEntry.accessories.data(),
-            redoAccessoryCount * sizeof(DeformableAccessoryAttachmentRecord)
-        );
+    outRedoState.accessories.reserve(state.accessories.size() + redoEntry.accessories.size());
+    AppendTriviallyCopyableVector(outRedoState.accessories, state.accessories);
+    AppendTriviallyCopyableVector(outRedoState.accessories, redoEntry.accessories);
 
     outResult.redoneEditId = redoEntry.edit.editId;
     outResult.restoredAccessoryCount = static_cast<u32>(redoEntry.accessories.size());

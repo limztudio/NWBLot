@@ -190,11 +190,7 @@ void AppendMeshletIndices(
     const PendingMeshlet::ScratchIndexVector& source,
     Vector<u32, DestinationAllocator>& destination
 ){
-    if(source.empty())
-        return;
-
-    destination.reserve(destination.size() + source.size());
-    destination.insert(destination.end(), source.begin(), source.end());
+    AppendTriviallyCopyableVector(destination, source);
 }
 
 template<typename MeshletAllocator, typename VertexIndexAllocator, typename LocalIndexAllocator>

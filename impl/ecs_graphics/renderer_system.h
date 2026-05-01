@@ -85,6 +85,10 @@ static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParamete
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
+    using MaterialParameterVectorAllocator = Core::Alloc::CustomAllocator<MaterialParameterGpuData>;
+    using MaterialParameterVector = Vector<MaterialParameterGpuData, MaterialParameterVectorAllocator>;
+
+
     struct MaterialPipelineKey{
         Name material = NAME_NONE;
         Core::FramebufferInfo framebufferInfo;
@@ -128,10 +132,14 @@ private:
         AString shaderVariant;
         Core::Assets::AssetRef<Shader> pixelShader;
         Core::Assets::AssetRef<Shader> meshShader;
-        Vector<MaterialParameterGpuData> parameters;
+        MaterialParameterVector parameters;
         f32 alpha = 1.f;
         bool transparent = false;
         bool valid = false;
+
+        explicit MaterialSurfaceInfo(Core::Alloc::CustomArena& arena)
+            : parameters(MaterialParameterVectorAllocator(arena))
+        {}
     };
 
     struct MaterialPipelineResources{
@@ -379,6 +387,7 @@ private:
     using MaterialPipelineMapAllocator = Core::Alloc::CustomAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>>;
     using LoggedMaterialPathMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, RenderPath::Enum>>;
 
+    Core::Alloc::CustomArena& m_arena;
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;

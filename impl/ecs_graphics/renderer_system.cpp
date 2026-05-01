@@ -1023,6 +1023,7 @@ RendererSystem::RendererSystem(
 )
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
+    , m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
@@ -2050,15 +2051,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 materialParameters.capacity(),
                 requiredParameterCapacity
             ));
-        const usize parameterWriteOffset = materialParameters.size();
-        materialParameters.resize(requiredParameterCapacity);
-        if(!materialInfo.parameters.empty())
-            NWB_MEMCPY(
-                materialParameters.data() + parameterWriteOffset,
-                materialInfo.parameters.size() * sizeof(MaterialParameterGpuData),
-                materialInfo.parameters.data(),
-                materialInfo.parameters.size() * sizeof(MaterialParameterGpuData)
-            );
+        AppendTriviallyCopyableVector(materialParameters, materialInfo.parameters);
 
         materialParameterBlocks.emplace(materialInfo.materialName, outBlock);
         return true;
@@ -2781,7 +2774,7 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 
     const Material& material = static_cast<const Material&>(*loadedAsset);
 
-    MaterialSurfaceInfo createdInfo;
+    MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
     createdInfo.shaderVariant = material.shaderVariant().empty()
         ? AString(Core::ShaderArchive::s_DefaultVariant)

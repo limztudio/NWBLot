@@ -90,6 +90,7 @@ Vec4 ToVec4(const ufbx_vec4 value){
 bool AppendInstanceGeometry(
     const MeshInstance& instance,
     const ImportOptions& options,
+    const bool wantsDeformableGeometry,
     const Vec4& defaultColor,
     UtilityVector<u32>& inOutTriangleIndices,
     UtilityVector<GeometryVertex>& outFlatVertices,
@@ -119,7 +120,7 @@ bool AppendInstanceGeometry(
 
     inOutTriangleIndices.resize(static_cast<usize>(mesh->max_face_triangles) * 3u);
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
-    const bool importUvs = IsDeformableGeometryKind(options.assetKind) && mesh->vertex_uv.exists;
+    const bool importUvs = wantsDeformableGeometry && mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
 
     for(usize faceIndex = 0; faceIndex < mesh->num_faces; ++faceIndex){
@@ -393,6 +394,7 @@ bool BuildGeometry(
     flatVertices.reserve(estimatedTriangleCorners);
     outIndices.reserve(estimatedTriangleCorners);
     UtilityVector<u32> triangleIndices;
+    const bool wantsDeformableGeometry = IsNormalizedDeformableGeometryKind(NormalizeAssetKind(options.assetKind));
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             outError = "selected mesh index is out of range";
@@ -402,6 +404,7 @@ bool BuildGeometry(
             !__hidden_fbx_import::AppendInstanceGeometry(
                 instances[instanceIndex],
                 options,
+                wantsDeformableGeometry,
                 defaultColor,
                 triangleIndices,
                 flatVertices,

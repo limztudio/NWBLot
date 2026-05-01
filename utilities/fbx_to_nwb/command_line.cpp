@@ -377,7 +377,7 @@ int Run(int argc, char** argv, bool& prompted){
         << "  geometry_class: " << options.assetKind << "\n"
         << "  index_type: " << resolvedIndexType << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
-    if(IsDeformableGeometryKind(options.assetKind))
+    if(IsNormalizedDeformableGeometryKind(options.assetKind))
         NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
 
     return 0;

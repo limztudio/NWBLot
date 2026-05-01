@@ -359,6 +359,7 @@ inline u64 UpdateFnv64U64(u64 hash, const u64 value){
 }
 
 inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
+inline constexpr u64 s_DerivePrefixHash = FNV1a64(s_DerivePrefix, FNV64_OFFSET_BASIS);
 
 
 };
@@ -370,13 +371,8 @@ inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
         return false;
 
     const NameHash& baseHash = baseName.hash();
-    const u64 derivePrefixHash = UpdateFnv64(
-        FNV64_OFFSET_BASIS,
-        reinterpret_cast<const u8*>(NameDetail::s_DerivePrefix),
-        sizeof(NameDetail::s_DerivePrefix) - 1u
-    );
     for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane)
-        outDerivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(derivePrefixHash, baseHash.qwords[lane]);
+        outDerivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(NameDetail::s_DerivePrefixHash, baseHash.qwords[lane]);
 
     return true;
 }

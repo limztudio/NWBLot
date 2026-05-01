@@ -47,14 +47,22 @@ AString NormalizeAssetKind(AString value){
     return ToLower(Trim(Move(value)));
 }
 
+bool IsNormalizedDeformableGeometryKind(const AStringView value){
+    return value == "static_deform" || value == "skinned" || value == "skinned_deform";
+}
+
+bool IsNormalizedSkinnedGeometryKind(const AStringView value){
+    return value == "skinned" || value == "skinned_deform";
+}
+
 bool IsDeformableGeometryKind(const AString& value){
     const AString normalized = NormalizeAssetKind(value);
-    return normalized == "static_deform" || normalized == "skinned" || normalized == "skinned_deform";
+    return IsNormalizedDeformableGeometryKind(normalized);
 }
 
 bool IsSkinnedGeometryKind(const AString& value){
     const AString normalized = NormalizeAssetKind(value);
-    return normalized == "skinned" || normalized == "skinned_deform";
+    return IsNormalizedSkinnedGeometryKind(normalized);
 }
 
 bool ValidateAssetKind(AString& inOutValue, AString& outError){
@@ -161,11 +169,7 @@ Path PathFromUtf8(const AString& value){
 
 AString PathToUtf8(const Path& path){
     const auto text = path.generic_u8string();
-    AString output;
-    output.reserve(text.size());
-    for(const auto ch : text)
-        output.push_back(static_cast<char>(ch));
-    return output;
+    return AString(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
 Path DefaultOutputPath(const AString& inputPath){

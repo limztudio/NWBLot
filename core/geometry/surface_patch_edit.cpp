@@ -232,9 +232,11 @@ template<typename IndexAllocator>
     if(a.vertex == b.vertex || a.vertex == c.vertex || b.vertex == c.vertex)
         return false;
 
-    outIndices.push_back(a.vertex);
-    outIndices.push_back(counterClockwise ? b.vertex : c.vertex);
-    outIndices.push_back(counterClockwise ? c.vertex : b.vertex);
+    const usize indexOffset = outIndices.size();
+    outIndices.resize(indexOffset + 3u);
+    outIndices[indexOffset + 0u] = a.vertex;
+    outIndices[indexOffset + 1u] = counterClockwise ? b.vertex : c.vertex;
+    outIndices[indexOffset + 2u] = counterClockwise ? c.vertex : b.vertex;
     return true;
 }
 

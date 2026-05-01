@@ -1732,15 +1732,15 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapIndices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    capPositions.reserve(capVertices.size());
-    localCapVertices.reserve(capVertices.size());
+    capPositions.resize(capVertices.size());
+    localCapVertices.resize(capVertices.size());
     for(usize capVertexIndex = 0u; capVertexIndex < capVertices.size(); ++capVertexIndex){
         const u32 capVertex = capVertices[capVertexIndex];
         if(capVertex >= restVertices.size())
             return false;
 
-        capPositions.push_back(restVertices[capVertex].position);
-        localCapVertices.push_back(static_cast<u32>(capVertexIndex));
+        capPositions[capVertexIndex] = restVertices[capVertex].position;
+        localCapVertices[capVertexIndex] = static_cast<u32>(capVertexIndex);
     }
 
     if(
@@ -1760,12 +1760,16 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
     if(localCapIndices.size() > Limit<usize>::s_Max - outIndices.size())
         return false;
 
-    outIndices.reserve(outIndices.size() + localCapIndices.size());
+    const usize indexOffset = outIndices.size();
     for(const u32 localCapIndex : localCapIndices){
         if(localCapIndex >= capVertices.size())
             return false;
+    }
 
-        outIndices.push_back(capVertices[localCapIndex]);
+    outIndices.resize(indexOffset + localCapIndices.size());
+    for(usize localIndex = 0u; localIndex < localCapIndices.size(); ++localIndex){
+        const u32 localCapIndex = localCapIndices[localIndex];
+        outIndices[indexOffset + localIndex] = capVertices[localCapIndex];
     }
     return true;
 }
@@ -2478,12 +2482,13 @@ template<typename DistanceFunc>
     Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertices{
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
-    vertices.reserve(polygon.size());
-    for(const SurfaceRemeshClipPoint& point : polygon){
+    vertices.resize(polygon.size());
+    for(usize pointIndex = 0u; pointIndex < polygon.size(); ++pointIndex){
+        const SurfaceRemeshClipPoint& point = polygon[pointIndex];
         u32 vertex = Limit<u32>::s_Max;
         if(!GetOrCreateSurfaceRemeshVertex(instance, sourceTriangle, triangleIndices, point, restPositions, generatedVertices, vertex))
             return false;
-        vertices.push_back(vertex);
+        vertices[pointIndex] = vertex;
     }
 
     for(usize i = 1u; i + 1u < vertices.size(); ++i){
@@ -4503,7 +4508,11 @@ template<usize sourceCount>
 
     Vector<u32> newIndices;
     newIndices.reserve(surfaceIndexCount + wallIndexCount + capIndexCount);
-    for(const SurfaceRemeshTriangle& triangle : surfaceTriangles){
+    newIndices.resize(surfaceIndexCount);
+    if(hasEditMaskPerTriangle)
+        newEditMaskPerTriangle.resize(surfaceTriangles.size());
+    for(usize surfaceTriangleIndex = 0u; surfaceTriangleIndex < surfaceTriangles.size(); ++surfaceTriangleIndex){
+        const SurfaceRemeshTriangle& triangle = surfaceTriangles[surfaceTriangleIndex];
         if(
             triangle.sourceTriangle >= triangleCount
             || triangle.indices[0u] >= newRestVertices.size()
@@ -4521,11 +4530,12 @@ template<usize sourceCount>
             return false;
         }
 
-        newIndices.push_back(triangle.indices[0u]);
-        newIndices.push_back(triangle.indices[1u]);
-        newIndices.push_back(triangle.indices[2u]);
+        const usize indexOffset = surfaceTriangleIndex * 3u;
+        newIndices[indexOffset + 0u] = triangle.indices[0u];
+        newIndices[indexOffset + 1u] = triangle.indices[1u];
+        newIndices[indexOffset + 2u] = triangle.indices[2u];
         if(hasEditMaskPerTriangle)
-            newEditMaskPerTriangle.push_back(resolveValidatedEditMask(triangle.sourceTriangle));
+            newEditMaskPerTriangle[surfaceTriangleIndex] = resolveValidatedEditMask(triangle.sourceTriangle);
     }
 
     u32 addedTriangleCount = 0u;
@@ -4691,12 +4701,11 @@ template<usize sourceCount>
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        ringVertices.reserve(boundaryVertexCount);
+        ringVertices.resize(boundaryVertexCount);
         for(usize ringIndex = 0u; ringIndex < wallBandCount; ++ringIndex){
             const usize wallVertexBase = ringIndex * boundaryVertexCount;
-            ringVertices.clear();
             for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
-                ringVertices.push_back(wallVertices[wallVertexBase + edgeIndex]);
+                ringVertices[edgeIndex] = wallVertices[wallVertexBase + edgeIndex];
 
             if(!TransferWallMorphDeltas(newMorphs, orderedBoundaryEdges, ringVertices)){
                 NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole failed while transferring wall morph deltas (entity={} runtime_mesh={} ring={} morphs={})")
@@ -4719,8 +4728,10 @@ template<usize sourceCount>
                 return false;
             }
             if(hasEditMaskPerTriangle){
+                const usize editMaskOffset = newEditMaskPerTriangle.size();
+                newEditMaskPerTriangle.resize(editMaskOffset + wallAddedTriangleCount);
                 for(u32 triangleOffset = 0u; triangleOffset < wallAddedTriangleCount; ++triangleOffset)
-                    newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+                    newEditMaskPerTriangle[editMaskOffset + triangleOffset] = removedEditMaskFlags;
             }
             addedTriangleCount += wallAddedTriangleCount;
 
@@ -4746,10 +4757,10 @@ template<usize sourceCount>
         Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
             Core::Alloc::ScratchAllocator<u32>(scratchArena)
         };
-        capVertices.reserve(boundaryVertexCount);
+        capVertices.resize(boundaryVertexCount);
         const usize capSourceVertexBase = (wallBandCount - 1u) * boundaryVertexCount;
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex)
-            capVertices.push_back(wallVertices[capSourceVertexBase + edgeIndex]);
+            capVertices[edgeIndex] = wallVertices[capSourceVertexBase + edgeIndex];
 
         u32 capAddedTriangleCount = 0u;
         if(
@@ -4770,8 +4781,10 @@ template<usize sourceCount>
             return false;
         }
         if(hasEditMaskPerTriangle){
+            const usize editMaskOffset = newEditMaskPerTriangle.size();
+            newEditMaskPerTriangle.resize(editMaskOffset + capAddedTriangleCount);
             for(u32 triangleOffset = 0u; triangleOffset < capAddedTriangleCount; ++triangleOffset)
-                newEditMaskPerTriangle.push_back(removedEditMaskFlags);
+                newEditMaskPerTriangle[editMaskOffset + triangleOffset] = removedEditMaskFlags;
         }
         addedTriangleCount += capAddedTriangleCount;
         if(!BlendDeepestWallRingCapFrames(newRestVertices, firstWallVertex, addedWallVertexCount, frame.normal, frame.tangent)){

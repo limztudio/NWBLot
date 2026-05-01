@@ -98,12 +98,17 @@ public:
         if(!isList())
             return false;
         const auto& list = asList();
-        outList.reserve(list.size());
         for(const auto& elem : list){
             if(!elem.isString())
                 return false;
+        }
+
+        const usize listOffset = outList.size();
+        outList.resize(listOffset + list.size());
+        for(usize i = 0u; i < list.size(); ++i){
+            const auto& elem = list[i];
             const MStringView text = elem.asString();
-            outList.emplace_back(text.data(), text.size());
+            outList[listOffset + i].assign(text.data(), text.size());
         }
         return true;
     }

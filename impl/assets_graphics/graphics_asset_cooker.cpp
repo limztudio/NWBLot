@@ -1230,13 +1230,15 @@ static bool ParseU32ListField(
         return false;
 
     const auto& list = field->asList();
-    outValues.reserve(list.size());
+    outValues.resize(list.size());
     for(usize i = 0; i < list.size(); ++i){
         u32 value = 0;
         const AString label = MakeIndexedLabel(fieldName, i);
-        if(!ParseU32Value(nwbFilePath, list[i], label, value))
+        if(!ParseU32Value(nwbFilePath, list[i], label, value)){
+            outValues.clear();
             return false;
-        outValues.push_back(value);
+        }
+        outValues[i] = value;
     }
 
     return true;
@@ -2496,14 +2498,17 @@ static bool GetVariantBytecode(
     Vector<Core::ShaderMacroDefinition, Core::Alloc::ScratchAllocator<Core::ShaderMacroDefinition>> compileDefines{
         Core::Alloc::ScratchAllocator<Core::ShaderMacroDefinition>(scratchArena)
     };
-    compileDefines.reserve(mergedDefines.size());
-    for(const auto& [defineName, value] : mergedDefines)
-        compileDefines.push_back(Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) });
-    if(compileDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
+    if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation")
             , StringConvert(entry.name)
         );
         return false;
+    }
+    compileDefines.resize(mergedDefines.size());
+    usize compileDefineIndex = 0u;
+    for(const auto& [defineName, value] : mergedDefines){
+        compileDefines[compileDefineIndex] = Core::ShaderMacroDefinition{ AStringView(defineName), AStringView(value) };
+        ++compileDefineIndex;
     }
 
     const Core::ShaderCompilerRequest compileRequest = {
@@ -3203,9 +3208,9 @@ bool GraphicsAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
     GraphicsCookEnvironment environment(m_arena);
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
-    environment.assetRoots.reserve(options.assetRoots.size());
-    for(const AString& assetRoot : options.assetRoots)
-        environment.assetRoots.push_back(Path(assetRoot.c_str()));
+    environment.assetRoots.resize(options.assetRoots.size());
+    for(usize assetRootIndex = 0u; assetRootIndex < options.assetRoots.size(); ++assetRootIndex)
+        environment.assetRoots[assetRootIndex] = Path(options.assetRoots[assetRootIndex].c_str());
     environment.outputDirectory = Path(options.outputDirectory.c_str());
     environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory.c_str());
 

@@ -327,8 +327,9 @@ template<typename PointAllocator>
     Vector<f32, Core::Alloc::ScratchAllocator<f32>> zPlanes{
         Core::Alloc::ScratchAllocator<f32>(scratchArena)
     };
-    zPlanes.reserve(vertices.size());
-    for(const GeometryVertex& vertex : vertices){
+    zPlanes.resize(vertices.size());
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        const GeometryVertex& vertex = vertices[vertexIndex];
         if(!FiniteOperatorPosition(vertex.position))
             return false;
         if(!foundPosition){
@@ -340,7 +341,7 @@ template<typename PointAllocator>
             minZ = Min(minZ, vertex.position.z);
             maxZ = Max(maxZ, vertex.position.z);
         }
-        zPlanes.push_back(vertex.position.z);
+        zPlanes[vertexIndex] = vertex.position.z;
     }
     if(!foundPosition)
         return false;

@@ -254,8 +254,8 @@ bool BuildOrderedBoundaryLoopImpl(
         return false;
     };
 
-    outOrderedEdges.reserve(boundaryEdges.size());
-    while(outOrderedEdges.size() < boundaryEdges.size()){
+    outOrderedEdges.resize(boundaryEdges.size());
+    for(usize orderedEdgeIndex = 0u; orderedEdgeIndex < boundaryEdges.size(); ++orderedEdgeIndex){
         usize nextEdgeIndex = Limit<usize>::s_Max;
         MeshTopologyEdge nextEdge;
         const auto foundEdges = vertexEdges.find(currentVertex);
@@ -287,9 +287,9 @@ bool BuildOrderedBoundaryLoopImpl(
             return fail();
 
         visitedEdges[nextEdgeIndex] = 1u;
-        outOrderedEdges.push_back(nextEdge);
+        outOrderedEdges[orderedEdgeIndex] = nextEdge;
         currentVertex = nextEdge.b;
-        if(currentVertex == startVertex && outOrderedEdges.size() != boundaryEdges.size())
+        if(currentVertex == startVertex && orderedEdgeIndex + 1u != boundaryEdges.size())
             return fail();
     }
 

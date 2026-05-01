@@ -172,9 +172,9 @@ void SystemScheduler::rebuild(){
         }
 
         Stage stage{SystemAllocator(m_arena)};
-        stage.reserve(stageSystems.size());
-        for(ISystem* system : stageSystems)
-            stage.push_back(system);
+        stage.resize(stageSystems.size());
+        for(usize stageSystemIndex = 0u; stageSystemIndex < stageSystems.size(); ++stageSystemIndex)
+            stage[stageSystemIndex] = stageSystems[stageSystemIndex];
         m_stages.push_back(Move(stage));
     }
 

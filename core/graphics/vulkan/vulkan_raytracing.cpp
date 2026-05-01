@@ -153,7 +153,7 @@ VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFor
 
 bool BuildOpacityMicromapUsageCounts(const Vector<RayTracingOpacityMicromapUsageCount>& counts, MicromapUsageVector& outUsageCounts, const tchar* operation){
     outUsageCounts.clear();
-    outUsageCounts.reserve(counts.size());
+    outUsageCounts.resize(counts.size());
 
     for(usize i = 0; i < counts.size(); ++i){
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
@@ -168,11 +168,11 @@ bool BuildOpacityMicromapUsageCounts(const Vector<RayTracingOpacityMicromapUsage
             return false;
         }
 
-        VkMicromapUsageEXT usageCount = {};
+        VkMicromapUsageEXT& usageCount = outUsageCounts[i];
+        usageCount = {};
         usageCount.count = count.count;
         usageCount.subdivisionLevel = count.subdivisionLevel;
         usageCount.format = static_cast<u32>(format);
-        outUsageCounts.push_back(usageCount);
     }
 
     return true;

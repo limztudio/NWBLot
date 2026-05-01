@@ -921,13 +921,13 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
     outChecksum = FNV64_OFFSET_BASIS;
 
     Vector<SortedDependencyItem, Alloc::ScratchAllocator<SortedDependencyItem>> sortedDependencies{Alloc::ScratchAllocator<SortedDependencyItem>(scratchArena)};
-    sortedDependencies.reserve(dependencies.size());
-    for(const Path& dependency : dependencies){
-        SortedDependencyItem item;
+    sortedDependencies.resize(dependencies.size());
+    for(usize dependencyIndex = 0u; dependencyIndex < dependencies.size(); ++dependencyIndex){
+        const Path& dependency = dependencies[dependencyIndex];
+        SortedDependencyItem& item = sortedDependencies[dependencyIndex];
         item.canonicalPath = PathToString(dependency);
         CanonicalizeTextInPlace(item.canonicalPath);
         item.path = dependency;
-        sortedDependencies.push_back(Move(item));
     }
 
     Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){ return lhs.canonicalPath < rhs.canonicalPath; });

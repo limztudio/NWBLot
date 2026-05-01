@@ -32,9 +32,10 @@ template<typename Set>
 static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringSetToVector(const Set& set, Alloc::ScratchArena<>& arena){
     Alloc::ScratchAllocator<const char*> alloc(arena);
     Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
-    ret.reserve(set.size());
+    ret.resize(set.size());
+    usize index = 0u;
     for(const auto& s : set)
-        ret.push_back(s.c_str());
+        ret[index++] = s.c_str();
     return ret;
 }
 
@@ -42,9 +43,10 @@ template<typename Map>
 static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringMapKeysToVector(const Map& map, Alloc::ScratchArena<>& arena){
     Alloc::ScratchAllocator<const char*> alloc(arena);
     Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
-    ret.reserve(map.size());
+    ret.resize(map.size());
+    usize index = 0u;
     for(const auto& [key, val] : map)
-        ret.push_back(key.c_str());
+        ret[index++] = key.c_str();
     return ret;
 }
 
@@ -367,23 +369,26 @@ bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
 
 void BackendContext::getEnabledInstanceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
-    extensions.reserve(m_enabledExtensions.instance.size());
+    extensions.resize(m_enabledExtensions.instance.size());
+    usize index = 0u;
     for(const auto& ext : m_enabledExtensions.instance)
-        extensions.push_back(ext);
+        extensions[index++] = ext;
 }
 
 void BackendContext::getEnabledDeviceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
-    extensions.reserve(m_enabledExtensions.device.size());
+    extensions.resize(m_enabledExtensions.device.size());
+    usize index = 0u;
     for(const auto& [name, _] : m_enabledExtensions.device)
-        extensions.push_back(name);
+        extensions[index++] = name;
 }
 
 void BackendContext::getEnabledLayers(Vector<AString>& layers)const{
     layers.clear();
-    layers.reserve(m_enabledExtensions.layers.size());
+    layers.resize(m_enabledExtensions.layers.size());
+    usize index = 0u;
     for(const auto& ext : m_enabledExtensions.layers)
-        layers.push_back(ext);
+        layers[index++] = ext;
 }
 
 ITexture* BackendContext::getCurrentBackBuffer(){

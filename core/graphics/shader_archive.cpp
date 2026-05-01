@@ -193,9 +193,10 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
 
     Alloc::ScratchArena<> scratchArena;
     Vector<const Record*, Alloc::ScratchAllocator<const Record*>> sortedRecords{Alloc::ScratchAllocator<const Record*>(scratchArena)};
-    sortedRecords.reserve(records.size());
+    sortedRecords.resize(records.size());
+    usize sortedRecordIndex = 0u;
     for(const Record& record : records)
-        sortedRecords.push_back(&record);
+        sortedRecords[sortedRecordIndex++] = &record;
     Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecordPointer);
 
     usize variantTextBinaryBytes = 0;

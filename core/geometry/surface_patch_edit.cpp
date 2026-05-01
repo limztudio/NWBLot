@@ -136,15 +136,14 @@ bool BuildSurfacePatchRingEdgesImpl(
             return false;
     }
 
-    outEdges.reserve(ringVertexCount);
+    outEdges.resize(ringVertexCount);
     for(usize vertexIndex = 0u; vertexIndex < ringVertexCount; ++vertexIndex){
         const usize nextVertexIndex = (vertexIndex + 1u) % ringVertexCount;
-        MeshTopologyEdge edge;
+        MeshTopologyEdge& edge = outEdges[vertexIndex];
         edge.a = ringVertices[vertexIndex];
         edge.b = ringVertices[nextVertexIndex];
         edge.fullCount = 2u;
         edge.removedCount = 1u;
-        outEdges.push_back(edge);
     }
     return true;
 }
@@ -299,7 +298,7 @@ template<typename IndexAllocator>
     Vector<CapPolygonVertex, Core::Alloc::ScratchAllocator<CapPolygonVertex>> polygon{
         Core::Alloc::ScratchAllocator<CapPolygonVertex>(scratchArena)
     };
-    polygon.reserve(capVertexCount);
+    polygon.resize(capVertexCount);
     if(capVertices[0u] >= positionCount)
         return false;
 
@@ -310,14 +309,12 @@ template<typename IndexAllocator>
             return false;
 
         const SIMDVector offset = VectorSubtract(LoadFloat(positions[capVertex]), origin);
-        CapPolygonVertex polygonVertex;
+        CapPolygonVertex& polygonVertex = polygon[capVertexIndex];
         polygonVertex.vertex = capVertex;
         polygonVertex.x = VectorGetX(Vector3Dot(offset, tangent));
         polygonVertex.y = VectorGetX(Vector3Dot(offset, bitangent));
         if(!IsFinite(polygonVertex.x) || !IsFinite(polygonVertex.y))
             return false;
-
-        polygon.push_back(polygonVertex);
     }
 
     if(!RemoveDuplicateCapVertices(polygon))
@@ -431,10 +428,10 @@ bool BuildSurfacePatchWallVerticesImpl(
         Core::Alloc::ScratchAllocator<MeshTopologyLoopVertexFrame>(scratchArena)
     };
     if(cacheLoopVertexFrames){
-        cachedLoopVertexFrames.reserve(boundaryVertexCount);
+        cachedLoopVertexFrames.resize(boundaryVertexCount);
         for(usize edgeIndex = 0u; edgeIndex < boundaryVertexCount; ++edgeIndex){
             const usize previousEdgeIndex = edgeIndex == 0u ? boundaryVertexCount - 1u : edgeIndex - 1u;
-            MeshTopologyLoopVertexFrame loopVertexFrame;
+            MeshTopologyLoopVertexFrame& loopVertexFrame = cachedLoopVertexFrames[edgeIndex];
             if(
                 !BuildBoundaryLoopVertexFrame(
                     positions,
@@ -445,7 +442,6 @@ bool BuildSurfacePatchWallVerticesImpl(
                 )
             )
                 return false;
-            cachedLoopVertexFrames.push_back(loopVertexFrame);
         }
     }
 

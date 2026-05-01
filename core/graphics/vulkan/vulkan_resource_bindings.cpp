@@ -125,14 +125,14 @@ bool BuildPipelineRenderingInfo(
     PipelineRenderingFormatVector& outColorFormats
 ){
     outColorFormats.clear();
-    outColorFormats.reserve(fbinfo.colorFormats.size());
+    outColorFormats.resize(fbinfo.colorFormats.size());
     for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
         if(vkFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
             return false;
         }
-        outColorFormats.push_back(vkFormat);
+        outColorFormats[i] = vkFormat;
     }
 
     outRenderingInfo = MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
@@ -693,15 +693,15 @@ bool DescriptorHeapManager::tryEnablePipeline(
     outFlags2.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO;
     outFlags2.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
 
-    outStageMappings.reserve(shaderStages.size());
+    outStageMappings.resize(shaderStages.size());
     for(usize i = 0; i < shaderStages.size(); ++i){
-        VkShaderDescriptorSetAndBindingMappingInfoEXT mappingInfo{};
+        VkShaderDescriptorSetAndBindingMappingInfoEXT& mappingInfo = outStageMappings[i];
+        mappingInfo = {};
         mappingInfo.sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT;
         mappingInfo.mappingCount = static_cast<u32>(outMappings.size());
         mappingInfo.pMappings = outMappings.data();
         mappingInfo.pNext = shaderStages[i].pNext;
-        outStageMappings.push_back(mappingInfo);
-        shaderStages[i].pNext = &outStageMappings.back();
+        shaderStages[i].pNext = &mappingInfo;
     }
 
     return true;

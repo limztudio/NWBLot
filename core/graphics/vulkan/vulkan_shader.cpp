@@ -573,9 +573,11 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         NWB_MEMCPY(layout->m_attributes.data(), layout->m_attributes.size() * sizeof(VertexAttributeDesc), d, attributeCount * sizeof(VertexAttributeDesc));
     }
 
-    layout->m_bindings.reserve(bindingInfos.size());
+    layout->m_bindings.resize(bindingInfos.size());
+    usize bindingIndex = 0u;
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
-        VkVertexInputBindingDescription binding{};
+        VkVertexInputBindingDescription& binding = layout->m_bindings[bindingIndex++];
+        binding = {};
         binding.binding = bufferIndex;
         binding.stride =
             bindingInfo.hasExplicitStride
@@ -583,7 +585,6 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             : static_cast<u32>(bindingInfo.requiredStride)
         ;
         binding.inputRate = bindingInfo.isInstanced ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
-        layout->m_bindings.push_back(binding);
     }
 
     layout->m_vkAttributes.resize(attributeCount);

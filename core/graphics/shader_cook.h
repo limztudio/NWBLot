@@ -151,9 +151,10 @@ private:
     ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Alloc::ScratchArena<>& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
         ScratchDefineEntryVector<MapT> entries{Alloc::ScratchAllocator<EntryPtr>(scratchArena)};
-        entries.reserve(map.size());
+        entries.resize(map.size());
+        usize entryIndex = 0u;
         for(const auto& [name, value] : map)
-            entries.push_back(EntryPtr{ &name, &value });
+            entries[entryIndex++] = EntryPtr{ &name, &value };
         Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs){ return *lhs.key < *rhs.key; });
         return entries;
     }

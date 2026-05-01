@@ -1201,9 +1201,10 @@ Vector<Name> VolumeFileSystem::listFiles()const{
     ScopedLock lock(m_mutex);
 
     Vector<Name> output;
-    output.reserve(m_files.size());
+    output.resize(m_files.size());
+    usize outputIndex = 0u;
     for(const auto& [path, _] : m_files)
-        output.push_back(path);
+        output[outputIndex++] = path;
 
     Sort(output.begin(), output.end(), __hidden_filesystem::LessName);
     return output;
@@ -1228,8 +1229,9 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     Vector<FileLayout, Core::Alloc::ScratchAllocator<FileLayout>> layouts{
         Core::Alloc::ScratchAllocator<FileLayout>(scratchArena)
     };
-    layouts.reserve(m_files.size());
+    layouts.resize(m_files.size());
 
+    usize layoutIndex = 0u;
     for(const auto& [path, record] : m_files){
         u64 endOffset = 0;
         if(!__hidden_filesystem::AddNoOverflow(record.offset, record.size, endOffset)){
@@ -1245,7 +1247,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
             return false;
         }
 
-        layouts.push_back(FileLayout{ path, record.offset, 0, record.size });
+        layouts[layoutIndex++] = FileLayout{ path, record.offset, 0, record.size };
     }
 
     Sort(
@@ -1616,9 +1618,10 @@ bool VolumeFileSystem::flushMetadataLocked(){
     Vector<MetadataIndexRecord, Core::Alloc::ScratchAllocator<MetadataIndexRecord>> sortedRecords{
         Core::Alloc::ScratchAllocator<MetadataIndexRecord>(scratchArena)
     };
-    sortedRecords.reserve(m_files.size());
+    sortedRecords.resize(m_files.size());
+    usize sortedRecordIndex = 0u;
     for(const auto& [path, record] : m_files)
-        sortedRecords.push_back(MetadataIndexRecord{ path, record });
+        sortedRecords[sortedRecordIndex++] = MetadataIndexRecord{ path, record };
     Sort(
         sortedRecords.begin(),
         sortedRecords.end(),

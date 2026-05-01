@@ -68,6 +68,42 @@ namespace RestVertexPayloadFailure{
     };
 };
 
+namespace RuntimePayloadFailure{
+    enum Enum : u8{
+        None,
+        IncompleteRestIndexPayload,
+        VertexIndexCountLimit,
+        IndexCountNotTriangleList,
+        InvalidRestVertex,
+        IndexOutOfRange,
+        DegenerateTriangle,
+        ZeroAreaTriangle,
+        SkinCountMismatch,
+        SkinMissingSkeleton,
+        SkeletonJointCountLimit,
+        InvalidInverseBindMatrices,
+        InvalidSkinInfluence,
+        SkinJointOutOfRange,
+        SourceSampleCountMismatch,
+        InvalidSourceSample,
+        EditMaskCountMismatch,
+        InvalidEditMask,
+        MorphPayload,
+    };
+};
+
+struct RuntimePayloadFailureInfo{
+    RuntimePayloadFailure::Enum reason = RuntimePayloadFailure::None;
+    usize vertexIndex = 0;
+    usize indexBase = 0;
+    u32 vertexId = 0;
+    usize count = 0;
+    usize expectedCount = 0;
+    u32 failedJoint = 0;
+    RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None;
+    MorphPayloadFailureInfo morphFailure;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,6 +118,30 @@ namespace RestVertexPayloadFailure{
     info.morphIndex = morphIndex;
     info.deltaIndex = deltaIndex;
     info.vertexId = vertexId;
+    return info;
+}
+
+[[nodiscard]] inline RuntimePayloadFailureInfo MakeRuntimePayloadFailure(
+    const RuntimePayloadFailure::Enum reason,
+    const usize vertexIndex = 0,
+    const usize indexBase = 0,
+    const u32 vertexId = 0,
+    const usize count = 0,
+    const usize expectedCount = 0,
+    const u32 failedJoint = 0,
+    const RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None,
+    const MorphPayloadFailureInfo& morphFailure = {}
+){
+    RuntimePayloadFailureInfo info;
+    info.reason = reason;
+    info.vertexIndex = vertexIndex;
+    info.indexBase = indexBase;
+    info.vertexId = vertexId;
+    info.count = count;
+    info.expectedCount = expectedCount;
+    info.failedJoint = failedJoint;
+    info.restVertexFailure = restVertexFailure;
+    info.morphFailure = morphFailure;
     return info;
 }
 
@@ -442,10 +502,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     return {};
 }
 
-[[nodiscard]] inline bool ValidMorphPayload(const Vector<DeformableMorph>& morphs, const usize vertexCount){
-    return FindMorphPayloadFailure(morphs, vertexCount).reason == MorphPayloadFailure::None;
-}
-
 [[nodiscard]] inline bool ValidEditMaskPayload(const Vector<DeformableEditMaskFlags>& editMaskPerTriangle, const usize triangleCount){
     if(editMaskPerTriangle.empty())
         return true;
@@ -485,57 +541,167 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     const Vector<DeformableJointMatrix>& inverseBindMatrices,
     const Vector<SourceSample>& sourceSamples,
     const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
+    const Vector<DeformableMorph>& morphs);
+
+[[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(
+    const Vector<DeformableVertexRest>& restVertices,
+    const Vector<u32>& indices,
+    const u32 sourceTriangleCount,
+    const u32 skeletonJointCount,
+    const Vector<SkinInfluence4>& skin,
+    const Vector<DeformableJointMatrix>& inverseBindMatrices,
+    const Vector<SourceSample>& sourceSamples,
+    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
     const Vector<DeformableMorph>& morphs){
     if(restVertices.empty() || indices.empty())
-        return false;
+        return MakeRuntimePayloadFailure(RuntimePayloadFailure::IncompleteRestIndexPayload);
     if(
         restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
         || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || (indices.size() % 3u) != 0u
     )
-        return false;
+        return MakeRuntimePayloadFailure(RuntimePayloadFailure::VertexIndexCountLimit);
+    if((indices.size() % 3u) != 0u)
+        return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexCountNotTriangleList, 0, 0, 0, indices.size());
     if(!skin.empty() && skin.size() != restVertices.size())
-        return false;
+        return MakeRuntimePayloadFailure(
+            RuntimePayloadFailure::SkinCountMismatch,
+            0,
+            0,
+            0,
+            skin.size(),
+            restVertices.size()
+        );
     if(!skin.empty() && skeletonJointCount == 0u)
-        return false;
+        return MakeRuntimePayloadFailure(RuntimePayloadFailure::SkinMissingSkeleton);
     if(skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u)
-        return false;
+        return MakeRuntimePayloadFailure(
+            RuntimePayloadFailure::SkeletonJointCountLimit,
+            0,
+            0,
+            0,
+            skeletonJointCount
+        );
     if(!ValidInverseBindMatrices(inverseBindMatrices, skeletonJointCount))
-        return false;
+        return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidInverseBindMatrices);
     if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
-        return false;
+        return MakeRuntimePayloadFailure(
+            RuntimePayloadFailure::SourceSampleCountMismatch,
+            0,
+            0,
+            0,
+            sourceSamples.size(),
+            restVertices.size()
+        );
     if(!sourceSamples.empty() && sourceTriangleCount == 0u)
-        return false;
-    if(!ValidEditMaskPayload(editMaskPerTriangle, indices.size() / 3u))
-        return false;
+        return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidSourceSample);
+    const usize triangleCount = indices.size() / 3u;
+    if(!editMaskPerTriangle.empty() && editMaskPerTriangle.size() != triangleCount){
+        return MakeRuntimePayloadFailure(
+            RuntimePayloadFailure::EditMaskCountMismatch,
+            0,
+            0,
+            0,
+            editMaskPerTriangle.size(),
+            triangleCount
+        );
+    }
 
-    for(const DeformableVertexRest& vertex : restVertices){
-        if(!ValidRestVertexFrame(vertex))
-            return false;
+    for(usize vertexIndex = 0; vertexIndex < restVertices.size(); ++vertexIndex){
+        const RestVertexPayloadFailure::Enum restVertexFailure = FindRestVertexPayloadFailure(restVertices[vertexIndex]);
+        if(restVertexFailure != RestVertexPayloadFailure::None){
+            return MakeRuntimePayloadFailure(
+                RuntimePayloadFailure::InvalidRestVertex,
+                vertexIndex,
+                0,
+                0,
+                0,
+                0,
+                0,
+                restVertexFailure
+            );
+        }
     }
     for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
-        if(
-            !ValidTriangle(
-                restVertices,
-                indices[indexBase + 0u],
-                indices[indexBase + 1u],
-                indices[indexBase + 2u]
-            )
-        )
-            return false;
+        const u32 a = indices[indexBase + 0u];
+        const u32 b = indices[indexBase + 1u];
+        const u32 c = indices[indexBase + 2u];
+        if(a >= restVertices.size())
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexOutOfRange, 0, indexBase, a, restVertices.size());
+        if(b >= restVertices.size())
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexOutOfRange, 0, indexBase, b, restVertices.size());
+        if(c >= restVertices.size())
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexOutOfRange, 0, indexBase, c, restVertices.size());
+        if(a == b || a == c || b == c)
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::DegenerateTriangle, 0, indexBase);
+        if(!ValidTriangleArea(restVertices, a, b, c))
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::ZeroAreaTriangle, 0, indexBase);
     }
-    for(const SkinInfluence4& influence : skin){
+    for(usize vertexIndex = 0; vertexIndex < skin.size(); ++vertexIndex){
+        const SkinInfluence4& influence = skin[vertexIndex];
         if(!ValidSkinInfluence(influence))
-            return false;
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidSkinInfluence, vertexIndex);
         u32 failedJoint = 0u;
         if(!SkinInfluenceFitsSkeleton(influence, skeletonJointCount, failedJoint))
-            return false;
+            return MakeRuntimePayloadFailure(
+                RuntimePayloadFailure::SkinJointOutOfRange,
+                vertexIndex,
+                0,
+                0,
+                skeletonJointCount,
+                0,
+                failedJoint
+            );
     }
-    for(const SourceSample& sample : sourceSamples){
-        if(!ValidSourceSample(sample, sourceTriangleCount))
-            return false;
+    for(usize vertexIndex = 0; vertexIndex < sourceSamples.size(); ++vertexIndex){
+        if(!ValidSourceSample(sourceSamples[vertexIndex], sourceTriangleCount))
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidSourceSample, vertexIndex);
     }
-    return ValidMorphPayload(morphs, restVertices.size());
+    for(usize triangleIndex = 0; triangleIndex < editMaskPerTriangle.size(); ++triangleIndex){
+        if(!ValidDeformableEditMaskFlags(editMaskPerTriangle[triangleIndex]))
+            return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidEditMask, 0, triangleIndex * 3u);
+    }
+
+    const MorphPayloadFailureInfo morphFailure = FindMorphPayloadFailure(morphs, restVertices.size());
+    if(morphFailure.reason != MorphPayloadFailure::None){
+        return MakeRuntimePayloadFailure(
+            RuntimePayloadFailure::MorphPayload,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            RestVertexPayloadFailure::None,
+            morphFailure
+        );
+    }
+
+    return {};
+}
+
+[[nodiscard]] inline bool ValidRuntimePayloadArrays(
+    const Vector<DeformableVertexRest>& restVertices,
+    const Vector<u32>& indices,
+    const u32 sourceTriangleCount,
+    const u32 skeletonJointCount,
+    const Vector<SkinInfluence4>& skin,
+    const Vector<DeformableJointMatrix>& inverseBindMatrices,
+    const Vector<SourceSample>& sourceSamples,
+    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
+    const Vector<DeformableMorph>& morphs){
+    return
+        FindRuntimePayloadFailure(
+            restVertices,
+            indices,
+            sourceTriangleCount,
+            skeletonJointCount,
+            skin,
+            inverseBindMatrices,
+            sourceSamples,
+            editMaskPerTriangle,
+            morphs
+        ).reason == RuntimePayloadFailure::None
+    ;
 }
 
 

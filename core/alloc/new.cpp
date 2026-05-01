@@ -10,17 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__cplusplus) && (__cplusplus >= 201703)
 #define __nwb__decl_nodiscard [[nodiscard]]
-#elif (defined(__GNUC__) && (__GNUC__ >= 4)) || defined(__clang__) // includes clang, icc, and clang-cl
-#define __nwb__decl_nodiscard __attribute__((warn_unused_result))
-#elif defined(_HAS_NODISCARD)
-#define __nwb__decl_nodiscard _NODISCARD
-#elif (_MSC_VER >= 1700)
-#define __nwb__decl_nodiscard _Check_return_
-#else
-#define __nwb__decl_nodiscard
-#endif
 
 #if defined(_MSC_VER) && defined(_Ret_notnull_) && defined(_Post_writable_byte_size_)
 // stay consistent with VCRT definitions

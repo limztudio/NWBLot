@@ -24,7 +24,8 @@ namespace __hidden_deformable_operator_shape{
 
 
 static constexpr f32 s_OperatorFootprintPlaneEpsilon = 0.0001f;
-static constexpr f32 s_OperatorFootprintPointEpsilonSq = 0.0000000001f;
+static constexpr f32 s_OperatorFootprintPointEpsilon = 0.00001f;
+static constexpr f32 s_OperatorFootprintPointEpsilonSq = s_OperatorFootprintPointEpsilon * s_OperatorFootprintPointEpsilon;
 static constexpr f32 s_OperatorFootprintAreaEpsilon = 0.000001f;
 static constexpr f32 s_OperatorProfileScaleEpsilon = 0.000001f;
 static constexpr f32 s_MaxOperatorProfileScale = 16.0f;
@@ -59,7 +60,7 @@ struct OperatorFootprintPoint{
     return (dx * dx) + (dy * dy);
 }
 
-[[nodiscard]] bool AppendUniqueOperatorFootprintPoint(
+[[nodiscard]] bool AppendOperatorFootprintPoint(
     Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>>& points,
     const f32 x,
     const f32 y
@@ -67,14 +68,31 @@ struct OperatorFootprintPoint{
     if(!IsFinite(x) || !IsFinite(y))
         return false;
 
-    const OperatorFootprintPoint point{ x, y };
-    for(const OperatorFootprintPoint& existing : points){
-        if(OperatorFootprintDistanceSq(existing, point) <= s_OperatorFootprintPointEpsilonSq)
-            return true;
-    }
-
-    points.push_back(point);
+    points.push_back(OperatorFootprintPoint{ x, y });
     return true;
+}
+
+template<typename PointAllocator>
+void CompactSortedOperatorFootprintPoints(Vector<OperatorFootprintPoint, PointAllocator>& points){
+    usize uniqueCount = 0u;
+    for(const OperatorFootprintPoint& point : points){
+        bool duplicate = false;
+        for(usize uniqueIndex = uniqueCount; uniqueIndex > 0u; --uniqueIndex){
+            const OperatorFootprintPoint& existing = points[uniqueIndex - 1u];
+            if(point.x - existing.x > s_OperatorFootprintPointEpsilon)
+                break;
+            if(OperatorFootprintDistanceSq(existing, point) <= s_OperatorFootprintPointEpsilonSq){
+                duplicate = true;
+                break;
+            }
+        }
+        if(duplicate)
+            continue;
+
+        points[uniqueCount] = point;
+        ++uniqueCount;
+    }
+    points.resize(uniqueCount);
 }
 
 [[nodiscard]] bool AppendOperatorFootprintHullPoint(
@@ -87,6 +105,18 @@ struct OperatorFootprintPoint{
     footprint.vertices[footprint.vertexCount] = Float2U(point.x, point.y);
     ++footprint.vertexCount;
     return true;
+}
+
+template<typename PointAllocator>
+[[nodiscard]] const OperatorFootprintPoint& OperatorFootprintHullPointAt(
+    const Vector<OperatorFootprintPoint, PointAllocator>& lower,
+    const Vector<OperatorFootprintPoint, PointAllocator>& upper,
+    const usize hullIndex
+){
+    return hullIndex < lower.size()
+        ? lower[hullIndex]
+        : upper[hullIndex - lower.size() + 1u]
+    ;
 }
 
 [[nodiscard]] bool BuildConvexOperatorFootprint(
@@ -103,6 +133,9 @@ struct OperatorFootprintPoint{
             return lhs.x < rhs.x;
         return lhs.y < rhs.y;
     });
+    CompactSortedOperatorFootprintPoints(points);
+    if(points.size() < 3u)
+        return false;
 
     Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> lower{
         Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
@@ -137,28 +170,29 @@ struct OperatorFootprintPoint{
     if(lower.size() < 2u || upper.size() < 2u)
         return false;
 
-    Vector<OperatorFootprintPoint, Core::Alloc::ScratchAllocator<OperatorFootprintPoint>> hull{
-        Core::Alloc::ScratchAllocator<OperatorFootprintPoint>(scratchArena)
-    };
-    hull.reserve(lower.size() + upper.size());
-    for(const OperatorFootprintPoint& point : lower)
-        hull.push_back(point);
-    for(usize i = 1u; i + 1u < upper.size(); ++i)
-        hull.push_back(upper[i]);
-
-    if(hull.size() < 3u)
+    const usize hullSize = lower.size() + upper.size() - 2u;
+    if(hullSize < 3u)
         return false;
 
-    if(hull.size() <= s_DeformableOperatorFootprintMaxVertexCount){
-        for(const OperatorFootprintPoint& point : hull){
-            if(!AppendOperatorFootprintHullPoint(outFootprint, point))
+    const usize footprintMaxVertexCount = static_cast<usize>(s_DeformableOperatorFootprintMaxVertexCount);
+    if(hullSize <= footprintMaxVertexCount){
+        for(usize hullIndex = 0u; hullIndex < hullSize; ++hullIndex){
+            if(!AppendOperatorFootprintHullPoint(
+                outFootprint,
+                OperatorFootprintHullPointAt(lower, upper, hullIndex)
+            ))
                 return false;
         }
     }
     else{
         for(u32 i = 0u; i < s_DeformableOperatorFootprintMaxVertexCount; ++i){
-            const usize hullIndex = (static_cast<usize>(i) * hull.size()) / s_DeformableOperatorFootprintMaxVertexCount;
-            if(hullIndex >= hull.size() || !AppendOperatorFootprintHullPoint(outFootprint, hull[hullIndex]))
+            const usize hullIndex = (static_cast<usize>(i) * hullSize) / footprintMaxVertexCount;
+            if(hullIndex >= hullSize)
+                return false;
+            if(!AppendOperatorFootprintHullPoint(
+                outFootprint,
+                OperatorFootprintHullPointAt(lower, upper, hullIndex)
+            ))
                 return false;
         }
     }
@@ -198,14 +232,14 @@ struct OperatorFootprintPoint{
     for(const GeometryVertex& vertex : vertices){
         if(maxZ - vertex.position.z > planeEpsilon)
             continue;
-        if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+        if(!AppendOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
             return false;
     }
 
     if(points.size() < 3u){
         points.clear();
         for(const GeometryVertex& vertex : vertices){
-            if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+            if(!AppendOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
                 return false;
         }
     }
@@ -231,9 +265,18 @@ struct OperatorFootprintPoint{
     for(const GeometryVertex& vertex : vertices){
         if(Abs(vertex.position.z - z) > planeEpsilon)
             continue;
-        if(!AppendUniqueOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
+        if(!AppendOperatorFootprintPoint(points, vertex.position.x, vertex.position.y))
             return false;
     }
+    if(points.empty())
+        return false;
+
+    Sort(points.begin(), points.end(), [](const OperatorFootprintPoint& lhs, const OperatorFootprintPoint& rhs){
+        if(lhs.x != rhs.x)
+            return lhs.x < rhs.x;
+        return lhs.y < rhs.y;
+    });
+    CompactSortedOperatorFootprintPoints(points);
     if(points.empty())
         return false;
 

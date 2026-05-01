@@ -2136,14 +2136,22 @@ template<typename DistanceFunc>
 }
 
 [[nodiscard]] f32 SurfaceRemeshPolygonSignedArea2D(const SurfaceRemeshClipPolygon& polygon){
+    if(polygon.size() < 3u)
+        return 0.0f;
+
     f32 area = 0.0f;
-    for(usize i = 0u; i < polygon.size(); ++i){
-        const usize next = (i + 1u) % polygon.size();
+    const usize vertexCount = polygon.size();
+    for(usize i = 1u; i < vertexCount; ++i){
+        const usize previous = i - 1u;
         area +=
-            (polygon[i].local.x * polygon[next].local.y)
-            - (polygon[i].local.y * polygon[next].local.x)
+            (polygon[previous].local.x * polygon[i].local.y)
+            - (polygon[previous].local.y * polygon[i].local.x)
         ;
     }
+    area +=
+        (polygon[vertexCount - 1u].local.x * polygon[0u].local.y)
+        - (polygon[vertexCount - 1u].local.y * polygon[0u].local.x)
+    ;
     return area * 0.5f;
 }
 

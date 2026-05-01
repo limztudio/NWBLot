@@ -165,14 +165,22 @@ bool BuildSurfacePatchRingEdgesImpl(
 
 template<typename PolygonAllocator>
 [[nodiscard]] f32 SignedArea2D(const Vector<CapPolygonVertex, PolygonAllocator>& polygon){
+    if(polygon.size() < 3u)
+        return 0.0f;
+
     f32 area = 0.0f;
-    for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
-        const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
+    const usize vertexCount = polygon.size();
+    for(usize vertexIndex = 1u; vertexIndex < vertexCount; ++vertexIndex){
+        const usize previousVertexIndex = vertexIndex - 1u;
         area +=
-            (polygon[vertexIndex].x * polygon[nextVertexIndex].y)
-            - (polygon[vertexIndex].y * polygon[nextVertexIndex].x)
+            (polygon[previousVertexIndex].x * polygon[vertexIndex].y)
+            - (polygon[previousVertexIndex].y * polygon[vertexIndex].x)
         ;
     }
+    area +=
+        (polygon[vertexCount - 1u].x * polygon[0u].y)
+        - (polygon[vertexCount - 1u].y * polygon[0u].x)
+    ;
     return area * 0.5f;
 }
 
@@ -201,15 +209,10 @@ template<typename PolygonAllocator>
     while(removed && polygon.size() >= 3u){
         removed = false;
         for(usize vertexIndex = 0u; vertexIndex < polygon.size(); ++vertexIndex){
-            const usize previousVertexIndex = vertexIndex == 0u ? polygon.size() - 1u : vertexIndex - 1u;
             const usize nextVertexIndex = (vertexIndex + 1u) % polygon.size();
-            const CapPolygonVertex& previous = polygon[previousVertexIndex];
             const CapPolygonVertex& current = polygon[vertexIndex];
             const CapPolygonVertex& next = polygon[nextVertexIndex];
-            if(
-                DistanceSq2D(previous, current) <= distanceEpsilonSq
-                || DistanceSq2D(current, next) <= distanceEpsilonSq
-            ){
+            if(DistanceSq2D(current, next) <= distanceEpsilonSq){
                 polygon.erase(polygon.begin() + static_cast<ptrdiff_t>(vertexIndex));
                 removed = true;
                 break;

@@ -213,20 +213,6 @@ struct OperatorFootprintPoint{
     return BuildConvexOperatorFootprint(points, outFootprint, scratchArena);
 }
 
-[[nodiscard]] bool AppendUniqueOperatorProfileZ(
-    Vector<f32, Core::Alloc::ScratchAllocator<f32>>& zPlanes,
-    const f32 z
-){
-    if(!IsFinite(z))
-        return false;
-    for(const f32 existing : zPlanes){
-        if(Abs(existing - z) <= s_OperatorFootprintPlaneEpsilon)
-            return true;
-    }
-    zPlanes.push_back(z);
-    return true;
-}
-
 [[nodiscard]] bool BuildOperatorProfilePlaneSample(
     const Vector<GeometryVertex>& vertices,
     const f32 z,
@@ -311,8 +297,7 @@ struct OperatorFootprintPoint{
             minZ = Min(minZ, vertex.position.z);
             maxZ = Max(maxZ, vertex.position.z);
         }
-        if(!AppendUniqueOperatorProfileZ(zPlanes, vertex.position.z))
-            return false;
+        zPlanes.push_back(vertex.position.z);
     }
     if(!foundPosition)
         return false;
@@ -325,6 +310,17 @@ struct OperatorFootprintPoint{
     Sort(zPlanes.begin(), zPlanes.end(), [](const f32 lhs, const f32 rhs){
         return lhs > rhs;
     });
+    usize uniquePlaneCount = 0u;
+    for(const f32 z : zPlanes){
+        if(
+            uniquePlaneCount == 0u
+            || Abs(zPlanes[uniquePlaneCount - 1u] - z) > s_OperatorFootprintPlaneEpsilon
+        ){
+            zPlanes[uniquePlaneCount] = z;
+            ++uniquePlaneCount;
+        }
+    }
+    zPlanes.resize(uniquePlaneCount);
 
     DeformableOperatorProfileSample topSample;
     if(
@@ -420,14 +416,21 @@ struct OperatorFootprintPoint{
 
 
 f32 OperatorFootprintSignedArea(const DeformableOperatorFootprint& footprint){
+    if(footprint.vertexCount < 3u)
+        return 0.0f;
+
     f32 area = 0.0f;
-    for(u32 i = 0u; i < footprint.vertexCount; ++i){
-        const u32 next = (i + 1u) % footprint.vertexCount;
+    for(u32 i = 1u; i < footprint.vertexCount; ++i){
+        const u32 previous = i - 1u;
         area +=
-            (footprint.vertices[i].x * footprint.vertices[next].y)
-            - (footprint.vertices[i].y * footprint.vertices[next].x)
+            (footprint.vertices[previous].x * footprint.vertices[i].y)
+            - (footprint.vertices[previous].y * footprint.vertices[i].x)
         ;
     }
+    area +=
+        (footprint.vertices[footprint.vertexCount - 1u].x * footprint.vertices[0u].y)
+        - (footprint.vertices[footprint.vertexCount - 1u].y * footprint.vertices[0u].x)
+    ;
     return area * 0.5f;
 }
 

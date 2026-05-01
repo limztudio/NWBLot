@@ -34,8 +34,10 @@ static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringSetToVect
     Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
     ret.resize(set.size());
     usize index = 0u;
-    for(const auto& s : set)
-        ret[index++] = s.c_str();
+    for(const auto& s : set){
+        ret[index] = s.c_str();
+        ++index;
+    }
     return ret;
 }
 
@@ -45,8 +47,10 @@ static Vector<const char*, Alloc::ScratchAllocator<const char*>> StringMapKeysTo
     Vector<const char*, Alloc::ScratchAllocator<const char*>> ret(alloc);
     ret.resize(map.size());
     usize index = 0u;
-    for(const auto& [key, val] : map)
-        ret[index++] = key.c_str();
+    for(const auto& [key, val] : map){
+        ret[index] = key.c_str();
+        ++index;
+    }
     return ret;
 }
 
@@ -371,24 +375,30 @@ void BackendContext::getEnabledInstanceExtensions(Vector<AString>& extensions)co
     extensions.clear();
     extensions.resize(m_enabledExtensions.instance.size());
     usize index = 0u;
-    for(const auto& ext : m_enabledExtensions.instance)
-        extensions[index++] = ext;
+    for(const auto& ext : m_enabledExtensions.instance){
+        extensions[index] = ext;
+        ++index;
+    }
 }
 
 void BackendContext::getEnabledDeviceExtensions(Vector<AString>& extensions)const{
     extensions.clear();
     extensions.resize(m_enabledExtensions.device.size());
     usize index = 0u;
-    for(const auto& [name, _] : m_enabledExtensions.device)
-        extensions[index++] = name;
+    for(const auto& [name, _] : m_enabledExtensions.device){
+        extensions[index] = name;
+        ++index;
+    }
 }
 
 void BackendContext::getEnabledLayers(Vector<AString>& layers)const{
     layers.clear();
     layers.resize(m_enabledExtensions.layers.size());
     usize index = 0u;
-    for(const auto& ext : m_enabledExtensions.layers)
-        layers[index++] = ext;
+    for(const auto& ext : m_enabledExtensions.layers){
+        layers[index] = ext;
+        ++index;
+    }
 }
 
 ITexture* BackendContext::getCurrentBackBuffer(){
@@ -1260,7 +1270,8 @@ bool BackendContext::createVulkanDevice(){
         queueInfo.queueFamilyIndex = static_cast<u32>(queueFamily);
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &priority;
-        queueDesc[queueIndex++] = queueInfo;
+        queueDesc[queueIndex] = queueInfo;
+        ++queueIndex;
     }
 
     VkPhysicalDeviceVulkan13Features vulkan13features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);

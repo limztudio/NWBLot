@@ -526,8 +526,10 @@ bool Device::createPipelineLayoutForBindingLayouts(
     for(const auto& bindingLayout : bindingLayouts){
         auto* layout = checked_cast<BindingLayout*>(bindingLayout.get());
         NWB_ASSERT(layout != nullptr);
-        for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
-            descriptorSetLayouts[descriptorSetLayoutIndex++] = descriptorSetLayout;
+        for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts){
+            descriptorSetLayouts[descriptorSetLayoutIndex] = descriptorSetLayout;
+            ++descriptorSetLayoutIndex;
+        }
     }
 
     if(

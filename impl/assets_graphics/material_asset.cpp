@@ -236,8 +236,10 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     Vector<ShaderStageEntry, Core::Alloc::ScratchAllocator<ShaderStageEntry>> sortedShaders{Core::Alloc::ScratchAllocator<ShaderStageEntry>(scratchArena)};
     sortedShaders.resize(material.stageShaders().size());
     usize sortedShaderIndex = 0u;
-    for(const auto& [stageName, shaderAsset] : material.stageShaders())
-        sortedShaders[sortedShaderIndex++] = { &stageName, &shaderAsset };
+    for(const auto& [stageName, shaderAsset] : material.stageShaders()){
+        sortedShaders[sortedShaderIndex] = { &stageName, &shaderAsset };
+        ++sortedShaderIndex;
+    }
 
     Sort(sortedShaders.begin(), sortedShaders.end(),
         [](const ShaderStageEntry& lhs, const ShaderStageEntry& rhs){
@@ -262,8 +264,10 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     Vector<ParamEntry, Core::Alloc::ScratchAllocator<ParamEntry>> sortedParams{Core::Alloc::ScratchAllocator<ParamEntry>(scratchArena)};
     sortedParams.resize(material.parameters().size());
     usize sortedParamIndex = 0u;
-    for(const auto& [key, value] : material.parameters())
-        sortedParams[sortedParamIndex++] = { &key, &value };
+    for(const auto& [key, value] : material.parameters()){
+        sortedParams[sortedParamIndex] = { &key, &value };
+        ++sortedParamIndex;
+    }
 
     Sort(sortedParams.begin(), sortedParams.end(),
         [](const ParamEntry& lhs, const ParamEntry& rhs){

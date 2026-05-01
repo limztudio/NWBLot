@@ -1203,8 +1203,10 @@ Vector<Name> VolumeFileSystem::listFiles()const{
     Vector<Name> output;
     output.resize(m_files.size());
     usize outputIndex = 0u;
-    for(const auto& [path, _] : m_files)
-        output[outputIndex++] = path;
+    for(const auto& [path, _] : m_files){
+        output[outputIndex] = path;
+        ++outputIndex;
+    }
 
     Sort(output.begin(), output.end(), __hidden_filesystem::LessName);
     return output;
@@ -1247,7 +1249,8 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
             return false;
         }
 
-        layouts[layoutIndex++] = FileLayout{ path, record.offset, 0, record.size };
+        layouts[layoutIndex] = FileLayout{ path, record.offset, 0, record.size };
+        ++layoutIndex;
     }
 
     Sort(
@@ -1620,8 +1623,10 @@ bool VolumeFileSystem::flushMetadataLocked(){
     };
     sortedRecords.resize(m_files.size());
     usize sortedRecordIndex = 0u;
-    for(const auto& [path, record] : m_files)
-        sortedRecords[sortedRecordIndex++] = MetadataIndexRecord{ path, record };
+    for(const auto& [path, record] : m_files){
+        sortedRecords[sortedRecordIndex] = MetadataIndexRecord{ path, record };
+        ++sortedRecordIndex;
+    }
     Sort(
         sortedRecords.begin(),
         sortedRecords.end(),

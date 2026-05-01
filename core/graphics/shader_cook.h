@@ -153,8 +153,10 @@ private:
         ScratchDefineEntryVector<MapT> entries{Alloc::ScratchAllocator<EntryPtr>(scratchArena)};
         entries.resize(map.size());
         usize entryIndex = 0u;
-        for(const auto& [name, value] : map)
-            entries[entryIndex++] = EntryPtr{ &name, &value };
+        for(const auto& [name, value] : map){
+            entries[entryIndex] = EntryPtr{ &name, &value };
+            ++entryIndex;
+        }
         Sort(entries.begin(), entries.end(), [](const EntryPtr& lhs, const EntryPtr& rhs){ return *lhs.key < *rhs.key; });
         return entries;
     }

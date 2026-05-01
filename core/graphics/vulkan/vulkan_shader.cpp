@@ -576,7 +576,8 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     layout->m_bindings.resize(bindingInfos.size());
     usize bindingIndex = 0u;
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
-        VkVertexInputBindingDescription& binding = layout->m_bindings[bindingIndex++];
+        VkVertexInputBindingDescription& binding = layout->m_bindings[bindingIndex];
+        ++bindingIndex;
         binding = {};
         binding.binding = bufferIndex;
         binding.stride =

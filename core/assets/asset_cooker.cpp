@@ -33,8 +33,10 @@ static AString DescribeAvailableCookers(const CookerMap& cookers){
     Vector<CompactString, Alloc::ScratchAllocator<CompactString>> types{Alloc::ScratchAllocator<CompactString>(scratchArena)};
     types.resize(cookers.size());
     usize typeIndex = 0u;
-    for(const auto& [_, cooker] : cookers)
-        types[typeIndex++] = cooker->assetTypeText();
+    for(const auto& [_, cooker] : cookers){
+        types[typeIndex] = cooker->assetTypeText();
+        ++typeIndex;
+    }
 
     Sort(types.begin(), types.end());
 

@@ -32,7 +32,7 @@ static int RunResourceCooker(const int argc, char** argv){
     return false;
 }
 
-static int EntryPoint(const isize argc, char** argv, void*){
+[[maybe_unused]] static int EntryPoint(const isize argc, char** argv, void*){
     try{
         NWB::Core::Common::InitializerGuard commonInitializerGuard;
         if(!InitializeResourceCookerCommon(commonInitializerGuard))

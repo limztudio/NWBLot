@@ -6,7 +6,8 @@
 #include "project_entry.h"
 
 #include <core/ecs/ecs.h>
-#include <impl/ecs_graphics/ecs_graphics.h>
+#include <impl/ecs_deformable_render/ecs_deformable_render.h>
+#include <impl/ecs_render/ecs_render.h>
 #include <impl/ecs_ui/ecs_ui.h>
 #include <logger/client/logger.h>
 
@@ -34,24 +35,24 @@ bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::E
         return false;
     }
 
-    auto& rendererSystem = world->addSystem<Core::ECSGraphics::RendererSystem>(
+    auto& rendererSystem = world->addSystem<Core::ECSRender::RendererSystem>(
         *world,
         context.graphics,
         context.assetManager,
         context.shaderPathResolver
     );
-    if(!world->getSystem<Core::ECSGraphics::RendererSystem>()){
+    if(!world->getSystem<Core::ECSRender::RendererSystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
         return false;
     }
-    auto& deformerSystem = world->addSystem<Core::ECSGraphics::DeformerSystem>(
+    auto& deformerSystem = world->addSystem<Core::ECSDeformableRender::DeformerSystem>(
         *world,
         context.graphics,
         context.assetManager,
         rendererSystem,
         context.shaderPathResolver
     );
-    if(!world->getSystem<Core::ECSGraphics::DeformerSystem>()){
+    if(!world->getSystem<Core::ECSDeformableRender::DeformerSystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core deformer system was not created"));
         return false;
     }
@@ -81,13 +82,13 @@ void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::
         return;
     }
 
-    auto* deformerSystem = world->getSystem<Core::ECSGraphics::DeformerSystem>();
+    auto* deformerSystem = world->getSystem<Core::ECSDeformableRender::DeformerSystem>();
     if(!deformerSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core deformer system is null"));
         return;
     }
 
-    auto* rendererSystem = world->getSystem<Core::ECSGraphics::RendererSystem>();
+    auto* rendererSystem = world->getSystem<Core::ECSRender::RendererSystem>();
     if(!rendererSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core renderer system is null"));
         return;

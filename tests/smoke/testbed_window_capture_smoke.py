@@ -685,7 +685,11 @@ class LinuxX11Capture:
         time.sleep(0.05)
         self.send_button_event(window, self.BUTTON_RELEASE, click_x, click_y)
 
-    def commit_surface_edit_preview(self, window, commit_relative_x, commit_relative_y):
+    def commit_surface_edit_preview(self, window, commit_relative_x, commit_relative_y, commit_key):
+        if commit_key:
+            self.send_named_key(window, commit_key)
+            return
+
         attributes = self.get_attributes(window)
         if not attributes:
             raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
@@ -838,6 +842,7 @@ class WindowsCapture:
     VK_RETURN = 0x0D
     VIRTUAL_KEYS = {
         **{str(index): 0x30 + index for index in range(0, 10)},
+        **{chr(ord("A") + index): 0x41 + index for index in range(0, 26)},
         **{f"F{index}": 0x6F + index for index in range(1, 13)},
     }
     WM_KEYDOWN = 0x0100
@@ -1025,7 +1030,11 @@ class WindowsCapture:
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
 
-    def commit_surface_edit_preview(self, hwnd, commit_relative_x, commit_relative_y):
+    def commit_surface_edit_preview(self, hwnd, commit_relative_x, commit_relative_y, commit_key):
+        if commit_key:
+            self.send_named_key(hwnd, commit_key)
+            return
+
         rect = self._window_rect(hwnd)
         if not rect:
             raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
@@ -1191,6 +1200,7 @@ def capture_existing_handle(args, backend):
             args.window_handle,
             args.csg_commit_click_x,
             args.csg_commit_click_y,
+            args.csg_commit_key,
         )
         time.sleep(args.csg_settle_seconds)
 
@@ -1285,6 +1295,7 @@ def launch_and_capture(args, backend):
                 handle,
                 args.csg_commit_click_x,
                 args.csg_commit_click_y,
+                args.csg_commit_key,
             )
             if log_directory:
                 wait_for_log_message(
@@ -1330,6 +1341,7 @@ def parse_args(argv):
     parser.add_argument("--csg-click-y", type=float, default=0.42, help="Relative window Y coordinate for the CSG smoke click.")
     parser.add_argument("--csg-commit-click-x", type=float, default=0.062, help="Relative window X coordinate for the Commit Preview button.")
     parser.add_argument("--csg-commit-click-y", type=float, default=0.384, help="Relative window Y coordinate for the Commit Preview button.")
+    parser.add_argument("--csg-commit-key", default="C", help="Key used to commit an active CSG preview. Set empty to fall back to the commit click coordinates.")
     parser.add_argument("--csg-settle-seconds", type=float, default=1.0, help="Seconds to wait after CSG input before capture.")
     parser.add_argument("--csg-log-timeout", type=float, default=10.0, help="Seconds to wait for the committed CSG log message.")
     parser.add_argument(

@@ -13,10 +13,15 @@ target_link_libraries(testbed PRIVATE
     nwb_common
     nwb_alloc
     nwb_loader
-    nwb_scene
-    nwb_ecs_graphics
+    nwb_ecs_deformable
+    nwb_ecs_deformable_edit
+    nwb_ecs_lighting
+    nwb_ecs_render
+    nwb_ecs_scene
     nwb_ecs_ui
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_geometry>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
     nwb_logclient
 )
 

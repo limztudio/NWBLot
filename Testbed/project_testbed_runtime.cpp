@@ -6,8 +6,9 @@
 
 #include <core/geometry/frame_math.h>
 #include <global/simplemath.h>
-#include <impl/assets_graphics/deformable_geometry_asset.h>
-#include <impl/assets_graphics/geometry_asset.h>
+#include <impl/assets_geometry/deformable_geometry_asset.h>
+#include <impl/assets_geometry/geometry_asset.h>
+#include <impl/ecs_lighting/ecs_lighting.h>
 #include <impl/ecs_ui/ecs_ui.h>
 #include <logger/client/logger.h>
 
@@ -141,11 +142,11 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 [[nodiscard]] static bool BuildSurfaceEditOperatorShape(
     NWB::Core::Assets::AssetManager& assetManager,
     const usize operatorIndex,
-    NWB::Core::ECSGraphics::DeformableOperatorFootprint& outFootprint,
-    NWB::Core::ECSGraphics::DeformableOperatorProfile& outProfile
+    NWB::Core::ECSDeformableEdit::DeformableOperatorFootprint& outFootprint,
+    NWB::Core::ECSDeformableEdit::DeformableOperatorProfile& outProfile
 ){
-    outFootprint = NWB::Core::ECSGraphics::DeformableOperatorFootprint{};
-    outProfile = NWB::Core::ECSGraphics::DeformableOperatorProfile{};
+    outFootprint = NWB::Core::ECSDeformableEdit::DeformableOperatorFootprint{};
+    outProfile = NWB::Core::ECSDeformableEdit::DeformableOperatorProfile{};
     if(operatorIndex >= s_SurfaceEditOperatorCount)
         return false;
 
@@ -159,7 +160,7 @@ static constexpr usize s_SurfaceEditCameraViewCount =
         return false;
 
     const auto& geometry = static_cast<const NWB::Impl::Geometry&>(*loadedAsset);
-    return NWB::Core::ECSGraphics::BuildOperatorShapeFromGeometry(
+    return NWB::Core::ECSDeformableEdit::BuildOperatorShapeFromGeometry(
         geometry.vertices(),
         outFootprint,
         outProfile
@@ -200,13 +201,13 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 }
 
 [[nodiscard]] static const tchar* SurfaceEditPermissionText(
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Enum permission){
+    const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPermission::Enum permission){
     switch(permission){
-    case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Restricted:
+    case NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPermission::Restricted:
         return NWB_TEXT("restricted");
-    case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Forbidden:
+    case NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPermission::Forbidden:
         return NWB_TEXT("forbidden");
-    case NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Allowed:
+    case NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPermission::Allowed:
     default:
         return NWB_TEXT("allowed");
     }
@@ -231,9 +232,9 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 }
 
 [[nodiscard]] static bool ResolveSurfaceEditOperatorTransform(
-    const NWB::Core::Scene::TransformComponent& targetTransform,
-    const NWB::Core::ECSGraphics::DeformableHolePreview& preview,
-    NWB::Core::Scene::TransformComponent& outTransform
+    const NWB::Core::ECSTransform::TransformComponent& targetTransform,
+    const NWB::Core::ECSDeformableEdit::DeformableHolePreview& preview,
+    NWB::Core::ECSTransform::TransformComponent& outTransform
 ){
     if(!preview.valid)
         return false;
@@ -305,7 +306,7 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 }
 
 [[nodiscard]] static const NWB::Impl::DeformableDisplacementTexture* ResolveSurfaceEditDebugDisplacementTexture(
-    const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
+    const NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance& instance,
     NWB::Core::Assets::AssetManager& assetManager,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     outLoadedAsset.reset();
@@ -393,7 +394,7 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 }
 
 static void ResolveFlyCameraAnglesFromTransform(
-    const NWB::Core::Scene::TransformComponent& transform,
+    const NWB::Core::ECSTransform::TransformComponent& transform,
     f32& outYawRadians,
     f32& outPitchRadians){
     const Float4 localForward(0.0f, 0.0f, 1.0f);
@@ -417,15 +418,15 @@ static void ResolveFlyCameraAnglesFromTransform(
     const EditorClientSize clientSize,
     const f64 cursorX,
     const f64 cursorY,
-    NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
+    NWB::Core::ECSDeformableEdit::DeformablePickingRay& outRay){
     if(clientSize.width == 0u || clientSize.height == 0u || !IsFinite(cursorX) || !IsFinite(cursorY))
         return false;
 
     const f32 width = static_cast<f32>(clientSize.width);
     const f32 height = static_cast<f32>(clientSize.height);
     const f32 framebufferAspect = width / height;
-    const NWB::Core::Scene::SceneCameraView cameraView =
-        NWB::Core::Scene::ResolveSceneCameraView(world, framebufferAspect)
+    const NWB::Core::ECSScene::SceneCameraView cameraView =
+        NWB::Core::ECSScene::ResolveSceneCameraView(world, framebufferAspect)
     ;
     if(!cameraView.valid())
         return false;
@@ -440,7 +441,7 @@ static void ResolveFlyCameraAnglesFromTransform(
     if(!IsFinite(ndcX) || !IsFinite(ndcY))
         return false;
 
-    const NWB::Core::Scene::CameraProjectionData& projectionData = cameraView.projectionData;
+    const NWB::Core::ECSCamera::CameraProjectionData& projectionData = cameraView.projectionData;
     const f32 horizontalScale = projectionData.tanHalfVerticalFov * projectionData.aspectRatio;
     const f32 localX = ndcX * horizontalScale;
     const f32 localY = ndcY * projectionData.tanHalfVerticalFov;
@@ -477,7 +478,7 @@ static void ResolveFlyCameraAnglesFromTransform(
     NWB::Core::ECS::World& world,
     Float3U& outViewUp
 ){
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    const NWB::Core::ECSScene::SceneCameraView cameraView = NWB::Core::ECSScene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return false;
 
@@ -494,7 +495,7 @@ static void ResolveFlyCameraAnglesFromTransform(
 }
 
 static void ApplySurfaceEditScalarParams(
-    NWB::Core::ECSGraphics::DeformableHoleEditParams& params,
+    NWB::Core::ECSDeformableEdit::DeformableHoleEditParams& params,
     const f32 radius,
     const f32 ellipseRatio,
     const f32 depth
@@ -507,7 +508,7 @@ static void ApplySurfaceEditScalarParams(
 [[nodiscard]] static bool BuildSurfaceEditOperatorShapeForParams(
     NWB::Core::Assets::AssetManager& assetManager,
     const usize operatorIndex,
-    NWB::Core::ECSGraphics::DeformableHoleEditParams& params
+    NWB::Core::ECSDeformableEdit::DeformableHoleEditParams& params
 ){
     return BuildSurfaceEditOperatorShape(
         assetManager,
@@ -518,7 +519,7 @@ static void ApplySurfaceEditScalarParams(
 }
 
 static void ApplyFlyCameraInput(
-    NWB::Core::Scene::TransformComponent& transform,
+    NWB::Core::ECSTransform::TransformComponent& transform,
     f32& yawRadians,
     f32& pitchRadians,
     const f32 rightAxis,
@@ -582,7 +583,7 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    const NWB::Core::ECSScene::SceneCameraView cameraView = NWB::Core::ECSScene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return;
 
@@ -609,7 +610,7 @@ static void ApplyFlyCameraInputToMainCamera(
     if(cameraViewIndex >= s_SurfaceEditCameraViewCount)
         return false;
 
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    const NWB::Core::ECSScene::SceneCameraView cameraView = NWB::Core::ECSScene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return false;
 
@@ -641,22 +642,22 @@ static void ApplyFlyCameraInputToMainCamera(
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = cameraEntity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
     transform.position = Float4(0.0f, 0.0f, -s_CameraStartDepth);
-    cameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
+    cameraEntity.addComponent<NWB::Core::ECSCamera::CameraComponent>();
     return cameraEntity.id();
 }
 
 static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     auto lightEntity = world.createEntity();
-    auto& transform = lightEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = lightEntity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
     StoreFloat(
         QuaternionRotationRollPitchYaw(s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f),
         &transform.rotation
     );
 
-    auto& light = lightEntity.addComponent<NWB::Core::Scene::LightComponent>();
-    light.type = NWB::Core::Scene::LightType::Directional;
+    auto& light = lightEntity.addComponent<NWB::Core::ECSLighting::LightComponent>();
+    light.type = NWB::Core::ECSLighting::LightType::Directional;
     light.setColor(Float4(1.0f, 0.96f, 0.88f));
     light.setIntensity(s_DefaultDirectionalLightIntensity);
 }
@@ -669,16 +670,16 @@ static void CreateRendererEntity(
     const f32 uniformScale
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
     transform.position = position;
     transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
-    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    auto& renderer = entity.addComponent<NWB::Core::ECSRender::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
 }
 
-[[nodiscard]] static NWB::Core::ECSGraphics::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
+[[nodiscard]] static NWB::Core::ECSDeformable::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
     const f32 safeAngleRadians = IsFinite(angleRadians) ? angleRadians : 0.0f;
     SIMDVector sinAngleVector;
     SIMDVector cosAngleVector;
@@ -690,7 +691,7 @@ static void CreateRendererEntity(
         cosAngle = 1.0f;
     }
 
-    NWB::Core::ECSGraphics::DeformableJointMatrix joint{};
+    NWB::Core::ECSDeformable::DeformableJointMatrix joint{};
     joint.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(0.0f, cosAngle, sinAngle, 0.0f);
     joint.rows[2] = Float4(0.0f, -sinAngle, cosAngle, 0.0f);
@@ -704,15 +705,15 @@ static void CreateRendererEntity(
 }
 
 static void UpdateProxySkeletonPose(
-    NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent& skeletonPose,
+    NWB::Core::ECSDeformable::DeformableSkeletonPoseComponent& skeletonPose,
     const f32 timeSeconds
 ){
     const f32 safeTimeSeconds = IsFinite(timeSeconds) ? timeSeconds : 0.0f;
 
     skeletonPose.parentJoints.resize(2u);
-    skeletonPose.parentJoints[0] = NWB::Core::ECSGraphics::s_DeformableSkeletonRootParent;
+    skeletonPose.parentJoints[0] = NWB::Core::ECSDeformable::s_DeformableSkeletonRootParent;
     skeletonPose.parentJoints[1] = 0u;
-    skeletonPose.localJoints.resize(2u, NWB::Core::ECSGraphics::MakeIdentityDeformableJointMatrix());
+    skeletonPose.localJoints.resize(2u, NWB::Core::ECSDeformable::MakeIdentityDeformableJointMatrix());
     const f32 skinAngle = VectorGetX(VectorSin(VectorReplicate(safeTimeSeconds * 0.9f)));
     skeletonPose.localJoints[1] = BuildProxySkinJoint(s_DeformableSkinMaxAngle * skinAngle);
 }
@@ -726,26 +727,26 @@ static void UpdateProxySkeletonPose(
     const bool animated
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
     transform.position = position;
     transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
-    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>();
+    auto& renderer = entity.addComponent<NWB::Core::ECSDeformable::DeformableRendererComponent>();
     renderer.deformableGeometry = geometry;
     renderer.material = material;
 
     if(!animated)
         return entity.id();
 
-    auto& morphWeights = entity.addComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>();
+    auto& morphWeights = entity.addComponent<NWB::Core::ECSDeformable::DeformableMorphWeightsComponent>();
     morphWeights.weights.resize(1u);
     morphWeights.weights[0].morph = Name("lift");
     morphWeights.weights[0].weight = 0.0f;
 
-    auto& skeletonPose = entity.addComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>();
+    auto& skeletonPose = entity.addComponent<NWB::Core::ECSDeformable::DeformableSkeletonPoseComponent>();
     UpdateProxySkeletonPose(skeletonPose, 0.0f);
 
-    auto& displacement = entity.addComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>();
+    auto& displacement = entity.addComponent<NWB::Core::ECSDeformable::DeformableDisplacementComponent>();
     displacement.amplitudeScale = 1.0f;
     displacement.enabled = true;
     return entity.id();
@@ -767,7 +768,7 @@ static void UpdateProxySkeletonPose(
         target.uniformScale,
         target.animated
     );
-    if(auto* transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity))
+    if(auto* transform = world.tryGetComponent<NWB::Core::ECSTransform::TransformComponent>(entity))
         StoreFloat(QuaternionRotationRollPitchYaw(0.0f, target.yawRadians, 0.0f), &transform->rotation);
     return entity;
 }
@@ -777,14 +778,14 @@ static void UpdateProxySkeletonPose(
     const TestbedGeometryRef& geometry,
     const TestbedMaterialRef& material){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
     transform.scale = Float4(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
 
-    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    auto& renderer = entity.addComponent<NWB::Core::ECSRender::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
     renderer.visible = false;
-    entity.addComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>();
+    entity.addComponent<NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent>();
     return entity.id();
 }
 
@@ -795,10 +796,10 @@ static void UpdateProxySkeletonPose(
     material.virtualPath = Name(s_SurfaceEditOperatorMaterialPath);
 
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::ECSTransform::TransformComponent>();
     transform.scale = Float4(1.0f, 1.0f, 1.0f);
 
-    auto& renderer = entity.addComponent<NWB::Core::ECSGraphics::RendererComponent>();
+    auto& renderer = entity.addComponent<NWB::Core::ECSRender::RendererComponent>();
     renderer.geometry = geometry;
     renderer.material = material;
     renderer.visible = false;
@@ -808,13 +809,13 @@ static void UpdateProxySkeletonPose(
 static void ResolvePickingInputs(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
-    NWB::Core::ECSGraphics::DeformablePickingInputs& outInputs){
-    outInputs = NWB::Core::ECSGraphics::DeformablePickingInputs{};
-    outInputs.morphWeights = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(entity);
-    outInputs.jointPalette = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableJointPaletteComponent>(entity);
-    outInputs.skeletonPose = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(entity);
-    outInputs.displacement = world.tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(entity);
-    outInputs.transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity);
+    NWB::Core::ECSDeformableEdit::DeformablePickingInputs& outInputs){
+    outInputs = NWB::Core::ECSDeformableEdit::DeformablePickingInputs{};
+    outInputs.morphWeights = world.tryGetComponent<NWB::Core::ECSDeformable::DeformableMorphWeightsComponent>(entity);
+    outInputs.jointPalette = world.tryGetComponent<NWB::Core::ECSDeformable::DeformableJointPaletteComponent>(entity);
+    outInputs.skeletonPose = world.tryGetComponent<NWB::Core::ECSDeformable::DeformableSkeletonPoseComponent>(entity);
+    outInputs.displacement = world.tryGetComponent<NWB::Core::ECSDeformable::DeformableDisplacementComponent>(entity);
+    outInputs.transform = world.tryGetComponent<NWB::Core::ECSTransform::TransformComponent>(entity);
 }
 
 
@@ -841,15 +842,15 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 }
 
 void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
-    auto* rendererSystem = world.getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+    auto* rendererSystem = world.getSystem<NWB::Core::ECSRender::RendererSystem>();
     NWB_FATAL_ASSERT_MSG(
         rendererSystem,
         NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
     );
 }
 
-NWB::Core::ECSGraphics::RendererSystem& ProjectTestbed::rendererSystem(){
-    auto* system = m_world->getSystem<NWB::Core::ECSGraphics::RendererSystem>();
+NWB::Core::ECSRender::RendererSystem& ProjectTestbed::rendererSystem(){
+    auto* system = m_world->getSystem<NWB::Core::ECSRender::RendererSystem>();
     NWB_FATAL_ASSERT_MSG(system, NWB_TEXT("ProjectTestbed runtime invariant failed: renderer system is missing"));
     return *system;
 }
@@ -995,7 +996,7 @@ void ProjectTestbed::drawUiControls(){
 
     ImGui::Separator();
     const bool hasDisplacement =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableDisplacementComponent>(m_surfaceEditTargetEntity)
         != nullptr
     ;
     ImGui::BeginDisabled(!hasDisplacement);
@@ -1074,7 +1075,7 @@ bool ProjectTestbed::onStartup(){
     using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
 
     auto sceneEntity = m_world->createEntity();
-    auto& scene = sceneEntity.addComponent<NWB::Core::Scene::SceneComponent>();
+    auto& scene = sceneEntity.addComponent<NWB::Core::ECSScene::SceneComponent>();
     scene.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
@@ -1234,13 +1235,13 @@ bool ProjectTestbed::selectSurfaceEditTarget(const usize targetIndex){
     clearPendingSurfaceEditAccessory();
     hideSurfaceEditAccessoriesForTarget(m_surfaceEditTargetEntity);
     auto* oldRenderer =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableRendererComponent>(m_surfaceEditTargetEntity)
     ;
     if(oldRenderer)
         oldRenderer->visible = false;
 
-    m_surfaceEditState = NWB::Core::ECSGraphics::DeformableSurfaceEditState{};
-    m_surfaceEditHistory = NWB::Core::ECSGraphics::DeformableSurfaceEditHistory{};
+    m_surfaceEditState = NWB::Core::ECSDeformableEdit::DeformableSurfaceEditState{};
+    m_surfaceEditHistory = NWB::Core::ECSDeformableEdit::DeformableSurfaceEditHistory{};
     m_surfaceEditDebugRuntimeMesh.reset();
     m_surfaceEditTargetTime = 0.0f;
     m_surfaceEditDisplacementScale = 1.0f;
@@ -1263,14 +1264,14 @@ bool ProjectTestbed::selectSurfaceEditOperator(const usize operatorIndex){
         return false;
 
     auto* renderer =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::RendererComponent>(m_surfaceEditPreviewEntity)
+        m_world->tryGetComponent<NWB::Core::ECSRender::RendererComponent>(m_surfaceEditPreviewEntity)
     ;
     if(!renderer)
         return false;
 
     const auto& desc = __hidden_project_testbed_runtime::s_SurfaceEditOperators[operatorIndex];
-    NWB::Core::ECSGraphics::DeformableOperatorFootprint footprint;
-    NWB::Core::ECSGraphics::DeformableOperatorProfile profile;
+    NWB::Core::ECSDeformableEdit::DeformableOperatorFootprint footprint;
+    NWB::Core::ECSDeformableEdit::DeformableOperatorProfile profile;
     if(
         !__hidden_project_testbed_runtime::BuildSurfaceEditOperatorShape(
             m_context.assetManager,
@@ -1371,7 +1372,7 @@ void ProjectTestbed::updateSurfaceEditTarget(const f32 delta){
         m_surfaceEditTargetTime = 0.0f;
 
     auto* morphWeights =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableMorphWeightsComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableMorphWeightsComponent>(m_surfaceEditTargetEntity)
     ;
     if(morphWeights && !morphWeights->weights.empty()){
         const f32 morphWeight =
@@ -1381,13 +1382,13 @@ void ProjectTestbed::updateSurfaceEditTarget(const f32 delta){
     }
 
     auto* skeletonPose =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableSkeletonPoseComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableSkeletonPoseComponent>(m_surfaceEditTargetEntity)
     ;
     if(skeletonPose)
         __hidden_project_testbed_runtime::UpdateProxySkeletonPose(*skeletonPose, m_surfaceEditTargetTime);
 
     auto* displacement =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableDisplacementComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableDisplacementComponent>(m_surfaceEditTargetEntity)
     ;
     if(displacement){
         if(!IsFinite(m_surfaceEditDisplacementScale))
@@ -1403,14 +1404,14 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
     auto& renderSystem = rendererSystem();
 
     m_world->view<
-        NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent,
-        NWB::Core::Scene::TransformComponent,
-        NWB::Core::ECSGraphics::RendererComponent
+        NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent,
+        NWB::Core::ECSTransform::TransformComponent,
+        NWB::Core::ECSRender::RendererComponent
     >().each(
         [&](NWB::Core::ECS::EntityID entity,
-            NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent& attachment,
-            NWB::Core::Scene::TransformComponent& transform,
-            NWB::Core::ECSGraphics::RendererComponent& renderer){
+            NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent& attachment,
+            NWB::Core::ECSTransform::TransformComponent& transform,
+            NWB::Core::ECSRender::RendererComponent& renderer){
             static_cast<void>(entity);
             const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
@@ -1418,17 +1419,17 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
                 return;
             }
             const auto* targetRenderer =
-                m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(attachment.targetEntity)
+                m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableRendererComponent>(attachment.targetEntity)
             ;
             if(!targetRenderer || !targetRenderer->visible){
                 renderer.visible = false;
                 return;
             }
 
-            NWB::Core::ECSGraphics::DeformablePickingInputs inputs;
+            NWB::Core::ECSDeformableEdit::DeformablePickingInputs inputs;
             __hidden_project_testbed_runtime::ResolvePickingInputs(*m_world, attachment.targetEntity, inputs);
             inputs.assetManager = &m_context.assetManager;
-            renderer.visible = NWB::Core::ECSGraphics::ResolveAccessoryAttachmentTransform(
+            renderer.visible = NWB::Core::ECSDeformableEdit::ResolveAccessoryAttachmentTransform(
                 *instance,
                 inputs,
                 attachment,
@@ -1443,7 +1444,7 @@ void ProjectTestbed::hideSurfaceEditPreviewMesh(){
         return;
 
     auto* renderer =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::RendererComponent>(m_surfaceEditPreviewEntity)
+        m_world->tryGetComponent<NWB::Core::ECSRender::RendererComponent>(m_surfaceEditPreviewEntity)
     ;
     if(renderer)
         renderer->visible = false;
@@ -1456,13 +1457,13 @@ bool ProjectTestbed::refreshSurfaceEditPreviewMesh(){
     }
 
     auto* previewTransform =
-        m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_surfaceEditPreviewEntity)
+        m_world->tryGetComponent<NWB::Core::ECSTransform::TransformComponent>(m_surfaceEditPreviewEntity)
     ;
     auto* previewRenderer =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::RendererComponent>(m_surfaceEditPreviewEntity)
+        m_world->tryGetComponent<NWB::Core::ECSRender::RendererComponent>(m_surfaceEditPreviewEntity)
     ;
     const auto* targetTransform =
-        m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSTransform::TransformComponent>(m_surfaceEditTargetEntity)
     ;
     if(!previewTransform || !previewRenderer || !targetTransform){
         hideSurfaceEditPreviewMesh();
@@ -1484,16 +1485,16 @@ bool ProjectTestbed::refreshSurfaceEditPreviewMesh(){
 
 void ProjectTestbed::clearSurfaceEditPreview(){
     hideSurfaceEditPreviewMesh();
-    m_surfaceEditSession = NWB::Core::ECSGraphics::DeformableSurfaceEditSession{};
-    m_surfaceEditPreviewParams = NWB::Core::ECSGraphics::DeformableHoleEditParams{};
-    m_surfaceEditPreview = NWB::Core::ECSGraphics::DeformableHolePreview{};
+    m_surfaceEditSession = NWB::Core::ECSDeformableEdit::DeformableSurfaceEditSession{};
+    m_surfaceEditPreviewParams = NWB::Core::ECSDeformableEdit::DeformableHoleEditParams{};
+    m_surfaceEditPreview = NWB::Core::ECSDeformableEdit::DeformableHolePreview{};
     m_surfaceEditPreviewActive = false;
 }
 
 void ProjectTestbed::clearPendingSurfaceEditAccessory(){
-    m_pendingSurfaceEditRuntimeMesh = NWB::Core::ECSGraphics::RuntimeMeshHandle{};
-    m_pendingSurfaceEditResult = NWB::Core::ECSGraphics::DeformableHoleEditResult{};
-    m_pendingSurfaceEditRecord = NWB::Core::ECSGraphics::DeformableSurfaceEditRecord{};
+    m_pendingSurfaceEditRuntimeMesh = NWB::Core::ECSDeformable::RuntimeMeshHandle{};
+    m_pendingSurfaceEditResult = NWB::Core::ECSDeformableEdit::DeformableHoleEditResult{};
+    m_pendingSurfaceEditRecord = NWB::Core::ECSDeformableEdit::DeformableSurfaceEditRecord{};
     m_pendingSurfaceEditAccessory = false;
 }
 
@@ -1531,7 +1532,7 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
         return false;
     }
     if(
-        !NWB::Core::ECSGraphics::PreviewHole(
+        !NWB::Core::ECSDeformableEdit::PreviewHole(
             *instance,
             m_surfaceEditSession,
             m_surfaceEditPreviewParams,
@@ -1570,15 +1571,15 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
 
     auto& renderSystem = rendererSystem();
 
-    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+    NWB::Core::ECSDeformableEdit::DeformablePickingRay ray;
     if(!buildSurfaceEditPickRay(ray)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: could not build editor pick ray"));
         return;
     }
 
-    NWB::Core::ECSGraphics::DeformablePosedHit hit;
+    NWB::Core::ECSDeformableEdit::DeformablePosedHit hit;
     if(
-        !NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+        !NWB::Core::ECSDeformableEdit::RaycastVisibleDeformableRenderers(
             *m_world,
             renderSystem,
             ray,
@@ -1590,7 +1591,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
         return;
     }
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle targetRuntimeMesh =
+    const NWB::Core::ECSDeformable::RuntimeMeshHandle targetRuntimeMesh =
         renderSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     if(!targetRuntimeMesh.valid() || hit.runtimeMesh != targetRuntimeMesh){
@@ -1604,7 +1605,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
         return;
     }
 
-    NWB::Core::ECSGraphics::DeformableHoleEditParams params;
+    NWB::Core::ECSDeformableEdit::DeformableHoleEditParams params;
     params.posedHit = hit;
     __hidden_project_testbed_runtime::ApplySurfaceEditScalarParams(
         params,
@@ -1627,11 +1628,11 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
         return;
     }
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditSession session;
-    NWB::Core::ECSGraphics::DeformableHolePreview preview;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditSession session;
+    NWB::Core::ECSDeformableEdit::DeformableHolePreview preview;
     if(
-        !NWB::Core::ECSGraphics::BeginSurfaceEdit(*instance, hit, session)
-        || !NWB::Core::ECSGraphics::PreviewHole(*instance, session, params, preview)
+        !NWB::Core::ECSDeformableEdit::BeginSurfaceEdit(*instance, hit, session)
+        || !NWB::Core::ECSDeformableEdit::PreviewHole(*instance, session, params, preview)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview failed for the selected deformable surface"));
         return;
@@ -1692,10 +1693,10 @@ void ProjectTestbed::commitSurfaceEditPreview(){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: selected operator shape is invalid"));
         return;
     }
-    NWB::Core::ECSGraphics::DeformableHoleEditResult result;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditRecord record;
+    NWB::Core::ECSDeformableEdit::DeformableHoleEditResult result;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditRecord record;
     if(
-        !NWB::Core::ECSGraphics::CommitHole(
+        !NWB::Core::ECSDeformableEdit::CommitHole(
             *instance,
             m_surfaceEditSession,
             m_surfaceEditPreviewParams,
@@ -1703,11 +1704,11 @@ void ProjectTestbed::commitSurfaceEditPreview(){
             &record
         )
     ){
-        const NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Enum permission =
+        const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPermission::Enum permission =
             m_surfaceEditPreview.editPermission
         ;
         clearSurfaceEditPreview();
-        if(permission == NWB::Core::ECSGraphics::DeformableSurfaceEditPermission::Forbidden){
+        if(permission == NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPermission::Forbidden){
             NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: commit refused by the deformable edit mask"));
         }
         else{
@@ -1742,9 +1743,9 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
         return;
     }
 
-    NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent attachment;
+    NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent attachment;
     if(
-        !NWB::Core::ECSGraphics::AttachAccessory(
+        !NWB::Core::ECSDeformableEdit::AttachAccessory(
             *instance,
             m_pendingSurfaceEditResult,
             __hidden_project_testbed_runtime::s_AccessoryNormalOffset,
@@ -1752,7 +1753,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
             attachment
         )
     ){
-        if((instance->dirtyFlags & NWB::Core::ECSGraphics::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
+        if((instance->dirtyFlags & NWB::Core::ECSDeformable::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u)
             return;
 
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: accessory attachment failed"));
@@ -1764,7 +1765,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     accessoryGeometry.virtualPath = Name(__hidden_project_testbed_runtime::s_AccessoryGeometryPath);
     __hidden_project_testbed_runtime::TestbedMaterialRef accessoryMaterial;
     accessoryMaterial.virtualPath = Name(__hidden_project_testbed_runtime::s_AccessoryMaterialPath);
-    NWB::Core::ECSGraphics::DeformableAccessoryAttachmentRecord accessoryRecord;
+    NWB::Core::ECSDeformableEdit::DeformableAccessoryAttachmentRecord accessoryRecord;
     accessoryRecord.geometry = accessoryGeometry;
     accessoryRecord.material = accessoryMaterial;
     if(
@@ -1782,15 +1783,15 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     accessoryRecord.uniformScale = attachment.uniformScale();
     accessoryRecord.wallLoopParameter = attachment.wallLoopParameter();
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditState candidateState = m_surfaceEditState;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditState candidateState = m_surfaceEditState;
     candidateState.edits.push_back(m_pendingSurfaceEditRecord);
     candidateState.accessories.push_back(accessoryRecord);
 
     NWB::Core::Assets::AssetBytes serializedState;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditState loadedState;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditState loadedState;
     if(
-        !NWB::Core::ECSGraphics::SerializeSurfaceEditState(candidateState, serializedState)
-        || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
+        !NWB::Core::ECSDeformableEdit::SerializeSurfaceEditState(candidateState, serializedState)
+        || !NWB::Core::ECSDeformableEdit::DeserializeSurfaceEditState(serializedState, loadedState)
     ){
         clearPendingSurfaceEditAccessory();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: committed hole but persistence validation failed"));
@@ -1806,7 +1807,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     ;
 
     auto* attachmentComponent =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>(accessoryEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent>(accessoryEntity)
     ;
     if(!attachmentComponent){
         clearPendingSurfaceEditAccessory();
@@ -1852,10 +1853,10 @@ void ProjectTestbed::queueSurfaceEditReplay(){
     }
 
     NWB::Core::Assets::AssetBytes serializedState;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditState loadedState;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditState loadedState;
     if(
-        !NWB::Core::ECSGraphics::SerializeSurfaceEditState(m_surfaceEditState, serializedState)
-        || !NWB::Core::ECSGraphics::DeserializeSurfaceEditState(serializedState, loadedState)
+        !NWB::Core::ECSDeformableEdit::SerializeSurfaceEditState(m_surfaceEditState, serializedState)
+        || !NWB::Core::ECSDeformableEdit::DeserializeSurfaceEditState(serializedState, loadedState)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit replay: save/load validation failed"));
         return;
@@ -1871,7 +1872,7 @@ void ProjectTestbed::queueSurfaceEditReplay(){
     ;
     Float4 replayPosition(0.0f, __hidden_project_testbed_runtime::s_SurfaceEditTargetY, 0.0f);
     f32 replayScale = 0.8f;
-    const auto* oldTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(
+    const auto* oldTransform = m_world->tryGetComponent<NWB::Core::ECSTransform::TransformComponent>(
         m_surfaceEditTargetEntity
     );
     if(oldTransform){
@@ -1879,7 +1880,7 @@ void ProjectTestbed::queueSurfaceEditReplay(){
         replayScale = oldTransform->scale.x;
     }
     auto* oldRenderer =
-        m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableRendererComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableRendererComponent>(m_surfaceEditTargetEntity)
     ;
     if(oldRenderer)
         oldRenderer->visible = false;
@@ -1908,21 +1909,21 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
     if(!m_pendingSurfaceEditReplay)
         return;
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+    const NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh =
         rendererSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
     if(!runtimeMesh.valid() || !instance)
         return;
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditReplayContext replayContext;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditReplayContext replayContext;
     replayContext.assetManager = &m_context.assetManager;
     replayContext.world = m_world.get();
     replayContext.targetEntity = m_surfaceEditTargetEntity;
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditReplayResult replayResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditReplayResult replayResult;
     if(
-        !NWB::Core::ECSGraphics::ApplySurfaceEditState(
+        !NWB::Core::ECSDeformableEdit::ApplySurfaceEditState(
             *instance,
             m_surfaceEditState,
             replayContext,
@@ -1945,10 +1946,10 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
 }
 
 bool ProjectTestbed::buildSurfaceEditCleanBase(
-    const NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& instance,
-    NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance& outCleanBase)const
+    const NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance& instance,
+    NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance& outCleanBase)const
 {
-    outCleanBase = NWB::Core::ECSGraphics::DeformableRuntimeMeshInstance{};
+    outCleanBase = NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance{};
     const Name sourceName = instance.source.name();
     if(!sourceName)
         return false;
@@ -1981,7 +1982,7 @@ bool ProjectTestbed::buildSurfaceEditCleanBase(
     outCleanBase.displacement = geometry.displacement();
     outCleanBase.morphs = geometry.morphs();
     outCleanBase.editRevision = 0u;
-    outCleanBase.dirtyFlags = NWB::Core::ECSGraphics::RuntimeMeshDirtyFlag::All;
+    outCleanBase.dirtyFlags = NWB::Core::ECSDeformable::RuntimeMeshDirtyFlag::All;
     return true;
 }
 
@@ -1990,8 +1991,8 @@ void ProjectTestbed::hideSurfaceEditAccessoriesForTarget(const NWB::Core::ECS::E
         return;
 
     auto accessoryView = m_world->view<
-        NWB::Core::ECSGraphics::RendererComponent,
-        NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent
+        NWB::Core::ECSRender::RendererComponent,
+        NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent
     >();
     for(auto&& [entity, renderer, attachment] : accessoryView){
         static_cast<void>(entity);
@@ -2004,7 +2005,7 @@ void ProjectTestbed::hideSurfaceEditAccessoriesForTarget(const NWB::Core::ECS::E
 }
 
 bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh =
+    const NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh =
         rendererSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     if(!runtimeMesh.valid())
@@ -2023,7 +2024,7 @@ bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
             )
         ;
         auto* attachment =
-            m_world->tryGetComponent<NWB::Core::ECSGraphics::DeformableAccessoryAttachmentComponent>(accessoryEntity)
+            m_world->tryGetComponent<NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent>(accessoryEntity)
         ;
         if(!attachment)
             return false;
@@ -2067,7 +2068,7 @@ bool ProjectTestbed::prepareSurfaceEditMutation(
 
 void ProjectTestbed::finishSurfaceEditMutation(
     const tchar* action,
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh,
+    const NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh,
     const SurfaceEditRedoStackMode::Enum redoStackMode){
     clearSurfaceEditPreview();
     clearPendingSurfaceEditAccessory();
@@ -2078,7 +2079,7 @@ void ProjectTestbed::finishSurfaceEditMutation(
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: failed to restore accessory entities"), action);
 }
 
-bool ProjectTestbed::buildSurfaceEditPickRay(NWB::Core::ECSGraphics::DeformablePickingRay& outRay){
+bool ProjectTestbed::buildSurfaceEditPickRay(NWB::Core::ECSDeformableEdit::DeformablePickingRay& outRay){
     const __hidden_project_testbed_runtime::EditorClientSize clientSize =
         __hidden_project_testbed_runtime::ResolveEditorClientSize(m_context.graphics)
     ;
@@ -2093,17 +2094,17 @@ bool ProjectTestbed::buildSurfaceEditPickRay(NWB::Core::ECSGraphics::DeformableP
 bool ProjectTestbed::pickSurfaceEditMutationTarget(
     const tchar* action,
     const SurfaceEditMutationContext& editContext,
-    NWB::Core::ECSGraphics::DeformablePosedHit& outTargetHit){
-    outTargetHit = NWB::Core::ECSGraphics::DeformablePosedHit{};
+    NWB::Core::ECSDeformableEdit::DeformablePosedHit& outTargetHit){
+    outTargetHit = NWB::Core::ECSDeformableEdit::DeformablePosedHit{};
 
-    NWB::Core::ECSGraphics::DeformablePickingRay ray;
+    NWB::Core::ECSDeformableEdit::DeformablePickingRay ray;
     if(!buildSurfaceEditPickRay(ray)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: could not build editor pick ray"), action);
         return false;
     }
 
     if(
-        !NWB::Core::ECSGraphics::RaycastVisibleDeformableRenderers(
+        !NWB::Core::ECSDeformableEdit::RaycastVisibleDeformableRenderers(
             *m_world,
             *editContext.rendererSystem,
             ray,
@@ -2131,9 +2132,9 @@ void ProjectTestbed::undoSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("undo"), editContext))
         return;
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditUndoResult undoResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditUndoResult undoResult;
     if(
-        !NWB::Core::ECSGraphics::UndoLastSurfaceEdit(
+        !NWB::Core::ECSDeformableEdit::UndoLastSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2166,9 +2167,9 @@ void ProjectTestbed::redoSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("redo"), editContext))
         return;
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditRedoResult redoResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditRedoResult redoResult;
     if(
-        !NWB::Core::ECSGraphics::RedoLastSurfaceEdit(
+        !NWB::Core::ECSDeformableEdit::RedoLastSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2201,12 +2202,12 @@ void ProjectTestbed::healLatestSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("heal"), editContext))
         return;
 
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+    const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditHealResult healResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditHealResult healResult;
     if(
-        !NWB::Core::ECSGraphics::HealSurfaceEdit(
+        !NWB::Core::ECSDeformableEdit::HealSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2239,12 +2240,12 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("resize"), editContext))
         return;
 
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+    const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditResizeResult resizeResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditResizeResult resizeResult;
     if(
-        !NWB::Core::ECSGraphics::ResizeSurfaceEdit(
+        !NWB::Core::ECSDeformableEdit::ResizeSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2284,16 +2285,16 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("move"), editContext))
         return;
 
-    NWB::Core::ECSGraphics::DeformablePosedHit targetHit;
+    NWB::Core::ECSDeformableEdit::DeformablePosedHit targetHit;
     if(!pickSurfaceEditMutationTarget(NWB_TEXT("move"), editContext, targetHit))
         return;
 
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+    const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditMoveResult moveResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditMoveResult moveResult;
     if(
-        !NWB::Core::ECSGraphics::MoveSurfaceEdit(
+        !NWB::Core::ECSDeformableEdit::MoveSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2331,16 +2332,16 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("patch"), editContext))
         return;
 
-    NWB::Core::ECSGraphics::DeformablePosedHit targetHit;
+    NWB::Core::ECSDeformableEdit::DeformablePosedHit targetHit;
     if(!pickSurfaceEditMutationTarget(NWB_TEXT("patch"), editContext, targetHit))
         return;
 
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+    const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditPatchResult patchResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditPatchResult patchResult;
     if(
-        !NWB::Core::ECSGraphics::PatchSurfaceEdit(
+        !NWB::Core::ECSDeformableEdit::PatchSurfaceEdit(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2387,12 +2388,12 @@ void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
     if(!prepareSurfaceEditMutation(NWB_TEXT("loop cut"), editContext))
         return;
 
-    const NWB::Core::ECSGraphics::DeformableSurfaceEditId editId =
+    const NWB::Core::ECSDeformableEdit::DeformableSurfaceEditId editId =
         m_surfaceEditState.edits.back().editId
     ;
-    NWB::Core::ECSGraphics::DeformableSurfaceEditLoopCutResult loopCutResult;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditLoopCutResult loopCutResult;
     if(
-        !NWB::Core::ECSGraphics::AddSurfaceEditLoopCut(
+        !NWB::Core::ECSDeformableEdit::AddSurfaceEditLoopCut(
             *editContext.instance,
             editContext.cleanBase,
             m_surfaceEditState,
@@ -2442,7 +2443,7 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
     if(!m_surfaceEditDebugEnabled)
         return;
 
-    const NWB::Core::ECSGraphics::RuntimeMeshHandle runtimeMesh = m_surfaceEditPreviewActive
+    const NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh = m_surfaceEditPreviewActive
         ? m_surfaceEditSession.runtimeMesh
         : m_surfaceEditDebugRuntimeMesh
     ;
@@ -2452,7 +2453,7 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
         return;
     }
 
-    NWB::Core::ECSGraphics::DeformableSurfaceEditDebugSnapshot snapshot;
+    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditDebugSnapshot snapshot;
     UniquePtr<NWB::Core::Assets::IAsset> debugDisplacementTextureAsset;
     const auto* debugDisplacementTexture =
         __hidden_project_testbed_runtime::ResolveSurfaceEditDebugDisplacementTexture(
@@ -2462,7 +2463,7 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
         )
     ;
     if(
-        !NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugSnapshot(
+        !NWB::Core::ECSDeformableEdit::BuildDeformableSurfaceEditDebugSnapshot(
             *instance,
             m_surfaceEditPreviewActive ? &m_surfaceEditSession : nullptr,
             m_surfaceEditPreviewActive ? &m_surfaceEditPreview : nullptr,
@@ -2476,7 +2477,7 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
     }
 
     AString dump;
-    if(!NWB::Core::ECSGraphics::BuildDeformableSurfaceEditDebugDump(snapshot, dump)){
+    if(!NWB::Core::ECSDeformableEdit::BuildDeformableSurfaceEditDebugDump(snapshot, dump)){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit debug: failed to format snapshot"));
         return;
     }
@@ -2513,6 +2514,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
             const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Keypad1);
             if(targetIndex < __hidden_project_testbed_runtime::s_SurfaceEditTargetCount)
                 static_cast<void>(selectSurfaceEditTarget(targetIndex));
+        }
+        else if(key == NWB::Core::Key::C){
+            m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::CommitPreview;
         }
     }
 

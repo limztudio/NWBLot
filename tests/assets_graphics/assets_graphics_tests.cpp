@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_graphics/deformable_geometry_asset.h>
-#include <impl/assets_graphics/geometry_asset.h>
+#include <impl/assets_geometry/deformable_geometry_asset.h>
+#include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 
 #include <tests/assets_graphics/deformable_test_helpers.h>

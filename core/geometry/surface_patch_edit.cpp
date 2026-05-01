@@ -233,11 +233,9 @@ template<typename IndexAllocator>
     if(a.vertex == b.vertex || a.vertex == c.vertex || b.vertex == c.vertex)
         return false;
 
-    const usize indexOffset = outIndices.size();
-    outIndices.resize(indexOffset + 3u);
-    outIndices[indexOffset + 0u] = a.vertex;
-    outIndices[indexOffset + 1u] = counterClockwise ? b.vertex : c.vertex;
-    outIndices[indexOffset + 2u] = counterClockwise ? c.vertex : b.vertex;
+    outIndices.push_back(a.vertex);
+    outIndices.push_back(counterClockwise ? b.vertex : c.vertex);
+    outIndices.push_back(counterClockwise ? c.vertex : b.vertex);
     return true;
 }
 
@@ -301,7 +299,7 @@ template<typename IndexAllocator>
     Vector<CapPolygonVertex, Core::Alloc::ScratchAllocator<CapPolygonVertex>> polygon{
         Core::Alloc::ScratchAllocator<CapPolygonVertex>(scratchArena)
     };
-    polygon.resize(capVertexCount);
+    polygon.reserve(capVertexCount);
     if(capVertices[0u] >= positionCount)
         return false;
 
@@ -312,12 +310,13 @@ template<typename IndexAllocator>
             return false;
 
         const SIMDVector offset = VectorSubtract(LoadFloat(positions[capVertex]), origin);
-        CapPolygonVertex& polygonVertex = polygon[capVertexIndex];
+        CapPolygonVertex polygonVertex;
         polygonVertex.vertex = capVertex;
         polygonVertex.x = VectorGetX(Vector3Dot(offset, tangent));
         polygonVertex.y = VectorGetX(Vector3Dot(offset, bitangent));
         if(!IsFinite(polygonVertex.x) || !IsFinite(polygonVertex.y))
             return false;
+        polygon.push_back(polygonVertex);
     }
 
     if(!RemoveDuplicateCapVertices(polygon))

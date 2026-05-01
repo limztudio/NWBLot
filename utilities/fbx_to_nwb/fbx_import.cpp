@@ -315,8 +315,9 @@ bool SelectMeshInstances(
 
     const AString normalized = ToLower(Trim(selector));
     if(normalized.empty() || normalized == "all"){
-        outSelection.resize(instances.size());
-        Iota(outSelection.begin(), outSelection.end(), usize{ 0 });
+        outSelection.reserve(instances.size());
+        for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
+            outSelection.push_back(instanceIndex);
         return true;
     }
     if(normalized == "first"){

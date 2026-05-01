@@ -3297,7 +3297,7 @@ struct HolePreviewPlan{
     Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> topCapPositions{
         Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
     };
-    topCapPositions.resize(boundaryVertexCount);
+    topCapPositions.reserve(boundaryVertexCount);
     const f32 surfaceOffset = Max(
         s_HolePreviewSurfaceOffsetMin,
         params.radius * s_HolePreviewSurfaceOffsetRadiusScale
@@ -3307,14 +3307,16 @@ struct HolePreviewPlan{
         if(edge.a >= restPositions.size())
             return false;
 
+        Float3U topCapPosition;
         StoreFloat(
             VectorMultiplyAdd(
                 frame.normal,
                 VectorReplicate(surfaceOffset),
                 LoadFloat(restPositions[edge.a])
             ),
-            &topCapPositions[edgeIndex]
+            &topCapPosition
         );
+        topCapPositions.push_back(topCapPosition);
     }
 
     if(!AppendHolePreviewCap(topCapPositions, frame.normal, frame.tangent, frame.bitangent, outMesh, scratchArena))
@@ -3842,7 +3844,7 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     Vector<AccessoryRecord, Core::Alloc::ScratchAllocator<AccessoryRecord>> accessoryRecords{
         Core::Alloc::ScratchAllocator<AccessoryRecord>(scratchArena)
     };
-    accessoryRecords.resize(state.accessories.size());
+    accessoryRecords.reserve(state.accessories.size());
 
     Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
         Core::Alloc::ScratchAllocator<u8>(scratchArena)
@@ -3858,14 +3860,13 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     if(canReserveStringTable)
         stringTable.reserve(stringTableReserveBytes);
 
-    for(usize accessoryIndex = 0u; accessoryIndex < state.accessories.size(); ++accessoryIndex){
-        const DeformableAccessoryAttachmentRecord& accessory = state.accessories[accessoryIndex];
+    for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         __hidden_deformable_surface_edit::SurfaceEditAccessoryRecordBinary binaryRecord;
         if(!__hidden_deformable_surface_edit::BuildAccessoryBinaryRecord(accessory, binaryRecord, stringTable)){
             outBinary.clear();
             return false;
         }
-        accessoryRecords[accessoryIndex] = binaryRecord;
+        accessoryRecords.push_back(binaryRecord);
     }
 
     usize binarySize = 0u;
@@ -4936,11 +4937,11 @@ void AccumulateSurfaceEditReplayResult(
         DeformableHoleEditResult replayResult;
         if(
             !ReplaySurfaceEditRecord(
-            replayInstance,
-            record,
-            replayRecord,
-            ReplayResultValidation::Exact,
-            replayResult
+                replayInstance,
+                record,
+                replayRecord,
+                ReplayResultValidation::Exact,
+                replayResult
             )
         )
             return false;
@@ -5082,11 +5083,11 @@ void AccumulateSurfaceEditReplayResult(
         DeformableHoleEditResult replayResult;
         if(
             !ReplaySurfaceEditRecord(
-            replayInstance,
-            record,
-            replayRecord,
-            ReplayResultValidation::Shape,
-            replayResult
+                replayInstance,
+                record,
+                replayRecord,
+                ReplayResultValidation::Shape,
+                replayResult
             )
         )
             return false;

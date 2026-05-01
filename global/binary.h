@@ -280,7 +280,13 @@ template<typename Container, typename ValueContainer>
     if(!BinaryDetail::CanReadBytes(binary, inOutOffset, byteCount))
         return BinaryVectorPayloadFailure::SourceTruncated;
 
-    outValues.resize(static_cast<usize>(count), initialValue);
+    if constexpr(IsDefaultConstructible_V<ValueType>){
+        static_cast<void>(initialValue);
+        outValues.resize(static_cast<usize>(count));
+    }
+    else{
+        outValues.resize(static_cast<usize>(count), initialValue);
+    }
     if(byteCount > 0u)
         NWB_MEMCPY(outValues.data(), byteCount, binary.data() + inOutOffset, byteCount);
     inOutOffset += byteCount;

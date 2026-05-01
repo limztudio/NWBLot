@@ -170,6 +170,11 @@ using IsAssignable = std::is_assignable<To, From>;
 template<class To, class From>
 inline constexpr bool IsAssignable_V = std::is_assignable_v<To, From>;
 
+template<class T>
+using IsDefaultConstructible = std::is_default_constructible<T>;
+template<class T>
+inline constexpr bool IsDefaultConstructible_V = std::is_default_constructible_v<T>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

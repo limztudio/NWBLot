@@ -973,14 +973,13 @@ static bool FillMetadataIndexRecursive(
     const tchar* metaKind,
     const AStringView label,
     const bool use32BitIndices,
-    IndexVectorT& outIndices,
-    usize& inOutIndex
+    IndexVectorT& outIndices
 ){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0; i < list.size(); ++i){
             const AString childLabel = MakeIndexedLabel(label, i);
-            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices, inOutIndex))
+            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices))
                 return false;
         }
         return true;
@@ -999,8 +998,7 @@ static bool FillMetadataIndexRecursive(
     }
 
     using IndexValue = typename IndexVectorT::value_type;
-    outIndices[inOutIndex] = static_cast<IndexValue>(index);
-    ++inOutIndex;
+    outIndices.push_back(static_cast<IndexValue>(index));
     return true;
 }
 
@@ -1027,13 +1025,12 @@ static bool ParseMetadataIndexField(
         return false;
     }
 
-    outIndices.resize(indexCount);
-    usize writeIndex = 0u;
-    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices, writeIndex)){
+    outIndices.reserve(indexCount);
+    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices)){
         outIndices.clear();
         return false;
     }
-    NWB_ASSERT(writeIndex == indexCount);
+    NWB_ASSERT(outIndices.size() == indexCount);
     if(outIndices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
         return false;

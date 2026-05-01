@@ -521,16 +521,14 @@ bool Device::createPipelineLayoutForBindingLayouts(
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
     }
 
-    descriptorSetLayouts.resize(descriptorSetLayoutCount);
-    usize descriptorSetLayoutIndex = 0u;
+    descriptorSetLayouts.reserve(descriptorSetLayoutCount);
     for(const auto& bindingLayout : bindingLayouts){
         auto* layout = checked_cast<BindingLayout*>(bindingLayout.get());
         NWB_ASSERT(layout != nullptr);
-        for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts){
-            descriptorSetLayouts[descriptorSetLayoutIndex] = descriptorSetLayout;
-            ++descriptorSetLayoutIndex;
-        }
+        for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
+            descriptorSetLayouts.push_back(descriptorSetLayout);
     }
+    NWB_ASSERT(descriptorSetLayouts.size() == descriptorSetLayoutCount);
 
     if(
         !VulkanDetail::CreatePipelineLayout(
@@ -660,8 +658,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
             return false;
         if(outPushDataSize + pushDataBytes > context.descriptorHeapProperties.maxPushDataSize)
             return false;
-        const usize mappingBaseIndex = outMappings.size();
-        outMappings.resize(mappingBaseIndex + heapBindings.size());
+        outMappings.reserve(outMappings.size() + heapBindings.size());
 
         DescriptorHeapPushRange pushRange{};
         pushRange.bindingSetIndex = i;
@@ -683,7 +680,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
             mapping.sourceData.pushIndex.pushOffset = pushRange.pushOffsetBytes + static_cast<u32>(bindingIndex * sizeof(u32));
             mapping.sourceData.pushIndex.heapIndexStride = meta.descriptorStride;
             mapping.sourceData.pushIndex.heapArrayStride = meta.descriptorStride;
-            outMappings[mappingBaseIndex + bindingIndex] = mapping;
+            outMappings.push_back(mapping);
             hasAnyDescriptors = true;
         }
 

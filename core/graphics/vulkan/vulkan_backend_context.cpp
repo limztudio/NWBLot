@@ -415,7 +415,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
     VkResult res = VK_SUCCESS;
 
     clearSemaphores(semaphores);
-    semaphores.resize(count, VK_NULL_HANDLE);
+    semaphores.reserve(count);
 
     VkSemaphoreCreateInfo semInfo = {};
     semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -428,7 +428,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
             clearSemaphores(semaphores);
             return false;
         }
-        semaphores[i] = sem;
+        semaphores.push_back(sem);
     }
 
     return true;

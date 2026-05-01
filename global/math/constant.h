@@ -11,20 +11,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_SIMD_VECTOR_CONST_CONVERSIONS \
+    inline operator SIMDVector()const noexcept{ return v; } \
+    inline operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); } \
+    inline operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+
+#define NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS \
+    inline operator SIMDVector()const noexcept{ return v; } \
+    inline operator __m128i()const noexcept{ return _mm_castps_si128(v); } \
+    inline operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+
+#define NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION \
+    inline operator SIMDVector()const noexcept{ return v; }
+
 struct alignas(16) SIMDVectorConstF{
     union{
         f32 f[4];
         SIMDVector v;
     };
 
-    inline operator SIMDVector()const noexcept{ return v; }
     inline operator const f32*()const noexcept{ return f; }
 #if defined(NWB_HAS_NEON)
-    inline operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); }
-    inline operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+    NWB_SIMD_VECTOR_CONST_CONVERSIONS
 #elif !defined(NWB_HAS_SCALAR)
-    inline operator __m128i()const noexcept{ return _mm_castps_si128(v); }
-    inline operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+    NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#else
+    NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
 #endif
 };
 
@@ -34,13 +46,12 @@ struct alignas(16) SIMDVectorConstI{
         SIMDVector v;
     };
 
-    inline operator SIMDVector()const noexcept{ return v; }
 #if defined(NWB_HAS_NEON)
-    inline operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); }
-    inline operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+    NWB_SIMD_VECTOR_CONST_CONVERSIONS
 #elif !defined(NWB_HAS_SCALAR)
-    inline operator __m128i()const noexcept{ return _mm_castps_si128(v); }
-    inline operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+    NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#else
+    NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
 #endif
 };
 
@@ -50,13 +61,12 @@ struct alignas(16) SIMDVectorConstU{
         SIMDVector v;
     };
 
-    inline operator SIMDVector()const noexcept{ return v; }
 #if defined(NWB_HAS_NEON)
-    inline operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); }
-    inline operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+    NWB_SIMD_VECTOR_CONST_CONVERSIONS
 #elif !defined(NWB_HAS_SCALAR)
-    inline operator __m128i()const noexcept{ return _mm_castps_si128(v); }
-    inline operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+    NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#else
+    NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
 #endif
 };
 
@@ -66,15 +76,18 @@ struct alignas(16) SIMDVectorConstB{
         SIMDVector v;
     };
 
-    inline operator SIMDVector()const noexcept{ return v; }
 #if defined(NWB_HAS_NEON)
-    inline operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); }
-    inline operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+    NWB_SIMD_VECTOR_CONST_CONVERSIONS
 #elif !defined(NWB_HAS_SCALAR)
-    inline operator __m128i()const noexcept{ return _mm_castps_si128(v); }
-    inline operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+    NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#else
+    NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
 #endif
 };
+
+#undef NWB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
+#undef NWB_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#undef NWB_SIMD_VECTOR_CONST_CONVERSIONS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

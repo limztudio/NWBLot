@@ -101,6 +101,22 @@ private:
     typename Types::second_type m_second;
 };
 
+template<typename T1, typename T2, typename Derived>
+class EmptyPairAccessors : public ImplementationTypes<T1, T2>{
+private:
+    typedef ImplementationTypes<T1, T2> Types;
+
+
+public:
+    typename Types::first_reference first(){ return static_cast<Derived&>(*this); }
+    typename Types::first_const_reference first()const{ return static_cast<const Derived&>(*this); }
+
+    typename Types::second_reference second(){ return static_cast<Derived&>(*this); }
+    typename Types::second_const_reference second()const{ return static_cast<const Derived&>(*this); }
+
+    void swap(::CompressedPair<T1, T2>&){}
+};
+
 template<typename T1, typename T2, int version>
 class Implementation;
 
@@ -202,8 +218,12 @@ private:
     typename Types::first_type m_first;
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 3> : public ImplementationTypes<T1, T2>, private T1, private T2{
+class Implementation<T1, T2, 3>
+    : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, 3>>
+    , private T1
+    , private T2{
 private:
+    friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, 3>>;
     typedef ImplementationTypes<T1, T2> Types;
 
 
@@ -219,20 +239,13 @@ public:
     Implementation(typename Types::second_param_type y)
         : T2(y)
     {}
-
-
-public:
-    typename Types::first_reference first(){ return *this; }
-    typename Types::first_const_reference first()const{ return *this; }
-
-    typename Types::second_reference second(){ return *this; }
-    typename Types::second_const_reference second()const{ return *this; }
-
-    void swap(::CompressedPair<T1, T2>&){}
 };
 template<typename T1, typename T2>
-class Implementation<T1, T2, 4> : public ImplementationTypes<T1, T2>, private T1{
+class Implementation<T1, T2, 4>
+    : public EmptyPairAccessors<T1, T2, Implementation<T1, T2, 4>>
+    , private T1{
 private:
+    friend class EmptyPairAccessors<T1, T2, Implementation<T1, T2, 4>>;
     typedef ImplementationTypes<T1, T2> Types;
 
 
@@ -244,16 +257,6 @@ public:
     Implementation(typename Types::first_param_type x)
         : T1(x)
     {}
-
-
-public:
-    typename Types::first_reference first(){ return *this; }
-    typename Types::first_const_reference first()const{ return *this; }
-
-    typename Types::second_reference second(){ return *this; }
-    typename Types::second_const_reference second()const{ return *this; }
-
-    void swap(::CompressedPair<T1, T2>&){}
 };
 template<typename T1, typename T2>
 class Implementation<T1, T2, 5> : public ValueStorage<T1, T2>{

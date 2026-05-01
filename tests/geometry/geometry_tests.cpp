@@ -334,12 +334,33 @@ static MeshTopologyEdge MakeEdge(const u32 a, const u32 b){
     return edge;
 }
 
+static Vector<MeshTopologyEdge> MakeSquareLoopEdges(){
+    Vector<MeshTopologyEdge> orderedEdges;
+    orderedEdges.push_back(MakeEdge(0u, 1u));
+    orderedEdges.push_back(MakeEdge(1u, 2u));
+    orderedEdges.push_back(MakeEdge(2u, 3u));
+    orderedEdges.push_back(MakeEdge(3u, 0u));
+    return orderedEdges;
+}
+
+static Vector<MeshTopologyEdge> MakeTriangleLoopEdges(){
+    Vector<MeshTopologyEdge> orderedEdges;
+    orderedEdges.push_back(MakeEdge(0u, 1u));
+    orderedEdges.push_back(MakeEdge(1u, 2u));
+    orderedEdges.push_back(MakeEdge(2u, 0u));
+    return orderedEdges;
+}
+
+static NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame MakeDefaultLoopFrame(){
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame;
+    frame.center = Float3U(0.0f, 0.0f, 0.0f);
+    frame.tangent = Float3U(1.0f, 0.0f, 0.0f);
+    frame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+    return frame;
+}
+
 static void TestOrdersBoundaryLoopCounterClockwise(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
-    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
+    Vector<Float3U> positions = MakeFlatQuadPositions();
 
     Vector<MeshTopologyEdge> boundaryEdges;
     boundaryEdges.push_back(MakeEdge(2u, 3u));
@@ -347,10 +368,7 @@ static void TestOrdersBoundaryLoopCounterClockwise(TestContext& context){
     boundaryEdges.push_back(MakeEdge(3u, 0u));
     boundaryEdges.push_back(MakeEdge(1u, 2u));
 
-    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame;
-    frame.center = Float3U(0.0f, 0.0f, 0.0f);
-    frame.tangent = Float3U(1.0f, 0.0f, 0.0f);
-    frame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame = MakeDefaultLoopFrame();
 
     Vector<MeshTopologyEdge> orderedEdges;
     NWB_GEOMETRY_TEST_CHECK(
@@ -377,10 +395,7 @@ static void TestRejectsBranchedBoundaryLoop(TestContext& context){
     boundaryEdges.push_back(MakeEdge(2u, 0u));
     boundaryEdges.push_back(MakeEdge(0u, 3u));
 
-    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame;
-    frame.center = Float3U(0.0f, 0.0f, 0.0f);
-    frame.tangent = Float3U(1.0f, 0.0f, 0.0f);
-    frame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame frame = MakeDefaultLoopFrame();
 
     Vector<MeshTopologyEdge> orderedEdges;
     NWB_GEOMETRY_TEST_CHECK(
@@ -495,10 +510,7 @@ static void TestRejectsMalformedRemovedTriangleBoundaries(TestContext& context){
 }
 
 static void TestAppendsWallTrianglePairs(TestContext& context){
-    Vector<MeshTopologyEdge> orderedEdges;
-    orderedEdges.push_back(MakeEdge(0u, 1u));
-    orderedEdges.push_back(MakeEdge(1u, 2u));
-    orderedEdges.push_back(MakeEdge(2u, 0u));
+    Vector<MeshTopologyEdge> orderedEdges = MakeTriangleLoopEdges();
 
     Vector<u32> innerVertices;
     innerVertices.push_back(3u);
@@ -546,10 +558,7 @@ static void TestRejectsMalformedWallTrianglePairs(TestContext& context){
     );
     NWB_GEOMETRY_TEST_CHECK(context, indices.empty());
 
-    orderedEdges.clear();
-    orderedEdges.push_back(MakeEdge(0u, 1u));
-    orderedEdges.push_back(MakeEdge(1u, 2u));
-    orderedEdges.push_back(MakeEdge(2u, 0u));
+    orderedEdges = MakeTriangleLoopEdges();
     innerVertices[1u] = 1u;
     NWB_GEOMETRY_TEST_CHECK(
         context,
@@ -563,16 +572,8 @@ static void TestRejectsMalformedWallTrianglePairs(TestContext& context){
 }
 
 static void TestBuildsBoundaryLoopVertexFrame(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
-    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
-
-    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame;
-    loopFrame.center = Float3U(0.0f, 0.0f, 0.0f);
-    loopFrame.tangent = Float3U(1.0f, 0.0f, 0.0f);
-    loopFrame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+    Vector<Float3U> positions = MakeFlatQuadPositions();
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame = MakeDefaultLoopFrame();
 
     NWB::Core::Geometry::MeshTopologyLoopVertexFrame vertexFrame;
     NWB_GEOMETRY_TEST_CHECK(
@@ -605,17 +606,8 @@ static void TestBuildsBoundaryLoopVertexFrame(TestContext& context){
 }
 
 static void TestBuildsSurfacePatchLoopDistances(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
-    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
-
-    Vector<MeshTopologyEdge> orderedEdges;
-    orderedEdges.push_back(MakeEdge(0u, 1u));
-    orderedEdges.push_back(MakeEdge(1u, 2u));
-    orderedEdges.push_back(MakeEdge(2u, 3u));
-    orderedEdges.push_back(MakeEdge(3u, 0u));
+    Vector<Float3U> positions = MakeFlatQuadPositions();
+    Vector<MeshTopologyEdge> orderedEdges = MakeSquareLoopEdges();
 
     f32 distances[4] = {};
     f32 loopLength = 0.0f;
@@ -663,10 +655,7 @@ static void TestRejectsMalformedSurfacePatchLoopDistances(TestContext& context){
     );
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(loopLength, 0.0f));
 
-    orderedEdges.clear();
-    orderedEdges.push_back(MakeEdge(0u, 1u));
-    orderedEdges.push_back(MakeEdge(1u, 2u));
-    orderedEdges.push_back(MakeEdge(2u, 0u));
+    orderedEdges = MakeTriangleLoopEdges();
     NWB_GEOMETRY_TEST_CHECK(
         context,
         !NWB::Core::Geometry::BuildSurfacePatchLoopDistances(
@@ -716,22 +705,9 @@ static void TestRejectsMalformedSurfacePatchRingEdges(TestContext& context){
 }
 
 static void TestBuildsSurfacePatchWallVertices(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
-    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
-
-    Vector<MeshTopologyEdge> orderedEdges;
-    orderedEdges.push_back(MakeEdge(0u, 1u));
-    orderedEdges.push_back(MakeEdge(1u, 2u));
-    orderedEdges.push_back(MakeEdge(2u, 3u));
-    orderedEdges.push_back(MakeEdge(3u, 0u));
-
-    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame;
-    loopFrame.center = Float3U(0.0f, 0.0f, 0.0f);
-    loopFrame.tangent = Float3U(1.0f, 0.0f, 0.0f);
-    loopFrame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+    Vector<Float3U> positions = MakeFlatQuadPositions();
+    Vector<MeshTopologyEdge> orderedEdges = MakeSquareLoopEdges();
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame = MakeDefaultLoopFrame();
 
     Vector<SurfacePatchWallVertex> wallVertices;
     wallVertices.resize(8u);
@@ -770,15 +746,8 @@ static void TestRejectsMalformedSurfacePatchWallVertices(TestContext& context){
     positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
     positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
 
-    Vector<MeshTopologyEdge> orderedEdges;
-    orderedEdges.push_back(MakeEdge(0u, 1u));
-    orderedEdges.push_back(MakeEdge(1u, 2u));
-    orderedEdges.push_back(MakeEdge(2u, 0u));
-
-    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame;
-    loopFrame.center = Float3U(0.0f, 0.0f, 0.0f);
-    loopFrame.tangent = Float3U(1.0f, 0.0f, 0.0f);
-    loopFrame.bitangent = Float3U(0.0f, 1.0f, 0.0f);
+    Vector<MeshTopologyEdge> orderedEdges = MakeTriangleLoopEdges();
+    NWB::Core::Geometry::MeshTopologyBoundaryLoopFrame loopFrame = MakeDefaultLoopFrame();
 
     SurfacePatchWallVertex wallVertices[3] = {};
     NWB_GEOMETRY_TEST_CHECK(

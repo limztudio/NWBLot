@@ -193,12 +193,9 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
 
     Alloc::ScratchArena<> scratchArena;
     Vector<const Record*, Alloc::ScratchAllocator<const Record*>> sortedRecords{Alloc::ScratchAllocator<const Record*>(scratchArena)};
-    sortedRecords.resize(records.size());
-    usize sortedRecordIndex = 0u;
-    for(const Record& record : records){
-        sortedRecords[sortedRecordIndex] = &record;
-        ++sortedRecordIndex;
-    }
+    sortedRecords.reserve(records.size());
+    for(const Record& record : records)
+        sortedRecords.push_back(&record);
     Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecordPointer);
 
     usize variantTextBinaryBytes = 0;
@@ -297,7 +294,7 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
     }
 
     Vector<Record> parsedRecords;
-    parsedRecords.resize(header.recordCount);
+    parsedRecords.reserve(header.recordCount);
     const Record* previousRecord = nullptr;
     for(u32 i = 0; i < header.recordCount; ++i){
         __hidden_shader_archive::RecordHeaderDisk recordHeader{};
@@ -335,8 +332,8 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
             }
         }
 
-        parsedRecords[i] = Move(record);
-        previousRecord = &parsedRecords[i];
+        parsedRecords.push_back(Move(record));
+        previousRecord = &parsedRecords.back();
     }
 
     if(cursor != binary.size()){

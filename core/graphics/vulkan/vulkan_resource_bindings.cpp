@@ -125,14 +125,14 @@ bool BuildPipelineRenderingInfo(
     PipelineRenderingFormatVector& outColorFormats
 ){
     outColorFormats.clear();
-    outColorFormats.resize(fbinfo.colorFormats.size());
+    outColorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
         if(vkFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
             return false;
         }
-        outColorFormats[i] = vkFormat;
+        outColorFormats.push_back(vkFormat);
     }
 
     outRenderingInfo = MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
@@ -697,15 +697,15 @@ bool DescriptorHeapManager::tryEnablePipeline(
     outFlags2.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO;
     outFlags2.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
 
-    outStageMappings.resize(shaderStages.size());
+    outStageMappings.reserve(shaderStages.size());
     for(usize i = 0; i < shaderStages.size(); ++i){
-        VkShaderDescriptorSetAndBindingMappingInfoEXT& mappingInfo = outStageMappings[i];
-        mappingInfo = {};
+        VkShaderDescriptorSetAndBindingMappingInfoEXT mappingInfo = {};
         mappingInfo.sType = VK_STRUCTURE_TYPE_SHADER_DESCRIPTOR_SET_AND_BINDING_MAPPING_INFO_EXT;
         mappingInfo.mappingCount = static_cast<u32>(outMappings.size());
         mappingInfo.pMappings = outMappings.data();
         mappingInfo.pNext = shaderStages[i].pNext;
-        shaderStages[i].pNext = &mappingInfo;
+        outStageMappings.push_back(mappingInfo);
+        shaderStages[i].pNext = &outStageMappings.back();
     }
 
     return true;
@@ -1389,9 +1389,9 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layout->m_bindlessDesc = desc;
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
-    bindings.resize(desc.registerSpaces.size());
+    bindings.reserve(desc.registerSpaces.size());
     Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
-    bindingFlags.resize(desc.registerSpaces.size());
+    bindingFlags.reserve(desc.registerSpaces.size());
     HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> registerSpaceSlots(
         0,
         Hasher<u32>(),
@@ -1424,10 +1424,10 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         binding.descriptorCount = maxCapacity;
         binding.stageFlags = VulkanDetail::ConvertShaderStages(desc.visibility);
         binding.pImmutableSamplers = nullptr;
-        bindings[i] = binding;
+        bindings.push_back(binding);
 
         VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
-        bindingFlags[i] = flags;
+        bindingFlags.push_back(flags);
     }
 
     if(!bindingFlags.empty())

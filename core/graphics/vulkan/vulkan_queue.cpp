@@ -302,25 +302,25 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
     Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> waitInfos{ Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena) };
-    waitInfos.resize(m_waitSemaphores.size());
+    waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
-        VkSemaphoreSubmitInfo& waitInfo = waitInfos[i];
-        waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
+        VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         waitInfo.semaphore = m_waitSemaphores[i];
         waitInfo.value = m_waitSemaphoreValues[i];
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        waitInfos.push_back(waitInfo);
     }
 
     Vector<VkSemaphoreSubmitInfo, Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>> signalInfos{ Alloc::ScratchAllocator<VkSemaphoreSubmitInfo>(scratchArena) };
-    signalInfos.resize(1u + m_signalSemaphores.size());
-    signalInfos[0u] = timelineSignal;
+    signalInfos.reserve(1u + m_signalSemaphores.size());
+    signalInfos.push_back(timelineSignal);
 
     for(usize i = 0; i < m_signalSemaphores.size(); ++i){
-        VkSemaphoreSubmitInfo& signalInfo = signalInfos[i + 1u];
-        signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
+        VkSemaphoreSubmitInfo signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         signalInfo.semaphore = m_signalSemaphores[i];
         signalInfo.value = m_signalSemaphoreValues[i];
         signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        signalInfos.push_back(signalInfo);
     }
 
     VkFence submitFence = VK_NULL_HANDLE;

@@ -2564,7 +2564,13 @@ static bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlanned
     return true;
 }
 
-static bool ResizeShaderIndexRecords(const PreparedShaderVector& preparedEntries, Vector<Core::ShaderArchive::Record>& outShaderIndexRecords){
+static bool ReserveShaderIndexRecords(
+    const PreparedShaderVector& preparedEntries,
+    Vector<Core::ShaderArchive::Record>& outShaderIndexRecords,
+    usize& outShaderRecordCount
+){
+    outShaderRecordCount = 0u;
+
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
@@ -2579,7 +2585,8 @@ static bool ResizeShaderIndexRecords(const PreparedShaderVector& preparedEntries
     }
 
     outShaderIndexRecords.clear();
-    outShaderIndexRecords.resize(static_cast<usize>(shaderRecordCount));
+    outShaderRecordCount = static_cast<usize>(shaderRecordCount);
+    outShaderIndexRecords.reserve(outShaderRecordCount);
     return true;
 }
 
@@ -2897,13 +2904,14 @@ static bool AppendPreparedShadersToVolume(
     PreparedShaderVector& preparedEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
+    const usize shaderRecordCount,
     Vector<Core::ShaderArchive::Record>& outShaderIndexRecords
 ){
     Vector<u8> cookedBytecode;
     Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{
         Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)
     };
-    usize shaderRecordIndex = 0u;
+    outShaderIndexRecords.clear();
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
@@ -2994,16 +3002,15 @@ static bool AppendPreparedShadersToVolume(
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
             record.virtualPathHash = virtualPathHash;
-            if(shaderRecordIndex >= outShaderIndexRecords.size()){
+            if(outShaderIndexRecords.size() >= shaderRecordCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count exceeded prepared capacity"));
                 return false;
             }
-            outShaderIndexRecords[shaderRecordIndex] = Move(record);
-            ++shaderRecordIndex;
+            outShaderIndexRecords.push_back(Move(record));
         }
     }
 
-    if(shaderRecordIndex != outShaderIndexRecords.size()){
+    if(outShaderIndexRecords.size() != shaderRecordCount){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count mismatch after cook"));
         return false;
     }
@@ -3303,7 +3310,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
 
     Vector<Core::ShaderArchive::Record> shaderIndexRecords;
-    if(!__hidden_graphics_asset_cooker::ResizeShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords))
+    usize shaderIndexRecordCount = 0u;
+    if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords, shaderIndexRecordCount))
         return false;
 
     __hidden_graphics_asset_cooker::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};
@@ -3345,6 +3353,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             preparedPlan.preparedEntries,
             volumeSession,
             seenVirtualPathHashes,
+            shaderIndexRecordCount,
             shaderIndexRecords
             )
         ){

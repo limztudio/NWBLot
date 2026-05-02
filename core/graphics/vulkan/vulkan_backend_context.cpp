@@ -1930,7 +1930,9 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
             &m_swapChainIndex
         );
 
-        if((res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) && attempt < s_MaxRetryCountAcquireNextImage - 1){
+        // VK_SUBOPTIMAL_KHR still returns an acquired image; render it instead of
+        // recreating the swap chain around a signaled acquire semaphore.
+        if(res == VK_ERROR_OUT_OF_DATE_KHR && attempt < s_MaxRetryCountAcquireNextImage - 1){
             if(callbacks.beforeResize)
                 callbacks.beforeResize(callbacks.userData);
 

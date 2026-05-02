@@ -3881,6 +3881,71 @@ static void TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(TestContex
     }
 }
 
+static void TestSurfaceEditMultipleCubeCsgCommitsBeforeUpload(TestContext& context){
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeSplitCubeCornerHoleInstance();
+
+    NWB::Impl::DeformableHoleEditParams firstParams =
+        MakeHoleEditParams(instance, 0u, 0.175f, 0.05f, 0.775f, 0.55f, 0.60f)
+    ;
+    firstParams.operatorFootprint = MakeBoxOperatorFootprint();
+    firstParams.operatorProfile = MakeBoxOperatorProfile();
+
+    NWB::Impl::DeformableHoleEditResult firstResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitPreviewedHole(instance, firstParams, &firstResult));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstResult.wallVertexCount >= 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        (instance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
+    );
+
+    const u32 tinyTriangleBase = static_cast<u32>(instance.restVertices.size());
+    NWB::Impl::DeformableVertexRest tinyVertex = instance.restVertices[0u];
+    tinyVertex.normal = Float3U(0.0f, 0.0f, 1.0f);
+    tinyVertex.tangent = Float4U(1.0f, 0.0f, 0.0f, 1.0f);
+    tinyVertex.position = Float3U(5.0f, 5.0f, 0.0f);
+    instance.restVertices.push_back(tinyVertex);
+    tinyVertex.position = Float3U(5.012f, 5.0f, 0.0f);
+    instance.restVertices.push_back(tinyVertex);
+    tinyVertex.position = Float3U(5.0f, 5.012f, 0.0f);
+    instance.restVertices.push_back(tinyVertex);
+    if(!instance.sourceSamples.empty()){
+        instance.sourceSamples.push_back(instance.sourceSamples[0u]);
+        instance.sourceSamples.push_back(instance.sourceSamples[0u]);
+        instance.sourceSamples.push_back(instance.sourceSamples[0u]);
+    }
+    if(!instance.skin.empty()){
+        instance.skin.push_back(instance.skin[0u]);
+        instance.skin.push_back(instance.skin[0u]);
+        instance.skin.push_back(instance.skin[0u]);
+    }
+    instance.indices.push_back(tinyTriangleBase + 0u);
+    instance.indices.push_back(tinyTriangleBase + 1u);
+    instance.indices.push_back(tinyTriangleBase + 2u);
+
+    u32 secondTriangle = Limit<u32>::s_Max;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        FindNearestUpFacingRestTriangle(instance, Float3U(-0.65f, -0.65f, 0.0f), secondTriangle)
+    );
+
+    NWB::Impl::DeformableHoleEditParams secondParams =
+        MakeHoleEditParams(instance, secondTriangle, 0.25f, 0.25f, 0.5f, 0.32f, 0.35f)
+    ;
+    secondParams.operatorFootprint = MakeBoxOperatorFootprint();
+    secondParams.operatorProfile = MakeBoxOperatorProfile();
+
+    NWB::Impl::DeformableSurfaceEditSession secondSession;
+    NWB::Impl::DeformableHolePreview secondPreview;
+    NWB::Impl::DeformableHoleEditResult secondResult;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, secondParams.posedHit, secondSession));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, secondSession, secondParams, secondPreview));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondPreview.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, secondSession, secondParams, &secondResult));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondResult.editRevision == firstResult.editRevision + 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondResult.wallVertexCount >= 3u);
+    CheckRuntimeMeshPayloadValid(context, instance);
+}
+
 static void TestSurfaceEditOperatorRemeshCutsCornerFromSideFaceHit(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeSplitCubeCornerHoleInstance();
     const usize oldVertexCount = instance.restVertices.size();
@@ -4361,13 +4426,12 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB::Impl::DeformableHoleEditResult dirtyResult;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !CommitPreviewedHole(dirtyInstance, dirtyParams, &dirtyResult)
+        CommitPreviewedHole(dirtyInstance, dirtyParams, &dirtyResult)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, dirtyResult.editRevision == 0u);
-    NWB::Impl::DeformableSurfaceEditSession dirtySession;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, dirtyResult.editRevision == dirtyInstance.editRevision);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::BeginSurfaceEdit(dirtyInstance, dirtyParams.posedHit, dirtySession)
+        (dirtyInstance.dirtyFlags & NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u
     );
 
     NWB::Impl::DeformableSurfaceEditSession session;
@@ -6544,6 +6608,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintDrivesPreviewAndCommit(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorFootprintRemeshesIntersectedTriangles(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(context);
+        __hidden_ecs_graphics_tests::TestSurfaceEditMultipleCubeCsgCommitsBeforeUpload(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshCutsCornerFromSideFaceHit(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorVolumeDepthGatesCurvedSurface(context);
         __hidden_ecs_graphics_tests::TestSurfaceEditOperatorRemeshIgnoresTrianglesOutsideDepth(context);

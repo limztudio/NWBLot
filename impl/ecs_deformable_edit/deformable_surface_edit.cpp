@@ -218,8 +218,20 @@ using MorphDeltaLookup = HashMap<
     const SIMDVector b = LoadRestVertexPosition(instance.restVertices[indices[1u]]);
     const SIMDVector c = LoadRestVertexPosition(instance.restVertices[indices[2u]]);
     const SIMDVector rawNormal = Vector3Cross(VectorSubtract(b, a), VectorSubtract(c, a));
-    if(VectorGetX(Vector3LengthSq(rawNormal)) <= Core::Geometry::s_FrameDirectionEpsilon)
+    const f32 rawNormalLengthSq = VectorGetX(Vector3LengthSq(rawNormal));
+    if(!IsFinite(rawNormalLengthSq))
         return false;
+    if(rawNormalLengthSq <= Core::Geometry::s_FrameDirectionEpsilon){
+        SIMDVector blendedNormal = VectorAdd(
+            VectorAdd(
+                LoadRestVertexNormal(instance.restVertices[indices[0u]]),
+                LoadRestVertexNormal(instance.restVertices[indices[1u]])
+            ),
+            LoadRestVertexNormal(instance.restVertices[indices[2u]])
+        );
+        outNormal = Core::Geometry::FrameNormalizeDirection(blendedNormal, s_SIMDIdentityR2);
+        return FiniteVec3(outNormal);
+    }
 
     outNormal = Core::Geometry::FrameNormalizeDirection(rawNormal, s_SIMDIdentityR2);
     return FiniteVec3(outNormal);
@@ -3519,7 +3531,7 @@ bool BeginSurfaceEdit(
     DeformableSurfaceEditSession& outSession
 ){
     outSession = DeformableSurfaceEditSession{};
-    if(!__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance))
+    if(!__hidden_deformable_surface_edit::ValidateRuntimePayload(instance))
         return false;
     if(!GeometryClassAllowsRuntimeDeform(instance.geometryClass))
         return false;
@@ -3544,7 +3556,7 @@ bool PreviewHole(
     session.previewParams = DeformableHoleEditParams{};
     session.previewed = false;
     if(
-        !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
+        !__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
         || !GeometryClassAllowsRuntimeDeform(instance.geometryClass)
         || !__hidden_deformable_surface_edit::ValidateSurfaceEditSessionParams(instance, session, params)
     )
@@ -3587,7 +3599,7 @@ bool BuildHolePreviewMesh(
 ){
     outMesh = DeformableHolePreviewMesh{};
     if(
-        !__hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance)
+        !__hidden_deformable_surface_edit::ValidateRuntimePayload(instance)
         || !GeometryClassAllowsRuntimeDeform(instance.geometryClass)
         || !__hidden_deformable_surface_edit::ValidateParams(instance, params)
     )
@@ -3616,9 +3628,9 @@ bool CommitHole(
     if(outRecord)
         *outRecord = DeformableSurfaceEditRecord{};
 
-    const bool validRuntimePayload = __hidden_deformable_surface_edit::ValidateUploadedRuntimePayload(instance);
+    const bool validRuntimePayload = __hidden_deformable_surface_edit::ValidateRuntimePayload(instance);
     if(!validRuntimePayload){
-        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, runtime payload is invalid or not uploaded (entity={} runtime_mesh={} dirty_flags={} vertices={} triangles={})")
+        NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: commit failed before edit, runtime payload is invalid (entity={} runtime_mesh={} dirty_flags={} vertices={} triangles={})")
             , instance.entity.id
             , instance.handle.value
             , static_cast<u32>(instance.dirtyFlags)
@@ -3661,7 +3673,7 @@ bool CommitHole(
         !__hidden_deformable_surface_edit::CommitRemeshedHoleImpl(
             instance,
             params,
-            true,
+            false,
             0u,
             &result
         )

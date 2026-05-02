@@ -29,8 +29,13 @@ namespace __hidden_deformable_runtime_mesh_cache{
 
 
 static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag::All;
+// uploadRuntimeMeshBuffers seeds the deformed draw buffer from the rest pose,
+// so the upload also satisfies the static deformer-input update.
 static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
-    RuntimeMeshDirtyFlag::TopologyDirty | RuntimeMeshDirtyFlag::AttributesDirty | RuntimeMeshDirtyFlag::GpuUploadDirty
+    RuntimeMeshDirtyFlag::TopologyDirty
+    | RuntimeMeshDirtyFlag::AttributesDirty
+    | RuntimeMeshDirtyFlag::DeformerInputDirty
+    | RuntimeMeshDirtyFlag::GpuUploadDirty
 ;
 
 [[nodiscard]] RuntimeMeshDirtyFlags SanitizeDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){

@@ -6,13 +6,7 @@
 #include "avboit_common.glsli"
 #include "bxdf.glsli"
 
-layout(std430, set = 1, binding = 0) readonly buffer NwbAvboitDepthWarpBuffer{
-    uint g_DepthWarp[];
-};
 layout(set = 1, binding = 1) uniform texture3D g_Transmittance;
-layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitControlBuffer{
-    uint g_Control[];
-};
 layout(set = 1, binding = 3) uniform sampler g_LinearSampler;
 
 layout(location = 0) in mediump vec4 inColor;
@@ -21,11 +15,6 @@ layout(location = 2) in vec4 inTangent;
 layout(location = 4) in vec3 inWorldPosition;
 layout(location = 0) out vec4 outAccumColor;
 layout(location = 1) out vec4 outAccumExtinction;
-
-uint nwbAvboitPhysicalSliceFromVirtualSlice(uint virtualSlice){
-    const uint activePhysicalSlices = max(min(g_Control[0], nwbAvboitPhysicalSliceCount()), 1u);
-    return min(g_DepthWarp[virtualSlice], activePhysicalSlices - 1u);
-}
 
 vec2 nwbAvboitTransmittanceUvFromFragCoord(vec2 fragCoord){
     const vec2 fullSize = max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0));

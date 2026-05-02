@@ -2471,33 +2471,9 @@ void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, Deferre
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
-    if(!ensureAvboitPipelines(avboitTargets))
-        return;
 
-    renderMaterialPass(
-        commandList,
-        avboitTargets.lowFramebuffer.get(),
-        MaterialPipelinePass::AvboitOccupancy,
-        true,
-        avboitTargets.occupancyBindingSet.get(),
-        &avboitTargets
-    );
-    commandList.endRenderPass();
-
-    dispatchAvboitDepthWarp(commandList, avboitTargets);
-
-    renderMaterialPass(
-        commandList,
-        avboitTargets.lowFramebuffer.get(),
-        MaterialPipelinePass::AvboitExtinction,
-        true,
-        avboitTargets.extinctionBindingSet.get(),
-        &avboitTargets
-    );
-    commandList.endRenderPass();
-
-    dispatchAvboitIntegration(commandList, avboitTargets);
-
+    // Weighted accumulation keeps transparent compositing stable without the
+    // packed extinction prepass' fragment storage-buffer atomics.
     renderMaterialPass(
         commandList,
         avboitTargets.accumulationFramebuffer.get(),

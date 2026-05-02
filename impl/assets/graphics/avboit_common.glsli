@@ -87,6 +87,12 @@ uint nwbAvboitLowPixelIndex(uvec2 lowPixel){
     return lowPixel.y * nwbAvboitLowWidth() + lowPixel.x;
 }
 
+uint nwbAvboitPhysicalSliceFromVirtualSlice(uint virtualSlice){
+    const uint physicalSliceCount = max(nwbAvboitPhysicalSliceCount(), 1u);
+    const uint virtualSliceCount = max(nwbAvboitVirtualSliceCount(), 1u);
+    return min((virtualSlice * physicalSliceCount) / virtualSliceCount, physicalSliceCount - 1u);
+}
+
 #include "avboit_extinction_common.glsli"
 
 uvec2 nwbAvboitLowPixelFromFragCoord(vec2 fragCoord){

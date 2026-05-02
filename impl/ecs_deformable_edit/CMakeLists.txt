@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_ecs_deformable_edit)
 target_sources(nwb_ecs_deformable_edit PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deformable_debug_draw.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_operator_shape.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_picking.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_surface_edit.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_debug_draw.h"

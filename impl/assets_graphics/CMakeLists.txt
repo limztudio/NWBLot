@@ -7,7 +7,6 @@ target_link_libraries(nwb_assets_graphics INTERFACE
 
 set(NWB_ASSETS_GRAPHICS_COOK_CODEC_SOURCES
     "${PROJECT_SOURCE_DIR}/impl/assets_geometry/deformable_geometry_asset.cpp"
-    "${PROJECT_SOURCE_DIR}/impl/assets_geometry/deformable_operator_shape.cpp"
     "${PROJECT_SOURCE_DIR}/impl/assets_geometry/geometry_asset.cpp"
     "${PROJECT_SOURCE_DIR}/impl/assets_material/material_asset.cpp"
 )

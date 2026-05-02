@@ -58,7 +58,14 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
     return true;
 }
 
-u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch, u32* outBufferRowLength, u32* outBufferImageHeight){
+u64 ComputeStagingTextureOffset(
+    const TextureDesc& desc,
+    const TextureSlice& slice,
+    usize* outRowPitch,
+    u32* outBufferRowLength,
+    u32* outBufferImageHeight,
+    u64* outRangeSize
+){
     if(!IsTextureSliceInBounds(desc, slice)){
         if(outRowPitch)
             *outRowPitch = 0;
@@ -66,6 +73,8 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
             *outBufferRowLength = 0;
         if(outBufferImageHeight)
             *outBufferImageHeight = 0;
+        if(outRangeSize)
+            *outRangeSize = 0;
         return 0;
     }
 
@@ -110,6 +119,21 @@ u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& sli
         *outBufferRowLength = static_cast<u32>(blocksX * formatBlockWidth);
     if(outBufferImageHeight)
         *outBufferImageHeight = static_cast<u32>(blocksY * formatBlockHeight);
+    if(outRangeSize){
+        const u64 mappedBlocksX = Max<u64>(
+            DivideUp(static_cast<u64>(resolved.width), static_cast<u64>(formatBlockWidth)),
+            1ull
+        );
+        const u64 mappedBlocksY = Max<u64>(
+            DivideUp(static_cast<u64>(resolved.height), static_cast<u64>(formatBlockHeight)),
+            1ull
+        );
+        *outRangeSize =
+            static_cast<u64>(resolved.depth - 1u) * slicePitch
+            + (mappedBlocksY - 1u) * rowPitch
+            + mappedBlocksX * formatInfo.bytesPerBlock
+        ;
+    }
 
     offset +=
         static_cast<u64>(resolved.z) * slicePitch
@@ -260,16 +284,25 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
         }
     }
 
+    usize rowPitch = 0;
+    u64 rangeSize = 0;
+    const u64 offset = VulkanDetail::ComputeStagingTextureOffset(
+        staging->m_desc,
+        slice,
+        &rowPitch,
+        nullptr,
+        nullptr,
+        &rangeSize
+    );
+
     if(staging->m_cpuAccess == CpuAccessMode::Read){
-        res = m_allocator.invalidateStagingTextureMemory(*staging);
+        res = m_allocator.invalidateStagingTextureMemory(*staging, offset, rangeSize);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
             return nullptr;
         }
     }
 
-    usize rowPitch = 0;
-    const u64 offset = VulkanDetail::ComputeStagingTextureOffset(staging->m_desc, slice, &rowPitch);
     if(outRowPitch)
         *outRowPitch = rowPitch;
 

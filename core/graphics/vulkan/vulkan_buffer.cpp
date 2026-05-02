@@ -312,12 +312,7 @@ void Device::unmapBuffer(IBuffer* bufferResource){
 
     auto* buffer = static_cast<Buffer*>(bufferResource);
 
-    if(
-        buffer->m_mappedMemory
-        && !buffer->m_persistentlyMapped
-        && !buffer->m_desc.isVolatile
-        && buffer->m_desc.cpuAccess == CpuAccessMode::None
-    ){
+    if(buffer->m_mappedMemory && !buffer->m_persistentlyMapped){
         buffer->m_allocator.unmapBufferMemory(*buffer);
         buffer->m_mappedMemory = nullptr;
     }

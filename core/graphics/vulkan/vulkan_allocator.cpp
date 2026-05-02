@@ -143,10 +143,15 @@ inline VkResult MapAllocation(const VulkanAllocatorHandle allocator, const Vulka
     return vmaMapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation), outData);
 }
 
-inline VkResult InvalidateAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){
+inline VkResult InvalidateAllocation(
+    const VulkanAllocatorHandle allocator,
+    const VulkanAllocationHandle allocation,
+    const u64 offset,
+    const u64 size
+){
     if(!allocation)
         return VK_ERROR_MEMORY_MAP_FAILED;
-    return vmaInvalidateAllocation(ToVmaAllocator(allocator), ToVmaAllocation(allocation), 0, VK_WHOLE_SIZE);
+    return vmaInvalidateAllocation(ToVmaAllocator(allocator), ToVmaAllocation(allocation), offset, size);
 }
 
 inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){
@@ -302,7 +307,7 @@ void VulkanAllocator::unmapBufferMemory(Buffer& buffer){
 }
 
 VkResult VulkanAllocator::invalidateBufferMemory(Buffer& buffer){
-    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, buffer.m_allocation);
+    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, buffer.m_allocation, 0, VK_WHOLE_SIZE);
 }
 
 VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInfo& imageInfo){
@@ -381,8 +386,8 @@ void VulkanAllocator::unmapStagingTextureMemory(StagingTexture& texture){
     __hidden_vulkan_allocator::UnmapAllocation(m_allocator, texture.m_allocation);
 }
 
-VkResult VulkanAllocator::invalidateStagingTextureMemory(StagingTexture& texture){
-    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, texture.m_allocation);
+VkResult VulkanAllocator::invalidateStagingTextureMemory(StagingTexture& texture, const u64 offset, const u64 size){
+    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, texture.m_allocation, offset, size);
 }
 
 VkResult VulkanAllocator::allocateHeap(Heap& heap){

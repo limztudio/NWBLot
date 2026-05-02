@@ -78,7 +78,14 @@ VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask);
 VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
 VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
-u64 ComputeStagingTextureOffset(const TextureDesc& desc, const TextureSlice& slice, usize* outRowPitch = nullptr, u32* outBufferRowLength = nullptr, u32* outBufferImageHeight = nullptr);
+u64 ComputeStagingTextureOffset(
+    const TextureDesc& desc,
+    const TextureSlice& slice,
+    usize* outRowPitch = nullptr,
+    u32* outBufferRowLength = nullptr,
+    u32* outBufferImageHeight = nullptr,
+    u64* outRangeSize = nullptr
+);
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
@@ -498,7 +505,7 @@ public:
     void destroyStagingTexture(StagingTexture& texture);
     VkResult mapStagingTextureMemory(StagingTexture& texture, void** outData);
     void unmapStagingTextureMemory(StagingTexture& texture);
-    VkResult invalidateStagingTextureMemory(StagingTexture& texture);
+    VkResult invalidateStagingTextureMemory(StagingTexture& texture, u64 offset, u64 size);
     VkResult allocateHeap(Heap& heap);
     void freeHeap(Heap& heap);
     VkResult bindHeapBufferMemory(Buffer& buffer, Heap& heap, u64 offset);

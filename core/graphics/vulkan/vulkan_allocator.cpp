@@ -25,24 +25,50 @@ namespace __hidden_vulkan_allocator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline VmaAllocationCreateInfo BuildDeviceLocalAllocationInfo(){
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    return allocInfo;
+}
+
+inline VmaAllocationCreateInfo BuildMappedHostAllocationInfo(
+    const VkMemoryPropertyFlags requiredFlags,
+    const VkMemoryPropertyFlags preferredFlags,
+    const VmaAllocationCreateFlags accessFlags
+){
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+    allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | requiredFlags;
+    allocInfo.preferredFlags = preferredFlags;
+    allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | accessFlags;
+    return allocInfo;
+}
+
+inline VmaAllocationCreateInfo BuildCpuAccessAllocationInfo(const CpuAccessMode::Enum cpuAccess){
+    if(cpuAccess == CpuAccessMode::Read){
+        return BuildMappedHostAllocationInfo(
+            0,
+            VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+        );
+    }
+
+    return BuildMappedHostAllocationInfo(
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        0,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+    );
+}
+
 inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc, const VkDeviceSize bufferSize){
     VmaAllocationCreateInfo allocInfo{};
-
-    if(desc.isVolatile || desc.cpuAccess == CpuAccessMode::Write){
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        allocInfo.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-    else if(desc.cpuAccess == CpuAccessMode::Read){
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        allocInfo.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-        allocInfo.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    }
-    else{
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    }
+    if(desc.isVolatile || desc.cpuAccess == CpuAccessMode::Write)
+        allocInfo = BuildCpuAccessAllocationInfo(CpuAccessMode::Write);
+    else if(desc.cpuAccess == CpuAccessMode::Read)
+        allocInfo = BuildCpuAccessAllocationInfo(CpuAccessMode::Read);
+    else
+        allocInfo = BuildDeviceLocalAllocationInfo();
 
     if(bufferSize >= s_LargeBufferThreshold)
         allocInfo.flags |= VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
@@ -50,34 +76,12 @@ inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc,
     return allocInfo;
 }
 
-inline VmaAllocationCreateInfo BuildTextureAllocationInfo(){
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    return allocInfo;
-}
-
 inline VmaAllocationCreateInfo BuildStagingTextureAllocationInfo(const CpuAccessMode::Enum cpuAccess){
-    VmaAllocationCreateInfo allocInfo{};
-    if(cpuAccess == CpuAccessMode::None){
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        return allocInfo;
-    }
-
-    if(cpuAccess == CpuAccessMode::Read){
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-        allocInfo.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    }
-    else{
-        allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-        allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-    }
-
-    return allocInfo;
+    return
+        cpuAccess == CpuAccessMode::None
+            ? BuildDeviceLocalAllocationInfo()
+            : BuildCpuAccessAllocationInfo(cpuAccess)
+    ;
 }
 
 inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
@@ -104,11 +108,11 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
 }
 
 inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
-    VmaAllocationCreateInfo allocInfo{};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
-    allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-    return allocInfo;
+    return BuildMappedHostAllocationInfo(
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        0,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+    );
 }
 
 inline u32 BuildAllMemoryTypeBits(const VkPhysicalDeviceMemoryProperties& memoryProperties){
@@ -314,7 +318,7 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
-    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildTextureAllocationInfo();
+    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildDeviceLocalAllocationInfo();
     VmaAllocation allocation = nullptr;
     const VkResult res = vmaCreateImage(
         __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),

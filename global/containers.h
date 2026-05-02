@@ -169,7 +169,17 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     if(destination.data() == source.data())
         return;
 
-    destination.assign(source.begin(), source.end());
+    if constexpr(IsDefaultConstructible_V<DestinationValue>){
+        const usize sourceSize = source.size();
+        NWB_ASSERT(sourceSize <= Limit<usize>::s_Max / sizeof(DestinationValue));
+        destination.resize(sourceSize);
+
+        const usize copyBytes = sourceSize * sizeof(DestinationValue);
+        NWB_MEMCPY(destination.data(), copyBytes, source.data(), copyBytes);
+    }
+    else{
+        destination.assign(source.begin(), source.end());
+    }
 }
 
 template<typename DestinationVector, typename SourceVector>
@@ -185,14 +195,23 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     const usize destinationSize = destination.size();
     const usize sourceSize = source.size();
     NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
-    destination.reserve(destinationSize + sourceSize);
     if(destination.data() == source.data()){
+        destination.reserve(destinationSize + sourceSize);
         for(usize i = 0; i < sourceSize; ++i)
             destination.push_back(source[i]);
         return;
     }
 
-    destination.insert(destination.end(), source.begin(), source.end());
+    if constexpr(IsDefaultConstructible_V<DestinationValue>){
+        NWB_ASSERT(sourceSize <= Limit<usize>::s_Max / sizeof(DestinationValue));
+        const usize copyBytes = sourceSize * sizeof(DestinationValue);
+        destination.resize(destinationSize + sourceSize);
+        NWB_MEMCPY(destination.data() + destinationSize, copyBytes, source.data(), copyBytes);
+    }
+    else{
+        destination.reserve(destinationSize + sourceSize);
+        destination.insert(destination.end(), source.begin(), source.end());
+    }
 }
 
 

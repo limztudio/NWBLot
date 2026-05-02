@@ -26,6 +26,52 @@ AString FromUfbxString(const ufbx_string value){
     return AString(value.data, value.length);
 }
 
+char ToLowerAscii(const char value){
+    if(value >= 'A' && value <= 'Z')
+        return static_cast<char>(value - 'A' + 'a');
+    return value;
+}
+
+AStringView UfbxStringView(const ufbx_string value){
+    if(!value.data || value.length == 0u)
+        return {};
+    return AStringView(value.data, value.length);
+}
+
+bool NormalizedAsciiEqual(const ufbx_string value, const AStringView normalized){
+    const AStringView text = UfbxStringView(value);
+    if(text.size() != normalized.size())
+        return false;
+
+    for(usize i = 0u; i < normalized.size(); ++i){
+        if(ToLowerAscii(text[i]) != normalized[i])
+            return false;
+    }
+    return true;
+}
+
+bool NormalizedAsciiContains(const ufbx_string value, const AStringView normalized){
+    const AStringView text = UfbxStringView(value);
+    if(normalized.empty())
+        return true;
+    if(text.size() < normalized.size())
+        return false;
+
+    const usize lastBegin = text.size() - normalized.size();
+    for(usize begin = 0u; begin <= lastBegin; ++begin){
+        bool matched = true;
+        for(usize i = 0u; i < normalized.size(); ++i){
+            if(ToLowerAscii(text[begin + i]) != normalized[i]){
+                matched = false;
+                break;
+            }
+        }
+        if(matched)
+            return true;
+    }
+    return false;
+}
+
 AString MeshDisplayName(const MeshInstance& instance){
     AString nodeName = FromUfbxString(instance.node->name);
     AString meshName = FromUfbxString(instance.mesh->name);
@@ -342,11 +388,19 @@ bool SelectMeshInstances(
     UtilityVector<usize> partialSelection;
     outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
-        const AString nodeName = ToLower(__hidden_fbx_import::FromUfbxString(instance.node->name));
-        const AString meshName = ToLower(__hidden_fbx_import::FromUfbxString(instance.mesh->name));
-        if(nodeName == normalized || meshName == normalized)
+        if(
+            __hidden_fbx_import::NormalizedAsciiEqual(instance.node->name, normalized)
+            || __hidden_fbx_import::NormalizedAsciiEqual(instance.mesh->name, normalized)
+        ){
             outSelection.push_back(instance.index);
-        else if(outSelection.empty() && (nodeName.find(normalized) != AString::npos || meshName.find(normalized) != AString::npos)){
+        }
+        else if(
+            outSelection.empty()
+            && (
+                __hidden_fbx_import::NormalizedAsciiContains(instance.node->name, normalized)
+                || __hidden_fbx_import::NormalizedAsciiContains(instance.mesh->name, normalized)
+            )
+        ){
             if(partialSelection.empty())
                 partialSelection.reserve(instances.size());
             partialSelection.push_back(instance.index);
@@ -456,8 +510,8 @@ bool BuildGeometry(
         outVertices = Move(flatVertices);
     }
     else{
-        for(usize vertexIndex = 0u; vertexIndex < flatVertices.size(); ++vertexIndex)
-            outIndices.push_back(static_cast<u32>(vertexIndex));
+        outIndices.resize(flatVertices.size());
+        Iota(outIndices.begin(), outIndices.end(), 0u);
         outVertices = Move(flatVertices);
     }
 

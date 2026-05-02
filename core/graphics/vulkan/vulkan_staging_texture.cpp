@@ -156,7 +156,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
+bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, TextureSlice* outResolved){
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
         return false;
     if(desc.arraySize == 0 || slice.arraySlice >= desc.arraySize)
@@ -189,6 +189,8 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice){
     if((resolved.height % formatBlockHeight) != 0 && resolved.y + resolved.height != mipHeight)
         return false;
 
+    if(outResolved)
+        *outResolved = resolved;
     return true;
 }
 
@@ -199,9 +201,13 @@ u64 ComputeStagingTextureOffset(
     u32* outBufferRowLength,
     u32* outBufferImageHeight,
     u64* outRangeSize,
-    u64 cachedArrayByteSize
+    u64 cachedArrayByteSize,
+    bool sliceIsResolvedAndInBounds
 ){
-    if(!IsTextureSliceInBounds(desc, slice)){
+    TextureSlice resolved;
+    if(sliceIsResolvedAndInBounds)
+        resolved = slice;
+    else if(!IsTextureSliceInBounds(desc, slice, &resolved)){
         __hidden_vulkan_staging_texture::ClearStagingTextureLayoutOutputs(
             outRowPitch,
             outBufferRowLength,
@@ -211,7 +217,6 @@ u64 ComputeStagingTextureOffset(
         return 0;
     }
 
-    const TextureSlice resolved = slice.resolve(desc);
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
     const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
     const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
@@ -417,7 +422,8 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without CPU access"));
         return nullptr;
     }
-    if(!VulkanDetail::IsTextureSliceInBounds(staging->m_desc, slice)){
+    TextureSlice resolvedSlice;
+    if(!VulkanDetail::IsTextureSliceInBounds(staging->m_desc, slice, &resolvedSlice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         return nullptr;
@@ -436,12 +442,13 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     u64* outRangeSize = staging->m_cpuAccess == CpuAccessMode::Read ? &rangeSize : nullptr;
     const u64 offset = VulkanDetail::ComputeStagingTextureOffset(
         staging->m_desc,
-        slice,
+        resolvedSlice,
         &rowPitch,
         nullptr,
         nullptr,
         outRangeSize,
-        staging->m_arrayByteSize
+        staging->m_arrayByteSize,
+        true
     );
 
     if(staging->m_cpuAccess == CpuAccessMode::Read){

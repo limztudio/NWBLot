@@ -211,7 +211,8 @@ VkBufferImageCopy BuildStagingTextureCopyRegion(
         &bufferRowLength,
         &bufferImageHeight,
         nullptr,
-        cachedArrayByteSize
+        cachedArrayByteSize,
+        true
     );
 
     VkBufferImageCopy region{};
@@ -717,15 +718,22 @@ void CommandList::copyTexture(ITexture* destResource, const TextureSlice& destSl
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: source and destination sample counts do not match"));
         return;
     }
-    if(!VulkanDetail::IsTextureSliceInBounds(dest->m_desc, destSlice) || !VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice)){
+    TextureSlice resolvedDst;
+    TextureSlice resolvedSrc;
+    if(
+        !VulkanDetail::IsTextureSliceInBounds(dest->m_desc, destSlice, &resolvedDst)
+        || !VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice, &resolvedSrc)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: slice is outside the texture"));
         return;
     }
 
-    const TextureSlice resolvedDst = destSlice.resolve(dest->m_desc);
-    const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
-    if(resolvedDst.width != resolvedSrc.width || resolvedDst.height != resolvedSrc.height || resolvedDst.depth != resolvedSrc.depth){
+    if(
+        resolvedDst.width != resolvedSrc.width
+        || resolvedDst.height != resolvedSrc.height
+        || resolvedDst.depth != resolvedSrc.depth
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture: source and destination extents do not match"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture: source and destination extents do not match"));
         return;
@@ -1067,17 +1075,17 @@ bool CommandList::prepareStagingTextureCopy(
         );
         return false;
     }
+    TextureSlice resolvedStaging;
+    TextureSlice resolvedTexture;
     if(
-        !VulkanDetail::IsTextureSliceInBounds(stagingDesc, stagingSlice)
-        || !VulkanDetail::IsTextureSliceInBounds(textureDesc, textureSlice)
+        !VulkanDetail::IsTextureSliceInBounds(stagingDesc, stagingSlice, &resolvedStaging)
+        || !VulkanDetail::IsTextureSliceInBounds(textureDesc, textureSlice, &resolvedTexture)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
         return false;
     }
 
-    const TextureSlice resolvedStaging = stagingSlice.resolve(stagingDesc);
-    const TextureSlice resolvedTexture = textureSlice.resolve(textureDesc);
     if(
         resolvedStaging.width != resolvedTexture.width
         || resolvedStaging.height != resolvedTexture.height

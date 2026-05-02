@@ -219,7 +219,8 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
         return;
     }
 
-    if(!VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice)){
+    TextureSlice resolvedSrc;
+    if(!VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice, &resolvedSrc)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         return;
@@ -229,7 +230,6 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source texture must be single-sampled"));
         return;
     }
-    const TextureSlice resolvedSrc = srcSlice.resolve(src->m_desc);
 
     const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags aspectMask = 0;

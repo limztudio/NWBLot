@@ -61,6 +61,21 @@ namespace IndirectDrawIndexMode{
     };
 };
 
+struct TextureFormatBlockLayout{
+    u32 blockWidth = 0;
+    u32 blockHeight = 0;
+    u32 bytesPerBlock = 0;
+};
+
+struct StagingTextureMipLayout{
+    u64 byteOffset = 0;
+    u64 rowPitch = 0;
+    u64 slicePitch = 0;
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
+};
+using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::CustomAllocator<StagingTextureMipLayout>>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,16 +95,17 @@ bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* ope
 VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
 VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
 u64 ComputeStagingTextureOffset(
-    const TextureDesc& desc,
-    const TextureSlice& slice,
+    const TextureSlice& resolvedSlice,
+    const StagingTextureMipLayout& mipLayout,
+    const TextureFormatBlockLayout& formatLayout,
+    u64 arrayByteSize,
     usize* outRowPitch = nullptr,
     u32* outBufferRowLength = nullptr,
     u32* outBufferImageHeight = nullptr,
-    u64* outRangeSize = nullptr,
-    u64 cachedArrayByteSize = 0,
-    bool sliceIsResolvedAndInBounds = false
+    u64* outRangeSize = nullptr
 );
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, TextureSlice* outResolved = nullptr);
+bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
@@ -788,7 +804,9 @@ public:
 
 private:
     TextureDesc m_desc;
+    VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     u64 m_arrayByteSize = 0;
+    VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;

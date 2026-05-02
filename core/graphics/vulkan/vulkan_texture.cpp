@@ -196,23 +196,24 @@ VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& 
 }
 
 VkBufferImageCopy BuildStagingTextureCopyRegion(
-    const TextureDesc& stagingDesc,
     const TextureSlice& stagingSlice,
     const TextureSlice& imageSlice,
     const VkImageAspectFlags aspectMask,
-    const u64 cachedArrayByteSize
+    const StagingTextureMipLayout& stagingMipLayout,
+    const TextureFormatBlockLayout& stagingFormatLayout,
+    const u64 stagingArrayByteSize
 ){
     u32 bufferRowLength = 0;
     u32 bufferImageHeight = 0;
     const u64 bufferOffset = ComputeStagingTextureOffset(
-        stagingDesc,
         stagingSlice,
+        stagingMipLayout,
+        stagingFormatLayout,
+        stagingArrayByteSize,
         nullptr,
         &bufferRowLength,
         &bufferImageHeight,
-        nullptr,
-        cachedArrayByteSize,
-        true
+        nullptr
     );
 
     VkBufferImageCopy region{};
@@ -377,6 +378,7 @@ Object Texture::getNativeView(ObjectType objectType, Format::Enum format, Textur
 
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IStagingTexture>(context.threadPool)
+    , m_mipLayouts(Alloc::CustomAllocator<VulkanDetail::StagingTextureMipLayout>(context.objectArena))
     , m_context(context)
     , m_allocator(allocator)
 {}
@@ -1078,7 +1080,7 @@ bool CommandList::prepareStagingTextureCopy(
     TextureSlice resolvedStaging;
     TextureSlice resolvedTexture;
     if(
-        !VulkanDetail::IsTextureSliceInBounds(stagingDesc, stagingSlice, &resolvedStaging)
+        !VulkanDetail::IsTextureSliceInBounds(stagingDesc, stagingSlice, outStaging->m_formatLayout, &resolvedStaging)
         || !VulkanDetail::IsTextureSliceInBounds(textureDesc, textureSlice, &resolvedTexture)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
@@ -1097,10 +1099,11 @@ bool CommandList::prepareStagingTextureCopy(
     }
 
     outRegion = VulkanDetail::BuildStagingTextureCopyRegion(
-        stagingDesc,
         resolvedStaging,
         resolvedTexture,
         copyAspectMask,
+        outStaging->m_mipLayouts[resolvedStaging.mipLevel],
+        outStaging->m_formatLayout,
         outStaging->m_arrayByteSize
     );
     return true;

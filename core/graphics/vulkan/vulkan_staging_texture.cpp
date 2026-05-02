@@ -129,32 +129,6 @@ inline bool BuildStagingTextureArrayLayout(
     return foundTargetMip;
 }
 
-inline bool ComputeStagingTextureTotalByteSize(
-    const TextureDesc& desc,
-    const FormatInfo& formatInfo,
-    const u32 formatBlockWidth,
-    const u32 formatBlockHeight,
-    u64& outTotalByteSize
-){
-    u64 arrayByteSize = 0;
-    if(!BuildStagingTextureArrayLayout(
-        desc,
-        formatInfo,
-        formatBlockWidth,
-        formatBlockHeight,
-        0,
-        arrayByteSize,
-        nullptr,
-        nullptr
-    ))
-        return false;
-    if(arrayByteSize != 0 && desc.arraySize > UINT64_MAX / arrayByteSize)
-        return false;
-
-    outTotalByteSize = arrayByteSize * desc.arraySize;
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -347,18 +321,23 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         return nullptr;
     }
 
-    u64 totalSize = 0;
-    if(!__hidden_vulkan_staging_texture::ComputeStagingTextureTotalByteSize(
+    u64 arrayByteSize = 0;
+    const bool layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureArrayLayout(
         d,
         formatInfo,
         formatBlockWidth,
         formatBlockHeight,
-        totalSize
-    )){
+        0,
+        arrayByteSize,
+        nullptr,
+        nullptr
+    );
+    if(!layoutBuilt || (arrayByteSize != 0 && d.arraySize > UINT64_MAX / arrayByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         return nullptr;
     }
+    const u64 totalSize = arrayByteSize * d.arraySize;
 
     auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
     staging->m_desc = d;

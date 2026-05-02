@@ -149,6 +149,11 @@ inline VkResult InvalidateAllocation(const VulkanAllocatorHandle allocator, cons
     return vmaInvalidateAllocation(ToVmaAllocator(allocator), ToVmaAllocation(allocation), 0, VK_WHOLE_SIZE);
 }
 
+inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){
+    NWB_ASSERT(allocation);
+    vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
+}
+
 inline void UnmapTransientAllocation(
     const VulkanAllocatorHandle allocator,
     const VulkanAllocationHandle allocation,
@@ -156,9 +161,54 @@ inline void UnmapTransientAllocation(
     const bool persistentlyMapped
 ){
     if(mappedMemory && !persistentlyMapped){
-        vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
+        UnmapAllocation(allocator, allocation);
         mappedMemory = nullptr;
     }
+}
+
+inline VkResult CreateBufferAllocation(
+    const VulkanAllocatorHandle allocator,
+    const VkBufferCreateInfo& bufferInfo,
+    const VmaAllocationCreateInfo& allocInfo,
+    VkBuffer& buffer,
+    VulkanAllocationHandle& allocation,
+    void*& mappedMemory
+){
+    VmaAllocationInfo allocationInfo{};
+    VmaAllocation vmaAllocation = nullptr;
+    const VkResult res = vmaCreateBuffer(
+        ToVmaAllocator(allocator),
+        &bufferInfo,
+        &allocInfo,
+        &buffer,
+        &vmaAllocation,
+        &allocationInfo
+    );
+    if(res == VK_SUCCESS){
+        allocation = ToVulkanAllocationHandle(vmaAllocation);
+        mappedMemory = allocationInfo.pMappedData;
+    }
+    return res;
+}
+
+inline void DestroyBufferAllocation(
+    const VulkanAllocatorHandle allocator,
+    VkBuffer& buffer,
+    VulkanAllocationHandle& allocation,
+    void*& mappedMemory,
+    const bool persistentlyMapped
+){
+    if(allocation){
+        UnmapTransientAllocation(allocator, allocation, mappedMemory, persistentlyMapped);
+        vmaDestroyBuffer(ToVmaAllocator(allocator), buffer, ToVmaAllocation(allocation));
+        allocation = nullptr;
+    }
+    else{
+        NWB_ASSERT(buffer == VK_NULL_HANDLE);
+    }
+
+    buffer = VK_NULL_HANDLE;
+    mappedMemory = nullptr;
 }
 
 
@@ -219,45 +269,27 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_desc, bufferInfo.size);
-    VmaAllocationInfo allocationInfo{};
-    VmaAllocation allocation = nullptr;
-    const VkResult res = vmaCreateBuffer(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        &bufferInfo,
-        &allocInfo,
-        &buffer.m_buffer,
-        &allocation,
-        &allocationInfo
+    const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
+        m_allocator,
+        bufferInfo,
+        allocInfo,
+        buffer.m_buffer,
+        buffer.m_allocation,
+        buffer.m_mappedMemory
     );
-    if(res == VK_SUCCESS){
-        buffer.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
-        buffer.m_mappedMemory = allocationInfo.pMappedData;
-        buffer.m_persistentlyMapped = allocationInfo.pMappedData != nullptr;
-    }
+    if(res == VK_SUCCESS)
+        buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
     return res;
 }
 
 void VulkanAllocator::destroyBuffer(Buffer& buffer){
-    if(buffer.m_allocation){
-        __hidden_vulkan_allocator::UnmapTransientAllocation(
-            m_allocator,
-            buffer.m_allocation,
-            buffer.m_mappedMemory,
-            buffer.m_persistentlyMapped
-        );
-        vmaDestroyBuffer(
-            __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-            buffer.m_buffer,
-            __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation)
-        );
-    }
-    else{
-        NWB_ASSERT(buffer.m_buffer == VK_NULL_HANDLE);
-    }
-
-    buffer.m_buffer = VK_NULL_HANDLE;
-    buffer.m_allocation = nullptr;
-    buffer.m_mappedMemory = nullptr;
+    __hidden_vulkan_allocator::DestroyBufferAllocation(
+        m_allocator,
+        buffer.m_buffer,
+        buffer.m_allocation,
+        buffer.m_mappedMemory,
+        buffer.m_persistentlyMapped
+    );
     buffer.m_persistentlyMapped = false;
 }
 
@@ -266,11 +298,7 @@ VkResult VulkanAllocator::mapBufferMemory(Buffer& buffer, void** outData){
 }
 
 void VulkanAllocator::unmapBufferMemory(Buffer& buffer){
-    NWB_ASSERT(buffer.m_allocation);
-    vmaUnmapMemory(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation)
-    );
+    __hidden_vulkan_allocator::UnmapAllocation(m_allocator, buffer.m_allocation);
 }
 
 VkResult VulkanAllocator::invalidateBufferMemory(Buffer& buffer){
@@ -321,45 +349,27 @@ VkResult VulkanAllocator::createStagingTexture(
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildStagingTextureAllocationInfo(cpuAccess);
-    VmaAllocationInfo allocationInfo{};
-    VmaAllocation allocation = nullptr;
-    const VkResult res = vmaCreateBuffer(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        &bufferInfo,
-        &allocInfo,
-        &texture.m_buffer,
-        &allocation,
-        &allocationInfo
+    const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
+        m_allocator,
+        bufferInfo,
+        allocInfo,
+        texture.m_buffer,
+        texture.m_allocation,
+        texture.m_mappedMemory
     );
-    if(res == VK_SUCCESS){
-        texture.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
-        texture.m_mappedMemory = allocationInfo.pMappedData;
-        texture.m_persistentlyMapped = allocationInfo.pMappedData != nullptr;
-    }
+    if(res == VK_SUCCESS)
+        texture.m_persistentlyMapped = texture.m_mappedMemory != nullptr;
     return res;
 }
 
 void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
-    if(texture.m_allocation){
-        __hidden_vulkan_allocator::UnmapTransientAllocation(
-            m_allocator,
-            texture.m_allocation,
-            texture.m_mappedMemory,
-            texture.m_persistentlyMapped
-        );
-        vmaDestroyBuffer(
-            __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-            texture.m_buffer,
-            __hidden_vulkan_allocator::ToVmaAllocation(texture.m_allocation)
-        );
-    }
-    else{
-        NWB_ASSERT(texture.m_buffer == VK_NULL_HANDLE);
-    }
-
-    texture.m_buffer = VK_NULL_HANDLE;
-    texture.m_allocation = nullptr;
-    texture.m_mappedMemory = nullptr;
+    __hidden_vulkan_allocator::DestroyBufferAllocation(
+        m_allocator,
+        texture.m_buffer,
+        texture.m_allocation,
+        texture.m_mappedMemory,
+        texture.m_persistentlyMapped
+    );
     texture.m_persistentlyMapped = false;
 }
 
@@ -368,11 +378,7 @@ VkResult VulkanAllocator::mapStagingTextureMemory(StagingTexture& texture, void*
 }
 
 void VulkanAllocator::unmapStagingTextureMemory(StagingTexture& texture){
-    NWB_ASSERT(texture.m_allocation);
-    vmaUnmapMemory(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        __hidden_vulkan_allocator::ToVmaAllocation(texture.m_allocation)
-    );
+    __hidden_vulkan_allocator::UnmapAllocation(m_allocator, texture.m_allocation);
 }
 
 VkResult VulkanAllocator::invalidateStagingTextureMemory(StagingTexture& texture){
@@ -456,38 +462,18 @@ VkResult VulkanAllocator::createHostMappedBuffer(
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHostMappedBufferAllocationInfo();
-    VmaAllocationInfo allocationInfo{};
-    VmaAllocation vmaAllocation = nullptr;
-    const VkResult res = vmaCreateBuffer(
-        __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-        &bufferInfo,
-        &allocInfo,
-        &buffer,
-        &vmaAllocation,
-        &allocationInfo
+    return __hidden_vulkan_allocator::CreateBufferAllocation(
+        m_allocator,
+        bufferInfo,
+        allocInfo,
+        buffer,
+        allocation,
+        mappedMemory
     );
-    if(res == VK_SUCCESS){
-        allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(vmaAllocation);
-        mappedMemory = allocationInfo.pMappedData;
-    }
-    return res;
 }
 
 void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
-    if(allocation){
-        vmaDestroyBuffer(
-            __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
-            buffer,
-            __hidden_vulkan_allocator::ToVmaAllocation(allocation)
-        );
-        allocation = nullptr;
-    }
-    else{
-        NWB_ASSERT(buffer == VK_NULL_HANDLE);
-    }
-
-    buffer = VK_NULL_HANDLE;
-    mappedMemory = nullptr;
+    __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer, allocation, mappedMemory, true);
 }
 
 

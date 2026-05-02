@@ -11,20 +11,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct VmaAllocator_T;
-typedef VmaAllocator_T* VmaAllocator;
-struct VmaAllocation_T;
-typedef VmaAllocation_T* VmaAllocation;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_VULKAN_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct VulkanAllocationHandle_T;
+using VulkanAllocationHandle = VulkanAllocationHandle_T*;
+struct VulkanAllocatorHandle_T;
+using VulkanAllocatorHandle = VulkanAllocatorHandle_T*;
 
 struct VulkanContext;
 class Buffer;
@@ -509,16 +505,16 @@ public:
     VkResult bindHeapTextureMemory(Texture& texture, Heap& heap, u64 offset);
     VkResult createHostMappedBuffer(
         VkBuffer& buffer,
-        VmaAllocation& allocation,
+        VulkanAllocationHandle& allocation,
         void*& mappedMemory,
         const VkBufferCreateInfo& bufferInfo
     );
-    void destroyHostMappedBuffer(VkBuffer& buffer, VmaAllocation& allocation, void*& mappedMemory);
+    void destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory);
 
 
 private:
     const VulkanContext& m_context;
-    VmaAllocator m_allocator = nullptr;
+    VulkanAllocatorHandle m_allocator = nullptr;
 };
 
 
@@ -545,7 +541,7 @@ public:
 private:
     HeapDesc m_desc;
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
-    VmaAllocation m_allocation = nullptr;
+    VulkanAllocationHandle m_allocation = nullptr;
     VkDeviceSize m_memoryOffset = 0;
     u32 m_memoryTypeIndex = UINT32_MAX;
 
@@ -671,7 +667,7 @@ private:
     BufferDesc m_desc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
-    VmaAllocation m_allocation = nullptr;
+    VulkanAllocationHandle m_allocation = nullptr;
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
     bool m_persistentlyMapped = false;
@@ -746,7 +742,7 @@ private:
     TextureDesc m_desc;
 
     VkImage m_image = VK_NULL_HANDLE;
-    VmaAllocation m_allocation = nullptr;
+    VulkanAllocationHandle m_allocation = nullptr;
     VkImageCreateInfo m_imageInfo{};
 
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::CustomAllocator<Pair<const TextureViewKey, VkImageView>>> m_views;
@@ -783,7 +779,7 @@ private:
     TextureDesc m_desc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
-    VmaAllocation m_allocation = nullptr;
+    VulkanAllocationHandle m_allocation = nullptr;
     void* m_mappedMemory = nullptr;
     bool m_persistentlyMapped = false;
     CpuAccessMode::Enum m_cpuAccess{};
@@ -1064,7 +1060,7 @@ private:
 
     struct HeapStorage{
         VkBuffer buffer = VK_NULL_HANDLE;
-        VmaAllocation allocation = nullptr;
+        VulkanAllocationHandle allocation = nullptr;
         void* mappedMemory = nullptr;
         VkDeviceAddress deviceAddress = 0;
         u32 capacityBytes = 0;

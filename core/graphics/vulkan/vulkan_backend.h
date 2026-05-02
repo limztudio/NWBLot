@@ -85,7 +85,7 @@ u64 ComputeStagingTextureOffset(
     u32* outBufferRowLength = nullptr,
     u32* outBufferImageHeight = nullptr,
     u64* outRangeSize = nullptr,
-    u64 arrayByteSize = 0
+    u64 cachedArrayByteSize = 0
 );
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);

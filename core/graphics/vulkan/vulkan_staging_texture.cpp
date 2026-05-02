@@ -91,71 +91,53 @@ inline bool AddAlignedStagingMipSize(u64& size, const u64 mipSize){
     return AlignUpU64Checked(size + mipSize, s_BufferAlignmentBytes, size);
 }
 
-inline bool BuildStagingTextureArrayLayout(
+inline bool BuildStagingTextureLayout(
     const TextureDesc& desc,
     const FormatInfo& formatInfo,
     const u32 formatBlockWidth,
     const u32 formatBlockHeight,
     const u32 targetMip,
-    u64& outArrayByteSize,
+    const bool completeArrayLayout,
+    u64* outArrayByteSize,
     u64* outTargetMipOffset,
     StagingTextureMipLayout* outTargetLayout
 ){
-    outArrayByteSize = 0;
+    if(outArrayByteSize)
+        *outArrayByteSize = 0;
     if(outTargetMipOffset)
         *outTargetMipOffset = 0;
     if(outTargetLayout)
         *outTargetLayout = {};
 
+    u64 arrayByteSize = 0;
     const bool needsTargetMip = outTargetMipOffset || outTargetLayout;
-    bool foundTargetMip = !needsTargetMip;
+    bool foundTargetMip = false;
     for(u32 mip = 0; mip < desc.mipLevels; ++mip){
         StagingTextureMipLayout layout;
         if(!BuildStagingTextureMipLayout(desc, formatInfo, formatBlockWidth, formatBlockHeight, mip, layout))
             return false;
 
-        if(mip == targetMip){
+        if(needsTargetMip && mip == targetMip){
             if(outTargetMipOffset)
-                *outTargetMipOffset = outArrayByteSize;
+                *outTargetMipOffset = arrayByteSize;
             if(outTargetLayout)
                 *outTargetLayout = layout;
             foundTargetMip = true;
         }
 
-        if(!AddAlignedStagingMipSize(outArrayByteSize, layout.mipSize))
-            return false;
-    }
-
-    return foundTargetMip;
-}
-
-inline bool BuildStagingTextureMipOffsetLayout(
-    const TextureDesc& desc,
-    const FormatInfo& formatInfo,
-    const u32 formatBlockWidth,
-    const u32 formatBlockHeight,
-    const u32 targetMip,
-    u64& outTargetMipOffset,
-    StagingTextureMipLayout& outTargetLayout
-){
-    outTargetMipOffset = 0;
-    outTargetLayout = {};
-
-    for(u32 mip = 0; mip < desc.mipLevels; ++mip){
-        StagingTextureMipLayout layout;
-        if(!BuildStagingTextureMipLayout(desc, formatInfo, formatBlockWidth, formatBlockHeight, mip, layout))
+        if(!AddAlignedStagingMipSize(arrayByteSize, layout.mipSize))
             return false;
 
-        if(mip == targetMip){
-            outTargetLayout = layout;
+        if(needsTargetMip && foundTargetMip && !completeArrayLayout){
+            if(outArrayByteSize)
+                *outArrayByteSize = arrayByteSize;
             return true;
         }
-
-        if(!AddAlignedStagingMipSize(outTargetMipOffset, layout.mipSize))
-            return false;
     }
 
-    return false;
+    if(outArrayByteSize)
+        *outArrayByteSize = arrayByteSize;
+    return !needsTargetMip || foundTargetMip;
 }
 
 
@@ -217,7 +199,7 @@ u64 ComputeStagingTextureOffset(
     u32* outBufferRowLength,
     u32* outBufferImageHeight,
     u64* outRangeSize,
-    u64 arrayByteSize
+    u64 cachedArrayByteSize
 ){
     if(!IsTextureSliceInBounds(desc, slice)){
         __hidden_vulkan_staging_texture::ClearStagingTextureLayoutOutputs(
@@ -235,27 +217,31 @@ u64 ComputeStagingTextureOffset(
     const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
 
     u64 offset = 0;
+    u64 arrayByteSize = cachedArrayByteSize;
     __hidden_vulkan_staging_texture::StagingTextureMipLayout layout;
     bool layoutBuilt = false;
     if(arrayByteSize != 0){
-        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureMipOffsetLayout(
+        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
             desc,
             formatInfo,
             formatBlockWidth,
             formatBlockHeight,
             resolved.mipLevel,
-            offset,
-            layout
+            false,
+            nullptr,
+            &offset,
+            &layout
         );
     }
     else{
-        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureArrayLayout(
+        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
             desc,
             formatInfo,
             formatBlockWidth,
             formatBlockHeight,
             resolved.mipLevel,
-            arrayByteSize,
+            true,
+            &arrayByteSize,
             &offset,
             &layout
         );
@@ -375,13 +361,14 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     }
 
     u64 arrayByteSize = 0;
-    const bool layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureArrayLayout(
+    const bool layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
         d,
         formatInfo,
         formatBlockWidth,
         formatBlockHeight,
         0,
-        arrayByteSize,
+        true,
+        &arrayByteSize,
         nullptr,
         nullptr
     );

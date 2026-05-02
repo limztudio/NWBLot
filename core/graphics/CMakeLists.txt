@@ -35,8 +35,10 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_context.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_queries.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_vma.h"
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_assets nwb_common nwb_input nwb::volk)
+target_link_libraries(nwb_graphics PRIVATE nwb::vma_headers)
 target_link_libraries(nwb_graphics PRIVATE nwb_filesystem)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

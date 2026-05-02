@@ -360,15 +360,6 @@ bool CreatePipelineLayout(
     return true;
 }
 
-u32 FindMemoryTypeIndex(const VulkanContext& context, const u32 typeBits, const VkMemoryPropertyFlags properties){
-    for(u32 i = 0; i < context.memoryProperties.memoryTypeCount; ++i){
-        if((typeBits & (1u << i)) && (context.memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
-            return i;
-    }
-
-    return UINT32_MAX;
-}
-
 VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mode){
     switch(mode){
     case SamplerAddressMode::Clamp:      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -732,8 +723,9 @@ bool DescriptorHeapManager::tryEnablePipeline(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DescriptorHeapManager::DescriptorHeapManager(const VulkanContext& context)
+DescriptorHeapManager::DescriptorHeapManager(const VulkanContext& context, VulkanAllocator& allocator)
     : m_context(context)
+    , m_allocator(allocator)
     , m_resourceHeap(context.objectArena)
     , m_samplerHeap(context.objectArena)
 {}
@@ -1067,55 +1059,22 @@ bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactStrin
     bufferInfo.usage = VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &heap.buffer);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor heap buffer '{}': {}"), StringConvert(debugName.view()), ResultToString(res));
-        return false;
-    }
-
-    VkMemoryRequirements memRequirements{};
-    vkGetBufferMemoryRequirements(m_context.device, heap.buffer, &memRequirements);
-
-    const u32 memoryTypeIndex = VulkanDetail::FindMemoryTypeIndex(
-        m_context,
-        memRequirements.memoryTypeBits,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+    res = m_allocator.createHostMappedBuffer(
+        heap.buffer,
+        heap.allocation,
+        heap.mappedMemory,
+        bufferInfo,
+        HostMappedMemoryAccess::Random
     );
-    if(memoryTypeIndex == UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find host-visible memory for descriptor heap '{}'.")
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor heap buffer '{}': {}")
             , StringConvert(debugName.view())
+            , ResultToString(res)
         );
-        shutdownHeap(heap);
         return false;
     }
-
-    VkMemoryAllocateFlagsInfo flagsInfo{};
-    flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-    flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-    allocInfo.pNext = &flagsInfo;
-
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap.memory);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor heap memory '{}': {}"), StringConvert(debugName.view()), ResultToString(res));
-        shutdownHeap(heap);
-        return false;
-    }
-
-    res = vkBindBufferMemory(m_context.device, heap.buffer, heap.memory, 0);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind descriptor heap memory '{}': {}"), StringConvert(debugName.view()), ResultToString(res));
-        shutdownHeap(heap);
-        return false;
-    }
-
-    res = vkMapMemory(m_context.device, heap.memory, 0, capacityBytes, 0, &heap.mappedMemory);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor heap memory '{}': {}"), StringConvert(debugName.view()), ResultToString(res));
+    if(!heap.mappedMemory){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor heap memory '{}'"), StringConvert(debugName.view()));
         shutdownHeap(heap);
         return false;
     }
@@ -1145,21 +1104,7 @@ bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactStrin
 }
 
 void DescriptorHeapManager::shutdownHeap(HeapStorage& heap){
-    if(heap.mappedMemory){
-        vkUnmapMemory(m_context.device, heap.memory);
-        heap.mappedMemory = nullptr;
-    }
-
-    if(heap.buffer != VK_NULL_HANDLE){
-        vkDestroyBuffer(m_context.device, heap.buffer, m_context.allocationCallbacks);
-        heap.buffer = VK_NULL_HANDLE;
-    }
-
-    if(heap.memory != VK_NULL_HANDLE){
-        vkFreeMemory(m_context.device, heap.memory, m_context.allocationCallbacks);
-        heap.memory = VK_NULL_HANDLE;
-    }
-
+    m_allocator.destroyHostMappedBuffer(heap.buffer, heap.allocation, heap.mappedMemory);
     heap.deviceAddress = 0;
     heap.capacityBytes = 0;
     heap.writableOffsetBytes = 0;

@@ -320,12 +320,7 @@ Texture::~Texture(){
     m_views.clear();
 
     if(m_managed){
-        if(m_image != VK_NULL_HANDLE){
-            vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
-            m_image = VK_NULL_HANDLE;
-        }
-
-        m_allocator.freeTextureMemory(this);
+        m_allocator.destroyTexture(*this);
     }
 }
 
@@ -422,19 +417,7 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
     , m_allocator(allocator)
 {}
 StagingTexture::~StagingTexture(){
-    if(m_buffer != VK_NULL_HANDLE){
-        vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
-        m_buffer = VK_NULL_HANDLE;
-    }
-
-    if(m_memory != VK_NULL_HANDLE){
-        if(m_mappedMemory){
-            vkUnmapMemory(m_context.device, m_memory);
-            m_mappedMemory = nullptr;
-        }
-        vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
-        m_memory = VK_NULL_HANDLE;
-    }
+    m_allocator.destroyStagingTexture(*this);
 }
 
 
@@ -522,22 +505,12 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->m_imageInfo.flags = flags;
     texture->m_imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-    res = vkCreateImage(m_context.device, &texture->m_imageInfo, m_context.allocationCallbacks, &texture->m_image);
+    res = m_allocator.createTexture(*texture, texture->m_imageInfo, !d.isVirtual);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
-    }
-
-    if(!d.isVirtual){
-        res = m_allocator.allocateTextureMemory(texture);
-        if(res != VK_SUCCESS){
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate texture memory"));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate texture memory: {}"), ResultToString(res));
-            DestroyArenaObject(m_context.objectArena, texture);
-            return nullptr;
-        }
     }
 
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -580,9 +553,7 @@ bool Device::bindTextureMemory(ITexture* textureResource, IHeap* heap, u64 offse
     if(!validateHeapMemoryBinding(heap, memRequirements, offset, NWB_TEXT("bind texture memory"), NWB_TEXT("texture"), vkHeap))
         return false;
 
-    texture->m_memory = VK_NULL_HANDLE;
-
-    res = vkBindImageMemory(m_context.device, texture->m_image, vkHeap->m_memory, offset);
+    res = m_allocator.bindHeapTextureMemory(*texture, *vkHeap, offset);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: {}"), ResultToString(res));
         return false;

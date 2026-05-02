@@ -223,86 +223,11 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &staging->m_buffer);
+    res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture buffer: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, staging);
         return nullptr;
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, staging->m_buffer, &memRequirements);
-
-    VkMemoryPropertyFlags memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    if(cpuAccess == CpuAccessMode::Read)
-        memProps |= VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-
-    bool foundMemoryType = false;
-    u32 memoryTypeIndex = 0;
-    for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-        if((memRequirements.memoryTypeBits & (1u << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
-            memoryTypeIndex = i;
-            foundMemoryType = true;
-            break;
-        }
-    }
-
-    // Fallback: try without HOST_CACHED if Read access was requested
-    if(!foundMemoryType && cpuAccess == CpuAccessMode::Read){
-        memProps = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-            if((memRequirements.memoryTypeBits & (1u << i)) && (m_context.memoryProperties.memoryTypes[i].propertyFlags & memProps) == memProps){
-                memoryTypeIndex = i;
-                foundMemoryType = true;
-                break;
-            }
-        }
-    }
-
-    if(!foundMemoryType){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find host-visible memory for staging texture"));
-        vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
-        staging->m_buffer = VK_NULL_HANDLE;
-        DestroyArenaObject(m_context.objectArena, staging);
-        return nullptr;
-    }
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &staging->m_memory);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate staging texture memory: {}"), ResultToString(res));
-        vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
-        staging->m_buffer = VK_NULL_HANDLE;
-        DestroyArenaObject(m_context.objectArena, staging);
-        return nullptr;
-    }
-
-    res = vkBindBufferMemory(m_context.device, staging->m_buffer, staging->m_memory, 0);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind staging texture memory: {}"), ResultToString(res));
-        vkFreeMemory(m_context.device, staging->m_memory, m_context.allocationCallbacks);
-        vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
-        staging->m_memory = VK_NULL_HANDLE;
-        staging->m_buffer = VK_NULL_HANDLE;
-        DestroyArenaObject(m_context.objectArena, staging);
-        return nullptr;
-    }
-
-    if(cpuAccess != CpuAccessMode::None){
-        res = vkMapMemory(m_context.device, staging->m_memory, 0, totalSize, 0, &staging->m_mappedMemory);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture memory: {}"), ResultToString(res));
-            vkFreeMemory(m_context.device, staging->m_memory, m_context.allocationCallbacks);
-            vkDestroyBuffer(m_context.device, staging->m_buffer, m_context.allocationCallbacks);
-            staging->m_memory = VK_NULL_HANDLE;
-            staging->m_buffer = VK_NULL_HANDLE;
-            DestroyArenaObject(m_context.objectArena, staging);
-            return nullptr;
-        }
     }
 
     return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -324,9 +249,17 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     if(!staging->m_mappedMemory){
-        res = vkMapMemory(m_context.device, staging->m_memory, 0, VK_WHOLE_SIZE, 0, &staging->m_mappedMemory);
+        res = m_allocator.mapStagingTextureMemory(*staging, &staging->m_mappedMemory);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture for CPU access: {}"), ResultToString(res));
+            return nullptr;
+        }
+    }
+
+    if(staging->m_cpuAccess == CpuAccessMode::Read){
+        res = m_allocator.invalidateStagingTextureMemory(*staging);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
             return nullptr;
         }
     }
@@ -340,9 +273,14 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
 }
 
 void Device::unmapStagingTexture(IStagingTexture* tex){
-    // Memory is persistently mapped; no-op.
-    // Unmapping is handled in StagingTexture destructor.
-    static_cast<void>(tex);
+    if(!tex)
+        return;
+
+    auto* staging = static_cast<StagingTexture*>(tex);
+    if(staging->m_mappedMemory && !staging->m_persistentlyMapped){
+        staging->m_allocator.unmapStagingTextureMemory(*staging);
+        staging->m_mappedMemory = nullptr;
+    }
 }
 
 

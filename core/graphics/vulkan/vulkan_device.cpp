@@ -231,7 +231,7 @@ Device::Device(const DeviceDesc& desc)
     , m_aftermathEnabled(desc.aftermathEnabled)
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
-    , m_descriptorHeapManager(m_context)
+    , m_descriptorHeapManager(m_context, m_allocator)
     , m_pipelineCacheDirectory(desc.pipelineCacheDirectory)
 {
     VkResult res = VK_SUCCESS;
@@ -455,6 +455,10 @@ Device::Device(const DeviceDesc& desc)
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor heap entry points are unavailable, falling back to descriptor sets."));
             m_context.extensions.EXT_descriptor_heap = false;
         }
+    }
+
+    if(!m_allocator.initialize()){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to initialize VMA allocator"));
     }
 
     if(m_context.extensions.EXT_descriptor_heap){
@@ -859,15 +863,13 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Heap::Heap(const VulkanContext& context)
+Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IHeap>(context.threadPool)
     , m_context(context)
+    , m_allocator(allocator)
 {}
 Heap::~Heap(){
-    if(m_memory != VK_NULL_HANDLE){
-        vkFreeMemory(m_context.device, m_memory, m_context.allocationCallbacks);
-        m_memory = VK_NULL_HANDLE;
-    }
+    m_allocator.freeHeap(*this);
 }
 
 Object Heap::getNativeHandle(ObjectType objectType){
@@ -889,18 +891,10 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         return nullptr;
     }
 
-    VkMemoryPropertyFlags memoryProperties = 0;
-    bool isReadbackHeap = false;
     switch(d.type){
     case HeapType::DeviceLocal:
-        memoryProperties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        break;
     case HeapType::Upload:
-        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        break;
     case HeapType::Readback:
-        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
-        isReadbackHeap = true;
         break;
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
@@ -908,49 +902,10 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         return nullptr;
     }
 
-    u32 memoryTypeIndex = UINT32_MAX;
-    for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-        if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
-            memoryTypeIndex = i;
-            break;
-        }
-    }
-
-    if(memoryTypeIndex == UINT32_MAX && isReadbackHeap){
-        memoryProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-        for(u32 i = 0; i < m_context.memoryProperties.memoryTypeCount; ++i){
-            if((m_context.memoryProperties.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties){
-                memoryTypeIndex = i;
-                break;
-            }
-        }
-    }
-
-    if(memoryTypeIndex == UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to find suitable memory type for heap"));
-        return nullptr;
-    }
-
-    auto* heap = NewArenaObject<Heap>(m_context.objectArena, m_context);
+    auto* heap = NewArenaObject<Heap>(m_context.objectArena, m_context, m_allocator);
     heap->m_desc = d;
-    heap->m_memoryTypeIndex = memoryTypeIndex;
 
-    void* pNext = nullptr;
-    VkMemoryAllocateFlagsInfo allocFlagsInfo{};
-    if(m_context.extensions.buffer_device_address){
-        allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
-        allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
-        allocFlagsInfo.pNext = pNext;
-        pNext = &allocFlagsInfo;
-    }
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = d.capacity;
-    allocInfo.memoryTypeIndex = memoryTypeIndex;
-    allocInfo.pNext = pNext;
-
-    res = vkAllocateMemory(m_context.device, &allocInfo, m_context.allocationCallbacks, &heap->m_memory);
+    res = m_allocator.allocateHeap(*heap);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
         DestroyArenaObject(m_context.objectArena, heap);

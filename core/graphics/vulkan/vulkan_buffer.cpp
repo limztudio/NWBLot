@@ -64,12 +64,7 @@ Buffer::~Buffer(){
     m_bufferViews.clear();
 
     if(m_managed){
-        if(m_buffer != VK_NULL_HANDLE){
-            vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
-            m_buffer = VK_NULL_HANDLE;
-        }
-
-        m_allocator.freeBufferMemory(this);
+        m_allocator.destroyBuffer(*this);
     }
 }
 
@@ -228,7 +223,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.usage = usageFlags;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
+    res = m_allocator.createBuffer(
+        *buffer,
+        bufferInfo,
+        !d.isVirtual
+    );
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
@@ -237,24 +236,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     }
 
     if(!d.isVirtual){
-        res = m_allocator.allocateBufferMemory(buffer, m_context.extensions.buffer_device_address && (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
-        if(res != VK_SUCCESS){
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to allocate buffer memory"));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate buffer memory: {}"), ResultToString(res));
-            DestroyArenaObject(m_context.objectArena, buffer);
-            return nullptr;
-        }
-
-        if(d.isVolatile || d.cpuAccess != CpuAccessMode::None){
-            res = vkMapMemory(m_context.device, buffer->m_memory, 0, size, 0, &buffer->m_mappedMemory);
-            if(res != VK_SUCCESS){
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map buffer memory"));
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
-                DestroyArenaObject(m_context.objectArena, buffer);
-                return nullptr;
-            }
-        }
-
         if(m_context.extensions.buffer_device_address){
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -275,7 +256,7 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
     }
 
     auto* buffer = static_cast<Buffer*>(bufferResource);
-    if(buffer->m_memory == VK_NULL_HANDLE){
+    if(buffer->m_allocation == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no bound memory"));
         return nullptr;
     }
@@ -284,11 +265,7 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
         if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
             return true;
 
-        auto range = VulkanDetail::MakeVkStruct<VkMappedMemoryRange>(VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE);
-        range.memory = buffer->m_memory;
-        range.offset = 0;
-        range.size = VK_WHOLE_SIZE;
-        res = vkInvalidateMappedMemoryRanges(m_context.device, 1, &range);
+        res = m_allocator.invalidateBufferMemory(*buffer);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
             return false;
@@ -303,7 +280,7 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
     }
 
     void* data = nullptr;
-    res = vkMapMemory(m_context.device, buffer->m_memory, 0, VK_WHOLE_SIZE, 0, &data);
+    res = m_allocator.mapBufferMemory(*buffer, &data);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
         return nullptr;
@@ -311,7 +288,7 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
 
     buffer->m_mappedMemory = data;
     if(!invalidateReadRange()){
-        vkUnmapMemory(m_context.device, buffer->m_memory);
+        m_allocator.unmapBufferMemory(*buffer);
         buffer->m_mappedMemory = nullptr;
         return nullptr;
     }
@@ -324,8 +301,13 @@ void Device::unmapBuffer(IBuffer* bufferResource){
 
     auto* buffer = static_cast<Buffer*>(bufferResource);
 
-    if(buffer->m_mappedMemory && !buffer->m_desc.isVolatile && buffer->m_desc.cpuAccess == CpuAccessMode::None){
-        vkUnmapMemory(m_context.device, buffer->m_memory);
+    if(
+        buffer->m_mappedMemory
+        && !buffer->m_persistentlyMapped
+        && !buffer->m_desc.isVolatile
+        && buffer->m_desc.cpuAccess == CpuAccessMode::None
+    ){
+        buffer->m_allocator.unmapBufferMemory(*buffer);
         buffer->m_mappedMemory = nullptr;
     }
 }
@@ -357,7 +339,7 @@ bool Device::validateHeapMemoryBinding(
 )const{
     outHeap = checked_cast<Heap*>(heap);
 
-    if(!outHeap || outHeap->m_memory == VK_NULL_HANDLE){
+    if(!outHeap || outHeap->m_allocation == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
         return false;
     }
@@ -407,10 +389,7 @@ bool Device::bindBufferMemory(IBuffer* bufferResource, IHeap* heap, u64 offset){
     if(!validateHeapMemoryBinding(heap, memRequirements, offset, NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer"), vkHeap))
         return false;
 
-    // Binding to a heap means the heap owns the memory, not the buffer
-    buffer->m_memory = VK_NULL_HANDLE;
-
-    res = vkBindBufferMemory(m_context.device, buffer->m_buffer, vkHeap->m_memory, offset);
+    res = m_allocator.bindHeapBufferMemory(*buffer, *vkHeap, offset);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
         return false;

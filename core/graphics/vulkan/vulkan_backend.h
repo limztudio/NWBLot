@@ -11,6 +11,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct VmaAllocator_T;
+typedef VmaAllocator_T* VmaAllocator;
+struct VmaAllocation_T;
+typedef VmaAllocation_T* VmaAllocation;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_VULKAN_BEGIN
 
 
@@ -18,6 +27,10 @@ NWB_VULKAN_BEGIN
 
 
 struct VulkanContext;
+class Buffer;
+class Heap;
+class Texture;
+class StagingTexture;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>>;
 using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>>;
 
@@ -467,26 +480,53 @@ private:
 // Handles memory allocation
 
 
+namespace HostMappedMemoryAccess{
+    enum Enum : u8{
+        SequentialWrite = 0u,
+        Random = 1u,
+    };
+};
+
 class VulkanAllocator final : NoCopy{
 public:
     explicit VulkanAllocator(const VulkanContext& context);
-    ~VulkanAllocator() = default;
+    ~VulkanAllocator();
 
 
 public:
-    VkResult allocateBufferMemory(Buffer* buffer, bool enableDeviceAddress = false);
-    void freeBufferMemory(Buffer* buffer);
+    [[nodiscard]] bool initialize();
 
-    VkResult allocateTextureMemory(Texture* texture);
-    void freeTextureMemory(Texture* texture);
+    VkResult createBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo, bool allocateMemory);
+    void destroyBuffer(Buffer& buffer);
+    VkResult mapBufferMemory(Buffer& buffer, void** outData);
+    void unmapBufferMemory(Buffer& buffer);
+    VkResult invalidateBufferMemory(Buffer& buffer);
 
+    VkResult createTexture(Texture& texture, const VkImageCreateInfo& imageInfo, bool allocateMemory);
+    void destroyTexture(Texture& texture);
 
-private:
-    u32 findMemoryType(u32 typeFilter, VkMemoryPropertyFlags properties)const;
+    VkResult createStagingTexture(StagingTexture& texture, const VkBufferCreateInfo& bufferInfo, CpuAccessMode::Enum cpuAccess);
+    void destroyStagingTexture(StagingTexture& texture);
+    VkResult mapStagingTextureMemory(StagingTexture& texture, void** outData);
+    void unmapStagingTextureMemory(StagingTexture& texture);
+    VkResult invalidateStagingTextureMemory(StagingTexture& texture);
+    VkResult allocateHeap(Heap& heap);
+    void freeHeap(Heap& heap);
+    VkResult bindHeapBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
+    VkResult bindHeapTextureMemory(Texture& texture, Heap& heap, u64 offset);
+    VkResult createHostMappedBuffer(
+        VkBuffer& buffer,
+        VmaAllocation& allocation,
+        void*& mappedMemory,
+        const VkBufferCreateInfo& bufferInfo,
+        HostMappedMemoryAccess::Enum access
+    );
+    void destroyHostMappedBuffer(VkBuffer& buffer, VmaAllocation& allocation, void*& mappedMemory);
 
 
 private:
     const VulkanContext& m_context;
+    VmaAllocator m_allocator = nullptr;
 };
 
 
@@ -501,7 +541,7 @@ class Heap final : public RefCounter<IHeap>, NoCopy{
 
 
 public:
-    Heap(const VulkanContext& context);
+    Heap(const VulkanContext& context, VulkanAllocator& allocator);
     virtual ~Heap()override;
 
 
@@ -513,9 +553,12 @@ public:
 private:
     HeapDesc m_desc;
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VmaAllocation m_allocation = nullptr;
+    VkDeviceSize m_memoryOffset = 0;
     u32 m_memoryTypeIndex = UINT32_MAX;
 
     const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
 };
 
 
@@ -637,16 +680,17 @@ private:
     BufferDesc m_desc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VmaAllocation m_allocation = nullptr;
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
+    bool m_persistentlyMapped = false;
 
     Vector<u64, Alloc::CustomAllocator<u64>> m_versionTracking;
     Vector<BufferViewEntry, Alloc::CustomAllocator<BufferViewEntry>> m_bufferViews;
     Futex m_bufferViewsMutex;
     VolatileBufferState m_volatileState;
 
-    bool m_managed = true; // if true, owns the VkBuffer and memory
+    bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
 
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -711,12 +755,12 @@ private:
     TextureDesc m_desc;
 
     VkImage m_image = VK_NULL_HANDLE;
-    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VmaAllocation m_allocation = nullptr;
     VkImageCreateInfo m_imageInfo{};
 
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::CustomAllocator<Pair<const TextureViewKey, VkImageView>>> m_views;
 
-    bool m_managed = true; // if true, owns the VkImage and memory
+    bool m_managed = true; // if true, owns the VkImage or VMA allocation
     bool m_keepInitialStateKnown = false;
     u64 m_tileByteSize = 0; // for sparse/tiled resources
 
@@ -732,6 +776,7 @@ private:
 class StagingTexture final : public RefCounter<IStagingTexture>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class VulkanAllocator;
 
 
 public:
@@ -747,8 +792,9 @@ private:
     TextureDesc m_desc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_memory = VK_NULL_HANDLE;
+    VmaAllocation m_allocation = nullptr;
     void* m_mappedMemory = nullptr;
+    bool m_persistentlyMapped = false;
     CpuAccessMode::Enum m_cpuAccess{};
 
     const VulkanContext& m_context;
@@ -1027,7 +1073,7 @@ private:
 
     struct HeapStorage{
         VkBuffer buffer = VK_NULL_HANDLE;
-        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VmaAllocation allocation = nullptr;
         void* mappedMemory = nullptr;
         VkDeviceAddress deviceAddress = 0;
         u32 capacityBytes = 0;
@@ -1065,7 +1111,7 @@ public:
 
 
 public:
-    explicit DescriptorHeapManager(const VulkanContext& context);
+    DescriptorHeapManager(const VulkanContext& context, VulkanAllocator& allocator);
     ~DescriptorHeapManager();
 
 
@@ -1092,6 +1138,7 @@ private:
 
 private:
     const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
     bool m_enabled = false;
     HeapStorage m_resourceHeap;
     HeapStorage m_samplerHeap;

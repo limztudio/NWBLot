@@ -635,6 +635,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
 
         Heap* heap = mapping.heap ? checked_cast<Heap*>(mapping.heap) : nullptr;
         VkDeviceMemory deviceMemory = heap ? heap->m_memory : VK_NULL_HANDLE;
+        const VkDeviceSize heapMemoryOffset = heap ? heap->m_memoryOffset : 0;
 
         usize opaqueWrite = counts.opaqueBase;
         usize imageWrite = counts.imageBase;
@@ -648,7 +649,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
                 bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
                 bind.size = region.tilesNum * texture->m_tileByteSize;
                 bind.memory = deviceMemory;
-                bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
+                bind.memoryOffset = deviceMemory ? heapMemoryOffset + mapping.byteOffsets[j] : 0;
                 sparseMemoryBinds[opaqueWrite] = bind;
                 ++opaqueWrite;
             }
@@ -664,7 +665,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
                 bind.extent.height = region.height * tileHeight;
                 bind.extent.depth = region.depth * tileDepth;
                 bind.memory = deviceMemory;
-                bind.memoryOffset = deviceMemory ? mapping.byteOffsets[j] : 0;
+                bind.memoryOffset = deviceMemory ? heapMemoryOffset + mapping.byteOffsets[j] : 0;
                 sparseImageMemoryBinds[imageWrite] = bind;
                 ++imageWrite;
             }

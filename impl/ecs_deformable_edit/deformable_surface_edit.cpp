@@ -2609,16 +2609,50 @@ template<typename DistanceFunc>
     return true;
 }
 
+[[nodiscard]] bool GetOrCreateSurfaceRemeshTriangleSplitVertex(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 sourceTriangle,
+    const SurfaceRemeshGeneratedVertex& generated,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices,
+    u32& outVertex
+){
+    outVertex = Limit<u32>::s_Max;
+
+    u32 sourceTriangleIndices[3] = {};
+    if(!DeformableRuntime::ValidateTriangleIndex(instance, sourceTriangle, sourceTriangleIndices))
+        return false;
+
+    SurfaceRemeshClipPoint point{};
+    point.local = generated.local;
+    point.depth = generated.depth;
+    point.originalVertex = Limit<u32>::s_Max;
+    if(!ComputeTriangleBarycentric(instance, sourceTriangleIndices, LoadFloat(generated.position), point.bary))
+        return false;
+
+    return GetOrCreateSurfaceRemeshVertex(
+        instance,
+        sourceTriangle,
+        sourceTriangleIndices,
+        point,
+        restPositions,
+        generatedVertices,
+        outVertex
+    );
+}
+
 [[nodiscard]] bool SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(
-    const Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
-    const Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices,
+    const DeformableRuntimeMeshInstance& instance,
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>>& restPositions,
+    Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>>& generatedVertices,
     Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>>& surfaceTriangles
 ){
     if(generatedVertices.empty() || surfaceTriangles.empty())
         return true;
 
-    if(generatedVertices.size() <= Limit<usize>::s_Max - surfaceTriangles.size())
-        surfaceTriangles.reserve(surfaceTriangles.size() + generatedVertices.size());
+    const usize generatedVertexScanCount = generatedVertices.size();
+    if(generatedVertexScanCount <= Limit<usize>::s_Max - surfaceTriangles.size())
+        surfaceTriangles.reserve(surfaceTriangles.size() + generatedVertexScanCount);
 
     bool splitTriangle = true;
     while(splitTriangle){
@@ -2630,10 +2664,23 @@ template<typename DistanceFunc>
                 const u32 edgeA = triangle.indices[edgeIndex];
                 const u32 edgeB = triangle.indices[(edgeIndex + 1u) % 3u];
                 const u32 opposite = triangle.indices[(edgeIndex + 2u) % 3u];
-                for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
-                    const u32 splitVertex = generated.vertex;
-                    if(!SurfaceRemeshEdgeContainsVertex(restPositions, edgeA, edgeB, splitVertex))
+                for(usize generatedIndex = 0u; generatedIndex < generatedVertexScanCount; ++generatedIndex){
+                    const SurfaceRemeshGeneratedVertex generated = generatedVertices[generatedIndex];
+                    if(!SurfaceRemeshEdgeContainsVertex(restPositions, edgeA, edgeB, generated.vertex))
                         continue;
+
+                    u32 splitVertex = Limit<u32>::s_Max;
+                    if(
+                        !GetOrCreateSurfaceRemeshTriangleSplitVertex(
+                            instance,
+                            triangle.sourceTriangle,
+                            generated,
+                            restPositions,
+                            generatedVertices,
+                            splitVertex
+                        )
+                    )
+                        return false;
                     if(
                         !SurfaceRemeshTriangleAreaValid(restPositions, opposite, edgeA, splitVertex)
                         || !SurfaceRemeshTriangleAreaValid(restPositions, opposite, splitVertex, edgeB)
@@ -3018,7 +3065,14 @@ template<typename DistanceFunc>
         }
     }
 
-    if(!SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(outRestPositions, outGeneratedVertices, outSurfaceTriangles))
+    if(
+        !SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(
+            instance,
+            outRestPositions,
+            outGeneratedVertices,
+            outSurfaceTriangles
+        )
+    )
         return false;
 
     if(

@@ -728,6 +728,81 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeSplitCubeCornerHoleInstance(
     return instance;
 }
 
+static bool ExpectedSplitCubeCornerFaceUv0(
+    const Float3U& faceCentroid,
+    const Float3U& position,
+    Float2U& outUv0
+){
+    if(NearlyEqual(faceCentroid.z, 0.0f, 0.0001f)){
+        if(!NearlyEqual(position.z, 0.0f, 0.0001f))
+            return false;
+
+        outUv0 = Float2U((position.x + 1.0f) * 0.5f, (position.y + 1.0f) * 0.5f);
+        return true;
+    }
+
+    if(NearlyEqual(faceCentroid.x, 1.0f, 0.0001f) && faceCentroid.z < -0.0001f){
+        if(!NearlyEqual(position.x, 1.0f, 0.0001f))
+            return false;
+
+        outUv0 = Float2U(-position.z, (position.y + 1.0f) * 0.5f);
+        return true;
+    }
+
+    if(NearlyEqual(faceCentroid.y, 1.0f, 0.0001f) && faceCentroid.z < -0.0001f){
+        if(!NearlyEqual(position.y, 1.0f, 0.0001f))
+            return false;
+
+        outUv0 = Float2U((position.x + 1.0f) * 0.5f, -position.z);
+        return true;
+    }
+
+    return false;
+}
+
+static void CheckSplitCubeCornerSurfaceTriangleUvs(
+    TestContext& context,
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const usize surfaceIndexEnd
+){
+    bool checkedTopFace = false;
+    bool checkedRightFace = false;
+    bool checkedBackFace = false;
+    for(usize indexBase = 0u; indexBase < surfaceIndexEnd; indexBase += 3u){
+        const u32 indices[3] = {
+            instance.indices[indexBase + 0u],
+            instance.indices[indexBase + 1u],
+            instance.indices[indexBase + 2u],
+        };
+        const Float3U& p0 = instance.restVertices[indices[0u]].position;
+        const Float3U& p1 = instance.restVertices[indices[1u]].position;
+        const Float3U& p2 = instance.restVertices[indices[2u]].position;
+        const Float3U centroid(
+            (p0.x + p1.x + p2.x) / 3.0f,
+            (p0.y + p1.y + p2.y) / 3.0f,
+            (p0.z + p1.z + p2.z) / 3.0f
+        );
+
+        Float2U expectedUv0;
+        if(!ExpectedSplitCubeCornerFaceUv0(centroid, p0, expectedUv0))
+            continue;
+
+        checkedTopFace = checkedTopFace || NearlyEqual(centroid.z, 0.0f, 0.0001f);
+        checkedRightFace = checkedRightFace || NearlyEqual(centroid.x, 1.0f, 0.0001f);
+        checkedBackFace = checkedBackFace || NearlyEqual(centroid.y, 1.0f, 0.0001f);
+        for(const u32 index : indices){
+            const NWB::Impl::DeformableVertexRest& vertex = instance.restVertices[index];
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, ExpectedSplitCubeCornerFaceUv0(centroid, vertex.position, expectedUv0));
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.x, expectedUv0.x, 0.0001f));
+            NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(vertex.uv0.y, expectedUv0.y, 0.0001f));
+        }
+    }
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, checkedTopFace);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, checkedRightFace);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, checkedBackFace);
+}
+
 static void ConfigureMinimalMilestonePayload(NWB::Impl::DeformableRuntimeMeshInstance& instance){
     instance.geometryClass = NWB::Impl::GeometryClass::SkinnedDeform;
     instance.skeletonJointCount = 2u;
@@ -3778,6 +3853,7 @@ static void TestSurfaceEditOperatorRemeshCutsPerpendicularCornerFaces(TestContex
     NWB_ECS_GRAPHICS_TEST_CHECK(context, foundGeneratedBackFaceRim);
 
     const usize wallIndexBase = instance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u);
+    CheckSplitCubeCornerSurfaceTriangleUvs(context, instance, wallIndexBase);
     for(usize indexBase = 0u; indexBase < wallIndexBase; indexBase += 3u){
         const u32 i0 = instance.indices[indexBase + 0u];
         const u32 i1 = instance.indices[indexBase + 1u];

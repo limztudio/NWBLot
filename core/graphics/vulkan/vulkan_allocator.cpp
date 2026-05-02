@@ -87,7 +87,6 @@ inline VmaAllocationCreateInfo BuildStagingTextureAllocationInfo(const CpuAccess
 inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_UNKNOWN;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
 
     switch(desc.type){
     case HeapType::DeviceLocal:
@@ -119,6 +118,17 @@ inline u32 BuildAllMemoryTypeBits(const VkPhysicalDeviceMemoryProperties& memory
     if(memoryProperties.memoryTypeCount >= 32u)
         return UINT32_MAX;
     return (1u << memoryProperties.memoryTypeCount) - 1u;
+}
+
+inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex){
+    if(memoryTypeIndex >= memoryProperties.memoryTypeCount)
+        return true;
+
+    const VkMemoryPropertyFlags propertyFlags = memoryProperties.memoryTypes[memoryTypeIndex].propertyFlags;
+    return
+        (propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0
+        && (propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0
+    ;
 }
 
 inline VmaAllocator ToVmaAllocator(const VulkanAllocatorHandle allocator){
@@ -177,11 +187,13 @@ inline void UnmapTransientAllocation(
 
 inline VkResult CreateBufferAllocation(
     const VulkanAllocatorHandle allocator,
+    const VkPhysicalDeviceMemoryProperties& memoryProperties,
     const VkBufferCreateInfo& bufferInfo,
     const VmaAllocationCreateInfo& allocInfo,
     VkBuffer& buffer,
     VulkanAllocationHandle& allocation,
-    void*& mappedMemory
+    void*& mappedMemory,
+    bool* outRequiresInvalidate
 ){
     VmaAllocationInfo allocationInfo{};
     VmaAllocation vmaAllocation = nullptr;
@@ -196,6 +208,8 @@ inline VkResult CreateBufferAllocation(
     if(res == VK_SUCCESS){
         allocation = ToVulkanAllocationHandle(vmaAllocation);
         mappedMemory = allocationInfo.pMappedData;
+        if(outRequiresInvalidate)
+            *outRequiresInvalidate = BuildRequiresInvalidate(memoryProperties, allocationInfo.memoryType);
     }
     return res;
 }
@@ -280,11 +294,13 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_desc, bufferInfo.size);
     const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
+        m_context.memoryProperties,
         bufferInfo,
         allocInfo,
         buffer.m_buffer,
         buffer.m_allocation,
-        buffer.m_mappedMemory
+        buffer.m_mappedMemory,
+        &buffer.m_requiresInvalidate
     );
     if(res == VK_SUCCESS)
         buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
@@ -300,6 +316,7 @@ void VulkanAllocator::destroyBuffer(Buffer& buffer){
         buffer.m_persistentlyMapped
     );
     buffer.m_persistentlyMapped = false;
+    buffer.m_requiresInvalidate = false;
 }
 
 VkResult VulkanAllocator::mapBufferMemory(Buffer& buffer, void** outData){
@@ -311,6 +328,8 @@ void VulkanAllocator::unmapBufferMemory(Buffer& buffer){
 }
 
 VkResult VulkanAllocator::invalidateBufferMemory(Buffer& buffer){
+    if(!buffer.m_requiresInvalidate)
+        return VK_SUCCESS;
     return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, buffer.m_allocation, 0, VK_WHOLE_SIZE);
 }
 
@@ -360,11 +379,13 @@ VkResult VulkanAllocator::createStagingTexture(
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildStagingTextureAllocationInfo(cpuAccess);
     const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
+        m_context.memoryProperties,
         bufferInfo,
         allocInfo,
         texture.m_buffer,
         texture.m_allocation,
-        texture.m_mappedMemory
+        texture.m_mappedMemory,
+        &texture.m_requiresInvalidate
     );
     if(res == VK_SUCCESS)
         texture.m_persistentlyMapped = texture.m_mappedMemory != nullptr;
@@ -380,6 +401,7 @@ void VulkanAllocator::destroyStagingTexture(StagingTexture& texture){
         texture.m_persistentlyMapped
     );
     texture.m_persistentlyMapped = false;
+    texture.m_requiresInvalidate = false;
 }
 
 VkResult VulkanAllocator::mapStagingTextureMemory(StagingTexture& texture, void** outData){
@@ -391,6 +413,8 @@ void VulkanAllocator::unmapStagingTextureMemory(StagingTexture& texture){
 }
 
 VkResult VulkanAllocator::invalidateStagingTextureMemory(StagingTexture& texture, const u64 offset, const u64 size){
+    if(!texture.m_requiresInvalidate)
+        return VK_SUCCESS;
     return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, texture.m_allocation, offset, size);
 }
 
@@ -473,11 +497,13 @@ VkResult VulkanAllocator::createHostMappedBuffer(
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHostMappedBufferAllocationInfo();
     return __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
+        m_context.memoryProperties,
         bufferInfo,
         allocInfo,
         buffer,
         allocation,
-        mappedMemory
+        mappedMemory,
+        nullptr
     );
 }
 

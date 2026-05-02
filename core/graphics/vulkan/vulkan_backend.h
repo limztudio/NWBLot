@@ -678,6 +678,7 @@ private:
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
     bool m_persistentlyMapped = false;
+    bool m_requiresInvalidate = false;
 
     Vector<u64, Alloc::CustomAllocator<u64>> m_versionTracking;
     Vector<BufferViewEntry, Alloc::CustomAllocator<BufferViewEntry>> m_bufferViews;
@@ -789,6 +790,7 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     void* m_mappedMemory = nullptr;
     bool m_persistentlyMapped = false;
+    bool m_requiresInvalidate = false;
     CpuAccessMode::Enum m_cpuAccess{};
 
     const VulkanContext& m_context;

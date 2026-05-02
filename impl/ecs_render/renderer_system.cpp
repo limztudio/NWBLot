@@ -14,7 +14,6 @@
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
 #include <core/scene/camera_component.h>
-#include <impl/ecs_deformable/deformable_runtime_names.h>
 #include <core/scene/light_component.h>
 #include <core/scene/scene.h>
 #include <core/scene/transform_component.h>
@@ -38,8 +37,6 @@ namespace __hidden_ecs_render{
 
 static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 static constexpr u32 s_StaticGeometryVertexStride = sizeof(GeometryVertex);
-static constexpr u32 s_MeshSourceLayoutGeometryVertex = 0u;
-static constexpr u32 s_MeshSourceLayoutDeformableVertex = 1u;
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
@@ -1035,26 +1032,27 @@ RendererSystem::RendererSystem(
     , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), MaterialSurfaceInfoMapAllocator(arena))
     , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), MaterialPipelineMapAllocator(arena))
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
-    , m_deformableRuntimeCache(Core::MakeCustomUnique<DeformableRuntimeMeshCache>(arena, arena, graphics, assetManager))
+    , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))
 {
     readAccess<Core::Scene::SceneComponent>();
     readAccess<Core::Scene::TransformComponent>();
     readAccess<Core::Scene::CameraComponent>();
     readAccess<RendererComponent>();
-    writeAccess<DeformableRendererComponent>();
 }
 RendererSystem::~RendererSystem()
 {}
 
 
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
+    static_cast<void>(world);
     static_cast<void>(delta);
-    updateDeformableRuntimeMeshes(world);
 }
 
 void RendererSystem::render(Core::IFramebuffer* framebuffer){
     if(!framebuffer)
         return;
+
+    pruneRuntimeGeometryResources();
 
     DeferredFrameTargets* deferredTargets = nullptr;
     if(!ensureDeferredFrameTargets(framebuffer, deferredTargets))
@@ -1113,49 +1111,28 @@ void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
     resetDeferredFrameTargets();
 }
 
-RuntimeMeshHandle RendererSystem::deformableRuntimeMeshHandle(const Core::ECS::EntityID entity)const{
-    return
-        m_deformableRuntimeCache
-            ? m_deformableRuntimeCache->handleForEntity(entity)
-            : RuntimeMeshHandle{}
-    ;
+void RendererSystem::registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
+    if(FindIf(
+        m_runtimeGeometryProviders.begin(),
+        m_runtimeGeometryProviders.end(),
+        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
+    ) != m_runtimeGeometryProviders.end())
+        return;
+
+    m_runtimeGeometryProviders.push_back(&provider);
 }
 
-u32 RendererSystem::deformableRuntimeMeshEditRevision(const RuntimeMeshHandle handle)const{
-    return
-        m_deformableRuntimeCache
-            ? m_deformableRuntimeCache->editRevision(handle)
-            : 0u
-    ;
-}
+void RendererSystem::unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
+    const auto found = FindIf(
+        m_runtimeGeometryProviders.begin(),
+        m_runtimeGeometryProviders.end(),
+        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
+    );
+    if(found == m_runtimeGeometryProviders.end())
+        return;
 
-bool RendererSystem::bumpDeformableRuntimeMeshRevision(
-    const RuntimeMeshHandle handle,
-    const RuntimeMeshDirtyFlags dirtyFlags
-){
-    return m_deformableRuntimeCache && m_deformableRuntimeCache->bumpEditRevision(handle, dirtyFlags);
-}
-
-DeformableRuntimeMeshInstance* RendererSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle){
-    return
-        m_deformableRuntimeCache
-            ? m_deformableRuntimeCache->findInstance(handle)
-            : nullptr
-    ;
-}
-
-const DeformableRuntimeMeshInstance* RendererSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle)const{
-    return
-        m_deformableRuntimeCache
-            ? m_deformableRuntimeCache->findInstance(handle)
-            : nullptr
-    ;
-}
-
-void RendererSystem::updateDeformableRuntimeMeshes(Core::ECS::World& world){
-    if(m_deformableRuntimeCache)
-        m_deformableRuntimeCache->update(world);
-    pruneDeformableGeometryResources();
+    m_runtimeGeometryProviders.erase(found);
+    pruneRuntimeGeometryResources();
 }
 
 bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets){
@@ -1998,8 +1975,18 @@ void RendererSystem::gatherMaterialPassDrawItems(
         return;
 
     auto rendererView = m_world.view<RendererComponent>();
-    auto deformableRendererView = m_world.view<DeformableRendererComponent>();
-    const usize rendererCapacity = rendererView.candidateCount() + deformableRendererView.candidateCount();
+    usize rendererCapacity = rendererView.candidateCount();
+    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
+        if(!provider)
+            continue;
+
+        const usize providerCandidateCount = provider->runtimeGeometryCandidateCount();
+        if(providerCandidateCount > Limit<usize>::s_Max - rendererCapacity){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry provider candidate count overflow"));
+            break;
+        }
+        rendererCapacity += providerCandidateCount;
+    }
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
@@ -2149,19 +2136,22 @@ void RendererSystem::gatherMaterialPassDrawItems(
             appendDrawForGeometry(entity, renderer.material, *geometry);
     }
 
-    for(auto&& [entity, renderer] : deformableRendererView){
-        if(!renderer.visible || !renderer.runtimeMesh.valid())
+    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
+        if(!provider)
             continue;
 
-        DeformableRuntimeMeshInstance* instance = findDeformableRuntimeMesh(renderer.runtimeMesh);
-        if(!instance || !instance->valid())
-            continue;
+        provider->forEachRuntimeGeometry(
+            [&](const RuntimeGeometryDesc& desc){
+                if(!desc.valid())
+                    return;
 
-        GeometryResources* geometry = nullptr;
-        if(!ensureDeformableGeometryResources(*instance, geometry))
-            continue;
-        if(geometry)
-            appendDrawForGeometry(entity, renderer.material, *geometry);
+                GeometryResources* geometry = nullptr;
+                if(!ensureRuntimeGeometryResources(desc, geometry))
+                    return;
+                if(geometry)
+                    appendDrawForGeometry(desc.entity, desc.material, *geometry);
+            }
+        );
     }
 }
 
@@ -2578,7 +2568,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
 
     GeometryResources createdGeometry;
     createdGeometry.geometryName = geometryPath;
-    createdGeometry.sourceVertexLayout = __hidden_ecs_render::s_MeshSourceLayoutGeometryVertex;
+    createdGeometry.sourceVertexLayout = MeshSourceLayout::GeometryVertex;
 
     const usize indexCount = geometry.indices().size();
     if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
@@ -2651,78 +2641,77 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     return outGeometry->valid();
 }
 
-bool RendererSystem::ensureDeformableGeometryResources(const DeformableRuntimeMeshInstance& instance, GeometryResources*& outGeometry){
+bool RendererSystem::ensureRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry){
     outGeometry = nullptr;
 
-    if(!instance.valid())
+    if(!desc.valid())
         return false;
-    if(
-        instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || instance.indices.size() > static_cast<usize>(Limit<u32>::s_Max)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh '{}' exceeds renderer u32 limits"), instance.handle.value);
-        return false;
+
+    const auto foundGeometry = m_geometryMeshes.find(desc.geometryKey);
+    if(foundGeometry != m_geometryMeshes.end()){
+        if(!foundGeometry.value().runtimeGeometry){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry '{}' collides with a static geometry resource")
+                , StringConvert(desc.geometryKey.c_str())
+            );
+            return false;
+        }
+        if(foundGeometry.value().runtimeGeometryVersion != desc.version){
+            m_geometryMeshes.erase(foundGeometry);
+        }
+        else{
+            outGeometry = &foundGeometry.value();
+            return outGeometry->valid();
+        }
     }
-    if((instance.indices.size() % 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh '{}' has non-triangle index count {}")
-            , instance.handle.value
-            , instance.indices.size()
+
+    GeometryResources createdGeometry;
+    createdGeometry.geometryName = desc.geometryKey;
+    createdGeometry.shaderVertexBuffer = desc.shaderVertexBuffer;
+    createdGeometry.shaderIndexBuffer = desc.shaderIndexBuffer;
+    createdGeometry.indexCount = desc.indexCount;
+    createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
+    createdGeometry.dispatchGroupCount = __hidden_ecs_render::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    createdGeometry.sourceVertexLayout = desc.sourceVertexLayout;
+    createdGeometry.runtimeGeometry = true;
+    createdGeometry.runtimeGeometryVersion = desc.version;
+    if(createdGeometry.dispatchGroupCount == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry '{}' produced no dispatch groups")
+            , StringConvert(desc.geometryKey.c_str())
         );
         return false;
     }
 
-    const Name geometryKey = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "deformed_draw");
-    if(!geometryKey){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive draw resource key for deformable runtime mesh '{}'"), instance.handle.value);
-        return false;
-    }
-
-    const auto foundGeometry = m_geometryMeshes.find(geometryKey);
-    if(foundGeometry != m_geometryMeshes.end()){
-        outGeometry = &foundGeometry.value();
-        return outGeometry->valid();
-    }
-
-    GeometryResources createdGeometry;
-    createdGeometry.geometryName = geometryKey;
-    createdGeometry.shaderVertexBuffer = instance.deformedVertexBuffer;
-    createdGeometry.shaderIndexBuffer = instance.indexBuffer;
-    createdGeometry.indexCount = static_cast<u32>(instance.indices.size());
-    createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = __hidden_ecs_render::ComputeDispatchGroupCount(createdGeometry.triangleCount);
-    createdGeometry.sourceVertexLayout = __hidden_ecs_render::s_MeshSourceLayoutDeformableVertex;
-    createdGeometry.runtimeMesh = instance.handle;
-    createdGeometry.runtimeEditRevision = instance.editRevision;
-    if(createdGeometry.dispatchGroupCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deformable runtime mesh '{}' produced no dispatch groups"), instance.handle.value);
-        return false;
-    }
-
-    auto result = m_geometryMeshes.try_emplace(geometryKey, Move(createdGeometry));
+    auto result = m_geometryMeshes.try_emplace(desc.geometryKey, Move(createdGeometry));
     auto it = result.first;
 
     outGeometry = &it.value();
     return outGeometry->valid();
 }
 
-void RendererSystem::pruneDeformableGeometryResources(){
-    if(!m_deformableRuntimeCache || m_geometryMeshes.empty())
+void RendererSystem::pruneRuntimeGeometryResources(){
+    if(m_geometryMeshes.empty())
         return;
 
     for(auto it = m_geometryMeshes.begin(); it != m_geometryMeshes.end();){
         const GeometryResources& geometry = it.value();
-        if(!geometry.runtimeMesh.valid()){
+        if(!geometry.runtimeGeometry){
             ++it;
             continue;
         }
 
-        const DeformableRuntimeMeshInstance* instance = m_deformableRuntimeCache->findInstance(geometry.runtimeMesh);
-        if(!instance || instance->editRevision != geometry.runtimeEditRevision){
-            it = m_geometryMeshes.erase(it);
+        bool alive = false;
+        for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
+            if(provider && provider->containsRuntimeGeometry(geometry.geometryName, geometry.runtimeGeometryVersion)){
+                alive = true;
+                break;
+            }
+        }
+        if(alive){
+            ++it;
             continue;
         }
 
-        ++it;
+        it = m_geometryMeshes.erase(it);
     }
 }
 
@@ -3312,13 +3301,19 @@ bool RendererSystem::hasTransparentRenderers(){
             return true;
     }
 
-    auto deformableRendererView = m_world.view<DeformableRendererComponent>();
-    for(auto&& [entity, renderer] : deformableRendererView){
-        static_cast<void>(entity);
-        if(!renderer.visible)
+    bool runtimeTransparent = false;
+    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
+        if(!provider)
             continue;
 
-        if(materialIsTransparent(renderer.material))
+        provider->forEachRuntimeGeometry(
+            [&](const RuntimeGeometryDesc& desc){
+                if(runtimeTransparent || !desc.valid())
+                    return;
+                runtimeTransparent = materialIsTransparent(desc.material);
+            }
+        );
+        if(runtimeTransparent)
             return true;
     }
 

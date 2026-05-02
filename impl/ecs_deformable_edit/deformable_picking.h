@@ -21,12 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct alignas(Float4) DeformablePickingRay{
     // xyz = origin, w = minimum hit distance.
     Float4 originMinDistance = Float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -210,7 +204,7 @@ static_assert(
 );
 [[nodiscard]] bool RaycastVisibleDeformableRenderers(
     Core::ECS::World& world,
-    const RendererSystem& rendererSystem,
+    const DeformableRuntimeMeshCache& runtimeMeshCache,
     const DeformablePickingRay& ray,
     DeformablePosedHit& outHit,
     Core::Assets::AssetManager* assetManager = nullptr

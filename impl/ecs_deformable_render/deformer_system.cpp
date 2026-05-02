@@ -239,23 +239,101 @@ DeformerSystem::DeformerSystem(
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
-    , m_rendererSystem(rendererSystem)
     , m_shaderPathResolver(Move(shaderPathResolver))
+    , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
 {
-    readAccess<DeformableRendererComponent>();
+    writeAccess<DeformableRendererComponent>();
     readAccess<DeformableMorphWeightsComponent>();
     readAccess<DeformableJointPaletteComponent>();
     readAccess<DeformableSkeletonPoseComponent>();
     readAccess<DeformableDisplacementComponent>();
+
+    rendererSystem.registerRuntimeGeometryProvider(*this);
 }
 
 DeformerSystem::~DeformerSystem()
 {}
 
 void DeformerSystem::update(Core::ECS::World& world, const f32 delta){
-    static_cast<void>(world);
     static_cast<void>(delta);
+    m_runtimeMeshCache.update(world);
+}
+
+usize DeformerSystem::runtimeGeometryCandidateCount(){
+    return m_world.view<DeformableRendererComponent>().candidateCount();
+}
+
+void DeformerSystem::forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor){
+    m_world.view<DeformableRendererComponent>().each(
+        [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
+            if(!renderer.visible || !renderer.runtimeMesh.valid())
+                return;
+
+            const DeformableRuntimeMeshInstance* instance = findDeformableRuntimeMesh(renderer.runtimeMesh);
+            if(!instance || !instance->valid() || instance->entity != entity)
+                return;
+            if(instance->indices.size() > static_cast<usize>(Limit<u32>::s_Max))
+                return;
+
+            RuntimeGeometryDesc desc;
+            desc.entity = entity;
+            desc.material = renderer.material;
+            desc.geometryKey = DeriveRuntimeResourceName(
+                instance->source.name(),
+                instance->handle.value,
+                instance->editRevision,
+                "deformed_draw"
+            );
+            desc.shaderVertexBuffer = instance->deformedVertexBuffer;
+            desc.shaderIndexBuffer = instance->indexBuffer;
+            desc.indexCount = static_cast<u32>(instance->indices.size());
+            desc.sourceVertexLayout = MeshSourceLayout::DeformableVertex;
+            desc.version = instance->editRevision;
+            desc.visible = renderer.visible;
+
+            if(desc.valid())
+                visitor(desc);
+        }
+    );
+}
+
+bool DeformerSystem::containsRuntimeGeometry(const Name& geometryKey, const u64 version){
+    if(!geometryKey)
+        return false;
+
+    bool found = false;
+    forEachRuntimeGeometry(
+        [&](const RuntimeGeometryDesc& desc){
+            if(found)
+                return;
+            found = desc.geometryKey == geometryKey && desc.version == version;
+        }
+    );
+    return found;
+}
+
+RuntimeMeshHandle DeformerSystem::deformableRuntimeMeshHandle(const Core::ECS::EntityID entity)const{
+    return m_runtimeMeshCache.handleForEntity(entity);
+}
+
+u32 DeformerSystem::deformableRuntimeMeshEditRevision(const RuntimeMeshHandle handle)const{
+    return m_runtimeMeshCache.editRevision(handle);
+}
+
+bool DeformerSystem::bumpDeformableRuntimeMeshRevision(
+    const RuntimeMeshHandle handle,
+    const RuntimeMeshDirtyFlags dirtyFlags
+){
+    return m_runtimeMeshCache.bumpEditRevision(handle, dirtyFlags);
+}
+
+DeformableRuntimeMeshInstance* DeformerSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle){
+    return m_runtimeMeshCache.findInstance(handle);
+}
+
+const DeformableRuntimeMeshInstance* DeformerSystem::findDeformableRuntimeMesh(const RuntimeMeshHandle handle)const{
+    return m_runtimeMeshCache.findInstance(handle);
 }
 
 void DeformerSystem::render(Core::IFramebuffer* framebuffer){
@@ -265,7 +343,7 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
         for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
             const RuntimeResources& resources = it.value();
             const DeformableRuntimeMeshInstance* instance =
-                m_rendererSystem.findDeformableRuntimeMesh(resources.handle)
+                findDeformableRuntimeMesh(resources.handle)
             ;
             if(!instance || !instance->valid() || instance->editRevision != resources.editRevision){
                 it = m_runtimeResources.erase(it);
@@ -306,7 +384,7 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
                 return;
 
             DeformableRuntimeMeshInstance* instance =
-                m_rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh)
+                findDeformableRuntimeMesh(renderer.runtimeMesh)
             ;
             if(!instance || !instance->valid())
                 return;

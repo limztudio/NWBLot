@@ -8,7 +8,6 @@
 #include <core/ecs/world.h>
 #include <core/geometry/frame_math.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
-#include <impl/ecs_render/renderer_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -866,7 +865,7 @@ bool RaycastDeformableRuntimeMesh(
 
 bool RaycastVisibleDeformableRenderers(
     Core::ECS::World& world,
-    const RendererSystem& rendererSystem,
+    const DeformableRuntimeMeshCache& runtimeMeshCache,
     const DeformablePickingRay& ray,
     DeformablePosedHit& outHit,
     Core::Assets::AssetManager* assetManager){
@@ -880,7 +879,7 @@ bool RaycastVisibleDeformableRenderers(
                 return;
 
             const DeformableRuntimeMeshInstance* instance =
-                rendererSystem.findDeformableRuntimeMesh(renderer.runtimeMesh)
+                runtimeMeshCache.findInstance(renderer.runtimeMesh)
             ;
             if(!instance)
                 return;

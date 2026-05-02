@@ -11,6 +11,7 @@
 #include <core/input/input.h>
 #include <impl/ecs_deformable/ecs_deformable.h>
 #include <impl/ecs_deformable_edit/ecs_deformable_edit.h>
+#include <impl/ecs_deformable_render/ecs_deformable_render.h>
 #include <impl/ecs_render/ecs_render.h>
 #include <core/scene/scene.h>
 
@@ -57,13 +58,13 @@ private:
     };
 
     struct SurfaceEditMutationContext{
-        NWB::Core::ECSRender::RendererSystem* rendererSystem = nullptr;
+        NWB::Core::ECSDeformableRender::DeformerSystem* deformerSystem = nullptr;
         NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh;
         NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance* instance = nullptr;
         NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance cleanBase;
     };
 
-    NWB::Core::ECSRender::RendererSystem& rendererSystem();
+    NWB::Core::ECSDeformableRender::DeformerSystem& deformerSystem();
     void drawUiControls();
     void processPendingUiActions();
     void registerInputHandler();

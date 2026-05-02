@@ -847,11 +847,16 @@ void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
         rendererSystem,
         NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
     );
+    auto* deformerSystem = world.getSystem<NWB::Core::ECSDeformableRender::DeformerSystem>();
+    NWB_FATAL_ASSERT_MSG(
+        deformerSystem,
+        NWB_TEXT("ProjectTestbed initialization failed: deformer system is missing in initial world")
+    );
 }
 
-NWB::Core::ECSRender::RendererSystem& ProjectTestbed::rendererSystem(){
-    auto* system = m_world->getSystem<NWB::Core::ECSRender::RendererSystem>();
-    NWB_FATAL_ASSERT_MSG(system, NWB_TEXT("ProjectTestbed runtime invariant failed: renderer system is missing"));
+NWB::Core::ECSDeformableRender::DeformerSystem& ProjectTestbed::deformerSystem(){
+    auto* system = m_world->getSystem<NWB::Core::ECSDeformableRender::DeformerSystem>();
+    NWB_FATAL_ASSERT_MSG(system, NWB_TEXT("ProjectTestbed runtime invariant failed: deformer system is missing"));
     return *system;
 }
 
@@ -1401,7 +1406,7 @@ void ProjectTestbed::updateSurfaceEditTarget(const f32 delta){
 }
 
 void ProjectTestbed::updateSurfaceEditAccessories(){
-    auto& renderSystem = rendererSystem();
+    auto& deformSystem = deformerSystem();
 
     m_world->view<
         NWB::Core::ECSDeformable::DeformableAccessoryAttachmentComponent,
@@ -1413,7 +1418,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
             NWB::Core::Scene::TransformComponent& transform,
             NWB::Core::ECSRender::RendererComponent& renderer){
             static_cast<void>(entity);
-            const auto* instance = renderSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
+            const auto* instance = deformSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
             if(!instance){
                 renderer.visible = false;
                 return;
@@ -1502,7 +1507,7 @@ bool ProjectTestbed::refreshSurfaceEditPreview(){
     if(!m_surfaceEditPreviewActive)
         return false;
 
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
+    auto* instance = deformerSystem().findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
     if(!instance){
         clearSurfaceEditPreview();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview runtime mesh is unavailable"));
@@ -1569,7 +1574,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
 
     clearSurfaceEditPreview();
 
-    auto& renderSystem = rendererSystem();
+    auto& deformSystem = deformerSystem();
 
     NWB::Core::ECSDeformableEdit::DeformablePickingRay ray;
     if(!buildSurfaceEditPickRay(ray)){
@@ -1581,7 +1586,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     if(
         !NWB::Core::ECSDeformableEdit::RaycastVisibleDeformableRenderers(
             *m_world,
-            renderSystem,
+            deformSystem.runtimeMeshCache(),
             ray,
             hit,
             &m_context.assetManager
@@ -1592,14 +1597,14 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     }
 
     const NWB::Core::ECSDeformable::RuntimeMeshHandle targetRuntimeMesh =
-        renderSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
+        deformSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     if(!targetRuntimeMesh.valid() || hit.runtimeMesh != targetRuntimeMesh){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit: cursor hit is not on the active target"));
         return;
     }
 
-    auto* instance = renderSystem.findDeformableRuntimeMesh(hit.runtimeMesh);
+    auto* instance = deformSystem.findDeformableRuntimeMesh(hit.runtimeMesh);
     if(!instance){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: hit runtime mesh is unavailable"));
         return;
@@ -1669,7 +1674,7 @@ void ProjectTestbed::commitSurfaceEditPreview(){
         return;
     }
 
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
+    auto* instance = deformerSystem().findDeformableRuntimeMesh(m_surfaceEditSession.runtimeMesh);
     if(!instance){
         clearSurfaceEditPreview();
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: preview runtime mesh is unavailable"));
@@ -1736,7 +1741,7 @@ void ProjectTestbed::attachPendingSurfaceEditAccessory(){
     if(!m_pendingSurfaceEditAccessory)
         return;
 
-    const auto* instance = rendererSystem().findDeformableRuntimeMesh(m_pendingSurfaceEditRuntimeMesh);
+    const auto* instance = deformerSystem().findDeformableRuntimeMesh(m_pendingSurfaceEditRuntimeMesh);
     if(!instance){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit: committed runtime mesh is unavailable"));
         clearPendingSurfaceEditAccessory();
@@ -1910,9 +1915,9 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
         return;
 
     const NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
+        deformerSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
-    auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    auto* instance = deformerSystem().findDeformableRuntimeMesh(runtimeMesh);
     if(!runtimeMesh.valid() || !instance)
         return;
 
@@ -2006,7 +2011,7 @@ void ProjectTestbed::hideSurfaceEditAccessoriesForTarget(const NWB::Core::ECS::E
 
 bool ProjectTestbed::restoreSurfaceEditAccessoryEntities(){
     const NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh =
-        rendererSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
+        deformerSystem().deformableRuntimeMeshHandle(m_surfaceEditTargetEntity)
     ;
     if(!runtimeMesh.valid())
         return false;
@@ -2050,10 +2055,10 @@ bool ProjectTestbed::prepareSurfaceEditMutation(
         return false;
     }
 
-    auto& renderSystem = rendererSystem();
-    outContext.rendererSystem = &renderSystem;
-    outContext.runtimeMesh = renderSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity);
-    outContext.instance = renderSystem.findDeformableRuntimeMesh(outContext.runtimeMesh);
+    auto& deformSystem = deformerSystem();
+    outContext.deformerSystem = &deformSystem;
+    outContext.runtimeMesh = deformSystem.deformableRuntimeMeshHandle(m_surfaceEditTargetEntity);
+    outContext.instance = deformSystem.findDeformableRuntimeMesh(outContext.runtimeMesh);
     if(!outContext.runtimeMesh.valid() || !outContext.instance){
         NWB_LOGGER_WARNING(NWB_TEXT("Surface edit {}: active runtime mesh is unavailable"), action);
         return false;
@@ -2106,7 +2111,7 @@ bool ProjectTestbed::pickSurfaceEditMutationTarget(
     if(
         !NWB::Core::ECSDeformableEdit::RaycastVisibleDeformableRenderers(
             *m_world,
-            *editContext.rendererSystem,
+            editContext.deformerSystem->runtimeMeshCache(),
             ray,
             outTargetHit,
             &m_context.assetManager
@@ -2447,7 +2452,7 @@ void ProjectTestbed::logSurfaceEditDebugSnapshot(){
         ? m_surfaceEditSession.runtimeMesh
         : m_surfaceEditDebugRuntimeMesh
     ;
-    const auto* instance = rendererSystem().findDeformableRuntimeMesh(runtimeMesh);
+    const auto* instance = deformerSystem().findDeformableRuntimeMesh(runtimeMesh);
     if(!instance){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit debug: no active runtime mesh"));
         return;

@@ -9,7 +9,6 @@ target_sources(nwb_ecs_render PRIVATE
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs
     nwb_scene
-    nwb_ecs_deformable
     nwb_graphics
     nwb_assets_geometry
     nwb_assets_material

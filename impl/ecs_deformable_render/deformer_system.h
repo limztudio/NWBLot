@@ -9,6 +9,7 @@
 #include <core/ecs/system.h>
 #include <core/graphics/graphics.h>
 #include <impl/ecs_deformable/deformable_runtime_mesh_cache.h>
+#include <impl/ecs_render/renderer_system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,14 +21,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem;
 class Shader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeformerSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
+class DeformerSystem final
+    : public Core::ECS::ISystem
+    , public Core::IRenderPass
+    , public IRuntimeGeometryProvider
+{
 public:
     struct alignas(Float4) DeformerVertexMorphRangeGpu{
         u32 firstDelta = 0;
@@ -104,6 +108,21 @@ public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
     virtual void render(Core::IFramebuffer* framebuffer)override;
 
+    virtual usize runtimeGeometryCandidateCount()override;
+    virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor)override;
+    virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version)override;
+
+    [[nodiscard]] RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const;
+    [[nodiscard]] u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const;
+    [[nodiscard]] bool bumpDeformableRuntimeMeshRevision(
+        RuntimeMeshHandle handle,
+        RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All
+    );
+    [[nodiscard]] DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle);
+    [[nodiscard]] const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)const;
+    [[nodiscard]] DeformableRuntimeMeshCache& runtimeMeshCache(){ return m_runtimeMeshCache; }
+    [[nodiscard]] const DeformableRuntimeMeshCache& runtimeMeshCache()const{ return m_runtimeMeshCache; }
+
 
 private:
     [[nodiscard]] bool ensurePipeline();
@@ -143,8 +162,8 @@ private:
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
-    RendererSystem& m_rendererSystem;
     ShaderPathResolveCallback m_shaderPathResolver;
+    DeformableRuntimeMeshCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, RuntimeResourceMapAllocator> m_runtimeResources;
     Core::BindingLayoutHandle m_bindingLayout;

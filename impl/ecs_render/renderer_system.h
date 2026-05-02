@@ -11,7 +11,6 @@
 #include <core/ecs/system.h>
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
-#include <impl/ecs_deformable/deformable_runtime_mesh_cache.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,6 +41,13 @@ namespace RenderPath{
     enum Enum : u8{
         MeshShader,
         ComputeEmulation,
+    };
+};
+
+namespace MeshSourceLayout{
+    enum Enum : u32{
+        GeometryVertex = 0u,
+        DeformableVertex = 1u,
     };
 };
 
@@ -84,6 +90,47 @@ static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParamete
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct RuntimeGeometryDesc{
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    Core::Assets::AssetRef<Material> material;
+    Name geometryKey = NAME_NONE;
+    Core::BufferHandle shaderVertexBuffer;
+    Core::BufferHandle shaderIndexBuffer;
+    u32 indexCount = 0u;
+    u32 sourceVertexLayout = MeshSourceLayout::GeometryVertex;
+    u64 version = 0u;
+    bool visible = true;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            visible
+            && entity.valid()
+            && material.valid()
+            && geometryKey != NAME_NONE
+            && shaderVertexBuffer != nullptr
+            && shaderIndexBuffer != nullptr
+            && indexCount > 0u
+            && (indexCount % 3u) == 0u
+        ;
+    }
+};
+
+using RuntimeGeometryVisitor = Function<void(const RuntimeGeometryDesc&)>;
+
+class IRuntimeGeometryProvider{
+public:
+    virtual ~IRuntimeGeometryProvider() = default;
+
+public:
+    [[nodiscard]] virtual usize runtimeGeometryCandidateCount() = 0;
+    virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor) = 0;
+    [[nodiscard]] virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version) = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
     using MaterialParameterVectorAllocator = Core::Alloc::CustomAllocator<MaterialParameterGpuData>;
@@ -113,8 +160,8 @@ private:
         u32 triangleCount = 0;
         u32 dispatchGroupCount = 0;
         u32 sourceVertexLayout = 0;
-        RuntimeMeshHandle runtimeMesh;
-        u32 runtimeEditRevision = 0;
+        bool runtimeGeometry = false;
+        u64 runtimeGeometryVersion = 0u;
 
         [[nodiscard]] bool valid()const noexcept{
             return
@@ -295,21 +342,14 @@ public:
 
 
 public:
-    [[nodiscard]] RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const;
-    [[nodiscard]] u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const;
-    [[nodiscard]] bool bumpDeformableRuntimeMeshRevision(
-        RuntimeMeshHandle handle,
-        RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All
-    );
-    [[nodiscard]] DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle);
-    [[nodiscard]] const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)const;
+    void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider);
+    void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider);
 
 
 private:
-    void updateDeformableRuntimeMeshes(Core::ECS::World& world);
     [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
-    [[nodiscard]] bool ensureDeformableGeometryResources(const DeformableRuntimeMeshInstance& instance, GeometryResources*& outGeometry);
-    void pruneDeformableGeometryResources();
+    [[nodiscard]] bool ensureRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry);
+    void pruneRuntimeGeometryResources();
     [[nodiscard]] bool ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool ensureMeshShaderResources();
     [[nodiscard]] bool ensureComputeEmulationResources();
@@ -388,6 +428,7 @@ private:
     using MaterialSurfaceInfoMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, MaterialSurfaceInfo>>;
     using MaterialPipelineMapAllocator = Core::Alloc::CustomAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>>;
     using LoggedMaterialPathMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, RenderPath::Enum>>;
+    using RuntimeGeometryProviderAllocator = Core::Alloc::CustomAllocator<IRuntimeGeometryProvider*>;
 
     Core::Alloc::CustomArena& m_arena;
     Core::ECS::World& m_world;
@@ -399,6 +440,7 @@ private:
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, MaterialSurfaceInfoMapAllocator> m_materialSurfaceInfos;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, MaterialPipelineMapAllocator> m_materialPipelines;
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, LoggedMaterialPathMapAllocator> m_loggedMaterialPaths;
+    Vector<IRuntimeGeometryProvider*, RuntimeGeometryProviderAllocator> m_runtimeGeometryProviders;
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BindingLayoutHandle m_emulationViewBindingLayout;
@@ -428,7 +470,6 @@ private:
     Core::ComputePipelineHandle m_avboitDepthWarpPipeline;
     Core::ComputePipelineHandle m_avboitIntegratePipeline;
     DeferredFrameTargets m_deferredTargets;
-    Core::CustomUniquePtr<DeformableRuntimeMeshCache> m_deformableRuntimeCache;
     usize m_instanceBufferCapacity = 0;
     usize m_materialParameterBufferCapacity = 0;
 };

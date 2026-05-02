@@ -224,33 +224,19 @@ u64 ComputeStagingTextureOffset(
     u64 offset = 0;
     u64 arrayByteSize = cachedArrayByteSize;
     __hidden_vulkan_staging_texture::StagingTextureMipLayout layout;
-    bool layoutBuilt = false;
-    if(arrayByteSize != 0){
-        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
-            desc,
-            formatInfo,
-            formatBlockWidth,
-            formatBlockHeight,
-            resolved.mipLevel,
-            false,
-            nullptr,
-            &offset,
-            &layout
-        );
-    }
-    else{
-        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
-            desc,
-            formatInfo,
-            formatBlockWidth,
-            formatBlockHeight,
-            resolved.mipLevel,
-            true,
-            &arrayByteSize,
-            &offset,
-            &layout
-        );
-    }
+    const bool buildCompleteArrayLayout = arrayByteSize == 0;
+    u64* outArrayByteSize = buildCompleteArrayLayout ? &arrayByteSize : nullptr;
+    const bool layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
+        desc,
+        formatInfo,
+        formatBlockWidth,
+        formatBlockHeight,
+        resolved.mipLevel,
+        buildCompleteArrayLayout,
+        outArrayByteSize,
+        &offset,
+        &layout
+    );
 
     if(!layoutBuilt){
         __hidden_vulkan_staging_texture::ClearStagingTextureLayoutOutputs(

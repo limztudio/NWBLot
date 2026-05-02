@@ -320,7 +320,15 @@ Texture::~Texture(){
     m_views.clear();
 
     if(m_managed){
-        m_allocator.destroyTexture(*this);
+        if(m_desc.isVirtual){
+            if(m_image != VK_NULL_HANDLE){
+                vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+                m_image = VK_NULL_HANDLE;
+            }
+        }
+        else{
+            m_allocator.destroyTexture(*this);
+        }
     }
 }
 
@@ -505,9 +513,10 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->m_imageInfo.flags = flags;
     texture->m_imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-    res = d.isVirtual
-        ? m_allocator.createVirtualTexture(*texture, texture->m_imageInfo)
-        : m_allocator.createTexture(*texture, texture->m_imageInfo);
+    if(d.isVirtual)
+        res = vkCreateImage(m_context.device, &texture->m_imageInfo, m_context.allocationCallbacks, &texture->m_image);
+    else
+        res = m_allocator.createTexture(*texture, texture->m_imageInfo);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));

@@ -64,7 +64,15 @@ Buffer::~Buffer(){
     m_bufferViews.clear();
 
     if(m_managed){
-        m_allocator.destroyBuffer(*this);
+        if(m_desc.isVirtual){
+            if(m_buffer != VK_NULL_HANDLE){
+                vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+                m_buffer = VK_NULL_HANDLE;
+            }
+        }
+        else{
+            m_allocator.destroyBuffer(*this);
+        }
     }
 }
 
@@ -223,9 +231,10 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.usage = usageFlags;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = d.isVirtual
-        ? m_allocator.createVirtualBuffer(*buffer, bufferInfo)
-        : m_allocator.createBuffer(*buffer, bufferInfo);
+    if(d.isVirtual)
+        res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
+    else
+        res = m_allocator.createBuffer(*buffer, bufferInfo);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));

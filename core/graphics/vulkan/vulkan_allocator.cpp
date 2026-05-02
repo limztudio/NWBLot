@@ -213,10 +213,6 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     return res;
 }
 
-VkResult VulkanAllocator::createVirtualBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo){
-    return vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer.m_buffer);
-}
-
 void VulkanAllocator::destroyBuffer(Buffer& buffer){
     if(buffer.m_allocation){
         __hidden_vulkan_allocator::UnmapTransientAllocation(
@@ -226,9 +222,6 @@ void VulkanAllocator::destroyBuffer(Buffer& buffer){
             buffer.m_persistentlyMapped
         );
         vmaDestroyBuffer(m_allocator, buffer.m_buffer, buffer.m_allocation);
-    }
-    else if(buffer.m_desc.isVirtual && buffer.m_buffer != VK_NULL_HANDLE){
-        vkDestroyBuffer(m_context.device, buffer.m_buffer, m_context.allocationCallbacks);
     }
     else{
         NWB_ASSERT(buffer.m_buffer == VK_NULL_HANDLE);
@@ -261,16 +254,9 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
     return vmaCreateImage(m_allocator, &imageInfo, &allocInfo, &texture.m_image, &texture.m_allocation, nullptr);
 }
 
-VkResult VulkanAllocator::createVirtualTexture(Texture& texture, const VkImageCreateInfo& imageInfo){
-    return vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &texture.m_image);
-}
-
 void VulkanAllocator::destroyTexture(Texture& texture){
     if(texture.m_allocation){
         vmaDestroyImage(m_allocator, texture.m_image, texture.m_allocation);
-    }
-    else if(texture.m_desc.isVirtual && texture.m_image != VK_NULL_HANDLE){
-        vkDestroyImage(m_context.device, texture.m_image, m_context.allocationCallbacks);
     }
     else{
         NWB_ASSERT(texture.m_image == VK_NULL_HANDLE);

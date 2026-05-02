@@ -490,14 +490,12 @@ public:
     [[nodiscard]] bool initialize();
 
     VkResult createBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo);
-    VkResult createVirtualBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo);
     void destroyBuffer(Buffer& buffer);
     VkResult mapBufferMemory(Buffer& buffer, void** outData);
     void unmapBufferMemory(Buffer& buffer);
     VkResult invalidateBufferMemory(Buffer& buffer);
 
     VkResult createTexture(Texture& texture, const VkImageCreateInfo& imageInfo);
-    VkResult createVirtualTexture(Texture& texture, const VkImageCreateInfo& imageInfo);
     void destroyTexture(Texture& texture);
 
     VkResult createStagingTexture(StagingTexture& texture, const VkBufferCreateInfo& bufferInfo, CpuAccessMode::Enum cpuAccess);

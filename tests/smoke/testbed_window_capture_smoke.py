@@ -23,11 +23,18 @@ class SmokeFailure(Exception):
 
 
 class CaptureResult:
-    def __init__(self, handle, width, height, has_pixel_variation):
+    def __init__(self, handle, width, height, has_pixel_variation, appears_blank):
         self.handle = handle
         self.width = width
         self.height = height
         self.has_pixel_variation = has_pixel_variation
+        self.appears_blank = appears_blank
+
+
+class ImageAnalysis:
+    def __init__(self, has_pixel_variation, appears_blank):
+        self.has_pixel_variation = has_pixel_variation
+        self.appears_blank = appears_blank
 
 
 def write_status(message):
@@ -195,6 +202,40 @@ def write_bmp_24(path, width, height, rows_rgb):
                 encoded.extend((blue, green, red))
             out.write(encoded)
             out.write(padding)
+
+
+def analyze_rgb_rows(rows_rgb):
+    first_pixel = None
+    total_pixels = 0
+    non_white_pixels = 0
+    luma_sum = 0
+    min_luma = 255
+    max_luma = 0
+    has_pixel_variation = False
+
+    for row in rows_rgb:
+        for red, green, blue in row:
+            rgb = (red, green, blue)
+            if first_pixel is None:
+                first_pixel = rgb
+            elif rgb != first_pixel:
+                has_pixel_variation = True
+
+            luma = (54 * red + 183 * green + 19 * blue) >> 8
+            min_luma = min(min_luma, luma)
+            max_luma = max(max_luma, luma)
+            luma_sum += luma
+            total_pixels += 1
+            if red < 247 or green < 247 or blue < 247:
+                non_white_pixels += 1
+
+    if total_pixels == 0:
+        return ImageAnalysis(False, True)
+
+    mean_luma = luma_sum / total_pixels
+    non_white_fraction = non_white_pixels / total_pixels
+    appears_blank = (max_luma - min_luma) <= 3 or (mean_luma >= 245.0 and non_white_fraction < 0.01)
+    return ImageAnalysis(has_pixel_variation, appears_blank)
 
 
 def channel_from_mask(pixel, mask):
@@ -469,6 +510,17 @@ class LinuxX11Capture:
             ctypes.c_int,
         ]
         self.x11.XWarpPointer.restype = ctypes.c_int
+        self.x11.XTranslateCoordinates.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_ulong,
+            ctypes.c_ulong,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_ulong),
+        ]
+        self.x11.XTranslateCoordinates.restype = ctypes.c_int
 
     def get_window_pid(self, window):
         actual_type = ctypes.c_ulong()
@@ -745,6 +797,9 @@ class LinuxX11Capture:
         self.send_button_event(window, self.BUTTON_RELEASE, commit_x, commit_y)
 
     def capture_window(self, window, output_path):
+        self.x11.XRaiseWindow(self.display, window)
+        self.x11.XFlush(self.display)
+        time.sleep(0.2)
         self.x11.XSync(self.display, False)
         attributes = self.get_attributes(window)
         if not attributes:
@@ -752,21 +807,67 @@ class LinuxX11Capture:
         if attributes.width <= 0 or attributes.height <= 0:
             raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
 
-        image = self.x11.XGetImage(
+        result = self._capture_drawable_region(window, window, 0, 0, attributes.width, attributes.height, output_path)
+        if not result.appears_blank:
+            return result
+
+        write_status(f"window 0x{window:x}: direct XGetImage capture looked blank; retrying from root screen")
+        root_region = self._window_root_region(window, attributes)
+        if root_region:
+            root_x, root_y, width, height = root_region
+            result = self._capture_drawable_region(self.root, window, root_x, root_y, width, height, output_path)
+            if not result.appears_blank:
+                return result
+
+        return result
+
+    def _window_root_region(self, window, attributes):
+        root_x = ctypes.c_int()
+        root_y = ctypes.c_int()
+        child = ctypes.c_ulong()
+        if self.x11.XTranslateCoordinates(
             self.display,
             window,
+            self.root,
             0,
             0,
-            attributes.width,
-            attributes.height,
+            ctypes.byref(root_x),
+            ctypes.byref(root_y),
+            ctypes.byref(child),
+        ) == 0:
+            return None
+
+        root_attributes = self.get_attributes(self.root)
+        if not root_attributes or root_attributes.width <= 0 or root_attributes.height <= 0:
+            return None
+
+        capture_x = max(root_x.value, 0)
+        capture_y = max(root_y.value, 0)
+        skipped_x = capture_x - root_x.value
+        skipped_y = capture_y - root_y.value
+        width = min(attributes.width - skipped_x, root_attributes.width - capture_x)
+        height = min(attributes.height - skipped_y, root_attributes.height - capture_y)
+        if width <= 0 or height <= 0:
+            return None
+
+        return capture_x, capture_y, width, height
+
+    def _capture_drawable_region(self, drawable, output_handle, x, y, width, height, output_path):
+        image = self.x11.XGetImage(
+            self.display,
+            drawable,
+            x,
+            y,
+            width,
+            height,
             ctypes.c_ulong(-1).value,
             self.Z_PIXMAP,
         )
         if not image:
-            raise SmokeFailure(f"XGetImage failed for window 0x{window:x}")
+            raise SmokeFailure(f"XGetImage failed for drawable 0x{drawable:x}")
 
         try:
-            return self._write_ximage_bmp(window, image.contents, output_path)
+            return self._write_ximage_bmp(output_handle, image.contents, output_path)
         finally:
             self.x11.XDestroyImage(image)
 
@@ -779,8 +880,6 @@ class LinuxX11Capture:
         raw_size = image.bytes_per_line * image.height
         raw = ctypes.string_at(image.data, raw_size)
         rows = []
-        first_pixel = None
-        has_variation = False
 
         for y in range(image.height):
             row_base = y * image.bytes_per_line
@@ -792,15 +891,12 @@ class LinuxX11Capture:
                 green = channel_from_mask(pixel, image.green_mask)
                 blue = channel_from_mask(pixel, image.blue_mask)
                 rgb = (red, green, blue)
-                if first_pixel is None:
-                    first_pixel = rgb
-                elif rgb != first_pixel:
-                    has_variation = True
                 row.append(rgb)
             rows.append(row)
 
         write_bmp_24(output_path, image.width, image.height, rows)
-        return CaptureResult(window, image.width, image.height, has_variation)
+        analysis = analyze_rgb_rows(rows)
+        return CaptureResult(window, image.width, image.height, analysis.has_pixel_variation, analysis.appears_blank)
 
 
 class WinRect(ctypes.Structure):
@@ -1085,8 +1181,6 @@ class WindowsCapture:
                 raise SmokeFailure(f"GetDIBits failed for HWND 0x{hwnd:x}")
 
             rows = []
-            first_pixel = None
-            has_variation = False
             for y in range(height):
                 row = []
                 row_base = y * width * 4
@@ -1096,15 +1190,12 @@ class WindowsCapture:
                     green = buffer[pixel_base + 1]
                     red = buffer[pixel_base + 2]
                     rgb = (red, green, blue)
-                    if first_pixel is None:
-                        first_pixel = rgb
-                    elif rgb != first_pixel:
-                        has_variation = True
                     row.append(rgb)
                 rows.append(row)
 
             write_bmp_24(output_path, width, height, rows)
-            return CaptureResult(hwnd, width, height, has_variation)
+            analysis = analyze_rgb_rows(rows)
+            return CaptureResult(hwnd, width, height, analysis.has_pixel_variation, analysis.appears_blank)
         finally:
             if old_object:
                 self.gdi32.SelectObject(mem_dc, old_object)
@@ -1205,6 +1296,8 @@ def capture_existing_handle(args, backend):
         time.sleep(args.csg_settle_seconds)
 
     result = backend.capture_window(args.window_handle, args.output)
+    if result.appears_blank:
+        raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears blank or white")
     if not result.has_pixel_variation:
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
 
@@ -1311,6 +1404,8 @@ def launch_and_capture(args, backend):
                 raise SmokeFailure(f"testbed exited after CSG exercise (exit {testbed_process.returncode})\n{tail}")
 
         result = backend.capture_window(handle, args.output)
+        if result.appears_blank:
+            raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears blank or white")
         if not result.has_pixel_variation:
             raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
         return result

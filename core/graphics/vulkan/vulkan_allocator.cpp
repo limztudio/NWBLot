@@ -198,10 +198,7 @@ bool VulkanAllocator::initialize(){
     return true;
 }
 
-VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo, const bool allocateMemory){
-    if(!allocateMemory)
-        return vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer.m_buffer);
-
+VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo){
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
@@ -220,6 +217,10 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
         buffer.m_persistentlyMapped = allocationInfo.pMappedData != nullptr;
     }
     return res;
+}
+
+VkResult VulkanAllocator::createVirtualBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo){
+    return vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer.m_buffer);
 }
 
 void VulkanAllocator::destroyBuffer(Buffer& buffer){
@@ -258,15 +259,16 @@ VkResult VulkanAllocator::invalidateBufferMemory(Buffer& buffer){
     return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, buffer.m_allocation);
 }
 
-VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInfo& imageInfo, const bool allocateMemory){
-    if(!allocateMemory)
-        return vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &texture.m_image);
-
+VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInfo& imageInfo){
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildTextureAllocationInfo();
     return vmaCreateImage(m_allocator, &imageInfo, &allocInfo, &texture.m_image, &texture.m_allocation, nullptr);
+}
+
+VkResult VulkanAllocator::createVirtualTexture(Texture& texture, const VkImageCreateInfo& imageInfo){
+    return vkCreateImage(m_context.device, &imageInfo, m_context.allocationCallbacks, &texture.m_image);
 }
 
 void VulkanAllocator::destroyTexture(Texture& texture){

@@ -223,11 +223,9 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.usage = usageFlags;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = m_allocator.createBuffer(
-        *buffer,
-        bufferInfo,
-        !d.isVirtual
-    );
+    res = d.isVirtual
+        ? m_allocator.createVirtualBuffer(*buffer, bufferInfo)
+        : m_allocator.createBuffer(*buffer, bufferInfo);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));

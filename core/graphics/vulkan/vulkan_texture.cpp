@@ -505,7 +505,9 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->m_imageInfo.flags = flags;
     texture->m_imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
 
-    res = m_allocator.createTexture(*texture, texture->m_imageInfo, !d.isVirtual);
+    res = d.isVirtual
+        ? m_allocator.createVirtualTexture(*texture, texture->m_imageInfo)
+        : m_allocator.createTexture(*texture, texture->m_imageInfo);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));

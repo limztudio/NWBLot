@@ -254,6 +254,10 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
     }
 
     auto* buffer = static_cast<Buffer*>(bufferResource);
+    if(!buffer->m_desc.isVolatile && buffer->m_desc.cpuAccess == CpuAccessMode::None){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
+        return nullptr;
+    }
     if(buffer->m_allocation == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no bound memory"));
         return nullptr;

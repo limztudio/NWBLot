@@ -242,6 +242,10 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     auto* staging = static_cast<StagingTexture*>(tex);
+    if(staging->m_cpuAccess == CpuAccessMode::None){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without CPU access"));
+        return nullptr;
+    }
     if(!VulkanDetail::IsTextureSliceInBounds(staging->m_desc, slice)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));

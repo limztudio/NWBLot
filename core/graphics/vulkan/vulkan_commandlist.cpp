@@ -147,6 +147,10 @@ void CommandList::retainStagingBuffer(IBuffer* buffer){
         m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(buffer, ArenaRefDeleter<IBuffer>(&m_context.objectArena));
 }
 
+IDevice* CommandList::getDevice(){
+    return &m_device;
+}
+
 bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
     if(!bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for {}"), commandName);

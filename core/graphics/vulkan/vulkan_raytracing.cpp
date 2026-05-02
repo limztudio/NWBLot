@@ -1562,6 +1562,54 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
     return true;
 }
 
+bool CommandList::buildTopLevelAccelStructFromInstanceData(
+    IRayTracingAccelStruct* asInterface,
+    AccelStruct* as,
+    const VkDeviceAddress instanceDataAddress,
+    const usize numInstances,
+    const RayTracingAccelStructBuildFlags::Mask buildFlags,
+    const tchar* operationName
+){
+    auto geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
+    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+    geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
+
+    auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
+    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
+        buildFlags,
+        VulkanDetail::AccelStructCompactionMode::Disabled
+    );
+    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    buildInfo.dstAccelerationStructure = as->m_accelStruct;
+    buildInfo.geometryCount = 1;
+    buildInfo.pGeometries = &geometry;
+
+    auto primitiveCount = static_cast<uint32_t>(numInstances);
+    auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
+
+    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is too small"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
+        return false;
+    }
+
+    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
+        return false;
+
+    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
+    rangeInfo.primitiveCount = primitiveCount;
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
+
+    retainResource(asInterface);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1957,6 +2005,60 @@ void CommandList::compactBottomLevelAccelStructs(){
             }
         m_pendingCompactions.resize(dst);
     }
+}
+
+void CommandList::buildTopLevelAccelStructFromBuffer(
+    IRayTracingAccelStruct* accelStructResource,
+    IBuffer* instanceBuffer,
+    u64 instanceBufferOffset,
+    usize numInstances,
+    RayTracingAccelStructBuildFlags::Mask buildFlags
+){
+    if(!accelStructResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
+        return;
+    }
+    if(!instanceBuffer && numInstances > 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is null"));
+        return;
+    }
+    if(numInstances == 0)
+        return;
+    if(numInstances > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance count exceeds Vulkan limit"));
+        return;
+    }
+
+    if(!m_context.extensions.KHR_acceleration_structure)
+        return;
+
+    auto* as = checked_cast<AccelStruct*>(accelStructResource);
+    if(!as || !as->m_desc.isTopLevel){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
+        return;
+    }
+
+    auto* instanceBufferImpl = checked_cast<Buffer*>(instanceBuffer);
+    if(!instanceBufferImpl){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is invalid"));
+        return;
+    }
+    if(!instanceBufferImpl->m_desc.isAccelStructBuildInput){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer was not created with acceleration-structure build input usage"));
+        return;
+    }
+
+    const u64 instanceDataBytes = static_cast<u64>(numInstances) * sizeof(VkAccelerationStructureInstanceKHR);
+    if(!VulkanDetail::IsBufferRangeInBounds(instanceBufferImpl->m_desc, instanceBufferOffset, instanceDataBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer range is outside the buffer"));
+        return;
+    }
+
+    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
+    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
+        return;
+
+    retainResource(instanceBuffer);
 }
 
 void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){

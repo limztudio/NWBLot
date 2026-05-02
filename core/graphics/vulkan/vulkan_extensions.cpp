@@ -14,29 +14,74 @@ NWB_VULKAN_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Sampler Feedback (stubs)
+// Local Helpers
 
 
-void CommandList::clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture){
-    static_cast<void>(texture);
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear sampler feedback texture: sampler feedback is not supported by this backend"));
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
+namespace __hidden_vulkan_extensions{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void ClearTextureTilingOutputs(u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum){
+    if(numTiles)
+        *numTiles = 0;
+    if(desc)
+        *desc = {};
+    if(tileShape)
+        *tileShape = {};
+    if(subresourceTilingsNum)
+        *subresourceTilingsNum = 0;
 }
 
-void CommandList::decodeSamplerFeedbackTexture(IBuffer* buffer, ISamplerFeedbackTexture* texture, Format::Enum format){
-    static_cast<void>(buffer);
-    static_cast<void>(texture);
-    static_cast<void>(format);
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to decode sampler feedback texture: sampler feedback is not supported by this backend"));
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
+[[nodiscard]] bool DivideUpU32(const u32 value, const u32 divisor, u32& outValue){
+    if(divisor == 0)
+        return false;
+
+    outValue = DivideUp(value, divisor);
+    return true;
 }
 
-void CommandList::setSamplerFeedbackTextureState(ISamplerFeedbackTexture* texture, ResourceStates::Mask stateBits){
-    static_cast<void>(texture);
-    static_cast<void>(stateBits);
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set sampler feedback texture state: sampler feedback is not supported by this backend"));
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
+[[nodiscard]] bool AddSparseTileCount(
+    const u32 startTileIndex,
+    const u32 widthInTiles,
+    const u32 heightInTiles,
+    const u32 depthInTiles,
+    u32& outNextTileIndex
+){
+    u64 tileCount = widthInTiles;
+    if(heightInTiles != 0 && tileCount > Limit<u64>::s_Max / heightInTiles)
+        return false;
+    tileCount *= heightInTiles;
+    if(depthInTiles != 0 && tileCount > Limit<u64>::s_Max / depthInTiles)
+        return false;
+    tileCount *= depthInTiles;
+    if(tileCount > static_cast<u64>(Limit<u32>::s_Max - startTileIndex))
+        return false;
+
+    outNextTileIndex = startTileIndex + static_cast<u32>(tileCount);
+    return true;
 }
+
+[[nodiscard]] bool ComputeSparseTileCount(const VkDeviceSize byteSize, const u64 tileByteSize, u32& outTileCount){
+    if(tileByteSize == 0){
+        outTileCount = 0;
+        return true;
+    }
+
+    const u64 tileCount = byteSize / tileByteSize;
+    if(tileCount > Limit<u32>::s_Max)
+        return false;
+
+    outTileCount = static_cast<u32>(tileCount);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,134 +157,8 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Draw Indirect
+// Cluster Acceleration Structure
 
-
-void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    Buffer* indirectBuffer = nullptr;
-    if(
-        !prepareDrawIndirect(
-            offsetBytes,
-            drawCount,
-            sizeof(DrawIndexedIndirectArguments),
-            NWB_TEXT("draw indexed indirect"),
-            NWB_TEXT("drawIndexedIndirect"),
-            VulkanDetail::IndirectDrawIndexMode::Indexed,
-            indirectBuffer
-        )
-    )
-        return;
-
-    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
-    retainResource(m_currentGraphicsState.indirectParams);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Ray Tracing (additional methods)
-
-
-bool CommandList::buildTopLevelAccelStructFromInstanceData(
-    IRayTracingAccelStruct* asInterface,
-    AccelStruct* as,
-    const VkDeviceAddress instanceDataAddress,
-    const usize numInstances,
-    const RayTracingAccelStructBuildFlags::Mask buildFlags,
-    const tchar* operationName
-){
-    auto geometry = VulkanDetail::MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
-    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-    geometry.geometry.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-    geometry.geometry.instances.arrayOfPointers = VK_FALSE;
-    geometry.geometry.instances.data.deviceAddress = instanceDataAddress;
-
-    auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
-    buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
-        buildFlags,
-        VulkanDetail::AccelStructCompactionMode::Disabled
-    );
-    buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->m_accelStruct;
-    buildInfo.geometryCount = 1;
-    buildInfo.pGeometries = &geometry;
-
-    auto primitiveCount = static_cast<uint32_t>(numInstances);
-    auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
-
-    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
-    if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is too small"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
-        return false;
-    }
-
-    if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
-        return false;
-
-    VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-    rangeInfo.primitiveCount = primitiveCount;
-    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
-    vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
-
-    retainResource(asInterface);
-    return true;
-}
-
-void CommandList::buildTopLevelAccelStructFromBuffer(
-    IRayTracingAccelStruct* accelStructResource,
-    IBuffer* instanceBuffer,
-    u64 instanceBufferOffset,
-    usize numInstances,
-    RayTracingAccelStructBuildFlags::Mask buildFlags
-){
-    if(!accelStructResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
-        return;
-    }
-    if(!instanceBuffer && numInstances > 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is null"));
-        return;
-    }
-    if(numInstances == 0)
-        return;
-    if(numInstances > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance count exceeds Vulkan limit"));
-        return;
-    }
-
-    if(!m_context.extensions.KHR_acceleration_structure)
-        return;
-
-    auto* as = checked_cast<AccelStruct*>(accelStructResource);
-    if(!as || !as->m_desc.isTopLevel){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
-        return;
-    }
-
-    auto* instanceBufferImpl = checked_cast<Buffer*>(instanceBuffer);
-    if(!instanceBufferImpl){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is invalid"));
-        return;
-    }
-    if(!instanceBufferImpl->m_desc.isAccelStructBuildInput){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer was not created with acceleration-structure build input usage"));
-        return;
-    }
-
-    const u64 instanceDataBytes = static_cast<u64>(numInstances) * sizeof(VkAccelerationStructureInstanceKHR);
-    if(!VulkanDetail::IsBufferRangeInBounds(instanceBufferImpl->m_desc, instanceBufferOffset, instanceDataBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer range is outside the buffer"));
-        return;
-    }
-
-    const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
-        return;
-
-    retainResource(instanceBuffer);
-}
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
     if(!m_context.extensions.NV_cluster_acceleration_structure)
@@ -355,6 +274,11 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(scratchBufferHandle));
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Cooperative Vector
+
+
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
     if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return;
@@ -457,112 +381,25 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// UAV Barriers and Tracking
-
-
-void CommandList::setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers){
-    if(!texture)
-        return;
-    m_stateTracker->setEnableUavBarriersForTexture(texture, enableBarriers);
-}
-
-void CommandList::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers){
-    if(!buffer)
-        return;
-    m_stateTracker->setEnableUavBarriersForBuffer(buffer, enableBarriers);
-}
-
-void CommandList::beginTrackingTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    m_stateTracker->beginTrackingTexture(texture, subresources, stateBits);
-}
-
-void CommandList::beginTrackingBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
-    m_stateTracker->beginTrackingBuffer(buffer, stateBits);
-}
-
-ResourceStates::Mask CommandList::getTextureSubresourceState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel){
-    return m_stateTracker->getTextureState(texture, arraySlice, mipLevel);
-}
-
-ResourceStates::Mask CommandList::getBufferState(IBuffer* buffer){
-    return m_stateTracker->getBufferState(buffer);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Accessors
-
-
-IDevice* CommandList::getDevice(){
-    return &m_device;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Texture tiling and sampler feedback stubs
+// Texture Tiling
 
 
 void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
-    auto clearOutputs = [&](){
-        if(numTiles)
-            *numTiles = 0;
-        if(desc)
-            *desc = {};
-        if(tileShape)
-            *tileShape = {};
-        if(subresourceTilingsNum)
-            *subresourceTilingsNum = 0;
-    };
-    auto ceilDivU32 = [](const u32 value, const u32 divisor, u32& outValue){
-        if(divisor == 0)
-            return false;
-
-        outValue = DivideUp(value, divisor);
-        return true;
-    };
-    auto addTileCount = [](const u32 startTileIndex, const u32 widthInTiles, const u32 heightInTiles, const u32 depthInTiles, u32& outNextTileIndex){
-        u64 tileCount = widthInTiles;
-        if(heightInTiles != 0 && tileCount > Limit<u64>::s_Max / heightInTiles)
-            return false;
-        tileCount *= heightInTiles;
-        if(depthInTiles != 0 && tileCount > Limit<u64>::s_Max / depthInTiles)
-            return false;
-        tileCount *= depthInTiles;
-        if(tileCount > static_cast<u64>(Limit<u32>::s_Max - startTileIndex))
-            return false;
-
-        outNextTileIndex = startTileIndex + static_cast<u32>(tileCount);
-        return true;
-    };
-    auto checkedTileCount = [](const VkDeviceSize byteSize, const u64 tileByteSize, u32& outTileCount){
-        if(tileByteSize == 0){
-            outTileCount = 0;
-            return true;
-        }
-
-        const u64 tileCount = byteSize / tileByteSize;
-        if(tileCount > Limit<u32>::s_Max)
-            return false;
-
-        outTileCount = static_cast<u32>(tileCount);
-        return true;
-    };
-
     if(!textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
-        clearOutputs();
+        __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
         return;
     }
     if(!queryFeatureSupport(Feature::VirtualResources)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: virtual/tiled resources are not supported by this backend"));
-        clearOutputs();
+        __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
         return;
     }
 
     auto* texture = checked_cast<Texture*>(textureResource);
     if(!texture->m_desc.isTiled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is not tiled"));
-        clearOutputs();
+        __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
         return;
     }
 
@@ -584,7 +421,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         numStandardMips = sparseReqs[0].imageMipTailFirstLod;
         if(numStandardMips > texture->m_desc.mipLevels){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image mip tail exceeds texture mip levels"));
-            clearOutputs();
+            __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
             return;
         }
 
@@ -592,11 +429,11 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
             desc->numStandardMips = numStandardMips;
             desc->numPackedMips = texture->m_desc.mipLevels - numStandardMips;
             if(
-                !checkedTileCount(sparseReqs[0].imageMipTailOffset, texture->m_tileByteSize, desc->startTileIndexInOverallResource)
-                || !checkedTileCount(sparseReqs[0].imageMipTailSize, texture->m_tileByteSize, desc->numTilesForPackedMips)
+                !__hidden_vulkan_extensions::ComputeSparseTileCount(sparseReqs[0].imageMipTailOffset, texture->m_tileByteSize, desc->startTileIndexInOverallResource)
+                || !__hidden_vulkan_extensions::ComputeSparseTileCount(sparseReqs[0].imageMipTailSize, texture->m_tileByteSize, desc->numTilesForPackedMips)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: packed mip tile range exceeds u32 limits"));
-                clearOutputs();
+                __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
                 return;
             }
         }
@@ -633,7 +470,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
     }
     if(tileWidth == 0 || tileHeight == 0 || tileDepth == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile shape is invalid"));
-        clearOutputs();
+        __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
         return;
     }
 
@@ -654,12 +491,12 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         for(u32 i = 0; i < *subresourceTilingsNum; ++i){
             if(i < numStandardMips){
                 if(
-                    !ceilDivU32(width, tileWidth, subresourceTilings[i].widthInTiles)
-                    || !ceilDivU32(height, tileHeight, subresourceTilings[i].heightInTiles)
-                    || !ceilDivU32(depth, tileDepth, subresourceTilings[i].depthInTiles)
+                    !__hidden_vulkan_extensions::DivideUpU32(width, tileWidth, subresourceTilings[i].widthInTiles)
+                    || !__hidden_vulkan_extensions::DivideUpU32(height, tileHeight, subresourceTilings[i].heightInTiles)
+                    || !__hidden_vulkan_extensions::DivideUpU32(depth, tileDepth, subresourceTilings[i].depthInTiles)
                 ){
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile shape is invalid"));
-                    clearOutputs();
+                    __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
                     return;
                 }
                 subresourceTilings[i].startTileIndexInOverallResource = startTileIndex;
@@ -676,7 +513,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
             depth = Max(depth / 2, tileDepth);
 
             if(
-                !addTileCount(
+                !__hidden_vulkan_extensions::AddSparseTileCount(
                     startTileIndex,
                     subresourceTilings[i].widthInTiles,
                     subresourceTilings[i].heightInTiles,
@@ -685,7 +522,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
                 )
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile count exceeds u32 limits"));
-                clearOutputs();
+                __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
                 return;
             }
         }
@@ -694,9 +531,9 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
     if(numTiles){
         VkMemoryRequirements memReqs;
         vkGetImageMemoryRequirements(m_context.device, texture->m_image, &memReqs);
-        if(!checkedTileCount(memReqs.size, texture->m_tileByteSize, *numTiles)){
+        if(!__hidden_vulkan_extensions::ComputeSparseTileCount(memReqs.size, texture->m_tileByteSize, *numTiles)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture tile count exceeds u32 limits"));
-            clearOutputs();
+            __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
             return;
         }
     }
@@ -729,23 +566,6 @@ void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapp
     }
 
     queue->updateTextureTileMappings(texture, tileMappings, numTileMappings);
-}
-
-SamplerFeedbackTextureHandle Device::createSamplerFeedbackTexture(ITexture* pairedTexture, const SamplerFeedbackTextureDesc& desc){
-    static_cast<void>(pairedTexture);
-    static_cast<void>(desc);
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler feedback texture: sampler feedback is not supported by this backend"));
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
-    return nullptr;
-}
-
-SamplerFeedbackTextureHandle Device::createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, ITexture* pairedTexture){
-    static_cast<void>(objectType);
-    static_cast<void>(texture);
-    static_cast<void>(pairedTexture);
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler feedback texture for native texture: sampler feedback is not supported by this backend"));
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Sampler feedback is not supported by this backend"));
-    return nullptr;
 }
 
 

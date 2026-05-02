@@ -676,6 +676,25 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     retainResource(m_currentGraphicsState.indirectParams);
 }
 
+void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
+    Buffer* indirectBuffer = nullptr;
+    if(
+        !prepareDrawIndirect(
+            offsetBytes,
+            drawCount,
+            sizeof(DrawIndexedIndirectArguments),
+            NWB_TEXT("draw indexed indirect"),
+            NWB_TEXT("drawIndexedIndirect"),
+            VulkanDetail::IndirectDrawIndexMode::Indexed,
+            indirectBuffer
+        )
+    )
+        return;
+
+    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
+    retainResource(m_currentGraphicsState.indirectParams);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

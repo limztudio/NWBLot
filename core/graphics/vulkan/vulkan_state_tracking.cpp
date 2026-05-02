@@ -605,6 +605,39 @@ void StateTracker::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBar
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Command List Tracking Accessors
+
+
+void CommandList::setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers){
+    if(!texture)
+        return;
+    m_stateTracker->setEnableUavBarriersForTexture(texture, enableBarriers);
+}
+
+void CommandList::setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers){
+    if(!buffer)
+        return;
+    m_stateTracker->setEnableUavBarriersForBuffer(buffer, enableBarriers);
+}
+
+void CommandList::beginTrackingTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+    m_stateTracker->beginTrackingTexture(texture, subresources, stateBits);
+}
+
+void CommandList::beginTrackingBufferState(IBuffer* buffer, ResourceStates::Mask stateBits){
+    m_stateTracker->beginTrackingBuffer(buffer, stateBits);
+}
+
+ResourceStates::Mask CommandList::getTextureSubresourceState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel){
+    return m_stateTracker->getTextureState(texture, arraySlice, mipLevel);
+}
+
+ResourceStates::Mask CommandList::getBufferState(IBuffer* buffer){
+    return m_stateTracker->getBufferState(buffer);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_VULKAN_END

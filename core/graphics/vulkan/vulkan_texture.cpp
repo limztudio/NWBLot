@@ -199,11 +199,20 @@ VkBufferImageCopy BuildStagingTextureCopyRegion(
     const TextureDesc& stagingDesc,
     const TextureSlice& stagingSlice,
     const TextureSlice& imageSlice,
-    const VkImageAspectFlags aspectMask
+    const VkImageAspectFlags aspectMask,
+    const u64 cachedArrayByteSize
 ){
     u32 bufferRowLength = 0;
     u32 bufferImageHeight = 0;
-    const u64 bufferOffset = ComputeStagingTextureOffset(stagingDesc, stagingSlice, nullptr, &bufferRowLength, &bufferImageHeight);
+    const u64 bufferOffset = ComputeStagingTextureOffset(
+        stagingDesc,
+        stagingSlice,
+        nullptr,
+        &bufferRowLength,
+        &bufferImageHeight,
+        nullptr,
+        cachedArrayByteSize
+    );
 
     VkBufferImageCopy region{};
     region.bufferOffset = bufferOffset;
@@ -244,60 +253,6 @@ bool PrepareColorTextureClear(ITexture* textureResource, const TextureSubresourc
     outRange = BuildImageSubresourceRange(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT);
     return true;
 }
-
-bool PrepareStagingTextureCopy(
-    IStagingTexture* stagingResource,
-    const TextureSlice& stagingSlice,
-    ITexture* textureResource,
-    const TextureSlice& textureSlice,
-    const tchar* operationName,
-    const tchar* singleSampleRequirement,
-    StagingTexture*& outStaging,
-    Texture*& outTexture,
-    VkBufferImageCopy& outRegion
-){
-    outStaging = checked_cast<StagingTexture*>(stagingResource);
-    outTexture = checked_cast<Texture*>(textureResource);
-    if(!outStaging || !outTexture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: resource is invalid"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: resource is invalid"), operationName);
-        return false;
-    }
-    const TextureDesc& stagingDesc = outStaging->getDescription();
-    const TextureDesc& textureDesc = outTexture->getDescription();
-    if(textureDesc.sampleCount != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
-        return false;
-    }
-    if(textureDesc.format != stagingDesc.format){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
-        return false;
-    }
-    VkImageAspectFlags copyAspectMask = 0;
-    if(!GetBufferImageCopyAspectMask(GetFormatInfo(stagingDesc.format), operationName, copyAspectMask)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil buffer-image copies are not supported"), operationName);
-        return false;
-    }
-    if(!IsTextureSliceInBounds(stagingDesc, stagingSlice) || !IsTextureSliceInBounds(textureDesc, textureSlice)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
-        return false;
-    }
-
-    const TextureSlice resolvedStaging = stagingSlice.resolve(stagingDesc);
-    const TextureSlice resolvedTexture = textureSlice.resolve(textureDesc);
-    if(resolvedStaging.width != resolvedTexture.width || resolvedStaging.height != resolvedTexture.height || resolvedStaging.depth != resolvedTexture.depth){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination extents do not match"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination extents do not match"), operationName);
-        return false;
-    }
-
-    outRegion = BuildStagingTextureCopyRegion(stagingDesc, resolvedStaging, resolvedTexture, copyAspectMask);
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -803,7 +758,7 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
     if(
-        !VulkanDetail::PrepareStagingTextureCopy(
+        !prepareStagingTextureCopy(
             dest,
             destSlice,
             src,
@@ -830,7 +785,7 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
     if(
-        !VulkanDetail::PrepareStagingTextureCopy(
+        !prepareStagingTextureCopy(
             src,
             srcSlice,
             dest,
@@ -1062,6 +1017,85 @@ void CommandList::resolveTexture(ITexture* destResource, const TextureSubresourc
 
     retainResource(srcResource);
     retainResource(destResource);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool CommandList::prepareStagingTextureCopy(
+    IStagingTexture* stagingResource,
+    const TextureSlice& stagingSlice,
+    ITexture* textureResource,
+    const TextureSlice& textureSlice,
+    const tchar* operationName,
+    const tchar* singleSampleRequirement,
+    StagingTexture*& outStaging,
+    Texture*& outTexture,
+    VkBufferImageCopy& outRegion
+)const{
+    outStaging = checked_cast<StagingTexture*>(stagingResource);
+    outTexture = checked_cast<Texture*>(textureResource);
+    if(!outStaging || !outTexture){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: resource is invalid"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: resource is invalid"), operationName);
+        return false;
+    }
+    const TextureDesc& stagingDesc = outStaging->getDescription();
+    const TextureDesc& textureDesc = outTexture->getDescription();
+    if(textureDesc.sampleCount != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
+        return false;
+    }
+    if(textureDesc.format != stagingDesc.format){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
+        return false;
+    }
+
+    VkImageAspectFlags copyAspectMask = 0;
+    if(!VulkanDetail::GetBufferImageCopyAspectMask(
+        GetFormatInfo(stagingDesc.format),
+        operationName,
+        copyAspectMask
+    )){
+        NWB_ASSERT_MSG(
+            false,
+            NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil buffer-image copies are not supported"),
+            operationName
+        );
+        return false;
+    }
+    if(
+        !VulkanDetail::IsTextureSliceInBounds(stagingDesc, stagingSlice)
+        || !VulkanDetail::IsTextureSliceInBounds(textureDesc, textureSlice)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: slice is outside the texture"), operationName);
+        return false;
+    }
+
+    const TextureSlice resolvedStaging = stagingSlice.resolve(stagingDesc);
+    const TextureSlice resolvedTexture = textureSlice.resolve(textureDesc);
+    if(
+        resolvedStaging.width != resolvedTexture.width
+        || resolvedStaging.height != resolvedTexture.height
+        || resolvedStaging.depth != resolvedTexture.depth
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination extents do not match"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination extents do not match"), operationName);
+        return false;
+    }
+
+    outRegion = VulkanDetail::BuildStagingTextureCopyRegion(
+        stagingDesc,
+        resolvedStaging,
+        resolvedTexture,
+        copyAspectMask,
+        outStaging->m_arrayByteSize
+    );
+    return true;
 }
 
 

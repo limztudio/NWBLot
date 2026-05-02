@@ -74,6 +74,7 @@ extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offse
 VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
 VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
 bool IsSupportedSampleCount(u32 sampleCount);
+bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask);
 VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
@@ -1720,6 +1721,17 @@ private:
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
+    bool prepareStagingTextureCopy(
+        IStagingTexture* stagingResource,
+        const TextureSlice& stagingSlice,
+        ITexture* textureResource,
+        const TextureSlice& textureSlice,
+        const tchar* operationName,
+        const tchar* singleSampleRequirement,
+        StagingTexture*& outStaging,
+        Texture*& outTexture,
+        VkBufferImageCopy& outRegion
+    )const;
     bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
     bool buildTopLevelAccelStructFromInstanceData(
         IRayTracingAccelStruct* asInterface,

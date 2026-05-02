@@ -350,6 +350,10 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
         return nullptr;
     }
+    if(!VulkanDetail::ValidateTextureShape(d, NWB_TEXT("create staging texture"))){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
+        return nullptr;
+    }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
     const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);

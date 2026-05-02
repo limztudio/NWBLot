@@ -1063,8 +1063,7 @@ bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactStrin
         heap.buffer,
         heap.allocation,
         heap.mappedMemory,
-        bufferInfo,
-        HostMappedMemoryAccess::Random
+        bufferInfo
     );
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor heap buffer '{}': {}")

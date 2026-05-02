@@ -480,13 +480,6 @@ private:
 // Handles memory allocation
 
 
-namespace HostMappedMemoryAccess{
-    enum Enum : u8{
-        SequentialWrite = 0u,
-        Random = 1u,
-    };
-};
-
 class VulkanAllocator final : NoCopy{
 public:
     explicit VulkanAllocator(const VulkanContext& context);
@@ -520,8 +513,7 @@ public:
         VkBuffer& buffer,
         VmaAllocation& allocation,
         void*& mappedMemory,
-        const VkBufferCreateInfo& bufferInfo,
-        HostMappedMemoryAccess::Enum access
+        const VkBufferCreateInfo& bufferInfo
     );
     void destroyHostMappedBuffer(VkBuffer& buffer, VmaAllocation& allocation, void*& mappedMemory);
 
@@ -559,7 +551,6 @@ private:
     VkDeviceSize m_memoryOffset = 0;
     u32 m_memoryTypeIndex = UINT32_MAX;
 
-    const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
 

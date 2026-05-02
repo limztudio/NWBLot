@@ -100,20 +100,11 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
     return allocInfo;
 }
 
-inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(const HostMappedMemoryAccess::Enum access){
+inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
-    switch(access){
-    case HostMappedMemoryAccess::SequentialWrite:
-        allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-        break;
-    case HostMappedMemoryAccess::Random:
-    default:
-        allocInfo.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
-        break;
-    }
+    allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
     return allocInfo;
 }
 
@@ -398,13 +389,12 @@ VkResult VulkanAllocator::createHostMappedBuffer(
     VkBuffer& buffer,
     VmaAllocation& allocation,
     void*& mappedMemory,
-    const VkBufferCreateInfo& bufferInfo,
-    const HostMappedMemoryAccess::Enum access
+    const VkBufferCreateInfo& bufferInfo
 ){
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
-    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHostMappedBufferAllocationInfo(access);
+    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHostMappedBufferAllocationInfo();
     VmaAllocationInfo allocationInfo{};
     const VkResult res = vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo, &buffer, &allocation, &allocationInfo);
     if(res == VK_SUCCESS)

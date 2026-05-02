@@ -865,7 +865,6 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 
 Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IHeap>(context.threadPool)
-    , m_context(context)
     , m_allocator(allocator)
 {}
 Heap::~Heap(){

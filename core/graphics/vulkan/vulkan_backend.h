@@ -29,6 +29,7 @@ class Texture;
 class StagingTexture;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchAllocator<VkFormat>>;
 using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>>;
+using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,6 +128,15 @@ VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
 CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
 VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
+
+inline void GetImageSparseMemoryRequirements(VkDevice device, VkImage image, SparseImageMemoryRequirementsVector& outRequirements){
+    uint32_t sparseReqCount = 0;
+    vkGetImageSparseMemoryRequirements(device, image, &sparseReqCount, nullptr);
+
+    outRequirements.resize(sparseReqCount);
+    if(sparseReqCount > 0)
+        vkGetImageSparseMemoryRequirements(device, image, &sparseReqCount, outRequirements.data());
+}
 
 template<typename T>
 constexpr T MakeVkStruct(VkStructureType sType){

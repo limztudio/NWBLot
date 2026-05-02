@@ -934,6 +934,35 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
     );
 }
 
+NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterImpl(
+    const f32 viewLeft,
+    const f32 viewRight,
+    const f32 viewBottom,
+    const f32 viewTop,
+    const f32 nearZ,
+    const f32 farZ,
+    const f32 rangeDenominator,
+    const f32 centerScale,
+    const f32 rangeNearScale,
+    const f32 forwardZ)noexcept
+{
+    NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+
+    const f32 twoNearZ = nearZ + nearZ;
+    const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
+    const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);
+    const f32 range = farZ / rangeDenominator;
+    return MatrixSet(
+        twoNearZ * reciprocalWidth, 0.0f, centerScale * (viewLeft + viewRight) * reciprocalWidth, 0.0f,
+        0.0f, twoNearZ * reciprocalHeight, centerScale * (viewTop + viewBottom) * reciprocalHeight, 0.0f,
+        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
+        0.0f, 0.0f, forwardZ, 0.0f
+    );
+}
+
 };
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
@@ -945,39 +974,11 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectR
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
-
-    const f32 twoNearZ = nearZ + nearZ;
-    const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
-    const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);
-    const f32 range = farZ / (farZ - nearZ);
-    return MatrixSet(
-        twoNearZ * reciprocalWidth, 0.0f, -(viewLeft + viewRight) * reciprocalWidth, 0.0f,
-        0.0f, twoNearZ * reciprocalHeight, -(viewTop + viewBottom) * reciprocalHeight, 0.0f,
-        0.0f, 0.0f, range, -range * nearZ,
-        0.0f, 0.0f, 1.0f, 0.0f
-    );
+    return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, farZ - nearZ, -1.0f, -1.0f, 1.0f);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
-
-    const f32 twoNearZ = nearZ + nearZ;
-    const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
-    const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);
-    const f32 range = farZ / (nearZ - farZ);
-    return MatrixSet(
-        twoNearZ * reciprocalWidth, 0.0f, (viewLeft + viewRight) * reciprocalWidth, 0.0f,
-        0.0f, twoNearZ * reciprocalHeight, (viewTop + viewBottom) * reciprocalHeight, 0.0f,
-        0.0f, 0.0f, range, range * nearZ,
-        0.0f, 0.0f, -1.0f, 0.0f
-    );
+    return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, nearZ - farZ, 1.0f, 1.0f, -1.0f);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{

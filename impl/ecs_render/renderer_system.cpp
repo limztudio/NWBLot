@@ -2338,6 +2338,14 @@ bool RendererSystem::findMaterialPassDrawItemResources(
     return true;
 }
 
+void RendererSystem::setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry){
+    commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
+}
+
 void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
@@ -2348,11 +2356,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         if(!ensureMeshBindingSet(geometry))
             return;
 
-        context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        context.commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
+        setMaterialPassCommonBufferStates(context.commandList, geometry);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -2407,11 +2411,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         if(!geometry.computeBindingSet || !geometry.emulationVertexBuffer)
             return;
 
-        context.commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        context.commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        context.commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
+        setMaterialPassCommonBufferStates(context.commandList, geometry);
         context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;

@@ -139,6 +139,46 @@ bool ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned, u32 base
 }
 
 using MicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchAllocator<VkMicromapUsageEXT>>;
+using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>>;
+using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>>;
+using BlasLssDataVector = Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>>;
+using BlasRangeInfoVector = Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>>;
+using BlasPrimitiveCountVector = Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>>;
+using BlasTransformOffsetVector = Vector<usize, Alloc::ScratchAllocator<usize>>;
+
+struct BlasGeometryScratch{
+    BlasGeometryVector geometries;
+    BlasSpheresDataVector spheresData;
+    BlasLssDataVector lssData;
+    BlasRangeInfoVector rangeInfos;
+    BlasPrimitiveCountVector primitiveCounts;
+    BlasTransformOffsetVector transformOffsets;
+
+    explicit BlasGeometryScratch(Alloc::ScratchArena<>& scratchArena)
+        : geometries(Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena))
+        , spheresData(Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>(scratchArena))
+        , lssData(Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>(scratchArena))
+        , rangeInfos(Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena))
+        , primitiveCounts(Alloc::ScratchAllocator<uint32_t>(scratchArena))
+        , transformOffsets(Alloc::ScratchAllocator<usize>(scratchArena))
+    {}
+
+    void reserveForSizeQuery(usize geometryCount){
+        geometries.reserve(geometryCount);
+        spheresData.reserve(geometryCount);
+        lssData.reserve(geometryCount);
+        primitiveCounts.reserve(geometryCount);
+    }
+
+    void resizeForBuild(usize geometryCount){
+        geometries.resize(geometryCount);
+        spheresData.resize(geometryCount);
+        lssData.resize(geometryCount);
+        rangeInfos.resize(geometryCount);
+        primitiveCounts.resize(geometryCount);
+        transformOffsets.resize(geometryCount);
+    }
+};
 
 VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFormat::Enum format){
     switch(format){
@@ -861,29 +901,23 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         }
 
         Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
-        Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena) };
-        Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>> spheresData{ Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>(scratchArena) };
-        Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>> lssData{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>(scratchArena) };
-        Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
+        VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
         const usize geometryCount = desc.bottomLevelGeometries.size();
-        geometries.reserve(geometryCount);
-        spheresData.reserve(geometryCount);
-        lssData.reserve(geometryCount);
-        primitiveCounts.reserve(geometryCount);
+        blasScratch.reserveForSizeQuery(geometryCount);
 
         for(usize i = 0; i < geometryCount; ++i){
-            geometries.emplace_back();
-            spheresData.emplace_back();
-            lssData.emplace_back();
-            primitiveCounts.emplace_back();
+            blasScratch.geometries.emplace_back();
+            blasScratch.spheresData.emplace_back();
+            blasScratch.lssData.emplace_back();
+            blasScratch.primitiveCounts.emplace_back();
             if(
                 !VulkanDetail::FillBlasGeometryForSizeQuery(
                     m_context,
                     desc.bottomLevelGeometries[i],
-                    geometries.back(),
-                    spheresData.back(),
-                    lssData.back(),
-                    primitiveCounts.back(),
+                    blasScratch.geometries.back(),
+                    blasScratch.spheresData.back(),
+                    blasScratch.lssData.back(),
+                    blasScratch.primitiveCounts.back(),
                     NWB_TEXT("create BLAS"),
                     false
                 )
@@ -900,11 +934,11 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
             VulkanDetail::AccelStructCompactionMode::Allowed
         );
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        buildInfo.geometryCount = static_cast<u32>(geometries.size());
-        buildInfo.pGeometries = geometries.data();
+        buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
+        buildInfo.pGeometries = blasScratch.geometries.data();
 
         auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
+        vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
         if(sizeInfo.accelerationStructureSize > 0)
             accelStructSize = sizeInfo.accelerationStructureSize;
     }
@@ -1641,23 +1675,12 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
 
     Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
 
-    Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>> geometries{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena) };
-    Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>> spheresData{ Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>(scratchArena) };
-    Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>> lssData{ Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>(scratchArena) };
-    Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>> rangeInfos{ Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena) };
-    Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>> primitiveCounts{ Alloc::ScratchAllocator<uint32_t>(scratchArena) };
-    Vector<usize, Alloc::ScratchAllocator<usize>> transformOffsets{ Alloc::ScratchAllocator<usize>(scratchArena) };
-
-    geometries.resize(numGeometries);
-    spheresData.resize(numGeometries);
-    lssData.resize(numGeometries);
-    rangeInfos.resize(numGeometries);
-    primitiveCounts.resize(numGeometries);
-    transformOffsets.resize(numGeometries);
+    VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
+    blasScratch.resizeForBuild(numGeometries);
 
     usize transformCount = 0;
     for(usize i = 0; i < numGeometries; ++i){
-        transformOffsets[i] = Limit<usize>::s_Max;
+        blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
         VkAccelerationStructureGeometryKHR validationGeometry = {};
         VkAccelerationStructureGeometrySpheresDataNV validationSpheresData = {};
         VkAccelerationStructureGeometryLinearSweptSpheresDataNV validationLssData = {};
@@ -1719,7 +1742,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
 
             const usize transformOffset = transformIndex * sizeof(VkTransformMatrixKHR);
             NWB_MEMCPY(mappedTransforms + transformOffset, sizeof(VkTransformMatrixKHR), &pGeometries[i].transform, sizeof(VkTransformMatrixKHR));
-            transformOffsets[i] = transformOffset;
+            blasScratch.transformOffsets[i] = transformOffset;
             ++transformIndex;
         }
 
@@ -1741,9 +1764,9 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
             !VulkanDetail::FillBlasGeometryForSizeQuery(
                 m_context,
                 geomDesc,
-                geometries[i],
-                spheresData[i],
-                lssData[i],
+                blasScratch.geometries[i],
+                blasScratch.spheresData[i],
+                blasScratch.lssData[i],
                 primitiveCount,
                 NWB_TEXT("build BLAS"),
                 true
@@ -1754,42 +1777,42 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
         if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
             const auto& triangles = geomDesc.geometryData.triangles;
 
-            geometries[i].geometry.triangles.vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
-            if(transformOffsets[i] != Limit<usize>::s_Max)
-                geometries[i].geometry.triangles.transformData.deviceAddress = transformBaseAddress + static_cast<u64>(transformOffsets[i]);
+            blasScratch.geometries[i].geometry.triangles.vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.vertexBuffer, triangles.vertexOffset);
+            if(blasScratch.transformOffsets[i] != Limit<usize>::s_Max)
+                blasScratch.geometries[i].geometry.triangles.transformData.deviceAddress = transformBaseAddress + static_cast<u64>(blasScratch.transformOffsets[i]);
 
             if(triangles.indexBuffer)
-                geometries[i].geometry.triangles.indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
+                blasScratch.geometries[i].geometry.triangles.indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(triangles.indexBuffer, triangles.indexOffset);
 
             rangeInfo.primitiveCount = primitiveCount;
         }
         else if(geomDesc.geometryType == RayTracingGeometryType::AABBs){
             const auto& aabbs = geomDesc.geometryData.aabbs;
 
-            geometries[i].geometry.aabbs.data.deviceAddress = VulkanDetail::GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
+            blasScratch.geometries[i].geometry.aabbs.data.deviceAddress = VulkanDetail::GetBufferDeviceAddress(aabbs.buffer, aabbs.offset);
             rangeInfo.primitiveCount = primitiveCount;
         }
         else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
             const auto& spheres = geomDesc.geometryData.spheres;
 
-            spheresData[i].vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.vertexBuffer, spheres.vertexPositionOffset);
-            spheresData[i].radiusData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.vertexBuffer, spheres.vertexRadiusOffset);
+            blasScratch.spheresData[i].vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.vertexBuffer, spheres.vertexPositionOffset);
+            blasScratch.spheresData[i].radiusData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.vertexBuffer, spheres.vertexRadiusOffset);
             if(spheres.indexBuffer)
-                spheresData[i].indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.indexBuffer, spheres.indexOffset);
+                blasScratch.spheresData[i].indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(spheres.indexBuffer, spheres.indexOffset);
             rangeInfo.primitiveCount = primitiveCount;
         }
         else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
             const auto& lss = geomDesc.geometryData.lss;
 
-            lssData[i].vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.vertexBuffer, lss.vertexPositionOffset);
-            lssData[i].radiusData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.vertexBuffer, lss.vertexRadiusOffset);
+            blasScratch.lssData[i].vertexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.vertexBuffer, lss.vertexPositionOffset);
+            blasScratch.lssData[i].radiusData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.vertexBuffer, lss.vertexRadiusOffset);
             if(lss.indexBuffer)
-                lssData[i].indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.indexBuffer, lss.indexOffset);
+                blasScratch.lssData[i].indexData.deviceAddress = VulkanDetail::GetBufferDeviceAddress(lss.indexBuffer, lss.indexOffset);
             rangeInfo.primitiveCount = primitiveCount;
         }
 
-        rangeInfos[i] = rangeInfo;
-        primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
+        blasScratch.rangeInfos[i] = rangeInfo;
+        blasScratch.primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
     };
 
     if(taskPool().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
@@ -1807,11 +1830,11 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     );
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as->m_accelStruct;
-    buildInfo.geometryCount = static_cast<u32>(geometries.size());
-    buildInfo.pGeometries = geometries.data();
+    buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
+    buildInfo.pGeometries = blasScratch.geometries.data();
 
     auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
-    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, primitiveCounts.data(), &sizeInfo);
+    vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
 
     auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
     if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
@@ -1823,7 +1846,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
         return;
 
-    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = rangeInfos.data();
+    const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
     vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfos);
 
     if(transformBuffer)

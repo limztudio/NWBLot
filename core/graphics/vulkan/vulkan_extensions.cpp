@@ -410,12 +410,8 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
 
     Alloc::ScratchArena<> scratchArena;
 
-    uint32_t sparseReqCount = 0;
-    vkGetImageSparseMemoryRequirements(m_context.device, texture->m_image, &sparseReqCount, nullptr);
-
-    Vector<VkSparseImageMemoryRequirements, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>> sparseReqs(sparseReqCount, Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena));
-    if(sparseReqCount > 0)
-        vkGetImageSparseMemoryRequirements(m_context.device, texture->m_image, &sparseReqCount, sparseReqs.data());
+    SparseImageMemoryRequirementsVector sparseReqs{ Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena) };
+    VulkanDetail::GetImageSparseMemoryRequirements(m_context.device, texture->m_image, sparseReqs);
 
     if(!sparseReqs.empty()){
         numStandardMips = sparseReqs[0].imageMipTailFirstLod;

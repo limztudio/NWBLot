@@ -128,6 +128,12 @@ def terminate_process(process, name):
         process.wait(timeout=5.0)
 
 
+def clamp_relative_point(width, height, relative_x, relative_y):
+    x = min(max(int(width * relative_x), 0), width - 1)
+    y = min(max(int(height * relative_y), 0), height - 1)
+    return x, y
+
+
 def read_process_tail(process):
     if process is None:
         return ""
@@ -314,61 +320,39 @@ LinuxXImage._fields_ = [
 ]
 
 
+LINUX_X_INPUT_EVENT_PREFIX = [
+    ("type", ctypes.c_int),
+    ("serial", ctypes.c_ulong),
+    ("send_event", ctypes.c_int),
+    ("display", ctypes.c_void_p),
+    ("window", ctypes.c_ulong),
+    ("root", ctypes.c_ulong),
+    ("subwindow", ctypes.c_ulong),
+    ("time", ctypes.c_ulong),
+    ("x", ctypes.c_int),
+    ("y", ctypes.c_int),
+    ("x_root", ctypes.c_int),
+    ("y_root", ctypes.c_int),
+    ("state", ctypes.c_uint),
+]
+
+
 class LinuxXKeyEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong),
-        ("root", ctypes.c_ulong),
-        ("subwindow", ctypes.c_ulong),
-        ("time", ctypes.c_ulong),
-        ("x", ctypes.c_int),
-        ("y", ctypes.c_int),
-        ("x_root", ctypes.c_int),
-        ("y_root", ctypes.c_int),
-        ("state", ctypes.c_uint),
+    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
         ("keycode", ctypes.c_uint),
         ("same_screen", ctypes.c_int),
     ]
 
 
 class LinuxXButtonEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong),
-        ("root", ctypes.c_ulong),
-        ("subwindow", ctypes.c_ulong),
-        ("time", ctypes.c_ulong),
-        ("x", ctypes.c_int),
-        ("y", ctypes.c_int),
-        ("x_root", ctypes.c_int),
-        ("y_root", ctypes.c_int),
-        ("state", ctypes.c_uint),
+    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
         ("button", ctypes.c_uint),
         ("same_screen", ctypes.c_int),
     ]
 
 
 class LinuxXMotionEvent(ctypes.Structure):
-    _fields_ = [
-        ("type", ctypes.c_int),
-        ("serial", ctypes.c_ulong),
-        ("send_event", ctypes.c_int),
-        ("display", ctypes.c_void_p),
-        ("window", ctypes.c_ulong),
-        ("root", ctypes.c_ulong),
-        ("subwindow", ctypes.c_ulong),
-        ("time", ctypes.c_ulong),
-        ("x", ctypes.c_int),
-        ("y", ctypes.c_int),
-        ("x_root", ctypes.c_int),
-        ("y_root", ctypes.c_int),
-        ("state", ctypes.c_uint),
+    _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
         ("is_hint", ctypes.c_char),
         ("same_screen", ctypes.c_int),
     ]
@@ -715,86 +699,51 @@ class LinuxX11Capture:
     def select_surface_edit_camera_view(self, window, camera_view_key):
         self.send_named_key(window, f"F{camera_view_key + 4}")
 
-    def preview_surface_edit(self, window, relative_x, relative_y):
+    def _validated_window_size(self, window):
         attributes = self.get_attributes(window)
         if not attributes:
             raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
         if attributes.width <= 0 or attributes.height <= 0:
             raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
+        return attributes.width, attributes.height
 
-        click_x = min(max(int(attributes.width * relative_x), 0), attributes.width - 1)
-        click_y = min(max(int(attributes.height * relative_y), 0), attributes.height - 1)
+    def _relative_window_point(self, window, relative_x, relative_y):
+        width, height = self._validated_window_size(window)
+        return clamp_relative_point(width, height, relative_x, relative_y)
 
-        self.x11.XRaiseWindow(self.display, window)
-        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
-        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, click_x, click_y)
+    def _click_window_point(self, window, x, y, settle_seconds, focus=True):
+        if focus:
+            self.x11.XRaiseWindow(self.display, window)
+            self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
+        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, x, y)
         self.x11.XFlush(self.display)
-        time.sleep(0.1)
+        time.sleep(settle_seconds)
 
-        self.send_motion_event(window, click_x, click_y)
+        self.send_motion_event(window, x, y)
         time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_PRESS, click_x, click_y)
+        self.send_button_event(window, self.BUTTON_PRESS, x, y)
         time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_RELEASE, click_x, click_y)
+        self.send_button_event(window, self.BUTTON_RELEASE, x, y)
+
+    def preview_surface_edit(self, window, relative_x, relative_y):
+        click_x, click_y = self._relative_window_point(window, relative_x, relative_y)
+        self._click_window_point(window, click_x, click_y, 0.1)
 
     def commit_surface_edit_preview(self, window, commit_relative_x, commit_relative_y, commit_key):
         if commit_key:
             self.send_named_key(window, commit_key)
             return
 
-        attributes = self.get_attributes(window)
-        if not attributes:
-            raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
-        if attributes.width <= 0 or attributes.height <= 0:
-            raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
-
-        commit_x = min(max(int(attributes.width * commit_relative_x), 0), attributes.width - 1)
-        commit_y = min(max(int(attributes.height * commit_relative_y), 0), attributes.height - 1)
-
-        self.x11.XRaiseWindow(self.display, window)
-        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
-        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, commit_x, commit_y)
-        self.x11.XFlush(self.display)
-        time.sleep(0.05)
-        self.send_motion_event(window, commit_x, commit_y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_PRESS, commit_x, commit_y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_RELEASE, commit_x, commit_y)
+        commit_x, commit_y = self._relative_window_point(window, commit_relative_x, commit_relative_y)
+        self._click_window_point(window, commit_x, commit_y, 0.05)
 
     def exercise_surface_edit(self, window, relative_x, relative_y, commit_relative_x, commit_relative_y):
-        attributes = self.get_attributes(window)
-        if not attributes:
-            raise SmokeFailure(f"window 0x{window:x} attributes are unavailable")
-        if attributes.width <= 0 or attributes.height <= 0:
-            raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
+        click_x, click_y = self._relative_window_point(window, relative_x, relative_y)
+        commit_x, commit_y = self._relative_window_point(window, commit_relative_x, commit_relative_y)
 
-        click_x = min(max(int(attributes.width * relative_x), 0), attributes.width - 1)
-        click_y = min(max(int(attributes.height * relative_y), 0), attributes.height - 1)
-        commit_x = min(max(int(attributes.width * commit_relative_x), 0), attributes.width - 1)
-        commit_y = min(max(int(attributes.height * commit_relative_y), 0), attributes.height - 1)
-
-        self.x11.XRaiseWindow(self.display, window)
-        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
-        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, click_x, click_y)
-        self.x11.XFlush(self.display)
-        time.sleep(0.1)
-
-        self.send_motion_event(window, click_x, click_y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_PRESS, click_x, click_y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_RELEASE, click_x, click_y)
+        self._click_window_point(window, click_x, click_y, 0.1)
         time.sleep(0.3)
-
-        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, commit_x, commit_y)
-        self.x11.XFlush(self.display)
-        time.sleep(0.05)
-        self.send_motion_event(window, commit_x, commit_y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_PRESS, commit_x, commit_y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_RELEASE, commit_x, commit_y)
+        self._click_window_point(window, commit_x, commit_y, 0.05, focus=False)
 
     def capture_window(self, window, output_path):
         self.x11.XRaiseWindow(self.display, window)
@@ -1056,7 +1005,7 @@ class WindowsCapture:
             time.sleep(0.1)
         return None
 
-    def exercise_surface_edit(self, hwnd, relative_x, relative_y, commit_relative_x, commit_relative_y):
+    def _window_size(self, hwnd):
         rect = self._window_rect(hwnd)
         if not rect:
             raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
@@ -1065,26 +1014,29 @@ class WindowsCapture:
         height = rect.bottom - rect.top
         if width <= 0 or height <= 0:
             raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
+        return width, height
 
-        click_x = min(max(int(width * relative_x), 0), width - 1)
-        click_y = min(max(int(height * relative_y), 0), height - 1)
-        lparam = (click_y << 16) | click_x
-        commit_x = min(max(int(width * commit_relative_x), 0), width - 1)
-        commit_y = min(max(int(height * commit_relative_y), 0), height - 1)
-        commit_lparam = (commit_y << 16) | commit_x
+    def _relative_lparam(self, hwnd, relative_x, relative_y):
+        width, height = self._window_size(hwnd)
+        x, y = clamp_relative_point(width, height, relative_x, relative_y)
+        return (y << 16) | x
 
-        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+    def _post_click(self, hwnd, lparam, settle_seconds, focus=True):
+        if focus:
+            self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, lparam)
-        time.sleep(0.1)
+        time.sleep(settle_seconds)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, lparam)
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
+
+    def exercise_surface_edit(self, hwnd, relative_x, relative_y, commit_relative_x, commit_relative_y):
+        lparam = self._relative_lparam(hwnd, relative_x, relative_y)
+        commit_lparam = self._relative_lparam(hwnd, commit_relative_x, commit_relative_y)
+
+        self._post_click(hwnd, lparam, 0.1)
         time.sleep(0.3)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, commit_lparam)
-        time.sleep(0.05)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, commit_lparam)
-        time.sleep(0.05)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, commit_lparam)
+        self._post_click(hwnd, commit_lparam, 0.05, focus=False)
 
     def select_surface_edit_target(self, hwnd, target_key):
         self.send_named_key(hwnd, str(target_key))
@@ -1106,50 +1058,14 @@ class WindowsCapture:
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)
 
     def preview_surface_edit(self, hwnd, relative_x, relative_y):
-        rect = self._window_rect(hwnd)
-        if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
-
-        width = rect.right - rect.left
-        height = rect.bottom - rect.top
-        if width <= 0 or height <= 0:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
-
-        click_x = min(max(int(width * relative_x), 0), width - 1)
-        click_y = min(max(int(height * relative_y), 0), height - 1)
-        lparam = (click_y << 16) | click_x
-
-        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, lparam)
-        time.sleep(0.1)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, lparam)
-        time.sleep(0.05)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
+        self._post_click(hwnd, self._relative_lparam(hwnd, relative_x, relative_y), 0.1)
 
     def commit_surface_edit_preview(self, hwnd, commit_relative_x, commit_relative_y, commit_key):
         if commit_key:
             self.send_named_key(hwnd, commit_key)
             return
 
-        rect = self._window_rect(hwnd)
-        if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
-
-        width = rect.right - rect.left
-        height = rect.bottom - rect.top
-        if width <= 0 or height <= 0:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
-
-        commit_x = min(max(int(width * commit_relative_x), 0), width - 1)
-        commit_y = min(max(int(height * commit_relative_y), 0), height - 1)
-        commit_lparam = (commit_y << 16) | commit_x
-
-        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, commit_lparam)
-        time.sleep(0.05)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, commit_lparam)
-        time.sleep(0.05)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, commit_lparam)
+        self._post_click(hwnd, self._relative_lparam(hwnd, commit_relative_x, commit_relative_y), 0.05)
 
     def capture_window(self, hwnd, output_path):
         rect = self._window_rect(hwnd)

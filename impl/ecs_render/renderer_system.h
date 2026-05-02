@@ -365,6 +365,7 @@ private:
             handler(drawItem, *geometry, *pipelineResources);
         }
     }
+    void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);

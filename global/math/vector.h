@@ -432,6 +432,30 @@ NWB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, cons
 #endif
 }
 
+template<typename OutputT, typename InputT, typename TransformT>
+NWB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
+    OutputT* outputStream,
+    usize outputStride,
+    const InputT* inputStream,
+    usize inputStride,
+    usize vectorCount,
+    const SIMDMatrix& matrix,
+    TransformT transform
+)noexcept{
+    NWB_ASSERT(outputStream != nullptr);
+    NWB_ASSERT(inputStream != nullptr);
+    NWB_ASSERT(inputStride >= sizeof(InputT));
+    NWB_ASSERT(outputStride >= sizeof(OutputT));
+
+    const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
+    for(usize i = 0; i < vectorCount; ++i){
+        const SIMDVector value = LoadFloat(*StridePointer(inputStream, inputStride, i));
+        StoreFloat(transform(value, transposedMatrix), StridePointer(outputStream, outputStride, i));
+    }
+
+    return outputStream;
+}
+
 #if defined(NWB_HAS_SSE4)
 template<int Mask>
 NWB_INLINE SIMDVector SIMDCALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVector value)noexcept{
@@ -2175,6 +2199,41 @@ NWB_INLINE SIMDVector SIMDCALL VectorTrigCosSign(SIMDVector cosSignSelect)noexce
     return VectorSelect(s_SIMDNegativeOne, s_SIMDOne, cosSignSelect);
 }
 
+NWB_INLINE SIMDVector SIMDCALL VectorSinPolynomial(SIMDVector x2)noexcept{
+    SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDSinCoefficients1), x2, VectorSplatW(s_SIMDSinCoefficients0));
+    result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDSinCoefficients0));
+    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients0));
+    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDSinCoefficients0));
+    return VectorMultiplyAdd(result, x2, s_SIMDOne);
+}
+
+NWB_INLINE SIMDVector SIMDCALL VectorCosPolynomial(SIMDVector x2)noexcept{
+    SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDCosCoefficients1), x2, VectorSplatW(s_SIMDCosCoefficients0));
+    result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDCosCoefficients0));
+    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients0));
+    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDCosCoefficients0));
+    return VectorMultiplyAdd(result, x2, s_SIMDOne);
+}
+
+NWB_INLINE SIMDVector SIMDCALL VectorSinEstPolynomial(SIMDVector x2)noexcept{
+    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDSinCoefficients1), x2, VectorSplatZ(s_SIMDSinCoefficients1));
+    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients1));
+    return VectorMultiplyAdd(result, x2, s_SIMDOne);
+}
+
+NWB_INLINE SIMDVector SIMDCALL VectorCosEstPolynomial(SIMDVector x2)noexcept{
+    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDCosCoefficients1), x2, VectorSplatZ(s_SIMDCosCoefficients1));
+    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients1));
+    return VectorMultiplyAdd(result, x2, s_SIMDOne);
+}
+
+NWB_INLINE SIMDVector SIMDCALL VectorArcEstPolynomial(SIMDVector x, SIMDVector root)noexcept{
+    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDArcEstCoefficients), x, VectorSplatZ(s_SIMDArcEstCoefficients));
+    result = VectorMultiplyAdd(result, x, VectorSplatY(s_SIMDArcEstCoefficients));
+    result = VectorMultiplyAdd(result, x, VectorSplatX(s_SIMDArcEstCoefficients));
+    return VectorMultiply(result, root);
+}
+
 };
 
 NWB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
@@ -2182,12 +2241,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
-    SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDSinCoefficients1), x2, VectorSplatW(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    return VectorMultiply(result, x);
+    return VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
@@ -2196,12 +2250,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
-    SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDCosCoefficients1), x2, VectorSplatW(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    return VectorMultiply(result, sign);
+    return VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
 NWB_INLINE void SIMDCALL VectorSinCos(SIMDVector* outSin, SIMDVector* outCos, SIMDVector value)noexcept{
@@ -2214,19 +2263,8 @@ NWB_INLINE void SIMDCALL VectorSinCos(SIMDVector* outSin, SIMDVector* outCos, SI
 
     SIMDVector x2 = VectorMultiply(x, x);
 
-    SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDSinCoefficients1), x2, VectorSplatW(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDSinCoefficients0));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    *outSin = VectorMultiply(result, x);
-
-    result = VectorMultiplyAdd(VectorSplatX(s_SIMDCosCoefficients1), x2, VectorSplatW(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, VectorSplatX(s_SIMDCosCoefficients0));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    *outCos = VectorMultiply(result, sign);
+    *outSin = VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
+    *outCos = VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
@@ -2418,10 +2456,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorSinEst(SIMDVector value)noexcept{
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
-    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDSinCoefficients1), x2, VectorSplatZ(s_SIMDSinCoefficients1));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients1));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    return VectorMultiply(result, x);
+    return VectorMultiply(SIMDVectorDetail::VectorSinEstPolynomial(x2), x);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
@@ -2430,10 +2465,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
-    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDCosCoefficients1), x2, VectorSplatZ(s_SIMDCosCoefficients1));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients1));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    return VectorMultiply(result, sign);
+    return VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
 }
 
 NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector* outSin, SIMDVector* outCos, SIMDVector value)noexcept{
@@ -2446,15 +2478,8 @@ NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector* outSin, SIMDVector* outCos,
 
     SIMDVector x2 = VectorMultiply(x, x);
 
-    SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDSinCoefficients1), x2, VectorSplatZ(s_SIMDSinCoefficients1));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients1));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    *outSin = VectorMultiply(result, x);
-
-    result = VectorMultiplyAdd(VectorSplatW(s_SIMDCosCoefficients1), x2, VectorSplatZ(s_SIMDCosCoefficients1));
-    result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients1));
-    result = VectorMultiplyAdd(result, x2, s_SIMDOne);
-    *outCos = VectorMultiply(result, sign);
+    *outSin = VectorMultiply(SIMDVectorDetail::VectorSinEstPolynomial(x2), x);
+    *outCos = VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTanEst(SIMDVector value)noexcept{
@@ -2481,11 +2506,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorASinEst(SIMDVector value)noexcept{
     SIMDVector x = VectorAbs(value);
     SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
 
-    SIMDVector t0 = VectorMultiplyAdd(VectorSplatW(s_SIMDArcEstCoefficients), x, VectorSplatZ(s_SIMDArcEstCoefficients));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatY(s_SIMDArcEstCoefficients));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatX(s_SIMDArcEstCoefficients));
-    t0 = VectorMultiply(t0, root);
-
+    SIMDVector t0 = SIMDVectorDetail::VectorArcEstPolynomial(x, root);
     SIMDVector t1 = VectorSubtract(s_SIMDPi, t0);
     t0 = VectorSelect(t1, t0, nonnegative);
     return VectorSubtract(s_SIMDHalfPi, t0);
@@ -2496,11 +2517,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorACosEst(SIMDVector value)noexcept{
     SIMDVector x = VectorAbs(value);
     SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
 
-    SIMDVector t0 = VectorMultiplyAdd(VectorSplatW(s_SIMDArcEstCoefficients), x, VectorSplatZ(s_SIMDArcEstCoefficients));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatY(s_SIMDArcEstCoefficients));
-    t0 = VectorMultiplyAdd(t0, x, VectorSplatX(s_SIMDArcEstCoefficients));
-    t0 = VectorMultiply(t0, root);
-
+    SIMDVector t0 = SIMDVectorDetail::VectorArcEstPolynomial(x, root);
     SIMDVector t1 = VectorSubtract(s_SIMDPi, t0);
     return VectorSelect(t1, t0, nonnegative);
 }
@@ -3299,133 +3316,69 @@ NWB_INLINE SIMDVector SIMDCALL Vector3TransformNormal(SIMDVector value, const SI
 }
 
 NWB_INLINE Float4U* SIMDCALL Vector2TransformStream(Float4U* outputStream, usize outputStride, const Float2U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float2U));
-    NWB_ASSERT(outputStride >= sizeof(Float4U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        StoreFloat(
-            SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(VectorSetZ(value, 0.0f), 1.0f), transposedMatrix),
-            SIMDVectorDetail::StridePointer(outputStream, outputStride, i)
-        );
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            return SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(VectorSetZ(value, 0.0f), 1.0f), transposedMatrix);
+        }
+    );
 }
 
 NWB_INLINE Float2U* SIMDCALL Vector2TransformCoordStream(Float2U* outputStream, usize outputStride, const Float2U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float2U));
-    NWB_ASSERT(outputStride >= sizeof(Float2U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        SIMDVector result = SIMDVectorDetail::Vector4TransformTransposed(
-            VectorSetW(VectorSetZ(value, 0.0f), 1.0f),
-            transposedMatrix
-        );
-        result = VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
-        StoreFloat(result, SIMDVectorDetail::StridePointer(outputStream, outputStride, i));
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            SIMDVector result = SIMDVectorDetail::Vector4TransformTransposed(
+                VectorSetW(VectorSetZ(value, 0.0f), 1.0f),
+                transposedMatrix
+            );
+            result = VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
+            return result;
+        }
+    );
 }
 
 NWB_INLINE Float2U* SIMDCALL Vector2TransformNormalStream(Float2U* outputStream, usize outputStride, const Float2U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float2U));
-    NWB_ASSERT(outputStride >= sizeof(Float2U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        StoreFloat(
-            SIMDVectorDetail::Vector4TransformTransposed(VectorAndInt(value, s_SIMDMaskXY), transposedMatrix),
-            SIMDVectorDetail::StridePointer(outputStream, outputStride, i)
-        );
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            return SIMDVectorDetail::Vector4TransformTransposed(VectorAndInt(value, s_SIMDMaskXY), transposedMatrix);
+        }
+    );
 }
 
 NWB_INLINE Float4U* SIMDCALL Vector3TransformStream(Float4U* outputStream, usize outputStride, const Float3U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float3U));
-    NWB_ASSERT(outputStride >= sizeof(Float4U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        StoreFloat(
-            SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(value, 1.0f), transposedMatrix),
-            SIMDVectorDetail::StridePointer(outputStream, outputStride, i)
-        );
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            return SIMDVectorDetail::Vector4TransformTransposed(VectorSetW(value, 1.0f), transposedMatrix);
+        }
+    );
 }
 
 NWB_INLINE Float3U* SIMDCALL Vector3TransformCoordStream(Float3U* outputStream, usize outputStride, const Float3U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float3U));
-    NWB_ASSERT(outputStride >= sizeof(Float3U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        SIMDVector result = SIMDVectorDetail::Vector4TransformTransposed(
-            VectorSetW(value, 1.0f),
-            transposedMatrix
-        );
-        result = VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
-        StoreFloat(result, SIMDVectorDetail::StridePointer(outputStream, outputStride, i));
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            SIMDVector result = SIMDVectorDetail::Vector4TransformTransposed(
+                VectorSetW(value, 1.0f),
+                transposedMatrix
+            );
+            result = VectorSetW(VectorDivide(result, VectorSplatW(result)), 1.0f);
+            return result;
+        }
+    );
 }
 
 NWB_INLINE Float3U* SIMDCALL Vector3TransformNormalStream(Float3U* outputStream, usize outputStride, const Float3U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float3U));
-    NWB_ASSERT(outputStride >= sizeof(Float3U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        StoreFloat(
-            SIMDVectorDetail::Vector4TransformTransposed(VectorAndInt(value, s_SIMDMask3), transposedMatrix),
-            SIMDVectorDetail::StridePointer(outputStream, outputStride, i)
-        );
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            return SIMDVectorDetail::Vector4TransformTransposed(VectorAndInt(value, s_SIMDMask3), transposedMatrix);
+        }
+    );
 }
 
 NWB_INLINE Float4U* SIMDCALL Vector4TransformStream(Float4U* outputStream, usize outputStride, const Float4U* inputStream, usize inputStride, usize vectorCount, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outputStream != nullptr);
-    NWB_ASSERT(inputStream != nullptr);
-    NWB_ASSERT(inputStride >= sizeof(Float4U));
-    NWB_ASSERT(outputStride >= sizeof(Float4U));
-
-    const SIMDMatrix transposedMatrix = SIMDVectorDetail::MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
-        const SIMDVector value = LoadFloat(*SIMDVectorDetail::StridePointer(inputStream, inputStride, i));
-        StoreFloat(
-            SIMDVectorDetail::Vector4TransformTransposed(value, transposedMatrix),
-            SIMDVectorDetail::StridePointer(outputStream, outputStride, i)
-        );
-    }
-
-    return outputStream;
+    return SIMDVectorDetail::VectorTransformStreamImpl(outputStream, outputStride, inputStream, inputStride, vectorCount, matrix,
+        [](SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+            return SIMDVectorDetail::Vector4TransformTransposed(value, transposedMatrix);
+        }
+    );
 }
 
 

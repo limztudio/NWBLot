@@ -17,10 +17,10 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct VulkanAllocationHandle_T;
-using VulkanAllocationHandle = VulkanAllocationHandle_T*;
-struct VulkanAllocatorHandle_T;
-using VulkanAllocatorHandle = VulkanAllocatorHandle_T*;
+struct VulkanAllocation;
+using VulkanAllocationHandle = VulkanAllocation*;
+struct VulkanAllocatorStorage;
+using VulkanAllocatorHandle = VulkanAllocatorStorage*;
 
 struct VulkanContext;
 class Buffer;

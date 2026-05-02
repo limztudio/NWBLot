@@ -473,11 +473,7 @@ VkResult VulkanAllocator::createHostMappedBuffer(
     return res;
 }
 
-void VulkanAllocator::destroyHostMappedBuffer(
-    VkBuffer& buffer,
-    VulkanAllocationHandle& allocation,
-    void*& mappedMemory
-){
+void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
     if(allocation){
         vmaDestroyBuffer(
             __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),

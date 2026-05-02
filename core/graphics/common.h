@@ -650,6 +650,7 @@ struct TextureSlice{
     ArraySlice arraySlice = 0;
 
     [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
+    [[nodiscard]] TextureSlice resolve(u32 mipWidth, u32 mipHeight, u32 mipDepth)const;
 
     constexpr TextureSlice& setOrigin(u32 vx = 0, u32 vy = 0, u32 vz = 0){ x = vx; y = vy; z = vz; return *this; }
     constexpr TextureSlice& setWidth(u32 value){ width = value; return *this; }

@@ -234,7 +234,6 @@ u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
 
 
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
-    TextureSlice ret(*this);
     NWB_ASSERT(mipLevel < desc.mipLevels);
     const MipLevel resolvedMipLevel = (desc.mipLevels > 0 && mipLevel < desc.mipLevels) ? mipLevel : 0;
 
@@ -244,6 +243,12 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
         ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1))
         : static_cast<u32>(1)
     ;
+
+    return resolve(mipWidth, mipHeight, mipDepth);
+}
+
+TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, const u32 mipDepth)const{
+    TextureSlice ret(*this);
 
     if(width == static_cast<u32>(-1))
         ret.width = x < mipWidth ? mipWidth - x : 0;

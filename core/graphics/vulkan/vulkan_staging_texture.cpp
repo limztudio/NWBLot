@@ -172,7 +172,7 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, 
     const u32 mipHeight = Max<u32>(desc.height >> slice.mipLevel, 1u);
     const u32 mipDepth = desc.dimension == TextureDimension::Texture3D ? Max<u32>(desc.depth >> slice.mipLevel, 1u) : 1u;
 
-    const TextureSlice resolved = slice.resolve(desc);
+    const TextureSlice resolved = slice.resolve(mipWidth, mipHeight, mipDepth);
     if(resolved.width == 0 || resolved.height == 0 || resolved.depth == 0)
         return false;
     if(resolved.x > mipWidth || resolved.width > mipWidth - resolved.x)
@@ -425,7 +425,8 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
 
     usize rowPitch = 0;
     u64 rangeSize = 0;
-    u64* outRangeSize = staging->m_cpuAccess == CpuAccessMode::Read ? &rangeSize : nullptr;
+    const bool needsInvalidate = staging->m_cpuAccess == CpuAccessMode::Read && staging->m_requiresInvalidate;
+    u64* outRangeSize = needsInvalidate ? &rangeSize : nullptr;
     const u64 offset = VulkanDetail::ComputeStagingTextureOffset(
         staging->m_desc,
         resolvedSlice,
@@ -437,7 +438,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
         true
     );
 
-    if(staging->m_cpuAccess == CpuAccessMode::Read){
+    if(needsInvalidate){
         res = m_allocator.invalidateStagingTextureMemory(*staging, offset, rangeSize);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));

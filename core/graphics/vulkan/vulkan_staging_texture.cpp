@@ -282,8 +282,13 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     VkResult res = VK_SUCCESS;
 
     if(d.width == 0 || d.height == 0 || d.depth == 0 || d.mipLevels == 0 || d.arraySize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero"));
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero")
+        );
+        NWB_ASSERT_MSG(
+            false,
+            NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero")
+        );
         return nullptr;
     }
     if(d.dimension == TextureDimension::Unknown){
@@ -296,7 +301,10 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
         return nullptr;
     }
-    if((d.dimension == TextureDimension::Texture1D || d.dimension == TextureDimension::Texture1DArray) && (d.height != 1 || d.depth != 1)){
+    if(
+        (d.dimension == TextureDimension::Texture1D || d.dimension == TextureDimension::Texture1DArray)
+        && (d.height != 1 || d.depth != 1)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging 1D texture: height and depth must be 1"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 1D texture: height and depth must be 1"));
         return nullptr;
@@ -367,7 +375,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
         return nullptr;
     }
 
-    auto* staging = static_cast<StagingTexture*>(tex);
+    auto* staging = checked_cast<StagingTexture*>(tex);
     if(staging->m_cpuAccess == CpuAccessMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without CPU access"));
         return nullptr;
@@ -416,7 +424,7 @@ void Device::unmapStagingTexture(IStagingTexture* tex){
     if(!tex)
         return;
 
-    auto* staging = static_cast<StagingTexture*>(tex);
+    auto* staging = checked_cast<StagingTexture*>(tex);
     if(staging->m_mappedMemory && !staging->m_persistentlyMapped){
         staging->m_allocator.unmapStagingTextureMemory(*staging);
         staging->m_mappedMemory = nullptr;

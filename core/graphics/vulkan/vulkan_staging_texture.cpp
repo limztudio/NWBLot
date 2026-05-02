@@ -129,6 +129,35 @@ inline bool BuildStagingTextureArrayLayout(
     return foundTargetMip;
 }
 
+inline bool BuildStagingTextureMipOffsetLayout(
+    const TextureDesc& desc,
+    const FormatInfo& formatInfo,
+    const u32 formatBlockWidth,
+    const u32 formatBlockHeight,
+    const u32 targetMip,
+    u64& outTargetMipOffset,
+    StagingTextureMipLayout& outTargetLayout
+){
+    outTargetMipOffset = 0;
+    outTargetLayout = {};
+
+    for(u32 mip = 0; mip < desc.mipLevels; ++mip){
+        StagingTextureMipLayout layout;
+        if(!BuildStagingTextureMipLayout(desc, formatInfo, formatBlockWidth, formatBlockHeight, mip, layout))
+            return false;
+
+        if(mip == targetMip){
+            outTargetLayout = layout;
+            return true;
+        }
+
+        if(!AddAlignedStagingMipSize(outTargetMipOffset, layout.mipSize))
+            return false;
+    }
+
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -187,7 +216,8 @@ u64 ComputeStagingTextureOffset(
     usize* outRowPitch,
     u32* outBufferRowLength,
     u32* outBufferImageHeight,
-    u64* outRangeSize
+    u64* outRangeSize,
+    u64 arrayByteSize
 ){
     if(!IsTextureSliceInBounds(desc, slice)){
         __hidden_vulkan_staging_texture::ClearStagingTextureLayoutOutputs(
@@ -204,19 +234,34 @@ u64 ComputeStagingTextureOffset(
     const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
     const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
 
-    u64 arrayByteSize = 0;
     u64 offset = 0;
     __hidden_vulkan_staging_texture::StagingTextureMipLayout layout;
-    if(!__hidden_vulkan_staging_texture::BuildStagingTextureArrayLayout(
-        desc,
-        formatInfo,
-        formatBlockWidth,
-        formatBlockHeight,
-        resolved.mipLevel,
-        arrayByteSize,
-        &offset,
-        &layout
-    )){
+    bool layoutBuilt = false;
+    if(arrayByteSize != 0){
+        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureMipOffsetLayout(
+            desc,
+            formatInfo,
+            formatBlockWidth,
+            formatBlockHeight,
+            resolved.mipLevel,
+            offset,
+            layout
+        );
+    }
+    else{
+        layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureArrayLayout(
+            desc,
+            formatInfo,
+            formatBlockWidth,
+            formatBlockHeight,
+            resolved.mipLevel,
+            arrayByteSize,
+            &offset,
+            &layout
+        );
+    }
+
+    if(!layoutBuilt){
         __hidden_vulkan_staging_texture::ClearStagingTextureLayoutOutputs(
             outRowPitch,
             outBufferRowLength,
@@ -349,6 +394,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 
     auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
     staging->m_desc = d;
+    staging->m_arrayByteSize = arrayByteSize;
     staging->m_cpuAccess = cpuAccess;
 
     VkBufferCreateInfo bufferInfo{};
@@ -403,7 +449,8 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
         &rowPitch,
         nullptr,
         nullptr,
-        outRangeSize
+        outRangeSize,
+        staging->m_arrayByteSize
     );
 
     if(staging->m_cpuAccess == CpuAccessMode::Read){

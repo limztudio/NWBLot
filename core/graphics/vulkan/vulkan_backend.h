@@ -84,7 +84,8 @@ u64 ComputeStagingTextureOffset(
     usize* outRowPitch = nullptr,
     u32* outBufferRowLength = nullptr,
     u32* outBufferImageHeight = nullptr,
-    u64* outRangeSize = nullptr
+    u64* outRangeSize = nullptr,
+    u64 arrayByteSize = 0
 );
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
@@ -785,6 +786,7 @@ public:
 
 private:
     TextureDesc m_desc;
+    u64 m_arrayByteSize = 0;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;

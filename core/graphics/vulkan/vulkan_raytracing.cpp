@@ -163,11 +163,11 @@ struct BlasGeometryScratch{
         , transformOffsets(Alloc::ScratchAllocator<usize>(scratchArena))
     {}
 
-    void reserveForSizeQuery(usize geometryCount){
-        geometries.reserve(geometryCount);
-        spheresData.reserve(geometryCount);
-        lssData.reserve(geometryCount);
-        primitiveCounts.reserve(geometryCount);
+    void resizeForSizeQuery(usize geometryCount){
+        geometries.resize(geometryCount);
+        spheresData.resize(geometryCount);
+        lssData.resize(geometryCount);
+        primitiveCounts.resize(geometryCount);
     }
 
     void resizeForBuild(usize geometryCount){
@@ -903,21 +903,17 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
         VulkanDetail::BlasGeometryScratch blasScratch(scratchArena);
         const usize geometryCount = desc.bottomLevelGeometries.size();
-        blasScratch.reserveForSizeQuery(geometryCount);
+        blasScratch.resizeForSizeQuery(geometryCount);
 
         for(usize i = 0; i < geometryCount; ++i){
-            blasScratch.geometries.emplace_back();
-            blasScratch.spheresData.emplace_back();
-            blasScratch.lssData.emplace_back();
-            blasScratch.primitiveCounts.emplace_back();
             if(
                 !VulkanDetail::FillBlasGeometryForSizeQuery(
                     m_context,
                     desc.bottomLevelGeometries[i],
-                    blasScratch.geometries.back(),
-                    blasScratch.spheresData.back(),
-                    blasScratch.lssData.back(),
-                    blasScratch.primitiveCounts.back(),
+                    blasScratch.geometries[i],
+                    blasScratch.spheresData[i],
+                    blasScratch.lssData[i],
+                    blasScratch.primitiveCounts[i],
                     NWB_TEXT("create BLAS"),
                     false
                 )
@@ -1681,18 +1677,14 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     usize transformCount = 0;
     for(usize i = 0; i < numGeometries; ++i){
         blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
-        VkAccelerationStructureGeometryKHR validationGeometry = {};
-        VkAccelerationStructureGeometrySpheresDataNV validationSpheresData = {};
-        VkAccelerationStructureGeometryLinearSweptSpheresDataNV validationLssData = {};
-        u32 validationPrimitiveCount = 0;
         if(
             !VulkanDetail::FillBlasGeometryForSizeQuery(
                 m_context,
                 pGeometries[i],
-                validationGeometry,
-                validationSpheresData,
-                validationLssData,
-                validationPrimitiveCount,
+                blasScratch.geometries[i],
+                blasScratch.spheresData[i],
+                blasScratch.lssData[i],
+                blasScratch.primitiveCounts[i],
                 NWB_TEXT("build BLAS"),
                 true
             )
@@ -1759,20 +1751,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
         const auto& geomDesc = pGeometries[i];
 
         VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
-        u32 primitiveCount = 0;
-        if(
-            !VulkanDetail::FillBlasGeometryForSizeQuery(
-                m_context,
-                geomDesc,
-                blasScratch.geometries[i],
-                blasScratch.spheresData[i],
-                blasScratch.lssData[i],
-                primitiveCount,
-                NWB_TEXT("build BLAS"),
-                true
-            )
-        )
-            return;
+        const u32 primitiveCount = blasScratch.primitiveCounts[i];
 
         if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
             const auto& triangles = geomDesc.geometryData.triangles;
@@ -1812,7 +1791,6 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
         }
 
         blasScratch.rangeInfos[i] = rangeInfo;
-        blasScratch.primitiveCounts[i] = static_cast<uint32_t>(primitiveCount);
     };
 
     if(taskPool().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)

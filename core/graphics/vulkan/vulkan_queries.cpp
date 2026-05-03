@@ -173,7 +173,6 @@ void Device::resetTimerQuery(ITimerQuery* queryResource){
     if(query->m_queryPool == VK_NULL_HANDLE)
         return;
     vkResetQueryPool(m_context.device, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
-    query->m_started = false;
     query->m_resolved = false;
 }
 
@@ -187,7 +186,6 @@ void CommandList::beginTimerQuery(ITimerQuery* queryResource){
         return;
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryBeginIndex);
-    query->m_started = true;
 }
 
 void CommandList::endTimerQuery(ITimerQuery* queryResource){

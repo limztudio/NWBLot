@@ -56,8 +56,6 @@ void CommandList::discardUnsubmittedUploadChunks(){
 }
 
 void CommandList::open(){
-    VkResult res = VK_SUCCESS;
-
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
 
@@ -80,7 +78,7 @@ void CommandList::open(){
     auto beginInfo = VulkanDetail::MakeVkStruct<VkCommandBufferBeginInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO);
     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
+    const VkResult res = vkBeginCommandBuffer(m_currentCmdBuf->m_cmdBuf, &beginInfo);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
@@ -93,8 +91,6 @@ void CommandList::open(){
 }
 
 void CommandList::close(){
-    VkResult res = VK_SUCCESS;
-
     if(!m_currentCmdBuf){
         clearState();
         return;
@@ -104,7 +100,7 @@ void CommandList::close(){
     m_stateTracker->appendKeepInitialStateBarriers(m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
 
-    res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+    const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));

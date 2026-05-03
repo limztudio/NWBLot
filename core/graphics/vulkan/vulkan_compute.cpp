@@ -33,7 +33,6 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
-    VkResult res = VK_SUCCESS;
     Alloc::ScratchArena<> scratchArena;
 
     auto* pso = NewArenaObject<ComputePipeline>(m_context.objectArena, m_context);
@@ -80,7 +79,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     pipelineInfo.stage = shaderStages[0];
     pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
 
-    res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
+    const VkResult res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);

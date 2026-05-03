@@ -23,16 +23,14 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 que
     , m_referencedAccelStructHandles(Alloc::CustomAllocator<VkAccelerationStructureKHR>(context.objectArena))
     , m_context(context)
 {
-    VkResult res = VK_SUCCESS;
-
     // Use TRANSIENT flag to hint that command buffers are short-lived
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    res = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool: {}"), ResultToString(res));
+    const VkResult createResult = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
+    if(createResult != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool: {}"), ResultToString(createResult));
         m_cmdPool = VK_NULL_HANDLE;
         m_cmdBuf = VK_NULL_HANDLE;
         return;
@@ -43,9 +41,9 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 que
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
 
-    res = vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(res));
+    const VkResult allocateResult = vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
+    if(allocateResult != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
         m_cmdBuf = VK_NULL_HANDLE;
         vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
         m_cmdPool = VK_NULL_HANDLE;
@@ -111,8 +109,6 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_commandBuffersInFlight(Alloc::CustomAllocator<TrackedCommandBufferPtr>(context.objectArena))
     , m_commandBuffersPool(Alloc::CustomAllocator<TrackedCommandBufferPtr>(context.objectArena))
 {
-    VkResult res = VK_SUCCESS;
-
     auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
     timelineInfo.initialValue = 0;
@@ -120,23 +116,20 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     auto semaphoreInfo = VulkanDetail::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
     semaphoreInfo.pNext = &timelineInfo;
 
-    res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
+    const VkResult res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &m_trackingSemaphore);
     if(res != VK_SUCCESS){
         m_trackingSemaphore = VK_NULL_HANDLE;
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create queue timeline semaphore: {}"), ResultToString(res));
     }
 }
 Queue::~Queue(){
-    VkResult res = VK_SUCCESS;
-
     if(m_trackingSemaphore && m_lastSubmittedID > 0){
         auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
         waitInfo.semaphoreCount = 1;
         waitInfo.pSemaphores = &m_trackingSemaphore;
         waitInfo.pValues = &m_lastSubmittedID;
 
-        res = vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX);
-        static_cast<void>(res);
+        static_cast<void>(vkWaitSemaphores(m_context.device, &waitInfo, UINT64_MAX));
     }
 
     m_commandBuffersInFlight.clear();
@@ -160,8 +153,6 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(){
 }
 
 TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
-    VkResult res = VK_SUCCESS;
-
     ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
@@ -184,7 +175,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
         if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
             return createCommandBuffer();
 
-        res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
             return createCommandBuffer();
@@ -217,8 +208,6 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 }
 
 u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
-    VkResult res = VK_SUCCESS;
-
     ScopedLock lock(m_mutex);
     if(outSubmitted)
         *outSubmitted = false;
@@ -342,7 +331,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-    res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
+    const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
 
     clearPendingSemaphores();
 
@@ -379,15 +368,13 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
 }
 
 void Queue::updateLastFinishedID(){
-    VkResult res = VK_SUCCESS;
-
     if(!m_trackingSemaphore){
         m_lastFinishedID = m_lastSubmittedID;
         return;
     }
 
     u64 completedValue = 0;
-    res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
+    const VkResult res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
         m_lastFinishedID = completedValue;
     else
@@ -402,8 +389,6 @@ bool Queue::pollCommandList(u64 commandListID){
 }
 
 bool Queue::waitCommandList(u64 commandListID, u64 timeout){
-    VkResult res = VK_SUCCESS;
-
     if(commandListID == 0)
         return true;
 
@@ -415,7 +400,7 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
     waitInfo.pSemaphores = &m_trackingSemaphore;
     waitInfo.pValues = &commandListID;
 
-    res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
+    const VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
     if(res == VK_ERROR_DEVICE_LOST){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost while waiting for command list."));
         return false;
@@ -431,11 +416,9 @@ bool Queue::waitCommandList(u64 commandListID, u64 timeout){
 }
 
 void Queue::waitForIdle(){
-    VkResult res = VK_SUCCESS;
-
     ScopedLock lock(m_mutex);
 
-    res = vkQueueWaitIdle(m_queue);
+    const VkResult res = vkQueueWaitIdle(m_queue);
     if(res != VK_SUCCESS)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
     if(res == VK_SUCCESS){

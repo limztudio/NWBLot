@@ -7,8 +7,6 @@
 #include <core/input/input.h>
 #include <core/common/log.h>
 
-#include "vulkan/vulkan_backend_context.h"
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -266,14 +264,6 @@ static void ExecuteTextureSetupPayload(Graphics& graphics, TextureSetupJobData& 
     payload.outTexture = graphics.setupTexture(payload.setupDesc);
 }
 
-static void AddVulkanDeviceExtensionOnce(Vector<AString>& extensions, const char* extensionName){
-    for(const auto& extension : extensions){
-        if(NWB_STRCMP(extension.c_str(), extensionName) == 0)
-            return;
-    }
-    extensions.push_back(extensionName);
-}
-
 static bool CopyInstanceParameters(DeviceCreationParameters& dst, const InstanceParameters& src){
     if(src.enableDebugRuntime && !CanEnableDebugRuntime())
         return false;
@@ -282,20 +272,15 @@ static bool CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     return true;
 }
 
-static CustomUniquePtr<IGraphicsBackend> CreateDefaultBackend(
+static CustomUniquePtr<IGraphicsBackend> CreateBackend(
     const DeviceCreationParameters& deviceParams,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool
+    Alloc::ThreadPool& threadPool,
+    GraphicsBackendFactory backendFactory
 ){
-    return MakeCustomUnique<Vulkan::BackendContext>(allocator.getObjectArena(), deviceParams, swapChainState, allocator, threadPool);
-}
-
-static const Vulkan::IBackendQueries* GetVulkanBackendQueries(const IGraphicsBackend& backend){
-    if(backend.getGraphicsAPI() != GraphicsAPI::VULKAN)
-        return nullptr;
-
-    return static_cast<const Vulkan::IBackendQueries*>(backend.queryInterface(Vulkan::s_BackendQueriesInterfaceID));
+    const GraphicsBackendFactory createBackend = backendFactory ? backendFactory : &CreateDefaultGraphicsBackend;
+    return createBackend(deviceParams, swapChainState, allocator, threadPool);
 }
 
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
@@ -328,18 +313,23 @@ void Graphics::BackBufferResizedCallback(void* userData){
 }
 
 
-Graphics::Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem, InputDispatcher& input)
+Graphics::Graphics(
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool,
+    Alloc::JobSystem& jobSystem,
+    InputDispatcher& input,
+    GraphicsBackendFactory backendFactory
+)
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_input(input)
-    , m_backend(__hidden_graphics::CreateDefaultBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool))
+    , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool, backendFactory))
     , m_renderPasses(RenderPassListAllocator(m_allocator.getObjectArena()))
     , m_swapChainFramebuffers(SwapChainFramebufferVectorAllocator(m_allocator.getObjectArena()))
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
     syncInputMousePositionScale();
-    __hidden_graphics::AddVulkanDeviceExtensionOnce(m_deviceCreationParams.optionalVulkanDeviceExtensions, "VK_NV_cooperative_vector");
 }
 Graphics::~Graphics(){
     destroy();
@@ -555,45 +545,27 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 bool Graphics::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
-    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend);
-    return queries && queries->isInstanceExtensionEnabled(extensionName);
+    return m_backend->isInstanceExtensionEnabled(extensionName);
 }
 
 bool Graphics::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
-    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend);
-    return queries && queries->isDeviceExtensionEnabled(extensionName);
+    return m_backend->isDeviceExtensionEnabled(extensionName);
 }
 
 bool Graphics::isVulkanLayerEnabled(const char* layerName)const{
-    const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend);
-    return queries && queries->isLayerEnabled(layerName);
+    return m_backend->isLayerEnabled(layerName);
 }
 
 void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
-    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend)){
-        queries->getEnabledInstanceExtensions(extensions);
-        return;
-    }
-
-    extensions.clear();
+    m_backend->getEnabledInstanceExtensions(extensions);
 }
 
 void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
-    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend)){
-        queries->getEnabledDeviceExtensions(extensions);
-        return;
-    }
-
-    extensions.clear();
+    m_backend->getEnabledDeviceExtensions(extensions);
 }
 
 void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
-    if(const Vulkan::IBackendQueries* queries = __hidden_graphics::GetVulkanBackendQueries(*m_backend)){
-        queries->getEnabledLayers(layers);
-        return;
-    }
-
-    layers.clear();
+    m_backend->getEnabledLayers(layers);
 }
 
 void Graphics::backBufferResizing(){

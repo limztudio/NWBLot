@@ -107,7 +107,7 @@ private:
 
 
 public:
-    ShaderCook(CookArena& memoryArena);
+    ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory = nullptr);
 
 
 public:

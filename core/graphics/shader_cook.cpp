@@ -10,8 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "vulkan/vulkan_shader_compiler.h"
-
 #include <core/assets/asset_paths.h>
 #include <core/metascript/parser.h>
 
@@ -552,10 +550,11 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShaderCook::ShaderCook(CookArena& memoryArena)
+ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory)
     : m_memoryArena(memoryArena)
 {
-    m_compiler = MakeCustomUnique<Vulkan::VulkanShaderCompiler>(m_memoryArena, m_memoryArena);
+    const ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : &CreateDefaultShaderCompiler;
+    m_compiler = createCompiler(m_memoryArena);
 }
 
 

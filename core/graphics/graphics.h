@@ -6,6 +6,7 @@
 
 
 #include "common.h"
+#include "graphics_backend.h"
 #include "render_pass.h"
 
 
@@ -18,7 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IGraphicsBackend;
 class InputDispatcher;
 
 
@@ -98,7 +98,13 @@ private:
 
 
 public:
-    Graphics(GraphicsAllocator& allocator, Alloc::ThreadPool& threadPool, Alloc::JobSystem& jobSystem, InputDispatcher& input);
+    Graphics(
+        GraphicsAllocator& allocator,
+        Alloc::ThreadPool& threadPool,
+        Alloc::JobSystem& jobSystem,
+        InputDispatcher& input,
+        GraphicsBackendFactory backendFactory = nullptr
+    );
     ~Graphics();
 
 

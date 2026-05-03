@@ -51,10 +51,32 @@ public:
     virtual bool beginFrame(const BackBufferResizeCallbacks& callbacks) = 0;
     virtual bool present() = 0;
 
+    [[nodiscard]] virtual bool isInstanceExtensionEnabled(const char*)const{ return false; }
+    [[nodiscard]] virtual bool isDeviceExtensionEnabled(const char*)const{ return false; }
+    [[nodiscard]] virtual bool isLayerEnabled(const char*)const{ return false; }
+    virtual void getEnabledInstanceExtensions(Vector<AString>& extensions)const{ extensions.clear(); }
+    virtual void getEnabledDeviceExtensions(Vector<AString>& extensions)const{ extensions.clear(); }
+    virtual void getEnabledLayers(Vector<AString>& layers)const{ layers.clear(); }
+
     virtual void reportLiveObjects(){}
     [[nodiscard]] virtual void* queryInterface(GraphicsBackendInterfaceID){ return nullptr; }
     [[nodiscard]] virtual const void* queryInterface(GraphicsBackendInterfaceID)const{ return nullptr; }
 };
+
+
+using GraphicsBackendFactory = CustomUniquePtr<IGraphicsBackend> (*)(
+    const DeviceCreationParameters& params,
+    SwapChainRuntimeState& swapChainState,
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool
+);
+
+[[nodiscard]] CustomUniquePtr<IGraphicsBackend> CreateDefaultGraphicsBackend(
+    const DeviceCreationParameters& params,
+    SwapChainRuntimeState& swapChainState,
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

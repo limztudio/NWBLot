@@ -93,6 +93,7 @@ private:
         { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, DeviceExtensionFeature::MutableDescriptorType },
+        { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
     static constexpr ExtEntry s_RayTracingExts[] = {
         { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::AccelerationStructure },

@@ -3797,6 +3797,10 @@ protected:
     Alloc::CustomArena& m_memoryArena;
 };
 
+using ShaderCompilerFactory = CustomUniquePtr<IShaderCompiler> (*)(Alloc::CustomArena& memoryArena);
+
+[[nodiscard]] CustomUniquePtr<IShaderCompiler> CreateDefaultShaderCompiler(Alloc::CustomArena& memoryArena);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

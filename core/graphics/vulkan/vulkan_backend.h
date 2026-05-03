@@ -1942,7 +1942,6 @@ public:
     virtual void setEventQuery(IEventQuery* query, CommandQueue::Enum queue)override;
     virtual bool pollEventQuery(IEventQuery* query)override;
     virtual void waitEventQuery(IEventQuery* query)override;
-    virtual void resetEventQuery(IEventQuery* query)override;
     [[nodiscard]] virtual TimerQueryHandle createTimerQuery()override;
     virtual bool pollTimerQuery(ITimerQuery* query)override;
     virtual f32 getTimerQueryTime(ITimerQuery* query)override;

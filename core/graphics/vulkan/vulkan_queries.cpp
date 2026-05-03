@@ -161,17 +161,6 @@ void Device::waitEventQuery(IEventQuery* queryResource){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait event query fence: {}"), ResultToString(res));
 }
 
-void Device::resetEventQuery(IEventQuery* queryResource){
-    auto* query = checked_cast<EventQuery*>(queryResource);
-    if(!query || query->m_fence == VK_NULL_HANDLE)
-        return;
-    const VkResult res = vkResetFences(m_context.device, 1, &query->m_fence);
-    if(res == VK_SUCCESS)
-        query->m_started = false;
-    else
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence: {}"), ResultToString(res));
-}
-
 TimerQueryHandle Device::createTimerQuery(){
     auto* query = NewArenaObject<TimerQuery>(m_context.objectArena, m_context);
     if(!query->m_queryPool){

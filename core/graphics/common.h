@@ -3615,7 +3615,6 @@ public:
     virtual void setEventQuery(IEventQuery* query, CommandQueue::Enum queue) = 0;
     virtual bool pollEventQuery(IEventQuery* query) = 0;
     virtual void waitEventQuery(IEventQuery* query) = 0;
-    virtual void resetEventQuery(IEventQuery* query) = 0;
 
     // Timer queries - see also begin/endTimerQuery in ICommandList
     virtual TimerQueryHandle createTimerQuery() = 0;

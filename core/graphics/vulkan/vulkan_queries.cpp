@@ -105,11 +105,8 @@ EventQueryHandle Device::createEventQuery(){
 }
 
 void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue){
-    if(!queryResource)
-        return;
-
-    auto* query = static_cast<EventQuery*>(queryResource);
-    if(query->m_fence == VK_NULL_HANDLE)
+    auto* query = checked_cast<EventQuery*>(queryResource);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
         return;
 
     query->m_started = false;
@@ -138,11 +135,8 @@ void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue)
 }
 
 bool Device::pollEventQuery(IEventQuery* queryResource){
-    if(!queryResource)
-        return false;
-
-    auto* query = static_cast<EventQuery*>(queryResource);
-    if(query->m_fence == VK_NULL_HANDLE)
+    auto* query = checked_cast<EventQuery*>(queryResource);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
         return false;
     if(!query->m_started)
         return true;
@@ -154,11 +148,8 @@ bool Device::pollEventQuery(IEventQuery* queryResource){
 }
 
 void Device::waitEventQuery(IEventQuery* queryResource){
-    if(!queryResource)
-        return;
-
-    auto* query = static_cast<EventQuery*>(queryResource);
-    if(query->m_fence == VK_NULL_HANDLE)
+    auto* query = checked_cast<EventQuery*>(queryResource);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
         return;
     if(!query->m_started)
         return;
@@ -171,11 +162,8 @@ void Device::waitEventQuery(IEventQuery* queryResource){
 }
 
 void Device::resetEventQuery(IEventQuery* queryResource){
-    if(!queryResource)
-        return;
-
-    auto* query = static_cast<EventQuery*>(queryResource);
-    if(query->m_fence == VK_NULL_HANDLE)
+    auto* query = checked_cast<EventQuery*>(queryResource);
+    if(!query || query->m_fence == VK_NULL_HANDLE)
         return;
     const VkResult res = vkResetFences(m_context.device, 1, &query->m_fence);
     if(res == VK_SUCCESS)
@@ -194,11 +182,8 @@ TimerQueryHandle Device::createTimerQuery(){
 }
 
 bool Device::pollTimerQuery(ITimerQuery* queryResource){
-    if(!queryResource)
-        return false;
-
-    auto* query = static_cast<TimerQuery*>(queryResource);
-    if(query->m_queryPool == VK_NULL_HANDLE)
+    auto* query = checked_cast<TimerQuery*>(queryResource);
+    if(!query || query->m_queryPool == VK_NULL_HANDLE)
         return false;
 
     u64 timestamps[s_TimerQueryTimestampCount] = {};
@@ -207,11 +192,8 @@ bool Device::pollTimerQuery(ITimerQuery* queryResource){
 }
 
 f32 Device::getTimerQueryTime(ITimerQuery* queryResource){
-    if(!queryResource)
-        return 0.f;
-
-    auto* query = static_cast<TimerQuery*>(queryResource);
-    if(query->m_queryPool == VK_NULL_HANDLE)
+    auto* query = checked_cast<TimerQuery*>(queryResource);
+    if(!query || query->m_queryPool == VK_NULL_HANDLE)
         return 0.f;
 
     u64 timestamps[s_TimerQueryTimestampCount] = {};
@@ -228,11 +210,8 @@ f32 Device::getTimerQueryTime(ITimerQuery* queryResource){
 }
 
 void Device::resetTimerQuery(ITimerQuery* queryResource){
-    if(!queryResource)
-        return;
-
-    auto* query = static_cast<TimerQuery*>(queryResource);
-    if(query->m_queryPool == VK_NULL_HANDLE)
+    auto* query = checked_cast<TimerQuery*>(queryResource);
+    if(!query || query->m_queryPool == VK_NULL_HANDLE)
         return;
     vkResetQueryPool(m_context.device, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
 }

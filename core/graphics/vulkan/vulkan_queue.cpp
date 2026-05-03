@@ -65,12 +65,11 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
 }
 
 void TrackedCommandBuffer::clearSignalFence(){
-    VkFence ignoredFence = VK_NULL_HANDLE;
-    EventQuery* signalFenceQuery = nullptr;
-    detachSignalFence(ignoredFence, signalFenceQuery);
+    if(m_signalFenceQuery)
+        m_signalFenceQuery->m_started = false;
 
-    if(signalFenceQuery)
-        signalFenceQuery->m_started = false;
+    m_signalFence = VK_NULL_HANDLE;
+    m_signalFenceQuery = nullptr;
 }
 
 void TrackedCommandBuffer::detachSignalFence(VkFence& outFence, EventQuery*& outQuery){

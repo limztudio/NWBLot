@@ -244,9 +244,7 @@ void CommandList::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum){
     }
 
     if(m_currentCmdBuf){
-        if(m_currentCmdBuf->m_signalFenceQuery)
-            m_currentCmdBuf->m_signalFenceQuery->m_started = false;
-
+        m_currentCmdBuf->clearSignalFence();
         m_currentCmdBuf->m_signalFence = query->m_fence;
         m_currentCmdBuf->m_signalFenceQuery = query;
         retainResource(queryResource);

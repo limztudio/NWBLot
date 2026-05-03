@@ -472,11 +472,13 @@ class TrackedCommandBuffer final : public RefCounter<IResource>, NoCopy{
 
 
 public:
-    TrackedCommandBuffer(const VulkanContext& context, CommandQueue::Enum, u32 queueFamilyIndex);
+    TrackedCommandBuffer(const VulkanContext& context, u32 queueFamilyIndex);
     virtual ~TrackedCommandBuffer()override;
 
 
 private:
+    void clearSignalFence();
+    void detachSignalFence(VkFence& outFence, EventQuery*& outQuery);
     void clearTrackedReferences();
 
 
@@ -526,6 +528,11 @@ public:
     [[nodiscard]] bool pollCommandList(u64 commandListID);
     [[nodiscard]] bool waitCommandList(u64 commandListID, u64 timeout);
     void waitForIdle();
+
+
+private:
+    void clearPendingSemaphores();
+    void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf, bool clearSignalFence);
 
 
 private:
@@ -1866,6 +1873,7 @@ class EventQuery final : public RefCounter<IEventQuery>, NoCopy{
     friend class Device;
     friend class CommandList;
     friend class Queue;
+    friend class TrackedCommandBuffer;
 
 
 public:

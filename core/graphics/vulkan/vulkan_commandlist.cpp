@@ -41,10 +41,7 @@ void CommandList::discardUnsubmittedUploadChunks(){
     if(!m_currentCmdBuf)
         return;
 
-    if(m_currentCmdBuf->m_signalFenceQuery)
-        m_currentCmdBuf->m_signalFenceQuery->m_started = false;
-    m_currentCmdBuf->m_signalFence = VK_NULL_HANDLE;
-    m_currentCmdBuf->m_signalFenceQuery = nullptr;
+    m_currentCmdBuf->clearSignalFence();
 
     if(!m_device.m_uploadManager && !m_device.m_scratchManager)
         return;

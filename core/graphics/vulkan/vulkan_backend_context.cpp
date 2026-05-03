@@ -2027,7 +2027,6 @@ bool BackendContext::present(){
         return true;
     }
 
-    m_rhiDevice->resetEventQuery(query.get());
     m_rhiDevice->setEventQuery(query.get(), CommandQueue::Graphics);
     m_framesInFlight.push(query);
 

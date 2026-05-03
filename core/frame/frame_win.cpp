@@ -477,19 +477,9 @@ bool Frame::showFrame(){
     return true;
 }
 bool Frame::mainLoop(){
-    Timer lateTime(TimerNow());
-
-    for(;;){
-        switch(PumpWin32FrameMessages([&](){ return data<Common::WinFrame>().isActive(); })){
-        case Win32MessagePumpResult::Quit:
-            return true;
-        case Win32MessagePumpResult::SkipUpdate:
-            continue;
-        case Win32MessagePumpResult::Continue:
-            break;
-        }
-
-        {
+    return RunWin32TimedFrameLoop(
+        [&](){ return data<Common::WinFrame>().isActive(); },
+        [&](){
             RECT rect = {};
             const bool hasRect = GetClientRect(data<Common::WinFrame>().hwnd(), &rect) != FALSE;
             const bool windowVisible = hasRect && (rect.right > rect.left) && (rect.bottom > rect.top);
@@ -503,14 +493,9 @@ bool Frame::mainLoop(){
                 SetWindowTextA(data<Common::WinFrame>().hwnd(), title);
 #endif
             }
-
-            const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
-
-            if(!update(timeDifference))
-                break;
-        }
-    }
-    return false;
+        },
+        [&](const f32 timeDifference){ return update(timeDifference); }
+    );
 }
 
 void Frame::setupPlatform(void* inst){

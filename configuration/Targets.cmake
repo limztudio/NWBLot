@@ -54,3 +54,10 @@ function(nwb_declare_executable target)
         target_link_libraries(${target} PRIVATE shell32)
     endif()
 endfunction()
+
+function(nwb_target_sources_standalone_runtime target)
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/core/common/standalone_runtime.cpp"
+        "${PROJECT_SOURCE_DIR}/core/common/standalone_runtime.h"
+    )
+endfunction()

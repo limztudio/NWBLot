@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "pch.h"
+#include <core/common/standalone_runtime.h>
 #include "frame.h"
 
 
@@ -388,26 +388,11 @@ bool Frame::showFrame(){
     return true;
 }
 bool Frame::mainLoop(){
-    Timer lateTime(TimerNow());
-
-    for(;;){
-        switch(PumpWin32FrameMessages([&](){ return data<FrameDetail::WinFrame>().isActive(); })){
-        case Win32MessagePumpResult::Quit:
-            return true;
-        case Win32MessagePumpResult::SkipUpdate:
-            continue;
-        case Win32MessagePumpResult::Continue:
-            break;
-        }
-
-        {
-            const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
-
-            if(!update(timeDifference))
-                break;
-        }
-    }
-    return false;
+    return RunWin32TimedFrameLoop(
+        [&](){ return data<FrameDetail::WinFrame>().isActive(); },
+        [](){},
+        [&](const f32 timeDifference){ return update(timeDifference); }
+    );
 }
 
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){

@@ -6,6 +6,7 @@
 
 
 #include "platform.h"
+#include "timer.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,6 +81,33 @@ template<typename IsActiveFunc>
     TranslateMessage(&message);
     DispatchMessage(&message);
     return Win32MessagePumpResult::SkipUpdate;
+}
+
+template<typename IsActiveFunc, typename BeforeUpdateFunc, typename UpdateFunc>
+[[nodiscard]] inline bool RunWin32TimedFrameLoop(
+    IsActiveFunc&& isActive,
+    BeforeUpdateFunc&& beforeUpdate,
+    UpdateFunc&& update
+){
+    Timer lateTime(TimerNow());
+
+    for(;;){
+        switch(PumpWin32FrameMessages(isActive)){
+        case Win32MessagePumpResult::Quit:
+            return true;
+        case Win32MessagePumpResult::SkipUpdate:
+            continue;
+        case Win32MessagePumpResult::Continue:
+            break;
+        }
+
+        beforeUpdate();
+
+        const f32 timeDifference = ConsumeTimerDeltaSeconds<f32>(lateTime);
+        if(!update(timeDifference))
+            break;
+    }
+    return false;
 }
 
 

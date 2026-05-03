@@ -2,12 +2,11 @@ nwb_declare_executable(nwb_logserver)
 target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/pch.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/server.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame.h"
-    "${CMAKE_CURRENT_LIST_DIR}/pch.h"
     "${CMAKE_CURRENT_LIST_DIR}/server.h"
 )
+nwb_target_sources_standalone_runtime(nwb_logserver)
 if(WIN32)
     target_sources(nwb_logserver PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/frame_win.cpp"
@@ -19,4 +18,3 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     )
 endif()
 target_link_libraries(nwb_logserver PRIVATE nwb::microhttpd nwb_common nwb_alloc nwb::cli11_headers)
-

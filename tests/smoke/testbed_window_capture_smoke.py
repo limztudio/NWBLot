@@ -1358,8 +1358,8 @@ def parse_args(argv):
     parser.add_argument(
         "--software-vulkan",
         choices=("auto", "on", "off"),
-        default="auto",
-        help="On Linux, use Mesa lavapipe when available to keep smoke captures stable.",
+        default="off",
+        help="On Linux, optionally use Mesa lavapipe. Defaults to the system Vulkan ICD.",
     )
     parser.add_argument(
         "--application-arg",

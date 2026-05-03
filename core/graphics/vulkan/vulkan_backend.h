@@ -381,7 +381,6 @@ class Device;
 class Queue;
 class TrackedCommandBuffer;
 class DescriptorHeapManager;
-class EventQuery;
 
 class Buffer;
 class Texture;
@@ -477,8 +476,6 @@ public:
 
 
 private:
-    void clearSignalFence();
-    void detachSignalFence(VkFence& outFence, EventQuery*& outQuery);
     void clearTrackedReferences();
 
 
@@ -489,9 +486,6 @@ private:
     Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::CustomAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>>> m_referencedResources;
     Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::CustomAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>>> m_referencedStagingBuffers;
     Vector<VkAccelerationStructureKHR, Alloc::CustomAllocator<VkAccelerationStructureKHR>> m_referencedAccelStructHandles;
-
-    VkFence m_signalFence = VK_NULL_HANDLE;
-    EventQuery* m_signalFenceQuery = nullptr;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -532,7 +526,7 @@ public:
 
 private:
     void clearPendingSemaphores();
-    void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf, bool clearSignalFence);
+    void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
 
 
 private:
@@ -1868,8 +1862,6 @@ private:
 
 class EventQuery final : public RefCounter<IEventQuery>, NoCopy{
     friend class Device;
-    friend class Queue;
-    friend class TrackedCommandBuffer;
 
 
 public:

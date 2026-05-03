@@ -64,21 +64,6 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     clearTrackedReferences();
 }
 
-void TrackedCommandBuffer::clearSignalFence(){
-    if(m_signalFenceQuery)
-        m_signalFenceQuery->m_started = false;
-
-    m_signalFence = VK_NULL_HANDLE;
-    m_signalFenceQuery = nullptr;
-}
-
-void TrackedCommandBuffer::detachSignalFence(VkFence& outFence, EventQuery*& outQuery){
-    outFence = m_signalFence;
-    outQuery = m_signalFenceQuery;
-    m_signalFence = VK_NULL_HANDLE;
-    m_signalFenceQuery = nullptr;
-}
-
 void TrackedCommandBuffer::clearTrackedReferences(){
     for(const auto handle : m_referencedAccelStructHandles){
         if(handle != VK_NULL_HANDLE)
@@ -160,7 +145,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
         if(cmdBuf->m_submissionID <= m_lastFinishedID){
-            recycleCommandBuffer(Move(*it), false);
+            recycleCommandBuffer(Move(*it));
             it = m_commandBuffersInFlight.erase(it);
         }
         else
@@ -274,7 +259,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         clearPendingSemaphores();
 
         for(auto& tracked : trackedBuffers)
-            recycleCommandBuffer(Move(tracked), true);
+            recycleCommandBuffer(Move(tracked));
         return m_lastSubmittedID;
     }
 
@@ -307,20 +292,6 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         signalInfos.push_back(signalInfo);
     }
 
-    VkFence submitFence = VK_NULL_HANDLE;
-    EventQuery* submitFenceQuery = nullptr;
-    for(auto& tracked : trackedBuffers){
-        VkFence trackedSignalFence = VK_NULL_HANDLE;
-        EventQuery* trackedSignalFenceQuery = nullptr;
-        tracked->detachSignalFence(trackedSignalFence, trackedSignalFenceQuery);
-        if(trackedSignalFence != VK_NULL_HANDLE){
-            if(submitFenceQuery)
-                submitFenceQuery->m_started = false;
-            submitFence = trackedSignalFence;
-            submitFenceQuery = trackedSignalFenceQuery;
-        }
-    }
-
     // Requires VK_KHR_synchronization2 extension to be enabled
     auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo2>(VK_STRUCTURE_TYPE_SUBMIT_INFO_2);
     submitInfo.waitSemaphoreInfoCount = static_cast<uint32_t>(waitInfos.size());
@@ -330,14 +301,12 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-    const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, submitFence);
+    const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
 
     clearPendingSemaphores();
 
     if(res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;
-        if(submitFenceQuery)
-            submitFenceQuery->m_started = false;
 
         if(res == VK_ERROR_DEVICE_LOST){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost during queue submission."));
@@ -348,14 +317,11 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
 
         for(auto& tracked : trackedBuffers){
             // Submission failed; command lists were not executed.
-            recycleCommandBuffer(Move(tracked), false);
+            recycleCommandBuffer(Move(tracked));
         }
 
         return m_lastSubmittedID;
     }
-
-    if(submitFenceQuery)
-        submitFenceQuery->m_started = true;
 
     for(auto& tracked : trackedBuffers){
         m_commandBuffersInFlight.push_back(Move(tracked));
@@ -424,7 +390,7 @@ void Queue::waitForIdle(){
         m_lastFinishedID = m_lastSubmittedID;
 
         for(auto& tracked : m_commandBuffersInFlight)
-            recycleCommandBuffer(Move(tracked), false);
+            recycleCommandBuffer(Move(tracked));
         m_commandBuffersInFlight.clear();
     }
 }
@@ -436,12 +402,10 @@ void Queue::clearPendingSemaphores(){
     m_signalSemaphoreValues.clear();
 }
 
-void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf, const bool shouldClearSignalFence){
+void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
     if(!cmdBuf)
         return;
 
-    if(shouldClearSignalFence)
-        cmdBuf->clearSignalFence();
     cmdBuf->clearTrackedReferences();
     m_commandBuffersPool.push_back(Move(cmdBuf));
 }

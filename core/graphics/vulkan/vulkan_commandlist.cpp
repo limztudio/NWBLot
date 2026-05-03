@@ -41,8 +41,6 @@ void CommandList::discardUnsubmittedUploadChunks(){
     if(!m_currentCmdBuf)
         return;
 
-    m_currentCmdBuf->clearSignalFence();
-
     if(!m_device.m_uploadManager && !m_device.m_scratchManager)
         return;
 

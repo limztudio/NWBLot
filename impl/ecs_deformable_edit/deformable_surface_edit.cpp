@@ -2754,6 +2754,72 @@ template<typename DistanceFunc>
     return true;
 }
 
+[[nodiscard]] bool BuildConnectedSurfacePatchTriangleMask(
+    const DeformableRuntimeMeshInstance& instance,
+    const usize triangleCount,
+    const u32 hitTriangle,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& outConnectedTriangles,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outConnectedTriangles.clear();
+    if(static_cast<usize>(hitTriangle) >= triangleCount || instance.restVertices.empty())
+        return false;
+
+    const usize cornerCount = triangleCount * 3u;
+    if(
+        cornerCount > instance.indices.size()
+        || cornerCount > static_cast<usize>(Limit<u32>::s_Max)
+        || instance.restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> firstCornerByVertex{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    firstCornerByVertex.resize(instance.restVertices.size(), Limit<u32>::s_Max);
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> nextCornerByCorner{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    nextCornerByCorner.resize(cornerCount, Limit<u32>::s_Max);
+
+    for(usize corner = 0u; corner < cornerCount; ++corner){
+        const u32 vertex = instance.indices[corner];
+        if(vertex >= instance.restVertices.size())
+            return false;
+
+        nextCornerByCorner[corner] = firstCornerByVertex[vertex];
+        firstCornerByVertex[vertex] = static_cast<u32>(corner);
+    }
+
+    outConnectedTriangles.resize(triangleCount, 0u);
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> pendingTriangles{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    pendingTriangles.reserve(triangleCount);
+    outConnectedTriangles[hitTriangle] = 1u;
+    pendingTriangles.push_back(hitTriangle);
+
+    for(usize queueIndex = 0u; queueIndex < pendingTriangles.size(); ++queueIndex){
+        const usize triangle = static_cast<usize>(pendingTriangles[queueIndex]);
+        const usize cornerBase = triangle * 3u;
+        for(u32 localCorner = 0u; localCorner < 3u; ++localCorner){
+            const u32 vertex = instance.indices[cornerBase + localCorner];
+            u32 connectedCorner = firstCornerByVertex[vertex];
+            while(connectedCorner != Limit<u32>::s_Max){
+                const u32 connectedTriangle = connectedCorner / 3u;
+                if(outConnectedTriangles[connectedTriangle] == 0u){
+                    outConnectedTriangles[connectedTriangle] = 1u;
+                    pendingTriangles.push_back(connectedTriangle);
+                }
+                connectedCorner = nextCornerByCorner[connectedCorner];
+            }
+        }
+    }
+
+    return true;
+}
+
 [[nodiscard]] bool BuildOperatorSurfaceRemeshPlan(
     const DeformableRuntimeMeshInstance& instance,
     const DeformableHoleEditParams& params,
@@ -2783,6 +2849,20 @@ template<typename DistanceFunc>
 
     u32 hitTriangleIndices[3] = {};
     if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
+        return false;
+
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> connectedTriangles{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    if(
+        !BuildConnectedSurfacePatchTriangleMask(
+            instance,
+            triangleCount,
+            params.posedHit.triangle,
+            connectedTriangles,
+            scratchArena
+        )
+    )
         return false;
 
     f32 hitBary[3] = {};
@@ -2858,6 +2938,12 @@ template<typename DistanceFunc>
                 outSurfaceTriangles
             );
         };
+
+        if(connectedTriangles[triangle] == 0u){
+            if(!appendOriginalTriangle())
+                return false;
+            continue;
+        }
 
         bool intersectsOperatorDepth = false;
         if(

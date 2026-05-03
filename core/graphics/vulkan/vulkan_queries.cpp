@@ -112,16 +112,16 @@ void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue)
     if(query->m_fence == VK_NULL_HANDLE)
         return;
 
+    query->m_started = false;
+
     VkResult res = vkResetFences(m_context.device, 1, &query->m_fence);
     if(res != VK_SUCCESS){
-        query->m_started = false;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence before submit: {}"), ResultToString(res));
         return;
     }
 
     Queue* q = getQueue(queue);
     if(!q){
-        query->m_started = false;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to set event query: requested queue is not available"));
         return;
     }
@@ -130,7 +130,6 @@ void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue)
     ScopedLock lock(q->m_mutex);
     res = vkQueueSubmit(q->m_queue, 1, &submitInfo, query->m_fence);
     if(res != VK_SUCCESS){
-        query->m_started = false;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to submit event query fence: {}"), ResultToString(res));
         return;
     }

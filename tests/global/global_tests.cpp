@@ -6,6 +6,7 @@
 
 #include <global/binary.h>
 #include <global/compile.h>
+#include <global/containers.h>
 #include <global/limit.h>
 
 
@@ -156,6 +157,23 @@ static void TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(TestContext& 
     NWB_GLOBAL_TEST_CHECK(context, parsed.empty());
 }
 
+static void TestAppendTriviallyCopyableVectorSelfAppend(TestContext& context){
+    Vector<u32> values;
+    values.push_back(1u);
+    values.push_back(2u);
+    values.push_back(3u);
+
+    AppendTriviallyCopyableVector(values, values);
+
+    NWB_GLOBAL_TEST_CHECK(context, values.size() == 6u);
+    NWB_GLOBAL_TEST_CHECK(context, values[0u] == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, values[1u] == 2u);
+    NWB_GLOBAL_TEST_CHECK(context, values[2u] == 3u);
+    NWB_GLOBAL_TEST_CHECK(context, values[3u] == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, values[4u] == 2u);
+    NWB_GLOBAL_TEST_CHECK(context, values[5u] == 3u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -185,6 +203,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_global_tests::TestInvalidStringTableReads(context);
         __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
         __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
+        __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
     });
 }
 

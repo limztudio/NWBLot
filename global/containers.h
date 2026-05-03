@@ -196,6 +196,16 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     const usize sourceSize = source.size();
     NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
     if(destination.data() == source.data()){
+        if constexpr(IsDefaultConstructible_V<DestinationValue>){
+            if(destinationSize == sourceSize){
+                NWB_ASSERT(sourceSize <= Limit<usize>::s_Max / sizeof(DestinationValue));
+                const usize copyBytes = sourceSize * sizeof(DestinationValue);
+                destination.resize(destinationSize + sourceSize);
+                NWB_MEMCPY(destination.data() + destinationSize, copyBytes, destination.data(), copyBytes);
+                return;
+            }
+        }
+
         destination.reserve(destinationSize + sourceSize);
         for(usize i = 0; i < sourceSize; ++i)
             destination.push_back(source[i]);

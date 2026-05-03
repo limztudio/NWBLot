@@ -156,6 +156,11 @@ template<typename MaskAllocator>
         Core::Alloc::ScratchAllocator<u32>(scratchArena)
     };
     pendingTriangles.reserve(triangleCount);
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{
+        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+    };
+    visitedVertices.resize(vertexCount, 0u);
+
     outConnectedTriangles[seedTriangle] = 1u;
     pendingTriangles.push_back(seedTriangle);
 
@@ -164,6 +169,10 @@ template<typename MaskAllocator>
         const usize cornerBase = triangle * 3u;
         for(u32 localCorner = 0u; localCorner < 3u; ++localCorner){
             const u32 vertex = indices[cornerBase + localCorner];
+            if(visitedVertices[vertex] != 0u)
+                continue;
+
+            visitedVertices[vertex] = 1u;
             u32 connectedCorner = firstCornerByVertex[vertex];
             while(connectedCorner != Limit<u32>::s_Max){
                 const u32 connectedTriangle = connectedCorner / 3u;

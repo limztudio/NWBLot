@@ -45,6 +45,56 @@ inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQuery
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+EventQuery::EventQuery(const VulkanContext& context)
+    : RefCounter<IEventQuery>(context.threadPool)
+    , m_context(context)
+{
+    auto fenceInfo = VulkanDetail::MakeVkStruct<VkFenceCreateInfo>(VK_STRUCTURE_TYPE_FENCE_CREATE_INFO);
+
+    const VkResult res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &m_fence);
+    if(res != VK_SUCCESS){
+        m_fence = VK_NULL_HANDLE;
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create fence for EventQuery"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create fence for EventQuery: {}"), ResultToString(res));
+    }
+}
+EventQuery::~EventQuery(){
+    if(m_fence != VK_NULL_HANDLE){
+        vkDestroyFence(m_context.device, m_fence, m_context.allocationCallbacks);
+        m_fence = VK_NULL_HANDLE;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TimerQuery::TimerQuery(const VulkanContext& context)
+    : RefCounter<ITimerQuery>(context.threadPool)
+    , m_context(context)
+{
+    auto queryPoolInfo = VulkanDetail::MakeVkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
+    queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryPoolInfo.queryCount = s_TimerQueryTimestampCount;
+
+    const VkResult res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &m_queryPool);
+    if(res != VK_SUCCESS){
+        m_queryPool = VK_NULL_HANDLE;
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery: {}"), ResultToString(res));
+    }
+}
+TimerQuery::~TimerQuery(){
+    if(m_queryPool != VK_NULL_HANDLE){
+        vkDestroyQueryPool(m_context.device, m_queryPool, m_context.allocationCallbacks);
+        m_queryPool = VK_NULL_HANDLE;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 EventQueryHandle Device::createEventQuery(){
     auto* query = NewArenaObject<EventQuery>(m_context.objectArena, m_context);
     if(!query->m_fence){

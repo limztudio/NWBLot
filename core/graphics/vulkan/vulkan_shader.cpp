@@ -257,8 +257,6 @@ void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
 }
 
 ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::Mask shaderType){
-    VkResult res = VK_SUCCESS;
-
     const AString requestedEntryName(entryName);
     ShaderLibraryKey key{ requestedEntryName, shaderType };
 
@@ -295,7 +293,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     createInfo.codeSize = m_bytecode.size();
     createInfo.pCode = spirvWords.data();
 
-    res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
+    const VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
@@ -314,8 +312,6 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
 
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
-    VkResult res = VK_SUCCESS;
-
     if(!binary || binarySize == 0 || (binarySize & 3) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
         return nullptr;
@@ -343,7 +339,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     createInfo.codeSize = binarySize;
     createInfo.pCode = spirvWords.data();
 
-    res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
+    const VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
@@ -353,8 +349,6 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 }
 
 ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
-    VkResult res = VK_SUCCESS;
-
     if(!baseShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: base shader is null"));
         return nullptr;
@@ -387,7 +381,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     createInfo.codeSize = shader->m_bytecode.size();
     createInfo.pCode = spirvWords.data();
 
-    res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
+    const VkResult res = vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
@@ -632,65 +626,6 @@ Framebuffer::~Framebuffer(){
         m_renderPass = VK_NULL_HANDLE;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-EventQuery::EventQuery(const VulkanContext& context)
-    : RefCounter<IEventQuery>(context.threadPool)
-    , m_context(context)
-{
-    VkResult res = VK_SUCCESS;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-    res = vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &m_fence);
-    if(res != VK_SUCCESS){
-        m_fence = VK_NULL_HANDLE;
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create fence for EventQuery"));
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create fence for EventQuery: {}"), ResultToString(res));
-    }
-}
-EventQuery::~EventQuery(){
-    if(m_fence != VK_NULL_HANDLE){
-        vkDestroyFence(m_context.device, m_fence, m_context.allocationCallbacks);
-        m_fence = VK_NULL_HANDLE;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-TimerQuery::TimerQuery(const VulkanContext& context)
-    : RefCounter<ITimerQuery>(context.threadPool)
-    , m_context(context)
-{
-    VkResult res = VK_SUCCESS;
-
-    VkQueryPoolCreateInfo queryPoolInfo{};
-    queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-    queryPoolInfo.queryCount = s_TimerQueryTimestampCount; // Start and end timestamps
-
-    res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &m_queryPool);
-    if(res != VK_SUCCESS){
-        m_queryPool = VK_NULL_HANDLE;
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery"));
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create query pool for TimerQuery: {}"), ResultToString(res));
-    }
-}
-TimerQuery::~TimerQuery(){
-    if(m_queryPool != VK_NULL_HANDLE){
-        vkDestroyQueryPool(m_context.device, m_queryPool, m_context.allocationCallbacks);
-        m_queryPool = VK_NULL_HANDLE;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_VULKAN_END

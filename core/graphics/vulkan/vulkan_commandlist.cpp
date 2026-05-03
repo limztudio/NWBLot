@@ -224,7 +224,7 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
     }
 
     TextureSlice resolvedSrc;
-    if(!VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice, &resolvedSrc)){
+    if(!VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice, src->m_formatLayout, &resolvedSrc)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
         return;
@@ -235,72 +235,33 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
         return;
     }
 
-    const FormatInfo& formatInfo = GetFormatInfo(src->m_desc.format);
     VkImageAspectFlags aspectMask = 0;
-    if(!VulkanDetail::GetBufferImageCopyAspectMask(formatInfo, NWB_TEXT("copy texture to buffer"), aspectMask)){
+    if(!VulkanDetail::GetBufferImageCopyAspectMask(src->m_aspectMask, NWB_TEXT("copy texture to buffer"), aspectMask)){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: combined depth/stencil buffer-image copies are not supported"));
         return;
     }
 
-    const u32 formatBlockWidth = GetFormatBlockWidth(formatInfo);
-    const u32 formatBlockHeight = GetFormatBlockHeight(formatInfo);
-    if(formatBlockWidth == 0 || formatBlockHeight == 0 || formatInfo.bytesPerBlock == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
+    const VkExtent3D srcExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
+    VulkanDetail::BufferImageCopyLayout copyLayout;
+    if(!VulkanDetail::BuildBufferImageCopyLayout(
+        srcExtent,
+        src->m_formatLayout,
+        static_cast<u64>(destRowPitch),
+        0,
+        VulkanDetail::BufferImageCopyRequiredSize::TouchedBytes,
+        VulkanDetail::BufferImageCopyPitchFields::OmitImplicit,
+        NWB_TEXT("copy texture to buffer"),
+        copyLayout
+    )){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid buffer-image copy layout"));
         return;
     }
 
-    const u64 blocksX = Max<u64>(DivideUp(static_cast<u64>(resolvedSrc.width), static_cast<u64>(formatBlockWidth)), 1ull);
-    const u64 blocksY = Max<u64>(DivideUp(static_cast<u64>(resolvedSrc.height), static_cast<u64>(formatBlockHeight)), 1ull);
-    if(blocksX > Limit<u64>::s_Max / formatInfo.bytesPerBlock){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: natural row pitch overflows"));
-        return;
-    }
-
-    const u64 naturalRowPitch = blocksX * formatInfo.bytesPerBlock;
-    if(destRowPitch > 0 && (destRowPitch < naturalRowPitch || (destRowPitch % formatInfo.bytesPerBlock) != 0)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid row pitch"));
-        return;
-    }
-
-    u64 bufferRowLength = 0;
-    if(destRowPitch > 0){
-        bufferRowLength = (static_cast<u64>(destRowPitch) / formatInfo.bytesPerBlock) * formatBlockWidth;
-        if(bufferRowLength > UINT32_MAX){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: row pitch exceeds Vulkan buffer image copy limits"));
-            return;
-        }
-    }
-
-    const u64 effectiveRowPitch = destRowPitch > 0 ? destRowPitch : naturalRowPitch;
-    if(blocksY > UINT64_MAX / effectiveRowPitch){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
-        return;
-    }
-    const u64 slicePitch = effectiveRowPitch * blocksY;
-    const u64 depthOffset = static_cast<u64>(resolvedSrc.depth - 1);
-    if(depthOffset > UINT64_MAX / slicePitch){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
-        return;
-    }
-    const u64 depthBytes = depthOffset * slicePitch;
-    const u64 rowBytes = static_cast<u64>(blocksY - 1) * effectiveRowPitch;
-    if(depthBytes > UINT64_MAX - rowBytes || depthBytes + rowBytes > UINT64_MAX - naturalRowPitch){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range size overflows"));
-        return;
-    }
-    const u64 requiredSize = depthBytes + rowBytes + naturalRowPitch;
     const BufferDesc& destDesc = dest->getDescription();
-    if(destOffsetBytes > destDesc.byteSize || requiredSize > destDesc.byteSize - destOffsetBytes){
+    if(destOffsetBytes > destDesc.byteSize || copyLayout.requiredSize > destDesc.byteSize - destOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination offset {} size {} is outside buffer size {}")
             , destOffsetBytes
-            , requiredSize
+            , copyLayout.requiredSize
             , destDesc.byteSize
         );
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range is outside the buffer"));
@@ -309,12 +270,9 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
 
     VkBufferImageCopy region{};
     region.bufferOffset = destOffsetBytes;
-    region.bufferRowLength = static_cast<u32>(bufferRowLength);
-    region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = aspectMask;
-    region.imageSubresource.mipLevel = resolvedSrc.mipLevel;
-    region.imageSubresource.baseArrayLayer = resolvedSrc.arraySlice;
-    region.imageSubresource.layerCount = 1;
+    region.bufferRowLength = copyLayout.bufferRowLength;
+    region.bufferImageHeight = copyLayout.bufferImageHeight;
+    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspectMask, resolvedSrc.mipLevel, resolvedSrc.arraySlice);
     region.imageOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
     region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
 

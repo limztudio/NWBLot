@@ -22,14 +22,6 @@ namespace __hidden_vulkan_staging_texture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline bool BuildTextureFormatBlockLayout(const FormatInfo& formatInfo, VulkanDetail::TextureFormatBlockLayout& outLayout){
-    outLayout = {};
-    outLayout.blockWidth = GetFormatBlockWidth(formatInfo);
-    outLayout.blockHeight = GetFormatBlockHeight(formatInfo);
-    outLayout.bytesPerBlock = formatInfo.bytesPerBlock;
-    return outLayout.blockWidth != 0 && outLayout.blockHeight != 0 && outLayout.bytesPerBlock != 0;
-}
-
 inline bool BuildStagingTextureMipLayout(
     const TextureDesc& desc,
     const VulkanDetail::TextureFormatBlockLayout& formatLayout,
@@ -40,12 +32,10 @@ inline bool BuildStagingTextureMipLayout(
     outLayout = {};
     outMipSize = 0;
 
-    const u32 mipWidth = Max<u32>(desc.width >> mip, 1u);
-    const u32 mipHeight = Max<u32>(desc.height >> mip, 1u);
-    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D ? Max<u32>(desc.depth >> mip, 1u) : 1u;
+    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mip);
 
-    const u64 blocksX = Max<u64>(DivideUp(static_cast<u64>(mipWidth), static_cast<u64>(formatLayout.blockWidth)), 1ull);
-    const u64 blocksY = Max<u64>(DivideUp(static_cast<u64>(mipHeight), static_cast<u64>(formatLayout.blockHeight)), 1ull);
+    const u64 blocksX = Max<u64>(DivideUp(static_cast<u64>(mipExtent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
+    const u64 blocksY = Max<u64>(DivideUp(static_cast<u64>(mipExtent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
     if(blocksX > UINT64_MAX / blocksY)
         return false;
 
@@ -60,10 +50,10 @@ inline bool BuildStagingTextureMipLayout(
 
     outLayout.rowPitch = blocksX * formatLayout.bytesPerBlock;
     outLayout.slicePitch = blockCount * formatLayout.bytesPerBlock;
-    if(mipDepth > UINT64_MAX / outLayout.slicePitch)
+    if(mipExtent.depth > UINT64_MAX / outLayout.slicePitch)
         return false;
 
-    outMipSize = outLayout.slicePitch * mipDepth;
+    outMipSize = outLayout.slicePitch * mipExtent.depth;
     outLayout.bufferRowLength = static_cast<u32>(bufferRowLength);
     outLayout.bufferImageHeight = static_cast<u32>(bufferImageHeight);
     return true;
@@ -126,20 +116,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, TextureSlice* outResolved){
-    if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
-        return false;
-    if(desc.arraySize == 0 || slice.arraySlice >= desc.arraySize)
-        return false;
-
-    const FormatInfo& formatInfo = GetFormatInfo(desc.format);
-    TextureFormatBlockLayout formatLayout;
-    if(!__hidden_vulkan_staging_texture::BuildTextureFormatBlockLayout(formatInfo, formatLayout))
-        return false;
-
-    return IsTextureSliceInBounds(desc, slice, formatLayout, outResolved);
-}
-
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved){
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
         return false;
@@ -148,25 +124,22 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, 
     if(formatLayout.blockWidth == 0 || formatLayout.blockHeight == 0 || formatLayout.bytesPerBlock == 0)
         return false;
 
-    const u32 mipWidth = Max<u32>(desc.width >> slice.mipLevel, 1u);
-    const u32 mipHeight = Max<u32>(desc.height >> slice.mipLevel, 1u);
-    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D ? Max<u32>(desc.depth >> slice.mipLevel, 1u) : 1u;
-
-    const TextureSlice resolved = slice.resolve(mipWidth, mipHeight, mipDepth);
+    const VkExtent3D mipExtent = GetTextureMipExtent(desc, slice.mipLevel);
+    const TextureSlice resolved = slice.resolve(mipExtent.width, mipExtent.height, mipExtent.depth);
     if(resolved.width == 0 || resolved.height == 0 || resolved.depth == 0)
         return false;
-    if(resolved.x > mipWidth || resolved.width > mipWidth - resolved.x)
+    if(resolved.x > mipExtent.width || resolved.width > mipExtent.width - resolved.x)
         return false;
-    if(resolved.y > mipHeight || resolved.height > mipHeight - resolved.y)
+    if(resolved.y > mipExtent.height || resolved.height > mipExtent.height - resolved.y)
         return false;
-    if(resolved.z > mipDepth || resolved.depth > mipDepth - resolved.z)
+    if(resolved.z > mipExtent.depth || resolved.depth > mipExtent.depth - resolved.z)
         return false;
 
     if((resolved.x % formatLayout.blockWidth) != 0 || (resolved.y % formatLayout.blockHeight) != 0)
         return false;
-    if((resolved.width % formatLayout.blockWidth) != 0 && resolved.x + resolved.width != mipWidth)
+    if((resolved.width % formatLayout.blockWidth) != 0 && resolved.x + resolved.width != mipExtent.width)
         return false;
-    if((resolved.height % formatLayout.blockHeight) != 0 && resolved.y + resolved.height != mipHeight)
+    if((resolved.height % formatLayout.blockHeight) != 0 && resolved.y + resolved.height != mipExtent.height)
         return false;
 
     if(outResolved)
@@ -229,21 +202,8 @@ u64 ComputeStagingTextureOffset(
 
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
-    VkResult res = VK_SUCCESS;
-
-    if(d.width == 0 || d.height == 0 || d.depth == 0 || d.mipLevels == 0 || d.arraySize == 0){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero")
-        );
-        NWB_ASSERT_MSG(
-            false,
-            NWB_TEXT("Vulkan: Failed to create staging texture: dimensions, mip count, and array size must be nonzero")
-        );
-        return nullptr;
-    }
-    if(d.dimension == TextureDimension::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: texture dimension is unknown"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: texture dimension is unknown"));
+    if(!VulkanDetail::ValidateTextureShape(d, NWB_TEXT("create staging texture"))){
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
         return nullptr;
     }
     if(d.sampleCount != 1){
@@ -251,32 +211,10 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
         return nullptr;
     }
-    if(
-        (d.dimension == TextureDimension::Texture1D || d.dimension == TextureDimension::Texture1DArray)
-        && (d.height != 1 || d.depth != 1)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging 1D texture: height and depth must be 1"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 1D texture: height and depth must be 1"));
-        return nullptr;
-    }
-    if(d.dimension != TextureDimension::Texture3D && d.depth != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create non-3D staging texture: depth must be 1"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create non-3D staging texture: depth must be 1"));
-        return nullptr;
-    }
-    if(d.dimension == TextureDimension::Texture3D && d.arraySize != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging 3D texture: array size must be 1"));
-        return nullptr;
-    }
-    if(!VulkanDetail::ValidateTextureShape(d, NWB_TEXT("create staging texture"))){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
-        return nullptr;
-    }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
     VulkanDetail::TextureFormatBlockLayout formatLayout;
-    if(!__hidden_vulkan_staging_texture::BuildTextureFormatBlockLayout(formatInfo, formatLayout)){
+    if(!VulkanDetail::GetTextureFormatBlockLayout(formatInfo, formatLayout)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         return nullptr;
@@ -285,6 +223,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
     staging->m_desc = d;
     staging->m_formatLayout = formatLayout;
+    staging->m_aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     staging->m_cpuAccess = cpuAccess;
 
     u64 arrayByteSize = 0;
@@ -310,7 +249,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
+    const VkResult res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture buffer: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, staging);
@@ -321,8 +260,6 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 }
 
 void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){
-    VkResult res = VK_SUCCESS;
-
     if(!tex){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture is null"));
         return nullptr;
@@ -341,7 +278,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     }
 
     if(!staging->m_mappedMemory){
-        res = m_allocator.mapStagingTextureMemory(*staging, &staging->m_mappedMemory);
+        const VkResult res = m_allocator.mapStagingTextureMemory(*staging, &staging->m_mappedMemory);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture for CPU access: {}"), ResultToString(res));
             return nullptr;
@@ -364,7 +301,7 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     );
 
     if(needsInvalidate){
-        res = m_allocator.invalidateStagingTextureMemory(*staging, offset, rangeSize);
+        const VkResult res = m_allocator.invalidateStagingTextureMemory(*staging, offset, rangeSize);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
             return nullptr;

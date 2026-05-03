@@ -515,7 +515,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
     Vector<VkSparseMemoryBind, Alloc::ScratchAllocator<VkSparseMemoryBind>> sparseMemoryBinds{ Alloc::ScratchAllocator<VkSparseMemoryBind>(scratchArena) };
 
     const VkImageCreateInfo& imageInfo = texture->m_imageInfo;
-    const VkImageAspectFlags textureAspectFlags = VulkanDetail::GetImageAspectMask(GetFormatInfo(texture->m_desc.format));
+    const VkImageAspectFlags textureAspectFlags = texture->m_aspectMask;
 
     u32 tileWidth = 1;
     u32 tileHeight = 1;

@@ -394,7 +394,7 @@ VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc){
 }
 
 bool BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item, VkImageViewCreateInfo& outViewInfo){
-    const TextureDesc& textureDesc = texture.getDescription();
+    const TextureDesc& textureDesc = texture.m_desc;
     TextureDimension::Enum dimension = item.dimension != TextureDimension::Unknown ? item.dimension : textureDesc.dimension;
     Format::Enum format = item.format != Format::UNKNOWN ? item.format : textureDesc.format;
     TextureSubresourceSet subresources = item.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Range);
@@ -403,38 +403,15 @@ bool BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item, VkIm
         return false;
     }
 
-    const VkFormat vkFormat = ConvertFormat(format);
-    if(vkFormat == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: format is unsupported"));
-        return false;
-    }
-
-    if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != 6){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: cube views must include exactly 6 array layers"));
-        return false;
-    }
-    if(dimension == TextureDimension::TextureCubeArray && (subresources.numArraySlices < 6 || (subresources.numArraySlices % 6) != 0)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: cube array views must include a positive multiple of 6 array layers"));
-        return false;
-    }
-
-    const VkImageAspectFlags aspectMask = GetImageAspectMask(GetFormatInfo(format));
-
-    outViewInfo = {};
-    outViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    outViewInfo.image = static_cast<VkImage>(static_cast<VkImage_T*>(texture.getNativeHandle(ObjectTypes::VK_Image)));
-    outViewInfo.viewType = TextureDimensionToViewType(dimension);
-    outViewInfo.format = vkFormat;
-    outViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    outViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    outViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    outViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    outViewInfo.subresourceRange.aspectMask = aspectMask;
-    outViewInfo.subresourceRange.baseMipLevel = subresources.baseMipLevel;
-    outViewInfo.subresourceRange.levelCount = subresources.numMipLevels;
-    outViewInfo.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
-    outViewInfo.subresourceRange.layerCount = subresources.numArraySlices;
-    return true;
+    return BuildTextureImageViewCreateInfo(
+        texture,
+        subresources,
+        dimension,
+        format,
+        NWB_TEXT("descriptor image view"),
+        false,
+        outViewInfo
+    );
 }
 
 const BindingLayoutItem* FindLayoutBinding(const BindingLayoutDesc& desc, const u32 slot, const ResourceType::Enum type){
@@ -1029,9 +1006,6 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
         case ResourceType::Texture_UAV:{
             auto* texture = checked_cast<Texture*>(item.resourceHandle);
             if(!texture)
-                return false;
-            const TextureSubresourceSet subresources = item.subresources.resolve(texture->getDescription(), TextureSubresourceMipResolve::Range);
-            if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0)
                 return false;
             if(!VulkanDetail::BuildImageViewCreateInfo(*texture, item, imageViewInfo))
                 return false;
@@ -1762,7 +1736,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture resource is invalid"), item.slot);
                 return false;
             }
-            imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
+            imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format);
             if(imageInfo.imageView == VK_NULL_HANDLE){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table slot {}: texture image view is null"), item.slot);
                 return false;
@@ -1959,7 +1933,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                     continue;
                 }
                 VkDescriptorImageInfo imgInfo = {};
-                imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format, false);
+                imgInfo.imageView = texture->getView(item.subresources, item.dimension, item.format);
                 if(imgInfo.imageView == VK_NULL_HANDLE){
                     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring binding set item for slot {}: texture image view is null"), item.slot);
                     continue;

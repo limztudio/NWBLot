@@ -410,20 +410,19 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
             ? TextureDimension::Texture2D
             : depthTex->m_desc.dimension
         ;
-        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN, true);
+        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN);
         if(depthView == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             return false;
         }
 
-        const FormatInfo& formatInfo = GetFormatInfo(depthTex->m_desc.format);
         const VkImageLayout depthStencilLayout =
             fbDesc.depthAttachment.isReadOnly
             ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
             : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         ;
-        if(formatInfo.hasDepth){
+        if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){
             depthAttachment.imageView = depthView;
             depthAttachment.imageLayout = depthStencilLayout;
             depthAttachment.loadOp = params.clearDepthTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -431,7 +430,7 @@ bool CommandList::beginDynamicRendering(IFramebuffer* framebuffer, const RenderP
             depthAttachment.clearValue.depthStencil.depth = params.depthClearValue;
             hasDepth = true;
         }
-        if(formatInfo.hasStencil){
+        if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0){
             stencilAttachment.imageView = depthView;
             stencilAttachment.imageLayout = depthStencilLayout;
             stencilAttachment.loadOp = params.clearStencilTarget ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;

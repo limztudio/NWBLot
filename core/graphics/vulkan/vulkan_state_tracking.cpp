@@ -25,7 +25,7 @@ namespace __hidden_vulkan_state_tracking{
 
 VkImageMemoryBarrier2 BuildTextureStateBarrier(
     const VkImage image,
-    const Format::Enum format,
+    const VkImageAspectFlags aspectMask,
     const TextureSubresourceSet& subresources,
     const ResourceStates::Mask oldState,
     const ResourceStates::Mask stateBits
@@ -39,14 +39,49 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
     barrier.image = image;
 
-    const FormatInfo& formatInfo = GetFormatInfo(format);
-    barrier.subresourceRange.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
-    barrier.subresourceRange.baseMipLevel = subresources.baseMipLevel;
-    barrier.subresourceRange.levelCount = subresources.numMipLevels;
-    barrier.subresourceRange.baseArrayLayer = subresources.baseArraySlice;
-    barrier.subresourceRange.layerCount = subresources.numArraySlices;
+    barrier.subresourceRange = VulkanDetail::BuildImageSubresourceRange(subresources, aspectMask);
 
     return barrier;
+}
+
+bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled){
+    return oldState != stateBits || (oldState == ResourceStates::UnorderedAccess && uavBarrierEnabled);
+}
+
+void AppendTextureStateBarrier(
+    Vector<VkImageMemoryBarrier2, Alloc::CustomAllocator<VkImageMemoryBarrier2>>& barriers,
+    const VkImage image,
+    const VkImageAspectFlags aspectMask,
+    const ArraySlice arraySlice,
+    const MipLevel mipLevel,
+    const ResourceStates::Mask oldState,
+    const ResourceStates::Mask stateBits
+){
+    barriers.push_back(BuildTextureStateBarrier(
+        image,
+        aspectMask,
+        TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+        oldState,
+        stateBits
+    ));
+}
+
+void AppendTextureStateBarriersBefore(
+    Vector<VkImageMemoryBarrier2, Alloc::CustomAllocator<VkImageMemoryBarrier2>>& barriers,
+    const VkImage image,
+    const VkImageAspectFlags aspectMask,
+    const TextureSubresourceSet& subresources,
+    const MipLevel mipEnd,
+    const ArraySlice currentArraySlice,
+    const MipLevel currentMipLevel,
+    const ResourceStates::Mask oldState,
+    const ResourceStates::Mask stateBits
+){
+    for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice <= currentArraySlice; ++arraySlice){
+        const MipLevel previousMipEnd = arraySlice == currentArraySlice ? currentMipLevel : mipEnd;
+        for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < previousMipEnd; ++mipLevel)
+            AppendTextureStateBarrier(barriers, image, aspectMask, arraySlice, mipLevel, oldState, stateBits);
+    }
 }
 
 template<typename ContainerT>
@@ -204,12 +239,13 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
     bool firstSubresource = true;
-    bool uniformOldState = true;
     bool needsBarrier = false;
+    bool usePerSubresourceBarriers = false;
     const bool uavBarrierEnabled = stateBits == ResourceStates::UnorderedAccess && m_stateTracker->isUavBarrierEnabledForTexture(textureResource);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
+    usize firstBarrierIndex = m_pendingImageBarriers.size();
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
@@ -221,21 +257,54 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
                 oldState = subresourceOldState;
                 firstSubresource = false;
             }
-            else if(subresourceOldState != oldState)
-                uniformOldState = false;
+            else if(subresourceOldState != oldState && !usePerSubresourceBarriers){
+                usePerSubresourceBarriers = true;
+                firstBarrierIndex = m_pendingImageBarriers.size();
+                __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
+                if(__hidden_vulkan_state_tracking::NeedsTextureStateBarrier(oldState, stateBits, uavBarrierEnabled)){
+                    __hidden_vulkan_state_tracking::AppendTextureStateBarriersBefore(
+                        m_pendingImageBarriers,
+                        texture->m_image,
+                        texture->m_aspectMask,
+                        resolvedSubresources,
+                        mipEnd,
+                        arraySlice,
+                        mipLevel,
+                        oldState,
+                        stateBits
+                    );
+                }
+            }
 
-            if(subresourceOldState != stateBits || (subresourceOldState == ResourceStates::UnorderedAccess && uavBarrierEnabled))
+            const bool subresourceNeedsBarrier = __hidden_vulkan_state_tracking::NeedsTextureStateBarrier(
+                subresourceOldState,
+                stateBits,
+                uavBarrierEnabled
+            );
+            if(subresourceNeedsBarrier){
                 needsBarrier = true;
+                if(usePerSubresourceBarriers){
+                    __hidden_vulkan_state_tracking::AppendTextureStateBarrier(
+                        m_pendingImageBarriers,
+                        texture->m_image,
+                        texture->m_aspectMask,
+                        arraySlice,
+                        mipLevel,
+                        subresourceOldState,
+                        stateBits
+                    );
+                }
+            }
         }
     }
 
     if(!needsBarrier)
         return;
 
-    if(uniformOldState){
+    if(!usePerSubresourceBarriers){
         const VkImageMemoryBarrier2 barrier = __hidden_vulkan_state_tracking::BuildTextureStateBarrier(
             texture->m_image,
-            texture->m_desc.format,
+            texture->m_aspectMask,
             resolvedSubresources,
             oldState,
             stateBits
@@ -254,26 +323,6 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
 
         executePipelineBarrier(depInfo);
         return;
-    }
-
-    const usize firstBarrierIndex = m_pendingImageBarriers.size();
-    __hidden_vulkan_state_tracking::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
-    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-            if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
-                return;
-            if(subresourceOldState == stateBits && (subresourceOldState != ResourceStates::UnorderedAccess || !uavBarrierEnabled))
-                continue;
-
-            m_pendingImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
-                texture->m_image,
-                texture->m_desc.format,
-                TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
-                subresourceOldState,
-                stateBits
-            ));
-        }
     }
 
     m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
@@ -516,7 +565,7 @@ void StateTracker::appendKeepInitialStateBarriers(
 
         imageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureStateBarrier(
             texture->m_image,
-            texture->m_desc.format,
+            texture->m_aspectMask,
             TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
             currentState,
             desc.initialState

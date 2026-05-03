@@ -62,10 +62,30 @@ namespace IndirectDrawIndexMode{
     };
 };
 
+namespace BufferImageCopyRequiredSize{
+    enum Enum : u8{
+        TouchedBytes = 0u,
+        PaddedSlices = 1u,
+    };
+};
+
+namespace BufferImageCopyPitchFields{
+    enum Enum : u8{
+        OmitImplicit = 0u,
+        EmitExplicit = 1u,
+    };
+};
+
 struct TextureFormatBlockLayout{
     u32 blockWidth = 0;
     u32 blockHeight = 0;
     u32 bytesPerBlock = 0;
+};
+
+struct BufferImageCopyLayout{
+    u64 requiredSize = 0;
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
 };
 
 struct StagingTextureMipLayout{
@@ -87,14 +107,39 @@ VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
 VkFormat ConvertFormat(Format::Enum format);
 VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
 extern VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset = 0);
-VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension);
-VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension);
 bool IsSupportedSampleCount(u32 sampleCount);
 bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
-bool GetBufferImageCopyAspectMask(const FormatInfo& formatInfo, const tchar* operationName, VkImageAspectFlags& outAspectMask);
-VkImageUsageFlags PickImageUsage(const TextureDesc& desc);
-VkImageCreateFlags PickImageFlags(const TextureDesc& desc);
+bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
+bool GetBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, const tchar* operationName, VkImageAspectFlags& outAspectMask);
+VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
+bool BuildBufferImageCopyLayout(
+    const VkExtent3D& extent,
+    const TextureFormatBlockLayout& formatLayout,
+    u64 rowPitch,
+    u64 depthPitch,
+    BufferImageCopyRequiredSize::Enum requiredSizeMode,
+    BufferImageCopyPitchFields::Enum pitchFields,
+    const tchar* operationName,
+    BufferImageCopyLayout& outLayout
+);
+VkImageSubresourceLayers BuildImageSubresourceLayers(
+    VkImageAspectFlags aspectMask,
+    MipLevel mipLevel,
+    ArraySlice arraySlice,
+    ArraySlice layerCount = 1u
+);
+VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask);
+bool BuildTextureImageViewCreateInfo(
+    Texture& texture,
+    const TextureSubresourceSet& resolvedSubresources,
+    TextureDimension::Enum dimension,
+    Format::Enum format,
+    const tchar* operationName,
+    bool assertFailure,
+    VkImageViewCreateInfo& outViewInfo
+);
+bool BuildImageViewCreateInfo(Texture& texture, const BindingSetItem& item, VkImageViewCreateInfo& outViewInfo);
 u64 ComputeStagingTextureOffset(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
@@ -105,7 +150,6 @@ u64 ComputeStagingTextureOffset(
     u32* outBufferImageHeight = nullptr,
     u64* outRangeSize = nullptr
 );
-bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, TextureSlice* outResolved = nullptr);
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
@@ -729,7 +773,6 @@ struct TextureViewKey{
     TextureSubresourceSet subresources;
     TextureDimension::Enum dimension = TextureDimension::Unknown;
     Format::Enum format = Format::UNKNOWN;
-    bool isReadOnlyDSV = false;
 };
 
 inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noexcept{
@@ -737,7 +780,6 @@ inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noex
         lhs.subresources == rhs.subresources
         && lhs.dimension == rhs.dimension
         && lhs.format == rhs.format
-        && lhs.isReadOnlyDSV == rhs.isReadOnlyDSV
         ;
 }
 
@@ -747,13 +789,27 @@ struct TextureViewKeyHasher{
         CoreDetail::HashCombine(seed, value.subresources);
         CoreDetail::HashCombine(seed, static_cast<u32>(value.dimension));
         CoreDetail::HashCombine(seed, static_cast<u32>(value.format));
-        CoreDetail::HashCombine(seed, value.isReadOnlyDSV);
         return seed;
     }
 };
 
 
 class Texture final : public RefCounter<ITexture>, NoCopy{
+    friend bool VulkanDetail::BuildTextureImageViewCreateInfo(
+        Texture& texture,
+        const TextureSubresourceSet& resolvedSubresources,
+        TextureDimension::Enum dimension,
+        Format::Enum format,
+        const tchar* operationName,
+        bool assertFailure,
+        VkImageViewCreateInfo& outViewInfo
+    );
+    friend bool VulkanDetail::BuildImageViewCreateInfo(
+        Texture& texture,
+        const BindingSetItem& item,
+        VkImageViewCreateInfo& outViewInfo
+    );
+
     friend class BackendContext;
     friend class Device;
     friend class CommandList;
@@ -770,13 +826,15 @@ public:
 public:
     [[nodiscard]] virtual const TextureDesc& getDescription()const override{ return m_desc; }
     virtual Object getNativeHandle(ObjectType objectType)override;
-    virtual Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool isReadOnlyDSV)override;
+    virtual Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool)override;
 
-    [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format, bool isReadOnlyDSV = false);
+    [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
 
 
 private:
     TextureDesc m_desc;
+    VulkanDetail::TextureFormatBlockLayout m_formatLayout;
+    VkImageAspectFlags m_aspectMask = 0;
 
     VkImage m_image = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
@@ -815,6 +873,7 @@ public:
 private:
     TextureDesc m_desc;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
+    VkImageAspectFlags m_aspectMask = 0;
     u64 m_arrayByteSize = 0;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
 
@@ -1750,6 +1809,7 @@ private:
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
     bool validateIndirectBuffer(IBuffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
+    void clearColorTexture(ITexture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue);
     bool prepareStagingTextureCopy(
         IStagingTexture* stagingResource,
         const TextureSlice& stagingSlice,

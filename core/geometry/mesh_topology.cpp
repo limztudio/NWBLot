@@ -109,6 +109,76 @@ void IncrementVertexDegree(VertexDegreeMap& degrees, const u32 vertex){
     ++it.value();
 }
 
+template<typename MaskAllocator>
+[[nodiscard]] bool BuildConnectedTriangleMaskImpl(
+    const Vector<u32>& indices,
+    const usize vertexCount,
+    const u32 seedTriangle,
+    Vector<u8, MaskAllocator>& outConnectedTriangles,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    outConnectedTriangles.clear();
+    if(indices.empty() || (indices.size() % 3u) != 0u || vertexCount == 0u)
+        return false;
+
+    const usize triangleCount = indices.size() / 3u;
+    if(
+        static_cast<usize>(seedTriangle) >= triangleCount
+        || triangleCount > static_cast<usize>(Limit<u32>::s_Max)
+        || vertexCount > static_cast<usize>(Limit<u32>::s_Max)
+        || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
+    )
+        return false;
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> firstCornerByVertex{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    firstCornerByVertex.resize(vertexCount, Limit<u32>::s_Max);
+
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> nextCornerByCorner{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    nextCornerByCorner.resize(indices.size(), Limit<u32>::s_Max);
+
+    for(usize corner = 0u; corner < indices.size(); ++corner){
+        const u32 vertex = indices[corner];
+        if(static_cast<usize>(vertex) >= vertexCount){
+            outConnectedTriangles.clear();
+            return false;
+        }
+
+        nextCornerByCorner[corner] = firstCornerByVertex[vertex];
+        firstCornerByVertex[vertex] = static_cast<u32>(corner);
+    }
+
+    outConnectedTriangles.resize(triangleCount, 0u);
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> pendingTriangles{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+    pendingTriangles.reserve(triangleCount);
+    outConnectedTriangles[seedTriangle] = 1u;
+    pendingTriangles.push_back(seedTriangle);
+
+    for(usize queueIndex = 0u; queueIndex < pendingTriangles.size(); ++queueIndex){
+        const usize triangle = static_cast<usize>(pendingTriangles[queueIndex]);
+        const usize cornerBase = triangle * 3u;
+        for(u32 localCorner = 0u; localCorner < 3u; ++localCorner){
+            const u32 vertex = indices[cornerBase + localCorner];
+            u32 connectedCorner = firstCornerByVertex[vertex];
+            while(connectedCorner != Limit<u32>::s_Max){
+                const u32 connectedTriangle = connectedCorner / 3u;
+                if(outConnectedTriangles[connectedTriangle] == 0u){
+                    outConnectedTriangles[connectedTriangle] = 1u;
+                    pendingTriangles.push_back(connectedTriangle);
+                }
+                connectedCorner = nextCornerByCorner[connectedCorner];
+            }
+        }
+    }
+
+    return true;
+}
+
 template<typename EdgeAllocator, typename PositionAllocator>
 [[nodiscard]] f32 ProjectedSignedLoopArea(
     const Vector<MeshTopologyEdge, EdgeAllocator>& orderedEdges,
@@ -586,6 +656,38 @@ bool BuildBoundaryEdgesFromRemovedTriangles(
     u32* outRemovedTriangleCount
 ){
     return __hidden_geometry_mesh_topology::BuildBoundaryEdgesFromRemovedTrianglesImpl(indices, removedTriangles, outBoundaryEdges, outRemovedTriangleCount);
+}
+
+bool BuildConnectedTriangleMask(
+    const Vector<u32>& indices,
+    const usize vertexCount,
+    const u32 seedTriangle,
+    Vector<u8>& outConnectedTriangles
+){
+    Core::Alloc::ScratchArena<> scratchArena;
+    return __hidden_geometry_mesh_topology::BuildConnectedTriangleMaskImpl(
+        indices,
+        vertexCount,
+        seedTriangle,
+        outConnectedTriangles,
+        scratchArena
+    );
+}
+
+bool BuildConnectedTriangleMask(
+    const Vector<u32>& indices,
+    const usize vertexCount,
+    const u32 seedTriangle,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& outConnectedTriangles,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
+    return __hidden_geometry_mesh_topology::BuildConnectedTriangleMaskImpl(
+        indices,
+        vertexCount,
+        seedTriangle,
+        outConnectedTriangles,
+        scratchArena
+    );
 }
 
 bool BuildBoundaryLoopVertexFrame(

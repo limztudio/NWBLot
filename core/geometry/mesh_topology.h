@@ -87,6 +87,21 @@ static_assert(IsTriviallyCopyable_V<MeshTopologyLoopVertexFrame>, "MeshTopologyL
     u32* outRemovedTriangleCount = nullptr
 );
 
+[[nodiscard]] bool BuildConnectedTriangleMask(
+    const Vector<u32>& indices,
+    usize vertexCount,
+    u32 seedTriangle,
+    Vector<u8>& outConnectedTriangles
+);
+
+[[nodiscard]] bool BuildConnectedTriangleMask(
+    const Vector<u32>& indices,
+    usize vertexCount,
+    u32 seedTriangle,
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>>& outConnectedTriangles,
+    Core::Alloc::ScratchArena<>& scratchArena
+);
+
 [[nodiscard]] bool BuildBoundaryLoopVertexFrame(
     const Vector<Float3U>& positions,
     const MeshTopologyBoundaryLoopFrame& frame,

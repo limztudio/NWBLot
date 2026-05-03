@@ -457,6 +457,69 @@ static void TestBuildsBoundaryEdgesFromRemovedTriangles(TestContext& context){
     }
 }
 
+static void TestBuildsConnectedTriangleMask(TestContext& context){
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(2u);
+    indices.push_back(1u);
+    indices.push_back(3u);
+    indices.push_back(4u);
+    indices.push_back(5u);
+    indices.push_back(6u);
+
+    Vector<u8> connectedTriangles;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildConnectedTriangleMask(indices, 7u, 0u, connectedTriangles)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles.size() == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles[0u] == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles[1u] == 1u);
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles[2u] == 0u);
+
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        NWB::Core::Geometry::BuildConnectedTriangleMask(indices, 7u, 2u, connectedTriangles)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles.size() == 3u);
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles[0u] == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles[1u] == 0u);
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles[2u] == 1u);
+}
+
+static void TestRejectsMalformedConnectedTriangleMask(TestContext& context){
+    Vector<u32> indices;
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    indices.push_back(3u);
+
+    Vector<u8> connectedTriangles;
+    connectedTriangles.push_back(1u);
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildConnectedTriangleMask(indices, 4u, 0u, connectedTriangles)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles.empty());
+
+    indices = MakeTriangleIndices();
+    connectedTriangles.push_back(1u);
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildConnectedTriangleMask(indices, 2u, 0u, connectedTriangles)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles.empty());
+
+    connectedTriangles.push_back(1u);
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildConnectedTriangleMask(indices, 3u, 1u, connectedTriangles)
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, connectedTriangles.empty());
+}
+
 static void TestRejectsMalformedRemovedTriangleBoundaries(TestContext& context){
     Vector<u32> indices = MakeQuadTriangleIndices();
 
@@ -1251,6 +1314,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_geometry_tests::TestOrdersBoundaryLoopCounterClockwise(context);
         __hidden_geometry_tests::TestRejectsBranchedBoundaryLoop(context);
         __hidden_geometry_tests::TestBuildsBoundaryEdgesFromRemovedTriangles(context);
+        __hidden_geometry_tests::TestBuildsConnectedTriangleMask(context);
+        __hidden_geometry_tests::TestRejectsMalformedConnectedTriangleMask(context);
         __hidden_geometry_tests::TestRejectsMalformedRemovedTriangleBoundaries(context);
         __hidden_geometry_tests::TestAppendsWallTrianglePairs(context);
         __hidden_geometry_tests::TestRejectsMalformedWallTrianglePairs(context);

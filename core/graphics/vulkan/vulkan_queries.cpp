@@ -58,12 +58,11 @@ void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue)
     if(!queryResource)
         return;
 
-    VkResult res = VK_SUCCESS;
     auto* query = static_cast<EventQuery*>(queryResource);
     if(query->m_fence == VK_NULL_HANDLE)
         return;
 
-    res = vkResetFences(m_context.device, 1, &query->m_fence);
+    VkResult res = vkResetFences(m_context.device, 1, &query->m_fence);
     if(res != VK_SUCCESS){
         query->m_started = false;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence before submit: {}"), ResultToString(res));
@@ -71,19 +70,18 @@ void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue)
     }
 
     Queue* q = getQueue(queue);
-    if(q){
-        auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
-        ScopedLock lock(q->m_mutex);
-        res = vkQueueSubmit(q->m_queue, 1, &submitInfo, query->m_fence);
-        if(res != VK_SUCCESS){
-            query->m_started = false;
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to submit event query fence: {}"), ResultToString(res));
-            return;
-        }
-    }
-    else{
+    if(!q){
         query->m_started = false;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to set event query: requested queue is not available"));
+        return;
+    }
+
+    auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
+    ScopedLock lock(q->m_mutex);
+    res = vkQueueSubmit(q->m_queue, 1, &submitInfo, query->m_fence);
+    if(res != VK_SUCCESS){
+        query->m_started = false;
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to submit event query fence: {}"), ResultToString(res));
         return;
     }
 
@@ -91,8 +89,6 @@ void Device::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum queue)
 }
 
 bool Device::pollEventQuery(IEventQuery* queryResource){
-    VkResult res = VK_SUCCESS;
-
     if(!queryResource)
         return false;
 
@@ -102,15 +98,13 @@ bool Device::pollEventQuery(IEventQuery* queryResource){
     if(!query->m_started)
         return true;
 
-    res = vkGetFenceStatus(m_context.device, query->m_fence);
+    const VkResult res = vkGetFenceStatus(m_context.device, query->m_fence);
     if(res == VK_SUCCESS)
         query->m_started = false;
     return res == VK_SUCCESS;
 }
 
 void Device::waitEventQuery(IEventQuery* queryResource){
-    VkResult res = VK_SUCCESS;
-
     if(!queryResource)
         return;
 
@@ -120,7 +114,7 @@ void Device::waitEventQuery(IEventQuery* queryResource){
     if(!query->m_started)
         return;
 
-    res = vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
+    const VkResult res = vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
     if(res == VK_SUCCESS)
         query->m_started = false;
     else
@@ -128,15 +122,13 @@ void Device::waitEventQuery(IEventQuery* queryResource){
 }
 
 void Device::resetEventQuery(IEventQuery* queryResource){
-    VkResult res = VK_SUCCESS;
-
     if(!queryResource)
         return;
 
     auto* query = static_cast<EventQuery*>(queryResource);
     if(query->m_fence == VK_NULL_HANDLE)
         return;
-    res = vkResetFences(m_context.device, 1, &query->m_fence);
+    const VkResult res = vkResetFences(m_context.device, 1, &query->m_fence);
     if(res == VK_SUCCESS)
         query->m_started = false;
     else
@@ -166,8 +158,6 @@ bool Device::pollTimerQuery(ITimerQuery* queryResource){
 }
 
 f32 Device::getTimerQueryTime(ITimerQuery* queryResource){
-    VkResult res = VK_SUCCESS;
-
     if(!queryResource)
         return 0.f;
 
@@ -176,7 +166,7 @@ f32 Device::getTimerQueryTime(ITimerQuery* queryResource){
         return 0.f;
 
     u64 timestamps[s_TimerQueryTimestampCount] = {};
-    res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
+    const VkResult res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
     if(res == VK_SUCCESS){
         u64 diff = timestamps[s_TimerQueryEndIndex] - timestamps[s_TimerQueryBeginIndex];
         f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;

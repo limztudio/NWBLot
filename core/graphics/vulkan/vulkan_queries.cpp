@@ -227,60 +227,6 @@ void CommandList::endMarker(){
         m_aftermathMarkerTracker.popEvent();
 }
 
-void CommandList::setEventQuery(IEventQuery* queryResource, CommandQueue::Enum){
-    VkResult res = VK_SUCCESS;
-
-    auto* query = checked_cast<EventQuery*>(queryResource);
-    if(!query || query->m_fence == VK_NULL_HANDLE)
-        return;
-
-    res = vkResetFences(m_context.device, 1, &query->m_fence);
-    if(res != VK_SUCCESS){
-        query->m_started = false;
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence for command list signal: {}"), ResultToString(res));
-        return;
-    }
-
-    if(m_currentCmdBuf){
-        m_currentCmdBuf->clearSignalFence();
-        m_currentCmdBuf->m_signalFence = query->m_fence;
-        m_currentCmdBuf->m_signalFenceQuery = query;
-        retainResource(queryResource);
-        query->m_started = true;
-    }
-    else
-        query->m_started = false;
-}
-
-void CommandList::resetEventQuery(IEventQuery* queryResource){
-    VkResult res = VK_SUCCESS;
-
-    auto* query = checked_cast<EventQuery*>(queryResource);
-    if(!query || query->m_fence == VK_NULL_HANDLE)
-        return;
-
-    res = vkResetFences(m_context.device, 1, &query->m_fence);
-    if(res == VK_SUCCESS)
-        query->m_started = false;
-    else
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset event query fence from command list: {}"), ResultToString(res));
-}
-
-void CommandList::waitEventQuery(IEventQuery* queryResource){
-    VkResult res = VK_SUCCESS;
-
-    auto* query = checked_cast<EventQuery*>(queryResource);
-    if(!query || query->m_fence == VK_NULL_HANDLE)
-        return;
-
-    res = vkWaitForFences(m_context.device, 1, &query->m_fence, VK_TRUE, UINT64_MAX);
-    if(res == VK_SUCCESS)
-        query->m_started = false;
-    else
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait event query fence from command list: {}"), ResultToString(res));
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

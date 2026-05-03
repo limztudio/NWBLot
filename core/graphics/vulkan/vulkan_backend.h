@@ -1781,9 +1781,6 @@ public:
 
 public:
     void copyTextureToBuffer(IBuffer* dest, u64 destOffsetBytes, u32 destRowPitch, ITexture* src, const TextureSlice& srcSlice);
-    void setEventQuery(IEventQuery* query, CommandQueue::Enum waitQueue);
-    void resetEventQuery(IEventQuery* query);
-    void waitEventQuery(IEventQuery* query);
 
 
 private:
@@ -1871,7 +1868,6 @@ private:
 
 class EventQuery final : public RefCounter<IEventQuery>, NoCopy{
     friend class Device;
-    friend class CommandList;
     friend class Queue;
     friend class TrackedCommandBuffer;
 

@@ -57,7 +57,7 @@ endfunction()
 
 function(nwb_target_sources_standalone_runtime target)
     target_sources(${target} PRIVATE
-        "${PROJECT_SOURCE_DIR}/core/common/standalone_runtime.cpp"
-        "${PROJECT_SOURCE_DIR}/core/common/standalone_runtime.h"
+        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp"
+        "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.h"
     )
 endfunction()

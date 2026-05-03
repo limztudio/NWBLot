@@ -1901,7 +1901,6 @@ public:
 
 private:
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
-    bool m_resolved = false;
 
     const VulkanContext& m_context;
 };

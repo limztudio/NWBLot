@@ -16,6 +16,35 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_vulkan_queries{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQueryPool queryPool, u64 (&timestamps)[s_TimerQueryTimestampCount]){
+    return vkGetQueryPoolResults(
+        context.device,
+        queryPool,
+        s_TimerQueryBeginIndex,
+        s_TimerQueryTimestampCount,
+        sizeof(timestamps),
+        timestamps,
+        sizeof(u64),
+        VK_QUERY_RESULT_64_BIT
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+} // namespace __hidden_vulkan_queries
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 EventQueryHandle Device::createEventQuery(){
     auto* query = NewArenaObject<EventQuery>(m_context.objectArena, m_context);
     if(!query->m_fence){
@@ -128,7 +157,12 @@ bool Device::pollTimerQuery(ITimerQuery* queryResource){
         return false;
 
     auto* query = static_cast<TimerQuery*>(queryResource);
-    return query->m_resolved;
+    if(query->m_queryPool == VK_NULL_HANDLE)
+        return false;
+
+    u64 timestamps[s_TimerQueryTimestampCount] = {};
+    const VkResult res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
+    return res == VK_SUCCESS;
 }
 
 f32 Device::getTimerQueryTime(ITimerQuery* queryResource){
@@ -141,27 +175,16 @@ f32 Device::getTimerQueryTime(ITimerQuery* queryResource){
     if(query->m_queryPool == VK_NULL_HANDLE)
         return 0.f;
 
-    if(!query->m_resolved)
-        return 0.f;
-
-    u64 timestamps[s_TimerQueryTimestampCount];
-    res = vkGetQueryPoolResults(
-        m_context.device,
-        query->m_queryPool,
-        s_TimerQueryBeginIndex,
-        s_TimerQueryTimestampCount,
-        sizeof(timestamps),
-        timestamps,
-        sizeof(u64),
-        VK_QUERY_RESULT_64_BIT
-    );
+    u64 timestamps[s_TimerQueryTimestampCount] = {};
+    res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
     if(res == VK_SUCCESS){
         u64 diff = timestamps[s_TimerQueryEndIndex] - timestamps[s_TimerQueryBeginIndex];
         f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;
         return static_cast<f32>(diff) * timestampPeriod * 1e-9f; // Convert to seconds
     }
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
+    if(res != VK_NOT_READY)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
     return 0.f;
 }
 
@@ -173,7 +196,6 @@ void Device::resetTimerQuery(ITimerQuery* queryResource){
     if(query->m_queryPool == VK_NULL_HANDLE)
         return;
     vkResetQueryPool(m_context.device, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
-    query->m_resolved = false;
 }
 
 
@@ -194,7 +216,6 @@ void CommandList::endTimerQuery(ITimerQuery* queryResource){
         return;
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryEndIndex);
-    query->m_resolved = true;
 }
 
 void CommandList::beginMarker(const AStringView name){

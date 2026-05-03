@@ -219,20 +219,26 @@ void CommandList::endTimerQuery(ITimerQuery* queryResource){
 }
 
 void CommandList::beginMarker(const AStringView name){
+    const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
+    const bool useDebugMarker = m_context.extensions.EXT_debug_marker;
+    const bool useAftermath = m_device.isAftermathEnabled();
+    if(!useDebugUtils && !useDebugMarker && !useAftermath)
+        return;
+
     const AString markerName(name);
 
-    if(m_context.extensions.EXT_debug_utils){
+    if(useDebugUtils){
         auto label = VulkanDetail::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);
         label.pLabelName = markerName.c_str();
         vkCmdBeginDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf, &label);
     }
-    else if(m_context.extensions.EXT_debug_marker){
+    else if(useDebugMarker){
         auto markerInfo = VulkanDetail::MakeVkStruct<VkDebugMarkerMarkerInfoEXT>(VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT);
         markerInfo.pMarkerName = markerName.c_str();
         vkCmdDebugMarkerBeginEXT(m_currentCmdBuf->m_cmdBuf, &markerInfo);
     }
 
-    if(m_device.isAftermathEnabled()){
+    if(useAftermath){
         const usize aftermathMarker = m_aftermathMarkerTracker.pushEvent(markerName.c_str());
         vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(aftermathMarker));
     }

@@ -357,16 +357,14 @@ RuntimeMeshHandle DeformableRuntimeMeshCache::handleForEntity(const Core::ECS::E
 }
 
 DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findInstance(const RuntimeMeshHandle handle){
-    const auto foundEntity = m_handleToEntity.find(handle.value);
-    if(foundEntity == m_handleToEntity.end())
-        return nullptr;
-    const auto foundInstance = m_instances.find(foundEntity.value());
-    if(foundInstance == m_instances.end())
-        return nullptr;
-    return &foundInstance.value();
+    return const_cast<DeformableRuntimeMeshInstance*>(findConstInstance(handle));
 }
 
 const DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findInstance(const RuntimeMeshHandle handle)const{
+    return findConstInstance(handle);
+}
+
+const DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findConstInstance(const RuntimeMeshHandle handle)const{
     const auto foundEntity = m_handleToEntity.find(handle.value);
     if(foundEntity == m_handleToEntity.end())
         return nullptr;

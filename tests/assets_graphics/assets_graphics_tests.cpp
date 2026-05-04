@@ -660,9 +660,15 @@ static bool CookSingleGraphicsMeta(
     return cooker.cook(options);
 }
 
-static bool CookSingleDeformableMeta(
+struct MinimalAssetCookInfo{
+    const char* assetDirectory = "";
+    const char* assetFilename = "";
+};
+
+static bool CookSingleMinimalAssetMeta(
     const AStringView metaText,
     const AStringView caseName,
+    const MinimalAssetCookInfo& cookInfo,
     TestArena& testArena,
     Path& outRoot,
     Path& outOutputDirectory
@@ -670,12 +676,23 @@ static bool CookSingleDeformableMeta(
     return CookSingleGraphicsMeta(
         metaText,
         caseName,
-        "characters",
-        "minimal_deformable.nwb",
+        cookInfo.assetDirectory,
+        cookInfo.assetFilename,
         testArena,
         outRoot,
         outOutputDirectory
     );
+}
+
+static bool CookSingleDeformableMeta(
+    const AStringView metaText,
+    const AStringView caseName,
+    TestArena& testArena,
+    Path& outRoot,
+    Path& outOutputDirectory
+){
+    static constexpr MinimalAssetCookInfo s_CookInfo{ "characters", "minimal_deformable.nwb" };
+    return CookSingleMinimalAssetMeta(metaText, caseName, s_CookInfo, testArena, outRoot, outOutputDirectory);
 }
 
 static bool CookSingleGeometryMeta(
@@ -685,15 +702,8 @@ static bool CookSingleGeometryMeta(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    return CookSingleGraphicsMeta(
-        metaText,
-        caseName,
-        "meshes",
-        "minimal_geometry.nwb",
-        testArena,
-        outRoot,
-        outOutputDirectory
-    );
+    static constexpr MinimalAssetCookInfo s_CookInfo{ "meshes", "minimal_geometry.nwb" };
+    return CookSingleMinimalAssetMeta(metaText, caseName, s_CookInfo, testArena, outRoot, outOutputDirectory);
 }
 
 template<typename AssetCodecT>

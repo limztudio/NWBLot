@@ -5,6 +5,7 @@
 #include "deformable_geometry_asset.h"
 
 #include "deformable_geometry_validation.h"
+#include "geometry_binary_payload.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
@@ -118,44 +119,6 @@ Core::Assets::AssetCodecAutoRegistrar s_DeformableDisplacementTextureAssetCodecA
     &CreateDeformableDisplacementTextureAssetCodec
 );
 
-
-template<typename T>
-[[nodiscard]] bool ReadVectorPayload(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    Vector<T>& outValues,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry: '{}' payload byte size overflows"), label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed '{}' payload"), label);
-    }
-
-    return false;
-}
-
-template<typename T, typename Allocator>
-[[nodiscard]] bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<T, Allocator>& values, const tchar* label){
-    const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry serialize failed: '{}' payload overflows"), label);
-    }
-
-    return false;
-}
 
 void LogGeometryMorphPayloadFailure(
     const TString& geometryPathText,
@@ -449,7 +412,14 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
 
     m_width = width;
     m_height = height;
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, texelCount, m_texels, NWB_TEXT("texels")))
+    if(!GeometryBinaryPayload::ReadVector(
+        binary,
+        cursor,
+        texelCount,
+        m_texels,
+        NWB_TEXT("DeformableDisplacementTexture::loadBinary"),
+        NWB_TEXT("texels")
+    ))
         return false;
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: trailing bytes detected"));
@@ -678,19 +648,23 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
+    const tchar* const loadFailureContext = NWB_TEXT("DeformableGeometry::loadBinary");
+    auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
+        return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
+    };
+    if(!readVector(vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
         return false;
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
+    if(!readVector(indexCount, m_indices, NWB_TEXT("indices")))
         return false;
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, skinCount, m_skin, NWB_TEXT("skin")))
+    if(!readVector(skinCount, m_skin, NWB_TEXT("skin")))
         return false;
     m_geometryClass = geometryClass;
     m_skeletonJointCount = static_cast<u32>(skeletonJointCount);
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
+    if(!readVector(inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
         return false;
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
+    if(!readVector(sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
         return false;
-    if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
+    if(!readVector(editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
         return false;
 
     if(morphCount > 0u){
@@ -721,7 +695,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         }
 
         DeformableMorph morph;
-        if(!__hidden_deformable_geometry_asset::ReadVectorPayload(binary, cursor, morphHeader.deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
+        if(!readVector(morphHeader.deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
             return false;
         m_morphs.push_back(Move(morph));
         morphNameOffsets.push_back(morphHeader.nameOffset);
@@ -904,17 +878,21 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
     const usize stringTableByteCountOffset = outBinary.size();
     AppendPOD(outBinary, static_cast<u64>(0u));
 
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.restVertices(), NWB_TEXT("rest vertices")))
+    const tchar* const serializeFailureContext = NWB_TEXT("DeformableGeometryAssetCodec::serialize");
+    auto appendVector = [&](const auto& values, const tchar* label){
+        return GeometryBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
+    };
+    if(!appendVector(geometry.restVertices(), NWB_TEXT("rest vertices")))
         return false;
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices")))
+    if(!appendVector(geometry.indices(), NWB_TEXT("indices")))
         return false;
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.skin(), NWB_TEXT("skin")))
+    if(!appendVector(geometry.skin(), NWB_TEXT("skin")))
         return false;
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.inverseBindMatrices(), NWB_TEXT("inverse bind matrices")))
+    if(!appendVector(geometry.inverseBindMatrices(), NWB_TEXT("inverse bind matrices")))
         return false;
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.sourceSamples(), NWB_TEXT("source samples")))
+    if(!appendVector(geometry.sourceSamples(), NWB_TEXT("source samples")))
         return false;
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, geometry.editMaskPerTriangle(), NWB_TEXT("edit masks")))
+    if(!appendVector(geometry.editMaskPerTriangle(), NWB_TEXT("edit masks")))
         return false;
 
     for(const DeformableMorph& morph : geometry.morphs()){
@@ -934,7 +912,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
             return false;
         }
         AppendPOD(outBinary, morphHeader);
-        if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, morph.deltas, NWB_TEXT("morph deltas")))
+        if(!appendVector(morph.deltas, NWB_TEXT("morph deltas")))
             return false;
     }
     __hidden_deformable_geometry_asset::DeformableDisplacementBinary displacementBinary;
@@ -958,7 +936,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         &stringTableByteCount,
         sizeof(stringTableByteCount)
     );
-    if(!__hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, stringTable, NWB_TEXT("string table")))
+    if(!appendVector(stringTable, NWB_TEXT("string table")))
         return false;
 
     return true;
@@ -993,7 +971,12 @@ bool DeformableDisplacementTextureAssetCodec::serialize(
     AppendPOD(outBinary, texture.width());
     AppendPOD(outBinary, texture.height());
     AppendPOD(outBinary, static_cast<u64>(texture.texels().size()));
-    return __hidden_deformable_geometry_asset::AppendVectorPayload(outBinary, texture.texels(), NWB_TEXT("texels"));
+    return GeometryBinaryPayload::AppendVector(
+        outBinary,
+        texture.texels(),
+        NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize"),
+        NWB_TEXT("texels")
+    );
 }
 
 

@@ -4,6 +4,8 @@
 
 #include "geometry_asset.h"
 
+#include "geometry_binary_payload.h"
+
 #include <global/binary.h>
 #include <logger/client/logger.h>
 #include <core/assets/asset_auto_registration.h>
@@ -40,51 +42,6 @@ UniquePtr<Core::Assets::IAssetCodec> CreateGeometryAssetCodec(){
     return MakeUnique<GeometryAssetCodec>();
 }
 Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateGeometryAssetCodec);
-
-
-template<typename ValueT>
-bool ReadVectorPayload(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    Vector<ValueT>& outValues,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: '{}' payload byte size overflows"), label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed '{}' payload"), label);
-    }
-
-    return false;
-}
-
-#if defined(NWB_COOK)
-template<typename ValueT>
-bool AppendVectorPayload(Core::Assets::AssetBytes& outBinary, const Vector<ValueT>& values, const tchar* label){
-    const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: '{}' payload byte size overflows"), label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: '{}' payload overflows output binary"), label);
-    }
-
-    return false;
-}
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -219,9 +176,13 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!__hidden_geometry_asset::ReadVectorPayload(binary, cursor, vertexCount, m_vertices, NWB_TEXT("vertices")))
+    const tchar* const loadFailureContext = NWB_TEXT("Geometry::loadBinary");
+    auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
+        return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
+    };
+    if(!readVector(vertexCount, m_vertices, NWB_TEXT("vertices")))
         return false;
-    if(!__hidden_geometry_asset::ReadVectorPayload(binary, cursor, indexCount, m_indices, NWB_TEXT("indices")))
+    if(!readVector(indexCount, m_indices, NWB_TEXT("indices")))
         return false;
 
     if(cursor != binary.size()){
@@ -273,10 +234,14 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, __hidden_geometry_asset::s_GeometryVersion);
     AppendPOD(outBinary, static_cast<u64>(geometry.vertices().size()));
     AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
-    if(!__hidden_geometry_asset::AppendVectorPayload(outBinary, geometry.vertices(), NWB_TEXT("vertices")))
+    const tchar* const serializeFailureContext = NWB_TEXT("GeometryAssetCodec::serialize");
+    auto appendVector = [&](const auto& values, const tchar* label){
+        return GeometryBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
+    };
+    if(!appendVector(geometry.vertices(), NWB_TEXT("vertices")))
         return false;
 
-    return __hidden_geometry_asset::AppendVectorPayload(outBinary, geometry.indices(), NWB_TEXT("indices"));
+    return appendVector(geometry.indices(), NWB_TEXT("indices"));
 }
 
 

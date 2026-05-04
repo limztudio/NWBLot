@@ -173,14 +173,12 @@ bool BlendSkinInfluence4(
             return false;
 
         for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
-            if(
-                !AccumulateSkinWeight(
-                    samples,
-                    sampleCount,
-                    source.influence.joint[influenceIndex],
-                    source.influence.weight[influenceIndex] * source.weight
-                )
-            )
+            if(!AccumulateSkinWeight(
+                samples,
+                sampleCount,
+                source.influence.joint[influenceIndex],
+                source.influence.weight[influenceIndex] * source.weight
+            ))
                 return false;
         }
     }

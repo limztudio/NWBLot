@@ -702,9 +702,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         }
     }
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> morphNameOffsets{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> morphNameOffsets{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     morphNameOffsets.reserve(static_cast<usize>(morphCount));
     m_morphs.reserve(static_cast<usize>(morphCount));
     for(u64 morphIndex = 0; morphIndex < morphCount; ++morphIndex){
@@ -888,9 +886,7 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         outBinary.reserve(reserveBytes);
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
     if(canReserveStringTable)
         stringTable.reserve(stringTableReserveBytes);
 
@@ -927,10 +923,10 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
         if(
             !__hidden_deformable_geometry_asset::StableTextMatchesName(morph.nameText, morph.name)
             || !::AppendStringTableText(
-                    stringTable,
-                    morph.nameText.view(),
-                    morphHeader.nameOffset
-                )
+                stringTable,
+                morph.nameText.view(),
+                morphHeader.nameOffset
+            )
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometryAssetCodec::serialize failed: morph '{}' is missing stable name text")
                 , StringConvert(morph.name.c_str())

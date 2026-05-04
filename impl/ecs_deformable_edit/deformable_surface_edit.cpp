@@ -1506,16 +1506,14 @@ template<typename EdgeVector, typename VertexVector>
                 edge.b,
             };
 
-            if(
-                !AppendBlendedMorphDelta(
-                    morph.deltas,
-                    morph,
-                    lookup,
-                    innerSourceVertices,
-                    s_WallInnerInpaintWeights,
-                    innerVertices[edgeIndex]
-                )
-            )
+            if(!AppendBlendedMorphDelta(
+                morph.deltas,
+                morph,
+                lookup,
+                innerSourceVertices,
+                s_WallInnerInpaintWeights,
+                innerVertices[edgeIndex]
+            ))
                 return false;
         }
     }
@@ -1736,15 +1734,9 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> capPositions{
-        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
-    };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapVertices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapIndices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> capPositions{ Core::Alloc::ScratchAllocator<Float3U>(scratchArena) };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapVertices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> localCapIndices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     capPositions.reserve(capVertices.size());
     localCapVertices.reserve(capVertices.size());
     for(usize capVertexIndex = 0u; capVertexIndex < capVertices.size(); ++capVertexIndex){
@@ -1756,18 +1748,16 @@ template<typename VertexAllocator, typename RestVertexAllocator, typename IndexA
         localCapVertices.push_back(static_cast<u32>(capVertexIndex));
     }
 
-    if(
-        !Core::Geometry::AppendSurfacePatchCapTriangles(
-            localCapVertices.data(),
-            localCapVertices.size(),
-            capPositions.data(),
-            capPositions.size(),
-            tangent,
-            bitangent,
-            localCapIndices,
-            outAddedTriangleCount
-        )
-    )
+    if(!Core::Geometry::AppendSurfacePatchCapTriangles(
+        localCapVertices.data(),
+        localCapVertices.size(),
+        capPositions.data(),
+        capPositions.size(),
+        tangent,
+        bitangent,
+        localCapIndices,
+        outAddedTriangleCount
+    ))
         return false;
 
     if(localCapIndices.size() > Limit<usize>::s_Max - outIndices.size())
@@ -2490,9 +2480,7 @@ template<typename DistanceFunc>
     if(polygon.size() < 3u)
         return true;
 
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> vertices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     vertices.reserve(polygon.size());
     for(usize pointIndex = 0u; pointIndex < polygon.size(); ++pointIndex){
         const SurfaceRemeshClipPoint& point = polygon[pointIndex];
@@ -2503,17 +2491,15 @@ template<typename DistanceFunc>
     }
 
     for(usize i = 1u; i + 1u < vertices.size(); ++i){
-        if(
-            !AppendSurfaceRemeshTriangle(
-                restPositions,
-                sourceNormal,
-                vertices[0u],
-                vertices[i],
-                vertices[i + 1u],
-                sourceTriangle,
-                surfaceTriangles
-            )
-        )
+        if(!AppendSurfaceRemeshTriangle(
+            restPositions,
+            sourceNormal,
+            vertices[0u],
+            vertices[i],
+            vertices[i + 1u],
+            sourceTriangle,
+            surfaceTriangles
+        ))
             return false;
     }
     return true;
@@ -2682,16 +2668,14 @@ template<typename DistanceFunc>
                         continue;
 
                     u32 splitVertex = Limit<u32>::s_Max;
-                    if(
-                        !GetOrCreateSurfaceRemeshTriangleSplitVertex(
-                            instance,
-                            triangle.sourceTriangle,
-                            generated,
-                            restPositions,
-                            generatedVertices,
-                            splitVertex
-                        )
-                    )
+                    if(!GetOrCreateSurfaceRemeshTriangleSplitVertex(
+                        instance,
+                        triangle.sourceTriangle,
+                        generated,
+                        restPositions,
+                        generatedVertices,
+                        splitVertex
+                    ))
                         return false;
                     if(
                         !SurfaceRemeshTriangleAreaValid(restPositions, opposite, edgeA, splitVertex)
@@ -2785,18 +2769,14 @@ template<typename DistanceFunc>
     if(!DeformableRuntime::ValidateTriangleIndex(instance, params.posedHit.triangle, hitTriangleIndices))
         return false;
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> connectedTriangles{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
-    if(
-        !Core::Geometry::BuildConnectedTriangleMask(
-            instance.indices,
-            instance.restVertices.size(),
-            params.posedHit.triangle,
-            connectedTriangles,
-            scratchArena
-        )
-    )
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> connectedTriangles{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
+    if(!Core::Geometry::BuildConnectedTriangleMask(
+        instance.indices,
+        instance.restVertices.size(),
+        params.posedHit.triangle,
+        connectedTriangles,
+        scratchArena
+    ))
         return false;
 
     f32 hitBary[3] = {};
@@ -2880,15 +2860,13 @@ template<typename DistanceFunc>
         }
 
         bool intersectsOperatorDepth = false;
-        if(
-            !SurfaceRemeshTriangleDepthIntersectsOperator(
-                instance,
-                outFrame,
-                params,
-                triangleIndices,
-                intersectsOperatorDepth
-            )
-        )
+        if(!SurfaceRemeshTriangleDepthIntersectsOperator(
+            instance,
+            outFrame,
+            params,
+            triangleIndices,
+            intersectsOperatorDepth
+        ))
             return false;
         if(!intersectsOperatorDepth){
             if(!appendOriginalTriangle())
@@ -2898,16 +2876,14 @@ template<typename DistanceFunc>
 
         SurfaceRemeshClipPoint triangleClipPoints[3] = {};
         for(u32 vertexIndex = 0u; vertexIndex < 3u; ++vertexIndex){
-            if(
-                !BuildSurfaceRemeshTriangleClipPoint(
-                    instance,
-                    outFrame,
-                    params,
-                    triangleIndices[vertexIndex],
-                    vertexIndex,
-                    triangleClipPoints[vertexIndex]
-                )
-            )
+            if(!BuildSurfaceRemeshTriangleClipPoint(
+                instance,
+                outFrame,
+                params,
+                triangleIndices[vertexIndex],
+                vertexIndex,
+                triangleClipPoints[vertexIndex]
+            ))
                 return false;
         }
         const SurfaceRemeshAreaMode::Enum areaMode = SurfaceRemeshTriangleProjectionIsDegenerate(triangleClipPoints)
@@ -2924,25 +2900,17 @@ template<typename DistanceFunc>
             continue;
         }
 
-        SurfaceRemeshClipPolygon active{
-            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
-        };
+        SurfaceRemeshClipPolygon active{ Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena) };
         active.reserve(8u);
         for(const SurfaceRemeshClipPoint& point : triangleClipPoints){
             if(!AppendSurfaceRemeshClipPoint(active, point))
                 return false;
         }
 
-        SurfaceRemeshClipPolygonList outsidePieces{
-            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPolygon>(scratchArena)
-        };
+        SurfaceRemeshClipPolygonList outsidePieces{ Core::Alloc::ScratchAllocator<SurfaceRemeshClipPolygon>(scratchArena) };
         outsidePieces.reserve(params.operatorFootprint.vertexCount);
-        SurfaceRemeshClipPolygon outside{
-            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
-        };
-        SurfaceRemeshClipPolygon inside{
-            Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena)
-        };
+        SurfaceRemeshClipPolygon outside{ Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena) };
+        SurfaceRemeshClipPolygon inside{ Core::Alloc::ScratchAllocator<SurfaceRemeshClipPoint>(scratchArena) };
         outside.reserve(active.size() + 1u);
         inside.reserve(active.size() + 1u);
         bool clippedAway = false;
@@ -3050,24 +3018,20 @@ template<typename DistanceFunc>
         ++outAffectedTriangleCount;
         hitTriangleAffected = hitTriangleAffected || affectedTriangleIndex == params.posedHit.triangle;
 
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> insideVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> insideVertices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
         insideVertices.reserve(active.size());
         for(usize pointIndex = 0u; pointIndex < active.size(); ++pointIndex){
             const SurfaceRemeshClipPoint& point = active[pointIndex];
             u32 vertex = Limit<u32>::s_Max;
-            if(
-                !GetOrCreateSurfaceRemeshVertex(
-                    instance,
-                    static_cast<u32>(triangle),
-                    triangleIndices,
-                    point,
-                    outRestPositions,
-                    outGeneratedVertices,
-                    vertex
-                )
-            )
+            if(!GetOrCreateSurfaceRemeshVertex(
+                instance,
+                static_cast<u32>(triangle),
+                triangleIndices,
+                point,
+                outRestPositions,
+                outGeneratedVertices,
+                vertex
+            ))
                 return false;
             insideVertices.push_back(vertex);
         }
@@ -3080,31 +3044,27 @@ template<typename DistanceFunc>
         }
 
         for(const SurfaceRemeshClipPolygon& outside : outsidePieces){
-            if(
-                !AppendSurfaceRemeshPolygonTriangles(
-                    instance,
-                    static_cast<u32>(triangle),
-                    triangleIndices,
-                    triangleNormal,
-                    outside,
-                    outRestPositions,
-                    outGeneratedVertices,
-                    outSurfaceTriangles,
-                    scratchArena
-                )
-            )
+            if(!AppendSurfaceRemeshPolygonTriangles(
+                instance,
+                static_cast<u32>(triangle),
+                triangleIndices,
+                triangleNormal,
+                outside,
+                outRestPositions,
+                outGeneratedVertices,
+                outSurfaceTriangles,
+                scratchArena
+            ))
                 return false;
         }
     }
 
-    if(
-        !SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(
-            instance,
-            outRestPositions,
-            outGeneratedVertices,
-            outSurfaceTriangles
-        )
-    )
+    if(!SplitSurfaceRemeshTrianglesAtGeneratedEdgeVertices(
+        instance,
+        outRestPositions,
+        outGeneratedVertices,
+        outSurfaceTriangles
+    ))
         return false;
 
     if(
@@ -3133,14 +3093,12 @@ template<typename DistanceFunc>
     StoreFloat(outFrame.center, &topologyFrame.center);
     StoreFloat(outFrame.tangent, &topologyFrame.tangent);
     StoreFloat(outFrame.bitangent, &topologyFrame.bitangent);
-    if(
-        !Core::Geometry::BuildOrderedBoundaryLoop(
-            boundaryEdges,
-            outRestPositions,
-            topologyFrame,
-            outOrderedBoundaryEdges
-        )
-    )
+    if(!Core::Geometry::BuildOrderedBoundaryLoop(
+        boundaryEdges,
+        outRestPositions,
+        topologyFrame,
+        outOrderedBoundaryEdges
+    ))
         return false;
 
     return outOrderedBoundaryEdges.size() >= s_MinWallLoopVertexCount;
@@ -3225,9 +3183,7 @@ template<typename EdgeVector, typename PositionVector>
     Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>> generatedVertices{
         Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>(scratchArena)
     };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> affectedTriangleIndices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> affectedTriangleIndices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     return BuildOperatorSurfaceRemeshPlan(
         instance,
         params,
@@ -3298,27 +3254,21 @@ struct HolePreviewPlan{
     if(mesh.vertices.size() > static_cast<usize>(Limit<u32>::s_Max) - positions.size())
         return false;
 
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> capVertices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     capVertices.reserve(positions.size());
     for(usize i = 0u; i < positions.size(); ++i)
         capVertices.push_back(static_cast<u32>(i));
 
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> capIndices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
-    if(
-        !Core::Geometry::AppendSurfacePatchCapTriangles(
-            capVertices.data(),
-            capVertices.size(),
-            positions.data(),
-            positions.size(),
-            tangent,
-            bitangent,
-            capIndices
-        )
-    )
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> capIndices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
+    if(!Core::Geometry::AppendSurfacePatchCapTriangles(
+        capVertices.data(),
+        capVertices.size(),
+        positions.data(),
+        positions.size(),
+        tangent,
+        bitangent,
+        capIndices
+    ))
         return false;
 
     const u32 vertexBase = static_cast<u32>(mesh.vertices.size());
@@ -3380,9 +3330,7 @@ struct HolePreviewPlan{
     const usize vertexReserve = boundaryVertexCount + sideVertexCount + bottomCapVertexCount;
     outMesh.vertices.reserve(vertexReserve);
 
-    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> topCapPositions{
-        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
-    };
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> topCapPositions{ Core::Alloc::ScratchAllocator<Float3U>(scratchArena) };
     topCapPositions.reserve(boundaryVertexCount);
     const f32 surfaceOffset = Max(
         s_HolePreviewSurfaceOffsetMin,
@@ -3421,29 +3369,25 @@ struct HolePreviewPlan{
             Core::Alloc::ScratchAllocator<Core::Geometry::SurfacePatchWallVertex>(scratchArena)
         };
         wallVertexPlan.resize(boundaryVertexCount);
-        if(
-            !Core::Geometry::BuildSurfacePatchWallVertices(
-                orderedBoundaryEdges,
-                restPositions,
-                topologyFrame,
-                frame.normal,
-                params.depth,
-                1u,
-                wallVertexPlan.data(),
-                wallVertexPlan.size()
-            )
-        )
+        if(!Core::Geometry::BuildSurfacePatchWallVertices(
+            orderedBoundaryEdges,
+            restPositions,
+            topologyFrame,
+            frame.normal,
+            params.depth,
+            1u,
+            wallVertexPlan.data(),
+            wallVertexPlan.size()
+        ))
             return false;
-        if(
-            !ApplyOperatorProfileToWallVertexPlan(
-                orderedBoundaryEdges,
-                restPositions,
-                frame,
-                params,
-                wallVertexPlan.data(),
-                wallVertexPlan.size()
-            )
-        )
+        if(!ApplyOperatorProfileToWallVertexPlan(
+            orderedBoundaryEdges,
+            restPositions,
+            frame,
+            params,
+            wallVertexPlan.data(),
+            wallVertexPlan.size()
+        ))
             return false;
 
         Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> bottomCapPositions{
@@ -3585,15 +3529,13 @@ bool PreviewHole(
     Core::Alloc::ScratchArena<> scratchArena;
     __hidden_deformable_surface_edit::HolePreviewPlan plan(scratchArena);
     DeformableHolePreviewMesh previewMesh;
-    if(
-        !__hidden_deformable_surface_edit::BuildHolePreviewPlanAndMesh(
-            instance,
-            params,
-            scratchArena,
-            plan,
-            previewMesh
-        )
-    )
+    if(!__hidden_deformable_surface_edit::BuildHolePreviewPlanAndMesh(
+        instance,
+        params,
+        scratchArena,
+        plan,
+        previewMesh
+    ))
         return false;
 
     StoreFloat(VectorSetW(plan.frame.center, 1.0f), &outPreview.center);
@@ -3811,14 +3753,12 @@ bool ResolveAccessoryAttachmentTransform(
         return false;
 
     usize wallIndexBase = Limit<usize>::s_Max;
-    if(
-        !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
-            instance,
-            attachment.firstWallVertex,
-            attachment.wallVertexCount,
-            &wallIndexBase
-        )
-    )
+    if(!__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
+        instance,
+        attachment.firstWallVertex,
+        attachment.wallVertexCount,
+        &wallIndexBase
+    ))
         return false;
 
     usize outerWallIndexBase = wallIndexBase;
@@ -3829,14 +3769,12 @@ bool ResolveAccessoryAttachmentTransform(
             break;
 
         usize candidateWallIndexBase = Limit<usize>::s_Max;
-        if(
-            !__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
-                instance,
-                static_cast<u32>(candidateFirstWallVertex),
-                attachment.wallVertexCount,
-                &candidateWallIndexBase
-            )
-        )
+        if(!__hidden_deformable_surface_edit::RuntimeMeshHasWallTrianglePairs(
+            instance,
+            static_cast<u32>(candidateFirstWallVertex),
+            attachment.wallVertexCount,
+            &candidateWallIndexBase
+        ))
             break;
 
         tracedFirstWallVertex = candidateFirstWallVertex;
@@ -3932,9 +3870,7 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     };
     accessoryRecords.reserve(state.accessories.size());
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> stringTable{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
     usize stringTableReserveBytes = 0u;
     bool canReserveStringTable = true;
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
@@ -3956,14 +3892,12 @@ bool SerializeSurfaceEditState(const DeformableSurfaceEditState& state, Core::As
     }
 
     usize binarySize = 0u;
-    if(
-        !__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
-            static_cast<u64>(state.edits.size()),
-            static_cast<u64>(state.accessories.size()),
-            static_cast<u64>(stringTable.size()),
-            binarySize
-        )
-    )
+    if(!__hidden_deformable_surface_edit::ComputeSurfaceEditStateBinarySize(
+        static_cast<u64>(state.edits.size()),
+        static_cast<u64>(state.accessories.size()),
+        static_cast<u64>(stringTable.size()),
+        binarySize
+    ))
         return false;
 
     outBinary.reserve(binarySize);
@@ -4254,53 +4188,45 @@ template<usize sourceCount>
 
     StoreFloat(normal, &vertex.normal);
     StoreFloat(VectorSetW(tangent, 1.0f), &vertex.tangent);
-    if(
-        !BuildBlendedVertexUv0(
-            instance.restVertices,
-            generated.sourceVertices,
-            generated.bary,
-            vertex.uv0
-        )
-    )
+    if(!BuildBlendedVertexUv0(
+        instance.restVertices,
+        generated.sourceVertices,
+        generated.bary,
+        vertex.uv0
+    ))
         return false;
-    if(
-        !BuildBlendedVertexColor(
-            instance.restVertices,
-            generated.sourceVertices,
-            generated.bary,
-            vertex.color0
-        )
-    )
+    if(!BuildBlendedVertexColor(
+        instance.restVertices,
+        generated.sourceVertices,
+        generated.bary,
+        vertex.color0
+    ))
         return false;
     if(!DeformableValidation::ValidRestVertexFrame(vertex))
         return false;
 
     if(!newSkin.empty()){
         SkinInfluence4 skin;
-        if(
-            !BuildBlendedSkinInfluence(
-                instance.skin,
-                generated.sourceVertices,
-                generated.bary,
-                skin
-            )
-        )
+        if(!BuildBlendedSkinInfluence(
+            instance.skin,
+            generated.sourceVertices,
+            generated.bary,
+            skin
+        ))
             return false;
         newSkin.push_back(skin);
     }
 
     if(!newSourceSamples.empty()){
         SourceSample sample;
-        if(
-            !BuildBlendedSourceSample(
-                instance.sourceSamples,
-                generated.sourceVertices,
-                generated.bary,
-                fallbackSourceSample,
-                instance.sourceTriangleCount,
-                sample
-            )
-        )
+        if(!BuildBlendedSourceSample(
+            instance.sourceSamples,
+            generated.sourceVertices,
+            generated.bary,
+            fallbackSourceSample,
+            instance.sourceTriangleCount,
+            sample
+        ))
             return false;
         newSourceSamples.push_back(sample);
     }
@@ -4337,16 +4263,14 @@ template<usize sourceCount>
 
         morph.deltas.reserve(morph.deltas.size() + generatedVertices.size());
         for(const SurfaceRemeshGeneratedVertex& generated : generatedVertices){
-            if(
-                !AppendBlendedMorphDelta(
-                    morph.deltas,
-                    morph,
-                    lookup,
-                    generated.sourceVertices,
-                    generated.bary,
-                    generated.vertex
-                )
-            )
+            if(!AppendBlendedMorphDelta(
+                morph.deltas,
+                morph,
+                lookup,
+                generated.sourceVertices,
+                generated.bary,
+                generated.vertex
+            ))
                 return false;
         }
     }
@@ -4414,18 +4338,14 @@ template<usize sourceCount>
     Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> orderedBoundaryEdges{
         Core::Alloc::ScratchAllocator<EdgeRecord>(scratchArena)
     };
-    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{
-        Core::Alloc::ScratchAllocator<Float3U>(scratchArena)
-    };
+    Vector<Float3U, Core::Alloc::ScratchAllocator<Float3U>> restPositions{ Core::Alloc::ScratchAllocator<Float3U>(scratchArena) };
     Vector<SurfaceRemeshTriangle, Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>> surfaceTriangles{
         Core::Alloc::ScratchAllocator<SurfaceRemeshTriangle>(scratchArena)
     };
     Vector<SurfaceRemeshGeneratedVertex, Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>> generatedVertices{
         Core::Alloc::ScratchAllocator<SurfaceRemeshGeneratedVertex>(scratchArena)
     };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> affectedTriangleIndices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> affectedTriangleIndices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     u32 affectedTriangleCount = 0u;
     if(
         !BuildOperatorSurfaceRemeshPlan(
@@ -4671,9 +4591,7 @@ template<usize sourceCount>
         }
 
         Vector<EdgeRecord, Core::Alloc::ScratchAllocator<EdgeRecord>> bandOuterEdges = orderedBoundaryEdges;
-        Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{
-            Core::Alloc::ScratchAllocator<u32>(scratchArena)
-        };
+        Vector<u32, Core::Alloc::ScratchAllocator<u32>> ringVertices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
         ringVertices.resize(boundaryVertexCount);
 
         auto appendPlannedVertex = [&](
@@ -4683,49 +4601,43 @@ template<usize sourceCount>
             const Float2U& uv0,
             u32& outVertex){
             Float4U innerColor;
-            if(
-                !BuildBlendedVertexColor(
-                    newRestVertices,
-                    plannedVertex.attributeVertices,
-                    s_WallInnerInpaintWeights,
-                    innerColor
-                )
-            )
+            if(!BuildBlendedVertexColor(
+                newRestVertices,
+                plannedVertex.attributeVertices,
+                s_WallInnerInpaintWeights,
+                innerColor
+            ))
                 return false;
 
             SkinInfluence4 innerSkin;
             const SkinInfluence4* innerSkinPtr = nullptr;
             if(!newSkin.empty()){
-                if(
-                    !BuildBlendedSkinInfluence(
-                        newSkin,
-                        plannedVertex.attributeVertices,
-                        s_WallInnerInpaintWeights,
-                        innerSkin
-                    )
-                )
+                if(!BuildBlendedSkinInfluence(
+                    newSkin,
+                    plannedVertex.attributeVertices,
+                    s_WallInnerInpaintWeights,
+                    innerSkin
+                ))
                     return false;
 
                 innerSkinPtr = &innerSkin;
             }
 
-            if(
-                !AppendWallVertex(
-                    newRestVertices,
-                    newSkin,
-                    newSourceSamples,
-                    plannedVertex.sourceVertex,
-                    innerSkinPtr,
-                    wallSourceSample,
-                    innerColor,
-                    LoadFloat(plannedVertex.position),
-                    normal,
-                    tangent,
-                    uv0.x,
-                    uv0.y,
-                    outVertex
-                )
-            )
+            if(!AppendWallVertex(
+                newRestVertices,
+                newSkin,
+                newSourceSamples,
+                plannedVertex.sourceVertex,
+                innerSkinPtr,
+                wallSourceSample,
+                innerColor,
+                LoadFloat(plannedVertex.position),
+                normal,
+                tangent,
+                uv0.x,
+                uv0.y,
+                outVertex
+            ))
                 return false;
 
             addedVertexCount += 1u;
@@ -5034,15 +4946,13 @@ void AccumulateSurfaceEditReplayResult(
     for(const DeformableSurfaceEditRecord& record : state.edits){
         DeformableSurfaceEditRecord replayRecord = record;
         DeformableHoleEditResult replayResult;
-        if(
-            !ReplaySurfaceEditRecord(
-                replayInstance,
-                record,
-                replayRecord,
-                ReplayResultValidation::Exact,
-                replayResult
-            )
-        )
+        if(!ReplaySurfaceEditRecord(
+            replayInstance,
+            record,
+            replayRecord,
+            ReplayResultValidation::Exact,
+            replayResult
+        ))
             return false;
 
         AccumulateSurfaceEditReplayResult(result, replayResult);
@@ -5160,15 +5070,13 @@ void AccumulateSurfaceEditReplayResult(
         replayRecord.result.editRevision = replayInstance.editRevision + 1u;
 
         DeformableHoleEditResult replayResult;
-        if(
-            !ReplaySurfaceEditRecord(
-                replayInstance,
-                record,
-                replayRecord,
-                ReplayResultValidation::Shape,
-                replayResult
-            )
-        )
+        if(!ReplaySurfaceEditRecord(
+            replayInstance,
+            record,
+            replayRecord,
+            ReplayResultValidation::Shape,
+            replayResult
+        ))
             return false;
 
         outHealedState.edits.push_back(replayRecord);
@@ -5514,14 +5422,12 @@ bool UndoLastSurfaceEdit(
     DeformableSurfaceEditState undoState;
     DeformableSurfaceEditUndoResult result;
     DeformableSurfaceEditRedoEntry redoEntry;
-    if(
-        !__hidden_deformable_surface_edit::BuildUndoSurfaceEditState(
-            state,
-            undoState,
-            result,
-            history ? &redoEntry : nullptr
-        )
-    )
+    if(!__hidden_deformable_surface_edit::BuildUndoSurfaceEditState(
+        state,
+        undoState,
+        result,
+        history ? &redoEntry : nullptr
+    ))
         return false;
 
     DeformableRuntimeMeshInstance replayInstance;
@@ -5559,14 +5465,12 @@ bool RedoLastSurfaceEdit(
 
     DeformableSurfaceEditState redoState;
     DeformableSurfaceEditRedoResult result;
-    if(
-        !__hidden_deformable_surface_edit::BuildRedoSurfaceEditState(
-            state,
-            history.redoStack.back(),
-            redoState,
-            result
-        )
-    )
+    if(!__hidden_deformable_surface_edit::BuildRedoSurfaceEditState(
+        state,
+        history.redoStack.back(),
+        redoState,
+        result
+    ))
         return false;
 
     DeformableRuntimeMeshInstance replayInstance;
@@ -5605,15 +5509,13 @@ bool HealSurfaceEdit(
 
     DeformableSurfaceEditState healedState;
     DeformableSurfaceEditHealResult result;
-    if(
-        !__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithoutEdit(
-            replayInstance,
-            state,
-            editId,
-            healedState,
-            result
-        )
-    )
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithoutEdit(
+        replayInstance,
+        state,
+        editId,
+        healedState,
+        result
+    ))
         return false;
     if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, healedState))
         return false;
@@ -5648,18 +5550,16 @@ bool ResizeSurfaceEdit(
 
     DeformableSurfaceEditState resizedState;
     DeformableSurfaceEditResizeResult result;
-    if(
-        !__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithResizedHole(
-            replayInstance,
-            state,
-            editId,
-            radius,
-            ellipseRatio,
-            depth,
-            resizedState,
-            result
-        )
-    )
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithResizedHole(
+        replayInstance,
+        state,
+        editId,
+        radius,
+        ellipseRatio,
+        depth,
+        resizedState,
+        result
+    ))
         return false;
     if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, resizedState))
         return false;
@@ -5696,16 +5596,14 @@ bool MoveSurfaceEdit(
 
     DeformableSurfaceEditState movedState;
     DeformableSurfaceEditMoveResult result;
-    if(
-        !__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithMovedHole(
-            replayInstance,
-            state,
-            editId,
-            moveTarget,
-            movedState,
-            result
-        )
-    )
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithMovedHole(
+        replayInstance,
+        state,
+        editId,
+        moveTarget,
+        movedState,
+        result
+    ))
         return false;
     if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, movedState))
         return false;
@@ -5745,19 +5643,17 @@ bool PatchSurfaceEdit(
 
     DeformableSurfaceEditState patchedState;
     DeformableSurfaceEditPatchResult result;
-    if(
-        !__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithPatchedHole(
-            replayInstance,
-            state,
-            editId,
-            patchTarget,
-            radius,
-            ellipseRatio,
-            depth,
-            patchedState,
-            result
-        )
-    )
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithPatchedHole(
+        replayInstance,
+        state,
+        editId,
+        patchTarget,
+        radius,
+        ellipseRatio,
+        depth,
+        patchedState,
+        result
+    ))
         return false;
     if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, patchedState))
         return false;
@@ -5789,15 +5685,13 @@ bool AddSurfaceEditLoopCut(
 
     DeformableSurfaceEditState loopCutState;
     DeformableSurfaceEditLoopCutResult result;
-    if(
-        !__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithAddedLoopCut(
-            replayInstance,
-            state,
-            editId,
-            loopCutState,
-            result
-        )
-    )
+    if(!__hidden_deformable_surface_edit::ReplaySurfaceEditRecordsWithAddedLoopCut(
+        replayInstance,
+        state,
+        editId,
+        loopCutState,
+        result
+    ))
         return false;
     if(!__hidden_deformable_surface_edit::ValidateReplayAccessoryAnchors(replayInstance, loopCutState))
         return false;

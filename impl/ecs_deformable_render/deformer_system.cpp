@@ -402,16 +402,14 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
                 m_world.tryGetComponent<DeformableDisplacementComponent>(entity)
             ;
             DeformableDisplacement resolvedDisplacement;
-            if(
-                !__hidden_deformer_system::HasPotentialDeformerWork(
+            if(!__hidden_deformer_system::HasPotentialDeformerWork(
                 *instance,
                 morphWeights,
                 jointPalette,
                 skeletonPose,
                 displacement,
                 resolvedDisplacement
-                )
-            )
+            ))
                 return;
             if(!ensureCommandList())
                 return;
@@ -540,15 +538,13 @@ bool DeformerSystem::dispatchRuntimeMesh(
             NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
-        if(
-            !DeformerSkinPayload::BuildSkinPayloadFromJointMatrices(
+        if(!DeformerSkinPayload::BuildSkinPayloadFromJointMatrices(
             instance,
             poseJoints,
             resolvedSkinningMode,
             skinInfluences,
             jointMatrices
-            )
-        )
+        ))
             return false;
     }
     else{
@@ -586,8 +582,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     RuntimeResources* resources = nullptr;
     bool resourcesRebuilt = false;
-    if(
-        !ensureRuntimeResources(
+    if(!ensureRuntimeResources(
         instance,
         payloadViews,
         resolvedDisplacement,
@@ -595,8 +590,7 @@ bool DeformerSystem::dispatchRuntimeMesh(
         morphSignature,
         resources,
         resourcesRebuilt
-        )
-    )
+    ))
         return false;
     if(
         !resources
@@ -639,14 +633,12 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
     usize jointPaletteBytes = 0;
     if(hasActiveSkin && !resourcesRebuilt){
-        if(
-            !__hidden_deformer_system::BufferPayloadBytes(
-                jointMatrices.size(),
-                sizeof(DeformableJointMatrix),
-                jointPaletteBytes,
-                NWB_TEXT("joint palette")
-            )
-        )
+        if(!__hidden_deformer_system::BufferPayloadBytes(
+            jointMatrices.size(),
+            sizeof(DeformableJointMatrix),
+            jointPaletteBytes,
+            NWB_TEXT("joint palette")
+        ))
             return false;
 
         commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
@@ -708,14 +700,12 @@ bool DeformerSystem::dispatchRuntimeMesh(
 
 bool DeformerSystem::copyRestToDeformed(Core::ICommandList& commandList, DeformableRuntimeMeshInstance& instance){
     usize copyBytes = 0;
-    if(
-        !__hidden_deformer_system::BufferPayloadBytes(
+    if(!__hidden_deformer_system::BufferPayloadBytes(
         instance.restVertices.size(),
         sizeof(DeformableVertexRest),
         copyBytes,
         NWB_TEXT("rest vertex")
-        )
-    )
+    ))
         return false;
 
     commandList.setBufferState(instance.restVertexBuffer.get(), Core::ResourceStates::CopySource);

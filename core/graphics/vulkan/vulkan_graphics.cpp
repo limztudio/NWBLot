@@ -213,16 +213,14 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    if(
-        !configurePipelineBindingsOrDestroy(
-            desc.bindingLayouts,
-            NWB_TEXT("graphics pipeline"),
-            shaderStages,
-            descriptorHeapScratch,
-            pso,
-            scratchArena
-        )
-    )
+    if(!configurePipelineBindingsOrDestroy(
+        desc.bindingLayouts,
+        NWB_TEXT("graphics pipeline"),
+        shaderStages,
+        descriptorHeapScratch,
+        pso,
+        scratchArena
+    ))
         return nullptr;
 
     // Step 2: Vertex input state from InputLayout
@@ -658,17 +656,15 @@ void CommandList::drawIndexed(const DrawArguments& args){
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     Buffer* indirectBuffer = nullptr;
-    if(
-        !prepareDrawIndirect(
-            offsetBytes,
-            drawCount,
-            sizeof(DrawIndirectArguments),
-            NWB_TEXT("draw indirect"),
-            NWB_TEXT("drawIndirect"),
-            VulkanDetail::IndirectDrawIndexMode::NonIndexed,
-            indirectBuffer
-        )
-    )
+    if(!prepareDrawIndirect(
+        offsetBytes,
+        drawCount,
+        sizeof(DrawIndirectArguments),
+        NWB_TEXT("draw indirect"),
+        NWB_TEXT("drawIndirect"),
+        VulkanDetail::IndirectDrawIndexMode::NonIndexed,
+        indirectBuffer
+    ))
         return;
 
     vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
@@ -677,17 +673,15 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     Buffer* indirectBuffer = nullptr;
-    if(
-        !prepareDrawIndirect(
-            offsetBytes,
-            drawCount,
-            sizeof(DrawIndexedIndirectArguments),
-            NWB_TEXT("draw indexed indirect"),
-            NWB_TEXT("drawIndexedIndirect"),
-            VulkanDetail::IndirectDrawIndexMode::Indexed,
-            indirectBuffer
-        )
-    )
+    if(!prepareDrawIndirect(
+        offsetBytes,
+        drawCount,
+        sizeof(DrawIndexedIndirectArguments),
+        NWB_TEXT("draw indexed indirect"),
+        NWB_TEXT("drawIndexedIndirect"),
+        VulkanDetail::IndirectDrawIndexMode::Indexed,
+        indirectBuffer
+    ))
         return;
 
     vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));

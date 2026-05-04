@@ -137,27 +137,23 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
 
     if(state){
         for(const DeformableSurfaceEditRecord& edit : state->edits){
-            if(
-                !AddWallLoopReserveCount(
-                    instance,
-                    edit.result.firstWallVertex,
-                    edit.result.wallVertexCount,
-                    lineCount,
-                    pointCount
-                )
-            )
+            if(!AddWallLoopReserveCount(
+                instance,
+                edit.result.firstWallVertex,
+                edit.result.wallVertexCount,
+                lineCount,
+                pointCount
+            ))
                 return false;
         }
         for(const DeformableAccessoryAttachmentRecord& accessory : state->accessories){
-            if(
-                !AddWallLoopReserveCount(
-                    instance,
-                    accessory.firstWallVertex,
-                    accessory.wallVertexCount,
-                    lineCount,
-                    pointCount
-                )
-            )
+            if(!AddWallLoopReserveCount(
+                instance,
+                accessory.firstWallVertex,
+                accessory.wallVertexCount,
+                lineCount,
+                pointCount
+            ))
                 return false;
         }
     }

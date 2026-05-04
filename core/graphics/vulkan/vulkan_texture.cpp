@@ -843,19 +843,17 @@ void CommandList::copyTexture(IStagingTexture* dest, const TextureSlice& destSli
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(
-        !prepareStagingTextureCopy(
-            dest,
-            destSlice,
-            src,
-            srcSlice,
-            NWB_TEXT("copy texture to staging texture"),
-            NWB_TEXT("source texture must be single-sampled"),
-            staging,
-            texture,
-            region
-        )
-    )
+    if(!prepareStagingTextureCopy(
+        dest,
+        destSlice,
+        src,
+        srcSlice,
+        NWB_TEXT("copy texture to staging texture"),
+        NWB_TEXT("source texture must be single-sampled"),
+        staging,
+        texture,
+        region
+    ))
         return;
 
     setTextureState(src, TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u), ResourceStates::CopySource);
@@ -870,19 +868,17 @@ void CommandList::copyTexture(ITexture* dest, const TextureSlice& destSlice, ISt
     StagingTexture* staging = nullptr;
     Texture* texture = nullptr;
     VkBufferImageCopy region{};
-    if(
-        !prepareStagingTextureCopy(
-            src,
-            srcSlice,
-            dest,
-            destSlice,
-            NWB_TEXT("copy staging texture to texture"),
-            NWB_TEXT("destination texture must be single-sampled"),
-            staging,
-            texture,
-            region
-        )
-    )
+    if(!prepareStagingTextureCopy(
+        src,
+        srcSlice,
+        dest,
+        destSlice,
+        NWB_TEXT("copy staging texture to texture"),
+        NWB_TEXT("destination texture must be single-sampled"),
+        staging,
+        texture,
+        region
+    ))
         return;
 
     setTextureState(dest, TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u), ResourceStates::CopyDest);
@@ -927,16 +923,18 @@ void CommandList::writeTexture(ITexture* destResource, u32 arraySlice, u32 mipLe
         return;
     }
     VulkanDetail::BufferImageCopyLayout copyLayout;
-    if(!VulkanDetail::BuildBufferImageCopyLayout(
-        mipExtent,
-        dest->m_formatLayout,
-        static_cast<u64>(rowPitch),
-        static_cast<u64>(depthPitch),
-        VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices,
-        VulkanDetail::BufferImageCopyPitchFields::EmitExplicit,
-        NWB_TEXT("write texture"),
-        copyLayout
-    )){
+    if(
+        !VulkanDetail::BuildBufferImageCopyLayout(
+            mipExtent,
+            dest->m_formatLayout,
+            static_cast<u64>(rowPitch),
+            static_cast<u64>(depthPitch),
+            VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices,
+            VulkanDetail::BufferImageCopyPitchFields::EmitExplicit,
+            NWB_TEXT("write texture"),
+            copyLayout
+        )
+    ){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid buffer-image copy layout"));
         return;
     }

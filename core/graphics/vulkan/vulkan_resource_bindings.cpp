@@ -498,16 +498,14 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
     NWB_ASSERT(descriptorSetLayouts.size() == descriptorSetLayoutCount);
 
-    if(
-        !VulkanDetail::CreatePipelineLayout(
-            m_context,
-            descriptorSetLayouts.data(),
-            static_cast<u32>(descriptorSetLayouts.size()),
-            pushConstantByteSize,
-            outPipelineLayout,
-            operationName
-        )
-    )
+    if(!VulkanDetail::CreatePipelineLayout(
+        m_context,
+        descriptorSetLayouts.data(),
+        static_cast<u32>(descriptorSetLayouts.size()),
+        pushConstantByteSize,
+        outPipelineLayout,
+        operationName
+    ))
         return false;
 
     outPushConstantByteSize = pushConstantByteSize;
@@ -1235,12 +1233,12 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     const bool hasPushConstants = pushConstantByteSize > 0;
     if(
         !VulkanDetail::CreatePipelineLayout(
-        m_context,
-        layout->m_descriptorSetLayouts.data(),
-        static_cast<u32>(layout->m_descriptorSetLayouts.size()),
-        pushConstantByteSize,
-        layout->m_pipelineLayout,
-        NWB_TEXT("create binding layout")
+            m_context,
+            layout->m_descriptorSetLayouts.data(),
+            static_cast<u32>(layout->m_descriptorSetLayouts.size()),
+            pushConstantByteSize,
+            layout->m_pipelineLayout,
+            NWB_TEXT("create binding layout")
         )
     ){
         DestroyArenaObject(m_context.objectArena, layout);
@@ -1369,12 +1367,12 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     if(
         !VulkanDetail::CreatePipelineLayout(
-        m_context,
-        layout->m_descriptorSetLayouts.data(),
-        static_cast<u32>(layout->m_descriptorSetLayouts.size()),
-        0,
-        layout->m_pipelineLayout,
-        NWB_TEXT("create bindless layout")
+            m_context,
+            layout->m_descriptorSetLayouts.data(),
+            static_cast<u32>(layout->m_descriptorSetLayouts.size()),
+            0,
+            layout->m_pipelineLayout,
+            NWB_TEXT("create bindless layout")
         )
     ){
         DestroyArenaObject(m_context.objectArena, layout);

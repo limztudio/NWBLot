@@ -435,14 +435,12 @@ bool BuildGeometry(
     outError.clear();
 
     usize estimatedTriangleCorners = 0u;
-    if(
-        !__hidden_fbx_import::EstimateSelectedTriangleCorners(
-            instances,
-            selection,
-            estimatedTriangleCorners,
-            outError
-        )
-    )
+    if(!__hidden_fbx_import::EstimateSelectedTriangleCorners(
+        instances,
+        selection,
+        estimatedTriangleCorners,
+        outError
+    ))
         return false;
 
     UtilityVector<GeometryVertex> flatVertices;

@@ -612,9 +612,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 
 static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Path, Core::Alloc::ScratchAllocator<Path>> movedBackupFiles{
-        Core::Alloc::ScratchAllocator<Path>(scratchArena)
-    };
+    Vector<Path, Core::Alloc::ScratchAllocator<Path>> movedBackupFiles{ Core::Alloc::ScratchAllocator<Path>(scratchArena) };
     if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
         return false;
 
@@ -740,10 +738,10 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
 
     if(
         !__hidden_filesystem::PromoteStagedVolume(
-        stagedVolumePaths,
-        outputDirectory,
-        config.volumeName,
-        static_cast<usize>(outBuildInfo.segmentCount)
+            stagedVolumePaths,
+            outputDirectory,
+            config.volumeName,
+            static_cast<usize>(outBuildInfo.segmentCount)
         )
     ){
         return false;
@@ -1627,9 +1625,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         }
     );
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexBytes{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexBytes{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
     if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
@@ -1671,9 +1667,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> metadataBuffer{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> metadataBuffer{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
     ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());

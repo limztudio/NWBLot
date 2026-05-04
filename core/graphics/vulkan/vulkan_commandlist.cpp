@@ -234,16 +234,18 @@ void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes
 
     const VkExtent3D srcExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
     VulkanDetail::BufferImageCopyLayout copyLayout;
-    if(!VulkanDetail::BuildBufferImageCopyLayout(
-        srcExtent,
-        src->m_formatLayout,
-        static_cast<u64>(destRowPitch),
-        0,
-        VulkanDetail::BufferImageCopyRequiredSize::TouchedBytes,
-        VulkanDetail::BufferImageCopyPitchFields::OmitImplicit,
-        NWB_TEXT("copy texture to buffer"),
-        copyLayout
-    )){
+    if(
+        !VulkanDetail::BuildBufferImageCopyLayout(
+            srcExtent,
+            src->m_formatLayout,
+            static_cast<u64>(destRowPitch),
+            0,
+            VulkanDetail::BufferImageCopyRequiredSize::TouchedBytes,
+            VulkanDetail::BufferImageCopyPitchFields::OmitImplicit,
+            NWB_TEXT("copy texture to buffer"),
+            copyLayout
+        )
+    ){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid buffer-image copy layout"));
         return;
     }

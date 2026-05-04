@@ -638,15 +638,13 @@ template<typename VertexVector>
         return false;
     UniquePtr<Core::Assets::IAsset> loadedDisplacementTextureAsset;
     const DeformableDisplacementTexture* displacementTexture = nullptr;
-    if(
-        !__hidden_deformable_picking::ResolvePickingDisplacementTexture(
-            displacement,
-            inputs.assetManager,
-            inputs.displacementTexture,
-            loadedDisplacementTextureAsset,
-            displacementTexture
-        )
-    )
+    if(!__hidden_deformable_picking::ResolvePickingDisplacementTexture(
+        displacement,
+        inputs.assetManager,
+        inputs.displacementTexture,
+        loadedDisplacementTextureAsset,
+        displacementTexture
+    ))
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
@@ -664,14 +662,12 @@ template<typename VertexVector>
         };
         if(!DeformableRuntime::BuildJointPaletteFromSkeletonPose(*inputs.skeletonPose, poseJoints, skinningMode))
             return false;
-        if(
-            !__hidden_deformable_picking::BuildPreparedJointPaletteFromJointMatrices(
-                instance,
-                poseJoints,
-                skinningMode,
-                jointPalette
-            )
-        )
+        if(!__hidden_deformable_picking::BuildPreparedJointPaletteFromJointMatrices(
+            instance,
+            poseJoints,
+            skinningMode,
+            jointPalette
+        ))
             return false;
     }
     else{
@@ -693,15 +689,13 @@ template<typename VertexVector>
         SIMDVector preSkinTangent;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, restNormal, restTangent, &preSkinNormal, &preSkinTangent);
 
-        if(
-            !__hidden_deformable_picking::ApplySkin(
-                instance,
-                jointPalette,
-                skinningMode,
-                static_cast<u32>(vertexIndex),
-                vertex
-            )
-        )
+        if(!__hidden_deformable_picking::ApplySkin(
+            instance,
+            jointPalette,
+            skinningMode,
+            static_cast<u32>(vertexIndex),
+            vertex
+        ))
             return false;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 

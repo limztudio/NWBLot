@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).
-Updated: 2026-04-27
+Updated: 2026-05-04
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -69,6 +69,7 @@ Updated: 2026-04-27
   - `if(condition)`
   - `    execute();`
 - Prefer single-line function calls, e.g. `foobar(a, b, c, d);`.
+- Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`.
 - Prefer single-line logger macro calls when they contain a single message and a small number of short formatting arguments.
 - For longer logger macro calls with formatting arguments, keep the message argument on the opener line and put subsequent formatting arguments on continuation lines with leading commas:
   - `NWB_LOGGER_WARNING(NWB_TEXT("message {}")`

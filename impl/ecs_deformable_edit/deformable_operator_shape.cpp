@@ -321,9 +321,7 @@ template<typename PointAllocator>
     f32 minZ = 0.0f;
     f32 maxZ = 0.0f;
     bool foundPosition = false;
-    Vector<f32, Core::Alloc::ScratchAllocator<f32>> zPlanes{
-        Core::Alloc::ScratchAllocator<f32>(scratchArena)
-    };
+    Vector<f32, Core::Alloc::ScratchAllocator<f32>> zPlanes{ Core::Alloc::ScratchAllocator<f32>(scratchArena) };
     zPlanes.reserve(vertices.size());
     for(const GeometryVertex& vertex : vertices){
         if(!FiniteOperatorPosition(vertex.position))
@@ -403,17 +401,15 @@ template<typename PointAllocator>
         if(sampleIndex == 0u){
             sample = topSample;
         }
-        else if(
-            !BuildOperatorProfilePlaneSample(
-                vertices,
-                zPlanes[planeIndex],
-                minZ,
-                maxZ,
-                topRadius,
-                sample,
-                samplePoints
-            )
-        )
+        else if(!BuildOperatorProfilePlaneSample(
+            vertices,
+            zPlanes[planeIndex],
+            minZ,
+            maxZ,
+            topRadius,
+            sample,
+            samplePoints
+        ))
             return false;
 
         if(sampleIndex == 0u){

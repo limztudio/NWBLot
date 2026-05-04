@@ -74,16 +74,14 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(desc.PS)
         appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
-    if(
-        !configurePipelineBindingsOrDestroy(
-            desc.bindingLayouts,
-            NWB_TEXT("meshlet pipeline"),
-            shaderStages,
-            descriptorHeapScratch,
-            pso,
-            scratchArena
-        )
-    )
+    if(!configurePipelineBindingsOrDestroy(
+        desc.bindingLayouts,
+        NWB_TEXT("meshlet pipeline"),
+        shaderStages,
+        descriptorHeapScratch,
+        pso,
+        scratchArena
+    ))
         return nullptr;
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(

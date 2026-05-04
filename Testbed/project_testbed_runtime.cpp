@@ -1495,11 +1495,13 @@ bool ProjectTestbed::refreshSurfaceEditPreviewMesh(){
         return false;
     }
 
-    if(!__hidden_project_testbed_runtime::ResolveSurfaceEditOperatorTransform(
-        *targetTransform,
-        m_surfaceEditPreview,
-        *previewTransform
-    )){
+    if(
+        !__hidden_project_testbed_runtime::ResolveSurfaceEditOperatorTransform(
+            *targetTransform,
+            m_surfaceEditPreview,
+            *previewTransform
+        )
+    ){
         hideSurfaceEditPreviewMesh();
         return false;
     }

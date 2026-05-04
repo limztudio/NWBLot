@@ -61,16 +61,14 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     shaderStages.push_back(shaderStage);
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
-    if(
-        !configurePipelineBindingsOrDestroy(
-            desc.bindingLayouts,
-            NWB_TEXT("compute pipeline"),
-            shaderStages,
-            descriptorHeapScratch,
-            pso,
-            scratchArena
-        )
-    )
+    if(!configurePipelineBindingsOrDestroy(
+        desc.bindingLayouts,
+        NWB_TEXT("compute pipeline"),
+        shaderStages,
+        descriptorHeapScratch,
+        pso,
+        scratchArena
+    ))
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);

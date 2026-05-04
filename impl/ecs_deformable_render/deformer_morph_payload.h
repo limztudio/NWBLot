@@ -136,9 +136,7 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
     Vector<BlendedMorphDeltaAccumulator, Core::Alloc::ScratchAllocator<BlendedMorphDeltaAccumulator>> blendedDeltas{
         Core::Alloc::ScratchAllocator<BlendedMorphDeltaAccumulator>(scratchArena)
     };
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> touchedVertices{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> touchedVertices{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
 
     u32 activeMorphCount = 0u;
     usize activeInputDeltaCount = 0u;

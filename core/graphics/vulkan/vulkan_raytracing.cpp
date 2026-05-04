@@ -406,29 +406,25 @@ bool FillBlasGeometryForSizeQuery(
             return false;
         }
         if(requireBuffers){
-            if(
-                !ValidateStridedBuildInputRange(
-                    spheres.vertexBuffer,
-                    spheres.vertexPositionOffset,
-                    spheres.vertexCount,
-                    spheres.vertexPositionStride,
-                    vertexFormatInfo.bytesPerBlock,
-                    operation,
-                    NWB_TEXT("sphere position")
-                )
-            )
+            if(!ValidateStridedBuildInputRange(
+                spheres.vertexBuffer,
+                spheres.vertexPositionOffset,
+                spheres.vertexCount,
+                spheres.vertexPositionStride,
+                vertexFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("sphere position")
+            ))
                 return false;
-            if(
-                !ValidateStridedBuildInputRange(
-                    spheres.vertexBuffer,
-                    spheres.vertexRadiusOffset,
-                    spheres.vertexCount,
-                    spheres.vertexRadiusStride,
-                    radiusFormatInfo.bytesPerBlock,
-                    operation,
-                    NWB_TEXT("sphere radius")
-                )
-            )
+            if(!ValidateStridedBuildInputRange(
+                spheres.vertexBuffer,
+                spheres.vertexRadiusOffset,
+                spheres.vertexCount,
+                spheres.vertexRadiusStride,
+                radiusFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("sphere radius")
+            ))
                 return false;
         }
 
@@ -448,17 +444,15 @@ bool FillBlasGeometryForSizeQuery(
                 return false;
             }
             if(requireBuffers){
-                if(
-                    !ValidateStridedBuildInputRange(
-                        spheres.indexBuffer,
-                        spheres.indexOffset,
-                        spheres.indexCount,
-                        spheres.indexStride,
-                        indexElementSize,
-                        operation,
-                        NWB_TEXT("sphere index")
-                    )
-                )
+                if(!ValidateStridedBuildInputRange(
+                    spheres.indexBuffer,
+                    spheres.indexOffset,
+                    spheres.indexCount,
+                    spheres.indexStride,
+                    indexElementSize,
+                    operation,
+                    NWB_TEXT("sphere index")
+                ))
                     return false;
             }
             primitiveCount = spheres.indexCount;
@@ -553,29 +547,25 @@ bool FillBlasGeometryForSizeQuery(
         }
 
         if(requireBuffers){
-            if(
-                !ValidateStridedBuildInputRange(
-                    lss.vertexBuffer,
-                    lss.vertexPositionOffset,
-                    requiredVertexCount,
-                    lss.vertexPositionStride,
-                    vertexFormatInfo.bytesPerBlock,
-                    operation,
-                    NWB_TEXT("LSS position")
-                )
-            )
+            if(!ValidateStridedBuildInputRange(
+                lss.vertexBuffer,
+                lss.vertexPositionOffset,
+                requiredVertexCount,
+                lss.vertexPositionStride,
+                vertexFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("LSS position")
+            ))
                 return false;
-            if(
-                !ValidateStridedBuildInputRange(
-                    lss.vertexBuffer,
-                    lss.vertexRadiusOffset,
-                    requiredVertexCount,
-                    lss.vertexRadiusStride,
-                    radiusFormatInfo.bytesPerBlock,
-                    operation,
-                    NWB_TEXT("LSS radius")
-                )
-            )
+            if(!ValidateStridedBuildInputRange(
+                lss.vertexBuffer,
+                lss.vertexRadiusOffset,
+                requiredVertexCount,
+                lss.vertexRadiusStride,
+                radiusFormatInfo.bytesPerBlock,
+                operation,
+                NWB_TEXT("LSS radius")
+            ))
                 return false;
         }
 
@@ -609,17 +599,15 @@ bool FillBlasGeometryForSizeQuery(
                 return false;
             }
             if(requireBuffers){
-                if(
-                    !ValidateStridedBuildInputRange(
-                        lss.indexBuffer,
-                        lss.indexOffset,
-                        requiredIndexCount,
-                        lss.indexStride,
-                        indexElementSize,
-                        operation,
-                        NWB_TEXT("LSS index")
-                    )
-                )
+                if(!ValidateStridedBuildInputRange(
+                    lss.indexBuffer,
+                    lss.indexOffset,
+                    requiredIndexCount,
+                    lss.indexStride,
+                    indexElementSize,
+                    operation,
+                    NWB_TEXT("LSS index")
+                ))
                     return false;
             }
             lssData.indexStride = lss.indexStride;
@@ -1250,16 +1238,14 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    if(
-        !configurePipelineBindingsOrDestroy(
-            desc.globalBindingLayouts,
-            NWB_TEXT("ray tracing pipeline"),
-            stages,
-            descriptorHeapScratch,
-            pso,
-            scratchArena
-        )
-    )
+    if(!configurePipelineBindingsOrDestroy(
+        desc.globalBindingLayouts,
+        NWB_TEXT("ray tracing pipeline"),
+        stages,
+        descriptorHeapScratch,
+        pso,
+        scratchArena
+    ))
         return nullptr;
 
     const bool enableSpherePipelineFlags = desc.allowSpheres || desc.allowLinearSweptSpheres;
@@ -1677,18 +1663,16 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     usize transformCount = 0;
     for(usize i = 0; i < numGeometries; ++i){
         blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
-        if(
-            !VulkanDetail::FillBlasGeometryForSizeQuery(
-                m_context,
-                pGeometries[i],
-                blasScratch.geometries[i],
-                blasScratch.spheresData[i],
-                blasScratch.lssData[i],
-                blasScratch.primitiveCounts[i],
-                NWB_TEXT("build BLAS"),
-                true
-            )
-        )
+        if(!VulkanDetail::FillBlasGeometryForSizeQuery(
+            m_context,
+            pGeometries[i],
+            blasScratch.geometries[i],
+            blasScratch.spheresData[i],
+            blasScratch.lssData[i],
+            blasScratch.primitiveCounts[i],
+            NWB_TEXT("build BLAS"),
+            true
+        ))
             return;
         if(pGeometries[i].useTransform){
             if(pGeometries[i].geometryType != RayTracingGeometryType::Triangles){

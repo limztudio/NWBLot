@@ -130,14 +130,10 @@ template<typename MaskAllocator>
     )
         return false;
 
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> firstCornerByVertex{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> firstCornerByVertex{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     firstCornerByVertex.resize(vertexCount, Limit<u32>::s_Max);
 
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> nextCornerByCorner{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> nextCornerByCorner{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     nextCornerByCorner.resize(indices.size(), Limit<u32>::s_Max);
 
     for(usize corner = 0u; corner < indices.size(); ++corner){
@@ -152,13 +148,9 @@ template<typename MaskAllocator>
     }
 
     outConnectedTriangles.resize(triangleCount, 0u);
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> pendingTriangles{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> pendingTriangles{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
     pendingTriangles.reserve(triangleCount);
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
     visitedVertices.resize(vertexCount, 0u);
 
     outConnectedTriangles[seedTriangle] = 1u;
@@ -292,9 +284,7 @@ bool BuildOrderedBoundaryLoopImpl(
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedEdges{
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
-    };
+    Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedEdges{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
     visitedEdges.resize(boundaryEdges.size(), 0u);
 
     using BoundaryVertexEdgeMap = HashMap<

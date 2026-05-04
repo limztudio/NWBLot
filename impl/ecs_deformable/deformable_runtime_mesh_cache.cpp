@@ -531,25 +531,21 @@ bool DeformableRuntimeMeshCache::uploadRuntimeMeshBuffers(DeformableRuntimeMeshI
 
     usize restVertexBytes = 0;
     usize indexBytes = 0;
-    if(
-        !computePayloadBytes(
+    if(!computePayloadBytes(
         instance,
         instance.restVertices.size(),
         sizeof(DeformableVertexRest),
         restVertexBytes,
         "rest vertices"
-        )
-    )
+    ))
         return false;
-    if(
-        !computePayloadBytes(
+    if(!computePayloadBytes(
         instance,
         instance.indices.size(),
         sizeof(u32),
         indexBytes,
         "indices"
-        )
-    )
+    ))
         return false;
 
     const Name restVertexBufferName = deriveRuntimeBufferName(instance, AStringView("rest_vb"));

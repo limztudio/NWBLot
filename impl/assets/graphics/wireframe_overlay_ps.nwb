@@ -1,0 +1,10 @@
+shader asset;
+
+asset.compiler = "glslang";
+asset.stage = "ps";
+asset.target_profile = "ps";
+asset.entry_point = "main";
+asset.include_roots = [
+    "project/shaders",
+    "engine/graphics",
+];

@@ -88,7 +88,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
         desc.renderState.rasterState,
-        VK_POLYGON_MODE_FILL,
+        VulkanDetail::ConvertFillMode(desc.renderState.rasterState.fillMode),
         VK_FALSE
     );
 

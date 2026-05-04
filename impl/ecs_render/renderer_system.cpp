@@ -150,6 +150,11 @@ static const Name& DeferredCompositePixelShaderName(){
     return s;
 }
 
+static const Name& WireframeOverlayPixelShaderName(){
+    static const Name s("engine/graphics/wireframe_overlay_ps");
+    return s;
+}
+
 static const Name& AvboitOccupancyPixelShaderName(){
     static const Name s("engine/graphics/avboit_occupancy_ps");
     return s;
@@ -233,7 +238,10 @@ static Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
         Core::Format::RGBA8_UNORM,
         Core::Format::BGRA8_UNORM,
     };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+    ;
 
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
@@ -306,6 +314,23 @@ static Core::RenderState BuildGeometryRenderState(){
     return renderState;
 }
 
+static Core::RenderState BuildWireframeOverlayRenderState(){
+    Core::RenderState renderState;
+    renderState.depthStencilState
+        .enableDepthTest()
+        .disableDepthWrite()
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
+    renderState.rasterState
+        .enableDepthClip()
+        .setCullNone()
+        .setFillWireframe()
+        .setDepthBias(-1)
+        .setSlopeScaleDepthBias(-1.0f)
+    ;
+    return renderState;
+}
+
 static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::ColorMask::Mask colorWriteMask = Core::ColorMask::All){
     Core::BlendState::RenderTarget target;
     target
@@ -348,6 +373,8 @@ static Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return BuildGeometryRenderState();
+    case MaterialPipelinePass::WireframeOverlay:
+        return BuildWireframeOverlayRenderState();
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
         return BuildAvboitVoxelRenderState();
@@ -355,6 +382,17 @@ static Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
         return BuildAvboitAccumulateRenderState();
     default:
         return BuildGeometryRenderState();
+    }
+}
+
+static bool MaterialPipelinePassUsesAvboit(const MaterialPipelinePass::Enum pass){
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+    case MaterialPipelinePass::AvboitExtinction:
+    case MaterialPipelinePass::AvboitAccumulate:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -1069,14 +1107,88 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     commandList->open();
 
     clearDeferredTargets(*commandList, *deferredTargets);
-    renderMaterialPass(
-        *commandList,
-        deferredTargets->framebuffer.get(),
-        MaterialPipelinePass::Opaque,
-        false,
-        nullptr,
-        nullptr
-    );
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    MaterialPassDrawItemVector opaqueMeshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
+    MaterialPassDrawItemVector opaqueComputeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
+    MaterialPassDrawItemVector wireframeMeshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
+    MaterialPassDrawItemVector wireframeComputeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
+    InstanceGpuDataVector instanceData{Core::Alloc::ScratchAllocator<InstanceGpuData>(scratchArena)};
+    MaterialParameterGpuDataVector materialParameters{Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)};
+
+    Core::ViewportState deferredViewportState;
+    deferredViewportState.addViewportAndScissorRect(deferredTargets->framebuffer->getFramebufferInfo().getViewport());
+
+    const f32 meshViewAspectRatio = __hidden_ecs_render::FramebufferAspectRatio(*deferredTargets->framebuffer);
+    const bool meshViewReady = ensureMeshViewBuffer(*commandList, meshViewAspectRatio);
+    if(meshViewReady){
+        gatherMaterialPassDrawItems(
+            deferredTargets->framebuffer.get(),
+            MaterialPipelinePass::Opaque,
+            false,
+            opaqueMeshDrawItems,
+            opaqueComputeDrawItems,
+            instanceData,
+            materialParameters
+        );
+        if(m_wireframeOverlayEnabled){
+            gatherMaterialPassDrawItems(
+                deferredTargets->framebuffer.get(),
+                MaterialPipelinePass::WireframeOverlay,
+                false,
+                wireframeMeshDrawItems,
+                wireframeComputeDrawItems,
+                instanceData,
+                materialParameters
+            );
+            gatherMaterialPassDrawItems(
+                deferredTargets->framebuffer.get(),
+                MaterialPipelinePass::WireframeOverlay,
+                true,
+                wireframeMeshDrawItems,
+                wireframeComputeDrawItems,
+                instanceData,
+                materialParameters
+            );
+        }
+    }
+
+    const bool hasDeferredDrawItems =
+        !opaqueMeshDrawItems.empty()
+        || !opaqueComputeDrawItems.empty()
+        || !wireframeMeshDrawItems.empty()
+        || !wireframeComputeDrawItems.empty()
+    ;
+    const bool deferredUploadReady =
+        hasDeferredDrawItems
+        && uploadInstanceBuffer(*commandList, instanceData)
+        && uploadMaterialParameterBuffer(*commandList, materialParameters)
+    ;
+    if(deferredUploadReady){
+        const MaterialPassDrawContext opaqueDrawContext{
+            *commandList,
+            deferredTargets->framebuffer.get(),
+            MaterialPipelinePass::Opaque,
+            nullptr,
+            nullptr,
+            deferredViewportState
+        };
+        renderMeshMaterialPassDrawItems(opaqueDrawContext, opaqueMeshDrawItems);
+        renderComputeMaterialPassDrawItems(opaqueDrawContext, opaqueComputeDrawItems);
+
+        if(m_wireframeOverlayEnabled){
+            const MaterialPassDrawContext wireframeDrawContext{
+                *commandList,
+                deferredTargets->framebuffer.get(),
+                MaterialPipelinePass::WireframeOverlay,
+                nullptr,
+                nullptr,
+                deferredViewportState
+            };
+            renderMeshMaterialPassDrawItems(wireframeDrawContext, wireframeMeshDrawItems);
+            renderComputeMaterialPassDrawItems(wireframeDrawContext, wireframeComputeDrawItems);
+        }
+    }
     commandList->endRenderPass();
 
     clearAvboitTargets(*commandList, deferredTargets->avboit);
@@ -1924,8 +2036,11 @@ void RendererSystem::renderMaterialPass(
 ){
     if(!framebuffer)
         return;
-    if(pass != MaterialPipelinePass::Opaque && (!passBindingSet || !avboitTargets || !avboitTargets->valid()))
+    const bool usesAvboit = __hidden_ecs_render::MaterialPipelinePassUsesAvboit(pass);
+    if(usesAvboit && (!passBindingSet || !avboitTargets || !avboitTargets->valid()))
         return;
+
+    commandList.endRenderPass();
 
     Core::Alloc::ScratchArena<> scratchArena;
     MaterialPassDrawItemVector meshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
@@ -2358,7 +2473,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 
         context.commandList.setMeshletState(meshletState);
 
-        if(context.pass == MaterialPipelinePass::Opaque){
+        if(!__hidden_ecs_render::MaterialPipelinePassUsesAvboit(context.pass)){
             const __hidden_ecs_render::ShaderDrivenPushConstants pushConstants =
                 __hidden_ecs_render::BuildShaderDrivenPushConstants(
                     geometry.triangleCount,
@@ -2438,7 +2553,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setGraphicsState(graphicsState);
 
-        if(context.pass != MaterialPipelinePass::Opaque){
+        if(__hidden_ecs_render::MaterialPipelinePassUsesAvboit(context.pass)){
             const __hidden_ecs_render::TransparentDrawPushConstants transparentPushConstants =
                 __hidden_ecs_render::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
@@ -3103,6 +3218,16 @@ bool RendererSystem::ensureRendererPipeline(
     switch(pass){
     case MaterialPipelinePass::Opaque:
         break;
+    case MaterialPipelinePass::WireframeOverlay:
+        if(!ensureShaderLoaded(
+            passPixelShader,
+            __hidden_ecs_render::WireframeOverlayPixelShaderName(),
+            shaderVariant,
+            Core::ShaderType::Pixel,
+            "ECSRender_WireframeOverlayPS"
+        ))
+            return failMaterialPipeline();
+        break;
     case MaterialPipelinePass::AvboitOccupancy:
         if(!ensureAvboitResources()){
             return failMaterialPipeline();
@@ -3141,9 +3266,8 @@ bool RendererSystem::ensureRendererPipeline(
             if(!ensureShaderLoaded(resources.pixelShader, materialInfo.pixelShader.name(), shaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
-        else{
+        else
             resources.pixelShader = passPixelShader;
-        }
 
         Core::MeshletPipelineDesc pipelineDesc;
         pipelineDesc.setMeshShader(resources.meshShader);

@@ -15,7 +15,13 @@
 #include <imgui.h>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_project_testbed_runtime{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
@@ -854,6 +860,12 @@ void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
     );
 }
 
+NWB::Core::ECSRender::RendererSystem& ProjectTestbed::rendererSystem(){
+    auto* system = m_world->getSystem<NWB::Core::ECSRender::RendererSystem>();
+    NWB_FATAL_ASSERT_MSG(system, NWB_TEXT("ProjectTestbed runtime invariant failed: renderer system is missing"));
+    return *system;
+}
+
 NWB::Core::ECSDeformableRender::DeformerSystem& ProjectTestbed::deformerSystem(){
     auto* system = m_world->getSystem<NWB::Core::ECSDeformableRender::DeformerSystem>();
     NWB_FATAL_ASSERT_MSG(system, NWB_TEXT("ProjectTestbed runtime invariant failed: deformer system is missing"));
@@ -998,6 +1010,12 @@ void ProjectTestbed::drawUiControls(){
         if(ImGui::Button("Log Debug Now"))
             m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::LogDebugSnapshot;
     }
+    bool wireframeOverlayEnabled = rendererSystem().wireframeOverlayEnabled();
+    if(
+        ImGui::Checkbox("Wireframe overlay (F2)", &wireframeOverlayEnabled)
+        && wireframeOverlayEnabled != rendererSystem().wireframeOverlayEnabled()
+    )
+        m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::ToggleWireframeOverlay;
 
     ImGui::Separator();
     const bool hasDisplacement =
@@ -1052,6 +1070,8 @@ void ProjectTestbed::processPendingUiActions(){
         toggleSurfaceEditDebug();
     if((actions & SurfaceEditUiAction::LogDebugSnapshot) != 0u)
         logSurfaceEditDebugSnapshot();
+    if((actions & SurfaceEditUiAction::ToggleWireframeOverlay) != 0u)
+        toggleSurfaceEditWireframeOverlay();
 }
 
 
@@ -2426,11 +2446,12 @@ void ProjectTestbed::logSurfaceEditControls()const{
         NWB_TEXT("Surface edit controls are available in the NWB Testbed UI panel")
     );
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("Surface edit: radius={} ellipse={} depth={} operator={}, choose a left-click viewport action in UI and use UI buttons for commit/replay/history/debug"),
-        m_surfaceEditRadius,
-        m_surfaceEditEllipseRatio,
-        m_surfaceEditDepth,
-        StringConvert(__hidden_project_testbed_runtime::SurfaceEditOperatorLabelView(m_surfaceEditOperatorIndex))
+        NWB_TEXT("Surface edit: radius={} ellipse={} depth={} operator={}, F2 toggles inverse-color wireframe overlay; ")
+        NWB_TEXT("choose a left-click viewport action in UI and use UI buttons for commit/replay/history/debug")
+        , m_surfaceEditRadius
+        , m_surfaceEditEllipseRatio
+        , m_surfaceEditDepth
+        , StringConvert(__hidden_project_testbed_runtime::SurfaceEditOperatorLabelView(m_surfaceEditOperatorIndex))
     );
 }
 
@@ -2442,6 +2463,16 @@ void ProjectTestbed::toggleSurfaceEditDebug(){
     );
     if(m_surfaceEditDebugEnabled)
         logSurfaceEditDebugSnapshot();
+}
+
+void ProjectTestbed::toggleSurfaceEditWireframeOverlay(){
+    auto& renderer = rendererSystem();
+    const bool enabled = !renderer.wireframeOverlayEnabled();
+    renderer.setWireframeOverlayEnabled(enabled);
+    NWB_LOGGER_ESSENTIAL_INFO(
+        NWB_TEXT("Surface edit wireframe overlay: {}"),
+        enabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+    );
 }
 
 void ProjectTestbed::logSurfaceEditDebugSnapshot(){
@@ -2501,6 +2532,9 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
             const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Number1);
             if(targetIndex < __hidden_project_testbed_runtime::s_SurfaceEditTargetCount)
                 static_cast<void>(selectSurfaceEditTarget(targetIndex));
+        }
+        else if(key == NWB::Core::Key::F2){
+            m_pendingSurfaceEditUiActions |= SurfaceEditUiAction::ToggleWireframeOverlay;
         }
         else if(key >= NWB::Core::Key::F1 && key <= NWB::Core::Key::F25){
             if(key < NWB::Core::Key::F1 + static_cast<i32>(__hidden_project_testbed_runtime::s_SurfaceEditOperatorCount)){

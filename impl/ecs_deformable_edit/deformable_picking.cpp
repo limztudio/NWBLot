@@ -35,6 +35,9 @@ using MorphWeightLookup = HashMap<
     Core::Alloc::ScratchAllocator<Pair<const NameHash, f32>>
 >;
 
+static constexpr f32 s_PickingVertexNormalOppositeGeometryMinDot = 0.98f;
+static constexpr f32 s_PickingVertexNormalSameGeometryMinDot = 0.9999f;
+
 struct PreparedJointPaletteEntry{
     SIMDMatrix transform;
     SIMDMatrix normalTransform;
@@ -581,6 +584,45 @@ void ApplyTransform(const Core::Scene::TransformComponent* transform, Deformable
     return true;
 }
 
+template<typename VertexVector>
+[[nodiscard]] SIMDVector ResolveHitNormalFromTriangleVertices(
+    const VertexVector& vertices,
+    const u32 (&indices)[3],
+    const f32 (&bary)[3],
+    const SIMDVector geometryNormal
+){
+    SIMDVector blendedNormal = VectorScale(LoadRestVertexNormal(vertices[indices[0u]]), bary[0u]);
+    blendedNormal = VectorMultiplyAdd(
+        LoadRestVertexNormal(vertices[indices[1u]]),
+        VectorReplicate(bary[1u]),
+        blendedNormal
+    );
+    blendedNormal = VectorMultiplyAdd(
+        LoadRestVertexNormal(vertices[indices[2u]]),
+        VectorReplicate(bary[2u]),
+        blendedNormal
+    );
+
+    const f32 blendedLengthSq = VectorGetX(Vector3LengthSq(blendedNormal));
+    if(!IsFinite(blendedLengthSq) || blendedLengthSq <= Core::Geometry::s_FrameDirectionEpsilon)
+        return geometryNormal;
+
+    blendedNormal = Core::Geometry::FrameNormalizeDirection(blendedNormal, geometryNormal);
+    if(!DeformableValidation::FiniteVector(blendedNormal, 0x7u))
+        return geometryNormal;
+
+    const f32 geometryDot = VectorGetX(Vector3Dot(blendedNormal, geometryNormal));
+    if(!IsFinite(geometryDot))
+        return geometryNormal;
+    if(
+        geometryDot < s_PickingVertexNormalSameGeometryMinDot
+        && geometryDot > -s_PickingVertexNormalOppositeGeometryMinDot
+    )
+        return geometryNormal;
+
+    return blendedNormal;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -837,7 +879,15 @@ bool RaycastDeformableRuntimeMesh(
 
         const SIMDVector edge0 = VectorSubtract(bVector, aVector);
         const SIMDVector edge1 = VectorSubtract(cVector, aVector);
-        const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+        const SIMDVector geometryNormal =
+            Core::Geometry::FrameNormalizeDirection(Vector3Cross(edge0, edge1), VectorSet(0.0f, 0.0f, 1.0f, 0.0f))
+        ;
+        const SIMDVector normal = __hidden_deformable_picking::ResolveHitNormalFromTriangleVertices(
+            posedVertices,
+            vertexIndices,
+            hitBary,
+            geometryNormal
+        );
         const SIMDVector position = VectorMultiplyAdd(rayDirectionVector, VectorReplicate(distance), rayOriginVector);
 
         closestDistance = distance;

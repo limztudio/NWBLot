@@ -46,7 +46,8 @@ private:
             ResizeLatest = 1u << 7u,
             AddLoopCut = 1u << 8u,
             ToggleDebug = 1u << 9u,
-            LogDebugSnapshot = 1u << 10u
+            LogDebugSnapshot = 1u << 10u,
+            ToggleWireframeOverlay = 1u << 11u
         };
     };
 
@@ -64,6 +65,7 @@ private:
         NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance cleanBase;
     };
 
+    NWB::Core::ECSRender::RendererSystem& rendererSystem();
     NWB::Core::ECSDeformableRender::DeformerSystem& deformerSystem();
     void drawUiControls();
     void processPendingUiActions();
@@ -115,6 +117,7 @@ private:
         NWB::Core::ECSDeformableEdit::DeformablePosedHit& outTargetHit
     );
     void toggleSurfaceEditDebug();
+    void toggleSurfaceEditWireframeOverlay();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;
     void destroyWorld();

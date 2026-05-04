@@ -31,6 +31,7 @@ class Shader;
 namespace MaterialPipelinePass{
     enum Enum : u8{
         Opaque,
+        WireframeOverlay,
         AvboitOccupancy,
         AvboitExtinction,
         AvboitAccumulate,
@@ -345,6 +346,10 @@ public:
     void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider);
     void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider);
 
+public:
+    void setWireframeOverlayEnabled(const bool enabled){ m_wireframeOverlayEnabled = enabled; }
+    [[nodiscard]] bool wireframeOverlayEnabled()const{ return m_wireframeOverlayEnabled; }
+
 
 private:
     [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
@@ -472,6 +477,7 @@ private:
     DeferredFrameTargets m_deferredTargets;
     usize m_instanceBufferCapacity = 0;
     usize m_materialParameterBufferCapacity = 0;
+    bool m_wireframeOverlayEnabled = false;
 };
 
 

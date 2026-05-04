@@ -403,3 +403,27 @@ Updated: 2026-05-04
 - If unsure, start with `Futex`.
 - Upgrade to `QueuingMutex`/`SharedQueuingMutex` only after observing contention/fairness issues.
 - Use spin-based locks (`SpinMutex`, `SharedMutex`) only for measured hot-path wins with very short lock hold times.
+
+## 15. Shader Source Style
+- Applies to `.glsl` and `.glsli` files under `impl/assets/graphics/` and `Testbed/assets/shaders/`.
+- Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files.
+- Stage entry files (`.glsl`) put `#version 460` immediately after the banner block, then includes, declarations/resources, helpers, and `main()`, separated by file-scope long separators.
+- Include files (`.glsli`) use uppercase include guards in the form `NWB_<MODULE>_GLSLI`; place the closing `#endif` before the final separator.
+- Group shader sections in this order when present: feature defines/extensions, includes, structs, layouts/resources, constants, helpers, explicit forward declarations required by authoring hooks, entry point.
+- Use 4-space indentation and K&R braces with no space before `{` for functions, structs, and layout blocks:
+  - `void main(){`
+  - `struct NwbThing{`
+  - `layout(...) uniform NwbThing{`
+- Shader functions and locals use `lowerCamelCase`.
+- Domain helper functions use the subsystem prefix (`nwbMesh...`, `nwbAvboit...`, `nwbProject...`, `nwbDeformer...`).
+- Shader types and interface blocks use `PascalCase` with the `Nwb` prefix.
+- Global shader resources/uniform instances use `g_...`.
+- Compile-time constants, layout constants, material parameter keys, and shader feature constants use uppercase `NWB_...`.
+- Keep `layout(...)` declarations explicit and grouped; preserve binding, set, and location qualifiers rather than relying on implicit locations.
+- Prefer explicit GLSL scalar/vector types and existing precision qualifiers where the shader data path uses them, such as `mediump` for color and normal fragment paths.
+- Prefer `const` for immutable local temporaries where GLSL permits it.
+- Prefer short readable expressions and ternaries on one line.
+- For multiline shader `return` expressions, keep `return <expression>` on the first line when readable and put the final `;` on its own line after the split expression.
+- Avoid macro-generated function signatures. Use explicit declarations for shader authoring hooks unless a GLSL/preprocessor constraint requires a macro.
+- Use comments sparingly; keep them for non-obvious resource packing, layout, or API constraints.
+- Keep `.nwb` shader metadata small and declarative: `shader asset;`, `asset.compiler`, `asset.stage`, `asset.target_profile`, `asset.entry_point`, and include roots.

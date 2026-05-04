@@ -1,8 +1,13 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #ifndef NWB_MESH_SHADER_AUTHORING_GLSLI
 #define NWB_MESH_SHADER_AUTHORING_GLSLI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #ifndef NWB_MESH_SHADER_EMULATION_COMPUTE
 #define NWB_MESH_SHADER_EMULATION_COMPUTE 0
@@ -15,6 +20,10 @@
 #if !NWB_MESH_SHADER_EMULATION_COMPUTE
 #extension GL_EXT_mesh_shader : require
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct NwbMeshSourceVertex{
     vec3 position;
@@ -46,19 +55,6 @@ struct NwbMaterialParameterData{
     uvec4 meta;
     uvec4 data;
 };
-
-#define NWB_MESH_BUILD_VERTEX_SIGNATURE \
-    NwbMeshGeneratedVertex nwbMeshBuildVertex( \
-        uint triangleIndex, \
-        uint corner, \
-        NwbMeshSourceVertex source, \
-        const NwbMeshInstanceData instance \
-    )
-
-const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 10u;
-const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_GEOMETRY_VERTEX = 0u;
-const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX = 1u;
-const uint NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE = 16u;
 
 layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
 
@@ -101,6 +97,23 @@ layout(location = 3) out vec2 outUv0[];
 layout(location = 4) out vec3 outWorldPosition[];
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 10u;
+const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX = 1u;
+const uint NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE = 16u;
+
+const uint NWB_MATERIAL_PARAMETER_TYPE_FLOAT = 1u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_UINT = 3u;
+const uint NWB_MATERIAL_PARAMETER_TYPE_BOOL = 4u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 uint nwbMeshGroupThreadID(){
     return gl_LocalInvocationID.x;
 }
@@ -126,10 +139,9 @@ uint nwbMeshSourceVertexLayout(){
 }
 
 uint nwbMeshRemainingTriangles(){
-    return
-        nwbMeshTriangleCount() > nwbMeshBaseTriangle()
-            ? (nwbMeshTriangleCount() - nwbMeshBaseTriangle())
-            : 0u
+    return nwbMeshTriangleCount() > nwbMeshBaseTriangle()
+        ? (nwbMeshTriangleCount() - nwbMeshBaseTriangle())
+        : 0u
     ;
 }
 
@@ -224,11 +236,6 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
     return nwbMeshInstances[nwbMeshInstanceIndex()];
 }
 
-const uint NWB_MATERIAL_PARAMETER_TYPE_FLOAT = 1u;
-const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
-const uint NWB_MATERIAL_PARAMETER_TYPE_UINT = 3u;
-const uint NWB_MATERIAL_PARAMETER_TYPE_BOOL = 4u;
-
 uint nwbMaterialParameterOffset(const NwbMeshInstanceData instance){
     return instance.materialParameters.x;
 }
@@ -275,9 +282,7 @@ vec4 nwbMaterialFindFloat4(const NwbMeshInstanceData instance, const uvec2 key, 
 }
 
 vec3 nwbMeshTransformPosition(vec3 localPosition, const NwbMeshInstanceData instance){
-    return nwbMeshRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation)
-        + instance.translation.xyz
-    ;
+    return nwbMeshRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
 }
 
 vec3 nwbMeshTransformPosition(vec3 localPosition){
@@ -384,7 +389,11 @@ void nwbMeshApplyGeneratedTriangleFrame(inout NwbMeshGeneratedVertex vertices[3]
     return;
 }
 
-NWB_MESH_BUILD_VERTEX_SIGNATURE;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source, const NwbMeshInstanceData instance);
 
 void main(){
 #if !NWB_MESH_SHADER_EMULATION_COMPUTE
@@ -435,7 +444,12 @@ void main(){
 #endif
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

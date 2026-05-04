@@ -1,10 +1,15 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #version 460
 
 #include "avboit_common.glsli"
 #include "bxdf.glsli"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 layout(set = 1, binding = 1) uniform texture3D g_Transmittance;
 layout(set = 1, binding = 3) uniform sampler g_LinearSampler;
@@ -15,6 +20,10 @@ layout(location = 2) in vec4 inTangent;
 layout(location = 4) in vec3 inWorldPosition;
 layout(location = 0) out vec4 outAccumColor;
 layout(location = 1) out vec4 outAccumExtinction;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 vec2 nwbAvboitTransmittanceUvFromFragCoord(vec2 fragCoord){
     const vec2 fullSize = max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0));
@@ -47,6 +56,10 @@ float nwbAvboitLinearBiasedTransmittance(vec2 fragCoord, float depth){
     ).r;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void main(){
     const float alpha = nwbAvboitMaterialAlpha();
     if(alpha <= 0.0)
@@ -65,6 +78,7 @@ void main(){
     outAccumColor = vec4(shadedColor * weightedAlpha, weightedAlpha);
     outAccumExtinction = vec4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,19 +1,37 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #version 460
 
 #include "mesh_shader_authoring.glsli"
 #include "bxdf.glsli"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const uvec2 NWB_ENGINE_MATERIAL_BASE_COLOR = uvec2(0x75bad3d8u, 0x5c10c7e2u);
 const uvec2 NWB_ENGINE_MATERIAL_COLOR_TINT = uvec2(0x360abc2cu, 0xca7492edu);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 vec4 nwbEngineBuildClipPosition(vec3 worldPosition){
     return nwbMeshTransformWorldToClip(worldPosition);
 }
 
-NWB_MESH_BUILD_VERTEX_SIGNATURE{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshGeneratedVertex nwbMeshBuildVertex(
+    uint triangleIndex,
+    uint corner,
+    NwbMeshSourceVertex source,
+    const NwbMeshInstanceData instance
+){
     NwbMeshGeneratedVertex generatedVertex;
     const vec3 worldPosition = nwbMeshTransformPosition(source.position, instance);
     generatedVertex.position = nwbEngineBuildClipPosition(worldPosition);
@@ -31,6 +49,7 @@ NWB_MESH_BUILD_VERTEX_SIGNATURE{
     generatedVertex.worldPosition = vec4(worldPosition, 1.0);
     return generatedVertex;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

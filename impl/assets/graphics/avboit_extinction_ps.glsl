@@ -1,9 +1,14 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #version 460
 
 #include "avboit_common.glsli"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 layout(set = 1, binding = 0) uniform texture2D g_OpaqueDepth;
 layout(set = 1, binding = 1) uniform sampler g_PointSampler;
@@ -21,6 +26,10 @@ layout(std430, set = 1, binding = 5) buffer NwbAvboitExtinctionOverflowDepthBuff
 };
 
 layout(location = 0) in mediump vec4 inColor;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void nwbAvboitSplatExtinction(uvec2 lowPixel, uint virtualSlice, float extinction){
     if(extinction <= 0.0)
@@ -45,6 +54,10 @@ void nwbAvboitSplatExtinction(uvec2 lowPixel, uint virtualSlice, float extinctio
         atomicMin(g_ExtinctionOverflowDepth[nwbAvboitLowPixelIndex(lowPixel)], physicalSlice);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void main(){
     float alpha;
     uint virtualSlice;
@@ -65,6 +78,7 @@ void main(){
     if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
         nwbAvboitSplatExtinction(lowPixel, virtualSlice1, extinction * sliceWeight1);
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

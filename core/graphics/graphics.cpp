@@ -4,7 +4,6 @@
 
 #include "graphics.h"
 
-#include <core/input/input.h>
 #include <core/common/log.h>
 
 
@@ -317,19 +316,16 @@ Graphics::Graphics(
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool,
     Alloc::JobSystem& jobSystem,
-    InputDispatcher& input,
     GraphicsBackendFactory backendFactory
 )
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
-    , m_input(input)
     , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool, backendFactory))
     , m_renderPasses(RenderPassListAllocator(m_allocator.getObjectArena()))
     , m_swapChainFramebuffers(SwapChainFramebufferVectorAllocator(m_allocator.getObjectArena()))
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
-    syncInputMousePositionScale();
 }
 Graphics::~Graphics(){
     destroy();
@@ -517,6 +513,11 @@ void Graphics::setWindowTitle(NotNull<const tchar*> title){
 
     m_windowTitle = title.get();
 }
+void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData){
+    m_pointerScaleChangedCallback = callback;
+    m_pointerScaleChangedUserData = userData;
+    notifyPointerScaleChanged();
+}
 
 ITexture* Graphics::getCurrentBackBuffer()const{
     return m_backend->getCurrentBackBuffer();
@@ -589,7 +590,7 @@ void Graphics::backBufferResized(){
 }
 
 void Graphics::displayScaleChanged(){
-    syncInputMousePositionScale();
+    notifyPointerScaleChanged();
 
     for(auto* renderPass : m_renderPasses)
         renderPass->displayScaleChanged(m_dpiScaleFactorX, m_dpiScaleFactorY);
@@ -620,11 +621,14 @@ void Graphics::updateAverageFrameTime(f64 elapsedTime){
     }
 }
 
-void Graphics::syncInputMousePositionScale(){
+void Graphics::notifyPointerScaleChanged()const{
+    if(!m_pointerScaleChangedCallback)
+        return;
+
     if(m_deviceCreationParams.supportExplicitDisplayScaling)
-        m_input.setMousePositionScale(1.f, 1.f);
+        m_pointerScaleChangedCallback(m_pointerScaleChangedUserData, 1.f, 1.f);
     else
-        m_input.setMousePositionScale(m_dpiScaleFactorX, m_dpiScaleFactorY);
+        m_pointerScaleChangedCallback(m_pointerScaleChangedUserData, m_dpiScaleFactorX, m_dpiScaleFactorY);
 }
 
 bool Graphics::shouldRenderUnfocused()const{

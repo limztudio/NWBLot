@@ -19,12 +19,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class InputDispatcher;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Graphics{
 private:
     using BackendOwner = CustomUniquePtr<IGraphicsBackend>;
@@ -90,6 +84,7 @@ public:
     };
 
     using JobHandle = Alloc::JobSystem::JobHandle;
+    using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
 
 
 private:
@@ -102,7 +97,6 @@ public:
         GraphicsAllocator& allocator,
         Alloc::ThreadPool& threadPool,
         Alloc::JobSystem& jobSystem,
-        InputDispatcher& input,
         GraphicsBackendFactory backendFactory = nullptr
     );
     ~Graphics();
@@ -137,6 +131,7 @@ public:
     void getDPIScaleInfo(f32& x, f32& y)const;
     [[nodiscard]] const tchar* getWindowTitle()const{ return m_windowTitle.c_str(); }
     void setWindowTitle(NotNull<const tchar*> title);
+    void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
     [[nodiscard]] ITexture* getCurrentBackBuffer()const;
     [[nodiscard]] ITexture* getBackBuffer(u32 index)const;
@@ -171,9 +166,6 @@ public:
     void waitAllJobs()const;
 
 
-private:
-    [[nodiscard]] bool shouldRenderUnfocused()const;
-
     void backBufferResizing();
     void backBufferResized();
     void displayScaleChanged();
@@ -181,7 +173,8 @@ private:
     void animate(f64 elapsedTime);
     void render();
     void updateAverageFrameTime(f64 elapsedTime);
-    void syncInputMousePositionScale();
+    void notifyPointerScaleChanged()const;
+    [[nodiscard]] bool shouldRenderUnfocused()const;
     bool animateRenderPresent();
 
 
@@ -189,7 +182,6 @@ private:
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
     Alloc::JobSystem& m_jobSystem;
-    InputDispatcher& m_input;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
 
@@ -220,6 +212,8 @@ private:
     Vector<FramebufferHandle, SwapChainFramebufferVectorAllocator> m_swapChainFramebuffers;
 
     BasicString<tchar> m_windowTitle;
+    PointerScaleChangedCallback m_pointerScaleChangedCallback = nullptr;
+    void* m_pointerScaleChangedUserData = nullptr;
 };
 
 

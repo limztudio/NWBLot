@@ -58,6 +58,11 @@ void ProjectObjectArenaFreeAligned(void* ptr){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
+    auto* frame = static_cast<Frame*>(userData);
+    NWB_ASSERT(frame);
+    frame->m_input.setMousePositionScale(scaleX, scaleY);
+}
 u32 Frame::queryGraphicsWorkerThreadCount(){
     u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
     if(coreCount <= 1)
@@ -96,12 +101,13 @@ Frame::Frame(void* inst, u16 width, u16 height)
     )
     , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
-    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_input)
+    , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem)
 {
     auto& frameData = data<Common::FrameData>();
     frameData.width() = width;
     frameData.height() = height;
     setupPlatform(inst);
+    m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
 }
 Frame::~Frame(){
     cleanup();

@@ -28,6 +28,7 @@ private:
 
 
 private:
+    static void ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY);
     static u32 queryGraphicsWorkerThreadCount();
     static u32 queryProjectWorkerThreadCount();
 

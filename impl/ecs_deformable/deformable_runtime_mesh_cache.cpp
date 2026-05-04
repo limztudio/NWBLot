@@ -311,29 +311,28 @@ DeformableRuntimeMeshCache::DeformableRuntimeMeshCache(Core::Alloc::CustomArena&
 
 void DeformableRuntimeMeshCache::update(Core::ECS::World& world){
     auto deformableRendererView = world.view<DeformableRendererComponent>();
-    if(m_instances.empty()){
-        deformableRendererView.each(
-            [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
-                if(!ensureRuntimeMesh(entity, component))
-                    component.runtimeMesh.reset();
-            }
-        );
-        return;
-    }
-
-    if(deformableRendererView.candidateCount() == 0u){
+    const usize rendererCandidateCount = deformableRendererView.candidateCount();
+    if(rendererCandidateCount == 0u){
         m_handleToEntity.clear();
         m_instances.clear();
         m_sources.clear();
         return;
     }
 
+    m_instances.reserve(rendererCandidateCount);
+    m_handleToEntity.reserve(rendererCandidateCount);
+    m_sources.reserve(rendererCandidateCount);
+
+    const bool pruneStaleInstances = !m_instances.empty();
     deformableRendererView.each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
             if(!ensureRuntimeMesh(entity, component))
                 component.runtimeMesh.reset();
         }
     );
+
+    if(!pruneStaleInstances)
+        return;
 
     for(auto it = m_instances.begin(); it != m_instances.end();){
         const Core::ECS::EntityID entity = it->first;

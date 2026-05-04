@@ -98,7 +98,7 @@ public:
 
 
 private:
-    u32 m_geometryClass = GeometryClass::StaticDeform;
+    u32 m_geometryClass = GeometryClass::Invalid;
     Vector<DeformableVertexRest> m_restVertices;
     Vector<u32> m_indices;
     Vector<SkinInfluence4> m_skin;

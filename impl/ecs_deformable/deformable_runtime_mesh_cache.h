@@ -65,6 +65,7 @@ struct DeformableRuntimeMeshInstance{
             entity.valid()
             && handle.valid()
             && source.valid()
+            && GeometryClassUsesDeformableRuntime(geometryClass)
             && !restVertices.empty()
             && !indices.empty()
             && (sourceSamples.empty() || sourceTriangleCount != 0u)

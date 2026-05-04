@@ -737,14 +737,6 @@ class LinuxX11Capture:
         commit_x, commit_y = self._relative_window_point(window, commit_relative_x, commit_relative_y)
         self._click_window_point(window, commit_x, commit_y, 0.05)
 
-    def exercise_surface_edit(self, window, relative_x, relative_y, commit_relative_x, commit_relative_y):
-        click_x, click_y = self._relative_window_point(window, relative_x, relative_y)
-        commit_x, commit_y = self._relative_window_point(window, commit_relative_x, commit_relative_y)
-
-        self._click_window_point(window, click_x, click_y, 0.1)
-        time.sleep(0.3)
-        self._click_window_point(window, commit_x, commit_y, 0.05, focus=False)
-
     def capture_window(self, window, output_path):
         self.x11.XRaiseWindow(self.display, window)
         self.x11.XFlush(self.display)
@@ -1030,14 +1022,6 @@ class WindowsCapture:
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
 
-    def exercise_surface_edit(self, hwnd, relative_x, relative_y, commit_relative_x, commit_relative_y):
-        lparam = self._relative_lparam(hwnd, relative_x, relative_y)
-        commit_lparam = self._relative_lparam(hwnd, commit_relative_x, commit_relative_y)
-
-        self._post_click(hwnd, lparam, 0.1)
-        time.sleep(0.3)
-        self._post_click(hwnd, commit_lparam, 0.05, focus=False)
-
     def select_surface_edit_target(self, hwnd, target_key):
         self.send_named_key(hwnd, str(target_key))
 
@@ -1176,48 +1160,117 @@ def launch_testbed(args, executable, env, log_port):
     )
 
 
-def capture_existing_handle(args, backend):
-    if args.surface_edit_target_key is not None:
-        backend.select_surface_edit_target(args.window_handle, args.surface_edit_target_key)
-        time.sleep(args.target_settle_seconds)
+def ensure_process_running(process, stage):
+    if process is None or process.poll() is None:
+        return
 
-    if args.surface_edit_operator_key is not None:
-        backend.select_surface_edit_operator(args.window_handle, args.surface_edit_operator_key)
-        time.sleep(args.target_settle_seconds)
+    tail = read_process_tail(process)
+    raise SmokeFailure(f"testbed exited {stage} (exit {process.returncode})\n{tail}")
 
-    if args.camera_view_key is not None:
-        backend.select_surface_edit_camera_view(args.window_handle, args.camera_view_key)
-        time.sleep(args.target_settle_seconds)
 
-    if args.preview_csg:
-        backend.preview_surface_edit(
-            args.window_handle,
-            args.csg_click_x,
-            args.csg_click_y,
-        )
-        time.sleep(args.csg_settle_seconds)
-    elif args.exercise_csg:
-        backend.preview_surface_edit(
-            args.window_handle,
-            args.csg_click_x,
-            args.csg_click_y,
-        )
-        time.sleep(args.csg_settle_seconds)
-        backend.commit_surface_edit_preview(
-            args.window_handle,
-            args.csg_commit_click_x,
-            args.csg_commit_click_y,
-            args.csg_commit_key,
-        )
-        time.sleep(args.csg_settle_seconds)
-
-    result = backend.capture_window(args.window_handle, args.output)
+def validate_capture_result(result):
     if result.appears_blank:
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears blank or white")
     if not result.has_pixel_variation:
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
 
+
+def apply_surface_edit_selection(args, backend, handle, after_step=None):
+    if args.surface_edit_target_key is not None:
+        backend.select_surface_edit_target(handle, args.surface_edit_target_key)
+        time.sleep(args.target_settle_seconds)
+        if after_step:
+            after_step("after target selection")
+
+    if args.surface_edit_operator_key is not None:
+        backend.select_surface_edit_operator(handle, args.surface_edit_operator_key)
+        time.sleep(args.target_settle_seconds)
+        if after_step:
+            after_step("after operator selection")
+
+    if args.camera_view_key is not None:
+        backend.select_surface_edit_camera_view(handle, args.camera_view_key)
+        time.sleep(args.target_settle_seconds)
+        if after_step:
+            after_step("after camera view selection")
+
+
+def wait_for_surface_edit_log(args, log_directory, log_baseline, message):
+    if not log_directory:
+        return False
+
+    wait_for_log_message(
+        log_directory,
+        log_baseline,
+        "logserver_*.log",
+        message,
+        args.csg_log_timeout,
+    )
+    return True
+
+
+def apply_surface_edit_csg(args, backend, handle, log_directory=None, log_baseline=None, after_step=None):
+    if not args.preview_csg and not args.exercise_csg:
+        return
+
+    if args.preview_csg:
+        backend.preview_surface_edit(
+            handle,
+            args.csg_click_x,
+            args.csg_click_y,
+        )
+        wait_for_surface_edit_log(
+            args,
+            log_directory,
+            log_baseline,
+            "Surface edit: selected preview radius=",
+        )
+        time.sleep(args.csg_settle_seconds)
+        if after_step:
+            after_step("after CSG preview")
+        return
+
+    backend.preview_surface_edit(
+        handle,
+        args.csg_click_x,
+        args.csg_click_y,
+    )
+    saw_preview_log = wait_for_surface_edit_log(
+        args,
+        log_directory,
+        log_baseline,
+        "Surface edit: selected preview radius=",
+    )
+    if not saw_preview_log:
+        time.sleep(args.csg_settle_seconds)
+
+    backend.commit_surface_edit_preview(
+        handle,
+        args.csg_commit_click_x,
+        args.csg_commit_click_y,
+        args.csg_commit_key,
+    )
+    wait_for_surface_edit_log(
+        args,
+        log_directory,
+        log_baseline,
+        "Surface edit: committed hole rev=",
+    )
+    time.sleep(args.csg_settle_seconds)
+    if after_step:
+        after_step("after CSG exercise")
+
+
+def capture_checked_window(args, backend, handle):
+    result = backend.capture_window(handle, args.output)
+    validate_capture_result(result)
     return result
+
+
+def capture_existing_handle(args, backend):
+    apply_surface_edit_selection(args, backend, args.window_handle)
+    apply_surface_edit_csg(args, backend, args.window_handle)
+    return capture_checked_window(args, backend, args.window_handle)
 
 
 def launch_and_capture(args, backend):
@@ -1240,91 +1293,12 @@ def launch_and_capture(args, backend):
             raise SmokeFailure("timed out waiting for a visible testbed window")
 
         time.sleep(args.settle_seconds)
-        if testbed_process.poll() is not None:
-            tail = read_process_tail(testbed_process)
-            raise SmokeFailure(f"testbed exited before capture (exit {testbed_process.returncode})\n{tail}")
+        ensure_process_running(testbed_process, "before capture")
 
-        if args.surface_edit_target_key is not None:
-            backend.select_surface_edit_target(handle, args.surface_edit_target_key)
-            time.sleep(args.target_settle_seconds)
-            if testbed_process.poll() is not None:
-                tail = read_process_tail(testbed_process)
-                raise SmokeFailure(f"testbed exited after target selection (exit {testbed_process.returncode})\n{tail}")
-
-        if args.surface_edit_operator_key is not None:
-            backend.select_surface_edit_operator(handle, args.surface_edit_operator_key)
-            time.sleep(args.target_settle_seconds)
-            if testbed_process.poll() is not None:
-                tail = read_process_tail(testbed_process)
-                raise SmokeFailure(f"testbed exited after operator selection (exit {testbed_process.returncode})\n{tail}")
-
-        if args.camera_view_key is not None:
-            backend.select_surface_edit_camera_view(handle, args.camera_view_key)
-            time.sleep(args.target_settle_seconds)
-            if testbed_process.poll() is not None:
-                tail = read_process_tail(testbed_process)
-                raise SmokeFailure(f"testbed exited after camera view selection (exit {testbed_process.returncode})\n{tail}")
-
-        if args.preview_csg:
-            backend.preview_surface_edit(
-                handle,
-                args.csg_click_x,
-                args.csg_click_y,
-            )
-            if log_directory:
-                wait_for_log_message(
-                    log_directory,
-                    log_baseline,
-                    "logserver_*.log",
-                    "Surface edit: selected preview radius=",
-                    args.csg_log_timeout,
-                )
-            time.sleep(args.csg_settle_seconds)
-            if testbed_process.poll() is not None:
-                tail = read_process_tail(testbed_process)
-                raise SmokeFailure(f"testbed exited after CSG preview (exit {testbed_process.returncode})\n{tail}")
-        elif args.exercise_csg:
-            backend.preview_surface_edit(
-                handle,
-                args.csg_click_x,
-                args.csg_click_y,
-            )
-            if log_directory:
-                wait_for_log_message(
-                    log_directory,
-                    log_baseline,
-                    "logserver_*.log",
-                    "Surface edit: selected preview radius=",
-                    args.csg_log_timeout,
-                )
-            else:
-                time.sleep(args.csg_settle_seconds)
-
-            backend.commit_surface_edit_preview(
-                handle,
-                args.csg_commit_click_x,
-                args.csg_commit_click_y,
-                args.csg_commit_key,
-            )
-            if log_directory:
-                wait_for_log_message(
-                    log_directory,
-                    log_baseline,
-                    "logserver_*.log",
-                    "Surface edit: committed hole rev=",
-                    args.csg_log_timeout,
-                )
-            time.sleep(args.csg_settle_seconds)
-            if testbed_process.poll() is not None:
-                tail = read_process_tail(testbed_process)
-                raise SmokeFailure(f"testbed exited after CSG exercise (exit {testbed_process.returncode})\n{tail}")
-
-        result = backend.capture_window(handle, args.output)
-        if result.appears_blank:
-            raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears blank or white")
-        if not result.has_pixel_variation:
-            raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
-        return result
+        after_step = lambda stage: ensure_process_running(testbed_process, stage)
+        apply_surface_edit_selection(args, backend, handle, after_step)
+        apply_surface_edit_csg(args, backend, handle, log_directory, log_baseline, after_step)
+        return capture_checked_window(args, backend, handle)
     finally:
         terminate_process(testbed_process, "testbed")
         terminate_process(logserver_process, "logserver")

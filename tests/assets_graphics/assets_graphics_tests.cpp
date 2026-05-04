@@ -1041,6 +1041,7 @@ static NWB::Impl::DeformableGeometry BuildMinimalDeformableGeometry(){
 
     Vector<u32> indices = MakeTriangleIndices();
 
+    geometry.setGeometryClass(NWB::Impl::GeometryClass::StaticDeform);
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     return geometry;

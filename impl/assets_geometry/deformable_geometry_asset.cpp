@@ -569,7 +569,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
 
     m_restVertices.clear();
     m_indices.clear();
-    m_geometryClass = GeometryClass::StaticDeform;
+    m_geometryClass = GeometryClass::Invalid;
     m_skin.clear();
     m_skeletonJointCount = 0u;
     m_inverseBindMatrices.clear();
@@ -582,7 +582,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0;
     u32 magic = 0;
     u32 version = 0;
-    u32 geometryClass = GeometryClass::StaticDeform;
+    u32 geometryClass = GeometryClass::Invalid;
     u64 vertexCount = 0;
     u64 indexCount = 0;
     u64 skinCount = 0;

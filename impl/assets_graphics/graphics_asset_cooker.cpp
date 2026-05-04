@@ -140,7 +140,7 @@ struct GeometryEntry{
 };
 struct DeformableGeometryEntry{
     Name virtualPath = NAME_NONE;
-    u32 geometryClass = GeometryClass::StaticDeform;
+    u32 geometryClass = GeometryClass::Invalid;
     Vector<DeformableVertexRest> restVertices;
     Vector<u32> indices;
     Vector<SkinInfluence4> skin;
@@ -1096,7 +1096,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
-    u32 geometryClass = GeometryClass::Static;
+    u32 geometryClass = GeometryClass::Invalid;
     if(!ParseGeometryClassField(
         discoveredFile.filePath,
         asset,

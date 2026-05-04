@@ -23,6 +23,7 @@ namespace GeometryClass{
         StaticDeform = 1,
         Skinned = 2,
         SkinnedDeform = 3,
+        Invalid = Limit<u32>::s_Max,
     };
 };
 
@@ -61,6 +62,8 @@ namespace GeometryClass{
         return "skinned";
     case GeometryClass::SkinnedDeform:
         return "skinned_deform";
+    case GeometryClass::Invalid:
+        return "invalid";
     default:
         return "unknown";
     }

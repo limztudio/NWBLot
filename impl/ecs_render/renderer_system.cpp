@@ -120,65 +120,19 @@ static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 28u, "MeshViewGpuData lay
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 
 
-static const Name& MeshEmulationVertexShaderName(){
-    static const Name s("engine/graphics/mesh_emulation_vs");
-    return s;
-}
+static constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh_emulation_vs");
+static constexpr Name s_InstanceBufferName("ecs_render/instance_data");
+static constexpr Name s_MaterialParameterBufferName("ecs_render/material_parameter_data");
+static constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
+static constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred_composite_vs");
+static constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred_composite_ps");
+static constexpr Name s_WireframeOverlayPixelShaderName("engine/graphics/wireframe_overlay_ps");
+static constexpr Name s_AvboitOccupancyPixelShaderName("engine/graphics/avboit_occupancy_ps");
+static constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit_depth_warp_cs");
+static constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit_extinction_ps");
+static constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit_integrate_cs");
+static constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit_accumulate_ps");
 
-static const Name& InstanceBufferName(){
-    static const Name s("ecs_render/instance_data");
-    return s;
-}
-
-static const Name& MaterialParameterBufferName(){
-    static const Name s("ecs_render/material_parameter_data");
-    return s;
-}
-
-static const Name& MeshViewBufferName(){
-    static const Name s("ecs_render/mesh_view_data");
-    return s;
-}
-
-static const Name& DeferredCompositeVertexShaderName(){
-    static const Name s("engine/graphics/deferred_composite_vs");
-    return s;
-}
-
-static const Name& DeferredCompositePixelShaderName(){
-    static const Name s("engine/graphics/deferred_composite_ps");
-    return s;
-}
-
-static const Name& WireframeOverlayPixelShaderName(){
-    static const Name s("engine/graphics/wireframe_overlay_ps");
-    return s;
-}
-
-static const Name& AvboitOccupancyPixelShaderName(){
-    static const Name s("engine/graphics/avboit_occupancy_ps");
-    return s;
-}
-
-static const Name& AvboitDepthWarpComputeShaderName(){
-    static const Name s("engine/graphics/avboit_depth_warp_cs");
-    return s;
-}
-
-static const Name& AvboitExtinctionPixelShaderName(){
-    static const Name s("engine/graphics/avboit_extinction_ps");
-    return s;
-}
-
-static const Name& AvboitIntegrateComputeShaderName(){
-    static const Name s("engine/graphics/avboit_integrate_cs");
-    return s;
-}
-
-static const Name& AvboitAccumulatePixelShaderName(){
-    static const Name s("engine/graphics/avboit_accumulate_ps");
-    return s;
-}
 
 static bool SupportsFormat(Core::IDevice& device, const Core::Format::Enum format, const Core::FormatSupport::Mask requiredSupport){
     return (device.queryFormatSupport(format) & requiredSupport) == requiredSupport;
@@ -1693,7 +1647,7 @@ bool RendererSystem::ensureDeferredCompositeResources(){
 
     if(!ensureShaderLoaded(
         m_deferredCompositeVertexShader,
-        __hidden_ecs_render::DeferredCompositeVertexShaderName(),
+        __hidden_ecs_render::s_DeferredCompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,
         "ECSRender_DeferredCompositeVS"
@@ -1702,7 +1656,7 @@ bool RendererSystem::ensureDeferredCompositeResources(){
 
     if(!ensureShaderLoaded(
         m_deferredCompositePixelShader,
-        __hidden_ecs_render::DeferredCompositePixelShaderName(),
+        __hidden_ecs_render::s_DeferredCompositePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_DeferredCompositePS"
@@ -1842,7 +1796,7 @@ bool RendererSystem::ensureAvboitResources(){
 
     if(!ensureShaderLoaded(
         m_avboitOccupancyPixelShader,
-        __hidden_ecs_render::AvboitOccupancyPixelShaderName(),
+        __hidden_ecs_render::s_AvboitOccupancyPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_AvboitOccupancyPS"
@@ -1851,7 +1805,7 @@ bool RendererSystem::ensureAvboitResources(){
 
     if(!ensureShaderLoaded(
         m_avboitDepthWarpComputeShader,
-        __hidden_ecs_render::AvboitDepthWarpComputeShaderName(),
+        __hidden_ecs_render::s_AvboitDepthWarpComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSRender_AvboitDepthWarpCS"
@@ -1860,7 +1814,7 @@ bool RendererSystem::ensureAvboitResources(){
 
     if(!ensureShaderLoaded(
         m_avboitExtinctionPixelShader,
-        __hidden_ecs_render::AvboitExtinctionPixelShaderName(),
+        __hidden_ecs_render::s_AvboitExtinctionPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_AvboitExtinctionPS"
@@ -1869,7 +1823,7 @@ bool RendererSystem::ensureAvboitResources(){
 
     if(!ensureShaderLoaded(
         m_avboitIntegrateComputeShader,
-        __hidden_ecs_render::AvboitIntegrateComputeShaderName(),
+        __hidden_ecs_render::s_AvboitIntegrateComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSRender_AvboitIntegrateCS"
@@ -1878,7 +1832,7 @@ bool RendererSystem::ensureAvboitResources(){
 
     if(!ensureShaderLoaded(
         m_avboitAccumulatePixelShader,
-        __hidden_ecs_render::AvboitAccumulatePixelShaderName(),
+        __hidden_ecs_render::s_AvboitAccumulatePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_AvboitAccumulatePS"
@@ -2290,7 +2244,7 @@ bool RendererSystem::ensureInstanceBufferCapacity(const usize instanceCount){
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
-        .setDebugName(__hidden_ecs_render::InstanceBufferName())
+        .setDebugName(__hidden_ecs_render::s_InstanceBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
@@ -2324,7 +2278,7 @@ bool RendererSystem::ensureMaterialParameterBufferCapacity(const usize parameter
     materialParameterBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(MaterialParameterGpuData)))
         .setStructStride(sizeof(MaterialParameterGpuData))
-        .setDebugName(__hidden_ecs_render::MaterialParameterBufferName())
+        .setDebugName(__hidden_ecs_render::s_MaterialParameterBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle materialParameterBuffer = m_graphics.createBuffer(materialParameterBufferDesc);
@@ -2345,7 +2299,7 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
         meshViewBufferDesc
             .setByteSize(sizeof(__hidden_ecs_render::MeshViewGpuData))
             .setIsConstantBuffer(true)
-            .setDebugName(__hidden_ecs_render::MeshViewBufferName())
+            .setDebugName(__hidden_ecs_render::s_MeshViewBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         Core::BufferHandle meshViewBuffer = m_graphics.createBuffer(meshViewBufferDesc);
@@ -2962,7 +2916,7 @@ bool RendererSystem::ensureComputeEmulationResources(){
     if(!m_emulationVertexShader){
         if(!ensureShaderLoaded(
             m_emulationVertexShader,
-            __hidden_ecs_render::MeshEmulationVertexShaderName(),
+            __hidden_ecs_render::s_MeshEmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
             "ECSRender_MeshEmulationVS"
@@ -3221,7 +3175,7 @@ bool RendererSystem::ensureRendererPipeline(
     case MaterialPipelinePass::WireframeOverlay:
         if(!ensureShaderLoaded(
             passPixelShader,
-            __hidden_ecs_render::WireframeOverlayPixelShaderName(),
+            __hidden_ecs_render::s_WireframeOverlayPixelShaderName,
             shaderVariant,
             Core::ShaderType::Pixel,
             "ECSRender_WireframeOverlayPS"

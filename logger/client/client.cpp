@@ -4,8 +4,6 @@
 
 #include "client.h"
 
-#include <global/binary.h>
-
 #include <curl/curl.h>
 
 
@@ -36,13 +34,23 @@ static bool BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
     const usize payloadSize = fixedPayloadBytes + strBytes;
 
     outPayload.clear();
-    outPayload.reserve(payloadSize);
-    AppendPOD(outPayload, time);
-    AppendPOD(outPayload, type);
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, str.c_str(), strBytes);
+    outPayload.resize(payloadSize);
+
+    usize payloadOffset = 0u;
+    auto appendPayloadBytes = [&](const void* source, const usize sourceBytes){
+        if(sourceBytes == 0u)
+            return;
+
+        NWB_MEMCPY(outPayload.data() + payloadOffset, payloadSize - payloadOffset, source, sourceBytes);
+        payloadOffset += sourceBytes;
+    };
+
+    appendPayloadBytes(&time, sizeof(time));
+    appendPayloadBytes(&type, sizeof(type));
+    appendPayloadBytes(str.c_str(), strBytes);
     constexpr tchar nullTerminator = 0;
-    AppendPOD(outPayload, nullTerminator);
-    NWB_ASSERT(outPayload.size() == payloadSize);
+    appendPayloadBytes(&nullTerminator, sizeof(nullTerminator));
+    NWB_ASSERT(payloadOffset == payloadSize);
 
     return true;
 }

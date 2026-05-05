@@ -14,9 +14,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "common.h"
+#include "../global.h"
 
 #include <core/alloc/scratch.h>
+#include <core/graphics/common.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,6 +32,18 @@ NWB_CORE_BEGIN
 namespace Metascript{
 class Document;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,17 +120,17 @@ private:
 
 
 public:
-    ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory = nullptr);
+    ShaderCook(CookArena& memoryArena, Core::ShaderCompilerFactory compilerFactory = nullptr);
 
 
 public:
-    inline bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
+    inline bool compileVariant(const Core::ShaderCompilerRequest& request, Vector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
 public:
-    bool parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc);
-    bool parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, ShaderEntry& outEntry);
+    bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
+    bool parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, ShaderEntry& outEntry);
     bool parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry);
-    bool parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, IncludeEntry& outEntry);
+    bool parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, IncludeEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry);
 
     bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues);
@@ -144,13 +157,13 @@ private:
     template<typename MapT>
     using ScratchDefineEntryVector = Vector<
         DefineEntryPtr<MapT>,
-        Alloc::ScratchAllocator<DefineEntryPtr<MapT>>
+        Core::Alloc::ScratchAllocator<DefineEntryPtr<MapT>>
     >;
 
     template<typename MapT>
-    ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Alloc::ScratchArena<>& scratchArena){
+    ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena<>& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
-        ScratchDefineEntryVector<MapT> entries{Alloc::ScratchAllocator<EntryPtr>(scratchArena)};
+        ScratchDefineEntryVector<MapT> entries{Core::Alloc::ScratchAllocator<EntryPtr>(scratchArena)};
         entries.reserve(map.size());
         for(const auto& [name, value] : map)
             entries.push_back(EntryPtr{ &name, &value });
@@ -163,14 +176,14 @@ private:
     CookArena& m_memoryArena;
 
 private:
-    CustomUniquePtr<IShaderCompiler> m_compiler;
+    Core::CustomUniquePtr<Core::IShaderCompiler> m_compiler;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

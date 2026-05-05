@@ -16,9 +16,9 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
+#include <impl/assets_shader/shader_cook.h>
 
 #include <core/graphics/shader_archive.h>
-#include <core/graphics/shader_cook.h>
 #include <core/graphics/shader_stage_names.h>
 
 #include <core/filesystem/filesystem.h>
@@ -78,7 +78,7 @@ static bool IsSupportedRendererMaterialShaderStage(const Core::ShaderType::Enum 
     return IsMaterialPixelShaderStage(shaderType) || IsMaterialMeshShaderStage(shaderType);
 }
 
-static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sourceEntry, Core::ShaderCook::ShaderEntry& outEntry){
+static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry, ShaderCook::ShaderEntry& outEntry){
     outEntry = sourceEntry;
     if(!outEntry.archiveStage.assign(MaterialShaderStageNames::MeshComputeArchiveStageText()))
         return false;
@@ -95,7 +95,7 @@ static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sou
 }
 
 
-static AString NormalizeVariantName(const Core::ShaderCook::ShaderEntry& entry, const AStringView generatedVariantName){
+static AString NormalizeVariantName(const ShaderCook::ShaderEntry& entry, const AStringView generatedVariantName){
     const AStringView normalizedGeneratedVariantName = generatedVariantName.empty()
         ? AStringView(Core::ShaderArchive::s_DefaultVariant)
         : generatedVariantName
@@ -113,12 +113,12 @@ static AString NormalizeVariantName(const Core::ShaderCook::ShaderEntry& entry, 
 
 struct ResolvedCookPaths{
     Path repoRoot;
-    Core::ShaderCook::CookVector<Path> assetRoots;
+    ShaderCook::CookVector<Path> assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
 
-    explicit ResolvedCookPaths(Core::ShaderCook::CookArena& arena)
-        : assetRoots(Core::ShaderCook::CookAllocator<Path>(arena))
+    explicit ResolvedCookPaths(ShaderCook::CookArena& arena)
+        : assetRoots(ShaderCook::CookAllocator<Path>(arena))
     {}
 };
 struct DiscoveredNwbFile{
@@ -159,17 +159,17 @@ struct DeformableDisplacementTextureEntry{
     Vector<Float4U> texels;
 };
 struct MaterialEntry{
-    using StageShaderMap = Core::ShaderCook::CookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
-    using ParameterMap = Core::ShaderCook::CookMap<CompactString, CompactString>;
+    using StageShaderMap = ShaderCook::CookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
+    using ParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
 
     Name virtualPath = NAME_NONE;
     AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
     StageShaderMap stageShaders;
     ParameterMap parameters;
 
-    explicit MaterialEntry(Core::ShaderCook::CookArena& arena)
-        : stageShaders(Core::ShaderCook::CookAllocator<Pair<const Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>>(arena))
-        , parameters(Core::ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
+    explicit MaterialEntry(ShaderCook::CookArena& arena)
+        : stageShaders(ShaderCook::CookAllocator<Pair<const Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>>(arena))
+        , parameters(ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
     {}
 
     void reset(){
@@ -194,30 +194,30 @@ inline bool operator==(const PreparedShaderKey& lhs, const PreparedShaderKey& rh
     return lhs.shaderName == rhs.shaderName && lhs.stageName == rhs.stageName;
 }
 struct PreparedShaderEntry{
-    Core::ShaderCook::ShaderEntry entry;
+    ShaderCook::ShaderEntry entry;
     Path sourcePath;
-    Core::ShaderCook::CookVector<Path> includeDirectories;
-    Core::ShaderCook::CookVector<Path> dependencies;
+    ShaderCook::CookVector<Path> includeDirectories;
+    ShaderCook::CookVector<Path> dependencies;
     u64 dependencyChecksum = 0;
     u64 variantCount = 0;
 
-    explicit PreparedShaderEntry(Core::ShaderCook::CookArena& arena)
+    explicit PreparedShaderEntry(ShaderCook::CookArena& arena)
         : entry(arena)
-        , includeDirectories(Core::ShaderCook::CookAllocator<Path>(arena))
-        , dependencies(Core::ShaderCook::CookAllocator<Path>(arena))
+        , includeDirectories(ShaderCook::CookAllocator<Path>(arena))
+        , dependencies(ShaderCook::CookAllocator<Path>(arena))
     {}
 };
-using IncludeMetadataMap = Core::ShaderCook::CookMap<AString, Core::ShaderCook::IncludeEntry>;
-using ShaderEntryVector = Core::ShaderCook::CookVector<Core::ShaderCook::ShaderEntry>;
-using PreparedShaderVector = Vector<PreparedShaderEntry, Core::ShaderCook::CookAllocator<PreparedShaderEntry>>;
-using VirtualPathHashSet = Core::ShaderCook::CookHashSet<NameHash>;
+using IncludeMetadataMap = ShaderCook::CookMap<AString, ShaderCook::IncludeEntry>;
+using ShaderEntryVector = ShaderCook::CookVector<ShaderCook::ShaderEntry>;
+using PreparedShaderVector = Vector<PreparedShaderEntry, ShaderCook::CookAllocator<PreparedShaderEntry>>;
+using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
 template<typename T>
 using ScratchVector = Vector<T, Core::Alloc::ScratchAllocator<T>>;
-using DiscoveredNwbFileVector = Core::ShaderCook::CookVector<DiscoveredNwbFile>;
-using GeometryEntryVector = Core::ShaderCook::CookVector<GeometryEntry>;
-using DeformableGeometryEntryVector = Core::ShaderCook::CookVector<DeformableGeometryEntry>;
-using DeformableDisplacementTextureEntryVector = Core::ShaderCook::CookVector<DeformableDisplacementTextureEntry>;
-using MaterialEntryVector = Core::ShaderCook::CookVector<MaterialEntry>;
+using DiscoveredNwbFileVector = ShaderCook::CookVector<DiscoveredNwbFile>;
+using GeometryEntryVector = ShaderCook::CookVector<GeometryEntry>;
+using DeformableGeometryEntryVector = ShaderCook::CookVector<DeformableGeometryEntry>;
+using DeformableDisplacementTextureEntryVector = ShaderCook::CookVector<DeformableDisplacementTextureEntry>;
+using MaterialEntryVector = ShaderCook::CookVector<MaterialEntry>;
 
 struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
@@ -227,13 +227,13 @@ struct ParsedAssetMetadata{
     DeformableDisplacementTextureEntryVector deformableDisplacementTextureEntries;
     MaterialEntryVector materialEntries;
 
-    explicit ParsedAssetMetadata(Core::ShaderCook::CookArena& arena)
-        : includeMetadata(Core::ShaderCook::CookAllocator<Pair<const AString, Core::ShaderCook::IncludeEntry>>(arena))
-        , shaderEntries(Core::ShaderCook::CookAllocator<Core::ShaderCook::ShaderEntry>(arena))
-        , geometryEntries(Core::ShaderCook::CookAllocator<GeometryEntry>(arena))
-        , deformableGeometryEntries(Core::ShaderCook::CookAllocator<DeformableGeometryEntry>(arena))
-        , deformableDisplacementTextureEntries(Core::ShaderCook::CookAllocator<DeformableDisplacementTextureEntry>(arena))
-        , materialEntries(Core::ShaderCook::CookAllocator<MaterialEntry>(arena))
+    explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
+        : includeMetadata(ShaderCook::CookAllocator<Pair<const AString, ShaderCook::IncludeEntry>>(arena))
+        , shaderEntries(ShaderCook::CookAllocator<ShaderCook::ShaderEntry>(arena))
+        , geometryEntries(ShaderCook::CookAllocator<GeometryEntry>(arena))
+        , deformableGeometryEntries(ShaderCook::CookAllocator<DeformableGeometryEntry>(arena))
+        , deformableDisplacementTextureEntries(ShaderCook::CookAllocator<DeformableDisplacementTextureEntry>(arena))
+        , materialEntries(ShaderCook::CookAllocator<MaterialEntry>(arena))
     {}
 };
 
@@ -241,8 +241,8 @@ struct PreparedShaderPlan{
     PreparedShaderVector preparedEntries;
     u64 plannedFileCount = 1; // shader archive index
 
-    explicit PreparedShaderPlan(Core::ShaderCook::CookArena& arena)
-        : preparedEntries(Core::ShaderCook::CookAllocator<PreparedShaderEntry>(arena))
+    explicit PreparedShaderPlan(ShaderCook::CookArena& arena)
+        : preparedEntries(ShaderCook::CookAllocator<PreparedShaderEntry>(arena))
     {}
 };
 
@@ -372,7 +372,7 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
 }
 
 
-static bool DiscoverNwbFiles(const Core::ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
+static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenNwbPaths(
@@ -457,7 +457,7 @@ static bool DiscoverNwbFiles(const Core::ShaderCook::CookVector<Path>& assetRoot
 }
 
 static bool ParseVariantField(
-    Core::ShaderCook& shaderCook,
+    ShaderCook& shaderCook,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
@@ -661,7 +661,7 @@ static bool BuildDiscoveredAssetVirtualPath(
 }
 
 static bool ParseMaterialMeta(
-    Core::ShaderCook& shaderCook,
+    ShaderCook& shaderCook,
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     MaterialEntry& outEntry
@@ -2125,7 +2125,7 @@ static bool BuildDeformableGeometryAsset(DeformableGeometryEntry& geometryEntry,
 }
 
 template<typename AssetRootVector>
-static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector& assetRoots, const Core::ShaderCook::ShaderEntry& entry, Core::ShaderCook::CookVector<Path>& outIncludeDirectories){
+static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector& assetRoots, const ShaderCook::ShaderEntry& entry, ShaderCook::CookVector<Path>& outIncludeDirectories){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
     HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenIncludeDirectories(
@@ -2198,7 +2198,7 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
     return true;
 }
 
-static bool CountShaderVariants(const Core::ShaderCook::ShaderEntry& entry, u64& outVariantCount){
+static bool CountShaderVariants(const ShaderCook::ShaderEntry& entry, u64& outVariantCount){
     outVariantCount = 1;
 
     for(const auto& [defineName, defineEntry] : entry.defineValues){
@@ -2262,7 +2262,7 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
 }
 
 static bool NormalizeMaterialVariant(
-    Core::ShaderCook& shaderCook,
+    ShaderCook& shaderCook,
     const MaterialEntry& materialEntry,
     const PreparedShaderEntry& preparedShaderEntry,
     const Name& stageName,
@@ -2308,8 +2308,8 @@ static bool NormalizeMaterialVariant(
 }
 
 static bool ValidateAndNormalizeMaterials(
-    Core::ShaderCook& shaderCook,
-    const Vector<PreparedShaderEntry, Core::ShaderCook::CookAllocator<PreparedShaderEntry>>& preparedEntries,
+    ShaderCook& shaderCook,
+    const Vector<PreparedShaderEntry, ShaderCook::CookAllocator<PreparedShaderEntry>>& preparedEntries,
     MaterialEntryVector& inOutMaterialEntries
 ){
     Core::Alloc::ScratchArena<> scratchArena;
@@ -2412,14 +2412,14 @@ static VariantCachePaths BuildVariantCachePaths(
 
 
 static bool GetVariantBytecode(
-    const Core::ShaderCook::ShaderEntry& entry,
+    const ShaderCook::ShaderEntry& entry,
     const AStringView variantName,
-    const Core::ShaderCook::DefineCombo& defineCombo,
-    const Core::ShaderCook::CookVector<Path>& includeDirectories,
+    const ShaderCook::DefineCombo& defineCombo,
+    const ShaderCook::CookVector<Path>& includeDirectories,
     const Path& sourcePath,
     const VariantCachePaths& cachePaths,
     const AStringView sourceChecksumHex,
-    Core::ShaderCook& shaderCook,
+    ShaderCook& shaderCook,
     Vector<u8>& outBytecode
 ){
     ErrorCode errorCode;
@@ -2579,8 +2579,8 @@ static bool ReserveShaderIndexRecords(
 }
 
 static bool ParseAssetMetadata(
-    Core::ShaderCook::CookArena& cookArena,
-    Core::ShaderCook& shaderCook,
+    ShaderCook::CookArena& cookArena,
+    ShaderCook& shaderCook,
     const DiscoveredNwbFileVector& nwbFiles,
     ParsedAssetMetadata& outMetadata
 ){
@@ -2595,12 +2595,12 @@ static bool ParseAssetMetadata(
         PreparedShaderKey,
         PreparedShaderKeyHasher,
         EqualTo<PreparedShaderKey>,
-        Core::ShaderCook::CookAllocator<PreparedShaderKey>
+        ShaderCook::CookAllocator<PreparedShaderKey>
     > seenShaderIdentityKeys{
         0,
         PreparedShaderKeyHasher(),
         EqualTo<PreparedShaderKey>(),
-        Core::ShaderCook::CookAllocator<PreparedShaderKey>(cookArena)
+        ShaderCook::CookAllocator<PreparedShaderKey>(cookArena)
     };
     Core::Alloc::ScratchArena<> scratchArena;
     HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenPropertyAssetPathHashes(
@@ -2622,7 +2622,7 @@ static bool ParseAssetMetadata(
         const AStringView rawAssetTypeText(doc.assetType().data(), doc.assetType().size());
         const Name assetType = ToName(rawAssetTypeText);
         if(assetType == Shader::AssetTypeName()){
-            Core::ShaderCook::ShaderEntry shaderEntry(cookArena);
+            ShaderCook::ShaderEntry shaderEntry(cookArena);
             if(!shaderCook.parseShaderMeta(nwbFile, doc, shaderEntry))
                 return false;
 
@@ -2656,7 +2656,7 @@ static bool ParseAssetMetadata(
         }
 
         if(assetType == IncludeAssetTypeName()){
-            Core::ShaderCook::IncludeEntry includeEntry(cookArena);
+            ShaderCook::IncludeEntry includeEntry(cookArena);
             if(!shaderCook.parseIncludeMeta(nwbFile, doc, includeEntry))
                 return false;
 
@@ -2756,8 +2756,8 @@ static bool ParseAssetMetadata(
 }
 
 static bool PrepareShaderEntriesForCook(
-    Core::ShaderCook::CookArena& cookArena,
-    Core::ShaderCook& shaderCook,
+    ShaderCook::CookArena& cookArena,
+    ShaderCook& shaderCook,
     const ResolvedCookPaths& resolvedPaths,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
@@ -2773,7 +2773,7 @@ static bool PrepareShaderEntriesForCook(
     outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
     outPreparedPlan.plannedFileCount = 1; // shader archive index
 
-    for(Core::ShaderCook::ShaderEntry& entry : inOutShaderEntries){
+    for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
         PreparedShaderEntry preparedEntry(cookArena);
         preparedEntry.entry = Move(entry);
 
@@ -2883,8 +2883,8 @@ static bool PrepareShaderEntriesForCook(
 }
 
 static bool AppendPreparedShadersToVolume(
-    Core::ShaderCook::CookArena& cookArena,
-    Core::ShaderCook& shaderCook,
+    ShaderCook::CookArena& cookArena,
+    ShaderCook& shaderCook,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     PreparedShaderVector& preparedEntries,
@@ -2894,13 +2894,13 @@ static bool AppendPreparedShadersToVolume(
     Vector<Core::ShaderArchive::Record>& outShaderIndexRecords
 ){
     Vector<u8> cookedBytecode;
-    Core::ShaderCook::CookVector<Core::ShaderCook::DefineCombo> defineCombinations{
-        Core::ShaderCook::CookAllocator<Core::ShaderCook::DefineCombo>(cookArena)
+    ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{
+        ShaderCook::CookAllocator<ShaderCook::DefineCombo>(cookArena)
     };
     outShaderIndexRecords.clear();
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
-        Core::ShaderCook::ShaderEntry& entry = preparedEntry.entry;
+        ShaderCook::ShaderEntry& entry = preparedEntry.entry;
         const Name shaderName = ToName(entry.name);
         const Name stageName = ToName(entry.archiveStage.view());
         if(!shaderName || !stageName || entry.entryPoint.empty()){
@@ -2922,9 +2922,9 @@ static bool AppendPreparedShadersToVolume(
             return false;
         }
         if(defineCombinations.empty())
-            defineCombinations.push_back(Core::ShaderCook::DefineCombo(Core::ShaderCook::CookAllocator<Pair<const AString, AString>>(cookArena)));
+            defineCombinations.push_back(ShaderCook::DefineCombo(ShaderCook::CookAllocator<Pair<const AString, AString>>(cookArena)));
 
-        for(const Core::ShaderCook::DefineCombo& defineCombo : defineCombinations){
+        for(const ShaderCook::DefineCombo& defineCombo : defineCombinations){
             const AString generatedVariantName = shaderCook.buildVariantName(defineCombo);
             const AString variantName = NormalizeVariantName(entry, generatedVariantName);
 
@@ -3239,7 +3239,7 @@ bool GraphicsAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
 bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& environment, GraphicsCookResult& outResult){
     outResult = {};
 
-    Core::ShaderCook shaderCook(m_arena);
+    ShaderCook shaderCook(m_arena);
 
     __hidden_graphics_asset_cooker::ResolvedCookPaths resolvedPaths(m_arena);
     if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths))
@@ -3247,7 +3247,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
 
     // discover .nwb files from asset roots
     __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{
-        Core::ShaderCook::CookAllocator<__hidden_graphics_asset_cooker::DiscoveredNwbFile>(m_arena)
+        ShaderCook::CookAllocator<__hidden_graphics_asset_cooker::DiscoveredNwbFile>(m_arena)
     };
     if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
         return false;
@@ -3296,7 +3296,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords, shaderIndexRecordCount))
         return false;
 
-    __hidden_graphics_asset_cooker::VirtualPathHashSet seenVirtualPathHashes{Core::ShaderCook::CookAllocator<NameHash>(m_arena)};
+    __hidden_graphics_asset_cooker::VirtualPathHashSet seenVirtualPathHashes{ShaderCook::CookAllocator<NameHash>(m_arena)};
     if(preparedPlan.plannedFileCount <= static_cast<u64>(Limit<usize>::s_Max))
         seenVirtualPathHashes.reserve(static_cast<usize>(preparedPlan.plannedFileCount));
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();

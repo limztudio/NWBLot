@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import ctypes
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import platform
@@ -22,19 +23,19 @@ class SmokeFailure(Exception):
     pass
 
 
+@dataclass(frozen=True)
 class CaptureResult:
-    def __init__(self, handle, width, height, has_pixel_variation, appears_blank):
-        self.handle = handle
-        self.width = width
-        self.height = height
-        self.has_pixel_variation = has_pixel_variation
-        self.appears_blank = appears_blank
+    handle: int
+    width: int
+    height: int
+    has_pixel_variation: bool
+    appears_blank: bool
 
 
+@dataclass(frozen=True)
 class ImageAnalysis:
-    def __init__(self, has_pixel_variation, appears_blank):
-        self.has_pixel_variation = has_pixel_variation
-        self.appears_blank = appears_blank
+    has_pixel_variation: bool
+    appears_blank: bool
 
 
 def write_status(message):
@@ -132,6 +133,26 @@ def clamp_relative_point(width, height, relative_x, relative_y):
     x = min(max(int(width * relative_x), 0), width - 1)
     y = min(max(int(height * relative_y), 0), height - 1)
     return x, y
+
+
+def run_after_step(after_step, stage):
+    if after_step:
+        after_step(stage)
+
+
+def require_positive_arg(parser, name, value):
+    if value <= 0.0:
+        parser.error(f"{name} must be positive")
+
+
+def require_non_negative_arg(parser, name, value):
+    if value < 0.0:
+        parser.error(f"{name} must not be negative")
+
+
+def require_unit_interval_arg(parser, name, value):
+    if value < 0.0 or value > 1.0:
+        parser.error(f"{name} must be between 0.0 and 1.0")
 
 
 def read_process_tail(process):
@@ -304,7 +325,7 @@ LinuxXImage._fields_ = [
     ("height", ctypes.c_int),
     ("xoffset", ctypes.c_int),
     ("format", ctypes.c_int),
-    ("data", ctypes.c_char_p),
+    ("data", ctypes.c_void_p),
     ("byte_order", ctypes.c_int),
     ("bitmap_unit", ctypes.c_int),
     ("bitmap_bit_order", ctypes.c_int),
@@ -812,10 +833,12 @@ class LinuxX11Capture:
         finally:
             self.x11.XDestroyImage(image)
 
-    def _write_ximage_bmp(self, window, image, output_path):
+    def _write_ximage_bmp(self, output_handle, image, output_path):
         bytes_per_pixel = (image.bits_per_pixel + 7) // 8
         if bytes_per_pixel not in (2, 3, 4):
             raise SmokeFailure(f"unsupported XImage pixel size: {image.bits_per_pixel} bits")
+        if not image.data:
+            raise SmokeFailure(f"XImage for drawable 0x{output_handle:x} has no pixel data")
 
         byte_order = "little" if image.byte_order == self.LSB_FIRST else "big"
         raw_size = image.bytes_per_line * image.height
@@ -837,7 +860,7 @@ class LinuxX11Capture:
 
         write_bmp_24(output_path, image.width, image.height, rows)
         analysis = analyze_rgb_rows(rows)
-        return CaptureResult(window, image.width, image.height, analysis.has_pixel_variation, analysis.appears_blank)
+        return CaptureResult(output_handle, image.width, image.height, analysis.has_pixel_variation, analysis.appears_blank)
 
 
 class WinRect(ctypes.Structure):
@@ -1062,10 +1085,25 @@ class WindowsCapture:
             raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
 
         screen_dc = self.user32.GetDC(None)
-        mem_dc = self.gdi32.CreateCompatibleDC(screen_dc)
-        bitmap = self.gdi32.CreateCompatibleBitmap(screen_dc, width, height)
-        old_object = self.gdi32.SelectObject(mem_dc, bitmap)
+        if not screen_dc:
+            raise SmokeFailure(f"GetDC failed while capturing HWND 0x{hwnd:x}")
+
+        mem_dc = None
+        bitmap = None
+        old_object = None
         try:
+            mem_dc = self.gdi32.CreateCompatibleDC(screen_dc)
+            if not mem_dc:
+                raise SmokeFailure(f"CreateCompatibleDC failed while capturing HWND 0x{hwnd:x}")
+
+            bitmap = self.gdi32.CreateCompatibleBitmap(screen_dc, width, height)
+            if not bitmap:
+                raise SmokeFailure(f"CreateCompatibleBitmap failed while capturing HWND 0x{hwnd:x}")
+
+            old_object = self.gdi32.SelectObject(mem_dc, bitmap)
+            if not old_object:
+                raise SmokeFailure(f"SelectObject failed while capturing HWND 0x{hwnd:x}")
+
             if not self.gdi32.BitBlt(mem_dc, 0, 0, width, height, screen_dc, rect.left, rect.top, self.SRCCOPY):
                 raise SmokeFailure(f"BitBlt failed for HWND 0x{hwnd:x}")
 
@@ -1179,20 +1217,17 @@ def apply_surface_edit_selection(args, backend, handle, after_step=None):
     if args.surface_edit_target_key is not None:
         backend.select_surface_edit_target(handle, args.surface_edit_target_key)
         time.sleep(args.target_settle_seconds)
-        if after_step:
-            after_step("after target selection")
+        run_after_step(after_step, "after target selection")
 
     if args.surface_edit_operator_key is not None:
         backend.select_surface_edit_operator(handle, args.surface_edit_operator_key)
         time.sleep(args.target_settle_seconds)
-        if after_step:
-            after_step("after operator selection")
+        run_after_step(after_step, "after operator selection")
 
     if args.camera_view_key is not None:
         backend.select_surface_edit_camera_view(handle, args.camera_view_key)
         time.sleep(args.target_settle_seconds)
-        if after_step:
-            after_step("after camera view selection")
+        run_after_step(after_step, "after camera view selection")
 
 
 def wait_for_surface_edit_log(args, log_directory, log_baseline, message):
@@ -1226,8 +1261,7 @@ def apply_surface_edit_csg(args, backend, handle, log_directory=None, log_baseli
             "Surface edit: selected preview radius=",
         )
         time.sleep(args.csg_settle_seconds)
-        if after_step:
-            after_step("after CSG preview")
+        run_after_step(after_step, "after CSG preview")
         return
 
     backend.preview_surface_edit(
@@ -1257,8 +1291,7 @@ def apply_surface_edit_csg(args, backend, handle, log_directory=None, log_baseli
         "Surface edit: committed hole rev=",
     )
     time.sleep(args.csg_settle_seconds)
-    if after_step:
-        after_step("after CSG exercise")
+    run_after_step(after_step, "after CSG exercise")
 
 
 def capture_checked_window(args, backend, handle):
@@ -1345,24 +1378,16 @@ def parse_args(argv):
 
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
-    if args.timeout <= 0.0:
-        parser.error("--timeout must be positive")
-    if args.settle_seconds < 0.0:
-        parser.error("--settle-seconds must not be negative")
-    if args.csg_settle_seconds < 0.0:
-        parser.error("--csg-settle-seconds must not be negative")
-    if args.csg_log_timeout <= 0.0:
-        parser.error("--csg-log-timeout must be positive")
+    require_positive_arg(parser, "--timeout", args.timeout)
+    require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
+    require_non_negative_arg(parser, "--csg-settle-seconds", args.csg_settle_seconds)
+    require_positive_arg(parser, "--csg-log-timeout", args.csg_log_timeout)
     if args.preview_csg and args.exercise_csg:
         parser.error("--preview-csg and --exercise-csg are mutually exclusive")
-    if args.csg_click_x < 0.0 or args.csg_click_x > 1.0:
-        parser.error("--csg-click-x must be between 0.0 and 1.0")
-    if args.csg_click_y < 0.0 or args.csg_click_y > 1.0:
-        parser.error("--csg-click-y must be between 0.0 and 1.0")
-    if args.csg_commit_click_x < 0.0 or args.csg_commit_click_x > 1.0:
-        parser.error("--csg-commit-click-x must be between 0.0 and 1.0")
-    if args.csg_commit_click_y < 0.0 or args.csg_commit_click_y > 1.0:
-        parser.error("--csg-commit-click-y must be between 0.0 and 1.0")
+    require_unit_interval_arg(parser, "--csg-click-x", args.csg_click_x)
+    require_unit_interval_arg(parser, "--csg-click-y", args.csg_click_y)
+    require_unit_interval_arg(parser, "--csg-commit-click-x", args.csg_commit_click_x)
+    require_unit_interval_arg(parser, "--csg-commit-click-y", args.csg_commit_click_y)
 
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()

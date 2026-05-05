@@ -939,6 +939,25 @@ typedef RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> BufferHandle;
 
 
 namespace ShaderType{
+    enum Enum : u8{
+        VertexStage = 0,
+        HullStage = 1,
+        DomainStage = 2,
+        GeometryStage = 3,
+        PixelStage = 4,
+        ComputeStage = 5,
+        AmplificationStage = 6,
+        MeshStage = 7,
+        RayGenerationStage = 8,
+        AnyHitStage = 9,
+        ClosestHitStage = 10,
+        MissStage = 11,
+        IntersectionStage = 12,
+        CallableStage = 13,
+
+        Count,
+        Invalid = Count,
+    };
     enum Mask : u16{
         None            = 0x0000,
 
@@ -965,6 +984,54 @@ namespace ShaderType{
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+
+    [[nodiscard]] inline constexpr bool IsValid(const Enum shaderType)noexcept{
+        return shaderType < Count;
+    }
+
+    [[nodiscard]] inline constexpr usize ToIndex(const Enum shaderType)noexcept{
+        return static_cast<usize>(shaderType);
+    }
+
+    [[nodiscard]] inline constexpr Mask ToMask(const Enum shaderType)noexcept{
+        switch(shaderType){
+            case VertexStage: return Vertex;
+            case HullStage: return Hull;
+            case DomainStage: return Domain;
+            case GeometryStage: return Geometry;
+            case PixelStage: return Pixel;
+            case ComputeStage: return Compute;
+            case AmplificationStage: return Amplification;
+            case MeshStage: return Mesh;
+            case RayGenerationStage: return RayGeneration;
+            case AnyHitStage: return AnyHit;
+            case ClosestHitStage: return ClosestHit;
+            case MissStage: return Miss;
+            case IntersectionStage: return Intersection;
+            case CallableStage: return Callable;
+            default: return None;
+        }
+    }
+
+    [[nodiscard]] inline constexpr Enum ToEnum(const Mask shaderType)noexcept{
+        switch(shaderType){
+            case Vertex: return VertexStage;
+            case Hull: return HullStage;
+            case Domain: return DomainStage;
+            case Geometry: return GeometryStage;
+            case Pixel: return PixelStage;
+            case Compute: return ComputeStage;
+            case Amplification: return AmplificationStage;
+            case Mesh: return MeshStage;
+            case RayGeneration: return RayGenerationStage;
+            case AnyHit: return AnyHitStage;
+            case ClosestHit: return ClosestHitStage;
+            case Miss: return MissStage;
+            case Intersection: return IntersectionStage;
+            case Callable: return CallableStage;
+            default: return Invalid;
+        }
+    }
 };
 
 namespace FastGeometryShaderFlags{

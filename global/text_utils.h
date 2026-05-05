@@ -141,9 +141,7 @@ template<typename CharT = char, typename PathT>
 
 
 template<typename CharT>
-inline constexpr CharT Canonicalize(CharT c){
-    if(c == static_cast<CharT>('\\'))
-        return static_cast<CharT>('/');
+inline constexpr CharT ToAsciiLower(CharT c){
     return
         (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
             ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
@@ -151,7 +149,45 @@ inline constexpr CharT Canonicalize(CharT c){
     ;
 }
 
+template<typename CharT>
+inline constexpr CharT Canonicalize(CharT c){
+    if(c == static_cast<CharT>('\\'))
+        return static_cast<CharT>('/');
+    return ToAsciiLower(c);
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected){
+    if(text == expected)
+        return true;
+    if(text.size() != expected.size())
+        return false;
+
+    for(usize i = 0; i < text.size(); ++i){
+        if(ToAsciiLower(text[i]) != ToAsciiLower(expected[i]))
+            return false;
+    }
+
+    return true;
+}
+template<typename CharT>
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT>& text, const BasicStringView<CharT> expected){
+    return EqualsAsciiIgnoreCase<CharT>(BasicStringView<CharT>{text}, expected);
+}
+template<typename CharT, usize N>
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N]){
+    return EqualsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace TextUtilsDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename CharT>
 inline constexpr bool IsSafeCacheNameChar(CharT ch){
@@ -178,7 +214,14 @@ template<typename CharT, bool Canonical>
     return output;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename CharT>

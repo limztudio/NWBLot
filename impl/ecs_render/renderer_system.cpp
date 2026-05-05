@@ -8,7 +8,6 @@
 
 #include <core/ecs/world.h>
 #include <core/graphics/shader_archive.h>
-#include <core/graphics/shader_stage_names.h>
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
@@ -357,16 +356,6 @@ static Core::RenderState BuildCompositeRenderState(){
     return renderState;
 }
 
-static bool TryFindShaderForStage(const Material& material, const Core::ShaderType::Mask shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset){
-    outShaderAsset.reset();
-
-    const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-    if(!stageName)
-        return false;
-
-    return material.findShaderForStage(stageName, outShaderAsset);
-}
-
 static u32 ComputeDispatchGroupCount(const u32 triangleCount){
     return DivideUp(triangleCount, s_TrianglesPerWorkgroup);
 }
@@ -387,10 +376,6 @@ static u32 FloatBits(const f32 value){
     return bits;
 }
 
-static bool EqualsAsciiToken(const AStringView text, const AStringView expected){
-    return text == expected;
-}
-
 static bool ParseMaterialParameterTypeText(
     const AStringView typeText,
     MaterialParameterValueType::Enum& outType,
@@ -400,7 +385,7 @@ static bool ParseMaterialParameterTypeText(
     outComponentCount = 0u;
 
     auto tryMatch = [&](const AStringView baseName, const AStringView vectorName, const MaterialParameterValueType::Enum type) -> bool{
-        if(EqualsAsciiToken(typeText, baseName)){
+        if(typeText == baseName){
             outType = type;
             outComponentCount = 1u;
             return true;
@@ -481,11 +466,11 @@ static bool SplitMaterialParameterTokens(const AStringView text, AStringView (&o
 }
 
 static bool ParseMaterialBoolToken(const AStringView token, u32& outValue){
-    if(EqualsAsciiToken(token, AStringView("true")) || EqualsAsciiToken(token, AStringView("1"))){
+    if(token == AStringView("true") || token == AStringView("1")){
         outValue = 1u;
         return true;
     }
-    if(EqualsAsciiToken(token, AStringView("false")) || EqualsAsciiToken(token, AStringView("0"))){
+    if(token == AStringView("false") || token == AStringView("0")){
         outValue = 0u;
         return true;
     }
@@ -872,30 +857,15 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     return pushConstants;
 }
 
-static bool EqualsAsciiTokenIgnoreCase(const AStringView text, const AStringView expected){
-    if(text == expected)
-        return true;
-    if(text.size() != expected.size())
-        return false;
-
-    for(usize i = 0; i < text.size(); ++i){
-        const char ch = text[i];
-        const char lowered = (ch >= 'A' && ch <= 'Z') ? static_cast<char>(ch + ('a' - 'A')) : ch;
-        if(lowered != expected[i])
-            return false;
-    }
-    return true;
-}
-
 static bool IsTransparentText(const AStringView text){
     return
-        EqualsAsciiTokenIgnoreCase(text, "transparent")
-        || EqualsAsciiTokenIgnoreCase(text, "translucent")
-        || EqualsAsciiTokenIgnoreCase(text, "blend")
-        || EqualsAsciiTokenIgnoreCase(text, "alpha")
-        || EqualsAsciiTokenIgnoreCase(text, "avboit")
-        || EqualsAsciiTokenIgnoreCase(text, "true")
-        || EqualsAsciiTokenIgnoreCase(text, "1")
+        EqualsAsciiIgnoreCase(text, "transparent")
+        || EqualsAsciiIgnoreCase(text, "translucent")
+        || EqualsAsciiIgnoreCase(text, "blend")
+        || EqualsAsciiIgnoreCase(text, "alpha")
+        || EqualsAsciiIgnoreCase(text, "avboit")
+        || EqualsAsciiIgnoreCase(text, "true")
+        || EqualsAsciiIgnoreCase(text, "1")
     ;
 }
 
@@ -920,20 +890,20 @@ static bool ParseAlphaValue(const AStringView text, f32& outAlpha){
 }
 
 static u32 MaterialAlphaParameterPriority(const CompactString& key){
-    if(EqualsAsciiToken(key.view(), "alpha"))
+    if(key.view() == AStringView("alpha"))
         return 0u;
-    if(EqualsAsciiToken(key.view(), "opacity"))
+    if(key.view() == AStringView("opacity"))
         return 1u;
 
     return Limit<u32>::s_Max;
 }
 
 static u32 MaterialModeParameterPriority(const CompactString& key){
-    if(EqualsAsciiToken(key.view(), "render_mode"))
+    if(key.view() == AStringView("render_mode"))
         return 0u;
-    if(EqualsAsciiToken(key.view(), "alpha_mode"))
+    if(key.view() == AStringView("alpha_mode"))
         return 1u;
-    if(EqualsAsciiToken(key.view(), "transparency"))
+    if(key.view() == AStringView("transparency"))
         return 2u;
 
     return Limit<u32>::s_Max;
@@ -2819,8 +2789,8 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     ;
     createdInfo.valid = true;
 
-    __hidden_ecs_render::TryFindShaderForStage(material, Core::ShaderType::Pixel, createdInfo.pixelShader);
-    __hidden_ecs_render::TryFindShaderForStage(material, Core::ShaderType::Mesh, createdInfo.meshShader);
+    (void)material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
+    (void)material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
 
     CompactString alphaText;
     u32 alphaPriority = Limit<u32>::s_Max;

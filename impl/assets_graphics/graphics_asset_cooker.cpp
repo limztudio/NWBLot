@@ -19,6 +19,7 @@
 
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_cook.h>
+#include <core/graphics/shader_stage_names.h>
 
 #include <core/filesystem/filesystem.h>
 #include <core/metascript/parser.h>
@@ -65,18 +66,16 @@ static bool IsMeshShaderStage(const AStringView stageName){
     return stageName == "mesh";
 }
 
-static bool IsMaterialPixelShaderStage(const Name& stageName){
-    static const Name s_StageName("ps");
-    return stageName == s_StageName;
+static bool IsMaterialPixelShaderStage(const Core::ShaderType::Enum shaderType){
+    return shaderType == Core::ShaderType::PixelStage;
 }
 
-static bool IsMaterialMeshShaderStage(const Name& stageName){
-    static const Name s_StageName("mesh");
-    return stageName == s_StageName;
+static bool IsMaterialMeshShaderStage(const Core::ShaderType::Enum shaderType){
+    return shaderType == Core::ShaderType::MeshStage;
 }
 
-static bool IsSupportedRendererMaterialShaderStage(const Name& stageName){
-    return IsMaterialPixelShaderStage(stageName) || IsMaterialMeshShaderStage(stageName);
+static bool IsSupportedRendererMaterialShaderStage(const Core::ShaderType::Enum shaderType){
+    return IsMaterialPixelShaderStage(shaderType) || IsMaterialMeshShaderStage(shaderType);
 }
 
 static bool BuildMeshComputeShadowEntry(const Core::ShaderCook::ShaderEntry& sourceEntry, Core::ShaderCook::ShaderEntry& outEntry){
@@ -160,7 +159,7 @@ struct DeformableDisplacementTextureEntry{
     Vector<Float4U> texels;
 };
 struct MaterialEntry{
-    using StageShaderMap = Core::ShaderCook::CookMap<Name, Core::Assets::AssetRef<Shader>>;
+    using StageShaderMap = Core::ShaderCook::CookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
     using ParameterMap = Core::ShaderCook::CookMap<CompactString, CompactString>;
 
     Name virtualPath = NAME_NONE;
@@ -169,7 +168,7 @@ struct MaterialEntry{
     ParameterMap parameters;
 
     explicit MaterialEntry(Core::ShaderCook::CookArena& arena)
-        : stageShaders(Core::ShaderCook::CookAllocator<Pair<const Name, Core::Assets::AssetRef<Shader>>>(arena))
+        : stageShaders(Core::ShaderCook::CookAllocator<Pair<const Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>>(arena))
         , parameters(Core::ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
     {}
 
@@ -558,15 +557,16 @@ static bool ParseMaterialStageShaders(
             return false;
         }
 
-        const Name stageName = ToName(stageKeyText);
+        const Core::ShaderType::Enum shaderType =
+            Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(stageKeyText));
         const Name shaderName = ToName(shaderValue.asString());
         Core::Assets::AssetRef<Shader> shaderAsset;
         shaderAsset.virtualPath = shaderName;
-        if(!stageName || !shaderAsset.valid()){
+        if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
-        if(!IsSupportedRendererMaterialShaderStage(stageName)){
+        if(!IsSupportedRendererMaterialShaderStage(shaderType)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
@@ -574,7 +574,7 @@ static bool ParseMaterialStageShaders(
             return false;
         }
 
-        if(!outStageShaders.emplace(stageName, shaderAsset).second){
+        if(!outStageShaders.emplace(shaderType, shaderAsset).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate shader stage '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
@@ -2344,7 +2344,8 @@ static bool ValidateAndNormalizeMaterials(
         AString normalizedVariant;
         bool hasNormalizedVariant = false;
 
-        for(const auto& [stageName, shaderAsset] : materialEntry.stageShaders){
+        for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
+            const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
             const PreparedShaderKey shaderLookupKey{ shaderAsset.name(), stageName };
             const auto foundShader = preparedShaderLookup.find(shaderLookupKey);
             if(foundShader == preparedShaderLookup.end()){
@@ -3066,8 +3067,16 @@ static bool AppendMaterialAssetsToVolume(
 
         Material cookedMaterial(materialEntry.virtualPath);
         cookedMaterial.setShaderVariant(materialEntry.shaderVariant);
-        for(const auto& [stageName, shaderAsset] : materialEntry.stageShaders)
-            cookedMaterial.setShaderForStage(stageName, shaderAsset);
+        for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
+            if(!cookedMaterial.setShaderForStage(shaderType, shaderAsset)){
+                const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: invalid material shader stage '{}' for '{}'")
+                    , StringConvert(stageName.c_str())
+                    , StringConvert(materialEntry.virtualPath.c_str())
+                );
+                return false;
+            }
+        }
         for(const auto& [paramName, paramValue] : materialEntry.parameters){
             if(!cookedMaterial.setParameter(paramName, paramValue)){
                 NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: invalid material parameter '{}' for '{}'")

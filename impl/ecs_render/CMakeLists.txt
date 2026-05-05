@@ -4,6 +4,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/ecs_render.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime_geometry.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_asset_loader.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC

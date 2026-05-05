@@ -9,7 +9,7 @@
 #include <core/ecs/system.h>
 #include <core/graphics/graphics.h>
 #include <impl/ecs_deformable/deformable_runtime_mesh_cache.h>
-#include <impl/ecs_render/renderer_system.h>
+#include <impl/ecs_render/runtime_geometry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +98,7 @@ public:
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
-        RendererSystem& rendererSystem,
+        IRuntimeGeometryRegistry& runtimeGeometryRegistry,
         ShaderPathResolveCallback shaderPathResolver
     );
     virtual ~DeformerSystem()override;
@@ -155,6 +155,7 @@ private:
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
+    IRuntimeGeometryRegistry& m_runtimeGeometryRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
     DeformableRuntimeMeshCache m_runtimeMeshCache;
 

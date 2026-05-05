@@ -12,7 +12,6 @@
 #include <impl/assets_geometry/deformable_geometry_validation.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>
-#include <impl/ecs_render/renderer_system.h>
 #include <impl/ecs_render/shader_asset_loader.h>
 #include <logger/client/logger.h>
 
@@ -232,13 +231,14 @@ DeformerSystem::DeformerSystem(
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
-    RendererSystem& rendererSystem,
+    IRuntimeGeometryRegistry& runtimeGeometryRegistry,
     ShaderPathResolveCallback shaderPathResolver)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
+    , m_runtimeGeometryRegistry(runtimeGeometryRegistry)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
@@ -249,11 +249,13 @@ DeformerSystem::DeformerSystem(
     readAccess<DeformableSkeletonPoseComponent>();
     readAccess<DeformableDisplacementComponent>();
 
-    rendererSystem.registerRuntimeGeometryProvider(*this);
+    m_runtimeGeometryRegistry.registerRuntimeGeometryProvider(*this);
 }
 
 DeformerSystem::~DeformerSystem()
-{}
+{
+    m_runtimeGeometryRegistry.unregisterRuntimeGeometryProvider(*this);
+}
 
 void DeformerSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(delta);

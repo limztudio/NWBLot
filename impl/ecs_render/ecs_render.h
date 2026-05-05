@@ -25,7 +25,12 @@ namespace ECSRender{
 
 
 using RendererComponent = NWB::Impl::RendererComponent;
+using RuntimeGeometryDesc = NWB::Impl::RuntimeGeometryDesc;
+using RuntimeGeometryVisitor = NWB::Impl::RuntimeGeometryVisitor;
+using IRuntimeGeometryProvider = NWB::Impl::IRuntimeGeometryProvider;
+using IRuntimeGeometryRegistry = NWB::Impl::IRuntimeGeometryRegistry;
 using RendererSystem = NWB::Impl::RendererSystem;
+namespace MeshSourceLayout = NWB::Impl::MeshSourceLayout;
 namespace MaterialPipelinePass = NWB::Impl::MaterialPipelinePass;
 namespace RenderPath = NWB::Impl::RenderPath;
 

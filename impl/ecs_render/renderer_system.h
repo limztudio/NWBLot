@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "runtime_geometry.h"
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/system.h>
@@ -42,13 +43,6 @@ namespace RenderPath{
     enum Enum : u8{
         MeshShader,
         ComputeEmulation,
-    };
-};
-
-namespace MeshSourceLayout{
-    enum Enum : u32{
-        GeometryVertex = 0u,
-        DeformableVertex = 1u,
     };
 };
 
@@ -91,47 +85,7 @@ static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParamete
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RuntimeGeometryDesc{
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
-    Core::Assets::AssetRef<Material> material;
-    Name geometryKey = NAME_NONE;
-    Core::BufferHandle shaderVertexBuffer;
-    Core::BufferHandle shaderIndexBuffer;
-    u32 indexCount = 0u;
-    u32 sourceVertexLayout = MeshSourceLayout::GeometryVertex;
-    u64 version = 0u;
-    bool visible = true;
-
-    [[nodiscard]] bool valid()const noexcept{
-        return
-            visible
-            && entity.valid()
-            && material.valid()
-            && geometryKey != NAME_NONE
-            && shaderVertexBuffer != nullptr
-            && shaderIndexBuffer != nullptr
-            && indexCount > 0u
-            && (indexCount % 3u) == 0u
-        ;
-    }
-};
-using RuntimeGeometryVisitor = Function<void(const RuntimeGeometryDesc&)>;
-
-class IRuntimeGeometryProvider{
-public:
-    virtual ~IRuntimeGeometryProvider() = default;
-
-public:
-    [[nodiscard]] virtual usize runtimeGeometryCandidateCount() = 0;
-    virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor) = 0;
-    [[nodiscard]] virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version) = 0;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
+class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public IRuntimeGeometryRegistry{
 private:
     using MaterialParameterVectorAllocator = Core::Alloc::CustomAllocator<MaterialParameterGpuData>;
     using MaterialParameterVector = Vector<MaterialParameterGpuData, MaterialParameterVectorAllocator>;
@@ -343,8 +297,8 @@ public:
 
 
 public:
-    void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider);
-    void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider);
+    virtual void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
+    virtual void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
 
 public:
     void setWireframeOverlayEnabled(const bool enabled){ m_wireframeOverlayEnabled = enabled; }

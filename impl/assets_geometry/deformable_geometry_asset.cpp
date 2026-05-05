@@ -783,23 +783,6 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     return validatePayload();
 }
 
-bool DeformableGeometryAssetCodec::deserialize(
-    const Name& virtualPath,
-    const Core::Assets::AssetBytes& binary,
-    UniquePtr<Core::Assets::IAsset>& outAsset
-)const{
-    return Core::Assets::DeserializeTypedAsset<DeformableGeometry>(virtualPath, binary, outAsset);
-}
-
-bool DeformableDisplacementTextureAssetCodec::deserialize(
-    const Name& virtualPath,
-    const Core::Assets::AssetBytes& binary,
-    UniquePtr<Core::Assets::IAsset>& outAsset
-)const{
-    return Core::Assets::DeserializeTypedAsset<DeformableDisplacementTexture>(virtualPath, binary, outAsset);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

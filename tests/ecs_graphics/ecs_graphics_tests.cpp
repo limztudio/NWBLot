@@ -53,6 +53,8 @@ using NWB::Tests::MakeTriangleIndices;
 
 static constexpr AStringView s_MockAccessoryGeometryPath = "project/meshes/mock_earring";
 static constexpr AStringView s_MockAccessoryMaterialPath = "project/materials/mat_test";
+static constexpr f32 s_DefaultAccessoryNormalOffset = 0.08f;
+static constexpr f32 s_DefaultAccessoryUniformScale = 0.12f;
 
 
 static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& context){
@@ -1143,6 +1145,31 @@ static bool CommitRecordedHole(
     return CommitRecordedHole(instance, triangle, 0.25f, 0.25f, 0.5f, radius, depth, state, outResult);
 }
 
+static bool AttachDefaultTestAccessory(
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const NWB::Impl::DeformableHoleEditResult& holeResult,
+    NWB::Impl::DeformableAccessoryAttachmentComponent& outAttachment
+){
+    return NWB::Impl::AttachAccessory(
+        instance,
+        holeResult,
+        s_DefaultAccessoryNormalOffset,
+        s_DefaultAccessoryUniformScale,
+        outAttachment
+    );
+}
+
+static bool CheckDefaultTestAccessoryRejected(
+    TestContext& context,
+    const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const NWB::Impl::DeformableHoleEditResult& holeResult,
+    NWB::Impl::DeformableAccessoryAttachmentComponent& outAttachment
+){
+    const bool rejected = !AttachDefaultTestAccessory(instance, holeResult, outAttachment);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, rejected);
+    return rejected;
+}
+
 struct RecordedHoleAccessory{
     NWB::Impl::DeformableHoleEditResult hole;
     NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
@@ -1212,6 +1239,33 @@ static bool PrepareSurfaceEditReplayFixture(
     return true;
 }
 
+static bool ApplySurfaceEditStateChecked(
+    TestContext& context,
+    NWB::Impl::DeformableRuntimeMeshInstance& replayInstance,
+    const NWB::Impl::DeformableSurfaceEditState& state,
+    const NWB::Impl::DeformableSurfaceEditReplayContext& replayContext,
+    NWB::Impl::DeformableSurfaceEditReplayResult& outResult
+){
+    const bool applied = NWB::Impl::ApplySurfaceEditState(replayInstance, state, replayContext, &outResult);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, applied);
+    return applied;
+}
+
+static bool ApplySurfaceEditStateChecked(
+    TestContext& context,
+    NWB::Impl::DeformableRuntimeMeshInstance& replayInstance,
+    const NWB::Impl::DeformableSurfaceEditState& state,
+    NWB::Impl::DeformableSurfaceEditReplayResult& outResult
+){
+    return ApplySurfaceEditStateChecked(
+        context,
+        replayInstance,
+        state,
+        NWB::Impl::DeformableSurfaceEditReplayContext{},
+        outResult
+    );
+}
+
 static bool ApplySurfaceEditReplayFixture(
     TestContext& context,
     const NWB::Impl::DeformableSurfaceEditState& state,
@@ -1221,14 +1275,13 @@ static bool ApplySurfaceEditReplayFixture(
     if(!PrepareSurfaceEditReplayFixture(context, state, replayInstance, outFixture))
         return false;
 
-    const bool applied = NWB::Impl::ApplySurfaceEditState(
+    return ApplySurfaceEditStateChecked(
+        context,
         replayInstance,
         outFixture.loadedState,
         outFixture.replayContext,
-        &outResult
+        outResult
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, applied);
-    return applied;
 }
 
 static Float3U RestHitPosition(
@@ -1299,7 +1352,16 @@ static bool CommitTwoRecordedHoleAccessories(
     const usize oldAccessoryCount = state.accessories.size();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHoleAccessory(instance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, outRecorded.first)
+        CommitRecordedHoleAccessory(
+            instance,
+            12u,
+            0.48f,
+            0.25f,
+            s_DefaultAccessoryNormalOffset,
+            s_DefaultAccessoryUniformScale,
+            state,
+            outRecorded.first
+        )
     );
     if(state.edits.size() != oldEditCount + 1u || state.accessories.size() != oldAccessoryCount + 1u)
         return false;
@@ -4333,10 +4395,7 @@ static void TestSurfaceEditDebugSnapshotCapturesPreviewAndWallVertices(TestConte
     state.edits.push_back(record);
     SimulateRuntimeMeshUpload(instance);
     NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(instance, result, 0.08f, 0.12f, attachment)
-    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AttachDefaultTestAccessory(instance, result, attachment));
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         AppendAccessoryRecord(
@@ -4529,31 +4588,13 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     const Name mockGeometry(s_MockAccessoryGeometryPath);
     const Name mockMaterial(s_MockAccessoryMaterialPath);
     NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::AttachAccessory(
-            instance,
-            result,
-            0.08f,
-            0.12f,
-            attachment
-        )
-    );
+    CheckDefaultTestAccessoryRejected(context, instance, result, attachment);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !attachment.targetEntity.valid());
 
     instance.dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
         instance.dirtyFlags & ~NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(
-            instance,
-            result,
-            0.08f,
-            0.12f,
-            attachment
-        )
-    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AttachDefaultTestAccessory(instance, result, attachment));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.targetEntity == instance.entity);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.firstWallVertex == result.firstWallVertex);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, attachment.wallVertexCount == result.wallVertexCount);
@@ -4561,16 +4602,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB::Impl::DeformableAccessoryAttachmentComponent rejectedAttachment;
     NWB::Impl::DeformableRuntimeMeshInstance futureInstance = instance;
     ++futureInstance.editRevision;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(
-            futureInstance,
-            result,
-            0.08f,
-            0.12f,
-            rejectedAttachment
-        )
-    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AttachDefaultTestAccessory(futureInstance, result, rejectedAttachment));
 
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -4578,7 +4610,7 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
             instance,
             result,
             -0.01f,
-            0.12f,
+            s_DefaultAccessoryUniformScale,
             rejectedAttachment
         )
     );
@@ -4587,58 +4619,22 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     NWB::Impl::DeformableHoleEditResult malformedResult = result;
     malformedResult.wallVertexCount = 4u;
     malformedResult.addedTriangleCount = 4u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::AttachAccessory(
-            instance,
-            malformedResult,
-            0.08f,
-            0.12f,
-            rejectedAttachment
-        )
-    );
+    CheckDefaultTestAccessoryRejected(context, instance, malformedResult, rejectedAttachment);
 
     malformedResult = result;
     malformedResult.addedTriangleCount = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::AttachAccessory(
-            instance,
-            malformedResult,
-            0.08f,
-            0.12f,
-            rejectedAttachment
-        )
-    );
+    CheckDefaultTestAccessoryRejected(context, instance, malformedResult, rejectedAttachment);
 
     malformedResult = result;
     malformedResult.firstWallVertex = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::AttachAccessory(
-            instance,
-            malformedResult,
-            0.08f,
-            0.12f,
-            rejectedAttachment
-        )
-    );
+    CheckDefaultTestAccessoryRejected(context, instance, malformedResult, rejectedAttachment);
 
     NWB::Impl::DeformableRuntimeMeshInstance malformedWallInstance = instance;
     const usize wallIndexBase =
         malformedWallInstance.indices.size() - (static_cast<usize>(result.addedTriangleCount) * 3u)
     ;
     malformedWallInstance.indices[wallIndexBase + 1u] = result.firstWallVertex + 1u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::AttachAccessory(
-            malformedWallInstance,
-            result,
-            0.08f,
-            0.12f,
-            rejectedAttachment
-        )
-    );
+    CheckDefaultTestAccessoryRejected(context, malformedWallInstance, result, rejectedAttachment);
 
     NWB::Core::Scene::TransformComponent baseTransform;
     instance.dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
@@ -4667,10 +4663,10 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, IsFinite(baseTransform.position.x));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, IsFinite(baseTransform.position.y));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.position.z, 0.08f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.x, 0.12f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.y, 0.12f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.z, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.position.z, s_DefaultAccessoryNormalOffset));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.x, s_DefaultAccessoryUniformScale));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.y, s_DefaultAccessoryUniformScale));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(baseTransform.scale.z, s_DefaultAccessoryUniformScale));
 
     NWB::Impl::DeformableAccessoryAttachmentComponent localAttachment;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -4679,8 +4675,8 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
             instance,
             result,
             0.25f,
-            0.08f,
-            0.12f,
+            s_DefaultAccessoryNormalOffset,
+            s_DefaultAccessoryUniformScale,
             localAttachment
         )
     );
@@ -4696,8 +4692,8 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
             localTransform
         )
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localTransform.position.z, 0.08f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localTransform.scale.x, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localTransform.position.z, s_DefaultAccessoryNormalOffset));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(localTransform.scale.x, s_DefaultAccessoryUniformScale));
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NearlyEqual(localTransform.position.x, baseTransform.position.x)
@@ -4711,8 +4707,8 @@ static void TestSurfaceEditFlowAttachesAndPersistsAccessory(TestContext& context
             instance,
             result,
             1.0f,
-            0.08f,
-            0.12f,
+            s_DefaultAccessoryNormalOffset,
+            s_DefaultAccessoryUniformScale,
             invalidLoopAttachment
         )
     );
@@ -4934,15 +4930,7 @@ static void TestSurfaceEditStateReplayOneHole(TestContext& context){
     const usize oldIndexCount = replayInstance.indices.size();
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            loadedState,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, loadedState, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 1u);
@@ -4977,15 +4965,7 @@ static void TestSurfaceEditStateReplayEmptyStateIsNoOp(TestContext& context){
     const usize oldIndexCount = replayInstance.indices.size();
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            loadedState,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, loadedState, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 0u);
@@ -5023,7 +5003,7 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitRecordedHole(editedInstance, 8u, 0.48f, 0.25f, state, &holeResult));
 
     NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.08f, 0.12f, attachment));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AttachDefaultTestAccessory(editedInstance, holeResult, attachment));
 
     const Name mockGeometry(s_MockAccessoryGeometryPath);
     const Name mockMaterial(s_MockAccessoryMaterialPath);
@@ -5061,10 +5041,7 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     replayContext.world = &testWorld.world;
     replayContext.targetEntity = replayInstance.entity;
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(replayInstance, loadedState, replayContext, &replayResult)
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, loadedState, replayContext, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.restoredAccessoryCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 1u);
@@ -5096,8 +5073,8 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
             resolvedTransform
         )
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, 0.08f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, 0.12f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.position.z, s_DefaultAccessoryNormalOffset));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedTransform.scale.x, s_DefaultAccessoryUniformScale));
 }
 
 static void TestSurfaceEditStateReplayRejectsInvalidAccessoryAsset(TestContext& context){
@@ -5108,7 +5085,7 @@ static void TestSurfaceEditStateReplayRejectsInvalidAccessoryAsset(TestContext& 
     NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitRecordedHole(editedInstance, 8u, 0.48f, 0.25f, state, &holeResult));
 
     NWB::Impl::DeformableAccessoryAttachmentComponent attachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::AttachAccessory(editedInstance, holeResult, 0.08f, 0.12f, attachment));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AttachDefaultTestAccessory(editedInstance, holeResult, attachment));
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         AppendAccessoryRecord(
@@ -5173,7 +5150,16 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
     RecordedHoleAccessory firstAccessory;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        CommitRecordedHoleAccessory(editedInstance, 12u, 0.48f, 0.25f, 0.08f, 0.12f, state, firstAccessory)
+        CommitRecordedHoleAccessory(
+            editedInstance,
+            12u,
+            0.48f,
+            0.25f,
+            s_DefaultAccessoryNormalOffset,
+            s_DefaultAccessoryUniformScale,
+            state,
+            firstAccessory
+        )
     );
 
     NWB::Impl::DeformableAccessoryAttachmentComponent secondFirstHoleAttachment;
@@ -5216,7 +5202,7 @@ static void TestSurfaceEditStateReplayRestoresMultipleAccessories(TestContext& c
             oldHoleTransform
         )
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(oldHoleTransform.position.z, 0.08f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(oldHoleTransform.position.z, s_DefaultAccessoryNormalOffset));
 
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = MakeGridHoleInstance(6u, 4u);
     replayInstance.editRevision = 0u;
@@ -5397,15 +5383,7 @@ static void TestSurfaceEditStateReplayTwoHoles(TestContext& context){
     replayInstance.handle.value = 344u;
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            state,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, state, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 2u);
@@ -5474,15 +5452,7 @@ static void TestSurfaceEditStateReplayOverlappingHoles(TestContext& context){
     replayInstance.handle.value = 364u;
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            state,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, state, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 2u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.restVertices.size() == editedInstance.restVertices.size());
@@ -5507,10 +5477,7 @@ static void TestSurfaceEditUndoLastReplaysFromCleanBase(TestContext& context){
     const NWB::Impl::DeformableSurfaceEditId firstEditId = state.edits[0].editId;
 
     NWB::Impl::DeformableAccessoryAttachmentComponent firstAttachment;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AttachAccessory(editedInstance, firstHoleResult, 0.08f, 0.12f, firstAttachment)
-    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AttachDefaultTestAccessory(editedInstance, firstHoleResult, firstAttachment));
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         AppendAccessoryRecord(
@@ -5990,15 +5957,7 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
     NWB::Impl::DeformableSurfaceEditState replayState = loadedState;
     replayState.accessories.clear();
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            replayState,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, replayState, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.editRevision == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.restVertices.size() == editedInstance.restVertices.size());
@@ -6116,15 +6075,7 @@ static void TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(TestContext& c
 
     NWB::Impl::DeformableRuntimeMeshInstance replayInstance = cleanBase;
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            state,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, state, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.restVertices.size() == editedInstance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.indices.size() == editedInstance.indices.size());
@@ -6257,15 +6208,7 @@ static void TestSurfaceEditStateReplayTriesLaterMatchingCandidate(TestContext& c
     replayInstance.handle.value = 444u;
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::ApplySurfaceEditState(
-            replayInstance,
-            state,
-            NWB::Impl::DeformableSurfaceEditReplayContext{},
-            &replayResult
-        )
-    );
+    ApplySurfaceEditStateChecked(context, replayInstance, state, replayResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.appliedEditCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayResult.finalEditRevision == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, replayInstance.restVertices.size() == editedInstance.restVertices.size());

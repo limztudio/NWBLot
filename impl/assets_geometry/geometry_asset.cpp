@@ -194,11 +194,6 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 
-bool GeometryAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    return Core::Assets::DeserializeTypedAsset<Geometry>(virtualPath, binary, outAsset);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

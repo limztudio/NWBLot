@@ -126,13 +126,6 @@ public:
 
 private:
     [[nodiscard]] bool ensurePipeline();
-    [[nodiscard]] bool ensureShaderLoaded(
-        Core::ShaderHandle& outShader,
-        const Name& shaderName,
-        AStringView variantName,
-        Core::ShaderType::Mask shaderType,
-        const Name& debugName
-    );
     [[nodiscard]] bool dispatchRuntimeMesh(
         Core::ICommandList& commandList,
         DeformableRuntimeMeshInstance& instance,

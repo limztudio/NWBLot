@@ -72,7 +72,13 @@ public:
     GeometryAssetCodec() = default;
 
 public:
-    virtual bool deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
+    virtual bool deserialize(
+        const Name& virtualPath,
+        const Core::Assets::AssetBytes& binary,
+        UniquePtr<Core::Assets::IAsset>& outAsset
+    )const override{
+        return Core::Assets::DeserializeTypedAsset<Geometry>(virtualPath, binary, outAsset);
+    }
 #if defined(NWB_COOK)
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif

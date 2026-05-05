@@ -124,7 +124,9 @@ public:
         const Name& virtualPath,
         const Core::Assets::AssetBytes& binary,
         UniquePtr<Core::Assets::IAsset>& outAsset
-    )const override;
+    )const override{
+        return Core::Assets::DeserializeTypedAsset<DeformableGeometry>(virtualPath, binary, outAsset);
+    }
 #if defined(NWB_COOK)
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
@@ -139,7 +141,9 @@ public:
         const Name& virtualPath,
         const Core::Assets::AssetBytes& binary,
         UniquePtr<Core::Assets::IAsset>& outAsset
-    )const override;
+    )const override{
+        return Core::Assets::DeserializeTypedAsset<DeformableDisplacementTexture>(virtualPath, binary, outAsset);
+    }
 #if defined(NWB_COOK)
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif

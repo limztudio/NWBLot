@@ -78,6 +78,43 @@ static bool NearlyEqualBounds(const MeshletBounds& lhs, const MeshletBounds& rhs
     ;
 }
 
+static void CheckBuildMeshletsRejected(
+    TestContext& context,
+    const Vector<Float3U>& positions,
+    const Vector<u32>& indices,
+    const MeshletBuildConfig& config,
+    Vector<MeshletCluster>& meshlets,
+    Vector<u32>& vertexIndices,
+    Vector<u32>& localIndices
+){
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
+    );
+}
+
+static void CheckMeshletDeformationBoundsRejected(
+    TestContext& context,
+    const Vector<Float3U>& positions,
+    const Vector<u32>& vertexIndices,
+    const MeshletCluster& meshlet,
+    const Vector<f32>& expansion,
+    const f32 baseExpansion,
+    MeshletBounds& bounds
+){
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
+            positions,
+            vertexIndices,
+            meshlet,
+            expansion,
+            baseExpansion,
+            bounds
+        )
+    );
+}
+
 static void TestResolvesCoreFrameMath(TestContext& context){
     SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
     SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
@@ -1153,17 +1190,7 @@ static void TestMeshletBuilderRebuildsDeterministically(TestContext& context){
         NWB_GEOMETRY_TEST_CHECK(context, secondLocalIndices[i] == firstLocalIndices[i]);
 
     positions[4u].x = Limit<f32>::s_QuietNaN;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildMeshlets(
-            positions,
-            indices,
-            config,
-            secondMeshlets,
-            secondVertexIndices,
-            secondLocalIndices
-        )
-    );
+    CheckBuildMeshletsRejected(context, positions, indices, config, secondMeshlets, secondVertexIndices, secondLocalIndices);
     NWB_GEOMETRY_TEST_CHECK(context, secondMeshlets.empty());
     NWB_GEOMETRY_TEST_CHECK(context, secondVertexIndices.empty());
     NWB_GEOMETRY_TEST_CHECK(context, secondLocalIndices.empty());
@@ -1184,34 +1211,22 @@ static void TestMeshletBuilderRejectsInvalidInput(TestContext& context){
     Vector<u32> vertexIndices;
     Vector<u32> localIndices;
     MeshletBuildConfig config;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
-    );
+    CheckBuildMeshletsRejected(context, positions, indices, config, meshlets, vertexIndices, localIndices);
     NWB_GEOMETRY_TEST_CHECK(context, meshlets.empty());
     NWB_GEOMETRY_TEST_CHECK(context, vertexIndices.empty());
     NWB_GEOMETRY_TEST_CHECK(context, localIndices.empty());
 
     indices[2] = 1u;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
-    );
+    CheckBuildMeshletsRejected(context, positions, indices, config, meshlets, vertexIndices, localIndices);
 
     indices[1] = 1u;
     indices[2] = 2u;
     positions[2].x = Limit<f32>::s_QuietNaN;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
-    );
+    CheckBuildMeshletsRejected(context, positions, indices, config, meshlets, vertexIndices, localIndices);
 
     positions[2] = Float3U(0.0f, 1.0f, 0.0f);
     config.maxVertices = 2u;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildMeshlets(positions, indices, config, meshlets, vertexIndices, localIndices)
-    );
+    CheckBuildMeshletsRejected(context, positions, indices, config, meshlets, vertexIndices, localIndices);
 }
 
 static void TestRejectsInvalidMeshletDeformationBounds(TestContext& context){
@@ -1231,58 +1246,18 @@ static void TestRejectsInvalidMeshletDeformationBounds(TestContext& context){
 
     Vector<f32> expansion;
     MeshletBounds bounds;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            expansion,
-            -0.01f,
-            bounds
-        )
-    );
+    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, -0.01f, bounds);
 
     expansion.resize(positions.size() - 1u, 0.0f);
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            expansion,
-            0.0f,
-            bounds
-        )
-    );
+    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, 0.0f, bounds);
 
     expansion.resize(positions.size(), 0.0f);
     expansion[1u] = Limit<f32>::s_QuietNaN;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            expansion,
-            0.0f,
-            bounds
-        )
-    );
+    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, 0.0f, bounds);
 
     expansion[1u] = 0.0f;
     vertexIndices[2u] = 3u;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            expansion,
-            0.0f,
-            bounds
-        )
-    );
+    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, 0.0f, bounds);
 }
 
 

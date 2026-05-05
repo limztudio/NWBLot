@@ -457,12 +457,16 @@ bool DeformerSystem::ensurePipeline(){
         }
     }
 
-    if(!ensureShaderLoaded(
+    if(!ShaderAssetLoader::EnsureLoaded(
         m_computeShader,
         __hidden_deformer_system::DeformerComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
-        Name("ECSDeformableRender_DeformerCS")
+        Name("ECSDeformableRender_DeformerCS"),
+        m_graphics,
+        m_assetManager,
+        m_shaderPathResolver,
+        NWB_TEXT("DeformerSystem")
     ))
         return false;
 
@@ -479,26 +483,6 @@ bool DeformerSystem::ensurePipeline(){
     }
 
     return true;
-}
-
-bool DeformerSystem::ensureShaderLoaded(
-    Core::ShaderHandle& outShader,
-    const Name& shaderName,
-    const AStringView variantName,
-    const Core::ShaderType::Mask shaderType,
-    const Name& debugName
-){
-    return ShaderAssetLoader::EnsureLoaded(
-        outShader,
-        shaderName,
-        variantName,
-        shaderType,
-        debugName,
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
-        NWB_TEXT("DeformerSystem")
-    );
 }
 
 bool DeformerSystem::dispatchRuntimeMesh(

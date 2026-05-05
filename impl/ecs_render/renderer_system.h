@@ -115,7 +115,6 @@ struct RuntimeGeometryDesc{
         ;
     }
 };
-
 using RuntimeGeometryVisitor = Function<void(const RuntimeGeometryDesc&)>;
 
 class IRuntimeGeometryProvider{
@@ -138,6 +137,7 @@ private:
     using MaterialParameterVector = Vector<MaterialParameterGpuData, MaterialParameterVectorAllocator>;
 
 
+private:
     struct MaterialPipelineKey{
         Name material = NAME_NONE;
         Core::FramebufferInfo framebufferInfo;
@@ -208,18 +208,18 @@ private:
         f32 alpha = 1.f;
     };
 
-    using MaterialPassDrawItemVector = Vector<
-        MaterialPassDrawItem,
-        Core::Alloc::ScratchAllocator<MaterialPassDrawItem>
-    >;
-    using InstanceGpuDataVector = Vector<
-        InstanceGpuData,
-        Core::Alloc::ScratchAllocator<InstanceGpuData>
-    >;
-    using MaterialParameterGpuDataVector = Vector<
-        MaterialParameterGpuData,
-        Core::Alloc::ScratchAllocator<MaterialParameterGpuData>
-    >;
+
+private:
+    using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchAllocator<MaterialPassDrawItem>>;
+    using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchAllocator<InstanceGpuData>>;
+    using MaterialParameterGpuDataVector = Vector<MaterialParameterGpuData, Core::Alloc::ScratchAllocator<MaterialParameterGpuData>>;
+
+    using GeometryResourcesMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, GeometryResources>>;
+    using MaterialSurfaceInfoMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, MaterialSurfaceInfo>>;
+    using MaterialPipelineMapAllocator = Core::Alloc::CustomAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>>;
+    using LoggedMaterialPathMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, RenderPath::Enum>>;
+    using RuntimeGeometryProviderAllocator = Core::Alloc::CustomAllocator<IRuntimeGeometryProvider*>;
+
 
 public:
     struct AvboitFrameTargets{
@@ -429,12 +429,6 @@ private:
 
 
 private:
-    using GeometryResourcesMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, GeometryResources>>;
-    using MaterialSurfaceInfoMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, MaterialSurfaceInfo>>;
-    using MaterialPipelineMapAllocator = Core::Alloc::CustomAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>>;
-    using LoggedMaterialPathMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, RenderPath::Enum>>;
-    using RuntimeGeometryProviderAllocator = Core::Alloc::CustomAllocator<IRuntimeGeometryProvider*>;
-
     Core::Alloc::CustomArena& m_arena;
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;

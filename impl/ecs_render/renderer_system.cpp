@@ -109,10 +109,7 @@ struct MaterialParameterBlock{
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
 static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) == 96, "TransparentDrawPushConstants layout must stay stable");
-static_assert(
-    sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize,
-    "Transparent draw push constants must fit the portable push constant budget"
-);
+static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
 static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 28u, "MeshViewGpuData layout must match the mesh shaders");
@@ -370,12 +367,6 @@ static usize NextGrowingCapacity(const usize currentCapacity, const usize requir
     return capacity;
 }
 
-static u32 FloatBits(const f32 value){
-    u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
 static bool ParseMaterialParameterTypeText(
     const AStringView typeText,
     MaterialParameterValueType::Enum& outType,
@@ -490,7 +481,8 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
         if(parsed < static_cast<f64>(Limit<f32>::s_Min) || parsed > static_cast<f64>(Limit<f32>::s_Max))
             return false;
 
-        outValue = FloatBits(static_cast<f32>(parsed));
+        f32 converted = static_cast<f32>(parsed);
+        NWB_MEMCPY(&outValue, sizeof(outValue), &converted, sizeof(converted));
         return true;
     }
     case MaterialParameterValueType::Int:{
@@ -2714,9 +2706,7 @@ bool RendererSystem::ensureRuntimeGeometryResources(const RuntimeGeometryDesc& d
     createdGeometry.runtimeGeometry = true;
     createdGeometry.runtimeGeometryVersion = desc.version;
     if(createdGeometry.dispatchGroupCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry '{}' produced no dispatch groups")
-            , StringConvert(desc.geometryKey.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry '{}' produced no dispatch groups"), StringConvert(desc.geometryKey.c_str()));
         return false;
     }
 

@@ -25,8 +25,9 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/deformable_geometry_validation.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_asset.h"
+        "${CMAKE_CURRENT_LIST_DIR}/geometry_asset_cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_class.h"
     )
-    target_link_libraries(nwb_assets_geometry_cook PUBLIC nwb_assets nwb_geometry)
+    target_link_libraries(nwb_assets_geometry_cook PUBLIC nwb_assets nwb_geometry nwb_metascript)
     target_compile_definitions(nwb_assets_geometry_cook PRIVATE NWB_COOK=1)
 endif()

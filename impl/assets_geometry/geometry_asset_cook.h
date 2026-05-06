@@ -1,0 +1,127 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "deformable_geometry_asset.h"
+#include "geometry_asset.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Metascript{
+class Document;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct GeometryCookEntry{
+    Name virtualPath = NAME_NONE;
+    Vector<GeometryVertex> vertices;
+    Vector<u32> indices;
+    bool use32BitIndices = false;
+};
+
+struct DeformableGeometryCookEntry{
+    Name virtualPath = NAME_NONE;
+    Vector<DeformableVertexRest> restVertices;
+    Vector<u32> indices;
+    u32 geometryClass = GeometryClass::Invalid;
+    Vector<SkinInfluence4> skin;
+    u32 skeletonJointCount = 0u;
+    Vector<DeformableJointMatrix> inverseBindMatrices;
+    Vector<SourceSample> sourceSamples;
+    Vector<DeformableEditMaskFlags> editMaskPerTriangle;
+    DeformableDisplacement displacement;
+    CompactString displacementTextureVirtualPathText;
+    Vector<DeformableMorph> morphs;
+    bool use32BitIndices = true;
+};
+
+struct DeformableDisplacementTextureCookEntry{
+    Name virtualPath = NAME_NONE;
+    u32 width = 0u;
+    u32 height = 0u;
+    Vector<Float4U> texels;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool ParseGeometryCookMetadata(
+    const Path& assetRoot,
+    AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    GeometryCookEntry& outEntry
+);
+[[nodiscard]] bool ParseDeformableGeometryCookMetadata(
+    const Path& assetRoot,
+    AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    DeformableGeometryCookEntry& outEntry
+);
+[[nodiscard]] bool ParseDeformableDisplacementTextureCookMetadata(
+    const Path& assetRoot,
+    AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    DeformableDisplacementTextureCookEntry& outEntry
+);
+
+[[nodiscard]] bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry);
+[[nodiscard]] bool BuildDeformableGeometryAsset(DeformableGeometryCookEntry& geometryEntry, DeformableGeometry& outGeometry);
+[[nodiscard]] bool BuildDeformableDisplacementTextureAsset(
+    DeformableDisplacementTextureCookEntry& textureEntry,
+    DeformableDisplacementTexture& outTexture
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

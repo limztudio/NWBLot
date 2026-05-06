@@ -724,6 +724,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
         VolumeSession volumeSession(arena);
         if(!volumeSession.create(stagedVolumePaths.stageDirectory, config))
             return false;
+        volumeSession.reserveFileCapacity(files.size());
 
         for(const auto& [virtualPath, payloadBytes] : files){
             if(!volumeSession.pushDataDeferred(virtualPath, payloadBytes))
@@ -1099,6 +1100,12 @@ bool VolumeFileSystem::flushMetadata(){
     }
 
     return flushMetadataLocked();
+}
+
+void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
+    ScopedLock lock(m_mutex);
+    if(fileCount > m_files.size())
+        m_files.reserve(fileCount);
 }
 
 bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)const{
@@ -1965,6 +1972,10 @@ bool VolumeSession::load(const AStringView volumeName, const Path& mountDirector
 
     NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::load failed to mount volume '{}'"), StringConvert(volumeName));
     return false;
+}
+
+void VolumeSession::reserveFileCapacity(const usize fileCount){
+    m_volumeFileSystem.reserveFileCapacity(fileCount);
 }
 
 bool VolumeSession::pushData(const Name& virtualPath, const void* data, const usize bytes){

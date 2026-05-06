@@ -164,6 +164,7 @@ public:
     }
 
     bool flushMetadata();
+    void reserveFileCapacity(usize fileCount);
 
     bool readFile(const Name& virtualPath, Vector<u8>& outData)const;
     bool removeFile(const Name& virtualPath);
@@ -231,6 +232,7 @@ public:
 public:
     bool create(const Path& outputDirectory, const VolumeBuildConfig& config);
     bool load(AStringView volumeName, const Path& mountDirectory);
+    void reserveFileCapacity(usize fileCount);
 
     bool pushData(const Name& virtualPath, const void* data, usize bytes);
     bool pushData(AStringView virtualPath, const void* data, usize bytes);

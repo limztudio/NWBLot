@@ -12,6 +12,7 @@
 #include <core/ecs/system.h>
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
+#include <impl/assets_material/material_asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,28 +59,6 @@ struct InstanceGpuData{
 };
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData layout must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace MaterialParameterValueType{
-    enum Enum : u32{
-        None = 0,
-        Float = 1,
-        Int = 2,
-        UInt = 3,
-        Bool = 4,
-    };
-};
-
-struct MaterialParameterGpuData{
-    UInt4 meta = {};
-    UInt4 data = {};
-};
-static_assert(sizeof(MaterialParameterGpuData) == sizeof(u32) * 8u, "MaterialParameterGpuData layout must match the mesh shaders");
-static_assert(alignof(MaterialParameterGpuData) >= alignof(UInt4), "MaterialParameterGpuData must stay SIMD-aligned");
-static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParameterGpuData must stay cheap to upload");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -27,6 +27,28 @@ class Shader;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace MaterialParameterValueType{
+    enum Enum : u32{
+        None = 0,
+        Float = 1,
+        Int = 2,
+        UInt = 3,
+        Bool = 4,
+    };
+};
+
+struct MaterialParameterGpuData{
+    UInt4 meta = {};
+    UInt4 data = {};
+};
+static_assert(sizeof(MaterialParameterGpuData) == sizeof(u32) * 8u, "MaterialParameterGpuData layout must match the mesh shaders");
+static_assert(alignof(MaterialParameterGpuData) >= alignof(UInt4), "MaterialParameterGpuData must stay SIMD-aligned");
+static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParameterGpuData must stay cheap to upload");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class Material final : public Core::Assets::TypedAsset<Material>{
 public:
     NWB_DEFINE_ASSET_TYPE("material")
@@ -35,6 +57,7 @@ public:
 public:
     static constexpr usize s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
     using StageShaderArray = Array<Core::Assets::AssetRef<Shader>, s_ShaderStageCount>;
+    using ParameterVector = Vector<MaterialParameterGpuData>;
 
 
 public:
@@ -50,16 +73,18 @@ public:
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset);
-    bool setShaderForStage(const Name& stageName, const Core::Assets::AssetRef<Shader>& shaderAsset);
+#if defined(NWB_COOK)
     bool setParameter(const CompactString& key, const CompactString& value);
+#endif
 
     bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
-    bool findShaderForStage(const Name& stageName, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
 
     [[nodiscard]] const AString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
-    [[nodiscard]] const HashMap<CompactString, CompactString>& parameters()const{ return m_parameters; }
+    [[nodiscard]] const ParameterVector& parameters()const{ return m_parameters; }
+    [[nodiscard]] f32 alpha()const{ return m_alpha; }
+    [[nodiscard]] bool transparent()const{ return m_transparent; }
 
 
 private:
@@ -69,8 +94,15 @@ private:
 private:
     AString m_shaderVariant;
     StageShaderArray m_stageShaders;
-    HashMap<CompactString, CompactString> m_parameters;
+    ParameterVector m_parameters;
+    f32 m_alpha = 1.f;
     u32 m_stageShaderCount = 0;
+    bool m_transparent = false;
+#if defined(NWB_COOK)
+    u32 m_alphaPriority = Limit<u32>::s_Max;
+    u32 m_modePriority = Limit<u32>::s_Max;
+    bool m_modeTransparent = false;
+#endif
 };
 
 

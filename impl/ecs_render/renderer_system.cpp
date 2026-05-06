@@ -367,194 +367,6 @@ static usize NextGrowingCapacity(const usize currentCapacity, const usize requir
     return capacity;
 }
 
-static bool ParseMaterialParameterTypeText(
-    const AStringView typeText,
-    MaterialParameterValueType::Enum& outType,
-    u32& outComponentCount
-){
-    outType = MaterialParameterValueType::None;
-    outComponentCount = 0u;
-
-    auto tryMatch = [&](const AStringView baseName, const AStringView vectorName, const MaterialParameterValueType::Enum type) -> bool{
-        if(typeText == baseName){
-            outType = type;
-            outComponentCount = 1u;
-            return true;
-        }
-
-        const auto parseSuffix = [&](const AStringView prefix) -> bool{
-            if(typeText.size() != prefix.size() + 1u)
-                return false;
-            for(usize i = 0; i < prefix.size(); ++i){
-                if(typeText[i] != prefix[i])
-                    return false;
-            }
-
-            const char suffix = typeText[prefix.size()];
-            if(suffix < '1' || suffix > '4')
-                return false;
-
-            outType = type;
-            outComponentCount = static_cast<u32>(suffix - '0');
-            return true;
-        };
-
-        return parseSuffix(baseName) || (!vectorName.empty() && parseSuffix(vectorName));
-    };
-
-    return
-        tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
-        || tryMatch(AStringView("int"), AStringView("ivec"), MaterialParameterValueType::Int)
-        || tryMatch(AStringView("uint"), AStringView("uvec"), MaterialParameterValueType::UInt)
-        || tryMatch(AStringView("bool"), AStringView("bvec"), MaterialParameterValueType::Bool)
-    ;
-}
-
-static bool SplitMaterialParameterCall(const AStringView text, AStringView& outType, AStringView& outArgs){
-    const AStringView trimmed = TrimView(text);
-    usize openParen = Limit<usize>::s_Max;
-    for(usize i = 0; i < trimmed.size(); ++i){
-        if(trimmed[i] == '('){
-            openParen = i;
-            break;
-        }
-    }
-    if(openParen == Limit<usize>::s_Max || trimmed.empty() || trimmed[trimmed.size() - 1u] != ')')
-        return false;
-
-    outType = TrimView(trimmed.substr(0u, openParen));
-    outArgs = TrimView(trimmed.substr(openParen + 1u, trimmed.size() - openParen - 2u));
-    return !outType.empty() && !outArgs.empty();
-}
-
-static bool ReadMaterialParameterToken(const AStringView text, usize& inOutCursor, AStringView& outToken){
-    while(inOutCursor < text.size() && (IsAsciiSpace(text[inOutCursor]) || text[inOutCursor] == ','))
-        ++inOutCursor;
-    if(inOutCursor >= text.size())
-        return false;
-
-    const usize begin = inOutCursor;
-    while(inOutCursor < text.size() && !IsAsciiSpace(text[inOutCursor]) && text[inOutCursor] != ',')
-        ++inOutCursor;
-
-    outToken = TrimView(text.substr(begin, inOutCursor - begin));
-    return !outToken.empty();
-}
-
-static bool SplitMaterialParameterTokens(const AStringView text, AStringView (&outTokens)[4], u32& outTokenCount){
-    outTokenCount = 0u;
-    usize cursor = 0u;
-    AStringView token;
-    while(ReadMaterialParameterToken(text, cursor, token)){
-        if(outTokenCount >= 4u)
-            return false;
-
-        outTokens[outTokenCount] = token;
-        ++outTokenCount;
-    }
-
-    return outTokenCount > 0u;
-}
-
-static bool ParseMaterialBoolToken(const AStringView token, u32& outValue){
-    if(token == AStringView("true") || token == AStringView("1")){
-        outValue = 1u;
-        return true;
-    }
-    if(token == AStringView("false") || token == AStringView("0")){
-        outValue = 0u;
-        return true;
-    }
-
-    return false;
-}
-
-static bool ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type, u32& outValue){
-    const char* begin = token.data();
-    const char* end = begin + token.size();
-
-    switch(type){
-    case MaterialParameterValueType::Float:{
-        f64 parsed = 0.0;
-        if(!ParseF64FromChars(begin, end, parsed) || !IsFinite(parsed))
-            return false;
-        if(parsed < static_cast<f64>(Limit<f32>::s_Min) || parsed > static_cast<f64>(Limit<f32>::s_Max))
-            return false;
-
-        f32 converted = static_cast<f32>(parsed);
-        NWB_MEMCPY(&outValue, sizeof(outValue), &converted, sizeof(converted));
-        return true;
-    }
-    case MaterialParameterValueType::Int:{
-        i64 parsed = 0;
-        if(!ParseI64FromChars(begin, end, parsed))
-            return false;
-        if(parsed < static_cast<i64>(Limit<i32>::s_Min) || parsed > static_cast<i64>(Limit<i32>::s_Max))
-            return false;
-
-        outValue = static_cast<u32>(static_cast<i32>(parsed));
-        return true;
-    }
-    case MaterialParameterValueType::UInt:{
-        u64 parsed = 0u;
-        if(!ParseU64FromChars(begin, end, parsed) || parsed > static_cast<u64>(Limit<u32>::s_Max))
-            return false;
-
-        outValue = static_cast<u32>(parsed);
-        return true;
-    }
-    case MaterialParameterValueType::Bool:
-        return ParseMaterialBoolToken(token, outValue);
-    default:
-        return false;
-    }
-}
-
-static bool TryBuildMaterialParameterGpuData(
-    const CompactString& key,
-    const CompactString& value,
-    MaterialParameterGpuData& outParameter
-){
-    outParameter = {};
-    if(!key || !value)
-        return false;
-
-    MaterialParameterValueType::Enum valueType = MaterialParameterValueType::Float;
-    u32 componentCount = 0u;
-    AStringView valueText = TrimView(value.view());
-    AStringView argsText = valueText;
-    AStringView typeText;
-    if(SplitMaterialParameterCall(valueText, typeText, argsText)){
-        if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
-            return false;
-    }
-    else if(ParseMaterialBoolToken(valueText, outParameter.data.x)){
-        valueType = MaterialParameterValueType::Bool;
-        componentCount = 1u;
-    }
-
-    AStringView tokens[4];
-    u32 tokenCount = 0u;
-    if(!SplitMaterialParameterTokens(argsText, tokens, tokenCount))
-        return false;
-    if(componentCount != 0u && tokenCount != componentCount)
-        return false;
-    if(componentCount == 0u)
-        componentCount = tokenCount;
-
-    for(u32 i = 0; i < tokenCount; ++i){
-        if(!ParseMaterialParameterToken(tokens[i], valueType, outParameter.data.raw[i]))
-            return false;
-    }
-
-    const u64 keyHash = UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, key.view());
-    outParameter.meta.x = static_cast<u32>(keyHash & 0xffffffffull);
-    outParameter.meta.y = static_cast<u32>(keyHash >> 32u);
-    outParameter.meta.z = static_cast<u32>(valueType);
-    outParameter.meta.w = componentCount;
-    return true;
-}
-
 static InstanceGpuData BuildInstanceGpuData(
     const Core::Scene::TransformComponent* transform,
     const u32 materialParameterOffset,
@@ -570,10 +382,6 @@ static InstanceGpuData BuildInstanceGpuData(
     data.translation = transform->position;
     data.scale = transform->scale;
     return data;
-}
-
-static f32 Float3Dot(const SIMDVector lhs, const SIMDVector rhs){
-    return VectorGetX(Vector3Dot(lhs, rhs));
 }
 
 static void StoreRotatedBasisVector(Float4& outVector, const Float4& localVector, SIMDVector rotation){
@@ -703,9 +511,9 @@ static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
     const SIMDVector up = LoadFloat(basis.up);
     const SIMDVector forward = LoadFloat(basis.forward);
     const SIMDVector projection = LoadFloat(projectionParams);
-    const f32 translationX = -Float3Dot(positionDepthBias, right);
-    const f32 translationY = -Float3Dot(positionDepthBias, up);
-    const f32 translationZ = -Float3Dot(positionDepthBias, forward) + basis.positionDepthBias.w;
+    const f32 translationX = -VectorGetX(Vector3Dot(positionDepthBias, right));
+    const f32 translationY = -VectorGetX(Vector3Dot(positionDepthBias, up));
+    const f32 translationZ = -VectorGetX(Vector3Dot(positionDepthBias, forward)) + basis.positionDepthBias.w;
 
     StoreProjectedViewColumn(
         outWorldToClip,
@@ -847,58 +655,6 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
         static_cast<f32>(scissorRect.maxY)
     );
     return pushConstants;
-}
-
-static bool IsTransparentText(const AStringView text){
-    return
-        EqualsAsciiIgnoreCase(text, "transparent")
-        || EqualsAsciiIgnoreCase(text, "translucent")
-        || EqualsAsciiIgnoreCase(text, "blend")
-        || EqualsAsciiIgnoreCase(text, "alpha")
-        || EqualsAsciiIgnoreCase(text, "avboit")
-        || EqualsAsciiIgnoreCase(text, "true")
-        || EqualsAsciiIgnoreCase(text, "1")
-    ;
-}
-
-static bool ParseAlphaValue(const AStringView text, f32& outAlpha){
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    while(begin < end && IsAsciiSpace(*begin))
-        ++begin;
-    while(end > begin && IsAsciiSpace(*(end - 1)))
-        --end;
-    if(begin == end)
-        return false;
-
-    f64 parsed = 0.0;
-    if(!ParseF64FromChars(begin, end, parsed) || !IsFinite(parsed))
-        return false;
-    if(parsed < static_cast<f64>(Limit<f32>::s_Min) || parsed > static_cast<f64>(Limit<f32>::s_Max))
-        return false;
-
-    outAlpha = static_cast<f32>(Max<f64>(0.0, Min<f64>(1.0, parsed)));
-    return true;
-}
-
-static u32 MaterialAlphaParameterPriority(const CompactString& key){
-    if(key.view() == AStringView("alpha"))
-        return 0u;
-    if(key.view() == AStringView("opacity"))
-        return 1u;
-
-    return Limit<u32>::s_Max;
-}
-
-static u32 MaterialModeParameterPriority(const CompactString& key){
-    if(key.view() == AStringView("render_mode"))
-        return 0u;
-    if(key.view() == AStringView("alpha_mode"))
-        return 1u;
-    if(key.view() == AStringView("transparency"))
-        return 2u;
-
-    return Limit<u32>::s_Max;
 }
 
 static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets, const f32 alpha){
@@ -2782,47 +2538,10 @@ bool RendererSystem::ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     (void)material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
     (void)material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
 
-    CompactString alphaText;
-    u32 alphaPriority = Limit<u32>::s_Max;
-    CompactString modeText;
-    u32 modePriority = Limit<u32>::s_Max;
-
     createdInfo.parameters.reserve(material.parameters().size());
-    for(const auto& [key, value] : material.parameters()){
-        const u32 candidateAlphaPriority = __hidden_ecs_render::MaterialAlphaParameterPriority(key);
-        if(candidateAlphaPriority < alphaPriority){
-            alphaText = value;
-            alphaPriority = candidateAlphaPriority;
-        }
-
-        const u32 candidateModePriority = __hidden_ecs_render::MaterialModeParameterPriority(key);
-        if(candidateModePriority < modePriority){
-            modeText = value;
-            modePriority = candidateModePriority;
-        }
-
-        MaterialParameterGpuData parameter;
-        if(__hidden_ecs_render::TryBuildMaterialParameterGpuData(key, value, parameter))
-            createdInfo.parameters.push_back(parameter);
-    }
-
-    if(alphaPriority != Limit<u32>::s_Max){
-        f32 parsedAlpha = 1.f;
-        if(__hidden_ecs_render::ParseAlphaValue(alphaText.view(), parsedAlpha))
-            createdInfo.alpha = parsedAlpha;
-        else{
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: material '{}' has invalid alpha '{}'; using 1.0")
-                , StringConvert(materialPath.c_str())
-                , StringConvert(alphaText.c_str())
-            );
-        }
-    }
-
-    if(modePriority != Limit<u32>::s_Max){
-        createdInfo.transparent = __hidden_ecs_render::IsTransparentText(modeText.view());
-    }
-    if(createdInfo.alpha < 0.999f)
-        createdInfo.transparent = true;
+    createdInfo.parameters.insert(createdInfo.parameters.end(), material.parameters().begin(), material.parameters().end());
+    createdInfo.alpha = material.alpha();
+    createdInfo.transparent = material.transparent();
 
     auto result = m_materialSurfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;

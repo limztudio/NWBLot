@@ -84,16 +84,12 @@ public:
 public:
     [[nodiscard]] const Name& assetType()const{ return m_assetType; }
 
-    virtual bool deserialize(
-        const Name& virtualPath,
-        const AssetBytes& binary,
-        UniquePtr<IAsset>& outAsset
-    )const = 0;
+public:
+    virtual bool deserialize(const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const = 0;
+
 #if defined(NWB_COOK)
-    virtual bool serialize(
-        const IAsset& asset,
-        AssetBytes& outBinary
-    )const = 0;
+public:
+    virtual bool serialize(const IAsset& asset, AssetBytes& outBinary)const = 0;
 #endif
 
 
@@ -102,26 +98,26 @@ private:
 };
 
 template<typename AssetT>
-class TypedAssetCodec : public IAssetCodec{
+class AssetCodec : public IAssetCodec{
 protected:
-    TypedAssetCodec()
+    AssetCodec()
         : IAssetCodec(AssetT::AssetTypeName())
     {}
+
+
+public:
+    virtual bool deserialize(const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const final override{
+        auto asset = MakeUnique<AssetT>(virtualPath);
+        if(!asset->loadBinary(binary))
+            return false;
+
+        outAsset = Move(asset);
+        return true;
+    }
 };
 
-template<typename AssetT>
-[[nodiscard]] inline bool DeserializeTypedAsset(
-    const Name& virtualPath,
-    const AssetBytes& binary,
-    UniquePtr<IAsset>& outAsset
-){
-    auto asset = MakeUnique<AssetT>(virtualPath);
-    if(!asset->loadBinary(binary))
-        return false;
 
-    outAsset = Move(asset);
-    return true;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ASSETS_END

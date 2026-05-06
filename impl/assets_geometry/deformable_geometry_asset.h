@@ -115,36 +115,24 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeformableGeometryAssetCodec final : public Core::Assets::TypedAssetCodec<DeformableGeometry>{
+class DeformableGeometryAssetCodec final : public Core::Assets::AssetCodec<DeformableGeometry>{
 public:
     DeformableGeometryAssetCodec() = default;
 
-public:
-    virtual bool deserialize(
-        const Name& virtualPath,
-        const Core::Assets::AssetBytes& binary,
-        UniquePtr<Core::Assets::IAsset>& outAsset
-    )const override{
-        return Core::Assets::DeserializeTypedAsset<DeformableGeometry>(virtualPath, binary, outAsset);
-    }
+
 #if defined(NWB_COOK)
+public:
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
 };
 
-class DeformableDisplacementTextureAssetCodec final : public Core::Assets::TypedAssetCodec<DeformableDisplacementTexture>{
+class DeformableDisplacementTextureAssetCodec final : public Core::Assets::AssetCodec<DeformableDisplacementTexture>{
 public:
     DeformableDisplacementTextureAssetCodec() = default;
 
-public:
-    virtual bool deserialize(
-        const Name& virtualPath,
-        const Core::Assets::AssetBytes& binary,
-        UniquePtr<Core::Assets::IAsset>& outAsset
-    )const override{
-        return Core::Assets::DeserializeTypedAsset<DeformableDisplacementTexture>(virtualPath, binary, outAsset);
-    }
+
 #if defined(NWB_COOK)
+public:
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
 };

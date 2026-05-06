@@ -148,7 +148,13 @@ static void TestLightComponents(TestContext& context){
 }
 
 template<typename AssetT>
-class TestAssetCodec final : public NWB::Core::Assets::TypedAssetCodec<AssetT>{
+class TestAssetCodec final : public NWB::Core::Assets::IAssetCodec{
+public:
+    TestAssetCodec()
+        : NWB::Core::Assets::IAssetCodec(AssetT::AssetTypeName())
+    {}
+
+
 public:
     virtual bool deserialize(
         const Name& virtualPath,
@@ -162,8 +168,14 @@ public:
 };
 
 class TestDisplacementTextureAssetCodec final
-    : public NWB::Core::Assets::TypedAssetCodec<NWB::Impl::DeformableDisplacementTexture>
+    : public NWB::Core::Assets::IAssetCodec
 {
+public:
+    TestDisplacementTextureAssetCodec()
+        : NWB::Core::Assets::IAssetCodec(NWB::Impl::DeformableDisplacementTexture::AssetTypeName())
+    {}
+
+
 public:
     virtual bool deserialize(
         const Name& virtualPath,

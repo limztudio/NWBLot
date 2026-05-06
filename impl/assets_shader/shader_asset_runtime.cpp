@@ -3,6 +3,7 @@
 
 
 #include "shader_asset.h"
+#include "shader_binary_payload.h"
 
 #include <logger/client/logger.h>
 #include <core/assets/asset_auto_registration.h>
@@ -44,14 +45,13 @@ bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    static constexpr u32 s_SpvMagic = 0x07230203u;
-    if(binary.size() < sizeof(u32) || (binary.size() & 3u) != 0u){
+    if(!ShaderBinaryPayload::IsValidBytecodeSize(binary.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid bytecode size"));
         return false;
     }
     usize cursor = 0;
     u32 magic = 0;
-    if(!ReadPOD(binary, cursor, magic) || magic != s_SpvMagic){
+    if(!ReadPOD(binary, cursor, magic) || magic != ShaderBinaryPayload::s_SpvMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid SPIR-V magic"));
         return false;
     }
@@ -64,45 +64,7 @@ bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    return Core::Assets::DeserializeTypedAsset<Shader>(virtualPath, binary, outAsset);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Shader::s_AssetTypeText)
-        );
-        return false;
-    }
-
-    outBinary = static_cast<const Shader&>(asset).bytecode();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

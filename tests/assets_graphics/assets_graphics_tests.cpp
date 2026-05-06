@@ -1141,7 +1141,11 @@ static void CheckSkinnedDeformableGeometryPayload(
 }
 
 template<typename CodecT, typename BuildAssetFnT>
-static void CheckCodecRejectsOldBinaryVersion(TestContext& context, BuildAssetFnT buildAsset){
+static void CheckCodecRejectsUnsupportedBinaryVersion(
+    TestContext& context,
+    BuildAssetFnT buildAsset,
+    const u32 unsupportedVersion
+){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -1152,14 +1156,16 @@ static void CheckCodecRejectsOldBinaryVersion(TestContext& context, BuildAssetFn
     CodecT codec;
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(asset, binary));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(binary, sizeof(u32), 1u));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(binary, sizeof(u32), unsupportedVersion));
 
     CheckCodecRejectsBinary(context, codec, asset.virtualPath(), binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported version 1")));
+    const TString expectedError = StringFormat(NWB_TEXT("unsupported version {}"), unsupportedVersion);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(expectedError.c_str()));
 #else
     static_cast<void>(context);
     static_cast<void>(buildAsset);
+    static_cast<void>(unsupportedVersion);
 #endif
 }
 
@@ -1177,8 +1183,12 @@ static void TestGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices()[2] == 2u);
 }
 
-static void TestGeometryCodecRejectsOldBinaryVersion(TestContext& context){
-    CheckCodecRejectsOldBinaryVersion<NWB::Impl::GeometryAssetCodec>(context, BuildMinimalGeometry);
+static void TestGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
+    CheckCodecRejectsUnsupportedBinaryVersion<NWB::Impl::GeometryAssetCodec>(
+        context,
+        BuildMinimalGeometry,
+        0u
+    );
 }
 
 static void TestDeformableDisplacementTextureCodecRoundTrip(TestContext& context){
@@ -1255,10 +1265,11 @@ static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
 }
 
-static void TestDeformableGeometryCodecRejectsOldBinaryVersion(TestContext& context){
-    CheckCodecRejectsOldBinaryVersion<NWB::Impl::DeformableGeometryAssetCodec>(
+static void TestDeformableGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
+    CheckCodecRejectsUnsupportedBinaryVersion<NWB::Impl::DeformableGeometryAssetCodec>(
         context,
-        BuildMinimalDeformableGeometry
+        BuildMinimalDeformableGeometry,
+        0u
     );
 }
 
@@ -2027,11 +2038,11 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
         __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestGeometryCodecRejectsOldBinaryVersion(context);
+        __hidden_assets_graphics_tests::TestGeometryCodecRejectsUnsupportedBinaryVersion(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTripsTextureDisplacement(context);
         __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsOldBinaryVersion(context);
+        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsUnsupportedBinaryVersion(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsUnusedStringTable(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);

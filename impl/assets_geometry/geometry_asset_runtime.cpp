@@ -26,18 +26,6 @@ namespace __hidden_geometry_asset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_GeometryMagic = 0x47454F31u; // GEO1
-static constexpr u32 s_GeometryVersion = 2u;
-#if defined(NWB_COOK)
-static constexpr usize s_GeometryHeaderBytes =
-    sizeof(u32) + // magic
-    sizeof(u32) + // version
-    sizeof(u64) + // vertex count
-    sizeof(u64)   // index count
-;
-#endif
-
-
 UniquePtr<Core::Assets::IAssetCodec> CreateGeometryAssetCodec(){
     return MakeUnique<GeometryAssetCodec>();
 }
@@ -141,28 +129,22 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_indices.clear();
 
     usize cursor = 0;
-    u32 magic = 0;
-    u32 version = 0;
-    u64 vertexCount = 0;
-    u64 indexCount = 0;
-    if(
-        !ReadPOD(binary, cursor, magic)
-        || !ReadPOD(binary, cursor, version)
-        || !ReadPOD(binary, cursor, vertexCount)
-        || !ReadPOD(binary, cursor, indexCount)
-    ){
+    GeometryBinaryPayload::GeometryHeaderBinary header;
+    if(!ReadPOD(binary, cursor, header)){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed header"));
         return false;
     }
 
-    if(magic != __hidden_geometry_asset::s_GeometryMagic){
+    if(header.magic != GeometryBinaryPayload::s_GeometryMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: invalid magic"));
         return false;
     }
-    if(version != __hidden_geometry_asset::s_GeometryVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: unsupported version {}"), version);
+    if(header.version != GeometryBinaryPayload::s_GeometryVersion){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: unsupported version {}"), header.version);
         return false;
     }
+    const u64 vertexCount = header.vertexCount;
+    const u64 indexCount = header.indexCount;
     if(vertexCount == 0u || indexCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: geometry payload is empty"));
         return false;
@@ -192,58 +174,6 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
 
     return validatePayload();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GeometryAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Geometry::s_AssetTypeText)
-        );
-        return false;
-    }
-
-    const Geometry& geometry = static_cast<const Geometry&>(asset);
-    if(!geometry.validatePayload())
-        return false;
-
-    usize reserveBytes = __hidden_geometry_asset::s_GeometryHeaderBytes;
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, geometry.vertices())
-        && AddBinaryVectorReserveBytes(reserveBytes, geometry.indices())
-    ;
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    AppendPOD(outBinary, __hidden_geometry_asset::s_GeometryMagic);
-    AppendPOD(outBinary, __hidden_geometry_asset::s_GeometryVersion);
-    AppendPOD(outBinary, static_cast<u64>(geometry.vertices().size()));
-    AppendPOD(outBinary, static_cast<u64>(geometry.indices().size()));
-    const tchar* const serializeFailureContext = NWB_TEXT("GeometryAssetCodec::serialize");
-    auto appendVector = [&](const auto& values, const tchar* label){
-        return GeometryBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
-    };
-    if(!appendVector(geometry.vertices(), NWB_TEXT("vertices")))
-        return false;
-
-    return appendVector(geometry.indices(), NWB_TEXT("indices"));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

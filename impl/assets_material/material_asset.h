@@ -103,6 +103,7 @@ private:
     f32 m_alpha = 1.f;
     u32 m_stageShaderCount = 0;
     bool m_transparent = false;
+
 #if defined(NWB_COOK)
     u32 m_alphaPriority = Limit<u32>::s_Max;
     u32 m_modePriority = Limit<u32>::s_Max;
@@ -114,13 +115,13 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MaterialAssetCodec final : public Core::Assets::TypedAssetCodec<Material>{
+class MaterialAssetCodec final : public Core::Assets::AssetCodec<Material>{
 public:
     MaterialAssetCodec() = default;
 
-public:
-    virtual bool deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
+
 #if defined(NWB_COOK)
+public:
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
 };

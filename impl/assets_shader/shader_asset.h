@@ -31,6 +31,7 @@ public:
     {}
 
 
+public:
     [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const{ return m_bytecode; }
 
 public:
@@ -45,12 +46,13 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderAssetCodec final : public Core::Assets::TypedAssetCodec<Shader>{
+class ShaderAssetCodec final : public Core::Assets::AssetCodec<Shader>{
 public:
     ShaderAssetCodec() = default;
 
-    virtual bool deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const override;
+
 #if defined(NWB_COOK)
+public:
     virtual bool serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const override;
 #endif
 };

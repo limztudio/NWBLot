@@ -25,6 +25,26 @@ namespace GeometryBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u32 s_GeometryMagic = 0x47454F31u; // GEO1
+inline constexpr u32 s_GeometryVersion = 1u;
+
+#pragma pack(push, 1)
+struct GeometryHeaderBinary{
+    u32 magic = s_GeometryMagic;
+    u32 version = s_GeometryVersion;
+    u64 vertexCount = 0;
+    u64 indexCount = 0;
+};
+#pragma pack(pop)
+static_assert(sizeof(GeometryHeaderBinary) == sizeof(u32) + sizeof(u32) + sizeof(u64) + sizeof(u64), "GeometryHeaderBinary layout drifted");
+static_assert(alignof(GeometryHeaderBinary) == 1u, "GeometryHeaderBinary must stay packed");
+static_assert(IsStandardLayout_V<GeometryHeaderBinary>, "GeometryHeaderBinary must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<GeometryHeaderBinary>, "GeometryHeaderBinary must stay binary-serializable");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ValueContainer>
 [[nodiscard]] bool ReadVector(
     const Core::Assets::AssetBytes& binary,
@@ -48,7 +68,16 @@ template<typename ValueContainer>
     return false;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ValueContainer>
 [[nodiscard]] bool AppendVector(
     Core::Assets::AssetBytes& outBinary,
@@ -69,6 +98,10 @@ template<typename ValueContainer>
 
     return false;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #endif
 

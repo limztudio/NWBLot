@@ -1118,6 +1118,26 @@ static bool CommitPreviewedHole(
     ;
 }
 
+static void CheckPreviewedOperatorHoleCommit(
+    TestContext& context,
+    NWB::Impl::DeformableRuntimeMeshInstance& instance,
+    const NWB::Impl::DeformableHoleEditParams& params,
+    NWB::Impl::DeformableHolePreviewMesh& previewMesh,
+    NWB::Impl::DeformableHoleEditResult& result
+){
+    previewMesh = NWB::Impl::DeformableHolePreviewMesh{};
+    result = NWB::Impl::DeformableHoleEditResult{};
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, CommitPreviewedHole(instance, params, &result));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == previewMesh.removedTriangleCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == previewMesh.wallVertexCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount > 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount <= 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex <= instance.restVertices.size());
+}
+
 static bool CommitRecordedHole(
     NWB::Impl::DeformableRuntimeMeshInstance& instance,
     const u32 triangle,
@@ -3916,21 +3936,8 @@ static void TestSurfaceEditOperatorRemeshStaysOnHitPatchAtSplitCorner(TestContex
     params.operatorProfile = MakeBoxOperatorProfile();
 
     NWB::Impl::DeformableHolePreviewMesh previewMesh;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
-
-    NWB::Impl::DeformableSurfaceEditSession session;
-    NWB::Impl::DeformableHolePreview preview;
     NWB::Impl::DeformableHoleEditResult result;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == previewMesh.removedTriangleCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == previewMesh.wallVertexCount);
-
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount > 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount <= 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex <= instance.restVertices.size());
+    CheckPreviewedOperatorHoleCommit(context, instance, params, previewMesh, result);
 
     bool foundGeneratedTopFaceRim = false;
     bool foundGeneratedSideFaceRim = false;
@@ -4022,20 +4029,8 @@ static void TestSurfaceEditOperatorRemeshStaysOnSideHitPatch(TestContext& contex
     params.operatorUp = Float3U(0.0f, 1.0f, 0.0f);
 
     NWB::Impl::DeformableHolePreviewMesh previewMesh;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildHolePreviewMesh(instance, params, previewMesh));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, previewMesh.valid);
-
-    NWB::Impl::DeformableSurfaceEditSession session;
-    NWB::Impl::DeformableHolePreview preview;
     NWB::Impl::DeformableHoleEditResult result;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BeginSurfaceEdit(instance, params.posedHit, session));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(instance, session, params, preview));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CommitHole(instance, session, params, &result));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount == previewMesh.removedTriangleCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.wallVertexCount == previewMesh.wallVertexCount);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount > 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.removedTriangleCount <= 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, result.firstWallVertex <= instance.restVertices.size());
+    CheckPreviewedOperatorHoleCommit(context, instance, params, previewMesh, result);
 
     bool foundRightFaceRim = false;
     bool foundBackFaceRim = false;

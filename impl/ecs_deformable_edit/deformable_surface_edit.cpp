@@ -1887,33 +1887,63 @@ using SurfaceRemeshClipPolygonList = Vector<
     ;
 }
 
+[[nodiscard]] bool SurfaceRemeshValidLocalPoint(const Float2U& point){
+    return IsFinite(point.x) && IsFinite(point.y);
+}
+
+void ResetSurfaceRemeshLocalBounds(SurfaceRemeshLocalBounds& bounds, const Float2U& point){
+    bounds.minX = point.x;
+    bounds.maxX = point.x;
+    bounds.minY = point.y;
+    bounds.maxY = point.y;
+}
+
+void ExpandSurfaceRemeshLocalBounds(SurfaceRemeshLocalBounds& bounds, const Float2U& point){
+    bounds.minX = Min(bounds.minX, point.x);
+    bounds.minY = Min(bounds.minY, point.y);
+    bounds.maxX = Max(bounds.maxX, point.x);
+    bounds.maxY = Max(bounds.maxY, point.y);
+}
+
+template<typename PointGetter>
+[[nodiscard]] bool BuildSurfaceRemeshLocalBounds(
+    const usize pointCount,
+    const PointGetter& pointAt,
+    SurfaceRemeshLocalBounds& outBounds
+){
+    outBounds = SurfaceRemeshLocalBounds{};
+    if(pointCount == 0u)
+        return false;
+
+    const Float2U& firstPoint = pointAt(0u);
+    if(!SurfaceRemeshValidLocalPoint(firstPoint))
+        return false;
+
+    ResetSurfaceRemeshLocalBounds(outBounds, firstPoint);
+    for(usize i = 1u; i < pointCount; ++i){
+        const Float2U& point = pointAt(i);
+        if(!SurfaceRemeshValidLocalPoint(point))
+            return false;
+
+        ExpandSurfaceRemeshLocalBounds(outBounds, point);
+    }
+    return true;
+}
+
 [[nodiscard]] bool BuildOperatorFootprintLocalBounds(
     const DeformableOperatorFootprint& footprint,
     SurfaceRemeshLocalBounds& outBounds
 ){
-    outBounds = SurfaceRemeshLocalBounds{};
     if(footprint.vertexCount == 0u || footprint.vertexCount > s_DeformableOperatorFootprintMaxVertexCount)
         return false;
 
-    const Float2U& firstPoint = footprint.vertices[0u];
-    if(!IsFinite(firstPoint.x) || !IsFinite(firstPoint.y))
-        return false;
-
-    outBounds.minX = firstPoint.x;
-    outBounds.maxX = firstPoint.x;
-    outBounds.minY = firstPoint.y;
-    outBounds.maxY = firstPoint.y;
-    for(u32 i = 1u; i < footprint.vertexCount; ++i){
-        const Float2U& point = footprint.vertices[i];
-        if(!IsFinite(point.x) || !IsFinite(point.y))
-            return false;
-
-        outBounds.minX = Min(outBounds.minX, point.x);
-        outBounds.minY = Min(outBounds.minY, point.y);
-        outBounds.maxX = Max(outBounds.maxX, point.x);
-        outBounds.maxY = Max(outBounds.maxY, point.y);
-    }
-    return true;
+    return BuildSurfaceRemeshLocalBounds(
+        static_cast<usize>(footprint.vertexCount),
+        [&](const usize index)->const Float2U&{
+            return footprint.vertices[index];
+        },
+        outBounds
+    );
 }
 
 [[nodiscard]] bool BuildSurfaceRemeshClipPointLocalBounds(
@@ -1921,29 +1951,16 @@ using SurfaceRemeshClipPolygonList = Vector<
     const usize pointCount,
     SurfaceRemeshLocalBounds& outBounds
 ){
-    outBounds = SurfaceRemeshLocalBounds{};
     if(!points || pointCount == 0u)
         return false;
 
-    const Float2U& firstPoint = points[0u].local;
-    if(!IsFinite(firstPoint.x) || !IsFinite(firstPoint.y))
-        return false;
-
-    outBounds.minX = firstPoint.x;
-    outBounds.maxX = firstPoint.x;
-    outBounds.minY = firstPoint.y;
-    outBounds.maxY = firstPoint.y;
-    for(usize i = 1u; i < pointCount; ++i){
-        const Float2U& point = points[i].local;
-        if(!IsFinite(point.x) || !IsFinite(point.y))
-            return false;
-
-        outBounds.minX = Min(outBounds.minX, point.x);
-        outBounds.minY = Min(outBounds.minY, point.y);
-        outBounds.maxX = Max(outBounds.maxX, point.x);
-        outBounds.maxY = Max(outBounds.maxY, point.y);
-    }
-    return true;
+    return BuildSurfaceRemeshLocalBounds(
+        pointCount,
+        [&](const usize index)->const Float2U&{
+            return points[index].local;
+        },
+        outBounds
+    );
 }
 
 [[nodiscard]] bool SurfaceRemeshLocalBoundsOverlap(

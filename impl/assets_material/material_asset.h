@@ -55,7 +55,8 @@ public:
 
 
 public:
-    static constexpr usize s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
+    static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
+
     using StageShaderArray = Array<Core::Assets::AssetRef<Shader>, s_ShaderStageCount>;
     using ParameterVector = Vector<MaterialParameterGpuData>;
 

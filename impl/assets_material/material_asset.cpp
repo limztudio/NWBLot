@@ -27,7 +27,7 @@ namespace __hidden_material_asset{
 
 
 static constexpr u32 s_MaterialMagic = 0x4D544C33u; // MTL3
-static constexpr u32 s_MaterialVersion = 5u;
+static constexpr u32 s_MaterialVersion = 1u;
 static constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 static constexpr usize s_ParameterEntryBytes = sizeof(MaterialParameterGpuData);
 static constexpr u32 s_MaterialFlagTransparent = 1u << 0u;

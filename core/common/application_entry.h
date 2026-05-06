@@ -26,13 +26,23 @@ namespace ApplicationEntryDetail{
 using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
 using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
+template<typename Invoke>
+[[nodiscard]] inline int InvokeWithInitializedCommon(Invoke&& invoke){
+    try{
+        InitializerGuard commonInitializerGuard;
+        if(!commonInitializerGuard.initialize())
+            return -1;
+
+        return Forward<Invoke>(invoke)();
+    }
+    catch(...){
+        return -1;
+    }
+}
+
 template<typename EntryPoint, typename CharT>
 [[nodiscard]] inline int InvokeEntryPoint(EntryPoint entryPoint, const isize argc, CharT** argv, void* instance){
-    InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize())
-        return -1;
-
-    return entryPoint(argc, argv, instance);
+    return InvokeWithInitializedCommon([entryPoint, argc, argv, instance](){ return entryPoint(argc, argv, instance); });
 }
 
 #if defined(NWB_UNICODE)
@@ -122,28 +132,24 @@ private:
 
 template<typename EntryPoint>
 [[nodiscard]] inline int InvokeWindowsUnicodeEntryPoint(EntryPoint entryPoint, HINSTANCE hInstance){
-    InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize())
+    return InvokeWithInitializedCommon([entryPoint, hInstance](){
+        WindowsCommandLineArgs args;
+        if(args.valid())
+            return entryPoint(args.argc(), args.argv(), hInstance);
+
         return -1;
-
-    WindowsCommandLineArgs args;
-    if(args.valid())
-        return entryPoint(args.argc(), args.argv(), hInstance);
-
-    return -1;
+    });
 }
 
 template<typename EntryPoint>
 [[nodiscard]] inline int InvokeWindowsUnicodeConsoleEntryPoint(EntryPoint entryPoint){
-    InitializerGuard commonInitializerGuard;
-    if(!commonInitializerGuard.initialize())
+    return InvokeWithInitializedCommon([entryPoint](){
+        WindowsCommandLineArgs args;
+        if(args.valid())
+            return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
+
         return -1;
-
-    WindowsCommandLineArgs args;
-    if(args.valid())
-        return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
-
-    return -1;
+    });
 }
 
 

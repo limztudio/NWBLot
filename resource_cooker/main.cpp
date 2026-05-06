@@ -24,39 +24,13 @@ static int RunResourceCooker(const int argc, char** argv){
     return ret;
 }
 
-[[nodiscard]] static bool InitializeResourceCookerCommon(NWB::Core::Common::InitializerGuard& commonInitializerGuard){
-    if(commonInitializerGuard.initialize())
-        return true;
-
-    NWB_CERR << "[resource_cooker] common initialization failed\n";
-    return false;
-}
-
 [[maybe_unused]] static int EntryPoint(const isize argc, char** argv, void*){
-    try{
-        NWB::Core::Common::InitializerGuard commonInitializerGuard;
-        if(!InitializeResourceCookerCommon(commonInitializerGuard))
-            return -1;
-
-        return RunResourceCooker(static_cast<int>(argc), argv);
-    }
-    catch(...){
-        return -1;
-    }
+    return RunResourceCooker(static_cast<int>(argc), argv);
 }
 
 #if defined(NWB_UNICODE)
 static int EntryPoint(const isize argc, wchar** argv, void*){
-    try{
-        NWB::Core::Common::InitializerGuard commonInitializerGuard;
-        if(!InitializeResourceCookerCommon(commonInitializerGuard))
-            return -1;
-
-        return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, RunResourceCooker);
-    }
-    catch(...){
-        return -1;
-    }
+    return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, RunResourceCooker);
 }
 #endif
 

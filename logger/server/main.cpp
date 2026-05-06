@@ -58,31 +58,22 @@ static int MainLogic(u16 logPort, void* inst){
 
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
-    try{
-        NWB::Core::Common::InitializerGuard commonInitializerGuard;
-        if(!commonInitializerGuard.initialize())
-            return -1;
+    u16 logPort = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
+    {
+        CLI::App app{ "logserver" };
 
-        u16 logPort = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
-        {
-            CLI::App app{ "logserver" };
+        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
 
-            NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
-
-            try{
-                NWB::ArgParseApp(app, argc, argv);
-            }
-            catch(const CLI::ParseError& e){
-                app.exit(e, NWB_COUT, NWB_CERR);
-                return -1;
-            }
+        try{
+            NWB::ArgParseApp(app, argc, argv);
         }
+        catch(const CLI::ParseError& e){
+            app.exit(e, NWB_COUT, NWB_CERR);
+            return -1;
+        }
+    }
 
-        return MainLogic(logPort, inst);
-    }
-    catch(...){
-        return -1;
-    }
+    return MainLogic(logPort, inst);
 }
 
 #include <core/common/application_entry.h>

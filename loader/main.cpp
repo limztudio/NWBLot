@@ -288,37 +288,28 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
-    try{
-        NWB::Core::Common::InitializerGuard commonInitializerGuard;
-        if(!commonInitializerGuard.initialize())
+    __hidden_loader::LoaderOptions options;
+    {
+        CLI::App app{ "loader" };
+
+        AString address = Get<static_cast<usize>(NWB::ArgCommand::LogAddress)>(NWB::g_ArgDefault);
+        u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
+        NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
+        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
+        __hidden_loader::AddDebugCommandLineOptions(app, options);
+
+        try{
+            NWB::ArgParseApp(app, argc, argv);
+        }
+        catch(const CLI::ParseError& e){
+            app.exit(e, NWB_COUT, NWB_CERR);
             return -1;
-
-        __hidden_loader::LoaderOptions options;
-        {
-            CLI::App app{ "loader" };
-
-            AString address = Get<static_cast<usize>(NWB::ArgCommand::LogAddress)>(NWB::g_ArgDefault);
-            u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
-            NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
-            NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
-            __hidden_loader::AddDebugCommandLineOptions(app, options);
-
-            try{
-                NWB::ArgParseApp(app, argc, argv);
-            }
-            catch(const CLI::ParseError& e){
-                app.exit(e, NWB_COUT, NWB_CERR);
-                return -1;
-            }
-
-            options.logAddress = StringFormat("{}:{}", address, port);
         }
 
-        return MainLogic(options, inst);
+        options.logAddress = StringFormat("{}:{}", address, port);
     }
-    catch(...){
-        return -1;
-    }
+
+    return MainLogic(options, inst);
 }
 
 

@@ -130,10 +130,6 @@ static constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit
 static constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit_accumulate_ps");
 
 
-static bool SupportsFormat(Core::IDevice& device, const Core::Format::Enum format, const Core::FormatSupport::Mask requiredSupport){
-    return (device.queryFormatSupport(format) & requiredSupport) == requiredSupport;
-}
-
 template<usize N>
 static Core::Format::Enum SelectSupportedFormat(
     Core::IDevice& device,
@@ -141,7 +137,7 @@ static Core::Format::Enum SelectSupportedFormat(
     const Core::FormatSupport::Mask requiredSupport
 ){
     for(const Core::Format::Enum format : candidates){
-        if(SupportsFormat(device, format, requiredSupport))
+        if((device.queryFormatSupport(format) & requiredSupport) == requiredSupport)
             return format;
     }
 

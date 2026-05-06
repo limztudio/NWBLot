@@ -3,12 +3,22 @@
 
 
 #include "material_asset.h"
+#include "material_binary_payload.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include <core/alloc/scratch.h>
 #include <global/hash_utils.h>
 #include <global/text_utils.h>
 #include <logger/client/logger.h>
-#include <core/assets/asset_auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,17 +35,6 @@ namespace __hidden_material_asset{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static constexpr u32 s_MaterialMagic = 0x4D544C33u; // MTL3
-static constexpr u32 s_MaterialVersion = 1u;
-static constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
-static constexpr usize s_ParameterEntryBytes = sizeof(MaterialParameterGpuData);
-static constexpr u32 s_MaterialFlagTransparent = 1u << 0u;
-
-static_assert(sizeof(Core::ShaderType::Enum) == sizeof(u8), "Material shader stage indices must stay byte-sized");
-
-
-#if defined(NWB_COOK)
 
 static bool ParseMaterialParameterTypeText(
     const AStringView typeText,
@@ -317,14 +316,6 @@ static bool LessMaterialParameterGpuData(const MaterialParameterGpuData& lhs, co
     return LessU32x4(lhs.data, rhs.data);
 }
 
-#endif
-
-
-UniquePtr<Core::Assets::IAssetCodec> CreateMaterialAssetCodec(){
-    return MakeUnique<MaterialAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&CreateMaterialAssetCodec);
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -335,288 +326,6 @@ Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&CreateM
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: virtual path is empty"));
-        return false;
-    }
-
-    m_shaderVariant.clear();
-    clearStageShaders();
-    m_parameters.clear();
-    m_alpha = 1.f;
-    m_transparent = false;
-#if defined(NWB_COOK)
-    m_alphaPriority = Limit<u32>::s_Max;
-    m_modePriority = Limit<u32>::s_Max;
-    m_modeTransparent = false;
-#endif
-
-    usize cursor = 0;
-    u32 magic = 0;
-    if(!ReadPOD(binary, cursor, magic)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing magic"));
-        return false;
-    }
-    if(magic != __hidden_material_asset::s_MaterialMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: invalid magic"));
-        return false;
-    }
-
-    u32 version = 0;
-    if(!ReadPOD(binary, cursor, version)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing version"));
-        return false;
-    }
-    if(version != __hidden_material_asset::s_MaterialVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: unsupported version {}"), version);
-        return false;
-    }
-
-    if(!ReadString(binary, cursor, m_shaderVariant)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shader variant"));
-        return false;
-    }
-
-    u32 shaderCount = 0;
-    if(!ReadPOD(binary, cursor, shaderCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shader count"));
-        return false;
-    }
-    if(shaderCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material has no shader stages"));
-        return false;
-    }
-    if(shaderCount > static_cast<u32>(Core::ShaderType::Count)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds supported shader stage count"));
-        return false;
-    }
-    if(cursor > binary.size() || shaderCount > (binary.size() - cursor) / __hidden_material_asset::s_ShaderEntryBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader count exceeds available data"));
-        return false;
-    }
-
-    for(u32 i = 0; i < shaderCount; ++i){
-        Core::ShaderType::Enum shaderType = Core::ShaderType::Invalid;
-        NameHash shaderNameHash = {};
-        if(!ReadPOD(binary, cursor, shaderType) || !ReadPOD(binary, cursor, shaderNameHash)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed shader stage at index {}"), i);
-            return false;
-        }
-
-        const Name shaderName(shaderNameHash);
-        Core::Assets::AssetRef<Shader> shaderAsset;
-        shaderAsset.virtualPath = shaderName;
-        if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage entries must not be empty"));
-            return false;
-        }
-
-        const usize shaderIndex = Core::ShaderType::ToIndex(shaderType);
-        if(m_stageShaders[shaderIndex].valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: duplicate shader stage index {}"), shaderIndex);
-            return false;
-        }
-
-        m_stageShaders[shaderIndex] = shaderAsset;
-        ++m_stageShaderCount;
-    }
-
-    u32 materialFlags = 0u;
-    if(!ReadPOD(binary, cursor, m_alpha) || !ReadPOD(binary, cursor, materialFlags)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material render properties"));
-        return false;
-    }
-    if(!IsFinite(m_alpha)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material alpha is not finite"));
-        return false;
-    }
-    if((materialFlags & ~__hidden_material_asset::s_MaterialFlagTransparent) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
-        return false;
-    }
-    m_alpha = static_cast<f32>(Max<f64>(0.0, Min<f64>(1.0, static_cast<f64>(m_alpha))));
-    m_transparent = (materialFlags & __hidden_material_asset::s_MaterialFlagTransparent) != 0u;
-
-    u32 parameterCount = 0;
-    if(!ReadPOD(binary, cursor, parameterCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing parameter count"));
-        return false;
-    }
-    if(cursor > binary.size() || parameterCount > (binary.size() - cursor) / __hidden_material_asset::s_ParameterEntryBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: parameter count exceeds available data"));
-        return false;
-    }
-    m_parameters.reserve(parameterCount);
-
-    for(u32 i = 0; i < parameterCount; ++i){
-        MaterialParameterGpuData parameter;
-        if(!ReadPOD(binary, cursor, parameter)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed parameter at index {}"), i);
-            return false;
-        }
-
-        if(parameter.meta.w == 0u || parameter.meta.w > 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: parameter at index {} has invalid component count {}"), i, parameter.meta.w);
-            return false;
-        }
-        const MaterialParameterValueType::Enum valueType = static_cast<MaterialParameterValueType::Enum>(parameter.meta.z);
-        if(valueType != MaterialParameterValueType::Float
-            && valueType != MaterialParameterValueType::Int
-            && valueType != MaterialParameterValueType::UInt
-            && valueType != MaterialParameterValueType::Bool
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: parameter at index {} has invalid value type {}"), i, parameter.meta.z);
-            return false;
-        }
-
-        m_parameters.push_back(parameter);
-    }
-
-    if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));
-        return false;
-    }
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool MaterialAssetCodec::deserialize(const Name& virtualPath, const Core::Assets::AssetBytes& binary, UniquePtr<Core::Assets::IAsset>& outAsset)const{
-    return Core::Assets::DeserializeTypedAsset<Material>(virtualPath, binary, outAsset);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Material::s_AssetTypeText)
-        );
-        return false;
-    }
-
-    const Material& material = static_cast<const Material&>(asset);
-    if(!material.virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: virtual path is empty"));
-        return false;
-    }
-    if(material.stageShaderCount() == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
-        return false;
-    }
-    if(material.parameters().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter count exceeds u32 range"));
-        return false;
-    }
-    if(!IsFinite(material.alpha())){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material alpha is not finite"));
-        return false;
-    }
-
-    usize reserveBytes =
-        sizeof(u32) + // magic
-        sizeof(u32)   // version
-    ;
-    bool canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), __hidden_material_asset::s_ShaderEntryBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(f32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
-        && AddBinaryRepeatedReserveBytes(reserveBytes, material.parameters().size(), __hidden_material_asset::s_ParameterEntryBytes)
-    ;
-
-    outBinary.clear();
-    if(canReserve)
-        outBinary.reserve(reserveBytes);
-
-    AppendPOD(outBinary, __hidden_material_asset::s_MaterialMagic);
-    AppendPOD(outBinary, __hidden_material_asset::s_MaterialVersion);
-    if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
-        return false;
-    }
-    AppendPOD(outBinary, material.stageShaderCount());
-
-    const Material::StageShaderArray& stageShaders = material.stageShaders();
-    for(usize shaderIndex = 0; shaderIndex < stageShaders.size(); ++shaderIndex){
-        const Core::Assets::AssetRef<Shader>& shaderAsset = stageShaders[shaderIndex];
-        if(!shaderAsset.valid())
-            continue;
-
-        const Core::ShaderType::Enum shaderType = static_cast<Core::ShaderType::Enum>(shaderIndex);
-        if(!Core::ShaderType::IsValid(shaderType)){
-            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader stage index {} is invalid"), shaderIndex);
-            return false;
-        }
-
-        AppendPOD(outBinary, shaderType);
-        AppendPOD(outBinary, shaderAsset.name().hash());
-    }
-
-    AppendPOD(outBinary, material.alpha());
-    const u32 materialFlags = material.transparent() ? __hidden_material_asset::s_MaterialFlagTransparent : 0u;
-    AppendPOD(outBinary, materialFlags);
-    AppendPOD(outBinary, static_cast<u32>(material.parameters().size()));
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MaterialParameterGpuData, Core::Alloc::ScratchAllocator<MaterialParameterGpuData>> sortedParams{
-        Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)
-    };
-    sortedParams.reserve(material.parameters().size());
-    for(const MaterialParameterGpuData& parameter : material.parameters())
-        sortedParams.push_back(parameter);
-
-    Sort(sortedParams.begin(), sortedParams.end(), __hidden_material_asset::LessMaterialParameterGpuData);
-
-    for(const MaterialParameterGpuData& parameter : sortedParams)
-        AppendPOD(outBinary, parameter);
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void Material::clearStageShaders(){
-    for(Core::Assets::AssetRef<Shader>& shaderAsset : m_stageShaders)
-        shaderAsset.reset();
-    m_stageShaderCount = 0;
-}
-
-bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset){
-    if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid())
-        return false;
-
-    Core::Assets::AssetRef<Shader>& storedShader = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
-    if(!storedShader.valid())
-        ++m_stageShaderCount;
-
-    storedShader = shaderAsset;
-    return true;
-}
-
-#if defined(NWB_COOK)
 bool Material::setParameter(const CompactString& key, const CompactString& value){
     if(!key)
         return false;
@@ -657,21 +366,111 @@ bool Material::setParameter(const CompactString& key, const CompactString& value
 
     return !__hidden_material_asset::LooksLikeMaterialParameterGpuValue(value.view());
 }
-#endif
 
-bool Material::findShaderForStage(const Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const{
-    outShaderAsset.reset();
-    if(!Core::ShaderType::IsValid(shaderType))
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
+    if(asset.assetType() != assetType()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
+            , StringConvert(asset.assetType().c_str())
+            , StringConvert(Material::s_AssetTypeText)
+        );
         return false;
+    }
 
-    outShaderAsset = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
-    return outShaderAsset.valid();
+    const Material& material = static_cast<const Material&>(asset);
+    if(!material.virtualPath()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: virtual path is empty"));
+        return false;
+    }
+    if(material.stageShaderCount() == 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
+        return false;
+    }
+    if(material.parameters().size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: parameter count exceeds u32 range"));
+        return false;
+    }
+    if(!IsFinite(material.alpha())){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material alpha is not finite"));
+        return false;
+    }
+
+    usize reserveBytes =
+        sizeof(u32) + // magic
+        sizeof(u32)   // version
+    ;
+    bool canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
+        && AddBinaryReserveBytes(reserveBytes, sizeof(f32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryRepeatedReserveBytes(reserveBytes, material.parameters().size(), MaterialBinaryPayload::s_ParameterEntryBytes)
+    ;
+
+    outBinary.clear();
+    if(canReserve)
+        outBinary.reserve(reserveBytes);
+
+    AppendPOD(outBinary, MaterialBinaryPayload::s_MaterialMagic);
+    AppendPOD(outBinary, MaterialBinaryPayload::s_MaterialVersion);
+    if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
+        return false;
+    }
+    AppendPOD(outBinary, material.stageShaderCount());
+
+    const Material::StageShaderArray& stageShaders = material.stageShaders();
+    for(usize shaderIndex = 0; shaderIndex < stageShaders.size(); ++shaderIndex){
+        const Core::Assets::AssetRef<Shader>& shaderAsset = stageShaders[shaderIndex];
+        if(!shaderAsset.valid())
+            continue;
+
+        const Core::ShaderType::Enum shaderType = static_cast<Core::ShaderType::Enum>(shaderIndex);
+        if(!Core::ShaderType::IsValid(shaderType)){
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader stage index {} is invalid"), shaderIndex);
+            return false;
+        }
+
+        AppendPOD(outBinary, shaderType);
+        AppendPOD(outBinary, shaderAsset.name().hash());
+    }
+
+    AppendPOD(outBinary, material.alpha());
+    const u32 materialFlags = material.transparent() ? MaterialBinaryPayload::s_MaterialFlagTransparent : 0u;
+    AppendPOD(outBinary, materialFlags);
+    AppendPOD(outBinary, static_cast<u32>(material.parameters().size()));
+
+    Core::Alloc::ScratchArena<> scratchArena;
+    Vector<MaterialParameterGpuData, Core::Alloc::ScratchAllocator<MaterialParameterGpuData>> sortedParams{
+        Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)
+    };
+    sortedParams.reserve(material.parameters().size());
+    for(const MaterialParameterGpuData& parameter : material.parameters())
+        sortedParams.push_back(parameter);
+
+    Sort(sortedParams.begin(), sortedParams.end(), __hidden_material_asset::LessMaterialParameterGpuData);
+
+    for(const MaterialParameterGpuData& parameter : sortedParams)
+        AppendPOD(outBinary, parameter);
+
+    return true;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

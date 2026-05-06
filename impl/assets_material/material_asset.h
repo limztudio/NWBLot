@@ -74,18 +74,22 @@ public:
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset);
-#if defined(NWB_COOK)
-    bool setParameter(const CompactString& key, const CompactString& value);
-#endif
 
     bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
 
+public:
     [[nodiscard]] const AString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
     [[nodiscard]] const ParameterVector& parameters()const{ return m_parameters; }
     [[nodiscard]] f32 alpha()const{ return m_alpha; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
+
+
+#if defined(NWB_COOK)
+public:
+    bool setParameter(const CompactString& key, const CompactString& value);
+#endif
 
 
 private:

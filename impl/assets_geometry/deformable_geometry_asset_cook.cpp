@@ -165,8 +165,8 @@ bool DeformableGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, 
 
 bool DeformableDisplacementTextureAssetCodec::serialize(
     const Core::Assets::IAsset& asset,
-    Core::Assets::AssetBytes& outBinary)const
-{
+    Core::Assets::AssetBytes& outBinary
+)const{
     if(asset.assetType() != assetType()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTextureAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
             , StringConvert(asset.assetType().c_str())
@@ -214,3 +214,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

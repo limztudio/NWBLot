@@ -745,8 +745,7 @@ RendererSystem::RendererSystem(
     readAccess<Core::Scene::CameraComponent>();
     readAccess<RendererComponent>();
 }
-RendererSystem::~RendererSystem()
-{}
+RendererSystem::~RendererSystem(){}
 
 
 void RendererSystem::update(Core::ECS::World& world, f32 delta){

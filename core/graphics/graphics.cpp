@@ -513,6 +513,7 @@ void Graphics::setWindowTitle(NotNull<const tchar*> title){
 
     m_windowTitle = title.get();
 }
+
 void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData){
     m_pointerScaleChangedCallback = callback;
     m_pointerScaleChangedUserData = userData;

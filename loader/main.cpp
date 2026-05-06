@@ -38,16 +38,16 @@ namespace __hidden_loader{
 
 class CallbackShutdownGuard : NoCopy{
 public:
-    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks* callbacks)
+    explicit CallbackShutdownGuard(NWB::IProjectEntryCallbacks& callbacks)
         : m_callbacks(callbacks)
     {}
 
     ~CallbackShutdownGuard(){
-        if(!m_active || !m_callbacks)
+        if(!m_active)
             return;
 
         try{
-            m_callbacks->onShutdown();
+            m_callbacks.onShutdown();
         }
         catch(...){
             NWB_LOGGER_ERROR(NWB_TEXT("Project shutdown callback threw an exception"));
@@ -59,12 +59,12 @@ public:
     }
 
 private:
-    NWB::IProjectEntryCallbacks* m_callbacks = nullptr;
+    NWB::IProjectEntryCallbacks& m_callbacks;
     bool m_active = false;
 };
 
 struct UpdateCallbackContext{
-    NWB::IProjectEntryCallbacks* callbacks = nullptr;
+    NWB::IProjectEntryCallbacks& callbacks;
 };
 
 struct LoaderOptions{
@@ -75,8 +75,7 @@ struct LoaderOptions{
 bool ProjectTickCallback(void* userData, f32 delta){
     NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
-    NWB_FATAL_ASSERT_MSG(updateContext->callbacks, NWB_TEXT("ProjectTickCallback received null callbacks"));
-    return updateContext->callbacks->onUpdate(delta);
+    return updateContext->callbacks.onUpdate(delta);
 }
 
 bool HasGraphicsVolumeSegment(const Path& mountDirectory){
@@ -252,8 +251,8 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
                 NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
                 return -1;
             }
-            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ callbacks.get() };
-            __hidden_loader::UpdateCallbackContext updateCallbackContext{ callbacks.get() };
+            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ *callbacks };
+            __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
 
             callbackShutdownGuard.activate();
             if(!callbacks->onStartup()){

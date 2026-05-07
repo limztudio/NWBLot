@@ -12,6 +12,3 @@ target_link_libraries(nwb_ecs_ui PUBLIC
     nwb_input
     nwb::imgui
 )
-target_link_libraries(nwb_ecs_ui PRIVATE
-    nwb_logclient
-)

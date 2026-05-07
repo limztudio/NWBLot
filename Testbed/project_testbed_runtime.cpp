@@ -10,7 +10,7 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <core/scene/light_component.h>
 #include <impl/ecs_ui/ecs_ui.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include <imgui.h>
 

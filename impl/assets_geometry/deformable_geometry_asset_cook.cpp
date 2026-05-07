@@ -15,7 +15,7 @@
 
 #include <core/alloc/scratch.h>
 #include <global/binary.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include <cstddef>
 

@@ -6,7 +6,7 @@
 
 
 #include <global/global.h>
-#include <logger/client/client.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,7 +24,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CapturingLogger final : public Log::IClient{
+class CapturingLogger final : public Log::ILogger{
 public:
     virtual void enqueue(TString&& str, Log::Type::Enum type = Log::Type::Info)override{
         record(str, type);

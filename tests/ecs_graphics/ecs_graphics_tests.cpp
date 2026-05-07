@@ -25,7 +25,7 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_material/material_asset.h>
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 #include <global/binary.h>
 #include <global/compile.h>
@@ -3159,7 +3159,7 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
 
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableRuntimeMeshInstance missingSkeleton = instance;
     missingSkeleton.skeletonJointCount = 0u;
@@ -6503,7 +6503,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     return NWB::Tests::RunTestSuite("ecs graphics", [](NWB::Tests::TestContext& context){
         __hidden_ecs_graphics_tests::CapturingLogger logger;
-        NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+        NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
         __hidden_ecs_graphics_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
         __hidden_ecs_graphics_tests::TestLightComponents(context);

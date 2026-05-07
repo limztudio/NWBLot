@@ -19,7 +19,7 @@
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <impl/ecs_render/components.h>
 #include <global/binary.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

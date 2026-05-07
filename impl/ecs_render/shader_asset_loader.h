@@ -12,7 +12,7 @@
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

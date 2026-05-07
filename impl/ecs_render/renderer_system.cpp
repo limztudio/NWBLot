@@ -16,7 +16,7 @@
 #include <core/scene/light_component.h>
 #include <core/scene/scene.h>
 #include <core/scene/transform_component.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

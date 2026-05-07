@@ -22,7 +22,6 @@ target_link_libraries(testbed PRIVATE
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_geometry>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
-    nwb_logclient
 )
 
 if(TARGET nwb_logserver)

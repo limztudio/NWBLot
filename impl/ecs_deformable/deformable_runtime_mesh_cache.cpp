@@ -10,7 +10,7 @@
 #include <core/ecs/world.h>
 #include <impl/assets_geometry/deformable_geometry_asset.h>
 #include <impl/assets_geometry/deformable_geometry_payload_logging.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

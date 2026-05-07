@@ -13,7 +13,7 @@
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>
 #include <impl/ecs_render/shader_asset_loader.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

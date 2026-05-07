@@ -11,7 +11,7 @@
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
 #include <global/binary.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

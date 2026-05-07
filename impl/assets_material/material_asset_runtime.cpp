@@ -5,7 +5,7 @@
 #include "material_asset.h"
 #include "material_binary_payload.h"
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 #include <core/assets/asset_auto_registration.h>
 
 

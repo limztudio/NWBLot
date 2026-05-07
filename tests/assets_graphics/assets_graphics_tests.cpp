@@ -18,7 +18,7 @@
 #include <global/binary.h>
 #include <global/compile.h>
 
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1148,7 +1148,7 @@ static void CheckCodecRejectsUnsupportedBinaryVersion(
 ){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     auto asset = buildAsset();
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, asset.validatePayload());
@@ -1276,7 +1276,7 @@ static void TestDeformableGeometryCodecRejectsUnsupportedBinaryVersion(TestConte
 static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
     NWB::Impl::DeformableGeometryAssetCodec codec;
@@ -1298,7 +1298,7 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
 static void TestDeformableGeometryCodecRejectsUnusedStringTable(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
     NWB::Impl::DeformableGeometryAssetCodec codec;
@@ -1319,7 +1319,7 @@ static void TestDeformableGeometryCodecRejectsUnusedStringTable(TestContext& con
 static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
     NWB::Impl::DeformableGeometryAssetCodec codec;
@@ -1369,7 +1369,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
 
 static void TestGeometryCookerTypedStreams(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1403,7 +1403,7 @@ static void TestGeometryCookerTypedStreams(TestContext& context){
 
 static void TestGeometryCookerDefaultColors(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1435,7 +1435,7 @@ static void TestGeometryCookerDefaultColors(TestContext& context){
 static void TestGeometryCookerValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
@@ -1467,7 +1467,7 @@ static void TestGeometryCookerValidationFailures(TestContext& context){
 
 static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1491,7 +1491,7 @@ static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
 
 static void TestDeformableGeometryCookerGeneratesMissingFrames(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1531,7 +1531,7 @@ static void TestDeformableGeometryCookerGeneratesMissingFrames(TestContext& cont
 
 static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1566,7 +1566,7 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
 
 static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     auto expectCookedDefaultOptionals = [&](const AStringView metaText, const AStringView caseName){
@@ -1595,7 +1595,7 @@ static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& 
 
 static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1629,7 +1629,7 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
 
 static void TestDeformableGeometryCookerNormalizesSkinWeights(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1664,7 +1664,7 @@ static void TestDeformableGeometryCookerNormalizesSkinWeights(TestContext& conte
 
 static void TestDeformableGeometryCookerSkinnedClass(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     Path root;
@@ -1702,7 +1702,7 @@ static void TestDeformableGeometryCookerSkinnedClass(TestContext& context){
 
 static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& context){
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     auto checkCookedDisplacement = [&](
@@ -1773,7 +1773,7 @@ static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& co
 static void TestDeformableGeometryCookerValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
     auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
@@ -1830,7 +1830,7 @@ static void CheckInvalidDeformableGeometry(TestContext& context, MutateFnT mutat
 static void TestDeformableGeometryValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
         Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();

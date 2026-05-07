@@ -8,7 +8,7 @@
 #include <impl/ecs_deformable_render/ecs_deformable_render.h>
 #include <impl/ecs_render/ecs_render.h>
 #include <impl/ecs_ui/ecs_ui.h>
-#include <logger/client/logger.h>
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

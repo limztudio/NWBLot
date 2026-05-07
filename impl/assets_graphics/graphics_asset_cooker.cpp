@@ -11,7 +11,7 @@
 #include "graphics_asset_cooker.h"
 
 #include <impl/assets_geometry/geometry_asset_cook.h>
-#include <impl/assets_material/material_asset.h>
+#include <impl/assets_material/material_asset_cook.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
 #include <impl/assets_shader/shader_cook.h>
@@ -62,18 +62,6 @@ static const Name& IncludeAssetTypeName(){
 
 static bool IsMeshShaderStage(const AStringView stageName){
     return stageName == "mesh";
-}
-
-static bool IsMaterialPixelShaderStage(const Core::ShaderType::Enum shaderType){
-    return shaderType == Core::ShaderType::PixelStage;
-}
-
-static bool IsMaterialMeshShaderStage(const Core::ShaderType::Enum shaderType){
-    return shaderType == Core::ShaderType::MeshStage;
-}
-
-static bool IsSupportedRendererMaterialShaderStage(const Core::ShaderType::Enum shaderType){
-    return IsMaterialPixelShaderStage(shaderType) || IsMaterialMeshShaderStage(shaderType);
 }
 
 static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry, ShaderCook::ShaderEntry& outEntry){
@@ -129,27 +117,6 @@ struct VariantCachePaths{
     Path bytecodePath;
     Path sourceChecksumPath;
 };
-struct MaterialEntry{
-    using StageShaderMap = ShaderCook::CookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
-    using ParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
-
-    Name virtualPath = NAME_NONE;
-    AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
-    StageShaderMap stageShaders;
-    ParameterMap parameters;
-
-    explicit MaterialEntry(ShaderCook::CookArena& arena)
-        : stageShaders(ShaderCook::CookAllocator<Pair<const Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>>(arena))
-        , parameters(ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
-    {}
-
-    void reset(){
-        virtualPath = NAME_NONE;
-        shaderVariant = Core::ShaderArchive::s_DefaultVariant;
-        stageShaders.clear();
-        parameters.clear();
-    }
-};
 struct PreparedShaderKey{
     Name shaderName = NAME_NONE;
     Name stageName = NAME_NONE;
@@ -186,7 +153,7 @@ using DiscoveredNwbFileVector = ShaderCook::CookVector<DiscoveredNwbFile>;
 using GeometryCookEntryVector = ShaderCook::CookVector<GeometryCookEntry>;
 using DeformableGeometryCookEntryVector = ShaderCook::CookVector<DeformableGeometryCookEntry>;
 using DeformableDisplacementTextureCookEntryVector = ShaderCook::CookVector<DeformableDisplacementTextureCookEntry>;
-using MaterialEntryVector = ShaderCook::CookVector<MaterialEntry>;
+using MaterialCookEntryVector = ShaderCook::CookVector<MaterialCookEntry>;
 
 struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
@@ -194,7 +161,7 @@ struct ParsedAssetMetadata{
     GeometryCookEntryVector geometryEntries;
     DeformableGeometryCookEntryVector deformableGeometryEntries;
     DeformableDisplacementTextureCookEntryVector deformableDisplacementTextureEntries;
-    MaterialEntryVector materialEntries;
+    MaterialCookEntryVector materialEntries;
 
     explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
         : includeMetadata(ShaderCook::CookAllocator<Pair<const AString, ShaderCook::IncludeEntry>>(arena))
@@ -202,7 +169,7 @@ struct ParsedAssetMetadata{
         , geometryEntries(ShaderCook::CookAllocator<GeometryCookEntry>(arena))
         , deformableGeometryEntries(ShaderCook::CookAllocator<DeformableGeometryCookEntry>(arena))
         , deformableDisplacementTextureEntries(ShaderCook::CookAllocator<DeformableDisplacementTextureCookEntry>(arena))
-        , materialEntries(ShaderCook::CookAllocator<MaterialEntry>(arena))
+        , materialEntries(ShaderCook::CookAllocator<MaterialCookEntry>(arena))
     {}
 };
 
@@ -425,228 +392,6 @@ static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, Dis
     return true;
 }
 
-static bool ParseVariantField(
-    ShaderCook& shaderCook,
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView fieldName,
-    const AStringView defaultValue,
-    AString& outVariant
-){
-    outVariant = defaultValue;
-
-    const auto* variantValue = asset.findField(fieldName);
-    if(!variantValue)
-        return true;
-
-    AString rawVariant;
-    if(variantValue->isList()){
-        const auto& list = variantValue->asList();
-        usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
-        for(usize i = 0; i < list.size(); ++i){
-            if(!list[i].isString()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' list elements must be strings")
-                    , PathToString<tchar>(nwbFilePath)
-                    , StringConvert(fieldName)
-                );
-                return false;
-            }
-            rawVariantSize += list[i].asString().size();
-        }
-
-        rawVariant.reserve(rawVariantSize);
-        for(usize i = 0; i < list.size(); ++i){
-            if(i > 0)
-                rawVariant += ';';
-            const Core::Metascript::MStringView variantText = list[i].asString();
-            rawVariant.append(variantText.data(), variantText.size());
-        }
-    }
-    else if(variantValue->isString()){
-        const Core::Metascript::MStringView variantText = variantValue->asString();
-        rawVariant.assign(variantText.data(), variantText.size());
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string or list of strings")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const AStringView rawVariantView = TrimView(rawVariant);
-    if(rawVariantView.empty()){
-        outVariant = defaultValue;
-        return true;
-    }
-    if(rawVariantView == Core::ShaderArchive::s_DefaultVariant){
-        outVariant = Core::ShaderArchive::s_DefaultVariant;
-        return true;
-    }
-
-    AString canonicalVariant;
-    if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-            , StringConvert(rawVariantView)
-        );
-        return false;
-    }
-
-    outVariant = Move(canonicalVariant);
-    return true;
-}
-
-static bool ParseMaterialStageShaders(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    MaterialEntry::StageShaderMap& outStageShaders
-){
-    outStageShaders.clear();
-
-    const auto* shadersValue = asset.findField("shaders");
-    if(!shadersValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders is required"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    if(!shadersValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must be a map"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    outStageShaders.reserve(shadersValue->asMap().size());
-
-    for(const auto& [stageKey, shaderValue] : shadersValue->asMap()){
-        const AStringView stageKeyText(stageKey.data(), stageKey.size());
-        if(!shaderValue.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader '{}' must be a string")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(stageKeyText)
-            );
-            return false;
-        }
-
-        const Core::ShaderType::Enum shaderType =
-            Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(stageKeyText));
-        const Name shaderName = ToName(shaderValue.asString());
-        Core::Assets::AssetRef<Shader> shaderAsset;
-        shaderAsset.virtualPath = shaderName;
-        if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
-            return false;
-        }
-        if(!IsSupportedRendererMaterialShaderStage(shaderType)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(stageKeyText)
-            );
-            return false;
-        }
-
-        if(!outStageShaders.emplace(shaderType, shaderAsset).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate shader stage '{}'")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(stageKeyText)
-            );
-            return false;
-        }
-    }
-
-    if(outStageShaders.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must not be empty"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    return true;
-}
-
-static bool ParseMaterialParameters(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    MaterialEntry::ParameterMap& outParameters
-){
-    outParameters.clear();
-
-    const auto* parametersValue = asset.findField("parameters");
-    if(!parametersValue)
-        return true;
-    if(!parametersValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameters must be a map"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    outParameters.reserve(parametersValue->asMap().size());
-
-    for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
-        const AStringView paramKeyText(paramKey.data(), paramKey.size());
-        if(!paramValue.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a string")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(paramKeyText)
-            );
-            return false;
-        }
-
-        CompactString key;
-        CompactString value;
-        const AStringView paramValueText(paramValue.asString().data(), paramValue.asString().size());
-        if(!key.assign(paramKeyText) || !value.assign(paramValueText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' exceeds CompactString capacity")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(paramKeyText)
-            );
-            return false;
-        }
-        if(!key){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter names must not be empty"), PathToString<tchar>(nwbFilePath));
-            return false;
-        }
-
-        if(!outParameters.emplace(key, value).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate parameter '{}'")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(key.c_str())
-            );
-            return false;
-        }
-    }
-
-    return true;
-}
-
-static bool ParseMaterialMeta(
-    ShaderCook& shaderCook,
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Document& doc,
-    MaterialEntry& outEntry
-){
-    outEntry.reset();
-
-    const Core::Metascript::Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': asset is not a map"), PathToString<tchar>(discoveredFile.filePath));
-        return false;
-    }
-
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        asset,
-        "Material",
-        outEntry.virtualPath
-    ))
-        return false;
-
-    if(!ParseVariantField(shaderCook, discoveredFile.filePath, asset, "shader_variant", Core::ShaderArchive::s_DefaultVariant, outEntry.shaderVariant))
-        return false;
-    if(!ParseMaterialStageShaders(discoveredFile.filePath, asset, outEntry.stageShaders))
-        return false;
-    if(!ParseMaterialParameters(discoveredFile.filePath, asset, outEntry.parameters))
-        return false;
-
-    return true;
-}
-
 template<typename AssetRootVector>
 static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector& assetRoots, const ShaderCook::ShaderEntry& entry, ShaderCook::CookVector<Path>& outIncludeDirectories){
     Core::Alloc::ScratchArena<> scratchArena;
@@ -786,7 +531,7 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
 
 static bool NormalizeMaterialVariant(
     ShaderCook& shaderCook,
-    const MaterialEntry& materialEntry,
+    const MaterialCookEntry& materialEntry,
     const PreparedShaderEntry& preparedShaderEntry,
     const Name& stageName,
     AString& outNormalizedVariant
@@ -833,7 +578,7 @@ static bool NormalizeMaterialVariant(
 static bool ValidateAndNormalizeMaterials(
     ShaderCook& shaderCook,
     const Vector<PreparedShaderEntry, ShaderCook::CookAllocator<PreparedShaderEntry>>& preparedEntries,
-    MaterialEntryVector& inOutMaterialEntries
+    MaterialCookEntryVector& inOutMaterialEntries
 ){
     Core::Alloc::ScratchArena<> scratchArena;
     HashMap<
@@ -863,7 +608,7 @@ static bool ValidateAndNormalizeMaterials(
         }
     }
 
-    for(MaterialEntry& materialEntry : inOutMaterialEntries){
+    for(MaterialCookEntry& materialEntry : inOutMaterialEntries){
         AString normalizedVariant;
         bool hasNormalizedVariant = false;
 
@@ -1209,8 +954,15 @@ static bool ParseAssetMetadata(
         }
 
         if(assetType == Material::AssetTypeName()){
-            MaterialEntry materialEntry(cookArena);
-            if(!ParseMaterialMeta(shaderCook, discoveredNwbFile, doc, materialEntry))
+            MaterialCookEntry materialEntry(cookArena);
+            if(!ParseMaterialCookMetadata(
+                shaderCook,
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                discoveredNwbFile.filePath,
+                doc,
+                materialEntry
+            ))
                 return false;
 
             if(!AppendUniquePropertyAssetEntry(materialEntry, seenPropertyAssetPathHashes, outMetadata.materialEntries))
@@ -1577,38 +1329,20 @@ static bool PushSerializedAssetToVolume(
 }
 
 static bool AppendMaterialAssetsToVolume(
-    const MaterialEntryVector& materialEntries,
+    const MaterialCookEntryVector& materialEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
     MaterialAssetCodec materialCodec;
     Vector<u8> materialBinary;
 
-    for(const MaterialEntry& materialEntry : materialEntries){
+    for(const MaterialCookEntry& materialEntry : materialEntries){
         if(!RegisterVolumeAssetPath(NWB_TEXT("material"), materialEntry.virtualPath, inOutSeenVirtualPathHashes))
             return false;
 
-        Material cookedMaterial(materialEntry.virtualPath);
-        cookedMaterial.setShaderVariant(materialEntry.shaderVariant);
-        for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
-            if(!cookedMaterial.setShaderForStage(shaderType, shaderAsset)){
-                const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: invalid material shader stage '{}' for '{}'")
-                    , StringConvert(stageName.c_str())
-                    , StringConvert(materialEntry.virtualPath.c_str())
-                );
-                return false;
-            }
-        }
-        for(const auto& [paramName, paramValue] : materialEntry.parameters){
-            if(!cookedMaterial.setParameter(paramName, paramValue)){
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: invalid material parameter '{}' for '{}'")
-                    , StringConvert(paramName.c_str())
-                    , StringConvert(materialEntry.virtualPath.c_str())
-                );
-                return false;
-            }
-        }
+        Material cookedMaterial;
+        if(!BuildMaterialAsset(materialEntry, cookedMaterial))
+            return false;
 
         if(!PushSerializedAssetToVolume(
             NWB_TEXT("material"),

@@ -13,6 +13,7 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset.h"
+        "${CMAKE_CURRENT_LIST_DIR}/material_asset_cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_shader_stage_names.h"
     )

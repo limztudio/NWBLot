@@ -15,6 +15,10 @@
 inline constexpr u64 FNV64_OFFSET_BASIS = 14695981039346656037ull;
 inline constexpr u64 FNV64_PRIME = 1099511628211ull;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename CharT>
 inline constexpr u64 FNV1a64(const CharT* str, u64 seed){
     u64 hash = seed;

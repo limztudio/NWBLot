@@ -244,8 +244,6 @@ private:
     char m_storage[s_BufferBytes];
     u8 m_size;
 };
-
-
 static_assert(sizeof(CompactString) == CompactString::s_StorageBytes, "CompactString must stay 256 bytes");
 
 

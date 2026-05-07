@@ -18,6 +18,10 @@ using MemoryOrder = std::memory_order;
 template<typename T>
 using Atomic = std::atomic<T>;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline void AtomicThreadFence(const MemoryOrder order)noexcept{ std::atomic_thread_fence(order); }
 
 

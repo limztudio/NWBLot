@@ -88,22 +88,21 @@ struct TriangleLocalIndices{
 
 [[nodiscard]] TriangleLocalIndices ResolveTriangleLocalIndices(const PendingMeshlet& meshlet, const TriangleVertices& triangle){
     TriangleLocalIndices output;
+    u32 missingVertexCount = 3u;
 
-    for(usize localIndex = 0u; localIndex < meshlet.vertices.size(); ++localIndex){
+    for(usize localIndex = 0u; localIndex < meshlet.vertices.size() && missingVertexCount != 0u; ++localIndex){
         const u32 vertex = meshlet.vertices[localIndex];
         for(u32 corner = 0u; corner < 3u; ++corner){
             if(output.values[corner] != Limit<u32>::s_Max || triangle.values[corner] != vertex)
                 continue;
 
             output.values[corner] = static_cast<u32>(localIndex);
+            --missingVertexCount;
             break;
         }
     }
 
-    for(u32 corner = 0u; corner < 3u; ++corner){
-        if(output.values[corner] == Limit<u32>::s_Max)
-            ++output.missingVertexCount;
-    }
+    output.missingVertexCount = missingVertexCount;
     return output;
 }
 

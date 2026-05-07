@@ -2680,7 +2680,7 @@ template<typename DistanceFunc>
                 const u32 edgeB = triangle.indices[(edgeIndex + 1u) % 3u];
                 const u32 opposite = triangle.indices[(edgeIndex + 2u) % 3u];
                 for(usize generatedIndex = 0u; generatedIndex < generatedVertexScanCount; ++generatedIndex){
-                    const SurfaceRemeshGeneratedVertex generated = generatedVertices[generatedIndex];
+                    const SurfaceRemeshGeneratedVertex& generated = generatedVertices[generatedIndex];
                     if(!SurfaceRemeshEdgeContainsVertex(restPositions, edgeA, edgeB, generated.vertex))
                         continue;
 
@@ -2805,10 +2805,22 @@ template<typename DistanceFunc>
     if(!PointInsideOperatorCrossSection(params.operatorFootprint, 0.0f, 0.0f))
         return false;
 
-    outRestPositions.reserve(instance.restVertices.size());
+    const usize remeshReserve = Min(
+        triangleCount * 3u,
+        Max(static_cast<usize>(params.operatorFootprint.vertexCount) * 8u, static_cast<usize>(64u))
+    );
+    usize restPositionReserve = instance.restVertices.size();
+    if(restPositionReserve <= Limit<usize>::s_Max - remeshReserve)
+        restPositionReserve += remeshReserve;
+    outRestPositions.reserve(restPositionReserve);
+    outGeneratedVertices.reserve(remeshReserve);
+    outAffectedTriangleIndices.reserve(Min(triangleCount, remeshReserve));
     for(const DeformableVertexRest& restVertex : instance.restVertices)
         outRestPositions.push_back(restVertex.position);
-    outSurfaceTriangles.reserve(triangleCount);
+    usize surfaceTriangleReserve = triangleCount;
+    if(surfaceTriangleReserve <= Limit<usize>::s_Max - remeshReserve)
+        surfaceTriangleReserve += remeshReserve;
+    outSurfaceTriangles.reserve(surfaceTriangleReserve);
 
     using BoundaryEdgeMap = HashMap<
         u64,
@@ -2823,11 +2835,7 @@ template<typename DistanceFunc>
         EqualTo<u64>(),
         Core::Alloc::ScratchAllocator<Pair<const u64, EdgeRecord>>(scratchArena)
     );
-    const usize boundaryEdgeReserve = Min(
-        triangleCount * 3u,
-        Max(static_cast<usize>(params.operatorFootprint.vertexCount) * 8u, static_cast<usize>(64u))
-    );
-    boundaryEdgeMap.reserve(boundaryEdgeReserve);
+    boundaryEdgeMap.reserve(remeshReserve);
 
     if(!ValidateOperatorFootprint(params.operatorFootprint))
         return false;

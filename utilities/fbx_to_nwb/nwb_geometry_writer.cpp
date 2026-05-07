@@ -116,6 +116,17 @@ bool WriteNwbGeometry(
     if(!__hidden_nwb_geometry_writer::ChooseIndexType(requestedIndexType, vertices.size(), outIndexType, outError))
         return false;
 
+    GeometryKind::Enum geometryKind = GeometryKind::Invalid;
+    if(!ParseAssetKind(assetKind, geometryKind)){
+        outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";
+        return false;
+    }
+    const bool writeDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryKind);
+    if(GeometryKindUsesSkinning(geometryKind)){
+        outError = "skinned and skinned_deform output require skeleton/skin export, which this converter does not write yet";
+        return false;
+    }
+
     ErrorCode errorCode;
     const Path parentPath = outputPath.parent_path();
     if(!parentPath.empty()){
@@ -132,14 +143,8 @@ bool WriteNwbGeometry(
     }
     file.precision(9);
 
-    const AString normalizedAssetKind = NormalizeAssetKind(assetKind);
-    const bool writeDeformableGeometry = IsNormalizedDeformableGeometryKind(normalizedAssetKind);
-    if(IsNormalizedSkinnedGeometryKind(normalizedAssetKind)){
-        outError = "skinned and skinned_deform output require skeleton/skin export, which this converter does not write yet";
-        return false;
-    }
     file << (writeDeformableGeometry ? "deformable_geometry asset;\n\n" : "geometry asset;\n\n");
-    file << "asset.geometry_class = \"" << normalizedAssetKind << "\";\n\n";
+    file << "asset.geometry_class = \"" << GeometryKindText(geometryKind) << "\";\n\n";
     file << "asset.index_type = \"" << outIndexType << "\";\n\n";
 
     file << "asset.positions = [\n";

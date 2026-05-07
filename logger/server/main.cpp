@@ -10,7 +10,7 @@
 
 #include <CLI.hpp>
 
-#include <global/command.h>
+#include <core/common/command_line.h>
 #include <core/common/common.h>
 #include "server.h"
 #include "frame.h"
@@ -58,14 +58,14 @@ static int MainLogic(u16 logPort, void* inst){
 
 
 static int EntryPoint(isize argc, tchar** argv, void* inst){
-    u16 logPort = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
+    u16 logPort = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
     {
         CLI::App app{ "logserver" };
 
-        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, logPort);
+        NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
 
         try{
-            NWB::ArgParseApp(app, argc, argv);
+            NWB::Core::Common::ArgParseApp(app, argc, argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

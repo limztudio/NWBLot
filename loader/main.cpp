@@ -11,9 +11,9 @@
 #include <CLI.hpp>
 
 #include <global/global.h>
-#include <global/command.h>
 #include <global/filesystem.h>
 
+#include <core/common/command_line.h>
 #include <logger/client/logger.h>
 #include <core/common/common.h>
 #include <core/frame/frame.h>
@@ -291,14 +291,14 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     {
         CLI::App app{ "loader" };
 
-        AString address = Get<static_cast<usize>(NWB::ArgCommand::LogAddress)>(NWB::g_ArgDefault);
-        u16 port = Get<static_cast<usize>(NWB::ArgCommand::LogPort)>(NWB::g_ArgDefault);
-        NWB::ArgAddOption<NWB::ArgCommand::LogAddress>(app, address);
-        NWB::ArgAddOption<NWB::ArgCommand::LogPort>(app, port);
+        AString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
+        u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
+        NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
+        NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
         __hidden_loader::AddDebugCommandLineOptions(app, options);
 
         try{
-            NWB::ArgParseApp(app, argc, argv);
+            NWB::Core::Common::ArgParseApp(app, argc, argv);
         }
         catch(const CLI::ParseError& e){
             app.exit(e, NWB_COUT, NWB_CERR);

@@ -15,7 +15,7 @@
 
 
 #include <windows.h>
-#include <global/win32_message_loop.h>
+#include <core/common/win32_message_loop.h>
 
 #include "frame_input_helpers.h"
 
@@ -279,7 +279,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
         if(
-            HandleWin32FrameLifecycleMessage(
+            Common::HandleWin32FrameLifecycleMessage(
                 hwnd,
                 uMsg,
                 wParam,
@@ -477,7 +477,7 @@ bool Frame::showFrame(){
     return true;
 }
 bool Frame::mainLoop(){
-    return RunWin32TimedFrameLoop(
+    return Common::RunWin32TimedFrameLoop(
         [&](){ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};

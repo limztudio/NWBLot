@@ -6,7 +6,7 @@
 
 #include <CLI.hpp>
 
-#include <global/command.h>
+#include <core/common/command_line.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +92,7 @@ CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookO
     outOptions = {};
     outError.clear();
 
-    if(NWB::ArgHasValidArgv(argc, argv)){
+    if(NWB::Core::Common::ArgHasValidArgv(argc, argv)){
         for(int i = 1; i < argc; ++i){
             if(argv[i] == nullptr)
                 continue;
@@ -108,7 +108,7 @@ CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookO
     ConfigureCommandLineOptions(app, parsedOptions);
 
     try{
-        NWB::ArgParseApp(app, argc, argv);
+        NWB::Core::Common::ArgParseApp(app, argc, argv);
     }
     catch(const CLI::CallForHelp&){
         return CommandLineParseResult::Help;

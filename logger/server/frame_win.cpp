@@ -16,7 +16,7 @@
 
 
 #include <windows.h>
-#include <global/win32_message_loop.h>
+#include <core/common/win32_message_loop.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
     if(auto* frame = s_Frame){
         LRESULT lifecycleResult = 0;
         if(
-            HandleWin32FrameLifecycleMessage(
+            NWB::Core::Common::HandleWin32FrameLifecycleMessage(
             hwnd,
             uMsg,
             wParam,
@@ -388,7 +388,7 @@ bool Frame::showFrame(){
     return true;
 }
 bool Frame::mainLoop(){
-    return RunWin32TimedFrameLoop(
+    return NWB::Core::Common::RunWin32TimedFrameLoop(
         [&](){ return data<FrameDetail::WinFrame>().isActive(); },
         [](){},
         [&](const f32 timeDifference){ return update(timeDifference); }

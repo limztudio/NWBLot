@@ -67,22 +67,6 @@ static bool BuildDiscoveredNwbFile(
     return true;
 }
 
-static bool BuildDiscoveredAssetVirtualPath(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset,
-    const AStringView assetLabel,
-    Name& outVirtualPath
-){
-    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, assetLabel))
-        return false;
-    return Core::Assets::BuildDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        outVirtualPath
-    );
-}
-
 static bool AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount){
     if(value.isList()){
         for(const Core::Metascript::Value& child : value.asList()){
@@ -488,7 +472,14 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     }
 
-    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "Geometry", outEntry.virtualPath))
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        asset,
+        "Geometry",
+        outEntry.virtualPath
+    ))
         return false;
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
@@ -1321,7 +1312,14 @@ static bool ParseDeformableGeometryMeta(
         return false;
     }
 
-    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "DeformableGeometry", outEntry.virtualPath))
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        asset,
+        "DeformableGeometry",
+        outEntry.virtualPath
+    ))
         return false;
 
     if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
@@ -1476,7 +1474,14 @@ static bool ParseDeformableDisplacementTextureMeta(
         return false;
     }
 
-    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "DeformableDisplacementTexture", outEntry.virtualPath))
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        asset,
+        "DeformableDisplacementTexture",
+        outEntry.virtualPath
+    ))
         return false;
 
     const Core::Metascript::Value* width = FindField(asset, "width");

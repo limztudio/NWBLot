@@ -521,17 +521,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     return ValidTriangleArea(restVertices, a, b, c);
 }
 
-[[nodiscard]] inline bool ValidRuntimePayloadArrays(
-    const Vector<DeformableVertexRest>& restVertices,
-    const Vector<u32>& indices,
-    const u32 sourceTriangleCount,
-    const u32 skeletonJointCount,
-    const Vector<SkinInfluence4>& skin,
-    const Vector<DeformableJointMatrix>& inverseBindMatrices,
-    const Vector<SourceSample>& sourceSamples,
-    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
-    const Vector<DeformableMorph>& morphs);
-
 [[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(
     const Vector<DeformableVertexRest>& restVertices,
     const Vector<u32>& indices,

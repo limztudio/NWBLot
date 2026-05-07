@@ -342,6 +342,32 @@ template<typename MetadataValue>
     return false;
 }
 
+template<typename MetadataValue>
+[[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView assetLabel,
+    Name& outVirtualPath
+){
+    if(!RejectVirtualPathOverrideField(nwbFilePath, asset, assetLabel))
+        return false;
+    return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outVirtualPath);
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(
+    const Path& assetRoot,
+    const CompactString& virtualRoot,
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView assetLabel,
+    Name& outVirtualPath
+){
+    return BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot.view(), nwbFilePath, asset, assetLabel, outVirtualPath);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

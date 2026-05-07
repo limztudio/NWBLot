@@ -5,7 +5,7 @@
 #include "deformable_geometry_asset.h"
 
 #include "deformable_geometry_binary_payload.h"
-#include "deformable_geometry_validation.h"
+#include "deformable_geometry_payload_logging.h"
 #include "geometry_binary_payload.h"
 
 #include <core/alloc/scratch.h>
@@ -40,187 +40,6 @@ UniquePtr<Core::Assets::IAssetCodec> CreateDeformableDisplacementTextureAssetCod
 Core::Assets::AssetCodecAutoRegistrar s_DeformableDisplacementTextureAssetCodecAutoRegistrar(
     &CreateDeformableDisplacementTextureAssetCodec
 );
-
-
-void LogGeometryMorphPayloadFailure(
-    const TString& geometryPathText,
-    const Vector<DeformableMorph>& morphs,
-    const DeformableValidation::MorphPayloadFailureInfo& failure){
-    const TString morphNameText = DeformableValidation::MorphPayloadFailureMorphNameText(morphs, failure);
-
-    switch(failure.reason){
-    case DeformableValidation::MorphPayloadFailure::MorphCountLimit:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph count exceeds u32 limits")
-            , geometryPathText
-        );
-        break;
-    case DeformableValidation::MorphPayloadFailure::EmptyMorph:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph {} is unnamed or empty")
-            , geometryPathText
-            , failure.morphIndex
-        );
-        break;
-    case DeformableValidation::MorphPayloadFailure::DuplicateMorphName:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' contains duplicate morph '{}'")
-            , geometryPathText
-            , morphNameText
-        );
-        break;
-    case DeformableValidation::MorphPayloadFailure::MorphDeltaCountLimit:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta count exceeds u32 limits")
-            , geometryPathText
-            , morphNameText
-        );
-        break;
-    case DeformableValidation::MorphPayloadFailure::InvalidMorphDelta:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' delta {} is invalid")
-            , geometryPathText
-            , morphNameText
-            , failure.deltaIndex
-        );
-        break;
-    case DeformableValidation::MorphPayloadFailure::DuplicateMorphDeltaVertex:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph '{}' has duplicate vertex {}")
-            , geometryPathText
-            , morphNameText
-            , failure.vertexId
-        );
-        break;
-    case DeformableValidation::MorphPayloadFailure::None:
-        break;
-    }
-}
-
-void LogGeometryRuntimePayloadFailure(
-    const TString& geometryPathText,
-    const Vector<DeformableMorph>& morphs,
-    const DeformableValidation::RuntimePayloadFailureInfo& failure){
-    switch(failure.reason){
-    case DeformableValidation::RuntimePayloadFailure::IncompleteRestIndexPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has incomplete rest/index payload")
-            , geometryPathText
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::VertexIndexCountLimit:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits")
-            , geometryPathText
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::IndexCountNotTriangleList:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3")
-            , geometryPathText
-            , failure.count
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::InvalidRestVertex:
-        if(failure.restVertexFailure == DeformableValidation::RestVertexPayloadFailure::NonFiniteData){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} contains non-finite data")
-                , geometryPathText
-                , failure.vertexIndex
-            );
-        }
-        else if(failure.restVertexFailure == DeformableValidation::RestVertexPayloadFailure::DegenerateFrame){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has a degenerate normal/tangent frame")
-                , geometryPathText
-                , failure.vertexIndex
-            );
-        }
-        else if(failure.restVertexFailure == DeformableValidation::RestVertexPayloadFailure::InvalidFrame){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' rest vertex {} has an invalid normal/tangent frame")
-                , geometryPathText
-                , failure.vertexIndex
-            );
-        }
-        break;
-    case DeformableValidation::RuntimePayloadFailure::IndexOutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' index {} exceeds {} vertices")
-            , geometryPathText
-            , failure.vertexId
-            , failure.count
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::DegenerateTriangle:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} is degenerate")
-            , geometryPathText
-            , failure.indexBase / 3u
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::ZeroAreaTriangle:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' triangle {} has zero area")
-            , geometryPathText
-            , failure.indexBase / 3u
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::SkinCountMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skin count {} does not match vertex count {}")
-            , geometryPathText
-            , failure.count
-            , failure.expectedCount
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::SkinMissingSkeleton:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has skin but no skeleton joint count")
-            , geometryPathText
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::SkeletonJointCountLimit:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' skeleton joint count {} exceeds skin stream limits")
-            , geometryPathText
-            , failure.count
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::InvalidInverseBindMatrices:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' inverse bind matrices must be empty or match a valid skeleton")
-            , geometryPathText
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::InvalidSkinInfluence:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin weights for vertex {} are invalid")
-            , geometryPathText
-            , failure.vertexIndex
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::SkinJointOutOfRange:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' skin joint {} for vertex {} exceeds skeleton joint count {}")
-            , geometryPathText
-            , failure.failedJoint
-            , failure.vertexIndex
-            , failure.count
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::SourceSampleCountMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' source samples {} do not match vertices {}")
-            , geometryPathText
-            , failure.count
-            , failure.expectedCount
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::InvalidSourceSample:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' source sample {} is invalid")
-            , geometryPathText
-            , failure.vertexIndex
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::EditMaskCountMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: '{}' edit mask count {} does not match triangle count {}")
-            , geometryPathText
-            , failure.count
-            , failure.expectedCount
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::InvalidEditMask:
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' edit mask {} is invalid")
-            , geometryPathText
-            , failure.indexBase / 3u
-        );
-        break;
-    case DeformableValidation::RuntimePayloadFailure::MorphPayload:
-        LogGeometryMorphPayloadFailure(geometryPathText, morphs, failure.morphFailure);
-        break;
-    case DeformableValidation::RuntimePayloadFailure::None:
-        break;
-    }
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -408,7 +227,9 @@ bool DeformableGeometry::validatePayload()const{
         )
     ;
     if(runtimePayloadFailure.reason != DeformableValidation::RuntimePayloadFailure::None){
-        __hidden_deformable_geometry_asset::LogGeometryRuntimePayloadFailure(
+        DeformableValidation::LogRuntimePayloadFailure(
+            NWB_TEXT("DeformableGeometry::validatePayload failed"),
+            NWB_TEXT("geometry"),
             geometryPathText(),
             m_morphs,
             runtimePayloadFailure

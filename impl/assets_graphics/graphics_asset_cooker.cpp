@@ -613,22 +613,6 @@ static bool ParseMaterialParameters(
     return true;
 }
 
-static bool BuildDiscoveredAssetVirtualPath(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset,
-    const AStringView assetLabel,
-    Name& outVirtualPath
-){
-    if(!Core::Assets::RejectVirtualPathOverrideField(discoveredFile.filePath, asset, assetLabel))
-        return false;
-    return Core::Assets::BuildDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        outVirtualPath
-    );
-}
-
 static bool ParseMaterialMeta(
     ShaderCook& shaderCook,
     const DiscoveredNwbFile& discoveredFile,
@@ -643,7 +627,14 @@ static bool ParseMaterialMeta(
         return false;
     }
 
-    if(!BuildDiscoveredAssetVirtualPath(discoveredFile, asset, "Material", outEntry.virtualPath))
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
+        discoveredFile.assetRoot,
+        discoveredFile.virtualRoot,
+        discoveredFile.filePath,
+        asset,
+        "Material",
+        outEntry.virtualPath
+    ))
         return false;
 
     if(!ParseVariantField(shaderCook, discoveredFile.filePath, asset, "shader_variant", Core::ShaderArchive::s_DefaultVariant, outEntry.shaderVariant))

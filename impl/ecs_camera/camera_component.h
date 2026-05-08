@@ -5,15 +5,13 @@
 #pragma once
 
 
-#include "global.h"
-
-#include <cstddef>
+#include "../global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,28 +41,13 @@ struct alignas(Float4) CameraProjectionData{
 
 static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<CameraComponent>, "CameraComponent must stay cheap to move in dense ECS storage");
-static_assert(
-    alignof(CameraComponent) >= alignof(Float4),
-    "CameraComponent must stay aligned for SIMD component loads"
-);
-static_assert(
-    sizeof(CameraComponent) == sizeof(Float4),
-    "CameraComponent must stay one aligned vector wide"
-);
-static_assert(
-    (sizeof(CameraComponent) % alignof(CameraComponent)) == 0,
-    "CameraComponent array stride must keep every element SIMD-aligned"
-);
-static_assert(
-    (offsetof(CameraComponent, projection) % alignof(Float4)) == 0,
-    "CameraComponent::projection must stay aligned"
-);
+static_assert(alignof(CameraComponent) >= alignof(Float4), "CameraComponent must stay aligned for SIMD component loads");
+static_assert(sizeof(CameraComponent) == sizeof(Float4), "CameraComponent must stay one aligned vector wide");
+static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == 0, "CameraComponent array stride must keep every element SIMD-aligned");
+static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0, "CameraComponent::projection must stay aligned");
 static_assert(IsStandardLayout_V<CameraProjectionData>, "CameraProjectionData must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CameraProjectionData>, "CameraProjectionData must stay cheap to pass by value");
-static_assert(
-    alignof(CameraProjectionData) >= alignof(Float4),
-    "CameraProjectionData must keep projection params aligned"
-);
+static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectionData must keep projection params aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,11 +158,19 @@ static_assert(
     return true;
 }
 
+[[nodiscard]] inline Float4 BuildDefaultCameraProjectionParams(const f32 fallbackAspectRatio = 1.0f){
+    Float4 projectionParams;
+    if(TryBuildCameraProjectionParams(CameraComponent{}, fallbackAspectRatio, projectionParams))
+        return projectionParams;
+
+    return Float4(1.0f, 1.0f, 1.0f, 0.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

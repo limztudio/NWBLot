@@ -12,8 +12,9 @@
 #include <impl/ecs_deformable/ecs_deformable.h>
 #include <impl/ecs_deformable_edit/ecs_deformable_edit.h>
 #include <impl/ecs_deformable_render/ecs_deformable_render.h>
+#include <impl/ecs_geometry/ecs_geometry.h>
 #include <impl/ecs_render/ecs_render.h>
-#include <core/scene/scene.h>
+#include <impl/ecs_scene/ecs_scene.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,14 +60,14 @@ private:
     };
 
     struct SurfaceEditMutationContext{
-        NWB::Core::ECSDeformableRender::DeformerSystem* deformerSystem = nullptr;
-        NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh;
-        NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance* instance = nullptr;
-        NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance cleanBase;
+        NWB::Impl::DeformerSystem* deformerSystem = nullptr;
+        NWB::Impl::RuntimeMeshHandle runtimeMesh;
+        NWB::Impl::DeformableRuntimeMeshInstance* instance = nullptr;
+        NWB::Impl::DeformableRuntimeMeshInstance cleanBase;
     };
 
-    NWB::Core::ECSRender::RendererSystem& rendererSystem();
-    NWB::Core::ECSDeformableRender::DeformerSystem& deformerSystem();
+    NWB::Impl::RendererSystem& rendererSystem();
+    NWB::Impl::DeformerSystem& deformerSystem();
     void drawUiControls();
     void processPendingUiActions();
     void registerInputHandler();
@@ -91,7 +92,7 @@ private:
     void cancelSurfaceEditPreview();
     void queueSurfaceEditReplay();
     void applyPendingSurfaceEditReplay();
-    [[nodiscard]] bool buildSurfaceEditPickRay(NWB::Core::ECSDeformableEdit::DeformablePickingRay& outRay);
+    [[nodiscard]] bool buildSurfaceEditPickRay(NWB::Impl::DeformablePickingRay& outRay);
     void undoSurfaceEdit();
     void redoSurfaceEdit();
     void healLatestSurfaceEdit();
@@ -100,21 +101,21 @@ private:
     void patchLatestSurfaceEdit();
     void addLoopCutToLatestSurfaceEdit();
     [[nodiscard]] bool buildSurfaceEditCleanBase(
-        const NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance& instance,
-        NWB::Core::ECSDeformable::DeformableRuntimeMeshInstance& outCleanBase
+        const NWB::Impl::DeformableRuntimeMeshInstance& instance,
+        NWB::Impl::DeformableRuntimeMeshInstance& outCleanBase
     )const;
     void hideSurfaceEditAccessoriesForTarget(NWB::Core::ECS::EntityID targetEntity);
     [[nodiscard]] bool restoreSurfaceEditAccessoryEntities();
     [[nodiscard]] bool prepareSurfaceEditMutation(const tchar* action, SurfaceEditMutationContext& outContext);
     void finishSurfaceEditMutation(
         const tchar* action,
-        NWB::Core::ECSDeformable::RuntimeMeshHandle runtimeMesh,
+        NWB::Impl::RuntimeMeshHandle runtimeMesh,
         SurfaceEditRedoStackMode::Enum redoStackMode
     );
     [[nodiscard]] bool pickSurfaceEditMutationTarget(
         const tchar* action,
         const SurfaceEditMutationContext& editContext,
-        NWB::Core::ECSDeformableEdit::DeformablePosedHit& outTargetHit
+        NWB::Impl::DeformablePosedHit& outTargetHit
     );
     void toggleSurfaceEditDebug();
     void toggleSurfaceEditWireframeOverlay();
@@ -147,15 +148,15 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_surfaceEditTargetEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_surfaceEditPreviewEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditState m_surfaceEditState;
-    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditHistory m_surfaceEditHistory;
-    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditSession m_surfaceEditSession;
-    NWB::Core::ECSDeformableEdit::DeformableHoleEditParams m_surfaceEditPreviewParams;
-    NWB::Core::ECSDeformableEdit::DeformableHolePreview m_surfaceEditPreview;
-    NWB::Core::ECSDeformable::RuntimeMeshHandle m_pendingSurfaceEditRuntimeMesh;
-    NWB::Core::ECSDeformable::RuntimeMeshHandle m_surfaceEditDebugRuntimeMesh;
-    NWB::Core::ECSDeformableEdit::DeformableHoleEditResult m_pendingSurfaceEditResult;
-    NWB::Core::ECSDeformableEdit::DeformableSurfaceEditRecord m_pendingSurfaceEditRecord;
+    NWB::Impl::DeformableSurfaceEditState m_surfaceEditState;
+    NWB::Impl::DeformableSurfaceEditHistory m_surfaceEditHistory;
+    NWB::Impl::DeformableSurfaceEditSession m_surfaceEditSession;
+    NWB::Impl::DeformableHoleEditParams m_surfaceEditPreviewParams;
+    NWB::Impl::DeformableHolePreview m_surfaceEditPreview;
+    NWB::Impl::RuntimeMeshHandle m_pendingSurfaceEditRuntimeMesh;
+    NWB::Impl::RuntimeMeshHandle m_surfaceEditDebugRuntimeMesh;
+    NWB::Impl::DeformableHoleEditResult m_pendingSurfaceEditResult;
+    NWB::Impl::DeformableSurfaceEditRecord m_pendingSurfaceEditRecord;
     usize m_surfaceEditTargetIndex = 0u;
     usize m_surfaceEditOperatorIndex = 0u;
     usize m_surfaceEditCameraViewIndex = 0u;

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "global.h"
+#include "../global.h"
 
 #include <cstddef>
 
@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,22 +54,10 @@ struct alignas(Float4) LightComponent{
 static_assert(sizeof(LightType::Enum) == sizeof(u8), "LightType must stay compact for ECS storage");
 static_assert(IsStandardLayout_V<LightComponent>, "LightComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<LightComponent>, "LightComponent must stay cheap to move in dense ECS storage");
-static_assert(
-    alignof(LightComponent) >= alignof(Float4),
-    "LightComponent must stay aligned for SIMD component loads"
-);
-static_assert(
-    sizeof(LightComponent) == (sizeof(Float4) * 2),
-    "LightComponent must stay two aligned vectors wide"
-);
-static_assert(
-    (sizeof(LightComponent) % alignof(LightComponent)) == 0,
-    "LightComponent array stride must keep every element SIMD-aligned"
-);
-static_assert(
-    (offsetof(LightComponent, colorIntensity) % alignof(Float4)) == 0,
-    "LightComponent::colorIntensity must stay aligned"
-);
+static_assert(alignof(LightComponent) >= alignof(Float4), "LightComponent must stay aligned for SIMD component loads");
+static_assert(sizeof(LightComponent) == (sizeof(Float4) * 2), "LightComponent must stay two aligned vectors wide");
+static_assert((sizeof(LightComponent) % alignof(LightComponent)) == 0, "LightComponent array stride must keep every element SIMD-aligned");
+static_assert((offsetof(LightComponent, colorIntensity) % alignof(Float4)) == 0, "LightComponent::colorIntensity must stay aligned");
 static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0, "LightComponent::range must stay aligned");
 static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, "LightComponent::type must stay aligned");
 
@@ -77,7 +65,7 @@ static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

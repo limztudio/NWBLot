@@ -19,7 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Geometry;
 class Material;
 
 
@@ -27,7 +26,6 @@ class Material;
 
 
 struct RendererComponent{
-    Core::Assets::AssetRef<Geometry> geometry;
     Core::Assets::AssetRef<Material> material;
     bool visible = true;
 };

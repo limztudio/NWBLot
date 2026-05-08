@@ -6,30 +6,39 @@
 
 
 #include "transform_component.h"
-#include "camera_component.h"
-#include "light_component.h"
 #include "scene_component.h"
+#include <impl/ecs_camera/camera_component.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ECS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class World;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ECS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct SceneCameraView{
-    ECS::EntityID entity = ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     TransformComponent* transform = nullptr;
     CameraComponent* camera = nullptr;
     CameraProjectionData projectionData;
@@ -44,14 +53,27 @@ struct SceneCameraView{
     }
 };
 
+struct alignas(Float4) SceneViewBasis{
+    Float4 right = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    Float4 up = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    Float4 forward = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    Float4 positionDepthBias = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+};
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(ECS::World& world, f32 fallbackAspectRatio = 1.0f);
+static_assert(IsStandardLayout_V<SceneViewBasis>, "SceneViewBasis must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<SceneViewBasis>, "SceneViewBasis must stay cheap to pass by value");
+static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must keep basis vectors aligned");
+
+
+[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = 1.0f);
+[[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis();
+[[nodiscard]] SceneViewBasis BuildSceneViewBasis(const TransformComponent& transform);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

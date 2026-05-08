@@ -527,7 +527,7 @@ void ApplyDisplacement(
     );
 }
 
-void ApplyTransform(const Core::Scene::TransformComponent* transform, DeformableVertexRest& vertex){
+void ApplyTransform(const NWB::Impl::TransformComponent* transform, DeformableVertexRest& vertex){
     if(!transform)
         return;
 
@@ -938,7 +938,7 @@ bool RaycastVisibleDeformableRenderers(
             inputs.jointPalette = world.tryGetComponent<DeformableJointPaletteComponent>(entity);
             inputs.skeletonPose = world.tryGetComponent<DeformableSkeletonPoseComponent>(entity);
             inputs.displacement = world.tryGetComponent<DeformableDisplacementComponent>(entity);
-            inputs.transform = world.tryGetComponent<Core::Scene::TransformComponent>(entity);
+            inputs.transform = world.tryGetComponent<NWB::Impl::TransformComponent>(entity);
 
             DeformablePosedHit hit;
             if(!RaycastDeformableRuntimeMesh(*instance, inputs, ray, hit))

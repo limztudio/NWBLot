@@ -12,10 +12,10 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
-#include <core/scene/camera_component.h>
-#include <core/scene/light_component.h>
-#include <core/scene/scene.h>
-#include <core/scene/transform_component.h>
+#include <impl/ecs_camera/ecs_camera.h>
+#include <impl/ecs_geometry/ecs_geometry.h>
+#include <impl/ecs_lighting/ecs_lighting.h>
+#include <impl/ecs_scene/ecs_scene.h>
 #include <core/common/log.h>
 
 
@@ -46,9 +46,6 @@ static constexpr u32 s_AvboitExtinctionSlicesPerWord = 4u;
 static constexpr f32 s_AvboitExtinctionFixedScale = 45.985905f;
 static constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
 static constexpr usize s_AvboitControlWordCount = 8u;
-static constexpr f32 s_DefaultMeshViewYaw = 0.82f;
-static constexpr f32 s_DefaultMeshViewPitch = 0.94f;
-static constexpr f32 s_DefaultMeshViewDepthOffset = 2.2f;
 
 
 struct ShaderDrivenPushConstants{
@@ -93,13 +90,7 @@ struct MeshViewGpuData{
 };
 
 using MeshViewState = MeshViewGpuData;
-
-struct MeshViewBasis{
-    Float4 right = Float4(1.f, 0.f, 0.f, 0.f);
-    Float4 up = Float4(0.f, 1.f, 0.f, 0.f);
-    Float4 forward = Float4(0.f, 0.f, 1.f, 0.f);
-    Float4 positionDepthBias = Float4(0.f, 0.f, 0.f, 0.f);
-};
+using MeshViewBasis = NWB::Impl::SceneViewBasis;
 
 struct MaterialParameterBlock{
     u32 offset = 0;
@@ -364,7 +355,7 @@ static usize NextGrowingCapacity(const usize currentCapacity, const usize requir
 }
 
 static InstanceGpuData BuildInstanceGpuData(
-    const Core::Scene::TransformComponent* transform,
+    const NWB::Impl::TransformComponent* transform,
     const u32 materialParameterOffset,
     const u32 materialParameterCount
 ){
@@ -382,33 +373,6 @@ static InstanceGpuData BuildInstanceGpuData(
 
 static void StoreRotatedBasisVector(Float4& outVector, const Float4& localVector, SIMDVector rotation){
     StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
-}
-
-static MeshViewBasis BuildDefaultMeshViewBasis(){
-    SIMDVector sinAngles;
-    SIMDVector cosAngles;
-    VectorSinCos(&sinAngles, &cosAngles, VectorSet(s_DefaultMeshViewYaw, s_DefaultMeshViewPitch, 0.0f, 0.0f));
-    const f32 sinYaw = VectorGetX(sinAngles);
-    const f32 cosYaw = VectorGetX(cosAngles);
-    const f32 sinPitch = VectorGetY(sinAngles);
-    const f32 cosPitch = VectorGetY(cosAngles);
-
-    MeshViewBasis basis;
-    basis.right = Float4(cosYaw, 0.0f, sinYaw, 0.0f);
-    basis.up = Float4(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
-    basis.forward = Float4(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
-    basis.positionDepthBias.w = s_DefaultMeshViewDepthOffset;
-    return basis;
-}
-
-static MeshViewBasis BuildTransformMeshViewBasis(const Core::Scene::TransformComponent& transform){
-    MeshViewBasis basis;
-    basis.positionDepthBias = transform.position;
-    const SIMDVector rotation = LoadFloat(transform.rotation);
-    StoreRotatedBasisVector(basis.right, Float4(1.0f, 0.0f, 0.0f), rotation);
-    StoreRotatedBasisVector(basis.up, Float4(0.0f, 1.0f, 0.0f), rotation);
-    StoreRotatedBasisVector(basis.forward, Float4(0.0f, 0.0f, 1.0f), rotation);
-    return basis;
 }
 
 static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& forward){
@@ -438,9 +402,9 @@ static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const 
 
 static bool TryApplyDirectionalLightMeshViewState(
     MeshViewState& state,
-    const Core::Scene::TransformComponent& transform,
-    const Core::Scene::LightComponent& light){
-    if(light.type != Core::Scene::LightType::Directional)
+    const NWB::Impl::TransformComponent& transform,
+    const NWB::Impl::LightComponent& light){
+    if(light.type != NWB::Impl::LightType::Directional)
         return false;
 
     const SIMDVector rotation = LoadFloat(transform.rotation);
@@ -469,21 +433,6 @@ static bool TryApplyDirectionalLightMeshViewState(
     StoreDirectionalLightDirection(state.directionalLightDirection, lightForward);
     state.directionalLightColorIntensity = light.colorIntensity;
     return true;
-}
-
-static void BuildCameraProjectionParams(
-    const Core::Scene::CameraComponent& camera,
-    const f32 fallbackAspectRatio,
-    Float4& outProjectionParams
-){
-    if(Core::Scene::TryBuildCameraProjectionParams(camera, fallbackAspectRatio, outProjectionParams))
-        return;
-
-    Core::Scene::CameraComponent fallbackCamera;
-    if(Core::Scene::TryBuildCameraProjectionParams(fallbackCamera, fallbackAspectRatio, outProjectionParams))
-        return;
-
-    outProjectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 }
 
 static void StoreProjectedViewColumn(
@@ -561,36 +510,20 @@ static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
     return ExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
 }
 
-static void ApplyDefaultCameraMeshViewState(MeshViewState& state, const MeshViewBasis& basis, const f32 fallbackAspectRatio){
-    Core::Scene::CameraComponent camera;
-    Float4 projectionParams;
-    BuildCameraProjectionParams(camera, fallbackAspectRatio, projectionParams);
-    StoreWorldToClipMatrix(state.worldToClip, basis, projectionParams);
-    ApplyDefaultCameraPositionMeshViewState(state, basis);
-}
-
 static void ApplyCameraMeshViewState(
     MeshViewState& state,
-    const Core::Scene::TransformComponent& transform,
-    const Core::Scene::CameraProjectionData& projectionData
+    const NWB::Impl::TransformComponent& transform,
+    const NWB::Impl::CameraProjectionData& projectionData
 ){
-    StoreWorldToClipMatrix(state.worldToClip, BuildTransformMeshViewBasis(transform), projectionData.projectionParams);
+    StoreWorldToClipMatrix(state.worldToClip, NWB::Impl::BuildSceneViewBasis(transform), projectionData.projectionParams);
     StoreFloat(VectorSetW(LoadFloat(transform.position), 1.0f), &state.cameraPosition);
 }
 
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewState state;
-    MeshViewBasis defaultBasis;
-    bool defaultBasisResolved = false;
-    auto resolveDefaultBasis = [&]() -> const MeshViewBasis&{
-        if(!defaultBasisResolved){
-            defaultBasis = BuildDefaultMeshViewBasis();
-            defaultBasisResolved = true;
-        }
-        return defaultBasis;
-    };
+    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
 
-    const Core::Scene::SceneCameraView cameraView = Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         __hidden_ecs_render::ApplyCameraMeshViewState(
             state,
@@ -599,15 +532,16 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         );
     }
     else{
-        __hidden_ecs_render::ApplyDefaultCameraMeshViewState(
-            state,
-            resolveDefaultBasis(),
-            fallbackAspectRatio
+        StoreWorldToClipMatrix(
+            state.worldToClip,
+            defaultBasis,
+            NWB::Impl::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
         );
+        __hidden_ecs_render::ApplyDefaultCameraPositionMeshViewState(state, defaultBasis);
     }
 
     bool directionalLightApplied = false;
-    const auto lightView = world.view<Core::Scene::TransformComponent, Core::Scene::LightComponent>();
+    const auto lightView = world.view<NWB::Impl::TransformComponent, NWB::Impl::LightComponent>();
     for(auto it = lightView.begin(); it != lightView.end(); ++it){
         auto&& [entity, transform, light] = *it;
         static_cast<void>(entity);
@@ -617,7 +551,7 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         }
     }
     if(!directionalLightApplied)
-        __hidden_ecs_render::ApplyDefaultDirectionalLightMeshViewState(state, resolveDefaultBasis());
+        __hidden_ecs_render::ApplyDefaultDirectionalLightMeshViewState(state, defaultBasis);
 
     return state;
 }
@@ -740,9 +674,10 @@ RendererSystem::RendererSystem(
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
     , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))
 {
-    readAccess<Core::Scene::SceneComponent>();
-    readAccess<Core::Scene::TransformComponent>();
-    readAccess<Core::Scene::CameraComponent>();
+    readAccess<NWB::Impl::SceneComponent>();
+    readAccess<NWB::Impl::TransformComponent>();
+    readAccess<NWB::Impl::CameraComponent>();
+    readAccess<NWB::Impl::GeometryComponent>();
     readAccess<RendererComponent>();
 }
 RendererSystem::~RendererSystem(){}
@@ -1757,6 +1692,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         return;
 
     auto rendererView = m_world.view<RendererComponent>();
+    auto* geometrySystem = m_world.getSystem<NWB::Impl::GeometrySystem>();
     usize rendererCapacity = rendererView.candidateCount();
     for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
         if(!provider)
@@ -1837,8 +1773,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!geometry.valid())
             return false;
 
-        const Core::Scene::TransformComponent* transform =
-            m_world.tryGetComponent<Core::Scene::TransformComponent>(entity)
+        const NWB::Impl::TransformComponent* transform =
+            m_world.tryGetComponent<NWB::Impl::TransformComponent>(entity)
         ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;
@@ -1911,8 +1847,17 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!renderer.visible)
             continue;
 
+        if(!geometrySystem){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GeometrySystem is not registered; static renderers cannot resolve geometry"));
+            break;
+        }
+
+        Core::Assets::AssetRef<Geometry> geometryAsset;
+        if(!geometrySystem->resolveGeometry(entity, geometryAsset))
+            continue;
+
         GeometryResources* geometry = nullptr;
-        if(!ensureGeometryLoaded(renderer.geometry, geometry))
+        if(!ensureGeometryLoaded(geometryAsset, geometry))
             continue;
         if(geometry)
             appendDrawForGeometry(entity, renderer.material, *geometry);

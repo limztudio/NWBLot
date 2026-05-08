@@ -24,12 +24,12 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class CapturingLogger final : public Log::ILogger{
+class CapturingLogger final : public Core::Common::ILogger{
 public:
-    virtual void enqueue(TString&& str, Log::Type::Enum type = Log::Type::Info)override{
+    virtual void enqueue(TString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
         record(str, type);
     }
-    virtual void enqueue(const TString& str, Log::Type::Enum type = Log::Type::Info)override{
+    virtual void enqueue(const TString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
         record(str, type);
     }
 
@@ -43,8 +43,8 @@ public:
     }
 
 private:
-    void record(const TString& str, const Log::Type::Enum type){
-        if(type == Log::Type::Error){
+    void record(const TString& str, const Core::Common::LogType::Enum type){
+        if(type == Core::Common::LogType::Error){
             ++m_errorCount;
             m_errors.push_back(str);
         }

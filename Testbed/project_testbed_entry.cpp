@@ -6,6 +6,7 @@
 
 #include <core/ecs/ecs.h>
 #include <impl/ecs_deformable_render/ecs_deformable_render.h>
+#include <impl/ecs_geometry/ecs_geometry.h>
 #include <impl/ecs_render/ecs_render.h>
 #include <impl/ecs_ui/ecs_ui.h>
 #include <core/common/log.h>
@@ -44,35 +45,40 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         return false;
     }
 
-    auto& rendererSystem = world->addSystem<Core::ECSRender::RendererSystem>(
+    world->addSystem<NWB::Impl::GeometrySystem>(*world);
+    if(!world->getSystem<NWB::Impl::GeometrySystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core geometry system was not created"));
+        return false;
+    }
+    auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
         *world,
         context.graphics,
         context.assetManager,
         context.shaderPathResolver
     );
-    if(!world->getSystem<Core::ECSRender::RendererSystem>()){
+    if(!world->getSystem<NWB::Impl::RendererSystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
         return false;
     }
-    auto& deformerSystem = world->addSystem<Core::ECSDeformableRender::DeformerSystem>(
+    auto& deformerSystem = world->addSystem<NWB::Impl::DeformerSystem>(
         *world,
         context.graphics,
         context.assetManager,
         rendererSystem,
         context.shaderPathResolver
     );
-    if(!world->getSystem<Core::ECSDeformableRender::DeformerSystem>()){
+    if(!world->getSystem<NWB::Impl::DeformerSystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core deformer system was not created"));
         return false;
     }
-    auto& uiSystem = world->addSystem<Core::ECSUI::UiSystem>(
+    auto& uiSystem = world->addSystem<NWB::Impl::UiSystem>(
         *world,
         context.graphics,
         context.input,
         context.assetManager,
         context.shaderPathResolver
     );
-    if(!world->getSystem<Core::ECSUI::UiSystem>()){
+    if(!world->getSystem<NWB::Impl::UiSystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core UI system was not created"));
         return false;
     }
@@ -92,19 +98,25 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    auto* deformerSystem = world->getSystem<Core::ECSDeformableRender::DeformerSystem>();
+    auto* deformerSystem = world->getSystem<NWB::Impl::DeformerSystem>();
     if(!deformerSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core deformer system is null"));
         return;
     }
 
-    auto* rendererSystem = world->getSystem<Core::ECSRender::RendererSystem>();
+    auto* rendererSystem = world->getSystem<NWB::Impl::RendererSystem>();
     if(!rendererSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core renderer system is null"));
         return;
     }
 
-    auto* uiSystem = world->getSystem<Core::ECSUI::UiSystem>();
+    auto* geometrySystem = world->getSystem<NWB::Impl::GeometrySystem>();
+    if(!geometrySystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core geometry system is null"));
+        return;
+    }
+
+    auto* uiSystem = world->getSystem<NWB::Impl::UiSystem>();
     if(!uiSystem){
         NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core UI system is null"));
         return;

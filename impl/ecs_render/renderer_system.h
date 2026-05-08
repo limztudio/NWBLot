@@ -6,13 +6,13 @@
 
 
 #include "components.h"
-#include "runtime_geometry.h"
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/system.h>
 #include <core/assets/asset_manager.h>
 #include <core/graphics/graphics.h>
 #include <impl/assets_material/material_asset.h>
+#include <impl/ecs_geometry/runtime_geometry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,6 +25,7 @@ NWB_IMPL_BEGIN
 
 
 class Shader;
+class Geometry;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

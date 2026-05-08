@@ -13,7 +13,10 @@ target_link_libraries(testbed PRIVATE
     nwb_common
     nwb_alloc
     nwb_loader
-    nwb_scene
+    nwb_ecs_camera
+    nwb_ecs_geometry
+    nwb_ecs_lighting
+    nwb_ecs_scene
     nwb_ecs_deformable
     nwb_ecs_deformable_edit
     nwb_ecs_deformable_render
@@ -61,3 +64,4 @@ if(TARGET nwb_resource_cooker)
     unset(_nwb_testbed_asset_stamp)
     unset(_nwb_testbed_asset_inputs)
 endif()
+

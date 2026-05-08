@@ -9,7 +9,7 @@
 #include <core/ecs/system.h>
 #include <core/graphics/graphics.h>
 #include <impl/ecs_deformable/deformable_runtime_mesh_cache.h>
-#include <impl/ecs_render/runtime_geometry.h>
+#include <impl/ecs_geometry/runtime_geometry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

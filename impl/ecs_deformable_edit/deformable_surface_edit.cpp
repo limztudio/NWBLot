@@ -17,6 +17,7 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_material/material_asset.h>
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
+#include <impl/ecs_geometry/components.h>
 #include <impl/ecs_render/components.h>
 #include <global/binary.h>
 #include <core/common/log.h>
@@ -1116,11 +1117,13 @@ void RestoreReplayAccessories(
 
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
         auto entity = context.world->createEntity();
-        auto& transform = entity.addComponent<Core::Scene::TransformComponent>();
+        auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
         transform.scale = Float4(accessory.uniformScale, accessory.uniformScale, accessory.uniformScale);
 
+        auto& geometry = entity.addComponent<GeometryComponent>();
+        geometry.geometry = accessory.geometry;
+
         auto& renderer = entity.addComponent<RendererComponent>();
-        renderer.geometry = accessory.geometry;
         renderer.material = accessory.material;
         renderer.visible = false;
 
@@ -1327,7 +1330,7 @@ void StoreAccessoryAttachmentTransform(
     const SIMDVector tangent,
     const SIMDVector normal,
     const f32 uniformScale,
-    Core::Scene::TransformComponent& outTransform
+    NWB::Impl::TransformComponent& outTransform
 ){
     StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
     StoreFloat(RotationFromFrame(tangent, normal), &outTransform.rotation);
@@ -1340,7 +1343,7 @@ void StoreAccessoryAttachmentTransform(
     const SIMDVector tangentReference,
     const f32 normalOffset,
     const f32 uniformScale,
-    Core::Scene::TransformComponent& outTransform
+    NWB::Impl::TransformComponent& outTransform
 ){
     const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
         VectorSubtract(anchorPosition, innerPosition),
@@ -3753,7 +3756,7 @@ bool ResolveAccessoryAttachmentTransform(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    Core::Scene::TransformComponent& outTransform
+    NWB::Impl::TransformComponent& outTransform
 ){
     if(
         !__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)

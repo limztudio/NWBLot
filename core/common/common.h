@@ -356,9 +356,8 @@ inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<
             output.insert_or_assign(Move(key), Move(value));
             cursor = next;
         }
-        else{
+        else
             ++cursor;
-        }
     }
 
     return output;

@@ -800,6 +800,36 @@ static void UpdateProxySkeletonPose(
     return entity.id();
 }
 
+static void RestoreSurfaceEditAccessory(
+    const NWB::Impl::DeformableSurfaceEditAccessoryRestoreDesc& desc,
+    void* userData
+){
+    auto* world = static_cast<NWB::Core::ECS::World*>(userData);
+    if(!world)
+        return;
+
+    auto entity = world->createEntity();
+    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+    transform.scale = Float4(desc.uniformScale, desc.uniformScale, desc.uniformScale);
+
+    auto& geometry = entity.addComponent<NWB::Impl::GeometryComponent>();
+    geometry.geometry = desc.geometry;
+
+    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
+    renderer.material = desc.material;
+    renderer.visible = false;
+
+    auto& attachment = entity.addComponent<NWB::Impl::DeformableAccessoryAttachmentComponent>();
+    attachment.targetEntity = desc.targetEntity;
+    attachment.runtimeMesh = desc.runtimeMesh;
+    attachment.anchorEditId = desc.anchorEditId;
+    attachment.firstWallVertex = desc.firstWallVertex;
+    attachment.wallVertexCount = desc.wallVertexCount;
+    attachment.setNormalOffset(desc.normalOffset);
+    attachment.setUniformScale(desc.uniformScale);
+    attachment.setWallLoopParameter(desc.wallLoopParameter);
+}
+
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSurfaceEditSubtractPreviewEntity(NWB::Core::ECS::World& world){
     TestbedGeometryRef geometry;
     geometry.virtualPath = Name(s_SurfaceEditOperators[0].geometryPath);
@@ -1615,7 +1645,7 @@ void ProjectTestbed::previewSurfaceEditAtCursor(){
     if(
         !NWB::Impl::RaycastVisibleDeformableRenderers(
             *m_world,
-            deformSystem.runtimeMeshCache(),
+            deformSystem,
             ray,
             hit,
             &m_context.assetManager
@@ -1952,8 +1982,9 @@ void ProjectTestbed::applyPendingSurfaceEditReplay(){
 
     NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
     replayContext.assetManager = &m_context.assetManager;
-    replayContext.world = m_world.get();
     replayContext.targetEntity = m_surfaceEditTargetEntity;
+    replayContext.restoreAccessory = __hidden_project_testbed_runtime::RestoreSurfaceEditAccessory;
+    replayContext.restoreAccessoryUserData = m_world.get();
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
     if(
@@ -2140,7 +2171,7 @@ bool ProjectTestbed::pickSurfaceEditMutationTarget(
     if(
         !NWB::Impl::RaycastVisibleDeformableRenderers(
             *m_world,
-            editContext.deformerSystem->runtimeMeshCache(),
+            *editContext.deformerSystem,
             ray,
             outTargetHit,
             &m_context.assetManager

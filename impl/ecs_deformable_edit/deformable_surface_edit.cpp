@@ -6,8 +6,6 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_manager.h>
-#include <core/ecs/entity.h>
-#include <core/ecs/world.h>
 #include <core/geometry/attribute_transfer.h>
 #include <core/geometry/frame_math.h>
 #include <core/geometry/mesh_topology.h>
@@ -18,7 +16,6 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <impl/ecs_geometry/components.h>
-#include <impl/ecs_render/components.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 
@@ -1099,7 +1096,7 @@ using SurfaceEditRecordLookup = HashMap<
 ){
     if(state.accessories.empty())
         return ReplayContextTargetsInstance(instance, context);
-    if(!context.world || !context.targetEntity.valid() || context.targetEntity != instance.entity)
+    if(!context.restoreAccessory || !context.targetEntity.valid() || context.targetEntity != instance.entity)
         return false;
 
     return ValidateReplayAccessoryAnchors(instance, state);
@@ -1112,30 +1109,23 @@ void RestoreReplayAccessories(
     u32& outRestoredAccessoryCount
 ){
     outRestoredAccessoryCount = 0u;
-    if(state.accessories.empty() || !context.world)
+    if(state.accessories.empty() || !context.restoreAccessory)
         return;
 
     for(const DeformableAccessoryAttachmentRecord& accessory : state.accessories){
-        auto entity = context.world->createEntity();
-        auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
-        transform.scale = Float4(accessory.uniformScale, accessory.uniformScale, accessory.uniformScale);
+        DeformableSurfaceEditAccessoryRestoreDesc desc;
+        desc.targetEntity = instance.entity;
+        desc.runtimeMesh = instance.handle;
+        desc.geometry = accessory.geometry;
+        desc.material = accessory.material;
+        desc.anchorEditId = accessory.anchorEditId;
+        desc.firstWallVertex = accessory.firstWallVertex;
+        desc.wallVertexCount = accessory.wallVertexCount;
+        desc.normalOffset = accessory.normalOffset;
+        desc.uniformScale = accessory.uniformScale;
+        desc.wallLoopParameter = accessory.wallLoopParameter;
 
-        auto& geometry = entity.addComponent<GeometryComponent>();
-        geometry.geometry = accessory.geometry;
-
-        auto& renderer = entity.addComponent<RendererComponent>();
-        renderer.material = accessory.material;
-        renderer.visible = false;
-
-        auto& attachment = entity.addComponent<DeformableAccessoryAttachmentComponent>();
-        attachment.targetEntity = instance.entity;
-        attachment.runtimeMesh = instance.handle;
-        attachment.anchorEditId = accessory.anchorEditId;
-        attachment.firstWallVertex = accessory.firstWallVertex;
-        attachment.wallVertexCount = accessory.wallVertexCount;
-        attachment.setNormalOffset(accessory.normalOffset);
-        attachment.setUniformScale(accessory.uniformScale);
-        attachment.setWallLoopParameter(accessory.wallLoopParameter);
+        context.restoreAccessory(desc, context.restoreAccessoryUserData);
         ++outRestoredAccessoryCount;
     }
 }

@@ -37,7 +37,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class DeformableRuntimeMeshCache final : NoCopy{
+class DeformableRuntimeMeshCache final : NoCopy, public IDeformableRuntimeMeshProvider{
 private:
     struct DeformableGeometrySource{
         Name sourceName = NAME_NONE;
@@ -64,6 +64,17 @@ public:
     [[nodiscard]] const DeformableRuntimeMeshInstance* findInstance(RuntimeMeshHandle handle)const;
     [[nodiscard]] u32 editRevision(RuntimeMeshHandle handle)const;
     [[nodiscard]] bool bumpEditRevision(RuntimeMeshHandle handle, RuntimeMeshDirtyFlags dirtyFlags);
+
+    [[nodiscard]] virtual RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const override;
+    [[nodiscard]] virtual u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const override;
+    [[nodiscard]] virtual bool bumpDeformableRuntimeMeshRevision(
+        RuntimeMeshHandle handle,
+        RuntimeMeshDirtyFlags dirtyFlags
+    )override;
+    [[nodiscard]] virtual DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)override;
+    [[nodiscard]] virtual const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(
+        RuntimeMeshHandle handle
+    )const override;
 
 
 private:

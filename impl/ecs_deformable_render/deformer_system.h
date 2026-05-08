@@ -31,6 +31,7 @@ class DeformerSystem final
     : public Core::ECS::ISystem
     , public Core::IRenderPass
     , public IRuntimeGeometryProvider
+    , public IDeformableRuntimeMeshProvider
 {
 public:
     struct alignas(Float4) DeformerVertexMorphRangeGpu{
@@ -112,16 +113,16 @@ public:
     virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor)override;
     virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version)override;
 
-    [[nodiscard]] RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const;
-    [[nodiscard]] u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const;
-    [[nodiscard]] bool bumpDeformableRuntimeMeshRevision(
+    [[nodiscard]] virtual RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const override;
+    [[nodiscard]] virtual u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const override;
+    [[nodiscard]] virtual bool bumpDeformableRuntimeMeshRevision(
         RuntimeMeshHandle handle,
         RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All
-    );
-    [[nodiscard]] DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle);
-    [[nodiscard]] const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)const;
-    [[nodiscard]] DeformableRuntimeMeshCache& runtimeMeshCache(){ return m_runtimeMeshCache; }
-    [[nodiscard]] const DeformableRuntimeMeshCache& runtimeMeshCache()const{ return m_runtimeMeshCache; }
+    )override;
+    [[nodiscard]] virtual DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)override;
+    [[nodiscard]] virtual const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(
+        RuntimeMeshHandle handle
+    )const override;
 
 
 private:

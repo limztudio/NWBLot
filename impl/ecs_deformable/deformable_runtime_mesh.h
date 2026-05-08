@@ -61,6 +61,26 @@ struct DeformableRuntimeMeshInstance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class IDeformableRuntimeMeshProvider{
+public:
+    virtual ~IDeformableRuntimeMeshProvider() = default;
+
+
+public:
+    [[nodiscard]] virtual RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const = 0;
+    [[nodiscard]] virtual u32 deformableRuntimeMeshEditRevision(RuntimeMeshHandle handle)const = 0;
+    [[nodiscard]] virtual bool bumpDeformableRuntimeMeshRevision(
+        RuntimeMeshHandle handle,
+        RuntimeMeshDirtyFlags dirtyFlags
+    ) = 0;
+    [[nodiscard]] virtual DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle) = 0;
+    [[nodiscard]] virtual const DeformableRuntimeMeshInstance* findDeformableRuntimeMesh(RuntimeMeshHandle handle)const = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 

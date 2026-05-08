@@ -242,6 +242,31 @@ bool DeformableRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handle
     return true;
 }
 
+RuntimeMeshHandle DeformableRuntimeMeshCache::deformableRuntimeMeshHandle(const Core::ECS::EntityID entity)const{
+    return handleForEntity(entity);
+}
+
+u32 DeformableRuntimeMeshCache::deformableRuntimeMeshEditRevision(const RuntimeMeshHandle handle)const{
+    return editRevision(handle);
+}
+
+bool DeformableRuntimeMeshCache::bumpDeformableRuntimeMeshRevision(
+    const RuntimeMeshHandle handle,
+    const RuntimeMeshDirtyFlags dirtyFlags
+){
+    return bumpEditRevision(handle, dirtyFlags);
+}
+
+DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findDeformableRuntimeMesh(const RuntimeMeshHandle handle){
+    return findInstance(handle);
+}
+
+const DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findDeformableRuntimeMesh(
+    const RuntimeMeshHandle handle
+)const{
+    return findInstance(handle);
+}
+
 bool DeformableRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, DeformableRendererComponent& component){
     const Name sourceName = component.deformableGeometry.name();
     if(!sourceName){

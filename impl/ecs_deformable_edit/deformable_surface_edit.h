@@ -242,10 +242,28 @@ struct DeformableSurfaceEditLoopCutResult{
     DeformableSurfaceEditReplayResult replay;
 };
 
+struct DeformableSurfaceEditAccessoryRestoreDesc{
+    Core::ECS::EntityID targetEntity = Core::ECS::ENTITY_ID_INVALID;
+    RuntimeMeshHandle runtimeMesh;
+    Core::Assets::AssetRef<Geometry> geometry;
+    Core::Assets::AssetRef<Material> material;
+    DeformableSurfaceEditId anchorEditId = 0;
+    u32 firstWallVertex = Limit<u32>::s_Max;
+    u32 wallVertexCount = 0;
+    f32 normalOffset = 0.0f;
+    f32 uniformScale = 1.0f;
+    f32 wallLoopParameter = s_DeformableAccessoryCenteredWallLoopParameter;
+};
+using DeformableSurfaceEditAccessoryRestoreCallback = void(*)(
+    const DeformableSurfaceEditAccessoryRestoreDesc& desc,
+    void* userData
+);
+
 struct DeformableSurfaceEditReplayContext{
     Core::Assets::AssetManager* assetManager = nullptr;
-    Core::ECS::World* world = nullptr;
     Core::ECS::EntityID targetEntity = Core::ECS::ENTITY_ID_INVALID;
+    DeformableSurfaceEditAccessoryRestoreCallback restoreAccessory = nullptr;
+    void* restoreAccessoryUserData = nullptr;
 };
 
 

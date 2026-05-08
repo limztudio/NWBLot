@@ -128,21 +128,19 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_vertices.clear();
     m_indices.clear();
 
+    const tchar* const loadFailureContext = NWB_TEXT("Geometry::loadBinary");
     usize cursor = 0;
     GeometryBinaryPayload::GeometryHeaderBinary header;
-    if(!ReadPOD(binary, cursor, header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: malformed header"));
+    if(!GeometryBinaryPayload::ReadHeader(
+        binary,
+        cursor,
+        header,
+        GeometryBinaryPayload::s_GeometryMagic,
+        GeometryBinaryPayload::s_GeometryVersion,
+        loadFailureContext
+    ))
         return false;
-    }
 
-    if(header.magic != GeometryBinaryPayload::s_GeometryMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: invalid magic"));
-        return false;
-    }
-    if(header.version != GeometryBinaryPayload::s_GeometryVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: unsupported version {}"), header.version);
-        return false;
-    }
     const u64 vertexCount = header.vertexCount;
     const u64 indexCount = header.indexCount;
     if(vertexCount == 0u || indexCount == 0u){
@@ -158,7 +156,6 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    const tchar* const loadFailureContext = NWB_TEXT("Geometry::loadBinary");
     auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
         return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
     };
@@ -167,10 +164,8 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!readVector(indexCount, m_indices, NWB_TEXT("indices")))
         return false;
 
-    if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::loadBinary failed: trailing bytes detected"));
+    if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;
-    }
 
     return validatePayload();
 }

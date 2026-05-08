@@ -117,21 +117,19 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
     m_height = 0u;
     m_texels.clear();
 
+    const tchar* const loadFailureContext = NWB_TEXT("DeformableDisplacementTexture::loadBinary");
     usize cursor = 0u;
     DeformableGeometryBinaryPayload::DeformableDisplacementTextureHeaderBinary header;
-    if(!ReadPOD(binary, cursor, header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: malformed header"));
+    if(!GeometryBinaryPayload::ReadHeader(
+        binary,
+        cursor,
+        header,
+        DeformableGeometryBinaryPayload::s_DeformableDisplacementTextureMagic,
+        DeformableGeometryBinaryPayload::s_DeformableDisplacementTextureVersion,
+        loadFailureContext
+    ))
         return false;
-    }
 
-    if(header.magic != DeformableGeometryBinaryPayload::s_DeformableDisplacementTextureMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: invalid magic"));
-        return false;
-    }
-    if(header.version != DeformableGeometryBinaryPayload::s_DeformableDisplacementTextureVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: unsupported version {}"), header.version);
-        return false;
-    }
     const u32 width = header.width;
     const u32 height = header.height;
     const u64 texelCount = header.texelCount;
@@ -151,14 +149,12 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
         cursor,
         texelCount,
         m_texels,
-        NWB_TEXT("DeformableDisplacementTexture::loadBinary"),
+        loadFailureContext,
         NWB_TEXT("texels")
     ))
         return false;
-    if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::loadBinary failed: trailing bytes detected"));
+    if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;
-    }
 
     return validatePayload();
 }
@@ -285,21 +281,19 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_displacementTextureVirtualPathText.clear();
     m_morphs.clear();
 
+    const tchar* const loadFailureContext = NWB_TEXT("DeformableGeometry::loadBinary");
     usize cursor = 0;
     DeformableGeometryBinaryPayload::DeformableGeometryHeaderBinary header;
-    if(!ReadPOD(binary, cursor, header)){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: malformed header"));
+    if(!GeometryBinaryPayload::ReadHeader(
+        binary,
+        cursor,
+        header,
+        DeformableGeometryBinaryPayload::s_DeformableGeometryMagic,
+        DeformableGeometryBinaryPayload::s_DeformableGeometryVersion,
+        loadFailureContext
+    ))
         return false;
-    }
 
-    if(header.magic != DeformableGeometryBinaryPayload::s_DeformableGeometryMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: invalid magic"));
-        return false;
-    }
-    if(header.version != DeformableGeometryBinaryPayload::s_DeformableGeometryVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: unsupported version {}"), header.version);
-        return false;
-    }
     const u32 geometryClass = header.geometryClass;
     const u64 vertexCount = header.restVertexCount;
     const u64 indexCount = header.indexCount;
@@ -370,7 +364,6 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    const tchar* const loadFailureContext = NWB_TEXT("DeformableGeometry::loadBinary");
     auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
         return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
     };
@@ -497,10 +490,8 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: trailing bytes detected"));
+    if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;
-    }
 
     return validatePayload();
 }

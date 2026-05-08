@@ -69,6 +69,46 @@ template<typename ValueContainer>
 }
 
 
+template<typename Header>
+[[nodiscard]] bool ReadHeader(
+    const Core::Assets::AssetBytes& binary,
+    usize& inOutCursor,
+    Header& outHeader,
+    const u32 expectedMagic,
+    const u32 expectedVersion,
+    const tchar* failureContext
+){
+    if(!ReadPOD(binary, inOutCursor, outHeader)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
+        return false;
+    }
+
+    if(outHeader.magic != expectedMagic){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid magic"), failureContext);
+        return false;
+    }
+    if(outHeader.version != expectedVersion){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: unsupported version {}"), failureContext, outHeader.version);
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] inline bool ReadComplete(
+    const Core::Assets::AssetBytes& binary,
+    const usize cursor,
+    const tchar* failureContext
+){
+    if(cursor != binary.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
+        return false;
+    }
+
+    return true;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

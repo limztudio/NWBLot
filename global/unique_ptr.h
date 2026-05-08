@@ -382,58 +382,7 @@ inline void swap(UniquePtr<T, D>& a, UniquePtr<T, D>& b)noexcept{ a.swap(b); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T1, typename D1, typename T2, typename D2>
-inline bool operator==(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){ return (a.get() == b.get()); }
-
-template<typename T1, typename D1, typename T2, typename D2>
-requires ThreeWayComparableWith<typename UniquePtr<T1, D1>::pointer, typename UniquePtr<T2, D2>::pointer>
-inline CompareThreeWayResult_T<typename UniquePtr<T1, D1>::pointer, typename UniquePtr<T2, D2>::pointer> operator<=>(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){ return a.get() <=> b.get(); }
-
-template<typename T1, typename D1, typename T2, typename D2>
-inline bool operator<(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){
-    typedef typename UniquePtr<T1, D1>::pointer P1;
-    typedef typename UniquePtr<T2, D2>::pointer P2;
-    typedef typename CommonType<P1, P2>::type PCommon;
-    PCommon pT1 = a.get();
-    PCommon pT2 = b.get();
-    return LessThan<PCommon>()(pT1, pT2);
-}
-template<typename T1, typename D1, typename T2, typename D2>
-inline bool operator>(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){ return (b < a); }
-template<typename T1, typename D1, typename T2, typename D2>
-inline bool operator<=(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){ return !(b < a); }
-template<typename T1, typename D1, typename T2, typename D2>
-inline bool operator>=(const UniquePtr<T1, D1>& a, const UniquePtr<T2, D2>& b){ return !(a < b); }
-
-template<typename T, typename D>
-inline bool operator==(const UniquePtr<T, D>& a, std::nullptr_t)noexcept{ return !a; }
-template<typename T, typename D>
-requires ThreeWayComparableWith<typename UniquePtr<T, D>::pointer, std::nullptr_t>
-inline CompareThreeWayResult_T<typename UniquePtr<T, D>::pointer, std::nullptr_t> operator<=>(const UniquePtr<T, D>& a, std::nullptr_t){return a.get() <=> nullptr; }
-
-template<typename T, typename D>
-inline bool operator<(const UniquePtr<T, D>& a, std::nullptr_t){
-    typedef typename UniquePtr<T, D>::pointer pointer;
-    return LessThan<pointer>()(a.get(), nullptr);
-}
-template<typename T, typename D>
-inline bool operator<(std::nullptr_t, const UniquePtr<T, D>& b){
-    typedef typename UniquePtr<T, D>::pointer pointer;
-    pointer pT = b.get();
-    return LessThan<pointer>()(nullptr, pT);
-}
-template<typename T, typename D>
-inline bool operator>(const UniquePtr<T, D>& a, std::nullptr_t){ return (nullptr < a); }
-template<typename T, typename D>
-inline bool operator>(std::nullptr_t, const UniquePtr<T, D>& b){ return (b < nullptr); }
-template<typename T, typename D>
-inline bool operator<=(const UniquePtr<T, D>& a, std::nullptr_t){ return !(nullptr < a); }
-template<typename T, typename D>
-inline bool operator<=(std::nullptr_t, const UniquePtr<T, D>& b){ return !(b < nullptr); }
-template<typename T, typename D>
-inline bool operator>=(const UniquePtr<T, D>& a, std::nullptr_t){ return !(a < nullptr); }
-template<typename T, typename D>
-inline bool operator>=(std::nullptr_t, const UniquePtr<T, D>& b){ return !(nullptr < b); }
+NWB_SMART_PTR_COMPARISON_OPERATORS(UniquePtr)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

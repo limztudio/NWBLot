@@ -8,6 +8,7 @@
 #include <core/ecs/world.h>
 #include <core/geometry/frame_math.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
+#include <impl/ecs_deformable_render/deformable_runtime_mesh_cache.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

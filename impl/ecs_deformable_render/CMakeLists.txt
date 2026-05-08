@@ -1,6 +1,8 @@
 nwb_declare_static_library(nwb_ecs_deformable_render)
 target_sources(nwb_ecs_deformable_render PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_mesh_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deformer_system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_mesh_cache.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformer_morph_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformer_skin_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformer_system.h"

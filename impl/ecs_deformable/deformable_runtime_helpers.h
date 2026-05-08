@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "deformable_runtime_mesh_cache.h"
+#include "deformable_runtime_mesh.h"
 
 #include <impl/assets_geometry/deformable_geometry_validation.h>
 

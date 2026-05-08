@@ -9,6 +9,7 @@
 #include "deformable_picking.h"
 
 #include <core/assets/asset.h>
+#include <core/assets/asset_manager.h>
 #include <core/assets/asset_ref.h>
 
 

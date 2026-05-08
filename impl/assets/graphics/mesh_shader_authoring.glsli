@@ -252,8 +252,7 @@ bool nwbMaterialFindParameter(
     const NwbMeshInstanceData instance,
     const uvec2 key,
     const uint valueType,
-    out NwbMaterialParameterData outParameter)
-{
+    out NwbMaterialParameterData outParameter){
     const uint offset = nwbMaterialParameterOffset(instance);
     const uint count = nwbMaterialParameterCount(instance);
     for(uint i = 0u; i < count; ++i){

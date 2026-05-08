@@ -144,12 +144,11 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
     auto it = m_commandBuffersInFlight.begin();
     while(it != m_commandBuffersInFlight.end()){
         TrackedCommandBuffer* cmdBuf = it->get();
-        if(cmdBuf->m_submissionID <= m_lastFinishedID){
-            recycleCommandBuffer(Move(*it));
-            it = m_commandBuffersInFlight.erase(it);
-        }
-        else
-            ++it;
+        if(cmdBuf->m_submissionID > m_lastFinishedID)
+            break;
+
+        recycleCommandBuffer(Move(*it));
+        it = m_commandBuffersInFlight.erase(it);
     }
 
     if(!m_commandBuffersPool.empty()){

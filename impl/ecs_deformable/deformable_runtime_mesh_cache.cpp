@@ -201,21 +201,11 @@ RuntimeMeshHandle DeformableRuntimeMeshCache::handleForEntity(const Core::ECS::E
 }
 
 DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findInstance(const RuntimeMeshHandle handle){
-    return const_cast<DeformableRuntimeMeshInstance*>(findConstInstance(handle));
+    return findInstanceByEntity(entityForHandle(handle));
 }
 
 const DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findInstance(const RuntimeMeshHandle handle)const{
-    return findConstInstance(handle);
-}
-
-const DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findConstInstance(const RuntimeMeshHandle handle)const{
-    const auto foundEntity = m_handleToEntity.find(handle.value);
-    if(foundEntity == m_handleToEntity.end())
-        return nullptr;
-    const auto foundInstance = m_instances.find(foundEntity.value());
-    if(foundInstance == m_instances.end())
-        return nullptr;
-    return &foundInstance.value();
+    return findInstanceByEntity(entityForHandle(handle));
 }
 
 u32 DeformableRuntimeMeshCache::editRevision(const RuntimeMeshHandle handle)const{
@@ -489,6 +479,33 @@ void DeformableRuntimeMeshCache::eraseUnusedSource(const Name& sourceName){
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end() && foundSource.value().referenceCount == 0u)
         m_sources.erase(foundSource);
+}
+
+Core::ECS::EntityID DeformableRuntimeMeshCache::entityForHandle(const RuntimeMeshHandle handle)const{
+    const auto foundEntity = m_handleToEntity.find(handle.value);
+    if(foundEntity == m_handleToEntity.end())
+        return Core::ECS::ENTITY_ID_INVALID;
+    return foundEntity.value();
+}
+
+DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findInstanceByEntity(const Core::ECS::EntityID entity){
+    if(!entity.valid())
+        return nullptr;
+
+    const auto foundInstance = m_instances.find(entity);
+    if(foundInstance == m_instances.end())
+        return nullptr;
+    return &foundInstance.value();
+}
+
+const DeformableRuntimeMeshInstance* DeformableRuntimeMeshCache::findInstanceByEntity(const Core::ECS::EntityID entity)const{
+    if(!entity.valid())
+        return nullptr;
+
+    const auto foundInstance = m_instances.find(entity);
+    if(foundInstance == m_instances.end())
+        return nullptr;
+    return &foundInstance.value();
 }
 
 Name DeformableRuntimeMeshCache::deriveRuntimeBufferName(const DeformableRuntimeMeshInstance& instance, const AStringView suffix)const{

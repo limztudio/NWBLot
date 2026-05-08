@@ -121,7 +121,9 @@ private:
     void releaseRuntimeMesh(Core::ECS::EntityID entity);
     void releaseSource(const Name& sourceName);
     void eraseUnusedSource(const Name& sourceName);
-    [[nodiscard]] const DeformableRuntimeMeshInstance* findConstInstance(RuntimeMeshHandle handle)const;
+    [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const;
+    [[nodiscard]] DeformableRuntimeMeshInstance* findInstanceByEntity(Core::ECS::EntityID entity);
+    [[nodiscard]] const DeformableRuntimeMeshInstance* findInstanceByEntity(Core::ECS::EntityID entity)const;
     [[nodiscard]] Name deriveRuntimeBufferName(const DeformableRuntimeMeshInstance& instance, AStringView suffix)const;
     [[nodiscard]] bool computePayloadBytes(
         const DeformableRuntimeMeshInstance& instance,

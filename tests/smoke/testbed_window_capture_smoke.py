@@ -635,19 +635,8 @@ class LinuxX11Capture:
     def send_motion_event(self, window, x, y):
         event = LinuxXEvent()
         event.xmotion.type = self.MOTION_NOTIFY
-        event.xmotion.send_event = True
-        event.xmotion.display = self.display
-        event.xmotion.window = window
-        event.xmotion.root = self.root
-        event.xmotion.subwindow = 0
-        event.xmotion.time = self.CURRENT_TIME
-        event.xmotion.x = x
-        event.xmotion.y = y
-        event.xmotion.x_root = x
-        event.xmotion.y_root = y
-        event.xmotion.state = 0
+        self._fill_input_event_prefix(event.xmotion, window, x, y)
         event.xmotion.is_hint = b"\0"
-        event.xmotion.same_screen = True
         if not self.x11.XSendEvent(self.display, window, False, self.POINTER_MOTION_MASK, ctypes.byref(event)):
             raise SmokeFailure("failed to send CSG pointer motion")
         self.x11.XFlush(self.display)
@@ -655,19 +644,9 @@ class LinuxX11Capture:
     def send_button_event(self, window, event_type, x, y):
         event = LinuxXEvent()
         event.xbutton.type = event_type
-        event.xbutton.send_event = True
-        event.xbutton.display = self.display
-        event.xbutton.window = window
-        event.xbutton.root = self.root
-        event.xbutton.subwindow = 0
-        event.xbutton.time = self.CURRENT_TIME
-        event.xbutton.x = x
-        event.xbutton.y = y
-        event.xbutton.x_root = x
-        event.xbutton.y_root = y
-        event.xbutton.state = self.BUTTON1_MASK if event_type == self.BUTTON_RELEASE else 0
+        state = self.BUTTON1_MASK if event_type == self.BUTTON_RELEASE else 0
+        self._fill_input_event_prefix(event.xbutton, window, x, y, state)
         event.xbutton.button = self.BUTTON_LEFT
-        event.xbutton.same_screen = True
         event_mask = self.BUTTON_PRESS_MASK if event_type == self.BUTTON_PRESS else self.BUTTON_RELEASE_MASK
         if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
             raise SmokeFailure("failed to send CSG mouse button event")
@@ -676,19 +655,8 @@ class LinuxX11Capture:
     def send_key_event(self, window, event_type, keycode):
         event = LinuxXEvent()
         event.xkey.type = event_type
-        event.xkey.send_event = True
-        event.xkey.display = self.display
-        event.xkey.window = window
-        event.xkey.root = self.root
-        event.xkey.subwindow = 0
-        event.xkey.time = self.CURRENT_TIME
-        event.xkey.x = 0
-        event.xkey.y = 0
-        event.xkey.x_root = 0
-        event.xkey.y_root = 0
-        event.xkey.state = 0
+        self._fill_input_event_prefix(event.xkey, window, 0, 0)
         event.xkey.keycode = keycode
-        event.xkey.same_screen = True
         event_mask = self.KEY_PRESS_MASK if event_type == self.KEY_PRESS else self.KEY_RELEASE_MASK
         if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
             raise SmokeFailure("failed to send CSG key event")
@@ -745,6 +713,39 @@ class LinuxX11Capture:
         self.send_button_event(window, self.BUTTON_PRESS, x, y)
         time.sleep(0.05)
         self.send_button_event(window, self.BUTTON_RELEASE, x, y)
+
+    def _window_root_point(self, window, x, y):
+        root_x = ctypes.c_int()
+        root_y = ctypes.c_int()
+        child = ctypes.c_ulong()
+        if self.x11.XTranslateCoordinates(
+            self.display,
+            window,
+            self.root,
+            x,
+            y,
+            ctypes.byref(root_x),
+            ctypes.byref(root_y),
+            ctypes.byref(child),
+        ) == 0:
+            return x, y
+
+        return root_x.value, root_y.value
+
+    def _fill_input_event_prefix(self, event, window, x, y, state=0):
+        root_x, root_y = self._window_root_point(window, x, y)
+        event.send_event = True
+        event.display = self.display
+        event.window = window
+        event.root = self.root
+        event.subwindow = 0
+        event.time = self.CURRENT_TIME
+        event.x = x
+        event.y = y
+        event.x_root = root_x
+        event.y_root = root_y
+        event.state = state
+        event.same_screen = True
 
     def preview_surface_edit(self, window, relative_x, relative_y):
         click_x, click_y = self._relative_window_point(window, relative_x, relative_y)

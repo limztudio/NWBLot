@@ -1263,36 +1263,6 @@ struct SurfaceEditReplayFixture{
     NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
 };
 
-static void RestoreSurfaceEditAccessoryForTest(
-    const NWB::Impl::DeformableSurfaceEditAccessoryRestoreDesc& desc,
-    void* userData
-){
-    auto* world = static_cast<NWB::Core::ECS::World*>(userData);
-    if(!world)
-        return;
-
-    auto entity = world->createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
-    transform.scale = Float4(desc.uniformScale, desc.uniformScale, desc.uniformScale);
-
-    auto& geometry = entity.addComponent<NWB::Impl::GeometryComponent>();
-    geometry.geometry = desc.geometry;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = desc.material;
-    renderer.visible = false;
-
-    auto& attachment = entity.addComponent<NWB::Impl::DeformableAccessoryAttachmentComponent>();
-    attachment.targetEntity = desc.targetEntity;
-    attachment.runtimeMesh = desc.runtimeMesh;
-    attachment.anchorEditId = desc.anchorEditId;
-    attachment.firstWallVertex = desc.firstWallVertex;
-    attachment.wallVertexCount = desc.wallVertexCount;
-    attachment.setNormalOffset(desc.normalOffset);
-    attachment.setUniformScale(desc.uniformScale);
-    attachment.setWallLoopParameter(desc.wallLoopParameter);
-}
-
 static bool PrepareSurfaceEditReplayFixture(
     TestContext& context,
     const NWB::Impl::DeformableSurfaceEditState& state,
@@ -1316,7 +1286,7 @@ static bool PrepareSurfaceEditReplayFixture(
     replayInstance.entity = targetEntity.id();
     outFixture.replayContext.assetManager = &outFixture.assets.manager;
     outFixture.replayContext.targetEntity = replayInstance.entity;
-    outFixture.replayContext.restoreAccessory = RestoreSurfaceEditAccessoryForTest;
+    outFixture.replayContext.restoreAccessory = NWB::Impl::RestoreSurfaceEditAccessoryEntityCallback;
     outFixture.replayContext.restoreAccessoryUserData = &outFixture.world.world;
     return true;
 }
@@ -5096,7 +5066,7 @@ static void TestSurfaceEditStateReplayRestoresAccessory(TestContext& context){
     NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
     replayContext.assetManager = &testAssets.manager;
     replayContext.targetEntity = replayInstance.entity;
-    replayContext.restoreAccessory = RestoreSurfaceEditAccessoryForTest;
+    replayContext.restoreAccessory = NWB::Impl::RestoreSurfaceEditAccessoryEntityCallback;
     replayContext.restoreAccessoryUserData = &testWorld.world;
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;
     ApplySurfaceEditStateChecked(context, replayInstance, loadedState, replayContext, replayResult);
@@ -5187,7 +5157,7 @@ static void TestSurfaceEditStateReplayRejectsInvalidAccessoryAsset(TestContext& 
     NWB::Impl::DeformableSurfaceEditReplayContext replayContext;
     replayContext.assetManager = &testAssets.manager;
     replayContext.targetEntity = replayInstance.entity;
-    replayContext.restoreAccessory = RestoreSurfaceEditAccessoryForTest;
+    replayContext.restoreAccessory = NWB::Impl::RestoreSurfaceEditAccessoryEntityCallback;
     replayContext.restoreAccessoryUserData = &testWorld.world;
 
     NWB::Impl::DeformableSurfaceEditReplayResult replayResult;

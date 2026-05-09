@@ -6,6 +6,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_manager.h>
+#include <core/ecs/ecs.h>
 #include <core/geometry/attribute_transfer.h>
 #include <core/geometry/frame_math.h>
 #include <core/geometry/mesh_topology.h>
@@ -16,6 +17,8 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <impl/ecs_geometry/components.h>
+#include <impl/ecs_render/components.h>
+#include <impl/ecs_scene/transform_component.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 
@@ -3505,6 +3508,48 @@ struct HolePreviewPlan{
 
 
 
+
+
+Core::ECS::EntityID RestoreSurfaceEditAccessoryEntity(
+    Core::ECS::World& world,
+    const DeformableSurfaceEditAccessoryRestoreDesc& desc
+){
+    auto entity = world.createEntity();
+    auto& transform = entity.addComponent<TransformComponent>();
+    transform.scale = Float4(desc.uniformScale, desc.uniformScale, desc.uniformScale);
+
+    auto& geometry = entity.addComponent<GeometryComponent>();
+    geometry.geometry = desc.geometry;
+
+    auto& renderer = entity.addComponent<RendererComponent>();
+    renderer.material = desc.material;
+    renderer.visible = false;
+
+    auto& attachment = entity.addComponent<DeformableAccessoryAttachmentComponent>();
+    attachment.targetEntity = desc.targetEntity;
+    attachment.runtimeMesh = desc.runtimeMesh;
+    attachment.anchorEditId = desc.anchorEditId;
+    attachment.firstWallVertex = desc.firstWallVertex;
+    attachment.wallVertexCount = desc.wallVertexCount;
+    attachment.setNormalOffset(desc.normalOffset);
+    attachment.setUniformScale(desc.uniformScale);
+    attachment.setWallLoopParameter(desc.wallLoopParameter);
+    return entity.id();
+}
+
+void RestoreSurfaceEditAccessoryEntityCallback(
+    const DeformableSurfaceEditAccessoryRestoreDesc& desc,
+    void* userData
+){
+    auto* world = static_cast<Core::ECS::World*>(userData);
+    if(!world)
+        return;
+
+    (void)RestoreSurfaceEditAccessoryEntity(*world, desc);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool BeginSurfaceEdit(

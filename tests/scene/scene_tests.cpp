@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_scene/ecs_scene.h>
-#include <impl/ecs_camera/ecs_camera.h>
+#include <core/scene/scene.h>
+#include <core/scene/camera_component.h>
 #include <core/ecs/ecs.h>
 #include <core/common/common.h>
 
@@ -40,26 +40,26 @@ static void TestSceneAndMainCamera(TestContext& context){
     TestWorld testWorld;
 
     auto sceneEntity = testWorld.world.createEntity();
-    auto& scene = sceneEntity.addComponent<NWB::Impl::SceneComponent>();
+    auto& scene = sceneEntity.addComponent<NWB::Core::Scene::SceneComponent>();
     NWB_SCENE_TEST_CHECK(context, scene.mainCamera == NWB::Core::ECS::ENTITY_ID_INVALID);
 
     auto cameraEntity = testWorld.world.createEntity();
-    auto& transform = cameraEntity.addComponent<NWB::Impl::TransformComponent>();
-    auto& camera = cameraEntity.addComponent<NWB::Impl::CameraComponent>();
+    auto& transform = cameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& camera = cameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
     scene.mainCamera = cameraEntity.id();
 
-    NWB_SCENE_TEST_CHECK(context, sceneEntity.hasComponent<NWB::Impl::SceneComponent>());
-    NWB_SCENE_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Impl::TransformComponent>());
-    NWB_SCENE_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Impl::CameraComponent>());
+    NWB_SCENE_TEST_CHECK(context, sceneEntity.hasComponent<NWB::Core::Scene::SceneComponent>());
+    NWB_SCENE_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Core::Scene::TransformComponent>());
+    NWB_SCENE_TEST_CHECK(context, cameraEntity.hasComponent<NWB::Core::Scene::CameraComponent>());
     NWB_SCENE_TEST_CHECK(context, scene.mainCamera == cameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, scene.mainCamera.valid());
     NWB_SCENE_TEST_CHECK(context, testWorld.world.entityCount() == 2);
 
     NWB_SCENE_TEST_CHECK(
         context,
-        (reinterpret_cast<usize>(&transform) % alignof(NWB::Impl::TransformComponent)) == 0
+        (reinterpret_cast<usize>(&transform) % alignof(NWB::Core::Scene::TransformComponent)) == 0
     );
-    NWB_SCENE_TEST_CHECK(context, (reinterpret_cast<usize>(&camera) % alignof(NWB::Impl::CameraComponent)) == 0);
+    NWB_SCENE_TEST_CHECK(context, (reinterpret_cast<usize>(&camera) % alignof(NWB::Core::Scene::CameraComponent)) == 0);
     NWB_SCENE_TEST_CHECK(context, (reinterpret_cast<usize>(&camera.projection) % alignof(Float4)) == 0);
     NWB_SCENE_TEST_CHECK(context, transform.position.x == 0.0f);
     NWB_SCENE_TEST_CHECK(context, transform.position.y == 0.0f);
@@ -79,13 +79,13 @@ static void TestSceneAndMainCamera(TestContext& context){
     const NWB::Core::ECS::EntityID cameraEntityId = cameraEntity.id();
     usize cameraViewCount = 0;
     testWorld.world.view<
-        NWB::Impl::TransformComponent,
-        NWB::Impl::CameraComponent
+        NWB::Core::Scene::TransformComponent,
+        NWB::Core::Scene::CameraComponent
     >().each(
         [&context, &cameraViewCount, cameraEntityId](
             NWB::Core::ECS::EntityID entityId,
-            NWB::Impl::TransformComponent& viewTransform,
-            NWB::Impl::CameraComponent& viewCamera
+            NWB::Core::Scene::TransformComponent& viewTransform,
+            NWB::Core::Scene::CameraComponent& viewCamera
         ){
             ++cameraViewCount;
             NWB_SCENE_TEST_CHECK(context, entityId == cameraEntityId);
@@ -99,23 +99,23 @@ static void TestSceneAndMainCamera(TestContext& context){
 static void TestSceneCameraResolution(TestContext& context){
     TestWorld testWorld;
 
-    NWB::Impl::SceneCameraView emptyCameraView = NWB::Impl::ResolveSceneCameraView(testWorld.world);
+    NWB::Core::Scene::SceneCameraView emptyCameraView = NWB::Core::Scene::ResolveSceneCameraView(testWorld.world);
     NWB_SCENE_TEST_CHECK(context, !emptyCameraView.valid());
 
     auto firstCameraEntity = testWorld.world.createEntity();
-    firstCameraEntity.addComponent<NWB::Impl::TransformComponent>();
-    firstCameraEntity.addComponent<NWB::Impl::CameraComponent>();
+    firstCameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    firstCameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
 
     auto secondCameraEntity = testWorld.world.createEntity();
-    secondCameraEntity.addComponent<NWB::Impl::TransformComponent>();
-    secondCameraEntity.addComponent<NWB::Impl::CameraComponent>();
+    secondCameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
+    secondCameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
 
-    auto* firstTransform = testWorld.world.tryGetComponent<NWB::Impl::TransformComponent>(firstCameraEntity.id());
-    auto* firstCamera = testWorld.world.tryGetComponent<NWB::Impl::CameraComponent>(firstCameraEntity.id());
-    auto* secondTransform = testWorld.world.tryGetComponent<NWB::Impl::TransformComponent>(secondCameraEntity.id());
-    auto* secondCamera = testWorld.world.tryGetComponent<NWB::Impl::CameraComponent>(secondCameraEntity.id());
+    auto* firstTransform = testWorld.world.tryGetComponent<NWB::Core::Scene::TransformComponent>(firstCameraEntity.id());
+    auto* firstCamera = testWorld.world.tryGetComponent<NWB::Core::Scene::CameraComponent>(firstCameraEntity.id());
+    auto* secondTransform = testWorld.world.tryGetComponent<NWB::Core::Scene::TransformComponent>(secondCameraEntity.id());
+    auto* secondCamera = testWorld.world.tryGetComponent<NWB::Core::Scene::CameraComponent>(secondCameraEntity.id());
 
-    NWB::Impl::SceneCameraView fallbackCameraView = NWB::Impl::ResolveSceneCameraView(testWorld.world);
+    NWB::Core::Scene::SceneCameraView fallbackCameraView = NWB::Core::Scene::ResolveSceneCameraView(testWorld.world);
     NWB_SCENE_TEST_CHECK(context, fallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, fallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, fallbackCameraView.transform == firstTransform);
@@ -124,10 +124,10 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, fallbackCameraView.projectionData.tanHalfVerticalFov > 0.0f);
 
     auto sceneEntity = testWorld.world.createEntity();
-    auto& scene = sceneEntity.addComponent<NWB::Impl::SceneComponent>();
+    auto& scene = sceneEntity.addComponent<NWB::Core::Scene::SceneComponent>();
     scene.mainCamera = secondCameraEntity.id();
 
-    NWB::Impl::SceneCameraView requestedCameraView = NWB::Impl::ResolveSceneCameraView(testWorld.world);
+    NWB::Core::Scene::SceneCameraView requestedCameraView = NWB::Core::Scene::ResolveSceneCameraView(testWorld.world);
     NWB_SCENE_TEST_CHECK(context, requestedCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, requestedCameraView.entity == secondCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, requestedCameraView.transform == secondTransform);
@@ -135,23 +135,23 @@ static void TestSceneCameraResolution(TestContext& context){
     NWB_SCENE_TEST_CHECK(context, requestedCameraView.projectionData.projectionParams.y > 0.0f);
     NWB_SCENE_TEST_CHECK(context, requestedCameraView.projectionData.aspectRatio == 1.0f);
 
-    NWB::Impl::SceneCameraView invalidProjectionView = requestedCameraView;
-    invalidProjectionView.projectionData = NWB::Impl::CameraProjectionData{};
+    NWB::Core::Scene::SceneCameraView invalidProjectionView = requestedCameraView;
+    invalidProjectionView.projectionData = NWB::Core::Scene::CameraProjectionData{};
     NWB_SCENE_TEST_CHECK(context, !invalidProjectionView.valid());
 
     secondCamera->setNearPlane(0.0f);
-    NWB::Impl::SceneCameraView invalidRequestedFallbackCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world)
+    NWB::Core::Scene::SceneCameraView invalidRequestedFallbackCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
     NWB_SCENE_TEST_CHECK(context, invalidRequestedFallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, invalidRequestedFallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, invalidRequestedFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, invalidRequestedFallbackCameraView.camera == firstCamera);
-    secondCamera->setNearPlane(NWB::Impl::CameraComponent{}.nearPlane());
+    secondCamera->setNearPlane(NWB::Core::Scene::CameraComponent{}.nearPlane());
 
     secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    NWB::Impl::SceneCameraView invalidTransformFallbackCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world)
+    NWB::Core::Scene::SceneCameraView invalidTransformFallbackCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
     NWB_SCENE_TEST_CHECK(context, invalidTransformFallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, invalidTransformFallbackCameraView.entity == firstCameraEntity.id());
@@ -161,28 +161,28 @@ static void TestSceneCameraResolution(TestContext& context){
 
     secondCamera->setVerticalFovRadians(179.0f * (s_PI / 180.0f));
     secondCamera->setAspectRatio(s_MaxF32);
-    NWB::Impl::SceneCameraView invalidProjectionFallbackCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world)
+    NWB::Core::Scene::SceneCameraView invalidProjectionFallbackCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
     NWB_SCENE_TEST_CHECK(context, invalidProjectionFallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, invalidProjectionFallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, invalidProjectionFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, invalidProjectionFallbackCameraView.camera == firstCamera);
-    *secondCamera = NWB::Impl::CameraComponent{};
+    *secondCamera = NWB::Core::Scene::CameraComponent{};
 
     secondCamera->setVerticalFovRadians(179.0f * (s_PI / 180.0f));
-    NWB::Impl::SceneCameraView invalidFallbackAspectCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world, s_MaxF32)
+    NWB::Core::Scene::SceneCameraView invalidFallbackAspectCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world, s_MaxF32)
     ;
     NWB_SCENE_TEST_CHECK(context, invalidFallbackAspectCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, invalidFallbackAspectCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, invalidFallbackAspectCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, invalidFallbackAspectCameraView.camera == firstCamera);
-    *secondCamera = NWB::Impl::CameraComponent{};
+    *secondCamera = NWB::Core::Scene::CameraComponent{};
 
     secondTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 2.0f);
-    NWB::Impl::SceneCameraView nonUnitTransformFallbackCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world)
+    NWB::Core::Scene::SceneCameraView nonUnitTransformFallbackCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
     NWB_SCENE_TEST_CHECK(context, nonUnitTransformFallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, nonUnitTransformFallbackCameraView.entity == firstCameraEntity.id());
@@ -193,8 +193,8 @@ static void TestSceneCameraResolution(TestContext& context){
     f32 nonFiniteScale = s_MaxF32;
     nonFiniteScale *= 2.0f;
     secondTransform->scale = Float4(nonFiniteScale, 1.0f, 1.0f);
-    NWB::Impl::SceneCameraView nonFiniteScaleFallbackCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world)
+    NWB::Core::Scene::SceneCameraView nonFiniteScaleFallbackCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
     NWB_SCENE_TEST_CHECK(context, nonFiniteScaleFallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, nonFiniteScaleFallbackCameraView.entity == firstCameraEntity.id());
@@ -205,15 +205,15 @@ static void TestSceneCameraResolution(TestContext& context){
     auto staleMainCameraEntity = testWorld.world.createEntity();
     scene.mainCamera = staleMainCameraEntity.id();
 
-    NWB::Impl::SceneCameraView staleFallbackCameraView = NWB::Impl::ResolveSceneCameraView(testWorld.world);
+    NWB::Core::Scene::SceneCameraView staleFallbackCameraView = NWB::Core::Scene::ResolveSceneCameraView(testWorld.world);
     NWB_SCENE_TEST_CHECK(context, staleFallbackCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, staleFallbackCameraView.entity == firstCameraEntity.id());
     NWB_SCENE_TEST_CHECK(context, staleFallbackCameraView.transform == firstTransform);
     NWB_SCENE_TEST_CHECK(context, staleFallbackCameraView.camera == firstCamera);
 
     firstTransform->rotation = Float4(0.0f, 0.0f, 0.0f, 2.0f);
-    NWB::Impl::SceneCameraView invalidFallbackSkippedCameraView =
-        NWB::Impl::ResolveSceneCameraView(testWorld.world)
+    NWB::Core::Scene::SceneCameraView invalidFallbackSkippedCameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(testWorld.world)
     ;
     NWB_SCENE_TEST_CHECK(context, invalidFallbackSkippedCameraView.valid());
     NWB_SCENE_TEST_CHECK(context, invalidFallbackSkippedCameraView.entity == secondCameraEntity.id());

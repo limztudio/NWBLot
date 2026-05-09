@@ -12,10 +12,10 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
-#include <impl/ecs_camera/ecs_camera.h>
+#include <core/scene/camera_component.h>
 #include <impl/ecs_geometry/ecs_geometry.h>
-#include <impl/ecs_lighting/ecs_lighting.h>
-#include <impl/ecs_scene/ecs_scene.h>
+#include <core/scene/light_component.h>
+#include <core/scene/scene.h>
 #include <core/common/log.h>
 
 
@@ -90,7 +90,7 @@ struct MeshViewGpuData{
 };
 
 using MeshViewState = MeshViewGpuData;
-using MeshViewBasis = NWB::Impl::SceneViewBasis;
+using MeshViewBasis = NWB::Core::Scene::SceneViewBasis;
 
 struct MaterialParameterBlock{
     u32 offset = 0;
@@ -355,7 +355,7 @@ static usize NextGrowingCapacity(const usize currentCapacity, const usize requir
 }
 
 static InstanceGpuData BuildInstanceGpuData(
-    const NWB::Impl::TransformComponent* transform,
+    const NWB::Core::Scene::TransformComponent* transform,
     const u32 materialParameterOffset,
     const u32 materialParameterCount
 ){
@@ -402,9 +402,9 @@ static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const 
 
 static bool TryApplyDirectionalLightMeshViewState(
     MeshViewState& state,
-    const NWB::Impl::TransformComponent& transform,
-    const NWB::Impl::LightComponent& light){
-    if(light.type != NWB::Impl::LightType::Directional)
+    const NWB::Core::Scene::TransformComponent& transform,
+    const NWB::Core::Scene::LightComponent& light){
+    if(light.type != NWB::Core::Scene::LightType::Directional)
         return false;
 
     const SIMDVector rotation = LoadFloat(transform.rotation);
@@ -512,18 +512,18 @@ static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
 
 static void ApplyCameraMeshViewState(
     MeshViewState& state,
-    const NWB::Impl::TransformComponent& transform,
-    const NWB::Impl::CameraProjectionData& projectionData
+    const NWB::Core::Scene::TransformComponent& transform,
+    const NWB::Core::Scene::CameraProjectionData& projectionData
 ){
-    StoreWorldToClipMatrix(state.worldToClip, NWB::Impl::BuildSceneViewBasis(transform), projectionData.projectionParams);
+    StoreWorldToClipMatrix(state.worldToClip, NWB::Core::Scene::BuildSceneViewBasis(transform), projectionData.projectionParams);
     StoreFloat(VectorSetW(LoadFloat(transform.position), 1.0f), &state.cameraPosition);
 }
 
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewState state;
-    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
+    const MeshViewBasis defaultBasis = NWB::Core::Scene::BuildDefaultSceneViewBasis();
 
-    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         __hidden_ecs_render::ApplyCameraMeshViewState(
             state,
@@ -535,13 +535,13 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         StoreWorldToClipMatrix(
             state.worldToClip,
             defaultBasis,
-            NWB::Impl::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
+            NWB::Core::Scene::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
         );
         __hidden_ecs_render::ApplyDefaultCameraPositionMeshViewState(state, defaultBasis);
     }
 
     bool directionalLightApplied = false;
-    const auto lightView = world.view<NWB::Impl::TransformComponent, NWB::Impl::LightComponent>();
+    const auto lightView = world.view<NWB::Core::Scene::TransformComponent, NWB::Core::Scene::LightComponent>();
     for(auto it = lightView.begin(); it != lightView.end(); ++it){
         auto&& [entity, transform, light] = *it;
         static_cast<void>(entity);
@@ -674,9 +674,9 @@ RendererSystem::RendererSystem(
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
     , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))
 {
-    readAccess<NWB::Impl::SceneComponent>();
-    readAccess<NWB::Impl::TransformComponent>();
-    readAccess<NWB::Impl::CameraComponent>();
+    readAccess<NWB::Core::Scene::SceneComponent>();
+    readAccess<NWB::Core::Scene::TransformComponent>();
+    readAccess<NWB::Core::Scene::CameraComponent>();
     readAccess<NWB::Impl::GeometryComponent>();
     readAccess<RendererComponent>();
 }
@@ -1773,8 +1773,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!geometry.valid())
             return false;
 
-        const NWB::Impl::TransformComponent* transform =
-            m_world.tryGetComponent<NWB::Impl::TransformComponent>(entity)
+        const NWB::Core::Scene::TransformComponent* transform =
+            m_world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity)
         ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;

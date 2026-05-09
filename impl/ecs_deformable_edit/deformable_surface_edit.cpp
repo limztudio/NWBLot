@@ -18,7 +18,7 @@
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <impl/ecs_geometry/components.h>
 #include <impl/ecs_render/components.h>
-#include <impl/ecs_scene/transform_component.h>
+#include <core/scene/transform_component.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 
@@ -1323,7 +1323,7 @@ void StoreAccessoryAttachmentTransform(
     const SIMDVector tangent,
     const SIMDVector normal,
     const f32 uniformScale,
-    NWB::Impl::TransformComponent& outTransform
+    NWB::Core::Scene::TransformComponent& outTransform
 ){
     StoreFloat(VectorSetW(accessoryPosition, 0.0f), &outTransform.position);
     StoreFloat(RotationFromFrame(tangent, normal), &outTransform.rotation);
@@ -1336,7 +1336,7 @@ void StoreAccessoryAttachmentTransform(
     const SIMDVector tangentReference,
     const f32 normalOffset,
     const f32 uniformScale,
-    NWB::Impl::TransformComponent& outTransform
+    NWB::Core::Scene::TransformComponent& outTransform
 ){
     const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
         VectorSubtract(anchorPosition, innerPosition),
@@ -3515,7 +3515,7 @@ Core::ECS::EntityID RestoreSurfaceEditAccessoryEntity(
     const DeformableSurfaceEditAccessoryRestoreDesc& desc
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.scale = Float4(desc.uniformScale, desc.uniformScale, desc.uniformScale);
 
     auto& geometry = entity.addComponent<GeometryComponent>();
@@ -3791,7 +3791,7 @@ bool ResolveAccessoryAttachmentTransform(
     const DeformableRuntimeMeshInstance& instance,
     const DeformablePickingInputs& inputs,
     const DeformableAccessoryAttachmentComponent& attachment,
-    NWB::Impl::TransformComponent& outTransform
+    NWB::Core::Scene::TransformComponent& outTransform
 ){
     if(
         !__hidden_deformable_surface_edit::ValidAccessoryAttachment(attachment)

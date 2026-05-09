@@ -373,26 +373,6 @@ static InstanceGpuData BuildInstanceGpuData(
     return data;
 }
 
-static void StoreRotatedBasisVector(Float4& outVector, const Float4& localVector, SIMDVector rotation){
-    StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
-}
-
-static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& forward){
-    const SIMDVector lightDirection = VectorNegate(LoadFloat(forward));
-    const f32 lightDirectionLengthSquared = VectorGetX(Vector3LengthSq(lightDirection));
-    if(!IsFinite(lightDirectionLengthSquared) || lightDirectionLengthSquared <= 0.0001f){
-        outDirection = Float4(0.0f, 0.0f, -1.0f, 0.0f);
-        return;
-    }
-
-    StoreFloat(VectorSetW(Vector3Normalize(lightDirection), 0.0f), &outDirection);
-}
-
-static void ApplyDefaultDirectionalLightMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
-    StoreDirectionalLightDirection(state.directionalLightDirection, basis.forward);
-    state.directionalLightColorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
-}
-
 static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
     state.cameraPosition = Float4(
         basis.positionDepthBias.x,
@@ -402,39 +382,12 @@ static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const 
     );
 }
 
-static bool TryApplyDirectionalLightMeshViewState(
+static void ApplyDirectionalLightMeshViewState(
     MeshViewState& state,
-    const NWB::Impl::TransformComponent& transform,
-    const NWB::Impl::LightComponent& light){
-    if(light.type != NWB::Impl::LightType::Directional)
-        return false;
-
-    const SIMDVector rotation = LoadFloat(transform.rotation);
-    const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
-    if(
-        QuaternionIsNaN(rotation)
-        || QuaternionIsInfinite(rotation)
-        || !IsFinite(rotationLengthSquared)
-        || rotationLengthSquared <= 0.0001f
-    ){
-        return false;
-    }
-
-    const SIMDVector lightColorIntensity = LoadFloat(light.colorIntensity);
-    if(
-        Vector3IsNaN(lightColorIntensity)
-        || Vector3IsInfinite(lightColorIntensity)
-        || !IsFinite(light.intensity())
-        || light.intensity() <= 0.0f
-    ){
-        return false;
-    }
-
-    Float4 lightForward;
-    StoreRotatedBasisVector(lightForward, Float4(0.0f, 0.0f, 1.0f), rotation);
-    StoreDirectionalLightDirection(state.directionalLightDirection, lightForward);
+    const NWB::Impl::SceneDirectionalLight& light
+){
+    state.directionalLightDirection = light.direction;
     state.directionalLightColorIntensity = light.colorIntensity;
-    return true;
 }
 
 static void StoreProjectedViewColumn(
@@ -542,18 +495,10 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         __hidden_ecs_render::ApplyDefaultCameraPositionMeshViewState(state, defaultBasis);
     }
 
-    bool directionalLightApplied = false;
-    const auto lightView = world.view<NWB::Impl::TransformComponent, NWB::Impl::LightComponent>();
-    for(auto it = lightView.begin(); it != lightView.end(); ++it){
-        auto&& [entity, transform, light] = *it;
-        static_cast<void>(entity);
-        if(TryApplyDirectionalLightMeshViewState(state, transform, light)){
-            directionalLightApplied = true;
-            break;
-        }
-    }
-    if(!directionalLightApplied)
-        __hidden_ecs_render::ApplyDefaultDirectionalLightMeshViewState(state, defaultBasis);
+    __hidden_ecs_render::ApplyDirectionalLightMeshViewState(
+        state,
+        NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis)
+    );
 
     return state;
 }

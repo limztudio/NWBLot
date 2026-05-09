@@ -23,8 +23,6 @@ struct BackBufferResizeCallbacks{
     void (*afterResize)(void*) = nullptr;
 };
 
-using GraphicsBackendInterfaceID = u64;
-
 class IGraphicsBackend{
 public:
     virtual ~IGraphicsBackend() = default;
@@ -52,8 +50,6 @@ public:
     virtual bool present() = 0;
 
     virtual void reportLiveObjects(){}
-    [[nodiscard]] virtual void* queryInterface(GraphicsBackendInterfaceID){ return nullptr; }
-    [[nodiscard]] virtual const void* queryInterface(GraphicsBackendInterfaceID)const{ return nullptr; }
 };
 
 

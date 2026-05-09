@@ -6,7 +6,8 @@
 
 
 #include "vulkan_backend.h"
-#include "vulkan_backend_queries.h"
+
+#include "../graphics_backend.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +41,7 @@ namespace DeviceExtensionFeature{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class BackendContext final : public IGraphicsBackend, public IBackendQueries{
+class BackendContext final : public IGraphicsBackend{
 private:
     using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature::Enum, Hasher<AString>, EqualTo<AString>, Alloc::CustomAllocator<Pair<const AString, DeviceExtensionFeature::Enum>>>;
 
@@ -121,24 +122,18 @@ public:
     [[nodiscard]] virtual IDevice* getDevice()const override{ return m_rhiDevice.get(); }
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
     [[nodiscard]] virtual const tchar* getRendererString()const override{ return m_rendererString.c_str(); }
-    [[nodiscard]] virtual void* queryInterface(GraphicsBackendInterfaceID interfaceID)override;
-    [[nodiscard]] virtual const void* queryInterface(GraphicsBackendInterfaceID interfaceID)const override;
-
     virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
-    virtual bool isInstanceExtensionEnabled(const char* extensionName)const override{
+    [[nodiscard]] bool isInstanceExtensionEnabled(const char* extensionName)const{
         return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
     }
-    virtual bool isDeviceExtensionEnabled(const char* extensionName)const override{
+    [[nodiscard]] bool isDeviceExtensionEnabled(const char* extensionName)const{
         return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
     }
-    virtual bool isLayerEnabled(const char* layerName)const override{
+    [[nodiscard]] bool isLayerEnabled(const char* layerName)const{
         return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
     }
-    virtual void getEnabledInstanceExtensions(Vector<AString>& extensions)const override;
-    virtual void getEnabledDeviceExtensions(Vector<AString>& extensions)const override;
-    virtual void getEnabledLayers(Vector<AString>& layers)const override;
 
     virtual ITexture* getCurrentBackBuffer()override;
     virtual ITexture* getBackBuffer(u32 index)override;

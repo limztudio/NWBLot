@@ -370,47 +370,12 @@ BackendContext::BackendContext(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void* BackendContext::queryInterface(GraphicsBackendInterfaceID interfaceID){
-    if(interfaceID == s_BackendQueriesInterfaceID)
-        return static_cast<IBackendQueries*>(this);
-
-    return IGraphicsBackend::queryInterface(interfaceID);
-}
-
-const void* BackendContext::queryInterface(GraphicsBackendInterfaceID interfaceID)const{
-    if(interfaceID == s_BackendQueriesInterfaceID)
-        return static_cast<const IBackendQueries*>(this);
-
-    return IGraphicsBackend::queryInterface(interfaceID);
-}
-
 bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
     for(const auto& ignored : m_deviceParams.ignoredVulkanValidationMessageLocations){
         if(ignored == location)
             return true;
     }
     return false;
-}
-
-void BackendContext::getEnabledInstanceExtensions(Vector<AString>& extensions)const{
-    extensions.clear();
-    extensions.reserve(m_enabledExtensions.instance.size());
-    for(const auto& ext : m_enabledExtensions.instance)
-        extensions.push_back(ext);
-}
-
-void BackendContext::getEnabledDeviceExtensions(Vector<AString>& extensions)const{
-    extensions.clear();
-    extensions.reserve(m_enabledExtensions.device.size());
-    for(const auto& [name, _] : m_enabledExtensions.device)
-        extensions.push_back(name);
-}
-
-void BackendContext::getEnabledLayers(Vector<AString>& layers)const{
-    layers.clear();
-    layers.reserve(m_enabledExtensions.layers.size());
-    for(const auto& ext : m_enabledExtensions.layers)
-        layers.push_back(ext);
 }
 
 ITexture* BackendContext::getCurrentBackBuffer(){

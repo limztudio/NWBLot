@@ -140,13 +140,6 @@ public:
     [[nodiscard]] IFramebuffer* getCurrentFramebuffer()const;
     [[nodiscard]] IFramebuffer* getFramebuffer(u32 index)const;
 
-    [[nodiscard]] bool isVulkanInstanceExtensionEnabled(const char* extensionName)const;
-    [[nodiscard]] bool isVulkanDeviceExtensionEnabled(const char* extensionName)const;
-    [[nodiscard]] bool isVulkanLayerEnabled(const char* layerName)const;
-    void getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const;
-    void getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const;
-    void getEnabledVulkanLayers(Vector<AString>& layers)const;
-
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;
 

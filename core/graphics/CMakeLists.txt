@@ -35,7 +35,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_context.h"
-    "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_queries.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_vma.h"
 )
 target_link_libraries(nwb_graphics PUBLIC nwb_assets nwb_common)
@@ -62,3 +61,4 @@ if(NWB_BUILD_RESOURCE_COOKER AND TARGET nwb::shaderc_combined)
     target_link_libraries(nwb_graphics_cook PRIVATE nwb::volk nwb::shaderc_combined)
     target_compile_definitions(nwb_graphics_cook PRIVATE NWB_COOK=1)
 endif()
+

@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/capturing_logger.h>
 #include <tests/test_context.h>
 
 #include <global/binary.h>
@@ -20,6 +21,7 @@ namespace __hidden_global_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using CapturingLogger = NWB::Tests::CapturingLogger;
 
 
 #define NWB_GLOBAL_TEST_CHECK NWB_TEST_CHECK
@@ -174,6 +176,26 @@ static void TestAppendTriviallyCopyableVectorSelfAppend(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, values[5u] == 3u);
 }
 
+static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard guard(logger);
+
+    bool elseBranchRan = false;
+    if(false)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("unreachable"));
+    else
+        elseBranchRan = true;
+
+    NWB_GLOBAL_TEST_CHECK(context, elseBranchRan);
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 0u);
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("macro {}"), 42);
+
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::EssentialInfo);
+    NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("macro 42")));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -204,6 +226,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
         __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
         __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
+        __hidden_global_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
     });
 }
 

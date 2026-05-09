@@ -4,6 +4,7 @@
 
 #include "renderer_system.h"
 
+#include "renderer_avboit.h"
 #include "shader_asset_loader.h"
 
 #include <core/assets/asset_manager.h>
@@ -41,13 +42,6 @@ static constexpr u32 s_StaticGeometryVertexStride = sizeof(GeometryVertex);
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
-static constexpr u32 s_AvboitDownsample = 8u;
-static constexpr u32 s_AvboitVirtualSlices = 128u;
-static constexpr u32 s_AvboitPhysicalSlices = 64u;
-static constexpr u32 s_AvboitExtinctionSlicesPerWord = 4u;
-static constexpr f32 s_AvboitExtinctionFixedScale = 45.985905f;
-static constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
-static constexpr usize s_AvboitControlWordCount = 8u;
 
 
 struct ShaderDrivenPushConstants{
@@ -59,15 +53,9 @@ struct ShaderDrivenPushConstants{
     Float4 scissorRect = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
-struct AvboitPushConstants{
-    u32 frame[4] = {};
-    u32 volume[4] = {};
-    Float4 params = Float4(0.f, 0.f, 0.f, 0.f);
-};
-
 struct TransparentDrawPushConstants{
     ShaderDrivenPushConstants mesh;
-    AvboitPushConstants avboit;
+    RendererAvboitPushConstants avboit;
 };
 
 struct EmulatedVertex{
@@ -100,8 +88,7 @@ struct MaterialParameterBlock{
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
-static_assert(sizeof(AvboitPushConstants) == 48, "AvboitPushConstants layout must stay stable");
-static_assert(sizeof(TransparentDrawPushConstants) == 96, "TransparentDrawPushConstants layout must stay stable");
+static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparentDrawPushConstantSize, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
@@ -116,11 +103,6 @@ static constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
 static constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred_composite_vs");
 static constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred_composite_ps");
 static constexpr Name s_WireframeOverlayPixelShaderName("engine/graphics/wireframe_overlay_ps");
-static constexpr Name s_AvboitOccupancyPixelShaderName("engine/graphics/avboit_occupancy_ps");
-static constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit_depth_warp_cs");
-static constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit_extinction_ps");
-static constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit_integrate_cs");
-static constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit_accumulate_ps");
 
 
 template<usize N>
@@ -144,23 +126,6 @@ static bool EnsurePointClampSampler(Core::IDevice& device, Core::SamplerHandle& 
     Core::SamplerDesc samplerDesc;
     samplerDesc
         .setAllFilters(false)
-        .setAllAddressModes(Core::SamplerAddressMode::Clamp)
-    ;
-    sampler = device.createSampler(samplerDesc);
-    if(sampler)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
-    return false;
-}
-
-static bool EnsureLinearClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
-    if(sampler)
-        return true;
-
-    Core::SamplerDesc samplerDesc;
-    samplerDesc
-        .setAllFilters(true)
         .setAllAddressModes(Core::SamplerAddressMode::Clamp)
     ;
     sampler = device.createSampler(samplerDesc);
@@ -196,52 +161,6 @@ static Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-static Core::Format::Enum SelectAvboitAccumColorFormat(Core::IDevice& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::RGBA16_FLOAT,
-        Core::Format::RGBA8_UNORM,
-    };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
-
-    return SelectSupportedFormat(device, candidates, requiredSupport);
-}
-
-static Core::Format::Enum SelectAvboitAccumExtinctionFormat(Core::IDevice& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::R16_FLOAT,
-        Core::Format::R32_FLOAT,
-        Core::Format::RGBA16_FLOAT,
-        Core::Format::R8_UNORM,
-        Core::Format::RGBA8_UNORM,
-    };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
-
-    return SelectSupportedFormat(device, candidates, requiredSupport);
-}
-
-static Core::Format::Enum SelectAvboitTransmittanceFormat(Core::IDevice& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::R16_FLOAT,
-    };
-    constexpr Core::FormatSupport::Mask requiredSupport =
-        Core::FormatSupport::Texture
-        | Core::FormatSupport::ShaderSample
-        | Core::FormatSupport::ShaderUavStore
-    ;
-
-    return SelectSupportedFormat(device, candidates, requiredSupport);
-}
-
-static Core::Format::Enum SelectAvboitLowRasterFormat(Core::IDevice& device){
-    constexpr Core::Format::Enum candidates[] = {
-        Core::Format::R8_UNORM,
-        Core::Format::RGBA8_UNORM,
-    };
-    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
-
-    return SelectSupportedFormat(device, candidates, requiredSupport);
-}
-
 static Core::RenderState BuildGeometryRenderState(){
     Core::RenderState renderState;
     renderState.depthStencilState
@@ -270,44 +189,6 @@ static Core::RenderState BuildWireframeOverlayRenderState(){
     return renderState;
 }
 
-static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::ColorMask::Mask colorWriteMask = Core::ColorMask::All){
-    Core::BlendState::RenderTarget target;
-    target
-        .enableBlend()
-        .setSrcBlend(Core::BlendFactor::One)
-        .setDestBlend(Core::BlendFactor::One)
-        .setBlendOp(Core::BlendOp::Add)
-        .setSrcBlendAlpha(Core::BlendFactor::One)
-        .setDestBlendAlpha(Core::BlendFactor::One)
-        .setBlendOpAlpha(Core::BlendOp::Add)
-        .setColorWriteMask(colorWriteMask)
-    ;
-    return target;
-}
-
-static Core::RenderState BuildAvboitVoxelRenderState(){
-    Core::RenderState renderState;
-    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
-    renderState.rasterState.enableDepthClip().setCullNone();
-    renderState.blendState.targets[0].setColorWriteMask(Core::ColorMask::None);
-    return renderState;
-}
-
-static Core::RenderState BuildAvboitAccumulateRenderState(){
-    Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .disableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
-    renderState.rasterState.enableDepthClip().setCullNone();
-    renderState.blendState
-        .setRenderTarget(0, BuildAdditiveBlendTarget())
-        .setRenderTarget(1, BuildAdditiveBlendTarget(Core::ColorMask::Red))
-    ;
-    return renderState;
-}
-
 static Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::Opaque:
@@ -316,22 +197,11 @@ static Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
         return BuildWireframeOverlayRenderState();
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
-        return BuildAvboitVoxelRenderState();
+        return BuildRendererAvboitVoxelRenderState();
     case MaterialPipelinePass::AvboitAccumulate:
-        return BuildAvboitAccumulateRenderState();
+        return BuildRendererAvboitAccumulateRenderState();
     default:
         return BuildGeometryRenderState();
-    }
-}
-
-static bool MaterialPipelinePassUsesAvboit(const MaterialPipelinePass::Enum pass){
-    switch(pass){
-    case MaterialPipelinePass::AvboitOccupancy:
-    case MaterialPipelinePass::AvboitExtinction:
-    case MaterialPipelinePass::AvboitAccumulate:
-        return true;
-    default:
-        return false;
     }
 }
 
@@ -506,28 +376,6 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     return pushConstants;
 }
 
-static AvboitPushConstants BuildAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets, const f32 alpha){
-    AvboitPushConstants pushConstants;
-    pushConstants.frame[0] = targets.fullWidth;
-    pushConstants.frame[1] = targets.fullHeight;
-    pushConstants.frame[2] = targets.lowWidth;
-    pushConstants.frame[3] = targets.lowHeight;
-    pushConstants.volume[0] = targets.virtualSliceCount;
-    pushConstants.volume[1] = targets.physicalSliceCount;
-    const u32 physicalExtinctionWordCount = DivideUp(targets.physicalSliceCount, s_AvboitExtinctionSlicesPerWord);
-    pushConstants.volume[2] = static_cast<u32>(
-        static_cast<u64>(targets.lowWidth) * static_cast<u64>(targets.lowHeight) * static_cast<u64>(physicalExtinctionWordCount)
-    );
-    pushConstants.volume[3] = DivideUp(targets.virtualSliceCount, 32u);
-    pushConstants.params = Float4(
-        alpha,
-        s_AvboitExtinctionFixedScale,
-        s_AvboitSelfOcclusionSliceBias,
-        0.f
-    );
-    return pushConstants;
-}
-
 static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 triangleCount,
     const u32 instanceIndex,
@@ -538,7 +386,7 @@ static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
 ){
     TransparentDrawPushConstants pushConstants;
     pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState);
-    pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
+    pushConstants.avboit = BuildRendererAvboitPushConstants(targets, alpha);
     return pushConstants;
 }
 
@@ -781,10 +629,10 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     Core::IDevice* device = m_graphics.getDevice();
     const Core::Format::Enum albedoFormat = __hidden_ecs_render::SelectGBufferAlbedoFormat(*device);
     const Core::Format::Enum depthFormat = __hidden_ecs_render::SelectGBufferDepthFormat(*device);
-    const Core::Format::Enum avboitLowRasterFormat = __hidden_ecs_render::SelectAvboitLowRasterFormat(*device);
-    const Core::Format::Enum avboitAccumColorFormat = __hidden_ecs_render::SelectAvboitAccumColorFormat(*device);
-    const Core::Format::Enum avboitAccumExtinctionFormat = __hidden_ecs_render::SelectAvboitAccumExtinctionFormat(*device);
-    const Core::Format::Enum avboitTransmittanceFormat = __hidden_ecs_render::SelectAvboitTransmittanceFormat(*device);
+    const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(*device);
+    const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(*device);
+    const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(*device);
+    const Core::Format::Enum avboitTransmittanceFormat = SelectRendererAvboitTransmittanceFormat(*device);
     if(albedoFormat == Core::Format::UNKNOWN || depthFormat == Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
@@ -868,282 +716,14 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         return false;
     }
 
-    AvboitFrameTargets avboitTargets;
-    avboitTargets.fullWidth = createdTargets.width;
-    avboitTargets.fullHeight = createdTargets.height;
-    const u64 lowWidth = Max<u64>(
-        1u,
-        DivideUp(static_cast<u64>(createdTargets.width), static_cast<u64>(__hidden_ecs_render::s_AvboitDownsample))
-    );
-    const u64 lowHeight = Max<u64>(
-        1u,
-        DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(__hidden_ecs_render::s_AvboitDownsample))
-    );
-    if(lowWidth > Limit<u32>::s_Max || lowHeight > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));
+    if(!createAvboitFrameTargets(
+        createdTargets,
+        avboitLowRasterFormat,
+        avboitAccumColorFormat,
+        avboitAccumExtinctionFormat,
+        avboitTransmittanceFormat
+    ))
         return false;
-    }
-    avboitTargets.lowWidth = static_cast<u32>(lowWidth);
-    avboitTargets.lowHeight = static_cast<u32>(lowHeight);
-    avboitTargets.virtualSliceCount = __hidden_ecs_render::s_AvboitVirtualSlices;
-    avboitTargets.physicalSliceCount = __hidden_ecs_render::s_AvboitPhysicalSlices;
-    avboitTargets.lowRasterFormat = avboitLowRasterFormat;
-    avboitTargets.accumColorFormat = avboitAccumColorFormat;
-    avboitTargets.accumExtinctionFormat = avboitAccumExtinctionFormat;
-    avboitTargets.transmittanceFormat = avboitTransmittanceFormat;
-
-    Core::TextureDesc lowRasterDesc;
-    lowRasterDesc
-        .setWidth(avboitTargets.lowWidth)
-        .setHeight(avboitTargets.lowHeight)
-        .setFormat(avboitTargets.lowRasterFormat)
-        .setInRenderTarget(true)
-        .setName("engine/avboit/low_raster")
-        .setClearValue(Core::Color(0.f, 0.f, 0.f, 0.f))
-    ;
-    avboitTargets.lowRasterTarget = m_graphics.createTexture(lowRasterDesc);
-    if(!avboitTargets.lowRasterTarget){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution raster target"));
-        return false;
-    }
-
-    Core::TextureDesc accumColorDesc;
-    accumColorDesc
-        .setWidth(avboitTargets.fullWidth)
-        .setHeight(avboitTargets.fullHeight)
-        .setFormat(avboitTargets.accumColorFormat)
-        .setInRenderTarget(true)
-        .setName("engine/avboit/accum_color")
-        .setClearValue(Core::Color(0.f, 0.f, 0.f, 0.f))
-    ;
-    avboitTargets.accumColor = m_graphics.createTexture(accumColorDesc);
-    if(!avboitTargets.accumColor){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
-        return false;
-    }
-
-    Core::TextureDesc accumExtinctionDesc;
-    accumExtinctionDesc
-        .setWidth(avboitTargets.fullWidth)
-        .setHeight(avboitTargets.fullHeight)
-        .setFormat(avboitTargets.accumExtinctionFormat)
-        .setInRenderTarget(true)
-        .setName("engine/avboit/accum_extinction")
-        .setClearValue(Core::Color(0.f, 0.f, 0.f, 0.f))
-    ;
-    avboitTargets.accumExtinction = m_graphics.createTexture(accumExtinctionDesc);
-    if(!avboitTargets.accumExtinction){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));
-        return false;
-    }
-
-    Core::FramebufferDesc lowFramebufferDesc;
-    lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), __hidden_ecs_render::s_FramebufferSubresources);
-    avboitTargets.lowFramebuffer = device->createFramebuffer(lowFramebufferDesc);
-    if(!avboitTargets.lowFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
-        return false;
-    }
-
-    Core::FramebufferDesc accumulationFramebufferDesc;
-    accumulationFramebufferDesc
-        .addColorAttachment(avboitTargets.accumColor.get(), __hidden_ecs_render::s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.accumExtinction.get(), __hidden_ecs_render::s_FramebufferSubresources)
-        .setDepthAttachment(
-            Core::FramebufferAttachment()
-                .setTexture(createdTargets.depth.get())
-                .setSubresources(__hidden_ecs_render::s_FramebufferSubresources)
-                .setReadOnly(true)
-        )
-    ;
-    avboitTargets.accumulationFramebuffer = device->createFramebuffer(accumulationFramebufferDesc);
-    if(!avboitTargets.accumulationFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
-        return false;
-    }
-
-    const u32 coverageWordCount = DivideUp(avboitTargets.virtualSliceCount, 32u);
-    const u64 coverageBytes = static_cast<u64>(coverageWordCount) * sizeof(u32);
-    const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
-    const u64 lowPixelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight;
-    if(lowPixelCount > static_cast<u64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT low-resolution pixel count exceeds u32 limits"));
-        return false;
-    }
-    const u32 physicalExtinctionWordCount = DivideUp(
-        avboitTargets.physicalSliceCount,
-        __hidden_ecs_render::s_AvboitExtinctionSlicesPerWord
-    );
-    if(physicalExtinctionWordCount == 0 || lowPixelCount > static_cast<u64>(Limit<u32>::s_Max) / physicalExtinctionWordCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT packed extinction word count exceeds u32 limits"));
-        return false;
-    }
-    const u64 extinctionWordCount = lowPixelCount * physicalExtinctionWordCount;
-    const u64 extinctionBytes = extinctionWordCount * sizeof(u32);
-    const u64 extinctionOverflowBytes = lowPixelCount * sizeof(u32);
-
-    Core::BufferDesc coverageDesc;
-    coverageDesc
-        .setByteSize(coverageBytes)
-        .setStructStride(sizeof(u32))
-        .setCanHaveUAVs(true)
-        .setDebugName("engine/avboit/depth_coverage")
-    ;
-    avboitTargets.coverageBuffer = m_graphics.createBuffer(coverageDesc);
-    if(!avboitTargets.coverageBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
-        return false;
-    }
-
-    Core::BufferDesc depthWarpDesc;
-    depthWarpDesc
-        .setByteSize(depthWarpBytes)
-        .setStructStride(sizeof(u32))
-        .setCanHaveUAVs(true)
-        .setDebugName("engine/avboit/depth_warp_lut")
-    ;
-    avboitTargets.depthWarpBuffer = m_graphics.createBuffer(depthWarpDesc);
-    if(!avboitTargets.depthWarpBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
-        return false;
-    }
-
-    Core::BufferDesc controlDesc;
-    controlDesc
-        .setByteSize(static_cast<u64>(__hidden_ecs_render::s_AvboitControlWordCount) * sizeof(u32))
-        .setStructStride(sizeof(u32))
-        .setCanHaveUAVs(true)
-        .setDebugName("engine/avboit/control")
-    ;
-    avboitTargets.controlBuffer = m_graphics.createBuffer(controlDesc);
-    if(!avboitTargets.controlBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
-        return false;
-    }
-
-    Core::BufferDesc extinctionDesc;
-    extinctionDesc
-        .setByteSize(extinctionBytes)
-        .setStructStride(sizeof(u32))
-        .setCanHaveUAVs(true)
-        .setDebugName("engine/avboit/packed_extinction_volume")
-    ;
-    avboitTargets.extinctionBuffer = m_graphics.createBuffer(extinctionDesc);
-    if(!avboitTargets.extinctionBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
-        return false;
-    }
-
-    Core::BufferDesc extinctionOverflowDesc;
-    extinctionOverflowDesc
-        .setByteSize(extinctionOverflowBytes)
-        .setStructStride(sizeof(u32))
-        .setCanHaveUAVs(true)
-        .setDebugName("engine/avboit/extinction_overflow_depth")
-    ;
-    avboitTargets.extinctionOverflowBuffer = m_graphics.createBuffer(extinctionOverflowDesc);
-    if(!avboitTargets.extinctionOverflowBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction overflow buffer"));
-        return false;
-    }
-
-    Core::TextureDesc transmittanceDesc;
-    transmittanceDesc
-        .setWidth(avboitTargets.lowWidth)
-        .setHeight(avboitTargets.lowHeight)
-        .setDepth(avboitTargets.physicalSliceCount)
-        .setFormat(avboitTargets.transmittanceFormat)
-        .setDimension(Core::TextureDimension::Texture3D)
-        .setInUAV(true)
-        .setName("engine/avboit/transmittance_volume")
-        .setClearValue(Core::Color(1.f, 1.f, 1.f, 1.f))
-    ;
-    avboitTargets.transmittanceTexture = m_graphics.createTexture(transmittanceDesc);
-    if(!avboitTargets.transmittanceTexture){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT transmittance volume"));
-        return false;
-    }
-
-    Core::BindingSetDesc occupancyBindingSetDesc;
-    occupancyBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        0,
-        createdTargets.depth.get(),
-        createdTargets.depthFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    occupancyBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
-    occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.coverageBuffer.get()));
-    avboitTargets.occupancyBindingSet = device->createBindingSet(occupancyBindingSetDesc, m_avboitOccupancyBindingLayout);
-    if(!avboitTargets.occupancyBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding set"));
-        return false;
-    }
-
-    Core::BindingSetDesc depthWarpBindingSetDesc;
-    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.coverageBuffer.get()));
-    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.depthWarpBuffer.get()));
-    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.controlBuffer.get()));
-    avboitTargets.depthWarpBindingSet = device->createBindingSet(depthWarpBindingSetDesc, m_avboitDepthWarpBindingLayout);
-    if(!avboitTargets.depthWarpBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding set"));
-        return false;
-    }
-
-    Core::BindingSetDesc extinctionBindingSetDesc;
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        0,
-        createdTargets.depth.get(),
-        createdTargets.depthFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.depthWarpBuffer.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, avboitTargets.controlBuffer.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(4, avboitTargets.extinctionBuffer.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(5, avboitTargets.extinctionOverflowBuffer.get()));
-    avboitTargets.extinctionBindingSet = device->createBindingSet(extinctionBindingSetDesc, m_avboitExtinctionBindingLayout);
-    if(!avboitTargets.extinctionBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding set"));
-        return false;
-    }
-
-    Core::BindingSetDesc integrateBindingSetDesc;
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.extinctionBuffer.get()));
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        1,
-        avboitTargets.transmittanceTexture.get(),
-        avboitTargets.transmittanceFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
-        Core::TextureDimension::Texture3D
-    ));
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, avboitTargets.extinctionOverflowBuffer.get()));
-    avboitTargets.integrateBindingSet = device->createBindingSet(integrateBindingSetDesc, m_avboitIntegrateBindingLayout);
-    if(!avboitTargets.integrateBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding set"));
-        return false;
-    }
-
-    Core::BindingSetDesc accumulateBindingSetDesc;
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.depthWarpBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        1,
-        avboitTargets.transmittanceTexture.get(),
-        avboitTargets.transmittanceFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
-        Core::TextureDimension::Texture3D
-    ));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_avboitLinearSampler.get()));
-    avboitTargets.accumulateBindingSet = device->createBindingSet(accumulateBindingSetDesc, m_avboitAccumulateBindingLayout);
-    if(!avboitTargets.accumulateBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding set"));
-        return false;
-    }
-
-    createdTargets.avboit = Move(avboitTargets);
 
     Core::BindingSetDesc bindingSetDesc;
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
@@ -1260,188 +840,6 @@ bool RendererSystem::ensureDeferredCompositePipeline(Core::IFramebuffer* present
     return true;
 }
 
-bool RendererSystem::ensureAvboitResources(){
-    Core::IDevice* device = m_graphics.getDevice();
-
-    if(!__hidden_ecs_render::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
-        return false;
-    if(!__hidden_ecs_render::EnsureLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
-        return false;
-
-    if(!m_avboitEmptyBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-
-        m_avboitEmptyBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_avboitEmptyBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT empty binding layout"));
-            return false;
-        }
-    }
-
-    if(!m_avboitOccupancyBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
-
-        m_avboitOccupancyBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_avboitOccupancyBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding layout"));
-            return false;
-        }
-    }
-
-    if(!m_avboitDepthWarpBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::AvboitPushConstants)));
-
-        m_avboitDepthWarpBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_avboitDepthWarpBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding layout"));
-            return false;
-        }
-    }
-
-    if(!m_avboitExtinctionBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(4, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(5, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
-
-        m_avboitExtinctionBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_avboitExtinctionBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding layout"));
-            return false;
-        }
-    }
-
-    if(!m_avboitIntegrateBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::AvboitPushConstants)));
-
-        m_avboitIntegrateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_avboitIntegrateBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding layout"));
-            return false;
-        }
-    }
-
-    if(!m_avboitAccumulateBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
-
-        m_avboitAccumulateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_avboitAccumulateBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
-            return false;
-        }
-    }
-
-    if(!ensureShaderLoaded(
-        m_avboitOccupancyPixelShader,
-        __hidden_ecs_render::s_AvboitOccupancyPixelShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Pixel,
-        "ECSRender_AvboitOccupancyPS"
-    ))
-        return false;
-
-    if(!ensureShaderLoaded(
-        m_avboitDepthWarpComputeShader,
-        __hidden_ecs_render::s_AvboitDepthWarpComputeShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_AvboitDepthWarpCS"
-    ))
-        return false;
-
-    if(!ensureShaderLoaded(
-        m_avboitExtinctionPixelShader,
-        __hidden_ecs_render::s_AvboitExtinctionPixelShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Pixel,
-        "ECSRender_AvboitExtinctionPS"
-    ))
-        return false;
-
-    if(!ensureShaderLoaded(
-        m_avboitIntegrateComputeShader,
-        __hidden_ecs_render::s_AvboitIntegrateComputeShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_AvboitIntegrateCS"
-    ))
-        return false;
-
-    if(!ensureShaderLoaded(
-        m_avboitAccumulatePixelShader,
-        __hidden_ecs_render::s_AvboitAccumulatePixelShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Pixel,
-        "ECSRender_AvboitAccumulatePS"
-    ))
-        return false;
-
-    return true;
-}
-
-bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
-    if(!ensureAvboitResources())
-        return false;
-
-    Core::IDevice* device = m_graphics.getDevice();
-
-    if(!m_avboitDepthWarpPipeline){
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(m_avboitDepthWarpComputeShader)
-            .addBindingLayout(m_avboitDepthWarpBindingLayout)
-        ;
-        m_avboitDepthWarpPipeline = device->createComputePipeline(pipelineDesc);
-        if(!m_avboitDepthWarpPipeline){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
-            return false;
-        }
-    }
-
-    if(!m_avboitIntegratePipeline){
-        Core::ComputePipelineDesc pipelineDesc;
-        pipelineDesc
-            .setComputeShader(m_avboitIntegrateComputeShader)
-            .addBindingLayout(m_avboitIntegrateBindingLayout)
-        ;
-        m_avboitIntegratePipeline = device->createComputePipeline(pipelineDesc);
-        if(!m_avboitIntegratePipeline){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
-            return false;
-        }
-    }
-
-    return targets.valid();
-}
-
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo){
         commandList.setTextureState(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -1469,82 +867,6 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
     }
 }
 
-void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets){
-    if(targets.lowRasterTarget){
-        commandList.setTextureState(targets.lowRasterTarget.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.accumColor){
-        commandList.setTextureState(targets.accumColor.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.accumExtinction){
-        commandList.setTextureState(targets.accumExtinction.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.coverageBuffer){
-        commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.depthWarpBuffer){
-        commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.controlBuffer){
-        commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.extinctionBuffer){
-        commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.extinctionOverflowBuffer){
-        commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::CopyDest);
-    }
-
-    if(targets.transmittanceTexture){
-        commandList.setTextureState(targets.transmittanceTexture.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
-
-    commandList.commitBarriers();
-
-    if(targets.lowRasterTarget){
-        commandList.clearTextureFloat(targets.lowRasterTarget.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    }
-
-    if(targets.accumColor){
-        commandList.clearTextureFloat(targets.accumColor.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    }
-
-    if(targets.accumExtinction){
-        commandList.clearTextureFloat(targets.accumExtinction.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    }
-
-    if(targets.coverageBuffer){
-        commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
-    }
-
-    if(targets.depthWarpBuffer){
-        commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
-    }
-
-    if(targets.controlBuffer){
-        commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
-    }
-
-    if(targets.extinctionBuffer){
-        commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
-    }
-
-    if(targets.extinctionOverflowBuffer){
-        commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), Limit<u32>::s_Max);
-    }
-
-    if(targets.transmittanceTexture){
-        commandList.clearTextureFloat(targets.transmittanceTexture.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
-    }
-}
-
 void RendererSystem::renderMaterialPass(
     Core::ICommandList& commandList,
     Core::IFramebuffer* framebuffer,
@@ -1555,7 +877,7 @@ void RendererSystem::renderMaterialPass(
 ){
     if(!framebuffer)
         return;
-    const bool usesAvboit = __hidden_ecs_render::MaterialPipelinePassUsesAvboit(pass);
+    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
     if(usesAvboit && (!passBindingSet || !avboitTargets || !avboitTargets->valid()))
         return;
 
@@ -2004,7 +1326,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 
         context.commandList.setMeshletState(meshletState);
 
-        if(!__hidden_ecs_render::MaterialPipelinePassUsesAvboit(context.pass)){
+        if(!MaterialPipelinePassUsesRendererAvboit(context.pass)){
             const __hidden_ecs_render::ShaderDrivenPushConstants pushConstants =
                 __hidden_ecs_render::BuildShaderDrivenPushConstants(
                     geometry.triangleCount,
@@ -2084,7 +1406,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setGraphicsState(graphicsState);
 
-        if(__hidden_ecs_render::MaterialPipelinePassUsesAvboit(context.pass)){
+        if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
             const __hidden_ecs_render::TransparentDrawPushConstants transparentPushConstants =
                 __hidden_ecs_render::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
@@ -2101,62 +1423,6 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         drawArgs.setVertexCount(geometry.indexCount);
         context.commandList.draw(drawArgs);
     });
-}
-
-void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets){
-    AvboitFrameTargets& avboitTargets = targets.avboit;
-    if(!avboitTargets.valid())
-        return;
-
-    // Weighted accumulation keeps transparent compositing stable without the
-    // packed extinction prepass' fragment storage-buffer atomics.
-    renderMaterialPass(
-        commandList,
-        avboitTargets.accumulationFramebuffer.get(),
-        MaterialPipelinePass::AvboitAccumulate,
-        true,
-        avboitTargets.accumulateBindingSet.get(),
-        &avboitTargets
-    );
-    commandList.endRenderPass();
-}
-
-void RendererSystem::dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets){
-    if(!m_avboitDepthWarpPipeline || !targets.depthWarpBindingSet)
-        return;
-
-    commandList.setResourceStatesForBindingSet(targets.depthWarpBindingSet.get());
-    commandList.commitBarriers();
-
-    Core::ComputeState computeState;
-    computeState.setPipeline(m_avboitDepthWarpPipeline.get());
-    computeState.addBindingSet(targets.depthWarpBindingSet.get());
-    commandList.setComputeState(computeState);
-
-    const __hidden_ecs_render::AvboitPushConstants pushConstants =
-        __hidden_ecs_render::BuildAvboitPushConstants(targets, 1.f);
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(1, 1, 1);
-}
-
-void RendererSystem::dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets){
-    if(!m_avboitIntegratePipeline || !targets.integrateBindingSet)
-        return;
-
-    commandList.setResourceStatesForBindingSet(targets.integrateBindingSet.get());
-    commandList.commitBarriers();
-
-    Core::ComputeState computeState;
-    computeState.setPipeline(m_avboitIntegratePipeline.get());
-    computeState.addBindingSet(targets.integrateBindingSet.get());
-    commandList.setComputeState(computeState);
-
-    const __hidden_ecs_render::AvboitPushConstants pushConstants =
-        __hidden_ecs_render::BuildAvboitPushConstants(targets, 1.f);
-    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-
-    const u32 pixelCount = targets.lowWidth * targets.lowHeight;
-    commandList.dispatch(DivideUp(pixelCount, 64u), 1, 1);
 }
 
 bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){

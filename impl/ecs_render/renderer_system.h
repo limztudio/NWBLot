@@ -318,6 +318,13 @@ private:
     [[nodiscard]] bool ensureDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
     [[nodiscard]] bool ensureAvboitResources();
     [[nodiscard]] bool ensureAvboitPipelines(AvboitFrameTargets& targets);
+    [[nodiscard]] bool createAvboitFrameTargets(
+        DeferredFrameTargets& createdTargets,
+        Core::Format::Enum lowRasterFormat,
+        Core::Format::Enum accumColorFormat,
+        Core::Format::Enum accumExtinctionFormat,
+        Core::Format::Enum transmittanceFormat
+    );
     [[nodiscard]] bool ensureRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
     void resetDeferredFrameTargets(){ m_deferredTargets = DeferredFrameTargets{}; }

@@ -7,8 +7,7 @@
 
 #include "transform_component.h"
 #include "scene_component.h"
-#include "camera_component.h"
-#include "light_component.h"
+#include <impl/ecs_camera/camera_component.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,14 +31,14 @@ NWB_ECS_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct SceneCameraView{
-    ECS::EntityID entity = ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     TransformComponent* transform = nullptr;
     CameraComponent* camera = nullptr;
     CameraProjectionData projectionData;
@@ -66,7 +65,7 @@ static_assert(IsTriviallyCopyable_V<SceneViewBasis>, "SceneViewBasis must stay c
 static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must keep basis vectors aligned");
 
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(ECS::World& world, f32 fallbackAspectRatio = 1.0f);
+[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = 1.0f);
 [[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis();
 [[nodiscard]] SceneViewBasis BuildSceneViewBasis(const TransformComponent& transform);
 
@@ -74,7 +73,7 @@ static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must k
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

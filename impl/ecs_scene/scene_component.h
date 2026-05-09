@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "global.h"
+#include "../global.h"
 
 #include <core/ecs/entity_id.h>
 
@@ -13,25 +13,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct SceneComponent{
-    ECS::EntityID mainCamera = ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID mainCamera = Core::ECS::ENTITY_ID_INVALID;
 };
 
 static_assert(IsStandardLayout_V<SceneComponent>, "SceneComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<SceneComponent>, "SceneComponent must stay cheap to move in dense ECS storage");
-static_assert(sizeof(SceneComponent) == sizeof(ECS::EntityID), "SceneComponent must only contain shared scene entity references");
+static_assert(sizeof(SceneComponent) == sizeof(Core::ECS::EntityID), "SceneComponent must only contain shared scene entity references");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -453,38 +453,18 @@ static void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
     );
 }
 
-static f32 ExtentAspectRatio(const u32 width, const u32 height){
-    if(width == 0 || height == 0)
-        return 1.0f;
-
-    return static_cast<f32>(width) / static_cast<f32>(height);
-}
-
-static f32 FramebufferAspectRatio(const Core::IFramebuffer& framebuffer){
-    const Core::FramebufferInfoEx& framebufferInfo = framebuffer.getFramebufferInfo();
-    return ExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
-}
-
-static void ApplyCameraMeshViewState(
-    MeshViewState& state,
-    const NWB::Impl::TransformComponent& transform,
-    const NWB::Impl::CameraProjectionData& projectionData
-){
-    StoreWorldToClipMatrix(state.worldToClip, NWB::Impl::BuildSceneViewBasis(transform), projectionData.projectionParams);
-    StoreFloat(VectorSetW(LoadFloat(transform.position), 1.0f), &state.cameraPosition);
-}
-
 static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewState state;
     const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
 
     const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
-        __hidden_ecs_render::ApplyCameraMeshViewState(
-            state,
-            *cameraView.transform,
-            cameraView.projectionData
+        StoreWorldToClipMatrix(
+            state.worldToClip,
+            NWB::Impl::BuildSceneViewBasis(*cameraView.transform),
+            cameraView.projectionData.projectionParams
         );
+        StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
     }
     else{
         StoreWorldToClipMatrix(
@@ -569,11 +549,6 @@ static TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     pushConstants.avboit = BuildAvboitPushConstants(targets, alpha);
     return pushConstants;
 }
-
-static u32 DispatchGroupCount1D(const u32 itemCount, const u32 groupSize){
-    return DivideUp(itemCount, groupSize);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -668,7 +643,10 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets->framebuffer->getFramebufferInfo().getViewport());
 
-    const f32 meshViewAspectRatio = __hidden_ecs_render::FramebufferAspectRatio(*deferredTargets->framebuffer);
+    const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets->framebuffer->getFramebufferInfo();
+    f32 meshViewAspectRatio = 1.0f;
+    if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
+        meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
     const bool meshViewReady = ensureMeshViewBuffer(*commandList, meshViewAspectRatio);
     if(meshViewReady){
         gatherMaterialPassDrawItems(
@@ -1600,10 +1578,12 @@ void RendererSystem::renderMaterialPass(
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-    const f32 meshViewAspectRatio = avboitTargets
-        ? __hidden_ecs_render::ExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight)
-        : __hidden_ecs_render::FramebufferAspectRatio(*framebuffer)
-    ;
+    const Core::FramebufferInfoEx& meshViewFramebufferInfo = framebuffer->getFramebufferInfo();
+    f32 meshViewAspectRatio = 1.0f;
+    if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
+        meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
+    if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)
+        meshViewAspectRatio = static_cast<f32>(avboitTargets->fullWidth) / static_cast<f32>(avboitTargets->fullHeight);
     if(!ensureMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
 
@@ -2184,7 +2164,7 @@ void RendererSystem::dispatchAvboitIntegration(Core::ICommandList& commandList, 
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
-    commandList.dispatch(__hidden_ecs_render::DispatchGroupCount1D(pixelCount, 64u), 1, 1);
+    commandList.dispatch(DivideUp(pixelCount, 64u), 1, 1);
 }
 
 bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){

@@ -23,6 +23,7 @@ namespace __hidden_geometry_meshlet_cluster{
 
 
 static constexpr f32 s_TriangleAreaEpsilon = 0.000000000001f;
+static constexpr u32 s_UnresolvedLocalIndex = Limit<u32>::s_Max;
 
 struct PendingMeshlet{
     using ScratchIndexVector = Vector<u32, Core::Alloc::ScratchAllocator<u32>>;
@@ -43,7 +44,7 @@ struct TriangleVertices{
 };
 
 struct TriangleLocalIndices{
-    u32 values[3] = { Limit<u32>::s_Max, Limit<u32>::s_Max, Limit<u32>::s_Max };
+    u32 values[3] = { s_UnresolvedLocalIndex, s_UnresolvedLocalIndex, s_UnresolvedLocalIndex };
     u32 missingVertexCount = 0u;
 };
 
@@ -92,13 +93,20 @@ struct TriangleLocalIndices{
 
     for(usize localIndex = 0u; localIndex < meshlet.vertices.size() && missingVertexCount != 0u; ++localIndex){
         const u32 vertex = meshlet.vertices[localIndex];
-        for(u32 corner = 0u; corner < 3u; ++corner){
-            if(output.values[corner] != Limit<u32>::s_Max || triangle.values[corner] != vertex)
-                continue;
-
-            output.values[corner] = static_cast<u32>(localIndex);
+        const u32 localIndexValue = static_cast<u32>(localIndex);
+        if(output.values[0] == s_UnresolvedLocalIndex && triangle.values[0] == vertex){
+            output.values[0] = localIndexValue;
             --missingVertexCount;
-            break;
+            continue;
+        }
+        if(output.values[1] == s_UnresolvedLocalIndex && triangle.values[1] == vertex){
+            output.values[1] = localIndexValue;
+            --missingVertexCount;
+            continue;
+        }
+        if(output.values[2] == s_UnresolvedLocalIndex && triangle.values[2] == vertex){
+            output.values[2] = localIndexValue;
+            --missingVertexCount;
         }
     }
 
@@ -124,7 +132,7 @@ struct TriangleLocalIndices{
 
     for(u32 corner = 0u; corner < 3u; ++corner){
         u32 localIndex = localIndices.values[corner];
-        if(localIndex == Limit<u32>::s_Max){
+        if(localIndex == s_UnresolvedLocalIndex){
             localIndex = static_cast<u32>(vertexBase + nextVertexOffset);
             meshlet.vertices.push_back(triangle.values[corner]);
             ++nextVertexOffset;

@@ -342,10 +342,6 @@ static Core::RenderState BuildCompositeRenderState(){
     return renderState;
 }
 
-static u32 ComputeDispatchGroupCount(const u32 triangleCount){
-    return DivideUp(triangleCount, s_TrianglesPerWorkgroup);
-}
-
 static usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity){
     usize capacity = Max<usize>(currentCapacity, 1u);
     while(capacity < requiredCapacity){
@@ -371,15 +367,6 @@ static InstanceGpuData BuildInstanceGpuData(
     data.translation = transform->position;
     data.scale = transform->scale;
     return data;
-}
-
-static void ApplyDefaultCameraPositionMeshViewState(MeshViewState& state, const MeshViewBasis& basis){
-    state.cameraPosition = Float4(
-        basis.positionDepthBias.x,
-        basis.positionDepthBias.y,
-        basis.positionDepthBias.z,
-        1.0f
-    );
 }
 
 static void ApplyDirectionalLightMeshViewState(
@@ -472,7 +459,12 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
             defaultBasis,
             NWB::Impl::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
         );
-        __hidden_ecs_render::ApplyDefaultCameraPositionMeshViewState(state, defaultBasis);
+        state.cameraPosition = Float4(
+            defaultBasis.positionDepthBias.x,
+            defaultBasis.positionDepthBias.y,
+            defaultBasis.positionDepthBias.z,
+            1.0f
+        );
     }
 
     __hidden_ecs_render::ApplyDirectionalLightMeshViewState(
@@ -2240,7 +2232,7 @@ bool RendererSystem::ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>
     }
 
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = __hidden_ecs_render::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, __hidden_ecs_render::s_TrianglesPerWorkgroup);
     if(createdGeometry.dispatchGroupCount == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"), StringConvert(geometryPath.c_str()));
         return false;
@@ -2324,7 +2316,7 @@ bool RendererSystem::ensureRuntimeGeometryResources(const RuntimeGeometryDesc& d
     createdGeometry.shaderIndexBuffer = desc.shaderIndexBuffer;
     createdGeometry.indexCount = desc.indexCount;
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = __hidden_ecs_render::ComputeDispatchGroupCount(createdGeometry.triangleCount);
+    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, __hidden_ecs_render::s_TrianglesPerWorkgroup);
     createdGeometry.sourceVertexLayout = desc.sourceVertexLayout;
     createdGeometry.runtimeGeometry = true;
     createdGeometry.runtimeGeometryVersion = desc.version;

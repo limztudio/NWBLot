@@ -4,6 +4,8 @@
 
 #include "graphics.h"
 
+#include "vulkan/vulkan_backend_queries.h"
+
 #include <core/common/log.h>
 
 
@@ -282,6 +284,12 @@ static CustomUniquePtr<IGraphicsBackend> CreateBackend(
     return createBackend(deviceParams, swapChainState, allocator, threadPool);
 }
 
+static const Vulkan::IBackendQueries* QueryVulkanBackendQueries(const IGraphicsBackend& backend){
+    return static_cast<const Vulkan::IBackendQueries*>(
+        backend.queryInterface(Vulkan::s_BackendQueriesInterfaceID)
+    );
+}
+
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
     return
         combo.inputType == CooperativeVectorDataType::Float16
@@ -547,27 +555,42 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 bool Graphics::isVulkanInstanceExtensionEnabled(const char* extensionName)const{
-    return m_backend->isInstanceExtensionEnabled(extensionName);
+    const auto* queries = __hidden_graphics::QueryVulkanBackendQueries(*m_backend);
+    return queries ? queries->isInstanceExtensionEnabled(extensionName) : false;
 }
 
 bool Graphics::isVulkanDeviceExtensionEnabled(const char* extensionName)const{
-    return m_backend->isDeviceExtensionEnabled(extensionName);
+    const auto* queries = __hidden_graphics::QueryVulkanBackendQueries(*m_backend);
+    return queries ? queries->isDeviceExtensionEnabled(extensionName) : false;
 }
 
 bool Graphics::isVulkanLayerEnabled(const char* layerName)const{
-    return m_backend->isLayerEnabled(layerName);
+    const auto* queries = __hidden_graphics::QueryVulkanBackendQueries(*m_backend);
+    return queries ? queries->isLayerEnabled(layerName) : false;
 }
 
 void Graphics::getEnabledVulkanInstanceExtensions(Vector<AString>& extensions)const{
-    m_backend->getEnabledInstanceExtensions(extensions);
+    const auto* queries = __hidden_graphics::QueryVulkanBackendQueries(*m_backend);
+    if(queries)
+        queries->getEnabledInstanceExtensions(extensions);
+    else
+        extensions.clear();
 }
 
 void Graphics::getEnabledVulkanDeviceExtensions(Vector<AString>& extensions)const{
-    m_backend->getEnabledDeviceExtensions(extensions);
+    const auto* queries = __hidden_graphics::QueryVulkanBackendQueries(*m_backend);
+    if(queries)
+        queries->getEnabledDeviceExtensions(extensions);
+    else
+        extensions.clear();
 }
 
 void Graphics::getEnabledVulkanLayers(Vector<AString>& layers)const{
-    m_backend->getEnabledLayers(layers);
+    const auto* queries = __hidden_graphics::QueryVulkanBackendQueries(*m_backend);
+    if(queries)
+        queries->getEnabledLayers(layers);
+    else
+        layers.clear();
 }
 
 void Graphics::backBufferResizing(){

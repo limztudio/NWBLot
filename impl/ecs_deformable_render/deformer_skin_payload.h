@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "deformer_system.h"
+#include "deformer_gpu_payload.h"
 
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <core/common/log.h>
@@ -151,7 +151,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             return false;
         }
 
-        DeformerSystem::DeformerSkinInfluenceGpu gpuSkin;
+        DeformerSkinInfluenceGpu gpuSkin;
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];

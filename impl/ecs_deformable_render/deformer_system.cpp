@@ -6,8 +6,11 @@
 
 #include "deformer_morph_payload.h"
 #include "deformer_skin_payload.h"
+
 #include <core/alloc/scratch.h>
+#include <core/assets/asset_manager.h>
 #include <core/ecs/world.h>
+#include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_geometry/deformable_geometry_validation.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
@@ -192,35 +195,6 @@ static Core::BufferHandle SetupStructuredBuffer(
 
 
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(
-    sizeof(DeformerSystem::DeformerVertexMorphRangeGpu) == sizeof(f32) * 4u,
-    "Deformer vertex morph range GPU layout drifted"
-);
-static_assert(
-    alignof(DeformerSystem::DeformerVertexMorphRangeGpu) >= alignof(Float4),
-    "Deformer vertex morph range GPU layout must stay SIMD-aligned"
-);
-static_assert(
-    sizeof(DeformerSystem::DeformerBlendedMorphDeltaGpu) == sizeof(f32) * 12u,
-    "Deformer blended morph delta GPU layout drifted"
-);
-static_assert(
-    alignof(DeformerSystem::DeformerBlendedMorphDeltaGpu) >= alignof(Float4),
-    "Deformer blended morph delta GPU layout must stay SIMD-aligned"
-);
-static_assert(
-    sizeof(DeformerSystem::DeformerSkinInfluenceGpu) == sizeof(f32) * 8u,
-    "Deformer skin influence GPU layout drifted"
-);
-static_assert(
-    alignof(DeformerSystem::DeformerSkinInfluenceGpu) >= alignof(Float4),
-    "Deformer skin influence GPU layout must stay SIMD-aligned"
-);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

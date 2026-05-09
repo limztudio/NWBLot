@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include <core/assets/asset_manager.h>
+#include "deformer_gpu_payload.h"
+
 #include <core/ecs/system.h>
-#include <core/graphics/graphics.h>
+#include <core/graphics/render_pass.h>
 #include <impl/ecs_deformable_render/deformable_runtime_mesh_cache.h>
 #include <impl/ecs_geometry/runtime_geometry.h>
 
@@ -33,26 +34,6 @@ class DeformerSystem final
     , public IRuntimeGeometryProvider
     , public IDeformableRuntimeMeshProvider
 {
-public:
-    struct alignas(Float4) DeformerVertexMorphRangeGpu{
-        u32 firstDelta = 0;
-        u32 deltaCount = 0;
-        u32 padding0 = 0;
-        u32 padding1 = 0;
-    };
-
-    struct alignas(Float4) DeformerBlendedMorphDeltaGpu{
-        Float4 deltaPosition = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        Float4 deltaNormal = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        Float4 deltaTangent = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    };
-
-    struct alignas(Float4) DeformerSkinInfluenceGpu{
-        u32 joint[4] = {};
-        Float4 weight = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    };
-
-
 private:
     struct RuntimeResources{
         RuntimeMeshHandle handle;

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "deformer_system.h"
+#include "deformer_gpu_payload.h"
 
 #include <core/alloc/scratch.h>
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
@@ -198,12 +198,12 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
         if(!ActiveBlendedMorphDelta(blendedDelta))
             continue;
 
-        DeformerSystem::DeformerVertexMorphRangeGpu range;
+        DeformerVertexMorphRangeGpu range;
         range.firstDelta = static_cast<u32>(outDeltas.size());
         range.deltaCount = 1u;
         outRanges[vertexIndex] = range;
 
-        DeformerSystem::DeformerBlendedMorphDeltaGpu gpuDelta;
+        DeformerBlendedMorphDeltaGpu gpuDelta;
         gpuDelta.deltaPosition = blendedDelta.deltaPosition;
         gpuDelta.deltaNormal = blendedDelta.deltaNormal;
         gpuDelta.deltaTangent = blendedDelta.deltaTangent;

@@ -5,7 +5,9 @@
 #include "deformable_runtime_mesh_cache.h"
 
 #include <core/alloc/scratch.h>
+#include <core/assets/asset_manager.h>
 #include <core/ecs/world.h>
+#include <core/graphics/graphics.h>
 #include <impl/assets_geometry/deformable_geometry_asset.h>
 #include <impl/assets_geometry/deformable_geometry_payload_logging.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>

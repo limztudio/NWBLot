@@ -6,7 +6,9 @@
 
 #include "shader_asset_loader.h"
 
+#include <core/assets/asset_manager.h>
 #include <core/ecs/world.h>
+#include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_material/material_asset.h>

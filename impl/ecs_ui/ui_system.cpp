@@ -4,7 +4,9 @@
 
 #include "ui_system.h"
 
+#include <core/assets/asset_manager.h>
 #include <core/ecs/world.h>
+#include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>
 #include <global/text_utils.h>

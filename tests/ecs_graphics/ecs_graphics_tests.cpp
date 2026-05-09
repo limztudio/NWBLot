@@ -2844,8 +2844,8 @@ static void TestDeformerMorphPayloadPreblendsDuplicateWeightsAndMorphs(TestConte
     weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.5f });
     weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("lift"), 0.5f });
 
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> ranges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> deltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> ranges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> deltas;
     usize signature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2879,8 +2879,8 @@ static void TestDeformerMorphPayloadSignatureChangesWithWeights(TestContext& con
     NWB::Impl::DeformableMorphWeightsComponent lightWeight;
     lightWeight.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.25f });
 
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> lightRanges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> lightDeltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> lightRanges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> lightDeltas;
     usize lightSignature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2896,8 +2896,8 @@ static void TestDeformerMorphPayloadSignatureChangesWithWeights(TestContext& con
     NWB::Impl::DeformableMorphWeightsComponent heavyWeight;
     heavyWeight.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.75f });
 
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> heavyRanges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> heavyDeltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> heavyRanges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> heavyDeltas;
     usize heavySignature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2933,8 +2933,8 @@ static void TestDeformerMorphPayloadSignatureChangesWithEditRevision(TestContext
     NWB::Impl::DeformableMorphWeightsComponent weight;
     weight.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("raise"), 0.5f });
 
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> baseRanges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> baseDeltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> baseRanges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> baseDeltas;
     usize baseSignature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2949,8 +2949,8 @@ static void TestDeformerMorphPayloadSignatureChangesWithEditRevision(TestContext
 
     instance.editRevision += 1u;
 
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> editedRanges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> editedDeltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> editedRanges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> editedDeltas;
     usize editedSignature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -2988,8 +2988,8 @@ static void TestDeformerMorphPayloadBuildsSparseVertexRanges(TestContext& contex
     NWB::Impl::DeformableMorphWeightsComponent weights;
     weights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("sparse"), 1.0f });
 
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> ranges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> deltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> ranges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> deltas;
     usize signature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -3135,7 +3135,7 @@ static void TestDeformerSkinPayloadValidatesSkeletonAndPalette(TestContext& cont
     NWB::Impl::DeformableJointPaletteComponent joints;
     joints.joints.push_back(MakeIdentityJointMatrix());
 
-    Vector<NWB::Impl::DeformerSystem::DeformerSkinInfluenceGpu> skinInfluences;
+    Vector<NWB::Impl::DeformerSkinInfluenceGpu> skinInfluences;
     Vector<NWB::Impl::DeformableJointMatrix> jointMatrices;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -5322,8 +5322,8 @@ static void TestMinimalMilestoneReplayPreservesAnimatedPayload(TestContext& cont
 
     NWB::Impl::DeformableMorphWeightsComponent morphWeights;
     morphWeights.weights.push_back(NWB::Impl::DeformableMorphWeight{ Name("minimal_milestone_lift"), 0.5f });
-    Vector<NWB::Impl::DeformerSystem::DeformerVertexMorphRangeGpu> morphRanges;
-    Vector<NWB::Impl::DeformerSystem::DeformerBlendedMorphDeltaGpu> morphDeltas;
+    Vector<NWB::Impl::DeformerVertexMorphRangeGpu> morphRanges;
+    Vector<NWB::Impl::DeformerBlendedMorphDeltaGpu> morphDeltas;
     usize morphSignature = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,

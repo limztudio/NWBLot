@@ -106,6 +106,24 @@ static AString MakeIndexedLabel(const AStringView baseLabel, const usize index){
     return label;
 }
 
+namespace MetadataF32ValueFailure{
+    enum Enum : u8{
+        None,
+        NotNumeric,
+        NonFinite,
+        OutOfRange
+    };
+};
+
+namespace MetadataU32ValueFailure{
+    enum Enum : u8{
+        None,
+        NotNumeric,
+        NonIntegerOrNegative,
+        OutOfRange
+    };
+};
+
 static constexpr const tchar* s_GeometryMetaKind = NWB_TEXT("Geometry");
 static constexpr const tchar* s_DeformableGeometryMetaKind = NWB_TEXT("Deformable geometry");
 
@@ -126,6 +144,56 @@ static const Core::Metascript::Value* FindRequiredMetadataListField(
     return nullptr;
 }
 
+static MetadataF32ValueFailure::Enum ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value, f32& outValue){
+    if(!value.isNumeric())
+        return MetadataF32ValueFailure::NotNumeric;
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue))
+        return MetadataF32ValueFailure::NonFinite;
+    if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max))
+        return MetadataF32ValueFailure::OutOfRange;
+
+    outValue = static_cast<f32>(numericValue);
+    return MetadataF32ValueFailure::None;
+}
+
+static void LogMetadataFiniteF32ValueFailure(
+    const Path& nwbFilePath,
+    const tchar* metaKind,
+    const AStringView label,
+    const MetadataF32ValueFailure::Enum failure
+){
+    switch(failure){
+    case MetadataF32ValueFailure::NotNumeric:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return;
+
+    case MetadataF32ValueFailure::NonFinite:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return;
+
+    case MetadataF32ValueFailure::OutOfRange:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return;
+
+    default:
+        return;
+    }
+}
+
 static bool ParseMetadataFiniteF32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
@@ -133,35 +201,12 @@ static bool ParseMetadataFiniteF32Value(
     const AStringView label,
     f32& outValue
 ){
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
+    const MetadataF32ValueFailure::Enum failure = ValidateMetadataFiniteF32Value(value, outValue);
+    if(failure == MetadataF32ValueFailure::None)
+        return true;
 
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-    if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-
-    outValue = static_cast<f32>(numericValue);
-    return true;
+    LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, label, failure);
+    return false;
 }
 
 template<usize ComponentCount>
@@ -184,9 +229,47 @@ static bool ParseMetadataF32Tuple(
 
     const auto& list = value.asList();
     for(usize i = 0; i < ComponentCount; ++i){
+        const MetadataF32ValueFailure::Enum failure = ValidateMetadataFiniteF32Value(list[i], outValues[i]);
+        if(failure == MetadataF32ValueFailure::None)
+            continue;
+
         const AString componentLabel = MakeIndexedLabel(label, i);
-        if(!ParseMetadataFiniteF32Value(nwbFilePath, list[i], metaKind, componentLabel, outValues[i]))
-            return false;
+        LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
+        return false;
+    }
+    return true;
+}
+
+template<usize ComponentCount>
+static bool ParseMetadataF32TupleListElement(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const tchar* metaKind,
+    const AStringView fieldName,
+    const usize elementIndex,
+    f32 (&outValues)[ComponentCount]
+){
+    if(!value.isList() || value.asList().size() != ComponentCount){
+        const AString label = MakeIndexedLabel(fieldName, elementIndex);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+            , ComponentCount
+        );
+        return false;
+    }
+
+    const auto& list = value.asList();
+    for(usize i = 0; i < ComponentCount; ++i){
+        const MetadataF32ValueFailure::Enum failure = ValidateMetadataFiniteF32Value(list[i], outValues[i]);
+        if(failure == MetadataF32ValueFailure::None)
+            continue;
+
+        const AString label = MakeIndexedLabel(fieldName, elementIndex);
+        const AString componentLabel = MakeIndexedLabel(label, i);
+        LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
+        return false;
     }
     return true;
 }
@@ -208,9 +291,8 @@ static bool ParseMetadataFloatListField(
     const auto& list = field->asList();
     outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
-        const AString label = MakeIndexedLabel(fieldName, i);
         alignas(16) f32 tuple[ComponentCount] = {};
-        if(!ParseMetadataF32Tuple(nwbFilePath, list[i], metaKind, label, tuple)){
+        if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple)){
             outValues.clear();
             return false;
         }
@@ -237,6 +319,56 @@ static bool ParseMetadataFloatListField(
     return true;
 }
 
+static MetadataU32ValueFailure::Enum ValidateMetadataU32Value(const Core::Metascript::Value& value, u32& outValue){
+    if(!value.isNumeric())
+        return MetadataU32ValueFailure::NotNumeric;
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue))
+        return MetadataU32ValueFailure::NonIntegerOrNegative;
+    if(numericValue > static_cast<f64>(Limit<u32>::s_Max))
+        return MetadataU32ValueFailure::OutOfRange;
+
+    outValue = static_cast<u32>(numericValue);
+    return MetadataU32ValueFailure::None;
+}
+
+static void LogMetadataU32ValueFailure(
+    const Path& nwbFilePath,
+    const tchar* metaKind,
+    const AStringView label,
+    const MetadataU32ValueFailure::Enum failure
+){
+    switch(failure){
+    case MetadataU32ValueFailure::NotNumeric:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return;
+
+    case MetadataU32ValueFailure::NonIntegerOrNegative:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return;
+
+    case MetadataU32ValueFailure::OutOfRange:
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
+            , metaKind
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return;
+
+    default:
+        return;
+    }
+}
+
 static bool ParseMetadataU32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
@@ -244,35 +376,12 @@ static bool ParseMetadataU32Value(
     const AStringView label,
     u32& outValue
 ){
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
+    const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(value, outValue);
+    if(failure == MetadataU32ValueFailure::None)
+        return true;
 
-    const f64 numericValue = value.toDouble();
-    if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-    if(numericValue > static_cast<f64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-
-    outValue = static_cast<u32>(numericValue);
-    return true;
+    LogMetadataU32ValueFailure(nwbFilePath, metaKind, label, failure);
+    return false;
 }
 
 static bool ParseMetadataIndexType(
@@ -541,22 +650,6 @@ static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value
     return ParseMetadataU32Value(nwbFilePath, value, s_DeformableGeometryMetaKind, label, outValue);
 }
 
-static bool ParseU16Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, u16& outValue){
-    u32 parsed = 0;
-    if(!ParseU32Value(nwbFilePath, value, label, parsed))
-        return false;
-    if(parsed > Limit<u16>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-
-    outValue = static_cast<u16>(parsed);
-    return true;
-}
-
 static const Core::Metascript::Value* FindRequiredListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
@@ -592,9 +685,22 @@ static bool ParseU16Tuple(
 
     const auto& list = value.asList();
     for(usize i = 0; i < ComponentCount; ++i){
-        const AString componentLabel = MakeIndexedLabel(label, i);
-        if(!ParseU16Value(nwbFilePath, list[i], componentLabel, outValues[i]))
+        u32 parsed = 0u;
+        const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], parsed);
+        if(failure != MetadataU32ValueFailure::None){
+            const AString componentLabel = MakeIndexedLabel(label, i);
+            LogMetadataU32ValueFailure(nwbFilePath, s_DeformableGeometryMetaKind, componentLabel, failure);
             return false;
+        }
+        if(parsed > Limit<u16>::s_Max){
+            const AString componentLabel = MakeIndexedLabel(label, i);
+            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(componentLabel)
+            );
+            return false;
+        }
+        outValues[i] = static_cast<u16>(parsed);
     }
     return true;
 }
@@ -626,8 +732,10 @@ static bool ParseU32ListField(
     outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
         u32 value = 0;
-        const AString label = MakeIndexedLabel(fieldName, i);
-        if(!ParseU32Value(nwbFilePath, list[i], label, value)){
+        const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], value);
+        if(failure != MetadataU32ValueFailure::None){
+            const AString label = MakeIndexedLabel(fieldName, i);
+            LogMetadataU32ValueFailure(nwbFilePath, s_DeformableGeometryMetaKind, label, failure);
             outValues.clear();
             return false;
         }

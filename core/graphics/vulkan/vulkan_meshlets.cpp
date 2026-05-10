@@ -90,63 +90,36 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         VK_FALSE
     );
 
-    auto viewportState = VulkanDetail::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount = 1;
-
-    auto multisampling = VulkanDetail::MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
+    const VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR,
+    };
+    VulkanDetail::GraphicsPipelineFixedState fixedState{ scratchArena };
     if(
-        !VulkanDetail::ConfigurePipelineMultisampleState(
-            fbinfo.sampleCount,
-            desc.renderState.blendState.alphaToCoverageEnable,
-            multisampling,
-            NWB_TEXT("meshlet pipeline")
+        !VulkanDetail::BuildGraphicsPipelineFixedState(
+            fbinfo,
+            desc.renderState,
+            VulkanDetail::PipelineStencilFaceMode::DepthOnly,
+            dynamicStates,
+            static_cast<u32>(LengthOf(dynamicStates)),
+            NWB_TEXT("meshlet pipeline"),
+            fixedState
         )
     ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    auto depthStencil = VulkanDetail::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
-    VulkanDetail::ConfigurePipelineDepthStencilState(
-        desc.renderState.depthStencilState,
-        VulkanDetail::PipelineStencilFaceMode::DepthOnly,
-        depthStencil
-    );
-
-    PipelineColorBlendAttachmentVector blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
-    auto colorBlending = VulkanDetail::BuildPipelineColorBlendState(fbinfo, desc.renderState.blendState, blendAttachments);
-
-    const VkDynamicState dynamicStates[] = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR,
-    };
-    auto dynamicState = VulkanDetail::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
-    dynamicState.dynamicStateCount = static_cast<u32>(LengthOf(dynamicStates));
-    dynamicState.pDynamicStates = dynamicStates;
-
-    VkPipelineRenderingCreateInfo renderingInfo = {};
-    PipelineRenderingFormatVector colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
-    if(!VulkanDetail::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("meshlet pipeline"), renderingInfo, colorFormats)){
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
-        pipelineInfo.pNext = descriptorHeapScratch.pNext(&renderingInfo);
+        pipelineInfo.pNext = descriptorHeapScratch.pNext(&fixedState.renderingInfo);
     else
-        pipelineInfo.pNext = &renderingInfo;
+        pipelineInfo.pNext = &fixedState.renderingInfo;
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = nullptr; // Mesh shaders don't use vertex input
     pipelineInfo.pInputAssemblyState = nullptr; // Mesh shaders don't use input assembly
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthStencil;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
+    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
     pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 

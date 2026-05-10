@@ -400,6 +400,7 @@ private:
 
 
 private:
+    [[nodiscard]] bool loadDeferredCompositeVertexShader();
     [[nodiscard]] bool loadShader(
         Core::ShaderHandle& outShader,
         const Name& shaderName,

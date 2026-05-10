@@ -97,6 +97,35 @@ struct StagingTextureMipLayout{
 };
 using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::CustomAllocator<StagingTextureMipLayout>>;
 
+struct GraphicsPipelineFixedState{
+    VkPipelineViewportStateCreateInfo viewportState = {};
+    VkPipelineMultisampleStateCreateInfo multisampling = {};
+    VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+    PipelineColorBlendAttachmentVector blendAttachments;
+    VkPipelineColorBlendStateCreateInfo colorBlending = {};
+    VkPipelineDynamicStateCreateInfo dynamicState = {};
+    VkPipelineRenderingCreateInfo renderingInfo = {};
+    PipelineRenderingFormatVector colorFormats;
+
+    explicit GraphicsPipelineFixedState(Alloc::ScratchArena<>& scratchArena)
+        : blendAttachments(Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena))
+        , colorFormats(Alloc::ScratchAllocator<VkFormat>(scratchArena))
+    {}
+};
+
+inline void AttachGraphicsPipelineFixedState(
+    VkGraphicsPipelineCreateInfo& pipelineInfo,
+    const VkPipelineRasterizationStateCreateInfo& rasterizer,
+    const GraphicsPipelineFixedState& fixedState
+){
+    pipelineInfo.pViewportState = &fixedState.viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &fixedState.multisampling;
+    pipelineInfo.pDepthStencilState = &fixedState.depthStencil;
+    pipelineInfo.pColorBlendState = &fixedState.colorBlending;
+    pipelineInfo.pDynamicState = &fixedState.dynamicState;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -158,6 +187,15 @@ bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, co
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
 void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
 VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, AccelStructCompactionMode::Enum compactionMode);
+bool BuildGraphicsPipelineFixedState(
+    const FramebufferInfo& fbinfo,
+    const RenderState& renderState,
+    PipelineStencilFaceMode::Enum stencilFaceMode,
+    const VkDynamicState* dynamicStates,
+    u32 dynamicStateCount,
+    const tchar* operationName,
+    GraphicsPipelineFixedState& outState
+);
 bool BuildClusterOperationInputInfo(
     const RayTracingClusterOperationParams& params,
     VkClusterAccelerationStructureInputInfoNV& outInputInfo,

@@ -118,6 +118,38 @@ void ConfigurePipelineDepthStencilState(
     }
 }
 
+bool BuildGraphicsPipelineFixedState(
+    const FramebufferInfo& fbinfo,
+    const RenderState& renderState,
+    const PipelineStencilFaceMode::Enum stencilFaceMode,
+    const VkDynamicState* dynamicStates,
+    const u32 dynamicStateCount,
+    const tchar* operationName,
+    GraphicsPipelineFixedState& outState
+){
+    outState.viewportState = MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
+    outState.viewportState.viewportCount = 1;
+    outState.viewportState.scissorCount = 1;
+
+    if(!ConfigurePipelineMultisampleState(
+        fbinfo.sampleCount,
+        renderState.blendState.alphaToCoverageEnable,
+        outState.multisampling,
+        operationName
+    ))
+        return false;
+
+    ConfigurePipelineDepthStencilState(renderState.depthStencilState, stencilFaceMode, outState.depthStencil);
+
+    outState.colorBlending = BuildPipelineColorBlendState(fbinfo, renderState.blendState, outState.blendAttachments);
+
+    outState.dynamicState = MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
+    outState.dynamicState.dynamicStateCount = dynamicStateCount;
+    outState.dynamicState.pDynamicStates = dynamicStates;
+
+    return BuildPipelineRenderingInfo(fbinfo, operationName, outState.renderingInfo, outState.colorFormats);
+}
+
 bool BuildPipelineRenderingInfo(
     const FramebufferInfo& fbinfo,
     const tchar* operationName,

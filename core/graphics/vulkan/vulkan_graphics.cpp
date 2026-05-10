@@ -242,12 +242,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     auto tessellationState = VulkanDetail::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
     tessellationState.patchControlPoints = desc.patchControlPoints;
 
-    // Step 4: Viewport and scissor (dynamic)
-    auto viewportState = VulkanDetail::MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount = 1;
-
-    // Step 5: Rasterization state
+    // Step 4: Rasterization state
     const RasterState& rasterState = desc.renderState.rasterState;
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
         rasterState,
@@ -255,33 +250,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         rasterState.depthClipEnable ? VK_FALSE : VK_TRUE
     );
 
-    // Step 6: Multisample state
-    VkPipelineMultisampleStateCreateInfo multisampling;
-    if(
-        !VulkanDetail::ConfigurePipelineMultisampleState(
-            fbinfo.sampleCount,
-            desc.renderState.blendState.alphaToCoverageEnable,
-            multisampling,
-            NWB_TEXT("graphics pipeline")
-        )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-
-    // Step 7: Depth/stencil state
-    auto depthStencil = VulkanDetail::MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
-    VulkanDetail::ConfigurePipelineDepthStencilState(
-        desc.renderState.depthStencilState,
-        VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
-        depthStencil
-    );
-
-    // Step 8: Color blend state
-    PipelineColorBlendAttachmentVector blendAttachments{ Alloc::ScratchAllocator<VkPipelineColorBlendAttachmentState>(scratchArena) };
-    auto colorBlending = VulkanDetail::BuildPipelineColorBlendState(fbinfo, desc.renderState.blendState, blendAttachments);
-
-    // Step 9: Dynamic state
+    // Step 5: Fixed-function state
     VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR,
@@ -293,35 +262,33 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-
-    auto dynamicState = VulkanDetail::MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
-    dynamicState.dynamicStateCount = static_cast<uint32_t>(LengthOf(dynamicStates));
-    dynamicState.pDynamicStates = dynamicStates;
-
-    // Step 10: Dynamic rendering info
-    VkPipelineRenderingCreateInfo renderingInfo = {};
-    PipelineRenderingFormatVector colorFormats{ Alloc::ScratchAllocator<VkFormat>(scratchArena) };
-    if(!VulkanDetail::BuildPipelineRenderingInfo(fbinfo, NWB_TEXT("graphics pipeline"), renderingInfo, colorFormats)){
+    VulkanDetail::GraphicsPipelineFixedState fixedState{ scratchArena };
+    if(
+        !VulkanDetail::BuildGraphicsPipelineFixedState(
+            fbinfo,
+            desc.renderState,
+            VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
+            dynamicStates,
+            static_cast<u32>(LengthOf(dynamicStates)),
+            NWB_TEXT("graphics pipeline"),
+            fixedState
+        )
+    ){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
     if(pso->m_usesDescriptorHeap)
-        pipelineInfo.pNext = descriptorHeapScratch.pNext(m_context.extensions.KHR_dynamic_rendering ? &renderingInfo : nullptr);
+        pipelineInfo.pNext = descriptorHeapScratch.pNext(m_context.extensions.KHR_dynamic_rendering ? &fixedState.renderingInfo : nullptr);
     else if(m_context.extensions.KHR_dynamic_rendering)
-        pipelineInfo.pNext = &renderingInfo;
+        pipelineInfo.pNext = &fixedState.renderingInfo;
     pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pTessellationState = (desc.patchControlPoints > 0) ? &tessellationState : nullptr;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthStencil;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = &dynamicState;
+    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
     pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;

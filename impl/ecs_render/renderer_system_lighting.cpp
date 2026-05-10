@@ -52,13 +52,7 @@ bool RendererSystem::createDeferredLightingResources(){
     if(!__hidden_ecs_render::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred lighting sampler")))
         return false;
 
-    if(!loadShader(
-        m_deferredCompositeVertexShader,
-        __hidden_ecs_render::s_DeferredCompositeVertexShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Vertex,
-        "ECSRender_DeferredCompositeVS"
-    ))
+    if(!loadDeferredCompositeVertexShader())
         return false;
 
     if(!loadShader(

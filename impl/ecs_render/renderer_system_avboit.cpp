@@ -2,11 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "renderer_avboit.h"
-
-#include <core/common/log.h>
-#include <core/graphics/graphics.h>
-#include <core/graphics/shader_archive.h>
+#include "renderer_system_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,37 +35,6 @@ static constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit_
 static constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit_integrate_cs");
 static constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit_accumulate_ps");
 
-
-template<usize N>
-static Core::Format::Enum SelectSupportedFormat(
-    Core::IDevice& device,
-    const Core::Format::Enum (&candidates)[N],
-    const Core::FormatSupport::Mask requiredSupport
-){
-    for(const Core::Format::Enum format : candidates){
-        if((device.queryFormatSupport(format) & requiredSupport) == requiredSupport)
-            return format;
-    }
-
-    return Core::Format::UNKNOWN;
-}
-
-static bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
-    if(sampler)
-        return true;
-
-    Core::SamplerDesc samplerDesc;
-    samplerDesc
-        .setAllFilters(false)
-        .setAllAddressModes(Core::SamplerAddressMode::Clamp)
-    ;
-    sampler = device.createSampler(samplerDesc);
-    if(sampler)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
-    return false;
-}
 
 static bool CreateLinearClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
     if(sampler)
@@ -120,7 +85,7 @@ Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    return __hidden_renderer_avboit::SelectSupportedFormat(device, candidates, requiredSupport);
+    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& device){
@@ -133,7 +98,7 @@ Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& devi
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    return __hidden_renderer_avboit::SelectSupportedFormat(device, candidates, requiredSupport);
+    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device){
@@ -146,7 +111,7 @@ Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device
         | Core::FormatSupport::ShaderUavStore
     ;
 
-    return __hidden_renderer_avboit::SelectSupportedFormat(device, candidates, requiredSupport);
+    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device){
@@ -156,7 +121,7 @@ Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    return __hidden_renderer_avboit::SelectSupportedFormat(device, candidates, requiredSupport);
+    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::RenderState BuildRendererAvboitVoxelRenderState(){
@@ -222,7 +187,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSyste
 bool RendererSystem::createAvboitResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
-    if(!__hidden_renderer_avboit::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
+    if(!__hidden_ecs_render::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
         return false;
     if(!__hidden_renderer_avboit::CreateLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
         return false;

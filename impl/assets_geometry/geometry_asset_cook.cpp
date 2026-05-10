@@ -1401,7 +1401,7 @@ static bool ParseDeformableGeometryMeta(
         );
         return false;
     }
-    if(GeometryClassUsesSkinning(outEntry.geometryClass) != !outEntry.skin.empty()){
+    if(!GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
         NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' does not match skin payload")
             , PathToString<tchar>(discoveredFile.filePath)
             , StringConvert(GeometryClassText(outEntry.geometryClass))
@@ -1439,21 +1439,20 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseMorphs(discoveredFile.filePath, asset, outEntry.morphs))
         return false;
-    if(!GeometryClassAllowsRuntimeDeform(outEntry.geometryClass)){
-        if(!outEntry.sourceSamples.empty() || !outEntry.editMaskPerTriangle.empty() || !outEntry.morphs.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' cannot define surface edit or morph payload")
-                , PathToString<tchar>(discoveredFile.filePath)
-                , StringConvert(GeometryClassText(outEntry.geometryClass))
-            );
-            return false;
-        }
-        if(outEntry.displacement.mode != DeformableDisplacementMode::None){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' cannot define displacement")
-                , PathToString<tchar>(discoveredFile.filePath)
-                , StringConvert(GeometryClassText(outEntry.geometryClass))
-            );
-            return false;
-        }
+    const bool hasSurfaceEditPayload = !outEntry.sourceSamples.empty() || !outEntry.editMaskPerTriangle.empty() || !outEntry.morphs.empty();
+    if(!GeometryClassAcceptsRuntimeDeformPayload(outEntry.geometryClass, hasSurfaceEditPayload)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' cannot define surface edit or morph payload")
+            , PathToString<tchar>(discoveredFile.filePath)
+            , StringConvert(GeometryClassText(outEntry.geometryClass))
+        );
+        return false;
+    }
+    if(!GeometryClassAcceptsRuntimeDeformPayload(outEntry.geometryClass, outEntry.displacement.mode != DeformableDisplacementMode::None)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' cannot define displacement")
+            , PathToString<tchar>(discoveredFile.filePath)
+            , StringConvert(GeometryClassText(outEntry.geometryClass))
+        );
+        return false;
     }
 
     return true;

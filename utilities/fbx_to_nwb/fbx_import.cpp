@@ -447,12 +447,12 @@ bool BuildGeometry(
     flatVertices.reserve(estimatedTriangleCorners);
     outIndices.reserve(estimatedTriangleCorners);
     UtilityVector<u32> triangleIndices;
-    GeometryKind::Enum geometryKind = GeometryKind::Invalid;
-    if(!ParseAssetKind(options.assetKind, geometryKind)){
+    u32 geometryClass = 0u;
+    if(!ParseAssetKind(options.assetKind, geometryClass)){
         outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";
         return false;
     }
-    const bool wantsDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryKind);
+    const bool wantsDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryClass);
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             outError = "selected mesh index is out of range";

@@ -21,16 +21,6 @@ using Vec2 = Float2U;
 using Vec3 = Float3U;
 using Vec4 = Float4U;
 
-namespace GeometryKind{
-    enum Enum : u8{
-        Static,
-        StaticDeform,
-        Skinned,
-        SkinnedDeform,
-        Invalid,
-    };
-};
-
 struct GeometryVertex{
     Vec3 position;
     Vec3 normal;
@@ -94,11 +84,11 @@ AString Trim(AString value);
 AString UnquotePath(AString value);
 AString ToLower(AString value);
 AString NormalizeAssetKind(AString value);
-AStringView GeometryKindText(GeometryKind::Enum value);
-bool ParseAssetKind(const AString& value, GeometryKind::Enum& outKind);
-bool ParseNormalizedAssetKind(AStringView value, GeometryKind::Enum& outKind);
-bool GeometryKindUsesDeformableRuntime(GeometryKind::Enum value);
-bool GeometryKindUsesSkinning(GeometryKind::Enum value);
+AStringView GeometryKindText(u32 geometryClass);
+bool ParseAssetKind(const AString& value, u32& outGeometryClass);
+bool ParseNormalizedAssetKind(AStringView value, u32& outGeometryClass);
+bool GeometryKindUsesDeformableRuntime(u32 geometryClass);
+bool GeometryKindUsesSkinning(u32 geometryClass);
 bool IsNormalizedDeformableGeometryKind(AStringView value);
 bool IsNormalizedSkinnedGeometryKind(AStringView value);
 bool IsDeformableGeometryKind(const AString& value);

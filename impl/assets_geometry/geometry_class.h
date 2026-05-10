@@ -44,8 +44,16 @@ namespace GeometryClass{
     return geometryClass == GeometryClass::Skinned || geometryClass == GeometryClass::SkinnedDeform;
 }
 
+[[nodiscard]] inline bool GeometryClassMatchesSkinPayload(const u32 geometryClass, const bool hasSkin){
+    return GeometryClassUsesSkinning(geometryClass) == hasSkin;
+}
+
 [[nodiscard]] inline bool GeometryClassAllowsRuntimeDeform(const u32 geometryClass){
     return geometryClass == GeometryClass::StaticDeform || geometryClass == GeometryClass::SkinnedDeform;
+}
+
+[[nodiscard]] inline bool GeometryClassAcceptsRuntimeDeformPayload(const u32 geometryClass, const bool hasPayload){
+    return GeometryClassAllowsRuntimeDeform(geometryClass) || !hasPayload;
 }
 
 [[nodiscard]] inline bool GeometryClassUsesDeformableRuntime(const u32 geometryClass){

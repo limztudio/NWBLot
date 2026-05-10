@@ -1999,6 +1999,21 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
 #endif
 }
 
+static void TestGeometryClassPolicyHelpers(TestContext& context){
+    using namespace NWB::Impl;
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassMatchesSkinPayload(GeometryClass::Static, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::Static, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassMatchesSkinPayload(GeometryClass::Skinned, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::SkinnedDeform, false));
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::Static, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::Static, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::Skinned, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::StaticDeform, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::SkinnedDeform, true));
+}
+
 static void TestFormatBlockDimensions(TestContext& context){
     const NWB::Core::FormatInfo& rgba8 = NWB::Core::GetFormatInfo(NWB::Core::Format::RGBA8_UNORM);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::GetFormatBlockWidth(rgba8) == 1u);
@@ -2059,6 +2074,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_assets_graphics_tests::TestDeformableGeometryCookerTextureDisplacementModes(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
         __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
+        __hidden_assets_graphics_tests::TestGeometryClassPolicyHelpers(context);
         __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
     });
 }

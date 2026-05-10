@@ -177,7 +177,7 @@ bool DeformableGeometry::validatePayload()const{
         ? static_cast<u32>(indexCount / 3u)
         : 0u
     ;
-    if(!ValidGeometryClass(m_geometryClass) || !GeometryClassUsesDeformableRuntime(m_geometryClass)){
+    if(!GeometryClassUsesDeformableRuntime(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")
             , geometryPathText()
             , StringConvert(GeometryClassText(m_geometryClass))
@@ -186,28 +186,27 @@ bool DeformableGeometry::validatePayload()const{
     }
 
     const bool hasSkin = !m_skin.empty();
-    if(GeometryClassUsesSkinning(m_geometryClass) != hasSkin){
+    if(!GeometryClassMatchesSkinPayload(m_geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' does not match skin payload")
             , geometryPathText()
             , StringConvert(GeometryClassText(m_geometryClass))
         );
         return false;
     }
-    if(!GeometryClassAllowsRuntimeDeform(m_geometryClass)){
-        if(!m_sourceSamples.empty() || !m_editMaskPerTriangle.empty() || !m_morphs.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry surface edit or morph payload")
-                , geometryPathText()
-                , StringConvert(GeometryClassText(m_geometryClass))
-            );
-            return false;
-        }
-        if(m_displacement.mode != DeformableDisplacementMode::None){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry displacement payload")
-                , geometryPathText()
-                , StringConvert(GeometryClassText(m_geometryClass))
-            );
-            return false;
-        }
+    const bool hasSurfaceEditPayload = !m_sourceSamples.empty() || !m_editMaskPerTriangle.empty() || !m_morphs.empty();
+    if(!GeometryClassAcceptsRuntimeDeformPayload(m_geometryClass, hasSurfaceEditPayload)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry surface edit or morph payload")
+            , geometryPathText()
+            , StringConvert(GeometryClassText(m_geometryClass))
+        );
+        return false;
+    }
+    if(!GeometryClassAcceptsRuntimeDeformPayload(m_geometryClass, m_displacement.mode != DeformableDisplacementMode::None)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry displacement payload")
+            , geometryPathText()
+            , StringConvert(GeometryClassText(m_geometryClass))
+        );
+        return false;
     }
     const DeformableValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
         DeformableValidation::FindRuntimePayloadFailure(
@@ -304,7 +303,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     const u64 editMaskCount = header.editMaskCount;
     const u64 morphCount = header.morphCount;
     const u64 stringTableByteCount = header.stringTableByteCount;
-    if(!ValidGeometryClass(geometryClass) || !GeometryClassUsesDeformableRuntime(geometryClass)){
+    if(!GeometryClassUsesDeformableRuntime(geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: invalid geometry class"));
         return false;
     }
@@ -355,11 +354,11 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: edit mask count must be empty or match triangle count"));
         return false;
     }
-    if(GeometryClassUsesSkinning(geometryClass) != (skinCount != 0u)){
+    if(!GeometryClassMatchesSkinPayload(geometryClass, skinCount != 0u)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class does not match skin payload"));
         return false;
     }
-    if(!GeometryClassAllowsRuntimeDeform(geometryClass) && (sourceSampleCount != 0u || editMaskCount != 0u || morphCount != 0u)){
+    if(!GeometryClassAcceptsRuntimeDeformPayload(geometryClass, sourceSampleCount != 0u || editMaskCount != 0u || morphCount != 0u)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class cannot carry surface edit or morph payload"));
         return false;
     }
@@ -425,7 +424,7 @@ bool DeformableGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     m_displacement = DeformableGeometryBinaryPayload::BuildDisplacement(displacementBinary);
-    if(!GeometryClassAllowsRuntimeDeform(m_geometryClass) && m_displacement.mode != DeformableDisplacementMode::None){
+    if(!GeometryClassAcceptsRuntimeDeformPayload(m_geometryClass, m_displacement.mode != DeformableDisplacementMode::None)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::loadBinary failed: geometry class cannot carry displacement payload"));
         return false;
     }

@@ -4,6 +4,8 @@
 
 #include "fbx_to_nwb.h"
 
+#include <impl/assets_geometry/geometry_class.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,64 +53,36 @@ AString NormalizeAssetKind(AString value){
     return ToLower(Trim(Move(value)));
 }
 
-AStringView GeometryKindText(const GeometryKind::Enum value){
-    switch(value){
-    case GeometryKind::Static:
-        return "static";
-    case GeometryKind::StaticDeform:
-        return "static_deform";
-    case GeometryKind::Skinned:
-        return "skinned";
-    case GeometryKind::SkinnedDeform:
-        return "skinned_deform";
-    default:
-        return "invalid";
-    }
+AStringView GeometryKindText(const u32 geometryClass){
+    return NWB::Impl::GeometryClassText(geometryClass);
 }
 
-bool ParseNormalizedAssetKind(const AStringView value, GeometryKind::Enum& outKind){
-    if(value == "static"){
-        outKind = GeometryKind::Static;
-        return true;
-    }
-    if(value == "static_deform"){
-        outKind = GeometryKind::StaticDeform;
-        return true;
-    }
-    if(value == "skinned"){
-        outKind = GeometryKind::Skinned;
-        return true;
-    }
-    if(value == "skinned_deform"){
-        outKind = GeometryKind::SkinnedDeform;
-        return true;
-    }
-
-    outKind = GeometryKind::Invalid;
-    return false;
+bool ParseNormalizedAssetKind(const AStringView value, u32& outGeometryClass){
+    outGeometryClass = NWB::Impl::GeometryClass::Invalid;
+    return NWB::Impl::ParseGeometryClassText(value, outGeometryClass);
 }
 
-bool ParseAssetKind(const AString& value, GeometryKind::Enum& outKind){
+bool ParseAssetKind(const AString& value, u32& outGeometryClass){
     const AString normalized = NormalizeAssetKind(value);
-    return ParseNormalizedAssetKind(normalized, outKind);
+    return ParseNormalizedAssetKind(normalized, outGeometryClass);
 }
 
-bool GeometryKindUsesDeformableRuntime(const GeometryKind::Enum value){
-    return value == GeometryKind::StaticDeform || value == GeometryKind::Skinned || value == GeometryKind::SkinnedDeform;
+bool GeometryKindUsesDeformableRuntime(const u32 geometryClass){
+    return NWB::Impl::GeometryClassUsesDeformableRuntime(geometryClass);
 }
 
-bool GeometryKindUsesSkinning(const GeometryKind::Enum value){
-    return value == GeometryKind::Skinned || value == GeometryKind::SkinnedDeform;
+bool GeometryKindUsesSkinning(const u32 geometryClass){
+    return NWB::Impl::GeometryClassUsesSkinning(geometryClass);
 }
 
 bool IsNormalizedDeformableGeometryKind(const AStringView value){
-    GeometryKind::Enum kind = GeometryKind::Invalid;
-    return ParseNormalizedAssetKind(value, kind) && GeometryKindUsesDeformableRuntime(kind);
+    u32 geometryClass = NWB::Impl::GeometryClass::Invalid;
+    return ParseNormalizedAssetKind(value, geometryClass) && GeometryKindUsesDeformableRuntime(geometryClass);
 }
 
 bool IsNormalizedSkinnedGeometryKind(const AStringView value){
-    GeometryKind::Enum kind = GeometryKind::Invalid;
-    return ParseNormalizedAssetKind(value, kind) && GeometryKindUsesSkinning(kind);
+    u32 geometryClass = NWB::Impl::GeometryClass::Invalid;
+    return ParseNormalizedAssetKind(value, geometryClass) && GeometryKindUsesSkinning(geometryClass);
 }
 
 bool IsDeformableGeometryKind(const AString& value){
@@ -123,8 +97,8 @@ bool IsSkinnedGeometryKind(const AString& value){
 
 bool ValidateAssetKind(AString& inOutValue, AString& outError){
     inOutValue = NormalizeAssetKind(Move(inOutValue));
-    GeometryKind::Enum kind = GeometryKind::Invalid;
-    if(ParseNormalizedAssetKind(inOutValue, kind))
+    u32 geometryClass = NWB::Impl::GeometryClass::Invalid;
+    if(ParseNormalizedAssetKind(inOutValue, geometryClass))
         return true;
 
     outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";

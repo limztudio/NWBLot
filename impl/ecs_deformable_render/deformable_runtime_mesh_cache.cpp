@@ -65,7 +65,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         ;
     };
 
-    if(!ValidGeometryClass(instance.geometryClass) || !GeometryClassUsesDeformableRuntime(instance.geometryClass)){
+    if(!GeometryClassUsesDeformableRuntime(instance.geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' has invalid geometry class")
             , sourceText()
         );
@@ -79,28 +79,27 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     }
 
     const bool hasSkin = !instance.skin.empty();
-    if(GeometryClassUsesSkinning(instance.geometryClass) != hasSkin){
+    if(!GeometryClassMatchesSkinPayload(instance.geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' does not match skin payload")
             , sourceText()
             , StringConvert(GeometryClassText(instance.geometryClass))
         );
         return false;
     }
-    if(!GeometryClassAllowsRuntimeDeform(instance.geometryClass)){
-        if(!instance.sourceSamples.empty() || !instance.editMaskPerTriangle.empty() || !instance.morphs.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry surface edit or morph payload")
-                , sourceText()
-                , StringConvert(GeometryClassText(instance.geometryClass))
-            );
-            return false;
-        }
-        if(instance.displacement.mode != DeformableDisplacementMode::None){
-            NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry displacement payload")
-                , sourceText()
-                , StringConvert(GeometryClassText(instance.geometryClass))
-            );
-            return false;
-        }
+    const bool hasSurfaceEditPayload = !instance.sourceSamples.empty() || !instance.editMaskPerTriangle.empty() || !instance.morphs.empty();
+    if(!GeometryClassAcceptsRuntimeDeformPayload(instance.geometryClass, hasSurfaceEditPayload)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry surface edit or morph payload")
+            , sourceText()
+            , StringConvert(GeometryClassText(instance.geometryClass))
+        );
+        return false;
+    }
+    if(!GeometryClassAcceptsRuntimeDeformPayload(instance.geometryClass, instance.displacement.mode != DeformableDisplacementMode::None)){
+        NWB_LOGGER_ERROR(NWB_TEXT("DeformableRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry displacement payload")
+            , sourceText()
+            , StringConvert(GeometryClassText(instance.geometryClass))
+        );
+        return false;
     }
     const DeformableValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
         DeformableValidation::FindRuntimePayloadFailure(

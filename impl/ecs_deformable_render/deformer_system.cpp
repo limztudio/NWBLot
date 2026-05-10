@@ -13,10 +13,10 @@
 #include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_geometry/deformable_geometry_validation.h>
+#include <impl/assets_shader/shader_asset_loader.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>
 #include <impl/ecs_render/components.h>
-#include <impl/ecs_render/shader_asset_loader.h>
 #include <core/common/log.h>
 
 

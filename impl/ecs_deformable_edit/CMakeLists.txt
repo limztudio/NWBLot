@@ -18,6 +18,7 @@ target_link_libraries(nwb_ecs_deformable_edit PUBLIC
     nwb_assets_material
 )
 target_link_libraries(nwb_ecs_deformable_edit PRIVATE
+    nwb_ecs_render_components
     nwb_geometry
 )
 

@@ -8,7 +8,6 @@
 #include "renderer_system.h"
 
 #include "renderer_avboit.h"
-#include "shader_asset_loader.h"
 
 #include <core/assets/asset_manager.h>
 #include <core/common/log.h>
@@ -19,6 +18,7 @@
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
+#include <impl/assets_shader/shader_asset_loader.h>
 #include <impl/ecs_camera/ecs_camera.h>
 #include <impl/ecs_geometry/ecs_geometry.h>
 #include <impl/ecs_lighting/ecs_lighting.h>

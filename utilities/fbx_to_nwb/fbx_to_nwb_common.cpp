@@ -4,7 +4,7 @@
 
 #include "fbx_to_nwb.h"
 
-#include <impl/assets_geometry/geometry_class.h>
+#include <core/geometry/geometry_class.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,12 +54,12 @@ AString NormalizeAssetKind(AString value){
 }
 
 AStringView GeometryKindText(const u32 geometryClass){
-    return NWB::Impl::GeometryClassText(geometryClass);
+    return NWB::Core::Geometry::GeometryClassText(geometryClass);
 }
 
 bool ParseNormalizedAssetKind(const AStringView value, u32& outGeometryClass){
-    outGeometryClass = NWB::Impl::GeometryClass::Invalid;
-    return NWB::Impl::ParseGeometryClassText(value, outGeometryClass);
+    outGeometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
+    return NWB::Core::Geometry::ParseGeometryClassText(value, outGeometryClass);
 }
 
 bool ParseAssetKind(const AString& value, u32& outGeometryClass){
@@ -68,20 +68,20 @@ bool ParseAssetKind(const AString& value, u32& outGeometryClass){
 }
 
 bool GeometryKindUsesDeformableRuntime(const u32 geometryClass){
-    return NWB::Impl::GeometryClassUsesDeformableRuntime(geometryClass);
+    return NWB::Core::Geometry::GeometryClassUsesDeformableRuntime(geometryClass);
 }
 
 bool GeometryKindUsesSkinning(const u32 geometryClass){
-    return NWB::Impl::GeometryClassUsesSkinning(geometryClass);
+    return NWB::Core::Geometry::GeometryClassUsesSkinning(geometryClass);
 }
 
 bool IsNormalizedDeformableGeometryKind(const AStringView value){
-    u32 geometryClass = NWB::Impl::GeometryClass::Invalid;
+    u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
     return ParseNormalizedAssetKind(value, geometryClass) && GeometryKindUsesDeformableRuntime(geometryClass);
 }
 
 bool IsNormalizedSkinnedGeometryKind(const AStringView value){
-    u32 geometryClass = NWB::Impl::GeometryClass::Invalid;
+    u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
     return ParseNormalizedAssetKind(value, geometryClass) && GeometryKindUsesSkinning(geometryClass);
 }
 
@@ -97,7 +97,7 @@ bool IsSkinnedGeometryKind(const AString& value){
 
 bool ValidateAssetKind(AString& inOutValue, AString& outError){
     inOutValue = NormalizeAssetKind(Move(inOutValue));
-    u32 geometryClass = NWB::Impl::GeometryClass::Invalid;
+    u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
     if(ParseNormalizedAssetKind(inOutValue, geometryClass))
         return true;
 

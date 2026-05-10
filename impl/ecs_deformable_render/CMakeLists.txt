@@ -12,11 +12,11 @@ target_sources(nwb_ecs_deformable_render PRIVATE
 target_link_libraries(nwb_ecs_deformable_render PUBLIC
     nwb_ecs_deformable
     nwb_ecs_geometry
-    nwb_assets_shader
     nwb_graphics
 )
 target_link_libraries(nwb_ecs_deformable_render PRIVATE
-    nwb_ecs_render
+    nwb_assets_shader_loader
+    nwb_ecs_render_components
     nwb_geometry
 )
 

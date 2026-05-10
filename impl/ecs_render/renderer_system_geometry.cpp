@@ -23,9 +23,6 @@ void RendererSystem::destroyGeometryBindingSets(){
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry){
     outGeometry = nullptr;
 
@@ -128,9 +125,6 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
     return outGeometry->valid();
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry){
     outGeometry = nullptr;
 
@@ -176,9 +170,6 @@ bool RendererSystem::createRuntimeGeometryResources(const RuntimeGeometryDesc& d
     return outGeometry->valid();
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererSystem::pruneRuntimeGeometryResources(){
     if(m_geometryMeshes.empty())
         return;
@@ -205,9 +196,6 @@ void RendererSystem::pruneRuntimeGeometryResources(){
         it = m_geometryMeshes.erase(it);
     }
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
     if(geometry.meshBindingSet)
@@ -243,9 +231,6 @@ bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
     if(geometry.computeBindingSet)
@@ -319,3 +304,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

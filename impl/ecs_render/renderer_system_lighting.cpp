@@ -73,9 +73,6 @@ bool RendererSystem::createDeferredLightingResources(){
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& targets){
     if(!targets.opaqueLightingFramebuffer)
         return false;
@@ -104,9 +101,6 @@ bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& target
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::updateSceneShadingBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
     if(!m_sceneShadingBuffer)
         return false;
@@ -122,9 +116,6 @@ bool RendererSystem::updateSceneShadingBuffer(Core::ICommandList& commandList, c
     commandList.commitBarriers();
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererSystem::renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.lightingBindingSet || !targets.opaqueLightingFramebuffer)
@@ -161,3 +152,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -106,6 +106,9 @@ static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * 12u, "SceneShadingGpu
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh_emulation_vs");
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialParameterBufferName("ecs_render/material_parameter_data");
@@ -114,6 +117,9 @@ inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred_composite_vs");
 inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred_lighting_ps");
 inline constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred_composite_ps");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<usize N>
@@ -421,3 +427,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

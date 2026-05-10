@@ -262,9 +262,6 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createDeferredCompositeResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
@@ -307,9 +304,6 @@ bool RendererSystem::createDeferredCompositeResources(){
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer){
     if(!presentationFramebuffer)
         return false;
@@ -338,9 +332,6 @@ bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* present
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo){
@@ -393,9 +384,6 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){
     if(!presentationFramebuffer)
         return false;
@@ -429,3 +417,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

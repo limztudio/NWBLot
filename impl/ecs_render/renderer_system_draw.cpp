@@ -67,9 +67,6 @@ void RendererSystem::renderMaterialPass(
     renderComputeMaterialPassDrawItems(drawContext, computeDrawItems);
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererSystem::gatherMaterialPassDrawItems(
     Core::IFramebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
@@ -273,9 +270,6 @@ void RendererSystem::gatherMaterialPassDrawItems(
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createMeshShaderResources(){
     if(m_meshBindingLayout)
         return true;
@@ -298,9 +292,6 @@ bool RendererSystem::createMeshShaderResources(){
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererSystem::createComputeEmulationResources(){
     if(!m_computeBindingLayout){
@@ -389,9 +380,6 @@ bool RendererSystem::createComputeEmulationResources(){
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createEmulationViewResources(){
     if(!m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: emulation view resources require a mesh view buffer"));
@@ -425,9 +413,6 @@ bool RendererSystem::createEmulationViewResources(){
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
@@ -464,9 +449,6 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::reserveMaterialParameterBufferCapacity(const usize parameterCount){
     const usize requiredCount = Max<usize>(parameterCount, 1u);
     if(requiredCount > static_cast<usize>(Limit<u32>::s_Max)){
@@ -501,9 +483,6 @@ bool RendererSystem::reserveMaterialParameterBufferCapacity(const usize paramete
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
     if(!m_meshViewBuffer){
         Core::BufferDesc meshViewBufferDesc;
@@ -535,9 +514,6 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
@@ -558,9 +534,6 @@ bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const
     commandList.commitBarriers();
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererSystem::uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters){
     const usize uploadCount = Max<usize>(materialParameters.size(), 1u);
@@ -584,9 +557,6 @@ bool RendererSystem::uploadMaterialParameterBuffer(Core::ICommandList& commandLi
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::findMaterialPassDrawItemResources(
     const MaterialPassDrawItem& drawItem,
     GeometryResources*& outGeometry,
@@ -608,9 +578,6 @@ bool RendererSystem::findMaterialPassDrawItemResources(
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererSystem::setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry){
     commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -618,9 +585,6 @@ void RendererSystem::setMaterialPassCommonBufferStates(Core::ICommandList& comma
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
@@ -669,9 +633,6 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.dispatchMesh(geometry.dispatchGroupCount);
     });
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
@@ -760,3 +721,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

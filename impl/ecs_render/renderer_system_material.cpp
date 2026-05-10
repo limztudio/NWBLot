@@ -63,9 +63,6 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     return outInfo->valid;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::createRendererPipeline(
     const MaterialSurfaceInfo& materialInfo,
     const MaterialPipelineKey& pipelineKey,
@@ -303,9 +300,6 @@ bool RendererSystem::createRendererPipeline(
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererSystem::hasTransparentRenderers(){
     auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
         MaterialSurfaceInfo* materialInfo = nullptr;
@@ -342,9 +336,6 @@ bool RendererSystem::hasTransparentRenderers(){
 
     return false;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
     auto [it, inserted] = m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
@@ -391,3 +382,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

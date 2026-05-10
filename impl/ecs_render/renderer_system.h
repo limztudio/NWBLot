@@ -305,9 +305,9 @@ public:
 public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
 
+    virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
+    virtual void invalidateResources()override;
     virtual void render(Core::IFramebuffer* framebuffer)override;
-    virtual void backBufferResizing()override;
-    virtual void backBufferResized(u32 width, u32 height, u32 sampleCount)override;
 
 
 public:
@@ -324,7 +324,7 @@ private:
     [[nodiscard]] bool ensureComputeEmulationResources();
     [[nodiscard]] bool ensureMeshBindingSet(GeometryResources& geometry);
     [[nodiscard]] bool ensureComputeBindingSet(GeometryResources& geometry);
-    [[nodiscard]] bool ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets);
+    [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool ensureDeferredLightingResources();
     [[nodiscard]] bool ensureDeferredLightingPipeline(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureDeferredCompositeResources();

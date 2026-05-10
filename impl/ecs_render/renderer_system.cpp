@@ -465,17 +465,69 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(delta);
 }
 
+bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+    static_cast<void>(sampleCount);
+    if(width == 0 || height == 0)
+        return true;
+
+    if(m_deferredTargets.valid() && m_deferredTargets.width == width && m_deferredTargets.height == height)
+        return true;
+
+    return createDeferredFrameTargets(width, height);
+}
+
+void RendererSystem::invalidateResources(){
+    m_geometryMeshes.clear();
+    m_materialPipelines.clear();
+    m_loggedMaterialPaths.clear();
+
+    m_meshBindingLayout.reset();
+    m_computeBindingLayout.reset();
+    m_emulationViewBindingLayout.reset();
+    m_deferredLightingBindingLayout.reset();
+    m_deferredCompositeBindingLayout.reset();
+    m_avboitEmptyBindingLayout.reset();
+    m_avboitOccupancyBindingLayout.reset();
+    m_avboitDepthWarpBindingLayout.reset();
+    m_avboitExtinctionBindingLayout.reset();
+    m_avboitIntegrateBindingLayout.reset();
+    m_avboitAccumulateBindingLayout.reset();
+    m_deferredSampler.reset();
+    m_avboitLinearSampler.reset();
+    m_instanceBuffer.reset();
+    m_materialParameterBuffer.reset();
+    m_meshViewBuffer.reset();
+    m_sceneShadingBuffer.reset();
+    m_emulationViewBindingSet.reset();
+    m_emulationVertexShader.reset();
+    m_deferredCompositeVertexShader.reset();
+    m_deferredLightingPixelShader.reset();
+    m_deferredCompositePixelShader.reset();
+    m_avboitOccupancyPixelShader.reset();
+    m_avboitDepthWarpComputeShader.reset();
+    m_avboitExtinctionPixelShader.reset();
+    m_avboitIntegrateComputeShader.reset();
+    m_avboitAccumulatePixelShader.reset();
+    m_emulationInputLayout.reset();
+    m_deferredLightingPipeline.reset();
+    m_deferredCompositePipeline.reset();
+    m_avboitDepthWarpPipeline.reset();
+    m_avboitIntegratePipeline.reset();
+    resetDeferredFrameTargets();
+
+    m_instanceBufferCapacity = 0u;
+    m_materialParameterBufferCapacity = 0u;
+}
+
 void RendererSystem::render(Core::IFramebuffer* framebuffer){
     if(!framebuffer)
         return;
 
     pruneRuntimeGeometryResources();
 
-    DeferredFrameTargets* deferredTargets = nullptr;
-    if(!ensureDeferredFrameTargets(framebuffer, deferredTargets))
+    if(!m_deferredTargets.valid())
         return;
-    if(!deferredTargets || !deferredTargets->valid())
-        return;
+    DeferredFrameTargets& deferredTargets = m_deferredTargets;
 
     Core::IDevice* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
@@ -485,7 +537,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     }
     commandList->open();
 
-    clearDeferredTargets(*commandList, *deferredTargets);
+    clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena<> scratchArena;
     MaterialPassDrawItemVector opaqueMeshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
@@ -494,9 +546,9 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     MaterialParameterGpuDataVector materialParameters{Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)};
 
     Core::ViewportState deferredViewportState;
-    deferredViewportState.addViewportAndScissorRect(deferredTargets->framebuffer->getFramebufferInfo().getViewport());
+    deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-    const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets->framebuffer->getFramebufferInfo();
+    const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets.framebuffer->getFramebufferInfo();
     f32 meshViewAspectRatio = 1.0f;
     if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
         meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
@@ -504,7 +556,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     const bool sceneShadingReady = ensureSceneShadingBuffer(*commandList, meshViewAspectRatio);
     if(meshViewReady && sceneShadingReady){
         gatherMaterialPassDrawItems(
-            deferredTargets->framebuffer.get(),
+            deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             false,
             opaqueMeshDrawItems,
@@ -526,7 +578,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     if(deferredUploadReady){
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,
-            deferredTargets->framebuffer.get(),
+            deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             nullptr,
             nullptr,
@@ -537,18 +589,18 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     }
     commandList->endRenderPass();
 
-    if(!renderDeferredLighting(*commandList, *deferredTargets)){
+    if(!renderDeferredLighting(*commandList, deferredTargets)){
         commandList->close();
         return;
     }
 
-    clearAvboitTargets(*commandList, deferredTargets->avboit);
+    clearAvboitTargets(*commandList, deferredTargets.avboit);
     if(hasTransparentRenderers())
-        renderAvboitPasses(*commandList, *deferredTargets);
+        renderAvboitPasses(*commandList, deferredTargets);
 
-    commandList->setResourceStatesForBindingSet(deferredTargets->compositeBindingSet.get());
+    commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());
     commandList->commitBarriers();
-    if(!renderDeferredComposite(*commandList, *deferredTargets, framebuffer)){
+    if(!renderDeferredComposite(*commandList, deferredTargets, framebuffer)){
         commandList->close();
         return;
     }
@@ -556,24 +608,6 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     commandList->close();
     Core::ICommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1);
-}
-
-void RendererSystem::backBufferResizing(){
-    m_materialPipelines.clear();
-    m_deferredLightingPipeline.reset();
-    m_deferredCompositePipeline.reset();
-    resetDeferredFrameTargets();
-}
-
-void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
-    static_cast<void>(width);
-    static_cast<void>(height);
-    static_cast<void>(sampleCount);
-
-    m_materialPipelines.clear();
-    m_deferredLightingPipeline.reset();
-    m_deferredCompositePipeline.reset();
-    resetDeferredFrameTargets();
 }
 
 void RendererSystem::registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
@@ -600,15 +634,9 @@ void RendererSystem::unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider&
     pruneRuntimeGeometryResources();
 }
 
-bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets){
-    outTargets = nullptr;
-
-    if(!presentationFramebuffer)
-        return false;
-
-    const Core::FramebufferInfoEx& presentationInfo = presentationFramebuffer->getFramebufferInfo();
-    if(presentationInfo.width == 0 || presentationInfo.height == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: presentation framebuffer has invalid dimensions"));
+bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 height){
+    if(width == 0 || height == 0){
+        resetDeferredFrameTargets();
         return false;
     }
 
@@ -642,24 +670,6 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         return false;
     }
 
-    if(
-        m_deferredTargets.valid()
-        && m_deferredTargets.width == presentationInfo.width
-        && m_deferredTargets.height == presentationInfo.height
-        && m_deferredTargets.albedoFormat == albedoFormat
-        && m_deferredTargets.normalFormat == normalFormat
-        && m_deferredTargets.worldPositionFormat == worldPositionFormat
-        && m_deferredTargets.opaqueColorFormat == opaqueColorFormat
-        && m_deferredTargets.depthFormat == depthFormat
-        && m_deferredTargets.avboit.lowRasterFormat == avboitLowRasterFormat
-        && m_deferredTargets.avboit.accumColorFormat == avboitAccumColorFormat
-        && m_deferredTargets.avboit.accumExtinctionFormat == avboitAccumExtinctionFormat
-        && m_deferredTargets.avboit.transmittanceFormat == avboitTransmittanceFormat
-    ){
-        outTargets = &m_deferredTargets;
-        return true;
-    }
-
     if(!ensureDeferredLightingResources())
         return false;
     if(!ensureDeferredCompositeResources())
@@ -669,10 +679,12 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
 
     resetDeferredFrameTargets();
     m_materialPipelines.clear();
+    m_deferredLightingPipeline.reset();
+    m_deferredCompositePipeline.reset();
 
     DeferredFrameTargets createdTargets;
-    createdTargets.width = presentationInfo.width;
-    createdTargets.height = presentationInfo.height;
+    createdTargets.width = width;
+    createdTargets.height = height;
     createdTargets.albedoFormat = albedoFormat;
     createdTargets.normalFormat = normalFormat;
     createdTargets.worldPositionFormat = worldPositionFormat;
@@ -850,7 +862,10 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     }
 
     m_deferredTargets = Move(createdTargets);
-    outTargets = &m_deferredTargets;
+    if(!ensureDeferredLightingPipeline(m_deferredTargets)){
+        resetDeferredFrameTargets();
+        return false;
+    }
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, AVBOIT color {}, extinction {}, transmittance {})")
         , m_deferredTargets.width
@@ -1433,8 +1448,6 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
 }
 
 bool RendererSystem::ensureSceneShadingBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
-    if(!ensureDeferredLightingResources())
-        return false;
     if(!m_sceneShadingBuffer)
         return false;
 
@@ -1661,7 +1674,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 bool RendererSystem::renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.lightingBindingSet || !targets.opaqueLightingFramebuffer)
         return false;
-    if(!ensureDeferredLightingPipeline(targets))
+    if(!m_deferredLightingPipeline)
         return false;
 
     commandList.setResourceStatesForBindingSet(targets.lightingBindingSet.get());
@@ -1690,7 +1703,7 @@ bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, De
         return false;
     if(!targets.compositeBindingSet)
         return false;
-    if(!ensureDeferredCompositePipeline(presentationFramebuffer))
+    if(!m_deferredCompositePipeline && !ensureDeferredCompositePipeline(presentationFramebuffer))
         return false;
 
     Core::ViewportState viewportState;

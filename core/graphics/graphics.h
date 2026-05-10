@@ -161,6 +161,8 @@ public:
 
     void backBufferResizing();
     void backBufferResized();
+    void invalidateRenderPassResources();
+    [[nodiscard]] bool validateRenderPassResources();
     void displayScaleChanged();
 
     void animate(f64 elapsedTime);

@@ -363,7 +363,7 @@ bool Graphics::init(const Common::FrameData& data){
         , data.width()
         , data.height()
     );
-    return true;
+    return validateRenderPassResources();
 }
 
 bool Graphics::createHeadlessDevice(){
@@ -383,7 +383,7 @@ bool Graphics::createHeadlessDevice(){
     m_previousFrameTimestamp = TimerNow();
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Graphics: headless device created"));
-    return true;
+    return validateRenderPassResources();
 }
 
 bool Graphics::createInstance(const InstanceParameters& params){
@@ -450,6 +450,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 void Graphics::destroy(){
     waitAllJobs();
 
+    invalidateRenderPassResources();
     m_renderPasses.clear();
 
     m_swapChainFramebuffers.clear();
@@ -471,6 +472,8 @@ void Graphics::addRenderPassToFront(IRenderPass& pass){
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+    if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
+        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: front render pass failed to validate resources after registration"));
 }
 
 void Graphics::addRenderPassToBack(IRenderPass& pass){
@@ -479,9 +482,12 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
+    if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
+        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: back render pass failed to validate resources after registration"));
 }
 
 void Graphics::removeRenderPass(IRenderPass& pass){
+    pass.invalidateResources();
     m_renderPasses.remove(&pass);
 }
 
@@ -547,6 +553,7 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 void Graphics::backBufferResizing(){
+    invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();
 
     for(auto* renderPass : m_renderPasses)
@@ -563,7 +570,29 @@ void Graphics::backBufferResized(){
     for(u32 index = 0; index < backBufferCount; ++index)
         m_swapChainFramebuffers.push_back(getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index))));
 
+    if(!validateRenderPassResources())
+        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: one or more render passes failed to validate resources after back buffer resize"));
     NWB_LOGGER_INFO(NWB_TEXT("Graphics: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+}
+
+void Graphics::invalidateRenderPassResources(){
+    for(auto* renderPass : m_renderPasses)
+        renderPass->invalidateResources();
+}
+
+bool Graphics::validateRenderPassResources(){
+    bool valid = true;
+    for(auto* renderPass : m_renderPasses){
+        valid =
+            renderPass->validateResources(
+                m_swapChainState.backBufferWidth,
+                m_swapChainState.backBufferHeight,
+                m_deviceCreationParams.swapChainSampleCount
+            )
+            && valid
+        ;
+    }
+    return valid;
 }
 
 void Graphics::displayScaleChanged(){

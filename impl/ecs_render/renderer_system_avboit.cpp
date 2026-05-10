@@ -775,7 +775,7 @@ void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, Deferre
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
-    if(!ensureAvboitPipelines(avboitTargets))
+    if((!m_avboitDepthWarpPipeline || !m_avboitIntegratePipeline) && !ensureAvboitPipelines(avboitTargets))
         return;
 
     renderMaterialPass(

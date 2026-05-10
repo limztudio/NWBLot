@@ -15,6 +15,12 @@
 
 layout(set = 1, binding = 1) uniform texture3D g_Transmittance;
 layout(set = 1, binding = 3) uniform sampler g_LinearSampler;
+layout(std430, set = 1, binding = 0) readonly buffer NwbAvboitDepthWarpBuffer{
+    uint g_DepthWarp[];
+};
+layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitControlBuffer{
+    uint g_Control[];
+};
 
 layout(location = 0) in mediump vec4 inColor;
 layout(location = 1) in mediump vec3 inNormal;
@@ -32,13 +38,22 @@ vec2 nwbAvboitTransmittanceUvFromFragCoord(vec2 fragCoord){
     return clamp(fragCoord / fullSize, vec2(0.0), vec2(1.0));
 }
 
+uint nwbAvboitActivePhysicalSliceCount(){
+    return clamp(g_Control[0], 1u, nwbAvboitPhysicalSliceCount());
+}
+
+float nwbAvboitWarpedPhysicalSliceFromVirtualSlice(uint virtualSlice){
+    const uint clampedVirtualSlice = min(virtualSlice, nwbAvboitVirtualSliceCount() - 1u);
+    return float(min(g_DepthWarp[clampedVirtualSlice], nwbAvboitActivePhysicalSliceCount() - 1u));
+}
+
 float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float sliceBase = floor(sampleSlice);
     const uint virtualSlice0 = uint(sliceBase);
     const uint virtualSlice1 = min(virtualSlice0 + 1u, virtualSliceCount - 1u);
-    const float physicalSlice0 = float(nwbAvboitPhysicalSliceFromVirtualSlice(virtualSlice0));
-    const float physicalSlice1 = float(nwbAvboitPhysicalSliceFromVirtualSlice(virtualSlice1));
+    const float physicalSlice0 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice0);
+    const float physicalSlice1 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice1);
     return mix(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
 }
 

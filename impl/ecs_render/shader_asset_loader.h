@@ -31,7 +31,7 @@ namespace ShaderAssetLoader{
 
 
 template<typename ShaderPathResolver>
-[[nodiscard]] bool EnsureLoaded(
+[[nodiscard]] bool Load(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
     AStringView variantName,

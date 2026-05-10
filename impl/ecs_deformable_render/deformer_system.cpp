@@ -433,7 +433,7 @@ bool DeformerSystem::ensurePipeline(){
         }
     }
 
-    if(!ShaderAssetLoader::EnsureLoaded(
+    if(!ShaderAssetLoader::Load(
         m_computeShader,
         __hidden_deformer_system::DeformerComputeShaderName(),
         Core::ShaderArchive::s_DefaultVariant,

@@ -316,33 +316,24 @@ public:
 
 
 private:
-    [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
-    [[nodiscard]] bool ensureRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry);
+    [[nodiscard]] bool createGeometryResources(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
+    [[nodiscard]] bool createRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry);
     void pruneRuntimeGeometryResources();
-    [[nodiscard]] bool ensureMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
-    [[nodiscard]] bool ensureMeshShaderResources();
-    [[nodiscard]] bool ensureComputeEmulationResources();
-    [[nodiscard]] bool ensureMeshBindingSet(GeometryResources& geometry);
-    [[nodiscard]] bool ensureComputeBindingSet(GeometryResources& geometry);
-    [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
-    [[nodiscard]] bool ensureDeferredLightingResources();
-    [[nodiscard]] bool ensureDeferredLightingPipeline(DeferredFrameTargets& targets);
-    [[nodiscard]] bool ensureDeferredCompositeResources();
-    [[nodiscard]] bool ensureDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
-    [[nodiscard]] bool ensureAvboitResources();
-    [[nodiscard]] bool ensureAvboitPipelines(AvboitFrameTargets& targets);
-    [[nodiscard]] bool createAvboitFrameTargets(
-        DeferredFrameTargets& createdTargets,
-        Core::Format::Enum lowRasterFormat,
-        Core::Format::Enum accumColorFormat,
-        Core::Format::Enum accumExtinctionFormat,
-        Core::Format::Enum transmittanceFormat
-    );
-    [[nodiscard]] bool ensureRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
+    void destroyGeometryBindingSets();
+    [[nodiscard]] bool createMeshBindingSet(GeometryResources& geometry);
+    [[nodiscard]] bool createComputeBindingSet(GeometryResources& geometry);
+
+private:
+    [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
+    [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
-    void resetDeferredFrameTargets(){ m_deferredTargets = DeferredFrameTargets{}; }
-    void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
-    void clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets);
+    void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
+
+private:
+    [[nodiscard]] bool createMeshShaderResources();
+    [[nodiscard]] bool createComputeEmulationResources();
+    [[nodiscard]] bool createEmulationViewResources();
+    [[nodiscard]] bool updateMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
     void renderMaterialPass(
         Core::ICommandList& commandList,
         Core::IFramebuffer* framebuffer,
@@ -360,14 +351,15 @@ private:
         InstanceGpuDataVector& instanceData,
         MaterialParameterGpuDataVector& materialParameters
     );
-    [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
-    [[nodiscard]] bool ensureMaterialParameterBufferCapacity(usize parameterCount);
-    [[nodiscard]] bool ensureMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
-    [[nodiscard]] bool ensureSceneShadingBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
+    void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry);
+    void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+    void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+
+private:
+    [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
+    [[nodiscard]] bool reserveMaterialParameterBufferCapacity(usize parameterCount);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters);
-    [[nodiscard]] bool ensureEmulationViewResources();
-    void invalidateGeometryBindingSets();
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
         GeometryResources*& outGeometry,
@@ -384,16 +376,39 @@ private:
             handler(drawItem, *geometry, *pipelineResources);
         }
     }
-    void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry);
-    void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+
+private:
+    [[nodiscard]] bool updateSceneShadingBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
+    [[nodiscard]] bool createDeferredLightingResources();
+    [[nodiscard]] bool createDeferredLightingPipeline(DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets);
+
+private:
+    [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
+    [[nodiscard]] bool createDeferredCompositeResources();
+    [[nodiscard]] bool createDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
+    void resetDeferredFrameTargets(){ m_deferredTargets = DeferredFrameTargets{}; }
+    void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
+
+private:
+    [[nodiscard]] bool createAvboitResources();
+    [[nodiscard]] bool createAvboitPipelines(AvboitFrameTargets& targets);
+    [[nodiscard]] bool createAvboitFrameTargets(
+        DeferredFrameTargets& createdTargets,
+        Core::Format::Enum lowRasterFormat,
+        Core::Format::Enum accumColorFormat,
+        Core::Format::Enum accumExtinctionFormat,
+        Core::Format::Enum transmittanceFormat
+    );
+    void clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     void dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets);
-    [[nodiscard]] bool renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
-    void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
-    [[nodiscard]] bool ensureShaderLoaded(
+
+
+private:
+    [[nodiscard]] bool loadShader(
         Core::ShaderHandle& outShader,
         const Name& shaderName,
         AStringView variantName,
@@ -410,46 +425,58 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
 
+private:
     HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>, GeometryResourcesMapAllocator> m_geometryMeshes;
+    Vector<IRuntimeGeometryProvider*, RuntimeGeometryProviderAllocator> m_runtimeGeometryProviders;
+
+
+private:
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, MaterialSurfaceInfoMapAllocator> m_materialSurfaceInfos;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, MaterialPipelineMapAllocator> m_materialPipelines;
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, LoggedMaterialPathMapAllocator> m_loggedMaterialPaths;
-    Vector<IRuntimeGeometryProvider*, RuntimeGeometryProviderAllocator> m_runtimeGeometryProviders;
+
+private:
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BindingLayoutHandle m_emulationViewBindingLayout;
+    Core::BufferHandle m_instanceBuffer;
+    Core::BufferHandle m_materialParameterBuffer;
+    Core::BufferHandle m_meshViewBuffer;
+    Core::BindingSetHandle m_emulationViewBindingSet;
+    Core::ShaderHandle m_emulationVertexShader;
+    Core::InputLayoutHandle m_emulationInputLayout;
+    usize m_instanceBufferCapacity = 0;
+    usize m_materialParameterBufferCapacity = 0;
+
+private:
     Core::BindingLayoutHandle m_deferredLightingBindingLayout;
+    Core::BufferHandle m_sceneShadingBuffer;
+    Core::ShaderHandle m_deferredCompositeVertexShader;
+    Core::ShaderHandle m_deferredLightingPixelShader;
+    Core::GraphicsPipelineHandle m_deferredLightingPipeline;
+
+private:
     Core::BindingLayoutHandle m_deferredCompositeBindingLayout;
+    Core::SamplerHandle m_deferredSampler;
+    Core::ShaderHandle m_deferredCompositePixelShader;
+    Core::GraphicsPipelineHandle m_deferredCompositePipeline;
+    DeferredFrameTargets m_deferredTargets;
+
+private:
     Core::BindingLayoutHandle m_avboitEmptyBindingLayout;
     Core::BindingLayoutHandle m_avboitOccupancyBindingLayout;
     Core::BindingLayoutHandle m_avboitDepthWarpBindingLayout;
     Core::BindingLayoutHandle m_avboitExtinctionBindingLayout;
     Core::BindingLayoutHandle m_avboitIntegrateBindingLayout;
     Core::BindingLayoutHandle m_avboitAccumulateBindingLayout;
-    Core::SamplerHandle m_deferredSampler;
     Core::SamplerHandle m_avboitLinearSampler;
-    Core::BufferHandle m_instanceBuffer;
-    Core::BufferHandle m_materialParameterBuffer;
-    Core::BufferHandle m_meshViewBuffer;
-    Core::BufferHandle m_sceneShadingBuffer;
-    Core::BindingSetHandle m_emulationViewBindingSet;
-    Core::ShaderHandle m_emulationVertexShader;
-    Core::ShaderHandle m_deferredCompositeVertexShader;
-    Core::ShaderHandle m_deferredLightingPixelShader;
-    Core::ShaderHandle m_deferredCompositePixelShader;
     Core::ShaderHandle m_avboitOccupancyPixelShader;
     Core::ShaderHandle m_avboitDepthWarpComputeShader;
     Core::ShaderHandle m_avboitExtinctionPixelShader;
     Core::ShaderHandle m_avboitIntegrateComputeShader;
     Core::ShaderHandle m_avboitAccumulatePixelShader;
-    Core::InputLayoutHandle m_emulationInputLayout;
-    Core::GraphicsPipelineHandle m_deferredLightingPipeline;
-    Core::GraphicsPipelineHandle m_deferredCompositePipeline;
     Core::ComputePipelineHandle m_avboitDepthWarpPipeline;
     Core::ComputePipelineHandle m_avboitIntegratePipeline;
-    DeferredFrameTargets m_deferredTargets;
-    usize m_instanceBufferCapacity = 0;
-    usize m_materialParameterBufferCapacity = 0;
 };
 
 

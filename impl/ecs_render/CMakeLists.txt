@@ -2,10 +2,17 @@ nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_deferred.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_geometry.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_lighting.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_material.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_shader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/ecs_render.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_asset_loader.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC

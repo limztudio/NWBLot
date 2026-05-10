@@ -54,7 +54,7 @@ static Core::Format::Enum SelectSupportedFormat(
     return Core::Format::UNKNOWN;
 }
 
-static bool EnsurePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
+static bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
     if(sampler)
         return true;
 
@@ -71,7 +71,7 @@ static bool EnsurePointClampSampler(Core::IDevice& device, Core::SamplerHandle& 
     return false;
 }
 
-static bool EnsureLinearClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
+static bool CreateLinearClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
     if(sampler)
         return true;
 
@@ -219,12 +219,12 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSyste
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::ensureAvboitResources(){
+bool RendererSystem::createAvboitResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
-    if(!__hidden_renderer_avboit::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
+    if(!__hidden_renderer_avboit::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
         return false;
-    if(!__hidden_renderer_avboit::EnsureLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
+    if(!__hidden_renderer_avboit::CreateLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
         return false;
 
     if(!m_avboitEmptyBindingLayout){
@@ -324,7 +324,7 @@ bool RendererSystem::ensureAvboitResources(){
         return false;
     }
 
-    if(!ensureShaderLoaded(
+    if(!loadShader(
         m_avboitOccupancyPixelShader,
         __hidden_renderer_avboit::s_AvboitOccupancyPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -333,7 +333,7 @@ bool RendererSystem::ensureAvboitResources(){
     ))
         return false;
 
-    if(!ensureShaderLoaded(
+    if(!loadShader(
         m_avboitDepthWarpComputeShader,
         __hidden_renderer_avboit::s_AvboitDepthWarpComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -342,7 +342,7 @@ bool RendererSystem::ensureAvboitResources(){
     ))
         return false;
 
-    if(!ensureShaderLoaded(
+    if(!loadShader(
         m_avboitExtinctionPixelShader,
         __hidden_renderer_avboit::s_AvboitExtinctionPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -351,7 +351,7 @@ bool RendererSystem::ensureAvboitResources(){
     ))
         return false;
 
-    if(!ensureShaderLoaded(
+    if(!loadShader(
         m_avboitIntegrateComputeShader,
         __hidden_renderer_avboit::s_AvboitIntegrateComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -360,7 +360,7 @@ bool RendererSystem::ensureAvboitResources(){
     ))
         return false;
 
-    if(!ensureShaderLoaded(
+    if(!loadShader(
         m_avboitAccumulatePixelShader,
         __hidden_renderer_avboit::s_AvboitAccumulatePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -372,8 +372,8 @@ bool RendererSystem::ensureAvboitResources(){
     return true;
 }
 
-bool RendererSystem::ensureAvboitPipelines(AvboitFrameTargets& targets){
-    if(!ensureAvboitResources())
+bool RendererSystem::createAvboitPipelines(AvboitFrameTargets& targets){
+    if(!createAvboitResources())
         return false;
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -775,7 +775,7 @@ void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, Deferre
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
-    if((!m_avboitDepthWarpPipeline || !m_avboitIntegratePipeline) && !ensureAvboitPipelines(avboitTargets))
+    if((!m_avboitDepthWarpPipeline || !m_avboitIntegratePipeline) && !createAvboitPipelines(avboitTargets))
         return;
 
     renderMaterialPass(

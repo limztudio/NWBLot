@@ -25,7 +25,7 @@ namespace __hidden_renderer_avboit{
 
 
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
-static constexpr u32 s_AvboitDownsample = 8u;
+static constexpr u32 s_AvboitDownsample = 4u;
 static constexpr u32 s_AvboitVirtualSlices = 128u;
 static constexpr u32 s_AvboitPhysicalSlices = 64u;
 static constexpr u32 s_AvboitExtinctionSlicesPerWord = 4u;
@@ -162,7 +162,7 @@ Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device){
 Core::RenderState BuildRendererAvboitVoxelRenderState(){
     Core::RenderState renderState;
     renderState.depthStencilState.disableDepthTest().disableDepthWrite();
-    renderState.rasterState.enableDepthClip().setCullNone();
+    renderState.rasterState.enableDepthClip().setCullBack();
     renderState.blendState.targets[0].setColorWriteMask(Core::ColorMask::None);
     return renderState;
 }
@@ -174,7 +174,7 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
         .disableDepthWrite()
         .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
     ;
-    renderState.rasterState.enableDepthClip().setCullNone();
+    renderState.rasterState.enableDepthClip().setCullBack();
     renderState.blendState
         .setRenderTarget(0, __hidden_renderer_avboit::BuildAdditiveBlendTarget())
         .setRenderTarget(1, __hidden_renderer_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
@@ -309,6 +309,7 @@ bool RendererSystem::ensureAvboitResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(3, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
 
         m_avboitAccumulateBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -316,6 +317,11 @@ bool RendererSystem::ensureAvboitResources(){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
             return false;
         }
+    }
+
+    if(!m_sceneShadingBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation requires a scene shading buffer"));
+        return false;
     }
 
     if(!ensureShaderLoaded(
@@ -678,6 +684,7 @@ bool RendererSystem::createAvboitFrameTargets(
     ));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_avboitLinearSampler.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_sceneShadingBuffer.get()));
     avboitTargets.accumulateBindingSet = device->createBindingSet(accumulateBindingSetDesc, m_avboitAccumulateBindingLayout);
     if(!avboitTargets.accumulateBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding set"));
@@ -768,9 +775,33 @@ void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, Deferre
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
+    if(!ensureAvboitPipelines(avboitTargets))
+        return;
 
-    // Weighted accumulation keeps transparent compositing stable without the
-    // packed extinction prepass' fragment storage-buffer atomics.
+    renderMaterialPass(
+        commandList,
+        avboitTargets.lowFramebuffer.get(),
+        MaterialPipelinePass::AvboitOccupancy,
+        true,
+        avboitTargets.occupancyBindingSet.get(),
+        &avboitTargets
+    );
+    commandList.endRenderPass();
+
+    dispatchAvboitDepthWarp(commandList, avboitTargets);
+
+    renderMaterialPass(
+        commandList,
+        avboitTargets.lowFramebuffer.get(),
+        MaterialPipelinePass::AvboitExtinction,
+        true,
+        avboitTargets.extinctionBindingSet.get(),
+        &avboitTargets
+    );
+    commandList.endRenderPass();
+
+    dispatchAvboitIntegration(commandList, avboitTargets);
+
     renderMaterialPass(
         commandList,
         avboitTargets.accumulationFramebuffer.get(),

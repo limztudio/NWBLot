@@ -41,12 +41,13 @@ static constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f
 static constexpr u32 s_StaticGeometryVertexStride = sizeof(GeometryVertex);
 static constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 static constexpr u32 s_TrianglesPerWorkgroup = 32u;
+static constexpr u32 s_MeshDispatchFlagScissorCull = 1u << 0u;
 static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 
 
 struct ShaderDrivenPushConstants{
     u32 triangleCount = 0;
-    u32 scissorCullEnabled = 0;
+    u32 dispatchFlags = 0;
     u32 instanceIndex = 0;
     u32 sourceVertexLayout = 0;
     Float4 viewportRect = Float4(0.f, 0.f, 0.f, 0.f);
@@ -74,12 +75,16 @@ struct MeshViewGpuData{
         Float4(0.f, 0.f, 1.f, 0.f),
         Float4(0.f, 0.f, 0.f, 1.f),
     };
+};
+
+struct SceneShadingGpuData{
     Float4 directionalLightDirection = Float4(0.f, 0.f, -1.f, 0.f);
     Float4 directionalLightColorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
 using MeshViewState = MeshViewGpuData;
+using SceneShadingState = SceneShadingGpuData;
 using MeshViewBasis = NWB::Impl::SceneViewBasis;
 
 struct MaterialParameterBlock{
@@ -92,17 +97,20 @@ static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparen
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
-static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 28u, "MeshViewGpuData layout must match the mesh shaders");
+static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 16u, "MeshViewGpuData layout must match the mesh shaders");
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
+static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * 12u, "SceneShadingGpuData layout must match the shading shaders");
+static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
 
 
 static constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh_emulation_vs");
 static constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 static constexpr Name s_MaterialParameterBufferName("ecs_render/material_parameter_data");
 static constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
+static constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 static constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred_composite_vs");
+static constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred_lighting_ps");
 static constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred_composite_ps");
-static constexpr Name s_WireframeOverlayPixelShaderName("engine/graphics/wireframe_overlay_ps");
 
 
 template<usize N>
@@ -150,6 +158,19 @@ static Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
+static Core::Format::Enum SelectGBufferVectorFormat(Core::IDevice& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::RGBA16_FLOAT,
+        Core::Format::RGBA32_FLOAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
 static Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::D32,
@@ -172,29 +193,10 @@ static Core::RenderState BuildGeometryRenderState(){
     return renderState;
 }
 
-static Core::RenderState BuildWireframeOverlayRenderState(){
-    Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .disableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
-    renderState.rasterState
-        .enableDepthClip()
-        .setCullNone()
-        .setFillWireframe()
-        .setDepthBias(-1)
-        .setSlopeScaleDepthBias(-1.0f)
-    ;
-    return renderState;
-}
-
 static Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return BuildGeometryRenderState();
-    case MaterialPipelinePass::WireframeOverlay:
-        return BuildWireframeOverlayRenderState();
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
         return BuildRendererAvboitVoxelRenderState();
@@ -239,8 +241,8 @@ static InstanceGpuData BuildInstanceGpuData(
     return data;
 }
 
-static void ApplyDirectionalLightMeshViewState(
-    MeshViewState& state,
+static void ApplyDirectionalLightSceneShadingState(
+    SceneShadingState& state,
     const NWB::Impl::SceneDirectionalLight& light
 ){
     state.directionalLightDirection = light.direction;
@@ -321,7 +323,6 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
             NWB::Impl::BuildSceneViewBasis(*cameraView.transform),
             cameraView.projectionData.projectionParams
         );
-        StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
     }
     else{
         StoreWorldToClipMatrix(
@@ -329,6 +330,20 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
             defaultBasis,
             NWB::Impl::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
         );
+    }
+
+    return state;
+}
+
+static SceneShadingState ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
+    SceneShadingState state;
+    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
+
+    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
+    if(cameraView.valid()){
+        StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
+    }
+    else{
         state.cameraPosition = Float4(
             defaultBasis.positionDepthBias.x,
             defaultBasis.positionDepthBias.y,
@@ -337,7 +352,7 @@ static MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         );
     }
 
-    __hidden_ecs_render::ApplyDirectionalLightMeshViewState(
+    __hidden_ecs_render::ApplyDirectionalLightSceneShadingState(
         state,
         NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis)
     );
@@ -360,7 +375,7 @@ static ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
         return pushConstants;
 
     const Core::Viewport& viewport = viewportState.viewports[0];
-    pushConstants.scissorCullEnabled = 1;
+    pushConstants.dispatchFlags = s_MeshDispatchFlagScissorCull;
     pushConstants.viewportRect = Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
 
     Core::Rect scissorRect(viewport);
@@ -475,8 +490,6 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     Core::Alloc::ScratchArena<> scratchArena;
     MaterialPassDrawItemVector opaqueMeshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
     MaterialPassDrawItemVector opaqueComputeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
-    MaterialPassDrawItemVector wireframeMeshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
-    MaterialPassDrawItemVector wireframeComputeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
     InstanceGpuDataVector instanceData{Core::Alloc::ScratchAllocator<InstanceGpuData>(scratchArena)};
     MaterialParameterGpuDataVector materialParameters{Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)};
 
@@ -488,7 +501,8 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
         meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
     const bool meshViewReady = ensureMeshViewBuffer(*commandList, meshViewAspectRatio);
-    if(meshViewReady){
+    const bool sceneShadingReady = ensureSceneShadingBuffer(*commandList, meshViewAspectRatio);
+    if(meshViewReady && sceneShadingReady){
         gatherMaterialPassDrawItems(
             deferredTargets->framebuffer.get(),
             MaterialPipelinePass::Opaque,
@@ -498,33 +512,11 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
             instanceData,
             materialParameters
         );
-        if(m_wireframeOverlayEnabled){
-            gatherMaterialPassDrawItems(
-                deferredTargets->framebuffer.get(),
-                MaterialPipelinePass::WireframeOverlay,
-                false,
-                wireframeMeshDrawItems,
-                wireframeComputeDrawItems,
-                instanceData,
-                materialParameters
-            );
-            gatherMaterialPassDrawItems(
-                deferredTargets->framebuffer.get(),
-                MaterialPipelinePass::WireframeOverlay,
-                true,
-                wireframeMeshDrawItems,
-                wireframeComputeDrawItems,
-                instanceData,
-                materialParameters
-            );
-        }
     }
 
     const bool hasDeferredDrawItems =
         !opaqueMeshDrawItems.empty()
         || !opaqueComputeDrawItems.empty()
-        || !wireframeMeshDrawItems.empty()
-        || !wireframeComputeDrawItems.empty()
     ;
     const bool deferredUploadReady =
         hasDeferredDrawItems
@@ -542,21 +534,13 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         };
         renderMeshMaterialPassDrawItems(opaqueDrawContext, opaqueMeshDrawItems);
         renderComputeMaterialPassDrawItems(opaqueDrawContext, opaqueComputeDrawItems);
-
-        if(m_wireframeOverlayEnabled){
-            const MaterialPassDrawContext wireframeDrawContext{
-                *commandList,
-                deferredTargets->framebuffer.get(),
-                MaterialPipelinePass::WireframeOverlay,
-                nullptr,
-                nullptr,
-                deferredViewportState
-            };
-            renderMeshMaterialPassDrawItems(wireframeDrawContext, wireframeMeshDrawItems);
-            renderComputeMaterialPassDrawItems(wireframeDrawContext, wireframeComputeDrawItems);
-        }
     }
     commandList->endRenderPass();
+
+    if(!renderDeferredLighting(*commandList, *deferredTargets)){
+        commandList->close();
+        return;
+    }
 
     clearAvboitTargets(*commandList, deferredTargets->avboit);
     if(hasTransparentRenderers())
@@ -576,6 +560,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
 
 void RendererSystem::backBufferResizing(){
     m_materialPipelines.clear();
+    m_deferredLightingPipeline.reset();
     m_deferredCompositePipeline.reset();
     resetDeferredFrameTargets();
 }
@@ -586,6 +571,7 @@ void RendererSystem::backBufferResized(u32 width, u32 height, u32 sampleCount){
     static_cast<void>(sampleCount);
 
     m_materialPipelines.clear();
+    m_deferredLightingPipeline.reset();
     m_deferredCompositePipeline.reset();
     resetDeferredFrameTargets();
 }
@@ -628,12 +614,21 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
 
     Core::IDevice* device = m_graphics.getDevice();
     const Core::Format::Enum albedoFormat = __hidden_ecs_render::SelectGBufferAlbedoFormat(*device);
+    const Core::Format::Enum normalFormat = __hidden_ecs_render::SelectGBufferVectorFormat(*device);
+    const Core::Format::Enum worldPositionFormat = __hidden_ecs_render::SelectGBufferVectorFormat(*device);
+    const Core::Format::Enum opaqueColorFormat = __hidden_ecs_render::SelectGBufferAlbedoFormat(*device);
     const Core::Format::Enum depthFormat = __hidden_ecs_render::SelectGBufferDepthFormat(*device);
     const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(*device);
     const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(*device);
     const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(*device);
     const Core::Format::Enum avboitTransmittanceFormat = SelectRendererAvboitTransmittanceFormat(*device);
-    if(albedoFormat == Core::Format::UNKNOWN || depthFormat == Core::Format::UNKNOWN){
+    if(
+        albedoFormat == Core::Format::UNKNOWN
+        || normalFormat == Core::Format::UNKNOWN
+        || worldPositionFormat == Core::Format::UNKNOWN
+        || opaqueColorFormat == Core::Format::UNKNOWN
+        || depthFormat == Core::Format::UNKNOWN
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
     }
@@ -652,6 +647,9 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         && m_deferredTargets.width == presentationInfo.width
         && m_deferredTargets.height == presentationInfo.height
         && m_deferredTargets.albedoFormat == albedoFormat
+        && m_deferredTargets.normalFormat == normalFormat
+        && m_deferredTargets.worldPositionFormat == worldPositionFormat
+        && m_deferredTargets.opaqueColorFormat == opaqueColorFormat
         && m_deferredTargets.depthFormat == depthFormat
         && m_deferredTargets.avboit.lowRasterFormat == avboitLowRasterFormat
         && m_deferredTargets.avboit.accumColorFormat == avboitAccumColorFormat
@@ -662,6 +660,8 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
         return true;
     }
 
+    if(!ensureDeferredLightingResources())
+        return false;
     if(!ensureDeferredCompositeResources())
         return false;
     if(!ensureAvboitResources())
@@ -674,6 +674,9 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     createdTargets.width = presentationInfo.width;
     createdTargets.height = presentationInfo.height;
     createdTargets.albedoFormat = albedoFormat;
+    createdTargets.normalFormat = normalFormat;
+    createdTargets.worldPositionFormat = worldPositionFormat;
+    createdTargets.opaqueColorFormat = opaqueColorFormat;
     createdTargets.depthFormat = depthFormat;
 
     Core::TextureDesc albedoDesc;
@@ -688,6 +691,51 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
+        return false;
+    }
+
+    Core::TextureDesc normalDesc;
+    normalDesc
+        .setWidth(createdTargets.width)
+        .setHeight(createdTargets.height)
+        .setFormat(createdTargets.normalFormat)
+        .setInRenderTarget(true)
+        .setName("engine/deferred/gbuffer_normal")
+        .setClearValue(Core::Color(0.5f, 0.5f, 1.f, 1.f))
+    ;
+    createdTargets.normal = m_graphics.createTexture(normalDesc);
+    if(!createdTargets.normal){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred normal target"));
+        return false;
+    }
+
+    Core::TextureDesc worldPositionDesc;
+    worldPositionDesc
+        .setWidth(createdTargets.width)
+        .setHeight(createdTargets.height)
+        .setFormat(createdTargets.worldPositionFormat)
+        .setInRenderTarget(true)
+        .setName("engine/deferred/gbuffer_world_position")
+        .setClearValue(Core::Color(0.f, 0.f, 0.f, 1.f))
+    ;
+    createdTargets.worldPosition = m_graphics.createTexture(worldPositionDesc);
+    if(!createdTargets.worldPosition){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred world-position target"));
+        return false;
+    }
+
+    Core::TextureDesc opaqueColorDesc;
+    opaqueColorDesc
+        .setWidth(createdTargets.width)
+        .setHeight(createdTargets.height)
+        .setFormat(createdTargets.opaqueColorFormat)
+        .setInRenderTarget(true)
+        .setName("engine/deferred/opaque_color")
+        .setClearValue(__hidden_ecs_render::s_ClearColor)
+    ;
+    createdTargets.opaqueColor = m_graphics.createTexture(opaqueColorDesc);
+    if(!createdTargets.opaqueColor){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred opaque color target"));
         return false;
     }
 
@@ -708,11 +756,21 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     Core::FramebufferDesc framebufferDesc;
     framebufferDesc
         .addColorAttachment(createdTargets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources)
+        .addColorAttachment(createdTargets.normal.get(), __hidden_ecs_render::s_FramebufferSubresources)
+        .addColorAttachment(createdTargets.worldPosition.get(), __hidden_ecs_render::s_FramebufferSubresources)
         .setDepthAttachment(createdTargets.depth.get(), __hidden_ecs_render::s_FramebufferSubresources)
     ;
     createdTargets.framebuffer = device->createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
+        return false;
+    }
+
+    Core::FramebufferDesc opaqueLightingFramebufferDesc;
+    opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), __hidden_ecs_render::s_FramebufferSubresources);
+    createdTargets.opaqueLightingFramebuffer = device->createFramebuffer(opaqueLightingFramebufferDesc);
+    if(!createdTargets.opaqueLightingFramebuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting framebuffer"));
         return false;
     }
 
@@ -725,11 +783,48 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     ))
         return false;
 
-    Core::BindingSetDesc bindingSetDesc;
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+    Core::BindingSetDesc lightingBindingSetDesc;
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
         createdTargets.albedo.get(),
         createdTargets.albedoFormat,
+        __hidden_ecs_render::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        1,
+        createdTargets.normal.get(),
+        createdTargets.normalFormat,
+        __hidden_ecs_render::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        2,
+        createdTargets.worldPosition.get(),
+        createdTargets.worldPositionFormat,
+        __hidden_ecs_render::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        3,
+        createdTargets.depth.get(),
+        createdTargets.depthFormat,
+        __hidden_ecs_render::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(4, m_deferredSampler.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(5, m_sceneShadingBuffer.get()));
+    createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, m_deferredLightingBindingLayout);
+    if(!createdTargets.lightingBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));
+        return false;
+    }
+
+    Core::BindingSetDesc bindingSetDesc;
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        0,
+        createdTargets.opaqueColor.get(),
+        createdTargets.opaqueColorFormat,
         __hidden_ecs_render::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
@@ -757,15 +852,105 @@ bool RendererSystem::ensureDeferredFrameTargets(Core::IFramebuffer* presentation
     m_deferredTargets = Move(createdTargets);
     outTargets = &m_deferredTargets;
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, depth {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, AVBOIT color {}, extinction {}, transmittance {})")
         , m_deferredTargets.width
         , m_deferredTargets.height
         , StringConvert(Core::GetFormatInfo(m_deferredTargets.albedoFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredTargets.normalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredTargets.worldPositionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredTargets.opaqueColorFormat).name)
         , StringConvert(Core::GetFormatInfo(m_deferredTargets.depthFormat).name)
         , StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.accumColorFormat).name)
         , StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.accumExtinctionFormat).name)
         , StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.transmittanceFormat).name)
     );
+    return true;
+}
+
+bool RendererSystem::ensureDeferredLightingResources(){
+    Core::IDevice* device = m_graphics.getDevice();
+
+    if(!m_sceneShadingBuffer){
+        Core::BufferDesc sceneShadingBufferDesc;
+        sceneShadingBufferDesc
+            .setByteSize(sizeof(__hidden_ecs_render::SceneShadingGpuData))
+            .setIsConstantBuffer(true)
+            .setDebugName(__hidden_ecs_render::s_SceneShadingBufferName)
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        m_sceneShadingBuffer = m_graphics.createBuffer(sceneShadingBufferDesc);
+        if(!m_sceneShadingBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene shading buffer"));
+            return false;
+        }
+    }
+
+    if(!m_deferredLightingBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc;
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(3, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(4, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(5, 1));
+
+        m_deferredLightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_deferredLightingBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
+            return false;
+        }
+    }
+
+    if(!__hidden_ecs_render::EnsurePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred lighting sampler")))
+        return false;
+
+    if(!ensureShaderLoaded(
+        m_deferredCompositeVertexShader,
+        __hidden_ecs_render::s_DeferredCompositeVertexShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Vertex,
+        "ECSRender_DeferredCompositeVS"
+    ))
+        return false;
+
+    if(!ensureShaderLoaded(
+        m_deferredLightingPixelShader,
+        __hidden_ecs_render::s_DeferredLightingPixelShaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Pixel,
+        "ECSRender_DeferredLightingPS"
+    ))
+        return false;
+
+    return true;
+}
+
+bool RendererSystem::ensureDeferredLightingPipeline(DeferredFrameTargets& targets){
+    if(!targets.opaqueLightingFramebuffer)
+        return false;
+    if(!ensureDeferredLightingResources())
+        return false;
+
+    const Core::FramebufferInfo& framebufferInfo = targets.opaqueLightingFramebuffer->getFramebufferInfo();
+    if(m_deferredLightingPipeline && m_deferredLightingPipeline->getFramebufferInfo() == framebufferInfo)
+        return true;
+
+    Core::GraphicsPipelineDesc pipelineDesc;
+    pipelineDesc
+        .setVertexShader(m_deferredCompositeVertexShader)
+        .setPixelShader(m_deferredLightingPixelShader)
+        .setRenderState(__hidden_ecs_render::BuildCompositeRenderState())
+        .addBindingLayout(m_deferredLightingBindingLayout)
+    ;
+
+    Core::IDevice* device = m_graphics.getDevice();
+    m_deferredLightingPipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    if(!m_deferredLightingPipeline){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
+        return false;
+    }
+
     return true;
 }
 
@@ -845,6 +1030,18 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
         commandList.setTextureState(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
+    if(targets.normal){
+        commandList.setTextureState(targets.normal.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.worldPosition){
+        commandList.setTextureState(targets.worldPosition.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
+    if(targets.opaqueColor){
+        commandList.setTextureState(targets.opaqueColor.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    }
+
     if(targets.depth){
         commandList.setTextureState(targets.depth.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
@@ -853,6 +1050,18 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
 
     if(targets.albedo){
         commandList.clearTextureFloat(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, __hidden_ecs_render::s_ClearColor);
+    }
+
+    if(targets.normal){
+        commandList.clearTextureFloat(targets.normal.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
+    }
+
+    if(targets.worldPosition){
+        commandList.clearTextureFloat(targets.worldPosition.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
+    }
+
+    if(targets.opaqueColor){
+        commandList.clearTextureFloat(targets.opaqueColor.get(), __hidden_ecs_render::s_FramebufferSubresources, __hidden_ecs_render::s_ClearColor);
     }
 
     if(targets.depth){
@@ -1223,6 +1432,24 @@ bool RendererSystem::ensureMeshViewBuffer(Core::ICommandList& commandList, const
     return true;
 }
 
+bool RendererSystem::ensureSceneShadingBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
+    if(!ensureDeferredLightingResources())
+        return false;
+    if(!m_sceneShadingBuffer)
+        return false;
+
+    const __hidden_ecs_render::SceneShadingState sceneShadingState =
+        __hidden_ecs_render::ResolveSceneShadingState(m_world, fallbackAspectRatio)
+    ;
+
+    commandList.setBufferState(m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(m_sceneShadingBuffer.get(), &sceneShadingState, sizeof(sceneShadingState));
+    commandList.setBufferState(m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.commitBarriers();
+    return true;
+}
+
 bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
@@ -1400,9 +1627,15 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                 .setSlot(0)
                 .setOffset(0)
         );
-        graphicsState.addBindingSet(m_emulationViewBindingSet.get());
-        if(context.passBindingSet)
+        if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
+            graphicsState.addBindingSet(nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
+        }
+        else{
+            graphicsState.addBindingSet(m_emulationViewBindingSet.get());
+            if(context.passBindingSet)
+                graphicsState.addBindingSet(context.passBindingSet);
+        }
 
         context.commandList.setGraphicsState(graphicsState);
 
@@ -1423,6 +1656,33 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         drawArgs.setVertexCount(geometry.indexCount);
         context.commandList.draw(drawArgs);
     });
+}
+
+bool RendererSystem::renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets){
+    if(!targets.lightingBindingSet || !targets.opaqueLightingFramebuffer)
+        return false;
+    if(!ensureDeferredLightingPipeline(targets))
+        return false;
+
+    commandList.setResourceStatesForBindingSet(targets.lightingBindingSet.get());
+    commandList.commitBarriers();
+
+    Core::ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(targets.opaqueLightingFramebuffer->getFramebufferInfo().getViewport());
+
+    Core::GraphicsState graphicsState;
+    graphicsState.setPipeline(m_deferredLightingPipeline.get());
+    graphicsState.setFramebuffer(targets.opaqueLightingFramebuffer.get());
+    graphicsState.setViewport(viewportState);
+    graphicsState.addBindingSet(targets.lightingBindingSet.get());
+
+    commandList.setGraphicsState(graphicsState);
+
+    Core::DrawArguments drawArgs;
+    drawArgs.setVertexCount(3);
+    commandList.draw(drawArgs);
+    commandList.endRenderPass();
+    return true;
 }
 
 bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){
@@ -1976,16 +2236,6 @@ bool RendererSystem::ensureRendererPipeline(
     switch(pass){
     case MaterialPipelinePass::Opaque:
         break;
-    case MaterialPipelinePass::WireframeOverlay:
-        if(!ensureShaderLoaded(
-            passPixelShader,
-            __hidden_ecs_render::s_WireframeOverlayPixelShaderName,
-            shaderVariant,
-            Core::ShaderType::Pixel,
-            "ECSRender_WireframeOverlayPS"
-        ))
-            return failMaterialPipeline();
-        break;
     case MaterialPipelinePass::AvboitOccupancy:
         if(!ensureAvboitResources()){
             return failMaterialPipeline();
@@ -2098,7 +2348,6 @@ bool RendererSystem::ensureRendererPipeline(
         emulationDesc.setVertexShader(m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
-        emulationDesc.addBindingLayout(m_emulationViewBindingLayout);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
             emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
@@ -2114,6 +2363,7 @@ bool RendererSystem::ensureRendererPipeline(
             break;
         case MaterialPipelinePass::Opaque:
         default:
+            emulationDesc.addBindingLayout(m_emulationViewBindingLayout);
             break;
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());

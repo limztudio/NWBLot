@@ -53,7 +53,6 @@ class Geometry;
 namespace MaterialPipelinePass{
     enum Enum : u8{
         Opaque,
-        WireframeOverlay,
         AvboitOccupancy,
         AvboitExtinction,
         AvboitAccumulate,
@@ -249,10 +248,18 @@ private:
         u32 width = 0;
         u32 height = 0;
         Core::Format::Enum albedoFormat = Core::Format::UNKNOWN;
+        Core::Format::Enum normalFormat = Core::Format::UNKNOWN;
+        Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
+        Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
         Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
         Core::TextureHandle albedo;
+        Core::TextureHandle normal;
+        Core::TextureHandle worldPosition;
+        Core::TextureHandle opaqueColor;
         Core::TextureHandle depth;
         Core::FramebufferHandle framebuffer;
+        Core::FramebufferHandle opaqueLightingFramebuffer;
+        Core::BindingSetHandle lightingBindingSet;
         Core::BindingSetHandle compositeBindingSet;
         AvboitFrameTargets avboit;
 
@@ -261,10 +268,18 @@ private:
                 width > 0
                 && height > 0
                 && albedoFormat != Core::Format::UNKNOWN
+                && normalFormat != Core::Format::UNKNOWN
+                && worldPositionFormat != Core::Format::UNKNOWN
+                && opaqueColorFormat != Core::Format::UNKNOWN
                 && depthFormat != Core::Format::UNKNOWN
                 && albedo != nullptr
+                && normal != nullptr
+                && worldPosition != nullptr
+                && opaqueColor != nullptr
                 && depth != nullptr
                 && framebuffer != nullptr
+                && opaqueLightingFramebuffer != nullptr
+                && lightingBindingSet != nullptr
                 && compositeBindingSet != nullptr
                 && avboit.valid()
             ;
@@ -299,10 +314,6 @@ public:
     virtual void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
     virtual void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
 
-public:
-    void setWireframeOverlayEnabled(const bool enabled){ m_wireframeOverlayEnabled = enabled; }
-    [[nodiscard]] bool wireframeOverlayEnabled()const{ return m_wireframeOverlayEnabled; }
-
 
 private:
     [[nodiscard]] bool ensureGeometryLoaded(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
@@ -314,6 +325,8 @@ private:
     [[nodiscard]] bool ensureMeshBindingSet(GeometryResources& geometry);
     [[nodiscard]] bool ensureComputeBindingSet(GeometryResources& geometry);
     [[nodiscard]] bool ensureDeferredFrameTargets(Core::IFramebuffer* presentationFramebuffer, DeferredFrameTargets*& outTargets);
+    [[nodiscard]] bool ensureDeferredLightingResources();
+    [[nodiscard]] bool ensureDeferredLightingPipeline(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureDeferredCompositeResources();
     [[nodiscard]] bool ensureDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
     [[nodiscard]] bool ensureAvboitResources();
@@ -350,6 +363,7 @@ private:
     [[nodiscard]] bool ensureInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool ensureMaterialParameterBufferCapacity(usize parameterCount);
     [[nodiscard]] bool ensureMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
+    [[nodiscard]] bool ensureSceneShadingBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters);
     [[nodiscard]] bool ensureEmulationViewResources();
@@ -376,6 +390,7 @@ private:
     void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     void dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets);
+    [[nodiscard]] bool renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool ensureShaderLoaded(
@@ -403,6 +418,7 @@ private:
     Core::BindingLayoutHandle m_meshBindingLayout;
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BindingLayoutHandle m_emulationViewBindingLayout;
+    Core::BindingLayoutHandle m_deferredLightingBindingLayout;
     Core::BindingLayoutHandle m_deferredCompositeBindingLayout;
     Core::BindingLayoutHandle m_avboitEmptyBindingLayout;
     Core::BindingLayoutHandle m_avboitOccupancyBindingLayout;
@@ -415,9 +431,11 @@ private:
     Core::BufferHandle m_instanceBuffer;
     Core::BufferHandle m_materialParameterBuffer;
     Core::BufferHandle m_meshViewBuffer;
+    Core::BufferHandle m_sceneShadingBuffer;
     Core::BindingSetHandle m_emulationViewBindingSet;
     Core::ShaderHandle m_emulationVertexShader;
     Core::ShaderHandle m_deferredCompositeVertexShader;
+    Core::ShaderHandle m_deferredLightingPixelShader;
     Core::ShaderHandle m_deferredCompositePixelShader;
     Core::ShaderHandle m_avboitOccupancyPixelShader;
     Core::ShaderHandle m_avboitDepthWarpComputeShader;
@@ -425,13 +443,13 @@ private:
     Core::ShaderHandle m_avboitIntegrateComputeShader;
     Core::ShaderHandle m_avboitAccumulatePixelShader;
     Core::InputLayoutHandle m_emulationInputLayout;
+    Core::GraphicsPipelineHandle m_deferredLightingPipeline;
     Core::GraphicsPipelineHandle m_deferredCompositePipeline;
     Core::ComputePipelineHandle m_avboitDepthWarpPipeline;
     Core::ComputePipelineHandle m_avboitIntegratePipeline;
     DeferredFrameTargets m_deferredTargets;
     usize m_instanceBufferCapacity = 0;
     usize m_materialParameterBufferCapacity = 0;
-    bool m_wireframeOverlayEnabled = false;
 };
 
 

@@ -11,9 +11,6 @@
 
 layout(std140, binding = 4) uniform NwbMeshViewBuffer{
     mat4 g_NwbMeshWorldToClip;
-    vec4 g_NwbMeshDirectionalLightDirection;
-    vec4 g_NwbMeshDirectionalLightColorIntensity;
-    vec4 g_NwbMeshCameraPosition;
 };
 
 

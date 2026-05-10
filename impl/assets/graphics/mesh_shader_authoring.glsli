@@ -110,6 +110,8 @@ const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
 const uint NWB_MATERIAL_PARAMETER_TYPE_UINT = 3u;
 const uint NWB_MATERIAL_PARAMETER_TYPE_BOOL = 4u;
 
+const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -296,9 +298,25 @@ vec3 nwbMeshTransformDirection(vec3 localDirection){
     return nwbMeshTransformDirection(localDirection, nwbMeshLoadInstance());
 }
 
+bool nwbMeshDispatchFlagEnabled(uint flag){
+    return (g_NwbMeshPushConstants.dispatch.y & flag) != 0u;
+}
+
+vec2 nwbMeshClipToFramebuffer(const vec4 p){
+    const vec2 viewportMin = g_NwbMeshPushConstants.viewportRect.xy;
+    const vec2 viewportMax = g_NwbMeshPushConstants.viewportRect.zw;
+    const vec2 viewportSize = viewportMax - viewportMin;
+    const vec2 ndc = p.xy / p.w;
+
+    return vec2(
+        viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x,
+        viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y
+    );
+}
+
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 bool nwbMeshScissorCullEnabled(){
-    return g_NwbMeshPushConstants.dispatch.y != 0u;
+    return nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL);
 }
 
 bool nwbMeshAllOutsideClipPlane(const vec4 a, const vec4 b, const vec4 c){
@@ -328,18 +346,6 @@ bool nwbMeshInsideClipVolume(const vec4 p){
         && p.z >= 0.0
         && p.z <= p.w
     ;
-}
-
-vec2 nwbMeshClipToFramebuffer(const vec4 p){
-    const vec2 viewportMin = g_NwbMeshPushConstants.viewportRect.xy;
-    const vec2 viewportMax = g_NwbMeshPushConstants.viewportRect.zw;
-    const vec2 viewportSize = viewportMax - viewportMin;
-    const vec2 ndc = p.xy / p.w;
-
-    return vec2(
-        viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x,
-        viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y
-    );
 }
 
 bool nwbMeshAllOutsideScissor(const vec4 a, const vec4 b, const vec4 c){
@@ -384,14 +390,6 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
 }
 #endif
 
-void nwbMeshApplyGeneratedTriangleFrame(inout NwbMeshGeneratedVertex vertices[3]){
-    return;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source, const NwbMeshInstanceData instance);
 
 void main(){
@@ -416,7 +414,6 @@ void main(){
             instance
         );
     }
-    nwbMeshApplyGeneratedTriangleFrame(generatedVertices);
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
     if(nwbMeshTriangleCulled(generatedVertices)){

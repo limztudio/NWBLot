@@ -5,7 +5,7 @@
 #version 460
 
 #include "bxdf.glsli"
-#include "mesh_pixel_io.glsli"
+#include "mesh_gbuffer_io.glsli"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,10 +13,7 @@
 
 void main(){
     const mediump vec3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), vec3(0.0), vec3(1.0));
-    outColor = vec4(
-        clamp(nwbProjectApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition), vec3(0.0), vec3(1.0)),
-        inColor.a
-    );
+    nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
 }
 
 

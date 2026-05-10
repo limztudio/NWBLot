@@ -24,7 +24,6 @@ NWB_IMPL_BEGIN
 
 
 class DeformableGeometry;
-class Material;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,9 +130,7 @@ struct DeformableDisplacementComponent{
 
 struct DeformableRendererComponent{
     Core::Assets::AssetRef<DeformableGeometry> deformableGeometry;
-    Core::Assets::AssetRef<Material> material;
     RuntimeMeshHandle runtimeMesh;
-    bool visible = true;
 };
 
 

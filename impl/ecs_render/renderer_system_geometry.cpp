@@ -174,6 +174,7 @@ void RendererSystem::pruneRuntimeGeometryResources(){
     if(m_geometryMeshes.empty())
         return;
 
+    const auto* geometrySystem = m_world.getSystem<NWB::Impl::GeometrySystem>();
     for(auto it = m_geometryMeshes.begin(); it != m_geometryMeshes.end();){
         const GeometryResources& geometry = it.value();
         if(!geometry.runtimeGeometry){
@@ -181,14 +182,7 @@ void RendererSystem::pruneRuntimeGeometryResources(){
             continue;
         }
 
-        bool alive = false;
-        for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
-            if(provider && provider->containsRuntimeGeometry(geometry.geometryName, geometry.runtimeGeometryVersion)){
-                alive = true;
-                break;
-            }
-        }
-        if(alive){
+        if(geometrySystem && geometrySystem->containsRuntimeGeometry(geometry.geometryName, geometry.runtimeGeometryVersion)){
             ++it;
             continue;
         }

@@ -15,6 +15,7 @@
 #include <impl/assets_geometry/deformable_geometry_validation.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>
+#include <impl/ecs_render/components.h>
 #include <impl/ecs_render/shader_asset_loader.h>
 #include <core/common/log.h>
 
@@ -120,6 +121,11 @@ static u32 DispatchGroupCount(const u32 vertexCount){
     return DivideUp(vertexCount, s_DeformerGroupSize);
 }
 
+static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::EntityID entity){
+    const RendererComponent* renderer = world.tryGetComponent<RendererComponent>(entity);
+    return renderer && renderer->visible;
+}
+
 static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){
     outBytes = 0;
     if(stride == 0u || count > Limit<usize>::s_Max / stride){
@@ -218,6 +224,7 @@ DeformerSystem::DeformerSystem(
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
 {
     writeAccess<DeformableRendererComponent>();
+    readAccess<RendererComponent>();
     readAccess<DeformableMorphWeightsComponent>();
     readAccess<DeformableJointPaletteComponent>();
     readAccess<DeformableSkeletonPoseComponent>();
@@ -242,36 +249,45 @@ usize DeformerSystem::runtimeGeometryCandidateCount(){
 
 void DeformerSystem::forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor){
     m_world.view<DeformableRendererComponent>().each(
-        [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
-            if(!renderer.visible || !renderer.runtimeMesh.valid())
-                return;
-
-            const DeformableRuntimeMeshInstance* instance = findDeformableRuntimeMesh(renderer.runtimeMesh);
-            if(!instance || !instance->valid() || instance->entity != entity)
-                return;
-            if(instance->indices.size() > static_cast<usize>(Limit<u32>::s_Max))
-                return;
-
+        [&](Core::ECS::EntityID entity, DeformableRendererComponent& component){
+            static_cast<void>(component);
             RuntimeGeometryDesc desc;
-            desc.entity = entity;
-            desc.material = renderer.material;
-            desc.geometryKey = DeriveRuntimeResourceName(
-                instance->source.name(),
-                instance->handle.value,
-                instance->editRevision,
-                "deformed_draw"
-            );
-            desc.shaderVertexBuffer = instance->deformedVertexBuffer;
-            desc.shaderIndexBuffer = instance->indexBuffer;
-            desc.indexCount = static_cast<u32>(instance->indices.size());
-            desc.sourceVertexLayout = MeshSourceLayout::DeformableVertex;
-            desc.version = instance->editRevision;
-            desc.visible = renderer.visible;
+            if(!resolveRuntimeGeometry(entity, desc))
+                return;
 
-            if(desc.valid())
-                visitor(desc);
+            visitor(desc);
         }
     );
+}
+
+bool DeformerSystem::resolveRuntimeGeometry(const Core::ECS::EntityID entity, RuntimeGeometryDesc& outGeometry){
+    outGeometry = RuntimeGeometryDesc{};
+    if(!__hidden_deformer_system::RuntimeMeshRenderVisible(m_world, entity))
+        return false;
+
+    const DeformableRendererComponent* renderer = m_world.tryGetComponent<DeformableRendererComponent>(entity);
+    if(!renderer || !renderer->runtimeMesh.valid())
+        return false;
+
+    const DeformableRuntimeMeshInstance* instance = findDeformableRuntimeMesh(renderer->runtimeMesh);
+    if(!instance || !instance->valid() || instance->entity != entity)
+        return false;
+    if(instance->indices.size() > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    outGeometry.entity = entity;
+    outGeometry.geometryKey = DeriveRuntimeResourceName(
+        instance->source.name(),
+        instance->handle.value,
+        instance->editRevision,
+        "deformed_draw"
+    );
+    outGeometry.shaderVertexBuffer = instance->deformedVertexBuffer;
+    outGeometry.shaderIndexBuffer = instance->indexBuffer;
+    outGeometry.indexCount = static_cast<u32>(instance->indices.size());
+    outGeometry.sourceVertexLayout = MeshSourceLayout::DeformableVertex;
+    outGeometry.version = instance->editRevision;
+    return outGeometry.valid();
 }
 
 bool DeformerSystem::containsRuntimeGeometry(const Name& geometryKey, const u64 version){
@@ -356,7 +372,7 @@ void DeformerSystem::render(Core::IFramebuffer* framebuffer){
 
     m_world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
-            if(!renderer.visible || !renderer.runtimeMesh.valid())
+            if(!__hidden_deformer_system::RuntimeMeshRenderVisible(m_world, entity) || !renderer.runtimeMesh.valid())
                 return;
 
             DeformableRuntimeMeshInstance* instance =

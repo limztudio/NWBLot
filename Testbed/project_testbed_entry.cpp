@@ -46,7 +46,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         return false;
     }
 
-    world->addSystem<NWB::Impl::GeometrySystem>(*world);
+    auto& geometrySystem = world->addSystem<NWB::Impl::GeometrySystem>(*world);
     if(!world->getSystem<NWB::Impl::GeometrySystem>()){
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core geometry system was not created"));
         return false;
@@ -65,7 +65,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         *world,
         context.graphics,
         context.assetManager,
-        rendererSystem,
+        geometrySystem,
         context.shaderPathResolver
     );
     if(!world->getSystem<NWB::Impl::DeformerSystem>()){

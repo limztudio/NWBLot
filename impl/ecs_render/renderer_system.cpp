@@ -49,7 +49,6 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_geometryMeshes(0, Hasher<Name>(), EqualTo<Name>(), GeometryResourcesMapAllocator(arena))
-    , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))
     , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), MaterialSurfaceInfoMapAllocator(arena))
     , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), MaterialPipelineMapAllocator(arena))
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
@@ -57,7 +56,6 @@ RendererSystem::RendererSystem(
     readAccess<NWB::Impl::SceneComponent>();
     readAccess<NWB::Impl::TransformComponent>();
     readAccess<NWB::Impl::CameraComponent>();
-    readAccess<NWB::Impl::GeometryComponent>();
     readAccess<RendererComponent>();
 }
 RendererSystem::~RendererSystem(){}
@@ -211,30 +209,6 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     commandList->close();
     Core::ICommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1);
-}
-
-void RendererSystem::registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
-    if(FindIf(
-        m_runtimeGeometryProviders.begin(),
-        m_runtimeGeometryProviders.end(),
-        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
-    ) != m_runtimeGeometryProviders.end())
-        return;
-
-    m_runtimeGeometryProviders.push_back(&provider);
-}
-
-void RendererSystem::unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
-    const auto found = FindIf(
-        m_runtimeGeometryProviders.begin(),
-        m_runtimeGeometryProviders.end(),
-        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
-    );
-    if(found == m_runtimeGeometryProviders.end())
-        return;
-
-    m_runtimeGeometryProviders.erase(found);
-    pruneRuntimeGeometryResources();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

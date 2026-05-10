@@ -317,23 +317,6 @@ bool RendererSystem::hasTransparentRenderers(){
         if(materialIsTransparent(renderer.material))
             return true;
     }
-
-    bool runtimeTransparent = false;
-    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
-        if(!provider)
-            continue;
-
-        provider->forEachRuntimeGeometry(
-            [&](const RuntimeGeometryDesc& desc){
-                if(runtimeTransparent || !desc.valid())
-                    return;
-                runtimeTransparent = materialIsTransparent(desc.material);
-            }
-        );
-        if(runtimeTransparent)
-            return true;
-    }
-
     return false;
 }
 

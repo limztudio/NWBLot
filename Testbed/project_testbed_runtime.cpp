@@ -741,8 +741,10 @@ static void UpdateProxySkeletonPose(
     transform.position = position;
     transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
-    auto& renderer = entity.addComponent<NWB::Impl::DeformableRendererComponent>();
-    renderer.deformableGeometry = geometry;
+    auto& deformableRenderer = entity.addComponent<NWB::Impl::DeformableRendererComponent>();
+    deformableRenderer.deformableGeometry = geometry;
+
+    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
     renderer.material = material;
 
     if(!animated)
@@ -1259,9 +1261,7 @@ bool ProjectTestbed::selectSurfaceEditTarget(const usize targetIndex){
     clearSurfaceEditPreview();
     clearPendingSurfaceEditAccessory();
     hideSurfaceEditAccessoriesForTarget(m_surfaceEditTargetEntity);
-    auto* oldRenderer =
-        m_world->tryGetComponent<NWB::Impl::DeformableRendererComponent>(m_surfaceEditTargetEntity)
-    ;
+    auto* oldRenderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(m_surfaceEditTargetEntity);
     if(oldRenderer)
         oldRenderer->visible = false;
 
@@ -1443,9 +1443,7 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
                 renderer.visible = false;
                 return;
             }
-            const auto* targetRenderer =
-                m_world->tryGetComponent<NWB::Impl::DeformableRendererComponent>(attachment.targetEntity)
-            ;
+            const auto* targetRenderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(attachment.targetEntity);
             if(!targetRenderer || !targetRenderer->visible){
                 renderer.visible = false;
                 return;
@@ -1906,9 +1904,7 @@ void ProjectTestbed::queueSurfaceEditReplay(){
         replayPosition = oldTransform->position;
         replayScale = oldTransform->scale.x;
     }
-    auto* oldRenderer =
-        m_world->tryGetComponent<NWB::Impl::DeformableRendererComponent>(m_surfaceEditTargetEntity)
-    ;
+    auto* oldRenderer = m_world->tryGetComponent<NWB::Impl::RendererComponent>(m_surfaceEditTargetEntity);
     if(oldRenderer)
         oldRenderer->visible = false;
 

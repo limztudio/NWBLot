@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 GeometrySystem::GeometrySystem(Core::Alloc::CustomArena& arena, Core::ECS::World& world)
     : Core::ECS::ISystem(arena)
     , m_world(world)
+    , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))
 {
     readAccess<GeometryComponent>();
 }
@@ -48,6 +49,66 @@ bool GeometrySystem::resolveGeometry(
 
     outGeometry = geometry->geometry;
     return true;
+}
+
+bool GeometrySystem::resolveRenderableGeometry(
+    const Core::ECS::EntityID entity,
+    RenderableGeometryDesc& outGeometry
+)const{
+    outGeometry = RenderableGeometryDesc{};
+
+    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
+        if(!provider)
+            continue;
+
+        RuntimeGeometryDesc runtimeGeometry;
+        if(provider->resolveRuntimeGeometry(entity, runtimeGeometry) && runtimeGeometry.valid()){
+            outGeometry.runtimeGeometry = runtimeGeometry;
+            outGeometry.runtime = true;
+            return true;
+        }
+    }
+
+    Core::Assets::AssetRef<Geometry> geometry;
+    if(!resolveGeometry(entity, geometry))
+        return false;
+
+    outGeometry.geometry = geometry;
+    return outGeometry.valid();
+}
+
+bool GeometrySystem::containsRuntimeGeometry(const Name& geometryKey, const u64 version)const{
+    if(!geometryKey)
+        return false;
+
+    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
+        if(provider && provider->containsRuntimeGeometry(geometryKey, version))
+            return true;
+    }
+    return false;
+}
+
+void GeometrySystem::registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
+    if(FindIf(
+        m_runtimeGeometryProviders.begin(),
+        m_runtimeGeometryProviders.end(),
+        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
+    ) != m_runtimeGeometryProviders.end())
+        return;
+
+    m_runtimeGeometryProviders.push_back(&provider);
+}
+
+void GeometrySystem::unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
+    const auto found = FindIf(
+        m_runtimeGeometryProviders.begin(),
+        m_runtimeGeometryProviders.end(),
+        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
+    );
+    if(found == m_runtimeGeometryProviders.end())
+        return;
+
+    m_runtimeGeometryProviders.erase(found);
 }
 
 

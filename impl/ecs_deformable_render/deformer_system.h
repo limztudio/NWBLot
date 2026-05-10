@@ -92,6 +92,7 @@ public:
 
     virtual usize runtimeGeometryCandidateCount()override;
     virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor)override;
+    virtual bool resolveRuntimeGeometry(Core::ECS::EntityID entity, RuntimeGeometryDesc& outGeometry)override;
     virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version)override;
 
     [[nodiscard]] virtual RuntimeMeshHandle deformableRuntimeMeshHandle(Core::ECS::EntityID entity)const override;

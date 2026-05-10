@@ -8,6 +8,7 @@
 #include <core/ecs/world.h>
 #include <core/geometry/frame_math.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
+#include <impl/ecs_render/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -919,7 +920,8 @@ bool RaycastVisibleDeformableRenderers(
 
     world.view<DeformableRendererComponent>().each(
         [&](Core::ECS::EntityID entity, DeformableRendererComponent& renderer){
-            if(!renderer.visible || !renderer.runtimeMesh.valid())
+            const RendererComponent* renderComponent = world.tryGetComponent<RendererComponent>(entity);
+            if(!renderComponent || !renderComponent->visible || !renderer.runtimeMesh.valid())
                 return;
 
             const DeformableRuntimeMeshInstance* instance =

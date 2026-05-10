@@ -83,7 +83,7 @@ static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public IRuntimeGeometryRegistry{
+class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
     using MaterialParameterVectorAllocator = Core::Alloc::CustomAllocator<MaterialParameterGpuData>;
     using MaterialParameterVector = Vector<MaterialParameterGpuData, MaterialParameterVectorAllocator>;
@@ -170,9 +170,6 @@ private:
     using MaterialSurfaceInfoMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, MaterialSurfaceInfo>>;
     using MaterialPipelineMapAllocator = Core::Alloc::CustomAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>>;
     using LoggedMaterialPathMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, RenderPath::Enum>>;
-    using RuntimeGeometryProviderAllocator = Core::Alloc::CustomAllocator<IRuntimeGeometryProvider*>;
-
-
 public:
     struct AvboitFrameTargets{
         u32 fullWidth = 0;
@@ -310,11 +307,6 @@ public:
     virtual void render(Core::IFramebuffer* framebuffer)override;
 
 
-public:
-    virtual void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
-    virtual void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
-
-
 private:
     [[nodiscard]] bool createGeometryResources(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
     [[nodiscard]] bool createRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry);
@@ -427,7 +419,6 @@ private:
 
 private:
     HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>, GeometryResourcesMapAllocator> m_geometryMeshes;
-    Vector<IRuntimeGeometryProvider*, RuntimeGeometryProviderAllocator> m_runtimeGeometryProviders;
 
 
 private:

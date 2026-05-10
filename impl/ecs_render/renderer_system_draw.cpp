@@ -82,17 +82,6 @@ void RendererSystem::gatherMaterialPassDrawItems(
     auto rendererView = m_world.view<RendererComponent>();
     auto* geometrySystem = m_world.getSystem<NWB::Impl::GeometrySystem>();
     usize rendererCapacity = rendererView.candidateCount();
-    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
-        if(!provider)
-            continue;
-
-        const usize providerCandidateCount = provider->runtimeGeometryCandidateCount();
-        if(providerCandidateCount > Limit<usize>::s_Max - rendererCapacity){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry provider candidate count overflow"));
-            break;
-        }
-        rendererCapacity += providerCandidateCount;
-    }
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
@@ -236,37 +225,25 @@ void RendererSystem::gatherMaterialPassDrawItems(
             continue;
 
         if(!geometrySystem){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GeometrySystem is not registered; static renderers cannot resolve geometry"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GeometrySystem is not registered; renderers cannot resolve geometry"));
             break;
         }
 
-        Core::Assets::AssetRef<Geometry> geometryAsset;
-        if(!geometrySystem->resolveGeometry(entity, geometryAsset))
+        RenderableGeometryDesc resolvedGeometry;
+        if(!geometrySystem->resolveRenderableGeometry(entity, resolvedGeometry))
             continue;
 
         GeometryResources* geometry = nullptr;
-        if(!createGeometryResources(geometryAsset, geometry))
+        if(resolvedGeometry.runtime){
+            if(!createRuntimeGeometryResources(resolvedGeometry.runtimeGeometry, geometry))
+                continue;
+        }
+        else if(!createGeometryResources(resolvedGeometry.geometry, geometry)){
             continue;
+        }
+
         if(geometry)
             appendDrawForGeometry(entity, renderer.material, *geometry);
-    }
-
-    for(IRuntimeGeometryProvider* provider : m_runtimeGeometryProviders){
-        if(!provider)
-            continue;
-
-        provider->forEachRuntimeGeometry(
-            [&](const RuntimeGeometryDesc& desc){
-                if(!desc.valid())
-                    return;
-
-                GeometryResources* geometry = nullptr;
-                if(!createRuntimeGeometryResources(desc, geometry))
-                    return;
-                if(geometry)
-                    appendDrawForGeometry(desc.entity, desc.material, *geometry);
-            }
-        );
     }
 }
 

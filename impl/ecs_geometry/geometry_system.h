@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "runtime_geometry.h"
 
 #include <core/ecs/system.h>
 
@@ -37,7 +38,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GeometrySystem final : public Core::ECS::ISystem{
+class GeometrySystem final : public Core::ECS::ISystem, public IRuntimeGeometryRegistry{
+private:
+    using RuntimeGeometryProviderAllocator = Core::Alloc::CustomAllocator<IRuntimeGeometryProvider*>;
+
+
 public:
     GeometrySystem(Core::Alloc::CustomArena& arena, Core::ECS::World& world);
     virtual ~GeometrySystem()override = default;
@@ -50,10 +55,17 @@ public:
     [[nodiscard]] GeometryComponent* findGeometry(Core::ECS::EntityID entity);
     [[nodiscard]] const GeometryComponent* findGeometry(Core::ECS::EntityID entity)const;
     [[nodiscard]] bool resolveGeometry(Core::ECS::EntityID entity, Core::Assets::AssetRef<Geometry>& outGeometry)const;
+    [[nodiscard]] bool resolveRenderableGeometry(Core::ECS::EntityID entity, RenderableGeometryDesc& outGeometry)const;
+    [[nodiscard]] bool containsRuntimeGeometry(const Name& geometryKey, u64 version)const;
+
+public:
+    virtual void registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
+    virtual void unregisterRuntimeGeometryProvider(IRuntimeGeometryProvider& provider)override;
 
 
 private:
     Core::ECS::World& m_world;
+    Vector<IRuntimeGeometryProvider*, RuntimeGeometryProviderAllocator> m_runtimeGeometryProviders;
 };
 
 

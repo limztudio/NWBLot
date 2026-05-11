@@ -380,25 +380,42 @@ float nwbDeformerDisplacementTextureCoordStep(const int size){
     return size > 1 ? 1.0 / float(size - 1) : 1.0;
 }
 
-void nwbDeformerApplyScalarTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0){
+struct NwbDeformerDisplacementTextureSampling{
+    vec2 uv;
+    float du;
+    float dv;
+};
+
+bool nwbDeformerPrepareDisplacementTextureSampling(
+    const vec2 uv0,
+    out NwbDeformerDisplacementTextureSampling outSampling
+){
     const ivec2 textureExtent = textureSize(
         sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler),
         0
     );
     if(textureExtent.x <= 1 && textureExtent.y <= 1)
+        return false;
+
+    outSampling.uv = nwbDeformerDisplacementTextureCoord(uv0);
+    outSampling.du = nwbDeformerDisplacementTextureCoordStep(textureExtent.x);
+    outSampling.dv = nwbDeformerDisplacementTextureCoordStep(textureExtent.y);
+    return true;
+}
+
+void nwbDeformerApplyScalarTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0){
+    NwbDeformerDisplacementTextureSampling sampling;
+    if(!nwbDeformerPrepareDisplacementTextureSampling(uv0, sampling))
         return;
 
-    const vec2 uv = nwbDeformerDisplacementTextureCoord(uv0);
-    const float du = nwbDeformerDisplacementTextureCoordStep(textureExtent.x);
-    const float dv = nwbDeformerDisplacementTextureCoordStep(textureExtent.y);
     const float amplitude = nwbDeformerDisplacementAmplitude();
     const float heightU =
-        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(du, 0.0)).x
-        - nwbDeformerSampleDisplacementTextureCoord(uv - vec2(du, 0.0)).x
+        nwbDeformerSampleDisplacementTextureCoord(sampling.uv + vec2(sampling.du, 0.0)).x
+        - nwbDeformerSampleDisplacementTextureCoord(sampling.uv - vec2(sampling.du, 0.0)).x
     ;
     const float heightV =
-        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(0.0, dv)).x
-        - nwbDeformerSampleDisplacementTextureCoord(uv - vec2(0.0, dv)).x
+        nwbDeformerSampleDisplacementTextureCoord(sampling.uv + vec2(0.0, sampling.dv)).x
+        - nwbDeformerSampleDisplacementTextureCoord(sampling.uv - vec2(0.0, sampling.dv)).x
     ;
     const vec3 bitangent = nwbDeformerSafeNormalize(
         cross(normal, tangent.xyz),
@@ -429,36 +446,30 @@ vec3 nwbDeformerVectorTextureOffsetToWorld(const vec3 sampleValue, const uint mo
 }
 
 void nwbDeformerApplyVectorTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0, const uint mode){
-    const ivec2 textureExtent = textureSize(
-        sampler2D(g_NwbDeformerDisplacementTexture, g_NwbDeformerDisplacementSampler),
-        0
-    );
-    if(textureExtent.x <= 1 && textureExtent.y <= 1)
+    NwbDeformerDisplacementTextureSampling sampling;
+    if(!nwbDeformerPrepareDisplacementTextureSampling(uv0, sampling))
         return;
 
-    const vec2 uv = nwbDeformerDisplacementTextureCoord(uv0);
-    const float du = nwbDeformerDisplacementTextureCoordStep(textureExtent.x);
-    const float dv = nwbDeformerDisplacementTextureCoordStep(textureExtent.y);
     const vec3 right = nwbDeformerVectorTextureOffsetToWorld(
-        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(du, 0.0)).xyz,
+        nwbDeformerSampleDisplacementTextureCoord(sampling.uv + vec2(sampling.du, 0.0)).xyz,
         mode,
         normal,
         tangent
     );
     const vec3 left = nwbDeformerVectorTextureOffsetToWorld(
-        nwbDeformerSampleDisplacementTextureCoord(uv - vec2(du, 0.0)).xyz,
+        nwbDeformerSampleDisplacementTextureCoord(sampling.uv - vec2(sampling.du, 0.0)).xyz,
         mode,
         normal,
         tangent
     );
     const vec3 up = nwbDeformerVectorTextureOffsetToWorld(
-        nwbDeformerSampleDisplacementTextureCoord(uv + vec2(0.0, dv)).xyz,
+        nwbDeformerSampleDisplacementTextureCoord(sampling.uv + vec2(0.0, sampling.dv)).xyz,
         mode,
         normal,
         tangent
     );
     const vec3 down = nwbDeformerVectorTextureOffsetToWorld(
-        nwbDeformerSampleDisplacementTextureCoord(uv - vec2(0.0, dv)).xyz,
+        nwbDeformerSampleDisplacementTextureCoord(sampling.uv - vec2(0.0, sampling.dv)).xyz,
         mode,
         normal,
         tangent

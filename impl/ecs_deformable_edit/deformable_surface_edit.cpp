@@ -1534,6 +1534,30 @@ template<typename EdgeVector, typename VertexVector>
     return influence;
 }
 
+template<usize sourceCount, typename SourceFn>
+[[nodiscard]] bool ForEachActiveBlendSource(
+    const u32 (&sourceVertices)[sourceCount],
+    const f32 (&sourceWeights)[sourceCount],
+    const usize vertexCount,
+    SourceFn sourceFn
+){
+    static_assert(sourceCount > 0u, "attribute transfer requires source samples");
+    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
+        const f32 sourceWeight = sourceWeights[sourceIndex];
+        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
+            return false;
+        if(!DeformableValidation::ActiveWeight(sourceWeight))
+            continue;
+
+        const u32 vertex = sourceVertices[sourceIndex];
+        if(vertex >= vertexCount)
+            return false;
+        if(!sourceFn(vertex, sourceWeight))
+            return false;
+    }
+    return true;
+}
+
 template<usize sourceCount>
 [[nodiscard]] bool BuildBlendedSkinInfluence(
     const Vector<SkinInfluence4>& skin,
@@ -1548,25 +1572,22 @@ template<usize sourceCount>
 
     Core::Geometry::AttributeTransferSkinBlendSource sources[sourceCount] = {};
     usize activeSourceCount = 0u;
-    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
-        const f32 sourceWeight = sourceWeights[sourceIndex];
-        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
-            return false;
-        if(!DeformableValidation::ActiveWeight(sourceWeight))
-            continue;
+    if(!ForEachActiveBlendSource(
+        sourceVertices,
+        sourceWeights,
+        skin.size(),
+        [&](const u32 vertex, const f32 sourceWeight){
+            const SkinInfluence4& sourceSkin = skin[vertex];
+            if(!DeformableValidation::ValidSkinInfluence(sourceSkin))
+                return false;
 
-        const u32 vertex = sourceVertices[sourceIndex];
-        if(vertex >= skin.size())
-            return false;
-
-        const SkinInfluence4& sourceSkin = skin[vertex];
-        if(!DeformableValidation::ValidSkinInfluence(sourceSkin))
-            return false;
-
-        sources[activeSourceCount].influence = ToAttributeTransferSkinInfluence(sourceSkin);
-        sources[activeSourceCount].weight = sourceWeight;
-        ++activeSourceCount;
-    }
+            sources[activeSourceCount].influence = ToAttributeTransferSkinInfluence(sourceSkin);
+            sources[activeSourceCount].weight = sourceWeight;
+            ++activeSourceCount;
+            return true;
+        }
+    ))
+        return false;
 
     Core::Geometry::AttributeTransferSkinInfluence4 blendedSkin;
     if(!Core::Geometry::BlendSkinInfluence4(sources, activeSourceCount, blendedSkin))
@@ -1588,22 +1609,19 @@ template<usize sourceCount>
 
     Core::Geometry::AttributeTransferFloat4BlendSource sources[sourceCount] = {};
     usize activeSourceCount = 0u;
-    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
-        const f32 sourceWeight = sourceWeights[sourceIndex];
-        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
-            return false;
-        if(!DeformableValidation::ActiveWeight(sourceWeight))
-            continue;
-
-        const u32 vertex = sourceVertices[sourceIndex];
-        if(vertex >= vertices.size())
-            return false;
-
-        const Float4U& sourceColor = vertices[vertex].color0;
-        sources[activeSourceCount].value = sourceColor;
-        sources[activeSourceCount].weight = sourceWeight;
-        ++activeSourceCount;
-    }
+    if(!ForEachActiveBlendSource(
+        sourceVertices,
+        sourceWeights,
+        vertices.size(),
+        [&](const u32 vertex, const f32 sourceWeight){
+            const Float4U& sourceColor = vertices[vertex].color0;
+            sources[activeSourceCount].value = sourceColor;
+            sources[activeSourceCount].weight = sourceWeight;
+            ++activeSourceCount;
+            return true;
+        }
+    ))
+        return false;
 
     return Core::Geometry::BlendFloat4(sources, activeSourceCount, outColor);
 }
@@ -1621,27 +1639,22 @@ template<usize sourceCount>
     f32 u = 0.0f;
     f32 v = 0.0f;
     f32 weightSum = 0.0f;
-    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
-        const f32 sourceWeight = sourceWeights[sourceIndex];
-        if(!IsFinite(sourceWeight) || sourceWeight < 0.0f)
-            return false;
-        if(!DeformableValidation::ActiveWeight(sourceWeight))
-            continue;
+    if(!ForEachActiveBlendSource(
+        sourceVertices,
+        sourceWeights,
+        vertices.size(),
+        [&](const u32 vertex, const f32 sourceWeight){
+            const Float2U& sourceUv0 = vertices[vertex].uv0;
+            if(!IsFinite(sourceUv0.x) || !IsFinite(sourceUv0.y))
+                return false;
 
-        const u32 vertex = sourceVertices[sourceIndex];
-        if(vertex >= vertices.size())
-            return false;
-
-        const Float2U& sourceUv0 = vertices[vertex].uv0;
-        if(!IsFinite(sourceUv0.x) || !IsFinite(sourceUv0.y))
-            return false;
-
-        u += sourceUv0.x * sourceWeight;
-        v += sourceUv0.y * sourceWeight;
-        weightSum += sourceWeight;
-        if(!IsFinite(u) || !IsFinite(v) || !IsFinite(weightSum))
-            return false;
-    }
+            u += sourceUv0.x * sourceWeight;
+            v += sourceUv0.y * sourceWeight;
+            weightSum += sourceWeight;
+            return IsFinite(u) && IsFinite(v) && IsFinite(weightSum);
+        }
+    ))
+        return false;
 
     if(!DeformableValidation::ActiveWeight(weightSum))
         return false;

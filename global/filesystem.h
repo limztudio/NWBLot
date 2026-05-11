@@ -259,12 +259,20 @@ struct StagedDirectoryPaths{
 }
 
 
-[[nodiscard]] inline bool ReadTextFile(const Path& path, AString& outText){
-    outText.clear();
+namespace GlobalFilesystemDetail{
 
-    ErrorCode errorCode;
-    const u64 fileSize = FileSize(path, errorCode);
-    if(errorCode)
+
+template<typename Container>
+[[nodiscard]] inline char* MutableReadBuffer(Container& outData)noexcept{
+    return reinterpret_cast<char*>(outData.data());
+}
+
+template<typename Container>
+[[nodiscard]] inline bool ReadWholeBinaryFile(const Path& path, Container& outData, ErrorCode& outError){
+    outData.clear();
+
+    const u64 fileSize = FileSize(path, outError);
+    if(outError)
         return false;
 
     if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
@@ -276,19 +284,28 @@ struct StagedDirectoryPaths{
     if(!stream.is_open())
         return false;
 
-    outText.resize(static_cast<usize>(fileSize));
+    outData.resize(static_cast<usize>(fileSize));
     if(fileSize == 0)
         return true;
 
-    stream.read(outText.data(), static_cast<GlobalFilesystemDetail::StreamSize>(fileSize));
+    stream.read(MutableReadBuffer(outData), static_cast<GlobalFilesystemDetail::StreamSize>(fileSize));
     if(stream.good())
         return true;
 
     if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize))
         return true;
 
-    outText.clear();
+    outData.clear();
     return false;
+}
+
+
+};
+
+
+[[nodiscard]] inline bool ReadTextFile(const Path& path, AString& outText){
+    ErrorCode errorCode;
+    return GlobalFilesystemDetail::ReadWholeBinaryFile(path, outText, errorCode);
 }
 
 [[nodiscard]] inline bool WriteTextFile(const Path& path, const AStringView content){
@@ -309,34 +326,7 @@ struct StagedDirectoryPaths{
 
 template<typename Container>
 [[nodiscard]] inline bool ReadBinaryFile(const Path& path, Container& outBytes, ErrorCode& outError){
-    outBytes.clear();
-
-    const u64 fileSize = FileSize(path, outError);
-    if(outError)
-        return false;
-
-    if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(fileSize))
-        return false;
-
-    GlobalFilesystemDetail::InputFileStream stream(path, GlobalFilesystemDetail::InputFileStream::binary);
-    if(!stream.is_open())
-        return false;
-
-    outBytes.resize(static_cast<usize>(fileSize));
-    if(fileSize == 0)
-        return true;
-
-    stream.read(reinterpret_cast<char*>(outBytes.data()), static_cast<GlobalFilesystemDetail::StreamSize>(fileSize));
-    if(stream.good())
-        return true;
-
-    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize))
-        return true;
-
-    outBytes.clear();
-    return false;
+    return GlobalFilesystemDetail::ReadWholeBinaryFile(path, outBytes, outError);
 }
 
 template<typename Container>

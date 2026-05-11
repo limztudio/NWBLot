@@ -210,7 +210,7 @@ static bool ParseMetadataFiniteF32Value(
 }
 
 template<usize ComponentCount>
-static bool ParseMetadataF32Tuple(
+static bool ParseMetadataF32TupleWithLabel(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const tchar* metaKind,
@@ -241,6 +241,17 @@ static bool ParseMetadataF32Tuple(
 }
 
 template<usize ComponentCount>
+static bool ParseMetadataF32Tuple(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& value,
+    const tchar* metaKind,
+    const AStringView label,
+    f32 (&outValues)[ComponentCount]
+){
+    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues);
+}
+
+template<usize ComponentCount>
 static bool ParseMetadataF32TupleListElement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
@@ -249,29 +260,8 @@ static bool ParseMetadataF32TupleListElement(
     const usize elementIndex,
     f32 (&outValues)[ComponentCount]
 ){
-    if(!value.isList() || value.asList().size() != ComponentCount){
-        const AString label = MakeIndexedLabel(fieldName, elementIndex);
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-            , ComponentCount
-        );
-        return false;
-    }
-
-    const auto& list = value.asList();
-    for(usize i = 0; i < ComponentCount; ++i){
-        const MetadataF32ValueFailure::Enum failure = ValidateMetadataFiniteF32Value(list[i], outValues[i]);
-        if(failure == MetadataF32ValueFailure::None)
-            continue;
-
-        const AString label = MakeIndexedLabel(fieldName, elementIndex);
-        const AString componentLabel = MakeIndexedLabel(label, i);
-        LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
-        return false;
-    }
-    return true;
+    const AString label = MakeIndexedLabel(fieldName, elementIndex);
+    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues);
 }
 
 template<typename ElementT, usize ComponentCount, typename ElementVectorT>

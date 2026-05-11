@@ -362,20 +362,51 @@ template<typename PreparedJointPaletteVector>
     return ValidateDisplacementTexture(displacement, outTexture);
 }
 
+struct DisplacementTextureNormalSampling{
+    Float2U uv = Float2U(0.0f, 0.0f);
+    f32 du = 0.0f;
+    f32 dv = 0.0f;
+};
+
+[[nodiscard]] bool PrepareDisplacementTextureNormalSampling(
+    const DeformableDisplacement& displacement,
+    const DeformableDisplacementTexture& texture,
+    const Float2U uv0,
+    DisplacementTextureNormalSampling& outSampling
+){
+    if(texture.width() <= 1u && texture.height() <= 1u)
+        return false;
+
+    outSampling.uv = DisplacementTextureCoord(displacement, uv0);
+    outSampling.du = DisplacementTextureCoordStep(texture.width());
+    outSampling.dv = DisplacementTextureCoordStep(texture.height());
+    return true;
+}
+
 void ApplyScalarTextureNormal(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
     DeformableVertexRest& vertex){
-    if(texture.width() <= 1u && texture.height() <= 1u)
+    DisplacementTextureNormalSampling sampling;
+    if(!PrepareDisplacementTextureNormalSampling(displacement, texture, vertex.uv0, sampling))
         return;
 
-    const Float2U uv = DisplacementTextureCoord(displacement, vertex.uv0);
-    const f32 du = DisplacementTextureCoordStep(texture.width());
-    const f32 dv = DisplacementTextureCoordStep(texture.height());
-    const Float4U right = SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x + du), uv.y));
-    const Float4U left = SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x - du), uv.y));
-    const Float4U up = SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y + dv)));
-    const Float4U down = SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y - dv)));
+    const Float4U right = SampleDisplacementTextureCoord(
+        texture,
+        Float2U(Saturate(sampling.uv.x + sampling.du), sampling.uv.y)
+    );
+    const Float4U left = SampleDisplacementTextureCoord(
+        texture,
+        Float2U(Saturate(sampling.uv.x - sampling.du), sampling.uv.y)
+    );
+    const Float4U up = SampleDisplacementTextureCoord(
+        texture,
+        Float2U(sampling.uv.x, Saturate(sampling.uv.y + sampling.dv))
+    );
+    const Float4U down = SampleDisplacementTextureCoord(
+        texture,
+        Float2U(sampling.uv.x, Saturate(sampling.uv.y - sampling.dv))
+    );
     const f32 heightU = (right.x - left.x) * displacement.amplitude * 0.5f;
     const f32 heightV = (up.x - down.x) * displacement.amplitude * 0.5f;
     if(!IsFinite(heightU) || !IsFinite(heightV))
@@ -403,40 +434,38 @@ void ApplyVectorTextureNormal(
     const DeformableDisplacement& displacement,
     const DeformableDisplacementTexture& texture,
     DeformableVertexRest& vertex){
-    if(texture.width() <= 1u && texture.height() <= 1u)
+    DisplacementTextureNormalSampling sampling;
+    if(!PrepareDisplacementTextureNormalSampling(displacement, texture, vertex.uv0, sampling))
         return;
 
-    const Float2U uv = DisplacementTextureCoord(displacement, vertex.uv0);
-    const f32 du = DisplacementTextureCoordStep(texture.width());
-    const f32 dv = DisplacementTextureCoordStep(texture.height());
     const SIMDVector normal = LoadRestVertexNormal(vertex);
     const SIMDVector tangentWithHandedness = LoadRestVertexTangent(vertex);
     const SIMDVector tangent = VectorSetW(tangentWithHandedness, 0.0f);
     const SIMDVector right = VectorTextureOffsetToFrame(
         displacement,
         displacement.mode,
-        SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x + du), uv.y)),
+        SampleDisplacementTextureCoord(texture, Float2U(Saturate(sampling.uv.x + sampling.du), sampling.uv.y)),
         normal,
         tangentWithHandedness
     );
     const SIMDVector left = VectorTextureOffsetToFrame(
         displacement,
         displacement.mode,
-        SampleDisplacementTextureCoord(texture, Float2U(Saturate(uv.x - du), uv.y)),
+        SampleDisplacementTextureCoord(texture, Float2U(Saturate(sampling.uv.x - sampling.du), sampling.uv.y)),
         normal,
         tangentWithHandedness
     );
     const SIMDVector up = VectorTextureOffsetToFrame(
         displacement,
         displacement.mode,
-        SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y + dv))),
+        SampleDisplacementTextureCoord(texture, Float2U(sampling.uv.x, Saturate(sampling.uv.y + sampling.dv))),
         normal,
         tangentWithHandedness
     );
     const SIMDVector down = VectorTextureOffsetToFrame(
         displacement,
         displacement.mode,
-        SampleDisplacementTextureCoord(texture, Float2U(uv.x, Saturate(uv.y - dv))),
+        SampleDisplacementTextureCoord(texture, Float2U(sampling.uv.x, Saturate(sampling.uv.y - sampling.dv))),
         normal,
         tangentWithHandedness
     );

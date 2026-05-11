@@ -79,6 +79,26 @@ static bool NearlyEqualBounds(const MeshletBounds& lhs, const MeshletBounds& rhs
     ;
 }
 
+static void CheckRemovedTriangleBoundaryBuildRejected(
+    TestContext& context,
+    const Vector<u32>& indices,
+    const Vector<u8>& removedTriangles,
+    Vector<MeshTopologyEdge>& boundaryEdges
+){
+    u32 removedTriangleCount = 7u;
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
+            indices,
+            removedTriangles,
+            boundaryEdges,
+            &removedTriangleCount
+        )
+    );
+    NWB_GEOMETRY_TEST_CHECK(context, boundaryEdges.empty());
+    NWB_GEOMETRY_TEST_CHECK(context, removedTriangleCount == 0u);
+}
+
 static void TestGeometryClassMetadata(TestContext& context){
     using namespace NWB::Core::Geometry;
 
@@ -612,34 +632,12 @@ static void TestRejectsMalformedRemovedTriangleBoundaries(TestContext& context){
     removedTriangles[0u] = 1u;
 
     Vector<MeshTopologyEdge> boundaryEdges;
-    u32 removedTriangleCount = 7u;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
-            indices,
-            removedTriangles,
-            boundaryEdges,
-            &removedTriangleCount
-        )
-    );
-    NWB_GEOMETRY_TEST_CHECK(context, boundaryEdges.empty());
-    NWB_GEOMETRY_TEST_CHECK(context, removedTriangleCount == 0u);
+    CheckRemovedTriangleBoundaryBuildRejected(context, indices, removedTriangles, boundaryEdges);
 
     indices = MakeTetrahedronIndices();
     removedTriangles.clear();
     removedTriangles.resize(4u, 1u);
-    removedTriangleCount = 7u;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::BuildBoundaryEdgesFromRemovedTriangles(
-            indices,
-            removedTriangles,
-            boundaryEdges,
-            &removedTriangleCount
-        )
-    );
-    NWB_GEOMETRY_TEST_CHECK(context, boundaryEdges.empty());
-    NWB_GEOMETRY_TEST_CHECK(context, removedTriangleCount == 0u);
+    CheckRemovedTriangleBoundaryBuildRejected(context, indices, removedTriangles, boundaryEdges);
 
     removedTriangles.resize(3u, 0u);
     NWB_GEOMETRY_TEST_CHECK(

@@ -20,9 +20,9 @@ bool RendererSystem::createDeferredLightingResources(){
     if(!m_sceneShadingBuffer){
         Core::BufferDesc sceneShadingBufferDesc;
         sceneShadingBufferDesc
-            .setByteSize(sizeof(__hidden_ecs_render::SceneShadingGpuData))
+            .setByteSize(sizeof(ECSRenderDetail::SceneShadingGpuData))
             .setIsConstantBuffer(true)
-            .setDebugName(__hidden_ecs_render::s_SceneShadingBufferName)
+            .setDebugName(ECSRenderDetail::s_SceneShadingBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         m_sceneShadingBuffer = m_graphics.createBuffer(sceneShadingBufferDesc);
@@ -49,7 +49,7 @@ bool RendererSystem::createDeferredLightingResources(){
         }
     }
 
-    if(!__hidden_ecs_render::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred lighting sampler")))
+    if(!ECSRenderDetail::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred lighting sampler")))
         return false;
 
     if(!loadDeferredCompositeVertexShader())
@@ -57,7 +57,7 @@ bool RendererSystem::createDeferredLightingResources(){
 
     if(!loadShader(
         m_deferredLightingPixelShader,
-        __hidden_ecs_render::s_DeferredLightingPixelShaderName,
+        ECSRenderDetail::s_DeferredLightingPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_DeferredLightingPS"
@@ -81,7 +81,7 @@ bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& target
     pipelineDesc
         .setVertexShader(m_deferredCompositeVertexShader)
         .setPixelShader(m_deferredLightingPixelShader)
-        .setRenderState(__hidden_ecs_render::BuildCompositeRenderState())
+        .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
         .addBindingLayout(m_deferredLightingBindingLayout)
     ;
 
@@ -99,8 +99,8 @@ bool RendererSystem::updateSceneShadingBuffer(Core::ICommandList& commandList, c
     if(!m_sceneShadingBuffer)
         return false;
 
-    const __hidden_ecs_render::SceneShadingState sceneShadingState =
-        __hidden_ecs_render::ResolveSceneShadingState(m_world, fallbackAspectRatio)
+    const ECSRenderDetail::SceneShadingState sceneShadingState =
+        ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio)
     ;
 
     commandList.setBufferState(m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);

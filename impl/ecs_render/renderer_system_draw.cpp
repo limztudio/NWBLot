@@ -87,10 +87,10 @@ void RendererSystem::gatherMaterialPassDrawItems(
     instanceData.reserve(rendererCapacity);
     materialParameters.reserve(rendererCapacity);
 
-    using MaterialParameterBlockPair = Pair<Name, __hidden_ecs_render::MaterialParameterBlock>;
+    using MaterialParameterBlockPair = Pair<Name, ECSRenderDetail::MaterialParameterBlock>;
     using MaterialParameterBlockMap = HashMap<
         Name,
-        __hidden_ecs_render::MaterialParameterBlock,
+        ECSRenderDetail::MaterialParameterBlock,
         Hasher<Name>,
         EqualTo<Name>,
         Core::Alloc::ScratchAllocator<MaterialParameterBlockPair>
@@ -107,7 +107,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
     auto appendMaterialParameterBlock = [&](
         const MaterialSurfaceInfo& materialInfo,
-        __hidden_ecs_render::MaterialParameterBlock& outBlock
+        ECSRenderDetail::MaterialParameterBlock& outBlock
     ) -> bool{
         const auto foundBlock = materialParameterBlocks.find(materialInfo.materialName);
         if(foundBlock != materialParameterBlocks.end()){
@@ -132,7 +132,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         outBlock.count = static_cast<u32>(materialInfo.parameters.size());
         const usize requiredParameterCapacity = materialParameters.size() + materialInfo.parameters.size();
         if(requiredParameterCapacity > materialParameters.capacity())
-            materialParameters.reserve(__hidden_ecs_render::NextGrowingCapacity(
+            materialParameters.reserve(ECSRenderDetail::NextGrowingCapacity(
                 materialParameters.capacity(),
                 requiredParameterCapacity
             ));
@@ -177,12 +177,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 return Limit<u32>::s_Max;
             }
 
-            __hidden_ecs_render::MaterialParameterBlock parameterBlock;
+            ECSRenderDetail::MaterialParameterBlock parameterBlock;
             if(!appendMaterialParameterBlock(*materialInfo, parameterBlock))
                 return Limit<u32>::s_Max;
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            instanceData.push_back(__hidden_ecs_render::BuildInstanceGpuData(
+            instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(
                 transform,
                 parameterBlock.offset,
                 parameterBlock.count
@@ -258,7 +258,7 @@ bool RendererSystem::createMeshShaderResources(){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::TransparentDrawPushConstants)));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
     m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -280,7 +280,7 @@ bool RendererSystem::createComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_ecs_render::ShaderDrivenPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
         m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -293,7 +293,7 @@ bool RendererSystem::createComputeEmulationResources(){
     if(!m_emulationVertexShader){
         if(!loadShader(
             m_emulationVertexShader,
-            __hidden_ecs_render::s_MeshEmulationVertexShaderName,
+            ECSRenderDetail::s_MeshEmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
             "ECSRender_MeshEmulationVS"
@@ -307,42 +307,42 @@ bool RendererSystem::createComputeEmulationResources(){
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(0)
-            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setName("POSITION")
         ;
         attributes[1]
             .setFormat(Core::Format::RGB32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 4u)
-            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setName("NORMAL")
         ;
         attributes[2]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 8u)
-            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setName("TANGENT")
         ;
         attributes[3]
             .setFormat(Core::Format::RG32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 12u)
-            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setName("TEXCOORD")
         ;
         attributes[4]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 16u)
-            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setName("COLOR")
         ;
         attributes[5]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0)
             .setOffset(sizeof(f32) * 20u)
-            .setElementStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setName("POSITION1")
         ;
 
@@ -401,7 +401,7 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(m_instanceBuffer && m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = __hidden_ecs_render::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
         return false;
@@ -411,7 +411,7 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
-        .setDebugName(__hidden_ecs_render::s_InstanceBufferName)
+        .setDebugName(ECSRenderDetail::s_InstanceBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
@@ -435,7 +435,7 @@ bool RendererSystem::reserveMaterialParameterBufferCapacity(const usize paramete
     if(m_materialParameterBuffer && m_materialParameterBufferCapacity >= requiredCount)
         return true;
 
-    const usize capacity = __hidden_ecs_render::NextGrowingCapacity(m_materialParameterBufferCapacity, requiredCount);
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_materialParameterBufferCapacity, requiredCount);
     if(capacity > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer capacity overflows addressable memory"));
         return false;
@@ -445,7 +445,7 @@ bool RendererSystem::reserveMaterialParameterBufferCapacity(const usize paramete
     materialParameterBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(MaterialParameterGpuData)))
         .setStructStride(sizeof(MaterialParameterGpuData))
-        .setDebugName(__hidden_ecs_render::s_MaterialParameterBufferName)
+        .setDebugName(ECSRenderDetail::s_MaterialParameterBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle materialParameterBuffer = m_graphics.createBuffer(materialParameterBufferDesc);
@@ -464,9 +464,9 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
     if(!m_meshViewBuffer){
         Core::BufferDesc meshViewBufferDesc;
         meshViewBufferDesc
-            .setByteSize(sizeof(__hidden_ecs_render::MeshViewGpuData))
+            .setByteSize(sizeof(ECSRenderDetail::MeshViewGpuData))
             .setIsConstantBuffer(true)
-            .setDebugName(__hidden_ecs_render::s_MeshViewBufferName)
+            .setDebugName(ECSRenderDetail::s_MeshViewBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         Core::BufferHandle meshViewBuffer = m_graphics.createBuffer(meshViewBufferDesc);
@@ -479,8 +479,8 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
         destroyGeometryBindingSets();
     }
 
-    const __hidden_ecs_render::MeshViewState viewState =
-        __hidden_ecs_render::ResolveMeshViewState(m_world, fallbackAspectRatio)
+    const ECSRenderDetail::MeshViewState viewState =
+        ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio)
     ;
 
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
@@ -586,8 +586,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.setMeshletState(meshletState);
 
         if(!MaterialPipelinePassUsesRendererAvboit(context.pass)){
-            const __hidden_ecs_render::ShaderDrivenPushConstants pushConstants =
-                __hidden_ecs_render::BuildShaderDrivenPushConstants(
+            const ECSRenderDetail::ShaderDrivenPushConstants pushConstants =
+                ECSRenderDetail::BuildShaderDrivenPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
@@ -596,8 +596,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
             context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         }
         else{
-            const __hidden_ecs_render::TransparentDrawPushConstants pushConstants =
-                __hidden_ecs_render::BuildTransparentDrawPushConstants(
+            const ECSRenderDetail::TransparentDrawPushConstants pushConstants =
+                ECSRenderDetail::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,
@@ -637,8 +637,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setComputeState(computeState);
 
-        const __hidden_ecs_render::ShaderDrivenPushConstants pushConstants =
-            __hidden_ecs_render::BuildShaderDrivenPushConstants(
+        const ECSRenderDetail::ShaderDrivenPushConstants pushConstants =
+            ECSRenderDetail::BuildShaderDrivenPushConstants(
                 geometry.triangleCount,
                 drawItem.instanceIndex,
                 geometry.sourceVertexLayout,
@@ -672,8 +672,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setGraphicsState(graphicsState);
 
         if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
-            const __hidden_ecs_render::TransparentDrawPushConstants transparentPushConstants =
-                __hidden_ecs_render::BuildTransparentDrawPushConstants(
+            const ECSRenderDetail::TransparentDrawPushConstants transparentPushConstants =
+                ECSRenderDetail::BuildTransparentDrawPushConstants(
                     geometry.triangleCount,
                     drawItem.instanceIndex,
                     geometry.sourceVertexLayout,

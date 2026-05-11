@@ -70,7 +70,7 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
     }
 
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, __hidden_ecs_render::s_TrianglesPerWorkgroup);
+    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, ECSRenderDetail::s_TrianglesPerWorkgroup);
     if(createdGeometry.dispatchGroupCount == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"), StringConvert(geometryPath.c_str()));
         return false;
@@ -86,7 +86,7 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
     Core::Graphics::BufferSetupDesc shaderVertexSetup;
     shaderVertexSetup.bufferDesc
         .setByteSize(static_cast<u64>(geometry.vertices().size() * sizeof(GeometryVertex)))
-        .setStructStride(__hidden_ecs_render::s_StaticGeometryVertexStride)
+        .setStructStride(ECSRenderDetail::s_StaticGeometryVertexStride)
         .setDebugName(shaderVertexBufferName)
     ;
     shaderVertexSetup.data = geometry.vertices().data();
@@ -154,7 +154,7 @@ bool RendererSystem::createRuntimeGeometryResources(const RuntimeGeometryDesc& d
     createdGeometry.shaderIndexBuffer = desc.shaderIndexBuffer;
     createdGeometry.indexCount = desc.indexCount;
     createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, __hidden_ecs_render::s_TrianglesPerWorkgroup);
+    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, ECSRenderDetail::s_TrianglesPerWorkgroup);
     createdGeometry.sourceVertexLayout = desc.sourceVertexLayout;
     createdGeometry.runtimeGeometry = true;
     createdGeometry.runtimeGeometryVersion = desc.version;
@@ -255,8 +255,8 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
 
         Core::BufferDesc emulationVertexBufferDesc;
         emulationVertexBufferDesc
-            .setByteSize(static_cast<u64>(geometry.indexCount) * __hidden_ecs_render::s_EmulatedVertexStride)
-            .setStructStride(__hidden_ecs_render::s_EmulatedVertexStride)
+            .setByteSize(static_cast<u64>(geometry.indexCount) * ECSRenderDetail::s_EmulatedVertexStride)
+            .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
             .setDebugName(emulationVertexBufferName)

@@ -40,7 +40,7 @@ bool RendererSystem::loadShader(
 bool RendererSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
         m_deferredCompositeVertexShader,
-        __hidden_ecs_render::s_DeferredCompositeVertexShaderName,
+        ECSRenderDetail::s_DeferredCompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,
         "ECSRender_DeferredCompositeVS"

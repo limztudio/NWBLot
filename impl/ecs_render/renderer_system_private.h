@@ -34,7 +34,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ecs_render{
+namespace ECSRenderDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -361,7 +361,7 @@ inline SceneShadingState ResolveSceneShadingState(Core::ECS::World& world, const
         );
     }
 
-    __hidden_ecs_render::ApplyDirectionalLightSceneShadingState(
+    ECSRenderDetail::ApplyDirectionalLightSceneShadingState(
         state,
         NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis)
     );

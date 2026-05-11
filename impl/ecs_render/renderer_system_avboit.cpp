@@ -85,7 +85,7 @@ Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& device){
@@ -98,7 +98,7 @@ Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& devi
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget | Core::FormatSupport::Blendable;
 
-    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device){
@@ -111,7 +111,7 @@ Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device
         | Core::FormatSupport::ShaderUavStore
     ;
 
-    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device){
@@ -121,7 +121,7 @@ Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device){
     };
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
-    return __hidden_ecs_render::SelectSupportedFormat(device, candidates, requiredSupport);
+    return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
 Core::RenderState BuildRendererAvboitVoxelRenderState(){
@@ -187,7 +187,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSyste
 bool RendererSystem::createAvboitResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
-    if(!__hidden_ecs_render::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
+    if(!ECSRenderDetail::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
         return false;
     if(!__hidden_renderer_avboit::CreateLinearClampSampler(*device, m_avboitLinearSampler, NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT")))
         return false;

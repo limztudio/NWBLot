@@ -21,11 +21,11 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
     }
 
     Core::IDevice* device = m_graphics.getDevice();
-    const Core::Format::Enum albedoFormat = __hidden_ecs_render::SelectGBufferAlbedoFormat(*device);
-    const Core::Format::Enum normalFormat = __hidden_ecs_render::SelectGBufferVectorFormat(*device);
-    const Core::Format::Enum worldPositionFormat = __hidden_ecs_render::SelectGBufferVectorFormat(*device);
-    const Core::Format::Enum opaqueColorFormat = __hidden_ecs_render::SelectGBufferAlbedoFormat(*device);
-    const Core::Format::Enum depthFormat = __hidden_ecs_render::SelectGBufferDepthFormat(*device);
+    const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(*device);
+    const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
+    const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
+    const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(*device);
+    const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(*device);
     const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(*device);
     const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(*device);
     const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(*device);
@@ -78,7 +78,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
         .setName("engine/deferred/gbuffer_albedo")
-        .setClearValue(__hidden_ecs_render::s_ClearColor)
+        .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
     createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
@@ -123,7 +123,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         .setFormat(createdTargets.opaqueColorFormat)
         .setInRenderTarget(true)
         .setName("engine/deferred/opaque_color")
-        .setClearValue(__hidden_ecs_render::s_ClearColor)
+        .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
     createdTargets.opaqueColor = m_graphics.createTexture(opaqueColorDesc);
     if(!createdTargets.opaqueColor){
@@ -147,10 +147,10 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
 
     Core::FramebufferDesc framebufferDesc;
     framebufferDesc
-        .addColorAttachment(createdTargets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources)
-        .addColorAttachment(createdTargets.normal.get(), __hidden_ecs_render::s_FramebufferSubresources)
-        .addColorAttachment(createdTargets.worldPosition.get(), __hidden_ecs_render::s_FramebufferSubresources)
-        .setDepthAttachment(createdTargets.depth.get(), __hidden_ecs_render::s_FramebufferSubresources)
+        .addColorAttachment(createdTargets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(createdTargets.normal.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(createdTargets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources)
     ;
     createdTargets.framebuffer = device->createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
@@ -159,7 +159,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
     }
 
     Core::FramebufferDesc opaqueLightingFramebufferDesc;
-    opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), __hidden_ecs_render::s_FramebufferSubresources);
+    opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources);
     createdTargets.opaqueLightingFramebuffer = device->createFramebuffer(opaqueLightingFramebufferDesc);
     if(!createdTargets.opaqueLightingFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting framebuffer"));
@@ -180,28 +180,28 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         0,
         createdTargets.albedo.get(),
         createdTargets.albedoFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         1,
         createdTargets.normal.get(),
         createdTargets.normalFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         2,
         createdTargets.worldPosition.get(),
         createdTargets.worldPositionFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         3,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(4, m_deferredSampler.get()));
@@ -217,21 +217,21 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         0,
         createdTargets.opaqueColor.get(),
         createdTargets.opaqueColorFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         1,
         createdTargets.avboit.accumColor.get(),
         createdTargets.avboit.accumColorFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         2,
         createdTargets.avboit.accumExtinction.get(),
         createdTargets.avboit.accumExtinctionFormat,
-        __hidden_ecs_render::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_deferredSampler.get()));
@@ -280,7 +280,7 @@ bool RendererSystem::createDeferredCompositeResources(){
         }
     }
 
-    if(!__hidden_ecs_render::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
+    if(!ECSRenderDetail::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
         return false;
 
     if(!loadDeferredCompositeVertexShader())
@@ -288,7 +288,7 @@ bool RendererSystem::createDeferredCompositeResources(){
 
     if(!loadShader(
         m_deferredCompositePixelShader,
-        __hidden_ecs_render::s_DeferredCompositePixelShaderName,
+        ECSRenderDetail::s_DeferredCompositePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_DeferredCompositePS"
@@ -313,7 +313,7 @@ bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* present
     pipelineDesc
         .setVertexShader(m_deferredCompositeVertexShader)
         .setPixelShader(m_deferredCompositePixelShader)
-        .setRenderState(__hidden_ecs_render::BuildCompositeRenderState())
+        .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
         .addBindingLayout(m_deferredCompositeBindingLayout)
     ;
 
@@ -329,47 +329,47 @@ bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* present
 
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo){
-        commandList.setTextureState(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.normal){
-        commandList.setTextureState(targets.normal.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.worldPosition){
-        commandList.setTextureState(targets.worldPosition.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.opaqueColor){
-        commandList.setTextureState(targets.opaqueColor.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     if(targets.depth){
-        commandList.setTextureState(targets.depth.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.commitBarriers();
 
     if(targets.albedo){
-        commandList.clearTextureFloat(targets.albedo.get(), __hidden_ecs_render::s_FramebufferSubresources, __hidden_ecs_render::s_ClearColor);
+        commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
     }
 
     if(targets.normal){
-        commandList.clearTextureFloat(targets.normal.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
+        commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
     }
 
     if(targets.worldPosition){
-        commandList.clearTextureFloat(targets.worldPosition.get(), __hidden_ecs_render::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
+        commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
     }
 
     if(targets.opaqueColor){
-        commandList.clearTextureFloat(targets.opaqueColor.get(), __hidden_ecs_render::s_FramebufferSubresources, __hidden_ecs_render::s_ClearColor);
+        commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
     }
 
     if(targets.depth){
         commandList.clearDepthStencilTexture(
             targets.depth.get(),
-            __hidden_ecs_render::s_FramebufferSubresources,
+            ECSRenderDetail::s_FramebufferSubresources,
             true,
             Core::s_DepthClearValue,
             false,

@@ -144,7 +144,7 @@ bool RendererSystem::createRendererPipeline(
     }
 
     Core::IDevice* device = m_graphics.getDevice();
-    const Core::RenderState renderState = __hidden_ecs_render::BuildRenderStateForPass(pass);
+    const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!hasMeshShader)

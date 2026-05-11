@@ -6,9 +6,10 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ui_system.h"
 )
 target_link_libraries(nwb_ecs_ui PUBLIC
-    nwb_assets_shader
+    nwb_assets
     nwb_ecs
     nwb_graphics
     nwb_input
     nwb::imgui
 )
+target_link_libraries(nwb_ecs_ui PRIVATE nwb_assets_shader)

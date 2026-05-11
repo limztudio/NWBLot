@@ -29,7 +29,6 @@ target_link_libraries(nwb_ecs_render PUBLIC
     nwb_graphics
     nwb_assets_geometry
     nwb_assets_material
-    nwb_assets_shader
 )
 target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_shader_loader nwb_geometry)
 

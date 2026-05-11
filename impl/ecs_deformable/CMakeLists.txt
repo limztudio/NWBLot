@@ -10,5 +10,5 @@ target_sources(nwb_ecs_deformable INTERFACE
 target_link_libraries(nwb_ecs_deformable INTERFACE
     nwb_ecs
     nwb_assets_geometry
-    nwb_assets_material
+    nwb_graphics
 )

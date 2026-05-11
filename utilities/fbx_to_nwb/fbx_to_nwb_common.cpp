@@ -57,6 +57,16 @@ AStringView GeometryKindText(const u32 geometryClass){
     return NWB::Core::Geometry::GeometryClassText(geometryClass);
 }
 
+AStringView SupportedGeometryKindText(){
+    return NWB::Core::Geometry::SupportedGeometryClassText();
+}
+
+AString GeometryKindErrorText(){
+    AString error = "NWB geometry type must be ";
+    error += SupportedGeometryKindText();
+    return error;
+}
+
 bool ParseNormalizedAssetKind(const AStringView value, u32& outGeometryClass){
     outGeometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
     return NWB::Core::Geometry::ParseGeometryClassText(value, outGeometryClass);
@@ -101,7 +111,7 @@ bool ValidateAssetKind(AString& inOutValue, AString& outError){
     if(ParseNormalizedAssetKind(inOutValue, geometryClass))
         return true;
 
-    outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";
+    outError = GeometryKindErrorText();
     return false;
 }
 

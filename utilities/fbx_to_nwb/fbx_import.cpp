@@ -449,7 +449,7 @@ bool BuildGeometry(
     UtilityVector<u32> triangleIndices;
     u32 geometryClass = 0u;
     if(!ParseAssetKind(options.assetKind, geometryClass)){
-        outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";
+        outError = GeometryKindErrorText();
         return false;
     }
     const bool wantsDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryClass);

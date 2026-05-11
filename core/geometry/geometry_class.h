@@ -31,17 +31,55 @@ namespace GeometryClass{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct GeometryClassInfo{
+    u32 geometryClass = GeometryClass::Invalid;
+    AStringView text;
+    bool usesSkinning = false;
+    bool allowsRuntimeDeform = false;
+};
+
+inline constexpr GeometryClassInfo s_GeometryClassInfos[] = {
+    { GeometryClass::Static, "static", false, false },
+    { GeometryClass::StaticDeform, "static_deform", false, true },
+    { GeometryClass::Skinned, "skinned", true, false },
+    { GeometryClass::SkinnedDeform, "skinned_deform", true, true },
+};
+
+[[nodiscard]] inline AStringView SupportedGeometryClassText(){
+    return "static, static_deform, skinned, or skinned_deform";
+}
+
+[[nodiscard]] inline AStringView SupportedDeformableGeometryClassText(){
+    return "static_deform, skinned, or skinned_deform";
+}
+
+[[nodiscard]] inline const GeometryClassInfo* FindGeometryClassInfo(const u32 geometryClass){
+    for(const GeometryClassInfo& info : s_GeometryClassInfos){
+        if(info.geometryClass == geometryClass)
+            return &info;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] inline const GeometryClassInfo* FindGeometryClassInfo(const AStringView text){
+    for(const GeometryClassInfo& info : s_GeometryClassInfos){
+        if(info.text == text)
+            return &info;
+    }
+    return nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool ValidGeometryClass(const u32 geometryClass){
-    return
-        geometryClass == GeometryClass::Static
-        || geometryClass == GeometryClass::StaticDeform
-        || geometryClass == GeometryClass::Skinned
-        || geometryClass == GeometryClass::SkinnedDeform
-    ;
+    return FindGeometryClassInfo(geometryClass) != nullptr;
 }
 
 [[nodiscard]] inline bool GeometryClassUsesSkinning(const u32 geometryClass){
-    return geometryClass == GeometryClass::Skinned || geometryClass == GeometryClass::SkinnedDeform;
+    const GeometryClassInfo* info = FindGeometryClassInfo(geometryClass);
+    return info && info->usesSkinning;
 }
 
 [[nodiscard]] inline bool GeometryClassMatchesSkinPayload(const u32 geometryClass, const bool hasSkin){
@@ -49,7 +87,8 @@ namespace GeometryClass{
 }
 
 [[nodiscard]] inline bool GeometryClassAllowsRuntimeDeform(const u32 geometryClass){
-    return geometryClass == GeometryClass::StaticDeform || geometryClass == GeometryClass::SkinnedDeform;
+    const GeometryClassInfo* info = FindGeometryClassInfo(geometryClass);
+    return info && info->allowsRuntimeDeform;
 }
 
 [[nodiscard]] inline bool GeometryClassAcceptsRuntimeDeformPayload(const u32 geometryClass, const bool hasPayload){
@@ -61,40 +100,18 @@ namespace GeometryClass{
 }
 
 [[nodiscard]] inline AStringView GeometryClassText(const u32 geometryClass){
-    switch(geometryClass){
-    case GeometryClass::Static:
-        return "static";
-    case GeometryClass::StaticDeform:
-        return "static_deform";
-    case GeometryClass::Skinned:
-        return "skinned";
-    case GeometryClass::SkinnedDeform:
-        return "skinned_deform";
-    case GeometryClass::Invalid:
+    const GeometryClassInfo* info = FindGeometryClassInfo(geometryClass);
+    if(info)
+        return info->text;
+    if(geometryClass == GeometryClass::Invalid)
         return "invalid";
-    default:
-        return "unknown";
-    }
+    return "unknown";
 }
 
 [[nodiscard]] inline bool ParseGeometryClassText(const AStringView text, u32& outGeometryClass){
-    if(text == "static"){
-        outGeometryClass = GeometryClass::Static;
-        return true;
-    }
-    if(text == "static_deform"){
-        outGeometryClass = GeometryClass::StaticDeform;
-        return true;
-    }
-    if(text == "skinned"){
-        outGeometryClass = GeometryClass::Skinned;
-        return true;
-    }
-    if(text == "skinned_deform"){
-        outGeometryClass = GeometryClass::SkinnedDeform;
-        return true;
-    }
-    return false;
+    const GeometryClassInfo* info = FindGeometryClassInfo(text);
+    outGeometryClass = info ? info->geometryClass : GeometryClass::Invalid;
+    return info != nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

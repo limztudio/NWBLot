@@ -85,6 +85,8 @@ AString UnquotePath(AString value);
 AString ToLower(AString value);
 AString NormalizeAssetKind(AString value);
 AStringView GeometryKindText(u32 geometryClass);
+AStringView SupportedGeometryKindText();
+AString GeometryKindErrorText();
 bool ParseAssetKind(const AString& value, u32& outGeometryClass);
 bool ParseNormalizedAssetKind(AStringView value, u32& outGeometryClass);
 bool GeometryKindUsesDeformableRuntime(u32 geometryClass);

@@ -3,6 +3,7 @@
 
 
 #include <core/geometry/attribute_transfer.h>
+#include <core/geometry/geometry_class.h>
 #include <core/geometry/meshlet_cluster.h>
 #include <core/geometry/mesh_topology.h>
 #include <core/geometry/surface_patch_edit.h>
@@ -76,6 +77,52 @@ static bool NearlyEqualBounds(const MeshletBounds& lhs, const MeshletBounds& rhs
         && NearlyEqual3(lhs.center, rhs.center.x, rhs.center.y, rhs.center.z)
         && NearlyEqual(lhs.radius, rhs.radius)
     ;
+}
+
+static void TestGeometryClassMetadata(TestContext& context){
+    using namespace NWB::Core::Geometry;
+
+    struct Case{
+        AStringView text;
+        u32 geometryClass;
+        bool usesSkinning;
+        bool allowsRuntimeDeform;
+    };
+
+    const Case cases[] = {
+        { "static", GeometryClass::Static, false, false },
+        { "static_deform", GeometryClass::StaticDeform, false, true },
+        { "skinned", GeometryClass::Skinned, true, false },
+        { "skinned_deform", GeometryClass::SkinnedDeform, true, true },
+    };
+
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        SupportedGeometryClassText() == AStringView("static, static_deform, skinned, or skinned_deform")
+    );
+    NWB_GEOMETRY_TEST_CHECK(
+        context,
+        SupportedDeformableGeometryClassText() == AStringView("static_deform, skinned, or skinned_deform")
+    );
+
+    for(const Case& testCase : cases){
+        u32 parsedClass = GeometryClass::Invalid;
+        NWB_GEOMETRY_TEST_CHECK(context, ParseGeometryClassText(testCase.text, parsedClass));
+        NWB_GEOMETRY_TEST_CHECK(context, parsedClass == testCase.geometryClass);
+        NWB_GEOMETRY_TEST_CHECK(context, ValidGeometryClass(testCase.geometryClass));
+        NWB_GEOMETRY_TEST_CHECK(context, GeometryClassText(testCase.geometryClass) == testCase.text);
+        NWB_GEOMETRY_TEST_CHECK(context, GeometryClassUsesSkinning(testCase.geometryClass) == testCase.usesSkinning);
+        NWB_GEOMETRY_TEST_CHECK(
+            context,
+            GeometryClassAllowsRuntimeDeform(testCase.geometryClass) == testCase.allowsRuntimeDeform
+        );
+    }
+
+    u32 parsedClass = GeometryClass::Static;
+    NWB_GEOMETRY_TEST_CHECK(context, !ParseGeometryClassText("STATIC", parsedClass));
+    NWB_GEOMETRY_TEST_CHECK(context, parsedClass == GeometryClass::Invalid);
+    NWB_GEOMETRY_TEST_CHECK(context, GeometryClassText(GeometryClass::Invalid) == AStringView("invalid"));
+    NWB_GEOMETRY_TEST_CHECK(context, GeometryClassText(999u) == AStringView("unknown"));
 }
 
 static void CheckBuildMeshletsRejected(
@@ -1275,6 +1322,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
     static_cast<void>(argv);
 
     return NWB::Tests::RunTestSuite("geometry", [](NWB::Tests::TestContext& context){
+        __hidden_geometry_tests::TestGeometryClassMetadata(context);
         __hidden_geometry_tests::TestResolvesCoreFrameMath(context);
         __hidden_geometry_tests::TestBlendsSkinInfluenceWeights(context);
         __hidden_geometry_tests::TestBlendSkinInfluenceRejectsInvalidInput(context);

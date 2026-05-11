@@ -171,7 +171,10 @@ bool ConfigurePromptsAfterLoad(
 ){
     if(!presence.assetKind && !options.acceptDefaults){
         AString assetKind;
-        PromptString("NWB geometry type (static, static_deform, skinned, or skinned_deform)", options.assetKind, assetKind, prompted);
+        AString prompt = "NWB geometry type (";
+        prompt += SupportedGeometryKindText();
+        prompt += ")";
+        PromptString(prompt, options.assetKind, assetKind, prompted);
         options.assetKind = assetKind;
     }
 
@@ -245,7 +248,9 @@ int Run(int argc, char** argv, bool& prompted){
 
     CLI::Option* inputOption = app.add_option("input", options.inputPath, "Input FBX file path");
     CLI::Option* outputOption = app.add_option("-o,--output", options.outputPath, "Output NWB geometry metadata path");
-    CLI::Option* assetKindOption = app.add_option("--geometry-type", options.assetKind, "NWB geometry type: static, static_deform, skinned, or skinned_deform");
+    AString geometryTypeDescription = "NWB geometry type: ";
+    geometryTypeDescription += SupportedGeometryKindText();
+    CLI::Option* assetKindOption = app.add_option("--geometry-type", options.assetKind, geometryTypeDescription);
     CLI::Option* meshOption = app.add_option("-m,--mesh", options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* indexTypeOption = app.add_option("--index-type", options.indexType, "Index type: auto, u16, or u32");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");

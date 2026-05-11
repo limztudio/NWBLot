@@ -118,7 +118,7 @@ bool WriteNwbGeometry(
 
     u32 geometryClass = 0u;
     if(!ParseAssetKind(assetKind, geometryClass)){
-        outError = "NWB geometry type must be static, static_deform, skinned, or skinned_deform";
+        outError = GeometryKindErrorText();
         return false;
     }
     const bool writeDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryClass);

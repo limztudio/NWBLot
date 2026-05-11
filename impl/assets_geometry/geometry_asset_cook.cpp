@@ -447,10 +447,11 @@ static bool ParseGeometryClassField(
     if(ParseGeometryClassText(classText, outGeometryClass))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported geometry_class '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported geometry_class '{}', expected {}")
         , metaKind
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(classText)
+        , StringConvert(SupportedGeometryClassText())
     );
     return false;
 }
@@ -1504,8 +1505,9 @@ static bool ParseDeformableGeometryMeta(
     ))
         return false;
     if(!GeometryClassUsesDeformableRuntime(outEntry.geometryClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class must be static_deform, skinned, or skinned_deform")
+        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class must be {}")
             , PathToString<tchar>(discoveredFile.filePath)
+            , StringConvert(SupportedDeformableGeometryClassText())
         );
         return false;
     }

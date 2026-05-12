@@ -1328,34 +1328,62 @@ static bool PushSerializedAssetToVolume(
     return true;
 }
 
-static bool AppendMaterialAssetsToVolume(
-    const MaterialCookEntryVector& materialEntries,
+template<typename AssetT, typename AssetCodecT, typename EntryVectorT, typename BuildAssetFn>
+static bool AppendBuiltAssetsToVolume(
+    const tchar* assetKind,
+    EntryVectorT& assetEntries,
     Core::Filesystem::VolumeSession& volumeSession,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
+    VirtualPathHashSet& inOutSeenVirtualPathHashes,
+    const bool logBuildFailure,
+    BuildAssetFn&& buildAsset
 ){
-    MaterialAssetCodec materialCodec;
-    Vector<u8> materialBinary;
+    AssetCodecT assetCodec;
+    Vector<u8> assetBinary;
 
-    for(const MaterialCookEntry& materialEntry : materialEntries){
-        if(!RegisterVolumeAssetPath(NWB_TEXT("material"), materialEntry.virtualPath, inOutSeenVirtualPathHashes))
+    for(auto& assetEntry : assetEntries){
+        if(!RegisterVolumeAssetPath(assetKind, assetEntry.virtualPath, inOutSeenVirtualPathHashes))
             return false;
 
-        Material cookedMaterial;
-        if(!BuildMaterialAsset(materialEntry, cookedMaterial))
+        AssetT cookedAsset;
+        if(!buildAsset(assetEntry, cookedAsset)){
+            if(logBuildFailure){
+                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build {} '{}'")
+                    , assetKind
+                    , StringConvert(assetEntry.virtualPath.c_str())
+                );
+            }
             return false;
+        }
 
         if(!PushSerializedAssetToVolume(
-            NWB_TEXT("material"),
-            materialEntry.virtualPath,
-            cookedMaterial,
-            materialCodec,
+            assetKind,
+            assetEntry.virtualPath,
+            cookedAsset,
+            assetCodec,
             volumeSession,
-            materialBinary
+            assetBinary
         ))
             return false;
     }
 
     return true;
+}
+
+static bool AppendMaterialAssetsToVolume(
+    const MaterialCookEntryVector& materialEntries,
+    Core::Filesystem::VolumeSession& volumeSession,
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
+){
+    return AppendBuiltAssetsToVolume<Material, MaterialAssetCodec>(
+        NWB_TEXT("material"),
+        materialEntries,
+        volumeSession,
+        inOutSeenVirtualPathHashes,
+        false,
+        [](const MaterialCookEntry& materialEntry, Material& outMaterial){
+            return BuildMaterialAsset(materialEntry, outMaterial);
+        }
+    );
 }
 
 static bool AppendGeometryAssetsToVolume(
@@ -1363,33 +1391,16 @@ static bool AppendGeometryAssetsToVolume(
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    GeometryAssetCodec geometryCodec;
-    Vector<u8> geometryBinary;
-
-    for(GeometryCookEntry& geometryEntry : geometryEntries){
-        if(!RegisterVolumeAssetPath(NWB_TEXT("geometry"), geometryEntry.virtualPath, inOutSeenVirtualPathHashes))
-            return false;
-
-        Geometry cookedGeometry;
-        if(!BuildGeometryAsset(geometryEntry, cookedGeometry)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build geometry '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
-            return false;
+    return AppendBuiltAssetsToVolume<Geometry, GeometryAssetCodec>(
+        NWB_TEXT("geometry"),
+        geometryEntries,
+        volumeSession,
+        inOutSeenVirtualPathHashes,
+        true,
+        [](GeometryCookEntry& geometryEntry, Geometry& outGeometry){
+            return BuildGeometryAsset(geometryEntry, outGeometry);
         }
-
-        if(!PushSerializedAssetToVolume(
-            NWB_TEXT("geometry"),
-            geometryEntry.virtualPath,
-            cookedGeometry,
-            geometryCodec,
-            volumeSession,
-            geometryBinary
-        ))
-            return false;
-    }
-
-    return true;
+    );
 }
 
 static bool AppendDeformableGeometryAssetsToVolume(
@@ -1397,33 +1408,16 @@ static bool AppendDeformableGeometryAssetsToVolume(
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    DeformableGeometryAssetCodec geometryCodec;
-    Vector<u8> geometryBinary;
-
-    for(DeformableGeometryCookEntry& geometryEntry : geometryEntries){
-        if(!RegisterVolumeAssetPath(NWB_TEXT("deformable geometry"), geometryEntry.virtualPath, inOutSeenVirtualPathHashes))
-            return false;
-
-        DeformableGeometry cookedGeometry;
-        if(!BuildDeformableGeometryAsset(geometryEntry, cookedGeometry)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build deformable geometry '{}'")
-                , StringConvert(geometryEntry.virtualPath.c_str())
-            );
-            return false;
+    return AppendBuiltAssetsToVolume<DeformableGeometry, DeformableGeometryAssetCodec>(
+        NWB_TEXT("deformable geometry"),
+        geometryEntries,
+        volumeSession,
+        inOutSeenVirtualPathHashes,
+        true,
+        [](DeformableGeometryCookEntry& geometryEntry, DeformableGeometry& outGeometry){
+            return BuildDeformableGeometryAsset(geometryEntry, outGeometry);
         }
-
-        if(!PushSerializedAssetToVolume(
-            NWB_TEXT("deformable geometry"),
-            geometryEntry.virtualPath,
-            cookedGeometry,
-            geometryCodec,
-            volumeSession,
-            geometryBinary
-        ))
-            return false;
-    }
-
-    return true;
+    );
 }
 
 static bool AppendDeformableDisplacementTexturesToVolume(
@@ -1431,33 +1425,16 @@ static bool AppendDeformableDisplacementTexturesToVolume(
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    DeformableDisplacementTextureAssetCodec textureCodec;
-    Vector<u8> textureBinary;
-
-    for(DeformableDisplacementTextureCookEntry& textureEntry : textureEntries){
-        if(!RegisterVolumeAssetPath(NWB_TEXT("deformable displacement texture"), textureEntry.virtualPath, inOutSeenVirtualPathHashes))
-            return false;
-
-        DeformableDisplacementTexture texture;
-        if(!BuildDeformableDisplacementTextureAsset(textureEntry, texture)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build deformable displacement texture '{}'")
-                , StringConvert(textureEntry.virtualPath.c_str())
-            );
-            return false;
+    return AppendBuiltAssetsToVolume<DeformableDisplacementTexture, DeformableDisplacementTextureAssetCodec>(
+        NWB_TEXT("deformable displacement texture"),
+        textureEntries,
+        volumeSession,
+        inOutSeenVirtualPathHashes,
+        true,
+        [](DeformableDisplacementTextureCookEntry& textureEntry, DeformableDisplacementTexture& outTexture){
+            return BuildDeformableDisplacementTextureAsset(textureEntry, outTexture);
         }
-
-        if(!PushSerializedAssetToVolume(
-            NWB_TEXT("deformable displacement texture"),
-            textureEntry.virtualPath,
-            texture,
-            textureCodec,
-            volumeSession,
-            textureBinary
-        ))
-            return false;
-    }
-
-    return true;
+    );
 }
 
 

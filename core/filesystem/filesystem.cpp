@@ -317,6 +317,43 @@ static bool TransferSegmentChunk(
     return transferStream(stream);
 }
 
+template<typename SegmentPaths, typename Bytes, typename TransferChunk>
+static bool TransferVolumeBytes(
+    const AStringView volumeName,
+    const AStringView operation,
+    const SegmentPaths& segmentPaths,
+    const u64 segmentSize,
+    const u64 offset,
+    const u64 byteCount,
+    Bytes& bytes,
+    TransferChunk&& transferChunk
+){
+    return ForEachSegmentChunk(
+        volumeName,
+        operation,
+        segmentPaths,
+        segmentSize,
+        offset,
+        byteCount,
+        [&](
+            const usize segmentIndex,
+            const GlobalFilesystemDetail::StreamOffset streamOffset,
+            const GlobalFilesystemDetail::StreamSize streamChunkSize,
+            const u64 chunkBytes
+        ){
+            return transferChunk(
+                volumeName,
+                segmentPaths,
+                segmentIndex,
+                streamOffset,
+                streamChunkSize,
+                chunkBytes,
+                bytes
+            );
+        }
+    );
+}
+
 template<typename SegmentPaths>
 static bool ReadSegmentBytes(
     const AStringView volumeName,
@@ -399,6 +436,52 @@ static bool WriteSegmentBytes(
         }
     );
 }
+
+struct ReadSegmentBytesOp{
+    template<typename SegmentPaths>
+    bool operator()(
+        const AStringView volumeName,
+        const SegmentPaths& segmentPaths,
+        const usize segmentIndex,
+        const GlobalFilesystemDetail::StreamOffset streamOffset,
+        const GlobalFilesystemDetail::StreamSize streamChunkSize,
+        const u64 chunkBytes,
+        u8*& outputBytes
+    )const{
+        return ReadSegmentBytes(
+            volumeName,
+            segmentPaths,
+            segmentIndex,
+            streamOffset,
+            streamChunkSize,
+            chunkBytes,
+            outputBytes
+        );
+    }
+};
+
+struct WriteSegmentBytesOp{
+    template<typename SegmentPaths>
+    bool operator()(
+        const AStringView volumeName,
+        const SegmentPaths& segmentPaths,
+        const usize segmentIndex,
+        const GlobalFilesystemDetail::StreamOffset streamOffset,
+        const GlobalFilesystemDetail::StreamSize streamChunkSize,
+        const u64 chunkBytes,
+        const u8*& inputBytes
+    )const{
+        return WriteSegmentBytes(
+            volumeName,
+            segmentPaths,
+            segmentIndex,
+            streamOffset,
+            streamChunkSize,
+            chunkBytes,
+            inputBytes
+        );
+    }
+};
 
 static void* BuildArenaAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "filesystem_build_volume"); }
 static void BuildArenaFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "filesystem_build_volume"); }
@@ -1709,29 +1792,15 @@ bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 b
     }
 
     u8* outputBytes = static_cast<u8*>(data);
-    return __hidden_filesystem::ForEachSegmentChunk(
+    return __hidden_filesystem::TransferVolumeBytes(
         m_volumeName,
         "readBytes",
         m_segmentPaths,
         m_segmentSize,
         offset,
         byteCount,
-        [&](
-            const usize segmentIndex,
-            const GlobalFilesystemDetail::StreamOffset streamOffset,
-            const GlobalFilesystemDetail::StreamSize streamChunkSize,
-            const u64 chunkBytes
-        ){
-            return __hidden_filesystem::ReadSegmentBytes(
-                m_volumeName,
-                m_segmentPaths,
-                segmentIndex,
-                streamOffset,
-                streamChunkSize,
-                chunkBytes,
-                outputBytes
-            );
-        }
+        outputBytes,
+        __hidden_filesystem::ReadSegmentBytesOp{}
     );
 }
 
@@ -1754,29 +1823,15 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     const u8* inputBytes = static_cast<const u8*>(data);
-    return __hidden_filesystem::ForEachSegmentChunk(
+    return __hidden_filesystem::TransferVolumeBytes(
         m_volumeName,
         "writeBytes",
         m_segmentPaths,
         m_segmentSize,
         offset,
         byteCount,
-        [&](
-            const usize segmentIndex,
-            const GlobalFilesystemDetail::StreamOffset streamOffset,
-            const GlobalFilesystemDetail::StreamSize streamChunkSize,
-            const u64 chunkBytes
-        ){
-            return __hidden_filesystem::WriteSegmentBytes(
-                m_volumeName,
-                m_segmentPaths,
-                segmentIndex,
-                streamOffset,
-                streamChunkSize,
-                chunkBytes,
-                inputBytes
-            );
-        }
+        inputBytes,
+        __hidden_filesystem::WriteSegmentBytesOp{}
     );
 }
 

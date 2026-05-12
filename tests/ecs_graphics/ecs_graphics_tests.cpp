@@ -1496,6 +1496,48 @@ static void CheckHoleEditUnchanged(
     NWB_ECS_GRAPHICS_TEST_CHECK(context, instance.editRevision == oldRevision);
 }
 
+static void MoveSurfaceEditChecked(
+    TestContext& context,
+    NWB::Impl::DeformableRuntimeMeshInstance& editedInstance,
+    const NWB::Impl::DeformableRuntimeMeshInstance& cleanBase,
+    NWB::Impl::DeformableSurfaceEditState& state,
+    const NWB::Impl::DeformableSurfaceEditId editId,
+    const NWB::Impl::DeformablePosedHit& posedHit,
+    NWB::Impl::DeformableSurfaceEditMoveResult& outResult
+){
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::MoveSurfaceEdit(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            posedHit,
+            &outResult
+        )
+    );
+}
+
+static void AddSurfaceEditLoopCutChecked(
+    TestContext& context,
+    NWB::Impl::DeformableRuntimeMeshInstance& editedInstance,
+    const NWB::Impl::DeformableRuntimeMeshInstance& cleanBase,
+    NWB::Impl::DeformableSurfaceEditState& state,
+    const NWB::Impl::DeformableSurfaceEditId editId,
+    NWB::Impl::DeformableSurfaceEditLoopCutResult& outResult
+){
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::AddSurfaceEditLoopCut(
+            editedInstance,
+            cleanBase,
+            state,
+            editId,
+            &outResult
+        )
+    );
+}
+
 static void ResolveRestoredAccessoryAttachmentTransform(
     TestContext& context,
     NWB::Impl::DeformableRuntimeMeshInstance& editedInstance,
@@ -5789,17 +5831,7 @@ static void TestSurfaceEditMoveReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::PreviewHole(editedInstance, moveSession, moveParams, movePreview));
 
     NWB::Impl::DeformableSurfaceEditMoveResult moveResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::MoveSurfaceEdit(
-            editedInstance,
-            cleanBase,
-            state,
-            editId,
-            moveParams.posedHit,
-            &moveResult
-        )
-    );
+    MoveSurfaceEditChecked(context, editedInstance, cleanBase, state, editId, moveParams.posedHit, moveResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, moveResult.movedEditId == editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(moveResult.oldRestPosition.x, oldRestPosition.x));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(moveResult.oldRestPosition.y, oldRestPosition.y));
@@ -5929,16 +5961,7 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, wallVertexCount >= 3u);
 
     NWB::Impl::DeformableSurfaceEditLoopCutResult loopCutResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AddSurfaceEditLoopCut(
-            editedInstance,
-            cleanBase,
-            state,
-            editId,
-            &loopCutResult
-        )
-    );
+    AddSurfaceEditLoopCutChecked(context, editedInstance, cleanBase, state, editId, loopCutResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loopCutResult.loopCutEditId == editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loopCutResult.oldLoopCutCount == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loopCutResult.newLoopCutCount == 1u);
@@ -6055,17 +6078,7 @@ static void TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(TestContext& c
         MakeHoleEditParams(editedInstance, moveTriangle, 0.25f, 0.25f, 0.5f, 0.48f, 0.30f)
     ;
     NWB::Impl::DeformableSurfaceEditMoveResult moveResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::MoveSurfaceEdit(
-            editedInstance,
-            cleanBase,
-            state,
-            editId,
-            moveParams.posedHit,
-            &moveResult
-        )
-    );
+    MoveSurfaceEditChecked(context, editedInstance, cleanBase, state, editId, moveParams.posedHit, moveResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, moveResult.replay.appliedEditCount == 1u);
     CheckRuntimeMeshPayloadValid(context, editedInstance);
     SimulateRuntimeMeshUpload(editedInstance);
@@ -6093,16 +6106,7 @@ static void TestSurfaceEditRepeatedOperationsKeepMeshPayloadValid(TestContext& c
     SimulateRuntimeMeshUpload(editedInstance);
 
     NWB::Impl::DeformableSurfaceEditLoopCutResult loopCutResult;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::AddSurfaceEditLoopCut(
-            editedInstance,
-            cleanBase,
-            state,
-            editId,
-            &loopCutResult
-        )
-    );
+    AddSurfaceEditLoopCutChecked(context, editedInstance, cleanBase, state, editId, loopCutResult);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, loopCutResult.replay.appliedEditCount == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].hole.wallLoopCutCount == 1u);
     CheckRuntimeMeshPayloadValid(context, editedInstance);

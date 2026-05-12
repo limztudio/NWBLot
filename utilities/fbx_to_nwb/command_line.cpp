@@ -25,7 +25,7 @@ namespace __hidden_command_line{
 struct OptionPresence{
     bool input = false;
     bool output = false;
-    bool assetKind = false;
+    bool geometryClass = false;
     bool mesh = false;
     bool indexType = false;
     bool defaultColor = false;
@@ -169,13 +169,13 @@ bool ConfigurePromptsAfterLoad(
     const UtilityVector<MeshInstance>& visibleInstances,
     bool& prompted
 ){
-    if(!presence.assetKind && !options.acceptDefaults){
-        AString assetKind;
-        AString prompt = "NWB geometry type (";
-        prompt += SupportedGeometryKindText();
+    if(!presence.geometryClass && !options.acceptDefaults){
+        AString geometryClass;
+        AString prompt = "NWB geometry_class (";
+        prompt += SupportedGeometryClassText();
         prompt += ")";
-        PromptString(prompt, options.assetKind, assetKind, prompted);
-        options.assetKind = assetKind;
+        PromptString(prompt, options.geometryClass, geometryClass, prompted);
+        options.geometryClass = geometryClass;
     }
 
     if(!presence.mesh && !options.acceptDefaults){
@@ -248,9 +248,9 @@ int Run(int argc, char** argv, bool& prompted){
 
     CLI::Option* inputOption = app.add_option("input", options.inputPath, "Input FBX file path");
     CLI::Option* outputOption = app.add_option("-o,--output", options.outputPath, "Output NWB geometry metadata path");
-    AString geometryTypeDescription = "NWB geometry type: ";
-    geometryTypeDescription += SupportedGeometryKindText();
-    CLI::Option* assetKindOption = app.add_option("--geometry-type", options.assetKind, geometryTypeDescription);
+    AString geometryClassDescription = "NWB geometry_class: ";
+    geometryClassDescription += SupportedGeometryClassText();
+    CLI::Option* geometryClassOption = app.add_option("--geometry-class", options.geometryClass, geometryClassDescription);
     CLI::Option* meshOption = app.add_option("-m,--mesh", options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* indexTypeOption = app.add_option("--index-type", options.indexType, "Index type: auto, u16, or u32");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
@@ -278,7 +278,7 @@ int Run(int argc, char** argv, bool& prompted){
 
     presence.input = inputOption->count() > 0u;
     presence.output = outputOption->count() > 0u;
-    presence.assetKind = assetKindOption->count() > 0u;
+    presence.geometryClass = geometryClassOption->count() > 0u;
     presence.mesh = meshOption->count() > 0u;
     presence.indexType = indexTypeOption->count() > 0u;
     presence.scale = scaleOption->count() > 0u;
@@ -335,7 +335,7 @@ int Run(int argc, char** argv, bool& prompted){
     if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
         return 1;
 
-    if(!ValidateAssetKind(options.assetKind, error)){
+    if(!ValidateGeometryClassText(options.geometryClass, error)){
         NWB_CERR << error << "\n";
         return 1;
     }
@@ -370,7 +370,7 @@ int Run(int argc, char** argv, bool& prompted){
     }
 
     AString resolvedIndexType;
-    if(!WriteNwbGeometry(outputPath, vertices, indices, options.indexType, options.assetKind, resolvedIndexType, error)){
+    if(!WriteNwbGeometry(outputPath, vertices, indices, options.indexType, options.geometryClass, resolvedIndexType, error)){
         NWB_CERR << "Failed to write NWB geometry: " << error << "\n";
         return 1;
     }
@@ -379,10 +379,10 @@ int Run(int argc, char** argv, bool& prompted){
         << "Wrote " << PathToUtf8(outputPath) << "\n"
         << "  vertices: " << vertices.size() << "\n"
         << "  triangles: " << (indices.size() / 3u) << "\n"
-        << "  geometry_class: " << options.assetKind << "\n"
+        << "  geometry_class: " << options.geometryClass << "\n"
         << "  index_type: " << resolvedIndexType << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
-    if(IsNormalizedDeformableGeometryKind(options.assetKind))
+    if(IsNormalizedDeformableGeometryClass(options.geometryClass))
         NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
 
     return 0;

@@ -104,7 +104,7 @@ bool WriteNwbGeometry(
     const UtilityVector<GeometryVertex>& vertices,
     const UtilityVector<u32>& indices,
     const AString& requestedIndexType,
-    const AString& assetKind,
+    const AString& geometryClassText,
     AString& outIndexType,
     AString& outError
 ){
@@ -117,12 +117,12 @@ bool WriteNwbGeometry(
         return false;
 
     u32 geometryClass = 0u;
-    if(!ParseAssetKind(assetKind, geometryClass)){
-        outError = GeometryKindErrorText();
+    if(!ParseGeometryClassText(geometryClassText, geometryClass)){
+        outError = GeometryClassErrorText();
         return false;
     }
-    const bool writeDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryClass);
-    if(GeometryKindUsesSkinning(geometryClass)){
+    const bool writeDeformableGeometry = GeometryClassUsesDeformableRuntime(geometryClass);
+    if(GeometryClassUsesSkinning(geometryClass)){
         outError = "skinned and skinned_deform output require skeleton/skin export, which this converter does not write yet";
         return false;
     }
@@ -144,7 +144,7 @@ bool WriteNwbGeometry(
     file.precision(9);
 
     file << (writeDeformableGeometry ? "deformable_geometry asset;\n\n" : "geometry asset;\n\n");
-    file << "asset.geometry_class = \"" << GeometryKindText(geometryClass) << "\";\n\n";
+    file << "asset.geometry_class = \"" << GeometryClassText(geometryClass) << "\";\n\n";
     file << "asset.index_type = \"" << outIndexType << "\";\n\n";
 
     file << "asset.positions = [\n";

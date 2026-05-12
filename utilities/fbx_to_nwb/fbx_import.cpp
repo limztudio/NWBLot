@@ -448,11 +448,11 @@ bool BuildGeometry(
     outIndices.reserve(estimatedTriangleCorners);
     UtilityVector<u32> triangleIndices;
     u32 geometryClass = 0u;
-    if(!ParseAssetKind(options.assetKind, geometryClass)){
-        outError = GeometryKindErrorText();
+    if(!ParseGeometryClassText(options.geometryClass, geometryClass)){
+        outError = GeometryClassErrorText();
         return false;
     }
-    const bool wantsDeformableGeometry = GeometryKindUsesDeformableRuntime(geometryClass);
+    const bool wantsDeformableGeometry = GeometryClassUsesDeformableRuntime(geometryClass);
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             outError = "selected mesh index is out of range";

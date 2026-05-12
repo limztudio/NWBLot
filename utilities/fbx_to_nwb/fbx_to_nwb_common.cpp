@@ -49,69 +49,69 @@ AString ToLower(AString value){
     return value;
 }
 
-AString NormalizeAssetKind(AString value){
+AString NormalizeGeometryClassText(AString value){
     return ToLower(Trim(Move(value)));
 }
 
-AStringView GeometryKindText(const u32 geometryClass){
+AStringView GeometryClassText(const u32 geometryClass){
     return NWB::Core::Geometry::GeometryClassText(geometryClass);
 }
 
-AStringView SupportedGeometryKindText(){
+AStringView SupportedGeometryClassText(){
     return NWB::Core::Geometry::SupportedGeometryClassText();
 }
 
-AString GeometryKindErrorText(){
-    AString error = "NWB geometry type must be ";
-    error += SupportedGeometryKindText();
+AString GeometryClassErrorText(){
+    AString error = "NWB geometry_class must be ";
+    error += SupportedGeometryClassText();
     return error;
 }
 
-bool ParseNormalizedAssetKind(const AStringView value, u32& outGeometryClass){
+bool ParseNormalizedGeometryClassText(const AStringView value, u32& outGeometryClass){
     outGeometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
     return NWB::Core::Geometry::ParseGeometryClassText(value, outGeometryClass);
 }
 
-bool ParseAssetKind(const AString& value, u32& outGeometryClass){
-    const AString normalized = NormalizeAssetKind(value);
-    return ParseNormalizedAssetKind(normalized, outGeometryClass);
+bool ParseGeometryClassText(const AString& value, u32& outGeometryClass){
+    const AString normalized = NormalizeGeometryClassText(value);
+    return ParseNormalizedGeometryClassText(normalized, outGeometryClass);
 }
 
-bool GeometryKindUsesDeformableRuntime(const u32 geometryClass){
+bool GeometryClassUsesDeformableRuntime(const u32 geometryClass){
     return NWB::Core::Geometry::GeometryClassUsesDeformableRuntime(geometryClass);
 }
 
-bool GeometryKindUsesSkinning(const u32 geometryClass){
+bool GeometryClassUsesSkinning(const u32 geometryClass){
     return NWB::Core::Geometry::GeometryClassUsesSkinning(geometryClass);
 }
 
-bool IsNormalizedDeformableGeometryKind(const AStringView value){
+bool IsNormalizedDeformableGeometryClass(const AStringView value){
     u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    return ParseNormalizedAssetKind(value, geometryClass) && GeometryKindUsesDeformableRuntime(geometryClass);
+    return ParseNormalizedGeometryClassText(value, geometryClass) && GeometryClassUsesDeformableRuntime(geometryClass);
 }
 
-bool IsNormalizedSkinnedGeometryKind(const AStringView value){
+bool IsNormalizedSkinnedGeometryClass(const AStringView value){
     u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    return ParseNormalizedAssetKind(value, geometryClass) && GeometryKindUsesSkinning(geometryClass);
+    return ParseNormalizedGeometryClassText(value, geometryClass) && GeometryClassUsesSkinning(geometryClass);
 }
 
-bool IsDeformableGeometryKind(const AString& value){
-    const AString normalized = NormalizeAssetKind(value);
-    return IsNormalizedDeformableGeometryKind(normalized);
+bool IsDeformableGeometryClass(const AString& value){
+    const AString normalized = NormalizeGeometryClassText(value);
+    return IsNormalizedDeformableGeometryClass(normalized);
 }
 
-bool IsSkinnedGeometryKind(const AString& value){
-    const AString normalized = NormalizeAssetKind(value);
-    return IsNormalizedSkinnedGeometryKind(normalized);
+bool IsSkinnedGeometryClass(const AString& value){
+    const AString normalized = NormalizeGeometryClassText(value);
+    return IsNormalizedSkinnedGeometryClass(normalized);
 }
 
-bool ValidateAssetKind(AString& inOutValue, AString& outError){
-    inOutValue = NormalizeAssetKind(Move(inOutValue));
+bool ValidateGeometryClassText(AString& inOutValue, AString& outError){
+    inOutValue = NormalizeGeometryClassText(Move(inOutValue));
     u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    if(ParseNormalizedAssetKind(inOutValue, geometryClass))
+    if(ParseNormalizedGeometryClassText(inOutValue, geometryClass))
         return true;
 
-    outError = GeometryKindErrorText();
+    outError = GeometryClassErrorText();
     return false;
 }
 

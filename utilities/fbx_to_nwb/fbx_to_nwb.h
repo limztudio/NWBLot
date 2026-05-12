@@ -38,7 +38,7 @@ static_assert(IsTriviallyCopyable_V<GeometryVertex>);
 struct ImportOptions{
     AString inputPath;
     AString outputPath;
-    AString assetKind = "static";
+    AString geometryClass = "static";
     AString meshSelector = "all";
     AString indexType = "auto";
     AString defaultColorText = "1,1,1,1";
@@ -83,19 +83,19 @@ struct SceneHandle{
 AString Trim(AString value);
 AString UnquotePath(AString value);
 AString ToLower(AString value);
-AString NormalizeAssetKind(AString value);
-AStringView GeometryKindText(u32 geometryClass);
-AStringView SupportedGeometryKindText();
-AString GeometryKindErrorText();
-bool ParseAssetKind(const AString& value, u32& outGeometryClass);
-bool ParseNormalizedAssetKind(AStringView value, u32& outGeometryClass);
-bool GeometryKindUsesDeformableRuntime(u32 geometryClass);
-bool GeometryKindUsesSkinning(u32 geometryClass);
-bool IsNormalizedDeformableGeometryKind(AStringView value);
-bool IsNormalizedSkinnedGeometryKind(AStringView value);
-bool IsDeformableGeometryKind(const AString& value);
-bool IsSkinnedGeometryKind(const AString& value);
-bool ValidateAssetKind(AString& inOutValue, AString& outError);
+AString NormalizeGeometryClassText(AString value);
+AStringView GeometryClassText(u32 geometryClass);
+AStringView SupportedGeometryClassText();
+AString GeometryClassErrorText();
+bool ParseGeometryClassText(const AString& value, u32& outGeometryClass);
+bool ParseNormalizedGeometryClassText(AStringView value, u32& outGeometryClass);
+bool GeometryClassUsesDeformableRuntime(u32 geometryClass);
+bool GeometryClassUsesSkinning(u32 geometryClass);
+bool IsNormalizedDeformableGeometryClass(AStringView value);
+bool IsNormalizedSkinnedGeometryClass(AStringView value);
+bool IsDeformableGeometryClass(const AString& value);
+bool IsSkinnedGeometryClass(const AString& value);
+bool ValidateGeometryClassText(AString& inOutValue, AString& outError);
 bool ParseColorText(const AString& text, Vec4& outColor);
 bool Normalize(Vec3& value);
 Vec4 BuildFallbackTangent(const Vec3& normal);
@@ -130,7 +130,7 @@ bool WriteNwbGeometry(
     const UtilityVector<GeometryVertex>& vertices,
     const UtilityVector<u32>& indices,
     const AString& requestedIndexType,
-    const AString& assetKind,
+    const AString& geometryClassText,
     AString& outIndexType,
     AString& outError
 );

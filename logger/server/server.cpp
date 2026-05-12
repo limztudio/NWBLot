@@ -34,25 +34,51 @@ struct ConnectionInfo{
     }
 
     [[nodiscard]] bool append(NotNull<const char*> uploadData, const usize appendSize){
+        if(appendSize == 0u)
+            return true;
+
         if(size > Limit<usize>::s_Max - appendSize)
             return false;
 
+        const usize requiredSize = size + appendSize;
+        if(!reserve(requiredSize))
+            return false;
+
+        NWB_MEMCPY(buffer + size, appendSize, uploadData.get(), appendSize);
+        size = requiredSize;
+        return true;
+    }
+
+    [[nodiscard]] bool reserve(const usize requiredSize){
+        if(requiredSize <= capacity)
+            return true;
+
+        constexpr usize s_InitialBufferCapacity = 256u;
+        usize newCapacity = capacity > 0u ? capacity : s_InitialBufferCapacity;
+        while(newCapacity < requiredSize){
+            if(newCapacity > Limit<usize>::s_Max / 2u){
+                newCapacity = requiredSize;
+                break;
+            }
+            newCapacity *= 2u;
+        }
+
         auto* newBuffer = reinterpret_cast<u8*>(Core::Alloc::CoreRealloc(
             buffer,
-            size + appendSize,
+            newCapacity,
             "ConnectionInfo buffer reallocated at Server::requestCallback"
         ));
         if(!newBuffer)
             return false;
 
         buffer = newBuffer;
-        NWB_MEMCPY(buffer + size, appendSize, uploadData.get(), appendSize);
-        size += appendSize;
+        capacity = newCapacity;
         return true;
     }
 
     u8* buffer = nullptr;
     usize size = 0u;
+    usize capacity = 0u;
 };
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;

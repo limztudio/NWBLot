@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <core/ecs/entity_id.h>
+
 #include <cstddef>
 
 
@@ -34,6 +36,18 @@ static_assert((sizeof(TransformComponent) % alignof(TransformComponent)) == 0, "
 static_assert((offsetof(TransformComponent, position) % alignof(Float4)) == 0, "TransformComponent::position must stay aligned");
 static_assert((offsetof(TransformComponent, rotation) % alignof(Float4)) == 0, "TransformComponent::rotation must stay aligned");
 static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0, "TransformComponent::scale must stay aligned");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SceneComponent{
+    Core::ECS::EntityID mainCamera = Core::ECS::ENTITY_ID_INVALID;
+};
+
+static_assert(IsStandardLayout_V<SceneComponent>, "SceneComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<SceneComponent>, "SceneComponent must stay cheap to move in dense ECS storage");
+static_assert(sizeof(SceneComponent) == sizeof(Core::ECS::EntityID), "SceneComponent must only contain shared scene entity references");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

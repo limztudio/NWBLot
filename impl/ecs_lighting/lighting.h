@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "light_component.h"
+#include "components.h"
 #include <impl/ecs_scene/scene.h>
 
 

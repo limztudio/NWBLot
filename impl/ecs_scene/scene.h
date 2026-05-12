@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include "transform_component.h"
-#include "scene_component.h"
-#include <impl/ecs_camera/camera_component.h>
+#include "components.h"
+
+#include <impl/ecs_camera/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -18,7 +18,7 @@
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <impl/ecs_geometry/components.h>
 #include <impl/ecs_render/components.h>
-#include <impl/ecs_scene/transform_component.h>
+#include <impl/ecs_scene/components.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 

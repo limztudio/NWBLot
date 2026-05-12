@@ -428,3 +428,8 @@ Updated: 2026-05-04
 - Avoid macro-generated function signatures. Use explicit declarations for shader authoring hooks unless a GLSL/preprocessor constraint requires a macro.
 - Use comments sparingly; keep them for non-obvious resource packing, layout, or API constraints.
 - Keep `.nwb` shader metadata small and declarative: `shader asset;`, `asset.compiler`, `asset.stage`, `asset.target_profile`, `asset.entry_point`, and include roots.
+
+## 16. ECS Component Headers
+- Engine ECS module component definitions belong in that module's `components.h`.
+- Do not add or keep production per-component headers such as `camera_component.h`, `light_component.h`, `scene_component.h`, or `transform_component.h`.
+- Test-only fixture components may stay local to the test source file that defines them.

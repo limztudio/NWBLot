@@ -49,7 +49,9 @@ void World::destroyEntity(EntityID entityId){
 void World::removeSystem(ISystem& system){
     m_scheduler.removeSystem(system);
 
-    auto itr = FindIf(m_systems.begin(), m_systems.end(),
+    auto itr = FindIf(
+        m_systems.begin(),
+        m_systems.end(),
         [&system](const SystemEntry& entry){ return entry.system.get() == &system; }
     );
     if(itr != m_systems.end())

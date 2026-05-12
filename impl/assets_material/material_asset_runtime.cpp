@@ -165,7 +165,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
             return false;
         }
         const MaterialParameterValueType::Enum valueType = static_cast<MaterialParameterValueType::Enum>(parameter.meta.z);
-        if(valueType != MaterialParameterValueType::Float
+        if(
+            valueType != MaterialParameterValueType::Float
             && valueType != MaterialParameterValueType::Int
             && valueType != MaterialParameterValueType::UInt
             && valueType != MaterialParameterValueType::Bool

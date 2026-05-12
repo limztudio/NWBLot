@@ -227,7 +227,9 @@ public:
             return;
 
         if constexpr(sizeof...(Ts) == 1u){
-            pool.parallelFor(static_cast<usize>(0), m_count,
+            pool.parallelFor(
+                static_cast<usize>(0),
+                m_count,
                 [this, &func](usize i){
                     const EntityID entityId = entityAt(i);
                     auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
@@ -237,7 +239,9 @@ public:
             return;
         }
 
-        pool.parallelFor(static_cast<usize>(0), m_count,
+        pool.parallelFor(
+            static_cast<usize>(0),
+            m_count,
             [this, &func](usize i){
                 EntityID entityId = entityAt(i);
                 tryApplyFunc(func, entityId, i);

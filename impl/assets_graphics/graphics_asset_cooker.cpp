@@ -383,7 +383,9 @@ static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, Dis
         }
     }
 
-    Sort(outNwbFiles.begin(), outNwbFiles.end(),
+    Sort(
+        outNwbFiles.begin(),
+        outNwbFiles.end(),
         [](const DiscoveredNwbFile& lhs, const DiscoveredNwbFile& rhs){
             return lhs.normalizedPathText < rhs.normalizedPathText;
         }

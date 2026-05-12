@@ -89,11 +89,13 @@ bool GeometrySystem::containsRuntimeGeometry(const Name& geometryKey, const u64 
 }
 
 void GeometrySystem::registerRuntimeGeometryProvider(IRuntimeGeometryProvider& provider){
-    if(FindIf(
-        m_runtimeGeometryProviders.begin(),
-        m_runtimeGeometryProviders.end(),
-        [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
-    ) != m_runtimeGeometryProviders.end())
+    if(
+        FindIf(
+            m_runtimeGeometryProviders.begin(),
+            m_runtimeGeometryProviders.end(),
+            [&provider](IRuntimeGeometryProvider* item){ return item == &provider; }
+        ) != m_runtimeGeometryProviders.end()
+    )
         return;
 
     m_runtimeGeometryProviders.push_back(&provider);

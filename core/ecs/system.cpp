@@ -57,7 +57,9 @@ void SystemScheduler::addSystem(ISystem& system){
 
 
 void SystemScheduler::removeSystem(ISystem& system){
-    auto itr = FindIf(m_allSystems.begin(), m_allSystems.end(),
+    auto itr = FindIf(
+        m_allSystems.begin(),
+        m_allSystems.end(),
         [&system](ISystem* iterSystem){ return iterSystem == &system; }
     );
     if(itr != m_allSystems.end()){
@@ -191,7 +193,9 @@ void SystemScheduler::execute(World& world, f32 delta){
             stage[0]->update(world, delta);
         }
         else{
-            pool.parallelFor(static_cast<usize>(0), stage.size(),
+            pool.parallelFor(
+                static_cast<usize>(0),
+                stage.size(),
                 [&stage, &world, delta](usize i){
                     stage[i]->update(world, delta);
                 }

@@ -201,7 +201,12 @@ vec3 nwbDeformerResolveFrameTangent(const vec3 normal, const vec3 tangent, const
     return nwbDeformerSafeNormalize(projectedTangent, safeFallbackTangent);
 }
 
-void nwbDeformerOrthonormalizeFrame(inout vec3 normal, inout vec4 tangent, const vec3 fallbackNormal, const vec4 fallbackTangent){
+void nwbDeformerOrthonormalizeFrame(
+    inout vec3 normal,
+    inout vec4 tangent,
+    const vec3 fallbackNormal,
+    const vec4 fallbackTangent
+){
     normal = nwbDeformerSafeNormalize(normal, nwbDeformerSafeNormalize(fallbackNormal, vec3(0.0, 0.0, 1.0)));
     tangent.xyz = nwbDeformerResolveFrameTangent(normal, tangent.xyz, fallbackTangent.xyz);
     tangent.w = nwbDeformerTangentHandedness(tangent.w, fallbackTangent.w);

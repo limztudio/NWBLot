@@ -49,7 +49,11 @@ void main(){
 
     for(uint physicalSlice = 0u; physicalSlice < physicalSliceCount; ++physicalSlice){
         const float transmittance = exp(-min(accumulatedExtinction, saturatedExtinction));
-        imageStore(g_Transmittance, ivec3(int(lowPixel.x), int(lowPixel.y), int(physicalSlice)), vec4(transmittance, 0.0, 0.0, 0.0));
+        imageStore(
+            g_Transmittance,
+            ivec3(int(lowPixel.x), int(lowPixel.y), int(physicalSlice)),
+            vec4(transmittance, 0.0, 0.0, 0.0)
+        );
 
         if(physicalSlice >= activePhysicalSlices || accumulatedExtinction >= saturatedExtinction)
             continue;

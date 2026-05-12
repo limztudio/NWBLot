@@ -4,9 +4,9 @@
 
 #version 460
 
-#include "avboit_common.glsli"
 #define NWB_SCENE_SHADING_SET 1
 #define NWB_SCENE_SHADING_BINDING 4
+#include "avboit_common.glsli"
 #include "bxdf_lighting.glsli"
 
 

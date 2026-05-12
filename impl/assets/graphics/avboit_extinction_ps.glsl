@@ -49,7 +49,8 @@ void nwbAvboitSplatExtinction(uvec2 lowPixel, uint virtualSlice, float extinctio
     const uint previousWord = atomicAdd(g_Extinction[wordIndex], packedExtinction << byteShift);
     const uint previousByte = (previousWord >> byteShift) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
     const bool byteOverflow = previousByte + packedExtinction > NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    const bool rawOverflow = float(previousByte) / nwbAvboitExtinctionFixedScale() + extinction > nwbAvboitExtinctionSaturation();
+    const float previousExtinction = float(previousByte) / nwbAvboitExtinctionFixedScale();
+    const bool rawOverflow = previousExtinction + extinction > nwbAvboitExtinctionSaturation();
     if(byteOverflow || rawOverflow)
         atomicMin(g_ExtinctionOverflowDepth[nwbAvboitLowPixelIndex(lowPixel)], physicalSlice);
 }

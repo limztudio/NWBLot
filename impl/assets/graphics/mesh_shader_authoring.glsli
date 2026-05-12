@@ -390,7 +390,12 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
 }
 #endif
 
-NwbMeshGeneratedVertex nwbMeshBuildVertex(uint triangleIndex, uint corner, NwbMeshSourceVertex source, const NwbMeshInstanceData instance);
+NwbMeshGeneratedVertex nwbMeshBuildVertex(
+    uint triangleIndex,
+    uint corner,
+    NwbMeshSourceVertex source,
+    const NwbMeshInstanceData instance
+);
 
 void main(){
 #if !NWB_MESH_SHADER_EMULATION_COMPUTE

@@ -8,9 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(push_constant) uniform PushConstants{
+layout(push_constant) uniform NwbImguiPushConstants{
     vec4 scaleTranslate;
-} pc;
+} g_NwbImguiPushConstants;
 
 layout(location = 0) in vec2 inPosition;
 layout(location = 1) in vec2 inUv;
@@ -24,9 +24,11 @@ layout(location = 1) out vec4 outColor;
 
 
 void main(){
+    const vec4 scaleTranslate = g_NwbImguiPushConstants.scaleTranslate;
+
     outUv = inUv;
     outColor = inColor;
-    gl_Position = vec4(inPosition * pc.scaleTranslate.xy + pc.scaleTranslate.zw, 0.0, 1.0);
+    gl_Position = vec4(inPosition * scaleTranslate.xy + scaleTranslate.zw, 0.0, 1.0);
 }
 
 

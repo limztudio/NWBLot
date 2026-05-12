@@ -16,7 +16,8 @@
 
 
 uint nwbAvboitPhysicalExtinctionWordCount(){
-    return (nwbAvboitPhysicalSliceCount() + NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u) / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
+    const uint roundedSliceCount = nwbAvboitPhysicalSliceCount() + NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u;
+    return roundedSliceCount / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
 }
 
 uint nwbAvboitExtinctionWordIndex(uvec2 lowPixel, uint physicalSlice){

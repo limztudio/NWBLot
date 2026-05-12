@@ -84,7 +84,13 @@ uint nwbAvboitVirtualSliceFromDepth(float depth){
     return min(uint(floor(clampedDepth * float(nwbAvboitVirtualSliceCount()))), nwbAvboitVirtualSliceCount() - 1u);
 }
 
-void nwbAvboitLinearVirtualSlicesFromDepth(float depth, out uint outSlice0, out uint outSlice1, out float outWeight0, out float outWeight1){
+void nwbAvboitLinearVirtualSlicesFromDepth(
+    float depth,
+    out uint outSlice0,
+    out uint outSlice1,
+    out float outWeight0,
+    out float outWeight1
+){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
     const float slicePosition = clamp(depth * float(virtualSliceCount), 0.0, virtualSliceMax);
@@ -109,8 +115,10 @@ uint nwbAvboitPhysicalSliceFromVirtualSlice(uint virtualSlice){
 #include "avboit_extinction_common.glsli"
 
 uvec2 nwbAvboitLowPixelFromFragCoord(vec2 fragCoord){
-    const vec2 normalized = clamp(fragCoord / max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0)), vec2(0.0), vec2(0.999999));
-    return min(uvec2(normalized * vec2(float(nwbAvboitLowWidth()), float(nwbAvboitLowHeight()))), uvec2(nwbAvboitLowWidth() - 1u, nwbAvboitLowHeight() - 1u));
+    const vec2 fullSize = max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0));
+    const uvec2 lowSize = uvec2(nwbAvboitLowWidth(), nwbAvboitLowHeight());
+    const vec2 normalized = clamp(fragCoord / fullSize, vec2(0.0), vec2(0.999999));
+    return min(uvec2(normalized * vec2(lowSize)), lowSize - uvec2(1u));
 }
 
 vec2 nwbAvboitFullUvFromLowFragCoord(vec2 fragCoord){
@@ -124,7 +132,8 @@ uvec2 nwbAvboitLowPixelFromLowFragCoord(vec2 fragCoord){
 }
 
 float nwbAvboitOpaqueDepth(texture2D opaqueDepth, sampler pointSampler, vec2 fragCoord){
-    const vec2 uv = clamp(fragCoord / max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0)), vec2(0.0), vec2(1.0));
+    const vec2 fullSize = max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0));
+    const vec2 uv = clamp(fragCoord / fullSize, vec2(0.0), vec2(1.0));
     return texture(sampler2D(opaqueDepth, pointSampler), uv).r;
 }
 

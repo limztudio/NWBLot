@@ -11,11 +11,11 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/graphics_asset_cooker.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/graphics_asset_cooker.h"
     )
-    target_link_libraries(nwb_assets_graphics_cook PUBLIC
+    target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets)
+    target_link_libraries(nwb_assets_graphics_cook PRIVATE
         nwb_assets_geometry_cook
         nwb_assets_material_cook
         nwb_assets_shader_cook
-        nwb_assets
         nwb_graphics
         nwb_graphics_cook
         nwb_metascript

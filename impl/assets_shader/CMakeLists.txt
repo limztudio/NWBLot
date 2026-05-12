@@ -25,6 +25,7 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/shader_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
     )
-    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_graphics_cook nwb_metascript)
+    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_graphics nwb_metascript)
+    target_link_libraries(nwb_assets_shader_cook PRIVATE nwb_graphics_cook)
     target_compile_definitions(nwb_assets_shader_cook PRIVATE NWB_COOK=1)
 endif()

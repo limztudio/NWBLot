@@ -8,7 +8,7 @@ target_sources(nwb_ecs_geometry PRIVATE
 )
 target_link_libraries(nwb_ecs_geometry PUBLIC
     nwb_ecs
-    nwb_assets_geometry
+    nwb_assets
     nwb_graphics
 )
 

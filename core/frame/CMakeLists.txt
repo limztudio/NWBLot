@@ -31,4 +31,5 @@ target_link_libraries(nwb_frame PUBLIC
     nwb_common
     nwb_alloc
     nwb_graphics
+    nwb_input
 )

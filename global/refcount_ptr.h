@@ -19,7 +19,7 @@ concept RefCountClass = IsClass_V<T> && requires(T& obj){
     { obj.release() }->SameAs<u32>;
 };
 
-struct AdoptRefT { explicit AdoptRefT() = default; };
+struct AdoptRefT{ explicit AdoptRefT() = default; };
 inline constexpr AdoptRefT AdoptRef{};
 
 

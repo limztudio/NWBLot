@@ -407,6 +407,7 @@ Updated: 2026-05-04
 ## 15. Shader Source Style
 - Applies to `.glsl` and `.glsli` files under `impl/assets/graphics/` and `Testbed/assets/shaders/`.
 - Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files.
+- After the shader banner separator, keep exactly two blank lines before the first shader directive or include guard (`#version`, `#ifndef`, `#extension`, etc.). Do not collapse this gap.
 - Stage entry files (`.glsl`) put `#version 460` immediately after the banner block, then includes, declarations/resources, helpers, and `main()`, separated by file-scope long separators.
 - Include files (`.glsli`) use uppercase include guards in the form `NWB_<MODULE>_GLSLI`; place the closing `#endif` before the final separator.
 - Group shader sections in this order when present: feature defines/extensions, includes, structs, layouts/resources, constants, helpers, explicit forward declarations required by authoring hooks, entry point.

@@ -53,9 +53,9 @@ RendererSystem::RendererSystem(
     , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), MaterialPipelineMapAllocator(arena))
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
 {
-    readAccess<NWB::Impl::SceneComponent>();
-    readAccess<NWB::Impl::TransformComponent>();
-    readAccess<NWB::Impl::CameraComponent>();
+    readAccess<NWB::Core::Scene::SceneComponent>();
+    readAccess<NWB::Core::Scene::TransformComponent>();
+    readAccess<NWB::Core::Scene::CameraComponent>();
     readAccess<RendererComponent>();
 }
 RendererSystem::~RendererSystem(){}

@@ -6,8 +6,8 @@
 
 #include <core/geometry/frame_math.h>
 #include <core/graphics/graphics.h>
-#include <impl/ecs_camera/ecs_camera.h>
-#include <impl/ecs_lighting/ecs_lighting.h>
+#include <core/scene/components.h>
+#include <core/scene/lighting.h>
 #include <global/simplemath.h>
 #include <impl/assets_geometry/deformable_geometry_asset.h>
 #include <impl/assets_geometry/geometry_asset.h>
@@ -240,9 +240,9 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 }
 
 [[nodiscard]] static bool ResolveSurfaceEditOperatorTransform(
-    const NWB::Impl::TransformComponent& targetTransform,
+    const NWB::Core::Scene::TransformComponent& targetTransform,
     const NWB::Impl::DeformableHolePreview& preview,
-    NWB::Impl::TransformComponent& outTransform
+    NWB::Core::Scene::TransformComponent& outTransform
 ){
     if(!preview.valid)
         return false;
@@ -402,7 +402,7 @@ static constexpr usize s_SurfaceEditCameraViewCount =
 }
 
 static void ResolveFlyCameraAnglesFromTransform(
-    const NWB::Impl::TransformComponent& transform,
+    const NWB::Core::Scene::TransformComponent& transform,
     f32& outYawRadians,
     f32& outPitchRadians){
     const Float4 localForward(0.0f, 0.0f, 1.0f);
@@ -433,8 +433,8 @@ static void ResolveFlyCameraAnglesFromTransform(
     const f32 width = static_cast<f32>(clientSize.width);
     const f32 height = static_cast<f32>(clientSize.height);
     const f32 framebufferAspect = width / height;
-    const NWB::Impl::SceneCameraView cameraView =
-        NWB::Impl::ResolveSceneCameraView(world, framebufferAspect)
+    const NWB::Core::Scene::SceneCameraView cameraView =
+        NWB::Core::Scene::ResolveSceneCameraView(world, framebufferAspect)
     ;
     if(!cameraView.valid())
         return false;
@@ -449,7 +449,7 @@ static void ResolveFlyCameraAnglesFromTransform(
     if(!IsFinite(ndcX) || !IsFinite(ndcY))
         return false;
 
-    const NWB::Impl::CameraProjectionData& projectionData = cameraView.projectionData;
+    const NWB::Core::Scene::CameraProjectionData& projectionData = cameraView.projectionData;
     const f32 horizontalScale = projectionData.tanHalfVerticalFov * projectionData.aspectRatio;
     const f32 localX = ndcX * horizontalScale;
     const f32 localY = ndcY * projectionData.tanHalfVerticalFov;
@@ -486,7 +486,7 @@ static void ResolveFlyCameraAnglesFromTransform(
     NWB::Core::ECS::World& world,
     Float3U& outViewUp
 ){
-    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world);
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return false;
 
@@ -527,7 +527,7 @@ static void ApplySurfaceEditScalarParams(
 }
 
 static void ApplyFlyCameraInput(
-    NWB::Impl::TransformComponent& transform,
+    NWB::Core::Scene::TransformComponent& transform,
     f32& yawRadians,
     f32& pitchRadians,
     const f32 rightAxis,
@@ -591,7 +591,7 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world);
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return;
 
@@ -618,7 +618,7 @@ static void ApplyFlyCameraInputToMainCamera(
     if(cameraViewIndex >= s_SurfaceEditCameraViewCount)
         return false;
 
-    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world);
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return false;
 
@@ -650,22 +650,22 @@ static void ApplyFlyCameraInputToMainCamera(
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = cameraEntity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = Float4(0.0f, 0.0f, -s_CameraStartDepth);
-    cameraEntity.addComponent<NWB::Impl::CameraComponent>();
+    cameraEntity.addComponent<NWB::Core::Scene::CameraComponent>();
     return cameraEntity.id();
 }
 
 static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     auto lightEntity = world.createEntity();
-    auto& transform = lightEntity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = lightEntity.addComponent<NWB::Core::Scene::TransformComponent>();
     StoreFloat(
         QuaternionRotationRollPitchYaw(s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f),
         &transform.rotation
     );
 
-    auto& light = lightEntity.addComponent<NWB::Impl::LightComponent>();
-    light.type = NWB::Impl::LightType::Directional;
+    auto& light = lightEntity.addComponent<NWB::Core::Scene::LightComponent>();
+    light.type = NWB::Core::Scene::LightType::Directional;
     light.setColor(Float4(1.0f, 0.96f, 0.88f));
     light.setIntensity(s_DefaultDirectionalLightIntensity);
 }
@@ -678,7 +678,7 @@ static void CreateRendererEntity(
     const f32 uniformScale
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
     transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
@@ -737,7 +737,7 @@ static void UpdateProxySkeletonPose(
     const bool animated
 ){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
     transform.scale = Float4(uniformScale, uniformScale, uniformScale);
 
@@ -780,7 +780,7 @@ static void UpdateProxySkeletonPose(
         target.uniformScale,
         target.animated
     );
-    if(auto* transform = world.tryGetComponent<NWB::Impl::TransformComponent>(entity))
+    if(auto* transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity))
         StoreFloat(QuaternionRotationRollPitchYaw(0.0f, target.yawRadians, 0.0f), &transform->rotation);
     return entity;
 }
@@ -790,7 +790,7 @@ static void UpdateProxySkeletonPose(
     const TestbedGeometryRef& geometry,
     const TestbedMaterialRef& material){
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.scale = Float4(s_AccessoryUniformScale, s_AccessoryUniformScale, s_AccessoryUniformScale);
 
     auto& geometryComponent = entity.addComponent<NWB::Impl::GeometryComponent>();
@@ -810,7 +810,7 @@ static void UpdateProxySkeletonPose(
     material.virtualPath = Name(s_SurfaceEditOperatorMaterialPath);
 
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.scale = Float4(1.0f, 1.0f, 1.0f);
 
     auto& geometryComponent = entity.addComponent<NWB::Impl::GeometryComponent>();
@@ -831,7 +831,7 @@ static void ResolvePickingInputs(
     outInputs.jointPalette = world.tryGetComponent<NWB::Impl::DeformableJointPaletteComponent>(entity);
     outInputs.skeletonPose = world.tryGetComponent<NWB::Impl::DeformableSkeletonPoseComponent>(entity);
     outInputs.displacement = world.tryGetComponent<NWB::Impl::DeformableDisplacementComponent>(entity);
-    outInputs.transform = world.tryGetComponent<NWB::Impl::TransformComponent>(entity);
+    outInputs.transform = world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity);
 }
 
 
@@ -1102,7 +1102,7 @@ bool ProjectTestbed::onStartup(){
     using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
 
     auto sceneEntity = m_world->createEntity();
-    auto& scene = sceneEntity.addComponent<NWB::Impl::SceneComponent>();
+    auto& scene = sceneEntity.addComponent<NWB::Core::Scene::SceneComponent>();
     scene.mainCamera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
@@ -1430,12 +1430,12 @@ void ProjectTestbed::updateSurfaceEditAccessories(){
 
     m_world->view<
         NWB::Impl::DeformableAccessoryAttachmentComponent,
-        NWB::Impl::TransformComponent,
+        NWB::Core::Scene::TransformComponent,
         NWB::Impl::RendererComponent
     >().each(
         [&](NWB::Core::ECS::EntityID entity,
             NWB::Impl::DeformableAccessoryAttachmentComponent& attachment,
-            NWB::Impl::TransformComponent& transform,
+            NWB::Core::Scene::TransformComponent& transform,
             NWB::Impl::RendererComponent& renderer){
             static_cast<void>(entity);
             const auto* instance = deformSystem.findDeformableRuntimeMesh(attachment.runtimeMesh);
@@ -1480,13 +1480,13 @@ bool ProjectTestbed::refreshSurfaceEditPreviewMesh(){
     }
 
     auto* previewTransform =
-        m_world->tryGetComponent<NWB::Impl::TransformComponent>(m_surfaceEditPreviewEntity)
+        m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_surfaceEditPreviewEntity)
     ;
     auto* previewRenderer =
         m_world->tryGetComponent<NWB::Impl::RendererComponent>(m_surfaceEditPreviewEntity)
     ;
     const auto* targetTransform =
-        m_world->tryGetComponent<NWB::Impl::TransformComponent>(m_surfaceEditTargetEntity)
+        m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_surfaceEditTargetEntity)
     ;
     if(!previewTransform || !previewRenderer || !targetTransform){
         hideSurfaceEditPreviewMesh();
@@ -1897,7 +1897,7 @@ void ProjectTestbed::queueSurfaceEditReplay(){
     ;
     Float4 replayPosition(0.0f, __hidden_project_testbed_runtime::s_SurfaceEditTargetY, 0.0f);
     f32 replayScale = 0.8f;
-    const auto* oldTransform = m_world->tryGetComponent<NWB::Impl::TransformComponent>(
+    const auto* oldTransform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(
         m_surfaceEditTargetEntity
     );
     if(oldTransform){

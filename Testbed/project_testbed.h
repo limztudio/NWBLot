@@ -14,7 +14,7 @@
 #include <impl/ecs_deformable_render/ecs_deformable_render.h>
 #include <impl/ecs_geometry/ecs_geometry.h>
 #include <impl/ecs_render/ecs_render.h>
-#include <impl/ecs_scene/ecs_scene.h>
+#include <core/scene/scene.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

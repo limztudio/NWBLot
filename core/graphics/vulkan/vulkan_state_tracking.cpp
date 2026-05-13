@@ -250,7 +250,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-            if(!m_stateTracker->getTransientTextureState(textureResource, arraySlice, mipLevel, subresourceOldState))
+            if(!m_stateTracker->getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState))
                 return;
 
             if(firstSubresource){
@@ -310,7 +310,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
             stateBits
         );
 
-        m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
+        m_stateTracker->beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
 
         if(!m_enableAutomaticBarriers){
             m_pendingImageBarriers.push_back(barrier);
@@ -325,7 +325,7 @@ void CommandList::setTextureState(ITexture* textureResource, TextureSubresourceS
         return;
     }
 
-    m_stateTracker->beginTrackingTransientTexture(textureResource, resolvedSubresources, stateBits);
+    m_stateTracker->beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
 
     if(!m_enableAutomaticBarriers)
         return;
@@ -492,6 +492,14 @@ bool StateTracker::getTransientTextureState(ITexture* texture, ArraySlice arrayS
     if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
         return false;
 
+    return getResolvedTransientTextureState(checked_cast<Texture*>(texture), arraySlice, mipLevel, outState);
+}
+
+bool StateTracker::getResolvedTransientTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
+    outState = ResourceStates::Unknown;
+    if(!texture)
+        return false;
+
     const TextureSubresourceStateKey key{ texture, mipLevel, arraySlice };
     auto it = m_textureStates.find(key);
     if(it != m_textureStates.end()){
@@ -499,8 +507,8 @@ bool StateTracker::getTransientTextureState(ITexture* texture, ArraySlice arrayS
         return true;
     }
 
-    if(desc.keepInitialState && checked_cast<Texture*>(texture)->m_keepInitialStateKnown)
-        outState = desc.initialState;
+    if(texture->m_desc.keepInitialState && texture->m_keepInitialStateKnown)
+        outState = texture->m_desc.initialState;
 
     return true;
 }
@@ -618,8 +626,15 @@ void StateTracker::beginTrackingTransientTexture(ITexture* texture, TextureSubre
     if(!texture)
         return;
 
-    const TextureDesc& desc = texture->getDescription();
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
+    auto* vulkanTexture = checked_cast<Texture*>(texture);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(vulkanTexture->m_desc, TextureSubresourceMipResolve::Range);
+    beginTrackingResolvedTransientTexture(vulkanTexture, resolvedSubresources, state);
+}
+
+void StateTracker::beginTrackingResolvedTransientTexture(Texture* texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state){
+    if(!texture)
+        return;
+
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);

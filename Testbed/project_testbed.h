@@ -116,6 +116,12 @@ private:
         const SurfaceEditMutationContext& editContext,
         NWB::Impl::DeformablePosedHit& outTargetHit
     );
+    [[nodiscard]] bool prepareSavedSurfaceEditMutation(const tchar* action, SurfaceEditMutationContext& outContext);
+    [[nodiscard]] bool prepareLatestSurfaceEditMutation(
+        const tchar* action,
+        SurfaceEditMutationContext& outContext,
+        NWB::Impl::DeformableSurfaceEditId& outEditId
+    );
     void toggleSurfaceEditDebug();
     void logSurfaceEditDebugSnapshot();
     void logSurfaceEditControls()const;

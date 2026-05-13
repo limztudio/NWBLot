@@ -39,30 +39,24 @@ Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateG
 
 
 bool Geometry::validatePayload()const{
-    const auto geometryPathText = [this]() -> TString{
-        return
-            virtualPath()
-                ? StringConvert(virtualPath().c_str())
-                : TString(NWB_TEXT("<unnamed>"))
-        ;
-    };
+    const TString geometryPathText = Core::Assets::AssetVirtualPathText(*this);
 
     if(m_vertices.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' has incomplete payload")
-            , geometryPathText()
+            , geometryPathText
         );
         return false;
     }
 
     if(m_vertices.size() > static_cast<usize>(Limit<u32>::s_Max) || m_indices.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits")
-            , geometryPathText()
+            , geometryPathText
         );
         return false;
     }
     if((m_indices.size() % 3u) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' index count {} is not a multiple of 3 for triangle-list rendering")
-            , geometryPathText()
+            , geometryPathText
             , m_indices.size()
         );
         return false;
@@ -84,7 +78,7 @@ bool Geometry::validatePayload()const{
         ;
         if(!finite){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex {} contains non-finite data")
-                , geometryPathText()
+                , geometryPathText
                 , i
             );
             return false;
@@ -97,7 +91,7 @@ bool Geometry::validatePayload()const{
         ;
         if(!IsFinite(normalLengthSquared) || Abs(normalLengthSquared - 1.0f) > 0.001f){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex {} has an invalid normal")
-                , geometryPathText()
+                , geometryPathText
                 , i
             );
             return false;
@@ -107,7 +101,7 @@ bool Geometry::validatePayload()const{
     for(const u32 indexValue : m_indices){
         if(indexValue >= m_vertices.size()){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' references vertex index {} but only has {} vertices")
-                , geometryPathText()
+                , geometryPathText
                 , indexValue
                 , m_vertices.size()
             );

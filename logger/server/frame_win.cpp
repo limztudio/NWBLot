@@ -61,6 +61,49 @@ static bool IsMessageIndexValid(UINT itemID){
     return static_cast<usize>(itemID) < s_Messages.size();
 }
 
+struct LogRowColors{
+    COLORREF text = RGB(0, 0, 0);
+    COLORREF background = RGB(230, 230, 230);
+};
+
+static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors& even, const LogRowColors& odd){
+    return alternate ? odd : even;
+}
+
+static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool alternate){
+    switch(type){
+    case Log::Type::EssentialInfo:
+    case Log::Type::Info:
+        return SelectLogRowColors(alternate, LogRowColors{}, LogRowColors{ RGB(80, 80, 80), RGB(255, 255, 255) });
+    case Log::Type::Warning:
+        return SelectLogRowColors(
+            alternate,
+            LogRowColors{ RGB(0, 0, 0), RGB(170, 170, 0) },
+            LogRowColors{ RGB(60, 60, 60), RGB(200, 200, 0) }
+        );
+    case Log::Type::CriticalWarning:
+        return SelectLogRowColors(
+            alternate,
+            LogRowColors{ RGB(240, 240, 240), RGB(170, 80, 0) },
+            LogRowColors{ RGB(255, 255, 255), RGB(200, 100, 0) }
+        );
+    case Log::Type::Error:
+        return SelectLogRowColors(
+            alternate,
+            LogRowColors{ RGB(200, 200, 200), RGB(170, 0, 0) },
+            LogRowColors{ RGB(255, 255, 255), RGB(200, 0, 0) }
+        );
+    case Log::Type::Fatal:
+        return SelectLogRowColors(
+            alternate,
+            LogRowColors{ RGB(200, 200, 0), RGB(220, 0, 0) },
+            LogRowColors{ RGB(255, 255, 0), RGB(250, 0, 0) }
+        );
+    default:
+        return SelectLogRowColors(alternate, LogRowColors{}, LogRowColors{ RGB(80, 80, 80), RGB(255, 255, 255) });
+    }
+}
+
 static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(uMsg == WM_KEYDOWN && wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
         SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
@@ -237,77 +280,12 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 HDC hdc = dis->hDC;
                 RECT rect = dis->rcItem;
 
-                COLORREF textColor;
-                COLORREF bgColor;
-                switch(curData.second()){
-                case Log::Type::EssentialInfo:
-                case Log::Type::Info:
-                    if(dis->itemID & 1){
-                        textColor = RGB(80, 80, 80);
-                        bgColor = RGB(255, 255, 255);
-                    }
-                    else{
-                        textColor = RGB(0, 0, 0);
-                        bgColor = RGB(230, 230, 230);
-                    }
-                    break;
-                case Log::Type::Warning:
-                    if(dis->itemID & 1){
-                        textColor = RGB(60, 60, 60);
-                        bgColor = RGB(200, 200, 0);
-                    }
-                    else{
-                        textColor = RGB(0, 0, 0);
-                        bgColor = RGB(170, 170, 0);
-                    }
-                    break;
-                case Log::Type::CriticalWarning:
-                    if(dis->itemID & 1){
-                        textColor = RGB(255, 255, 255);
-                        bgColor = RGB(200, 100, 0);
-                    }
-                    else{
-                        textColor = RGB(240, 240, 240);
-                        bgColor = RGB(170, 80, 0);
-                    }
-                    break;
-                case Log::Type::Error:
-                    if(dis->itemID & 1){
-                        textColor = RGB(255, 255, 255);
-                        bgColor = RGB(200, 0, 0);
-                    }
-                    else{
-                        textColor = RGB(200, 200, 200);
-                        bgColor = RGB(170, 0, 0);
-                    }
-                    break;
-                case Log::Type::Fatal:
-                    if(dis->itemID & 1){
-                        textColor = RGB(255, 255, 0);
-                        bgColor = RGB(250, 0, 0);
-                    }
-                    else{
-                        textColor = RGB(200, 200, 0);
-                        bgColor = RGB(220, 0, 0);
-                    }
-                    break;
-                default:
-                    if(dis->itemID & 1){
-                        textColor = RGB(80, 80, 80);
-                        bgColor = RGB(255, 255, 255);
-                    }
-                    else{
-                        textColor = RGB(0, 0, 0);
-                        bgColor = RGB(230, 230, 230);
-                    }
-                    break;
-                }
-
-                HBRUSH hBrush = CreateSolidBrush(bgColor);
+                const LogRowColors colors = ResolveLogRowColors(curData.second(), (dis->itemID & 1) != 0);
+                HBRUSH hBrush = CreateSolidBrush(colors.background);
                 FillRect(hdc, &rect, hBrush);
                 DeleteObject(hBrush);
 
-                SetTextColor(hdc, textColor);
+                SetTextColor(hdc, colors.text);
                 SetBkMode(hdc, TRANSPARENT);
                 DrawText(hdc, curData.first().c_str(), -1, &rect, DT_WORDBREAK | DT_LEFT);
             }

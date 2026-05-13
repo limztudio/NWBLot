@@ -10,6 +10,7 @@
 #include <core/graphics/graphics.h>
 #include <impl/assets_geometry/deformable_geometry_asset.h>
 #include <impl/assets_geometry/deformable_geometry_payload_logging.h>
+#include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <impl/ecs_deformable/deformable_runtime_names.h>
 #include <core/common/log.h>
 
@@ -102,17 +103,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         return false;
     }
     const DeformableValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
-        DeformableValidation::FindRuntimePayloadFailure(
-            instance.restVertices,
-            instance.indices,
-            instance.sourceTriangleCount,
-            instance.skeletonJointCount,
-            instance.skin,
-            instance.inverseBindMatrices,
-            instance.sourceSamples,
-            instance.editMaskPerTriangle,
-            instance.morphs
-        )
+        DeformableRuntime::FindRuntimeMeshPayloadFailure(instance)
     ;
     if(runtimePayloadFailure.reason != DeformableValidation::RuntimePayloadFailure::None){
         DeformableValidation::LogRuntimePayloadFailure(

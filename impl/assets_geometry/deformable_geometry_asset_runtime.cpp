@@ -57,13 +57,7 @@ void DeformableDisplacementTexture::setSize(const u32 width, const u32 height){
 }
 
 bool DeformableDisplacementTexture::validatePayload()const{
-    const auto texturePathText = [this]() -> TString{
-        return
-            virtualPath()
-                ? StringConvert(virtualPath().c_str())
-                : TString(NWB_TEXT("<unnamed>"))
-        ;
-    };
+    const TString texturePathText = Core::Assets::AssetVirtualPathText(*this);
 
     if(!virtualPath()){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: virtual path is empty"));
@@ -71,13 +65,13 @@ bool DeformableDisplacementTexture::validatePayload()const{
     }
     if(m_width == 0u || m_height == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions are empty")
-            , texturePathText()
+            , texturePathText
         );
         return false;
     }
     if(m_width > Limit<u32>::s_Max / m_height){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' dimensions overflow")
-            , texturePathText()
+            , texturePathText
         );
         return false;
     }
@@ -85,7 +79,7 @@ bool DeformableDisplacementTexture::validatePayload()const{
     const usize requiredTexelCount = static_cast<usize>(m_width) * static_cast<usize>(m_height);
     if(m_texels.size() != requiredTexelCount){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel count {} does not match dimensions {}x{}")
-            , texturePathText()
+            , texturePathText
             , m_texels.size()
             , m_width
             , m_height
@@ -97,7 +91,7 @@ bool DeformableDisplacementTexture::validatePayload()const{
         const Float4U& texel = m_texels[i];
         if(!IsFinite(texel.x) || !IsFinite(texel.y) || !IsFinite(texel.z) || !IsFinite(texel.w)){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableDisplacementTexture::validatePayload failed: texture '{}' texel {} is not finite")
-                , texturePathText()
+                , texturePathText
                 , i
             );
             return false;
@@ -164,13 +158,7 @@ bool DeformableDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& b
 
 
 bool DeformableGeometry::validatePayload()const{
-    const auto geometryPathText = [this]() -> TString{
-        return
-            virtualPath()
-                ? StringConvert(virtualPath().c_str())
-                : TString(NWB_TEXT("<unnamed>"))
-        ;
-    };
+    const TString geometryPathText = Core::Assets::AssetVirtualPathText(*this);
 
     const usize indexCount = m_indices.size();
     const u32 sourceTriangleCount = indexCount <= static_cast<usize>(Limit<u32>::s_Max)
@@ -179,7 +167,7 @@ bool DeformableGeometry::validatePayload()const{
     ;
     if(!GeometryClassUsesDeformableRuntime(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")
-            , geometryPathText()
+            , geometryPathText
             , StringConvert(GeometryClassText(m_geometryClass))
         );
         return false;
@@ -188,7 +176,7 @@ bool DeformableGeometry::validatePayload()const{
     const bool hasSkin = !m_skin.empty();
     if(!GeometryClassMatchesSkinPayload(m_geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' does not match skin payload")
-            , geometryPathText()
+            , geometryPathText
             , StringConvert(GeometryClassText(m_geometryClass))
         );
         return false;
@@ -196,14 +184,14 @@ bool DeformableGeometry::validatePayload()const{
     const bool hasSurfaceEditPayload = !m_sourceSamples.empty() || !m_editMaskPerTriangle.empty() || !m_morphs.empty();
     if(!GeometryClassAcceptsRuntimeDeformPayload(m_geometryClass, hasSurfaceEditPayload)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry surface edit or morph payload")
-            , geometryPathText()
+            , geometryPathText
             , StringConvert(GeometryClassText(m_geometryClass))
         );
         return false;
     }
     if(!GeometryClassAcceptsRuntimeDeformPayload(m_geometryClass, m_displacement.mode != DeformableDisplacementMode::None)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry displacement payload")
-            , geometryPathText()
+            , geometryPathText
             , StringConvert(GeometryClassText(m_geometryClass))
         );
         return false;
@@ -225,7 +213,7 @@ bool DeformableGeometry::validatePayload()const{
         DeformableValidation::LogRuntimePayloadFailure(
             NWB_TEXT("DeformableGeometry::validatePayload failed"),
             NWB_TEXT("geometry"),
-            geometryPathText(),
+            geometryPathText,
             m_morphs,
             runtimePayloadFailure
         );
@@ -234,7 +222,7 @@ bool DeformableGeometry::validatePayload()const{
 
     if(!ValidDeformableDisplacementDescriptor(m_displacement)){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid")
-            , geometryPathText()
+            , geometryPathText
         );
         return false;
     }
@@ -246,14 +234,14 @@ bool DeformableGeometry::validatePayload()const{
             )
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' displacement texture path text does not match asset ref")
-            , geometryPathText()
+            , geometryPathText
         );
         return false;
     }
     for(const DeformableMorph& morph : m_morphs){
         if(!morph.nameText.empty() && !DeformableGeometryBinaryPayload::StableTextMatchesName(morph.nameText, morph.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("DeformableGeometry::validatePayload failed: geometry '{}' morph name text does not match morph name")
-                , geometryPathText()
+                , geometryPathText
             );
             return false;
         }

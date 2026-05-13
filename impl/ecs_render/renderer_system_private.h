@@ -414,6 +414,49 @@ inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     return pushConstants;
 }
 
+inline void SetShaderDrivenPushConstants(
+    Core::ICommandList& commandList,
+    const u32 triangleCount,
+    const u32 instanceIndex,
+    const u32 sourceVertexLayout,
+    const Core::ViewportState& viewportState
+){
+    const ShaderDrivenPushConstants pushConstants =
+        BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState)
+    ;
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+}
+
+inline void SetTransparentDrawPushConstants(
+    Core::ICommandList& commandList,
+    const u32 triangleCount,
+    const u32 instanceIndex,
+    const u32 sourceVertexLayout,
+    const Core::ViewportState& viewportState,
+    const RendererSystem::AvboitFrameTargets& targets,
+    const f32 alpha
+){
+    const TransparentDrawPushConstants pushConstants =
+        BuildTransparentDrawPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState, targets, alpha)
+    ;
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+}
+
+inline void SetEmulatedVertexAttribute(
+    Core::VertexAttributeDesc& attribute,
+    const Core::Format::Enum format,
+    const u32 offsetFloatCount,
+    const char* name
+){
+    attribute
+        .setFormat(format)
+        .setBufferIndex(0)
+        .setOffset(sizeof(f32) * offsetFloatCount)
+        .setElementStride(s_EmulatedVertexStride)
+        .setName(name)
+    ;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

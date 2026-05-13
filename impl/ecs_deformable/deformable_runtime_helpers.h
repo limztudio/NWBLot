@@ -318,8 +318,8 @@ template<typename JointMatrixVector>
     return Vector3Rotate(direction, real);
 }
 
-[[nodiscard]] inline bool ValidRuntimeMeshPayloadArrays(const DeformableRuntimeMeshInstance& instance){
-    return DeformableValidation::ValidRuntimePayloadArrays(
+[[nodiscard]] inline DeformableValidation::RuntimePayloadFailureInfo FindRuntimeMeshPayloadFailure(const DeformableRuntimeMeshInstance& instance){
+    return DeformableValidation::FindRuntimePayloadFailure(
         instance.restVertices,
         instance.indices,
         instance.sourceTriangleCount,
@@ -330,6 +330,10 @@ template<typename JointMatrixVector>
         instance.editMaskPerTriangle,
         instance.morphs
     );
+}
+
+[[nodiscard]] inline bool ValidRuntimeMeshPayloadArrays(const DeformableRuntimeMeshInstance& instance){
+    return FindRuntimeMeshPayloadFailure(instance).reason == DeformableValidation::RuntimePayloadFailure::None;
 }
 
 [[nodiscard]] inline bool ValidateTriangleIndex(const DeformableRuntimeMeshInstance& instance, const u32 triangle, u32 (&outIndices)[3]){

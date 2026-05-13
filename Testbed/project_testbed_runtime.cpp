@@ -2146,14 +2146,30 @@ bool ProjectTestbed::pickSurfaceEditMutationTarget(
     return true;
 }
 
-void ProjectTestbed::undoSurfaceEdit(){
+bool ProjectTestbed::prepareSavedSurfaceEditMutation(const tchar* action, SurfaceEditMutationContext& outContext){
     if(m_surfaceEditState.edits.empty()){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit undo: no saved edits"));
-        return;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit {}: no saved edits"), action);
+        return false;
     }
 
+    return prepareSurfaceEditMutation(action, outContext);
+}
+
+bool ProjectTestbed::prepareLatestSurfaceEditMutation(
+    const tchar* action,
+    SurfaceEditMutationContext& outContext,
+    NWB::Impl::DeformableSurfaceEditId& outEditId){
+    outEditId = {};
+    if(!prepareSavedSurfaceEditMutation(action, outContext))
+        return false;
+
+    outEditId = m_surfaceEditState.edits.back().editId;
+    return true;
+}
+
+void ProjectTestbed::undoSurfaceEdit(){
     SurfaceEditMutationContext editContext;
-    if(!prepareSurfaceEditMutation(NWB_TEXT("undo"), editContext))
+    if(!prepareSavedSurfaceEditMutation(NWB_TEXT("undo"), editContext))
         return;
 
     NWB::Impl::DeformableSurfaceEditUndoResult undoResult;
@@ -2217,18 +2233,11 @@ void ProjectTestbed::redoSurfaceEdit(){
 }
 
 void ProjectTestbed::healLatestSurfaceEdit(){
-    if(m_surfaceEditState.edits.empty()){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit heal: no saved edits"));
-        return;
-    }
-
     SurfaceEditMutationContext editContext;
-    if(!prepareSurfaceEditMutation(NWB_TEXT("heal"), editContext))
+    NWB::Impl::DeformableSurfaceEditId editId;
+    if(!prepareLatestSurfaceEditMutation(NWB_TEXT("heal"), editContext, editId))
         return;
 
-    const NWB::Impl::DeformableSurfaceEditId editId =
-        m_surfaceEditState.edits.back().editId
-    ;
     NWB::Impl::DeformableSurfaceEditHealResult healResult;
     if(
         !NWB::Impl::HealSurfaceEdit(
@@ -2255,18 +2264,11 @@ void ProjectTestbed::healLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::resizeLatestSurfaceEdit(){
-    if(m_surfaceEditState.edits.empty()){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit resize: no saved edits"));
-        return;
-    }
-
     SurfaceEditMutationContext editContext;
-    if(!prepareSurfaceEditMutation(NWB_TEXT("resize"), editContext))
+    NWB::Impl::DeformableSurfaceEditId editId;
+    if(!prepareLatestSurfaceEditMutation(NWB_TEXT("resize"), editContext, editId))
         return;
 
-    const NWB::Impl::DeformableSurfaceEditId editId =
-        m_surfaceEditState.edits.back().editId
-    ;
     NWB::Impl::DeformableSurfaceEditResizeResult resizeResult;
     if(
         !NWB::Impl::ResizeSurfaceEdit(
@@ -2300,22 +2302,15 @@ void ProjectTestbed::resizeLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::moveLatestSurfaceEdit(){
-    if(m_surfaceEditState.edits.empty()){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit move: no saved edits"));
-        return;
-    }
-
     SurfaceEditMutationContext editContext;
-    if(!prepareSurfaceEditMutation(NWB_TEXT("move"), editContext))
+    NWB::Impl::DeformableSurfaceEditId editId;
+    if(!prepareLatestSurfaceEditMutation(NWB_TEXT("move"), editContext, editId))
         return;
 
     NWB::Impl::DeformablePosedHit targetHit;
     if(!pickSurfaceEditMutationTarget(NWB_TEXT("move"), editContext, targetHit))
         return;
 
-    const NWB::Impl::DeformableSurfaceEditId editId =
-        m_surfaceEditState.edits.back().editId
-    ;
     NWB::Impl::DeformableSurfaceEditMoveResult moveResult;
     if(
         !NWB::Impl::MoveSurfaceEdit(
@@ -2347,22 +2342,15 @@ void ProjectTestbed::moveLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::patchLatestSurfaceEdit(){
-    if(m_surfaceEditState.edits.empty()){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit patch: no saved edits"));
-        return;
-    }
-
     SurfaceEditMutationContext editContext;
-    if(!prepareSurfaceEditMutation(NWB_TEXT("patch"), editContext))
+    NWB::Impl::DeformableSurfaceEditId editId;
+    if(!prepareLatestSurfaceEditMutation(NWB_TEXT("patch"), editContext, editId))
         return;
 
     NWB::Impl::DeformablePosedHit targetHit;
     if(!pickSurfaceEditMutationTarget(NWB_TEXT("patch"), editContext, targetHit))
         return;
 
-    const NWB::Impl::DeformableSurfaceEditId editId =
-        m_surfaceEditState.edits.back().editId
-    ;
     NWB::Impl::DeformableSurfaceEditPatchResult patchResult;
     if(
         !NWB::Impl::PatchSurfaceEdit(
@@ -2403,18 +2391,11 @@ void ProjectTestbed::patchLatestSurfaceEdit(){
 }
 
 void ProjectTestbed::addLoopCutToLatestSurfaceEdit(){
-    if(m_surfaceEditState.edits.empty()){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Surface edit loop cut: no saved edits"));
-        return;
-    }
-
     SurfaceEditMutationContext editContext;
-    if(!prepareSurfaceEditMutation(NWB_TEXT("loop cut"), editContext))
+    NWB::Impl::DeformableSurfaceEditId editId;
+    if(!prepareLatestSurfaceEditMutation(NWB_TEXT("loop cut"), editContext, editId))
         return;
 
-    const NWB::Impl::DeformableSurfaceEditId editId =
-        m_surfaceEditState.edits.back().editId
-    ;
     NWB::Impl::DeformableSurfaceEditLoopCutResult loopCutResult;
     if(
         !NWB::Impl::AddSurfaceEditLoopCut(

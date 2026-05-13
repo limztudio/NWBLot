@@ -303,48 +303,12 @@ bool RendererSystem::createComputeEmulationResources(){
 
     if(!m_emulationInputLayout){
         Core::VertexAttributeDesc attributes[6];
-        attributes[0]
-            .setFormat(Core::Format::RGBA32_FLOAT)
-            .setBufferIndex(0)
-            .setOffset(0)
-            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setName("POSITION")
-        ;
-        attributes[1]
-            .setFormat(Core::Format::RGB32_FLOAT)
-            .setBufferIndex(0)
-            .setOffset(sizeof(f32) * 4u)
-            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setName("NORMAL")
-        ;
-        attributes[2]
-            .setFormat(Core::Format::RGBA32_FLOAT)
-            .setBufferIndex(0)
-            .setOffset(sizeof(f32) * 8u)
-            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setName("TANGENT")
-        ;
-        attributes[3]
-            .setFormat(Core::Format::RG32_FLOAT)
-            .setBufferIndex(0)
-            .setOffset(sizeof(f32) * 12u)
-            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setName("TEXCOORD")
-        ;
-        attributes[4]
-            .setFormat(Core::Format::RGBA32_FLOAT)
-            .setBufferIndex(0)
-            .setOffset(sizeof(f32) * 16u)
-            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setName("COLOR")
-        ;
-        attributes[5]
-            .setFormat(Core::Format::RGBA32_FLOAT)
-            .setBufferIndex(0)
-            .setOffset(sizeof(f32) * 20u)
-            .setElementStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setName("POSITION1")
-        ;
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[0], Core::Format::RGBA32_FLOAT, 0u, "POSITION");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[1], Core::Format::RGB32_FLOAT, 4u, "NORMAL");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[2], Core::Format::RGBA32_FLOAT, 8u, "TANGENT");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[3], Core::Format::RG32_FLOAT, 12u, "TEXCOORD");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[4], Core::Format::RGBA32_FLOAT, 16u, "COLOR");
+        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[5], Core::Format::RGBA32_FLOAT, 20u, "POSITION1");
 
         Core::IDevice* device = m_graphics.getDevice();
         m_emulationInputLayout = device->createInputLayout(attributes, 6, m_emulationVertexShader.get());
@@ -586,26 +550,24 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.setMeshletState(meshletState);
 
         if(!MaterialPipelinePassUsesRendererAvboit(context.pass)){
-            const ECSRenderDetail::ShaderDrivenPushConstants pushConstants =
-                ECSRenderDetail::BuildShaderDrivenPushConstants(
-                    geometry.triangleCount,
-                    drawItem.instanceIndex,
-                    geometry.sourceVertexLayout,
-                    context.viewportState
-                );
-            context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+            ECSRenderDetail::SetShaderDrivenPushConstants(
+                context.commandList,
+                geometry.triangleCount,
+                drawItem.instanceIndex,
+                geometry.sourceVertexLayout,
+                context.viewportState
+            );
         }
         else{
-            const ECSRenderDetail::TransparentDrawPushConstants pushConstants =
-                ECSRenderDetail::BuildTransparentDrawPushConstants(
-                    geometry.triangleCount,
-                    drawItem.instanceIndex,
-                    geometry.sourceVertexLayout,
-                    context.viewportState,
-                    *context.avboitTargets,
-                    drawItem.alpha
-                );
-            context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+            ECSRenderDetail::SetTransparentDrawPushConstants(
+                context.commandList,
+                geometry.triangleCount,
+                drawItem.instanceIndex,
+                geometry.sourceVertexLayout,
+                context.viewportState,
+                *context.avboitTargets,
+                drawItem.alpha
+            );
         }
         context.commandList.dispatchMesh(geometry.dispatchGroupCount);
     });
@@ -637,14 +599,13 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setComputeState(computeState);
 
-        const ECSRenderDetail::ShaderDrivenPushConstants pushConstants =
-            ECSRenderDetail::BuildShaderDrivenPushConstants(
-                geometry.triangleCount,
-                drawItem.instanceIndex,
-                geometry.sourceVertexLayout,
-                context.viewportState
-            );
-        context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        ECSRenderDetail::SetShaderDrivenPushConstants(
+            context.commandList,
+            geometry.triangleCount,
+            drawItem.instanceIndex,
+            geometry.sourceVertexLayout,
+            context.viewportState
+        );
         context.commandList.dispatch(geometry.dispatchGroupCount);
 
         context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
@@ -672,16 +633,15 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setGraphicsState(graphicsState);
 
         if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
-            const ECSRenderDetail::TransparentDrawPushConstants transparentPushConstants =
-                ECSRenderDetail::BuildTransparentDrawPushConstants(
-                    geometry.triangleCount,
-                    drawItem.instanceIndex,
-                    geometry.sourceVertexLayout,
-                    context.viewportState,
-                    *context.avboitTargets,
-                    drawItem.alpha
-                );
-            context.commandList.setPushConstants(&transparentPushConstants, sizeof(transparentPushConstants));
+            ECSRenderDetail::SetTransparentDrawPushConstants(
+                context.commandList,
+                geometry.triangleCount,
+                drawItem.instanceIndex,
+                geometry.sourceVertexLayout,
+                context.viewportState,
+                *context.avboitTargets,
+                drawItem.alpha
+            );
         }
 
         Core::DrawArguments drawArgs;

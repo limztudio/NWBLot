@@ -57,6 +57,14 @@ private:
     Name m_virtualPath = NAME_NONE;
 };
 
+[[nodiscard]] inline TString AssetVirtualPathText(const IAsset& asset){
+    return
+        asset.virtualPath()
+            ? StringConvert(asset.virtualPath().c_str())
+            : TString(NWB_TEXT("<unnamed>"))
+    ;
+}
+
 template<typename AssetT>
 class TypedAsset : public IAsset{
 protected:

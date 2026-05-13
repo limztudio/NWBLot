@@ -99,15 +99,21 @@ private:
 
 public:
     inline bool initialize(){
+        m_initializedItemCount = 0u;
+        usize initializedItemCount = 0u;
         for(auto& cur : m_items){
-            if(!cur.item->initialize())
+            if(!cur.item->initialize()){
+                finalizeInitialized(initializedItemCount);
                 return false;
+            }
+            ++initializedItemCount;
         }
+        m_initializedItemCount = initializedItemCount;
         return true;
     }
     inline void finalize(){
-        for(auto& cur : m_items)
-            cur.item->finalize();
+        finalizeInitialized(m_initializedItemCount);
+        m_initializedItemCount = 0u;
     }
     [[nodiscard]] inline bool acquire(){
         if(m_activeCount > 0u){
@@ -141,8 +147,22 @@ public:
 
 
 private:
+    inline void finalizeInitialized(const usize initializedItemCount){
+        usize itemIndex = 0u;
+        for(auto& cur : m_items){
+            if(itemIndex >= initializedItemCount)
+                return;
+
+            cur.item->finalize();
+            ++itemIndex;
+        }
+    }
+
+
+private:
     ForwardList<InitializerItem> m_items;
     decltype(m_items)::iterator m_cursor;
+    usize m_initializedItemCount = 0;
     usize m_activeCount = 0;
 };
 

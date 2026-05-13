@@ -231,6 +231,12 @@ def write_bmp_24(path, width, height, rows_rgb):
             out.write(padding)
 
 
+def write_capture_rows(handle, width, height, rows_rgb, output_path):
+    write_bmp_24(output_path, width, height, rows_rgb)
+    analysis = analyze_rgb_rows(rows_rgb)
+    return CaptureResult(handle, width, height, analysis.has_pixel_variation, analysis.appears_blank)
+
+
 def analyze_rgb_rows(rows_rgb):
     first_pixel = None
     total_pixels = 0
@@ -275,6 +281,43 @@ def channel_from_mask(pixel, mask):
     value = (pixel & mask) >> shift
     maximum = (1 << bit_count) - 1
     return (value * 255 + maximum // 2) // maximum
+
+
+def ximage_rgb_rows(image, byte_order):
+    bytes_per_pixel = (image.bits_per_pixel + 7) // 8
+    raw_size = image.bytes_per_line * image.height
+    raw = ctypes.string_at(image.data, raw_size)
+    rows = []
+
+    for y in range(image.height):
+        row_base = y * image.bytes_per_line
+        row = []
+        for x in range(image.width):
+            pixel_base = row_base + x * bytes_per_pixel
+            pixel = int.from_bytes(raw[pixel_base:pixel_base + bytes_per_pixel], byte_order)
+            red = channel_from_mask(pixel, image.red_mask)
+            green = channel_from_mask(pixel, image.green_mask)
+            blue = channel_from_mask(pixel, image.blue_mask)
+            row.append((red, green, blue))
+        rows.append(row)
+
+    return rows
+
+
+def bgra_rgb_rows(buffer, width, height):
+    rows = []
+    for y in range(height):
+        row = []
+        row_base = y * width * 4
+        for x in range(width):
+            pixel_base = row_base + x * 4
+            blue = buffer[pixel_base]
+            green = buffer[pixel_base + 1]
+            red = buffer[pixel_base + 2]
+            row.append((red, green, blue))
+        rows.append(row)
+
+    return rows
 
 
 class LinuxXWindowAttributes(ctypes.Structure):
@@ -842,26 +885,8 @@ class LinuxX11Capture:
             raise SmokeFailure(f"XImage for drawable 0x{output_handle:x} has no pixel data")
 
         byte_order = "little" if image.byte_order == self.LSB_FIRST else "big"
-        raw_size = image.bytes_per_line * image.height
-        raw = ctypes.string_at(image.data, raw_size)
-        rows = []
-
-        for y in range(image.height):
-            row_base = y * image.bytes_per_line
-            row = []
-            for x in range(image.width):
-                pixel_base = row_base + x * bytes_per_pixel
-                pixel = int.from_bytes(raw[pixel_base:pixel_base + bytes_per_pixel], byte_order)
-                red = channel_from_mask(pixel, image.red_mask)
-                green = channel_from_mask(pixel, image.green_mask)
-                blue = channel_from_mask(pixel, image.blue_mask)
-                rgb = (red, green, blue)
-                row.append(rgb)
-            rows.append(row)
-
-        write_bmp_24(output_path, image.width, image.height, rows)
-        analysis = analyze_rgb_rows(rows)
-        return CaptureResult(output_handle, image.width, image.height, analysis.has_pixel_variation, analysis.appears_blank)
+        rows = ximage_rgb_rows(image, byte_order)
+        return write_capture_rows(output_handle, image.width, image.height, rows, output_path)
 
 
 class WinRect(ctypes.Structure):
@@ -1119,22 +1144,7 @@ class WindowsCapture:
             if self.gdi32.GetDIBits(mem_dc, bitmap, 0, height, buffer, ctypes.byref(bitmap_info), self.DIB_RGB_COLORS) == 0:
                 raise SmokeFailure(f"GetDIBits failed for HWND 0x{hwnd:x}")
 
-            rows = []
-            for y in range(height):
-                row = []
-                row_base = y * width * 4
-                for x in range(width):
-                    pixel_base = row_base + x * 4
-                    blue = buffer[pixel_base]
-                    green = buffer[pixel_base + 1]
-                    red = buffer[pixel_base + 2]
-                    rgb = (red, green, blue)
-                    row.append(rgb)
-                rows.append(row)
-
-            write_bmp_24(output_path, width, height, rows)
-            analysis = analyze_rgb_rows(rows)
-            return CaptureResult(hwnd, width, height, analysis.has_pixel_variation, analysis.appears_blank)
+            return write_capture_rows(hwnd, width, height, bgra_rgb_rows(buffer, width, height), output_path)
         finally:
             if old_object:
                 self.gdi32.SelectObject(mem_dc, old_object)

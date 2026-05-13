@@ -1434,25 +1434,21 @@ static bool ParseDeformableGeometryMeta(
         return false;
     bool normalsProvided = false;
     bool tangentsProvided = false;
-    if(
-        !ParseOptionalFloatListField<Float3U, 3u>(
-            discoveredFile.filePath,
-            asset,
-            "normals",
-            normals,
-            normalsProvided
-        )
-    )
+    if(!ParseOptionalFloatListField<Float3U, 3u>(
+        discoveredFile.filePath,
+        asset,
+        "normals",
+        normals,
+        normalsProvided
+    ))
         return false;
-    if(
-        !ParseOptionalFloatListField<Float4U, 4u>(
-            discoveredFile.filePath,
-            asset,
-            "tangents",
-            tangents,
-            tangentsProvided
-        )
-    )
+    if(!ParseOptionalFloatListField<Float4U, 4u>(
+        discoveredFile.filePath,
+        asset,
+        "tangents",
+        tangents,
+        tangentsProvided
+    ))
         return false;
     if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
         return false;

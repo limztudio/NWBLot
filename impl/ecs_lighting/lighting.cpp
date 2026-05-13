@@ -10,13 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_lighting{
+namespace __hidden_ecs_lighting{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +49,7 @@ static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& f
 
 SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis){
     SceneDirectionalLight light;
-    __hidden_lighting::StoreDirectionalLightDirection(light.direction, basis.forward);
+    __hidden_ecs_lighting::StoreDirectionalLightDirection(light.direction, basis.forward);
     light.colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     return light;
 }
@@ -81,8 +81,8 @@ bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const Li
     }
 
     Float4 lightForward;
-    __hidden_lighting::StoreRotatedLightBasisVector(lightForward, Float4(0.0f, 0.0f, 1.0f), rotation);
-    __hidden_lighting::StoreDirectionalLightDirection(outLight.direction, lightForward);
+    __hidden_ecs_lighting::StoreRotatedLightBasisVector(lightForward, Float4(0.0f, 0.0f, 1.0f), rotation);
+    __hidden_ecs_lighting::StoreDirectionalLightDirection(outLight.direction, lightForward);
     outLight.colorIntensity = light.colorIntensity;
     return true;
 }
@@ -105,7 +105,7 @@ SceneDirectionalLight ResolveSceneDirectionalLight(Core::ECS::World& world, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

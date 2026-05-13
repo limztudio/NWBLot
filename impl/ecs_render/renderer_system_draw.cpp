@@ -150,8 +150,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!geometry.valid())
             return false;
 
-        const NWB::Core::Scene::TransformComponent* transform =
-            m_world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity)
+        const NWB::Impl::TransformComponent* transform =
+            m_world.tryGetComponent<NWB::Impl::TransformComponent>(entity)
         ;
 
         MaterialSurfaceInfo* materialInfo = nullptr;

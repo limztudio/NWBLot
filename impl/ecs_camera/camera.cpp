@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "scene.h"
+#include "camera.h"
 
 #include <core/ecs/world.h>
 
@@ -10,29 +10,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_BEGIN
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_scene{
+namespace __hidden_ecs_camera{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static constexpr f32 s_DefaultSceneViewYaw = 0.82f;
-static constexpr f32 s_DefaultSceneViewPitch = 0.94f;
-static constexpr f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
 [[nodiscard]] bool SceneFloat3Finite(const Float4& value){
     const SIMDVector valueVector = LoadFloat(value);
     return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
-}
-
-void StoreRotatedSceneViewBasisVector(Float4& outVector, const Float4& localVector, const SIMDVector rotation){
-    StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
 }
 
 [[nodiscard]] bool SceneCameraTransformValid(const TransformComponent& transform){
@@ -73,12 +65,12 @@ void StoreRotatedSceneViewBasisVector(Float4& outVector, const Float4& localVect
     return true;
 }
 
-[[nodiscard]] Core::ECS::EntityID ResolveSceneMainCamera(Core::ECS::World& world){
-    const auto sceneView = world.view<SceneComponent>();
-    for(auto it = sceneView.begin(); it != sceneView.end(); ++it){
-        auto&& [entity, scene] = *it;
+[[nodiscard]] Core::ECS::EntityID ResolveActiveCamera(Core::ECS::World& world){
+    const auto activeCameraView = world.view<ActiveCameraComponent>();
+    for(auto it = activeCameraView.begin(); it != activeCameraView.end(); ++it){
+        auto&& [entity, activeCamera] = *it;
         static_cast<void>(entity);
-        return scene.mainCamera;
+        return activeCamera.camera;
     }
 
     return Core::ECS::ENTITY_ID_INVALID;
@@ -94,39 +86,8 @@ void StoreRotatedSceneViewBasisVector(Float4& outVector, const Float4& localVect
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneViewBasis BuildDefaultSceneViewBasis(){
-    SIMDVector sinAngles;
-    SIMDVector cosAngles;
-    VectorSinCos(
-        &sinAngles,
-        &cosAngles,
-        VectorSet(__hidden_scene::s_DefaultSceneViewYaw, __hidden_scene::s_DefaultSceneViewPitch, 0.0f, 0.0f)
-    );
-    const f32 sinYaw = VectorGetX(sinAngles);
-    const f32 cosYaw = VectorGetX(cosAngles);
-    const f32 sinPitch = VectorGetY(sinAngles);
-    const f32 cosPitch = VectorGetY(cosAngles);
-
-    SceneViewBasis basis;
-    basis.right = Float4(cosYaw, 0.0f, sinYaw, 0.0f);
-    basis.up = Float4(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f);
-    basis.forward = Float4(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f);
-    basis.positionDepthBias.w = __hidden_scene::s_DefaultSceneViewDepthOffset;
-    return basis;
-}
-
-SceneViewBasis BuildSceneViewBasis(const TransformComponent& transform){
-    SceneViewBasis basis;
-    basis.positionDepthBias = transform.position;
-    const SIMDVector rotation = LoadFloat(transform.rotation);
-    __hidden_scene::StoreRotatedSceneViewBasisVector(basis.right, Float4(1.0f, 0.0f, 0.0f), rotation);
-    __hidden_scene::StoreRotatedSceneViewBasisVector(basis.up, Float4(0.0f, 1.0f, 0.0f), rotation);
-    __hidden_scene::StoreRotatedSceneViewBasisVector(basis.forward, Float4(0.0f, 0.0f, 1.0f), rotation);
-    return basis;
-}
-
 SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio){
-    const Core::ECS::EntityID mainCamera = __hidden_scene::ResolveSceneMainCamera(world);
+    const Core::ECS::EntityID activeCamera = __hidden_ecs_camera::ResolveActiveCamera(world);
     SceneCameraView fallbackCamera;
     SceneCameraView requestedCamera;
 
@@ -134,12 +95,12 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
     for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
         auto&& [entity, transform, camera] = *it;
         SceneCameraView resolvedCamera;
-        if(!__hidden_scene::TryBuildSceneCameraView(entity, transform, camera, fallbackAspectRatio, resolvedCamera))
+        if(!__hidden_ecs_camera::TryBuildSceneCameraView(entity, transform, camera, fallbackAspectRatio, resolvedCamera))
             continue;
 
         if(!fallbackCamera.valid())
             fallbackCamera = resolvedCamera;
-        if(mainCamera.valid() && entity == mainCamera){
+        if(activeCamera.valid() && entity == activeCamera){
             requestedCamera = resolvedCamera;
             break;
         }
@@ -156,7 +117,7 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_SCENE_END
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

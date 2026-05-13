@@ -432,4 +432,6 @@ Updated: 2026-05-04
 ## 16. ECS Component Headers
 - Engine ECS module component definitions belong in that module's `components.h`.
 - Do not add or keep production per-component headers such as `camera_component.h`, `light_component.h`, `scene_component.h`, or `transform_component.h`.
+- Core modules must not own implementation ECS components or world-query helpers. Put scene transform/view-basis components in `impl/ecs_scene`, camera components and active-camera resolution in `impl/ecs_camera`, and light components/resolution in `impl/ecs_lighting`.
+- Avoid compatibility aliases that expose implementation ECS component types from `core/*`; they preserve the wrong dependency direction.
 - Test-only fixture components may stay local to the test source file that defines them.

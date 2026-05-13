@@ -19,10 +19,9 @@
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
 #include <impl/assets_shader/shader_asset_loader.h>
-#include <core/scene/components.h>
+#include <impl/ecs_camera/camera.h>
 #include <impl/ecs_geometry/ecs_geometry.h>
-#include <core/scene/lighting.h>
-#include <core/scene/scene.h>
+#include <impl/ecs_lighting/lighting.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +87,7 @@ struct SceneShadingGpuData{
 
 using MeshViewState = MeshViewGpuData;
 using SceneShadingState = SceneShadingGpuData;
-using MeshViewBasis = NWB::Core::Scene::SceneViewBasis;
+using MeshViewBasis = NWB::Impl::SceneViewBasis;
 
 struct MaterialParameterBlock{
     u32 offset = 0;
@@ -234,7 +233,7 @@ inline usize NextGrowingCapacity(const usize currentCapacity, const usize requir
 }
 
 inline InstanceGpuData BuildInstanceGpuData(
-    const NWB::Core::Scene::TransformComponent* transform,
+    const NWB::Impl::TransformComponent* transform,
     const u32 materialParameterOffset,
     const u32 materialParameterCount
 ){
@@ -252,7 +251,7 @@ inline InstanceGpuData BuildInstanceGpuData(
 
 inline void ApplyDirectionalLightSceneShadingState(
     SceneShadingState& state,
-    const NWB::Core::Scene::SceneDirectionalLight& light
+    const NWB::Impl::SceneDirectionalLight& light
 ){
     state.directionalLightDirection = light.direction;
     state.directionalLightColorIntensity = light.colorIntensity;
@@ -323,13 +322,13 @@ inline void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
 
 inline MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewState state;
-    const MeshViewBasis defaultBasis = NWB::Core::Scene::BuildDefaultSceneViewBasis();
+    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
 
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         StoreWorldToClipMatrix(
             state.worldToClip,
-            NWB::Core::Scene::BuildSceneViewBasis(*cameraView.transform),
+            NWB::Impl::BuildSceneViewBasis(*cameraView.transform),
             cameraView.projectionData.projectionParams
         );
     }
@@ -337,7 +336,7 @@ inline MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
         StoreWorldToClipMatrix(
             state.worldToClip,
             defaultBasis,
-            NWB::Core::Scene::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
+            NWB::Impl::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
         );
     }
 
@@ -346,9 +345,9 @@ inline MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
 
 inline SceneShadingState ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     SceneShadingState state;
-    const MeshViewBasis defaultBasis = NWB::Core::Scene::BuildDefaultSceneViewBasis();
+    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
 
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
     }
@@ -363,7 +362,7 @@ inline SceneShadingState ResolveSceneShadingState(Core::ECS::World& world, const
 
     ECSRenderDetail::ApplyDirectionalLightSceneShadingState(
         state,
-        NWB::Core::Scene::ResolveSceneDirectionalLight(world, defaultBasis)
+        NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis)
     );
 
     return state;

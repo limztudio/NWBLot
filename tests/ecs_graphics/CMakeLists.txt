@@ -6,8 +6,10 @@ target_link_libraries(nwb_ecs_graphics_tests PRIVATE
     nwb_ecs_deformable
     nwb_ecs_deformable_edit
     nwb_ecs_deformable_render
+    nwb_ecs_camera
     nwb_ecs_geometry
-    nwb_scene
+    nwb_ecs_lighting
+    nwb_ecs_scene
     nwb_ecs_render
     nwb_common
     nwb_alloc

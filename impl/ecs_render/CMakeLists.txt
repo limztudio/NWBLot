@@ -22,8 +22,11 @@ target_sources(nwb_ecs_render PRIVATE
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components
     nwb_ecs
+    nwb_ecs_camera
     nwb_ecs_geometry
+    nwb_ecs_lighting
+    nwb_ecs_scene
     nwb_graphics
     nwb_assets_material
 )
-target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_geometry nwb_assets_shader_loader nwb_geometry nwb_scene)
+target_link_libraries(nwb_ecs_render PRIVATE nwb_assets_geometry nwb_assets_shader_loader nwb_geometry)

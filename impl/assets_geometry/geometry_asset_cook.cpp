@@ -445,6 +445,38 @@ static bool ParseGeometryClassField(
     return false;
 }
 
+static bool ParseStaticGeometryClassField(const Path& nwbFilePath, const Core::Metascript::Value& asset){
+    u32 geometryClass = GeometryClass::Invalid;
+    if(!ParseGeometryClassField(nwbFilePath, asset, s_GeometryMetaKind, geometryClass))
+        return false;
+
+    if(geometryClass == GeometryClass::Static)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': geometry_class must be 'static' for geometry assets")
+        , PathToString<tchar>(nwbFilePath)
+    );
+    return false;
+}
+
+static bool ParseDeformableGeometryClassField(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    u32& outGeometryClass
+){
+    if(!ParseGeometryClassField(nwbFilePath, asset, s_DeformableGeometryMetaKind, outGeometryClass))
+        return false;
+
+    if(GeometryClassUsesDeformableRuntime(outGeometryClass))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class must be {}")
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(SupportedDeformableGeometryClassText())
+    );
+    return false;
+}
+
 template<typename IndexVectorT>
 static bool FillMetadataIndexRecursive(
     const Path& nwbFilePath,
@@ -581,20 +613,8 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
-    u32 geometryClass = GeometryClass::Invalid;
-    if(!ParseGeometryClassField(
-        discoveredFile.filePath,
-        asset,
-        s_GeometryMetaKind,
-        geometryClass
-    ))
+    if(!ParseStaticGeometryClassField(discoveredFile.filePath, asset))
         return false;
-    if(geometryClass != GeometryClass::Static){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': geometry_class must be 'static' for geometry assets")
-            , PathToString<tchar>(discoveredFile.filePath)
-        );
-        return false;
-    }
 
     Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<Float3U> positions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
@@ -1421,6 +1441,8 @@ static bool ParseDeformableGeometryMeta(
 
     if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
         return false;
+    if(!ParseDeformableGeometryClassField(discoveredFile.filePath, asset, outEntry.geometryClass))
+        return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<Float3U> positions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
@@ -1481,20 +1503,6 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
         return false;
-    if(!ParseGeometryClassField(
-        discoveredFile.filePath,
-        asset,
-        s_DeformableGeometryMetaKind,
-        outEntry.geometryClass
-    ))
-        return false;
-    if(!GeometryClassUsesDeformableRuntime(outEntry.geometryClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class must be {}")
-            , PathToString<tchar>(discoveredFile.filePath)
-            , StringConvert(SupportedDeformableGeometryClassText())
-        );
-        return false;
-    }
     if(!GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
         NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' does not match skin payload")
             , PathToString<tchar>(discoveredFile.filePath)

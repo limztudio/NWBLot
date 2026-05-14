@@ -16,6 +16,70 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_system{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool accessesCanShareStage(const ComponentAccess& stageAccess, const ComponentAccess& systemAccess){
+    if(stageAccess.typeId != systemAccess.typeId)
+        return true;
+
+    return stageAccess.mode != AccessMode::Write && systemAccess.mode != AccessMode::Write;
+}
+
+template<typename StageAccessContainer>
+[[nodiscard]] bool stageCanAddAccess(const StageAccessContainer& stageAccesses, const ComponentAccess& systemAccess){
+    for(const ComponentAccess& stageAccess : stageAccesses){
+        if(!accessesCanShareStage(stageAccess, systemAccess))
+            return false;
+    }
+    return true;
+}
+
+template<typename StageAccessContainer, typename SystemAccessContainer>
+[[nodiscard]] bool stageCanAddSystem(
+    const StageAccessContainer& stageAccesses,
+    const SystemAccessContainer& systemAccesses
+){
+    for(const ComponentAccess& systemAccess : systemAccesses){
+        if(!stageCanAddAccess(stageAccesses, systemAccess))
+            return false;
+    }
+    return true;
+}
+
+template<typename StageAccessContainer>
+void mergeStageAccess(StageAccessContainer& stageAccesses, const ComponentAccess& systemAccess){
+    for(ComponentAccess& stageAccess : stageAccesses){
+        if(stageAccess.typeId != systemAccess.typeId)
+            continue;
+
+        if(systemAccess.mode == AccessMode::Write)
+            stageAccess.mode = AccessMode::Write;
+        return;
+    }
+
+    stageAccesses.push_back(systemAccess);
+}
+
+template<typename StageAccessContainer, typename SystemAccessContainer>
+void mergeSystemAccess(StageAccessContainer& stageAccesses, const SystemAccessContainer& systemAccesses){
+    for(const ComponentAccess& systemAccess : systemAccesses)
+        mergeStageAccess(stageAccesses, systemAccess);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 ISystem::ISystem(Alloc::CustomArena& arena)
     : m_access(AccessAllocator(arena))
 {}
@@ -123,26 +187,6 @@ void SystemScheduler::rebuild(){
     Vector<ISystem*, ScratchSystemAllocator> stageSystems{ScratchSystemAllocator(scratchArena)};
     stageSystems.reserve(systemCount);
 
-    auto componentAccessCompatible = [](const auto& accesses, const ComponentAccess& access) -> bool{
-        for(const ComponentAccess& stageAccess : accesses){
-            if(stageAccess.typeId != access.typeId)
-                continue;
-            return access.mode != AccessMode::Write && stageAccess.mode != AccessMode::Write;
-        }
-        return true;
-    };
-
-    auto addComponentAccess = [](auto& accesses, const ComponentAccess& access){
-        for(ComponentAccess& stageAccess : accesses){
-            if(stageAccess.typeId != access.typeId)
-                continue;
-            if(access.mode == AccessMode::Write)
-                stageAccess.mode = AccessMode::Write;
-            return;
-        }
-        accesses.push_back(access);
-    };
-
     usize numAssigned = 0;
 
     while(numAssigned < systemCount){
@@ -156,21 +200,13 @@ void SystemScheduler::rebuild(){
             ISystem* sys = m_allSystems[i];
             const auto& acc = sys->m_access;
 
-            bool compatible = true;
-            for(const auto& ca : acc){
-                if(!componentAccessCompatible(stageAccesses, ca)){
-                    compatible = false;
-                    break;
-                }
-            }
+            if(!__hidden_system::stageCanAddSystem(stageAccesses, acc))
+                continue;
 
-            if(compatible){
-                for(const auto& ca : acc)
-                    addComponentAccess(stageAccesses, ca);
-                assignedSystems[i] = 1u;
-                stageSystems.push_back(sys);
-                ++numAssigned;
-            }
+            __hidden_system::mergeSystemAccess(stageAccesses, acc);
+            assignedSystems[i] = 1u;
+            stageSystems.push_back(sys);
+            ++numAssigned;
         }
 
         Stage stage{SystemAllocator(m_arena)};

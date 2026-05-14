@@ -423,6 +423,19 @@ static constexpr AStringView s_MissingGeometryClassDeformableMeta =
 asset.morphs = {};
 )";
 
+static constexpr AStringView s_StaticClassDeformableMeta =
+    "deformable_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
+    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+    R"(asset.skin = {};
+asset.morphs = {};
+)";
+
 static constexpr AStringView s_MismatchedDeformableMeta =
     "deformable_geometry asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
@@ -1688,6 +1701,7 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     };
 
     expectCookFailure(s_MissingGeometryClassDeformableMeta, "missing_geometry_class");
+    expectCookFailure(s_StaticClassDeformableMeta, "static_class");
     expectCookFailure(s_MismatchedDeformableMeta, "mismatched_streams");
     expectCookFailure(s_MissingIndexTypeDeformableMeta, "missing_index_type");
     expectCookFailure(s_MismatchedSkinDeformableMeta, "mismatched_skin");
@@ -1697,8 +1711,9 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     expectCookFailure(s_MissingMorphTangentDeformableMeta, "missing_morph_tangent");
     expectCookFailure(s_SourceImportDeformableMeta, "source_import");
     expectCookFailure(s_MismatchedEditMaskDeformableMeta, "mismatched_edit_mask");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 10u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 11u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("geometry_class must be static_deform")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));
@@ -1888,7 +1903,7 @@ static void TestDeformableGeometryValidationFailures(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("contains duplicate morph")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("edit mask 0 is invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("no skeleton joint count")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices must be empty or match a valid skeleton")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices are invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("exceeds skeleton joint count")));
 #else
     static_cast<void>(context);

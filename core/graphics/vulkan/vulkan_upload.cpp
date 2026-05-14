@@ -25,6 +25,19 @@ struct SubmittedOwnersContext{
     usize count = 0;
 };
 
+static constexpr usize s_SubmittedOwnerLookupThreshold = 8u;
+
+using SubmittedOwnerLookup = HashSet<
+    TrackedCommandBuffer*,
+    Hasher<TrackedCommandBuffer*>,
+    EqualTo<TrackedCommandBuffer*>,
+    Alloc::ScratchAllocator<TrackedCommandBuffer*>
+>;
+
+struct SubmittedOwnerLookupContext{
+    const SubmittedOwnerLookup* owners = nullptr;
+};
+
 static bool IsSubmittedOwner(TrackedCommandBuffer* owner, const void* context){
     const auto& submitted = *static_cast<const SubmittedOwnersContext*>(context);
     for(usize i = 0; i < submitted.count; ++i){
@@ -32,6 +45,11 @@ static bool IsSubmittedOwner(TrackedCommandBuffer* owner, const void* context){
             return true;
     }
     return false;
+}
+
+static bool IsSubmittedOwnerInLookup(TrackedCommandBuffer* owner, const void* context){
+    const auto& submitted = *static_cast<const SubmittedOwnerLookupContext*>(context);
+    return owner && submitted.owners && submitted.owners->find(owner) != submitted.owners->end();
 }
 
 static bool IsMatchingOwner(TrackedCommandBuffer* owner, const void* context){
@@ -212,6 +230,32 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
     u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
+
+    if(submittedOwnerCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
+        Alloc::ScratchArena<> scratchArena;
+        VulkanDetail::SubmittedOwnerLookup submittedOwnerLookup(
+            0,
+            Hasher<TrackedCommandBuffer*>(),
+            EqualTo<TrackedCommandBuffer*>(),
+            Alloc::ScratchAllocator<TrackedCommandBuffer*>(scratchArena)
+        );
+        submittedOwnerLookup.reserve(submittedOwnerCount);
+        for(usize i = 0u; i < submittedOwnerCount; ++i){
+            if(submittedOwners[i])
+                submittedOwnerLookup.insert(submittedOwners[i]);
+        }
+
+        const VulkanDetail::SubmittedOwnerLookupContext submittedLookupContext{ &submittedOwnerLookup };
+        recycleMatchingActiveChunks(
+            queueIndex,
+            submittedVersion,
+            false,
+            completedVersions,
+            VulkanDetail::IsSubmittedOwnerInLookup,
+            &submittedLookupContext
+        );
+        return;
+    }
 
     const VulkanDetail::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
     recycleMatchingActiveChunks(queueIndex, submittedVersion, false, completedVersions, VulkanDetail::IsSubmittedOwner, &submittedContext);

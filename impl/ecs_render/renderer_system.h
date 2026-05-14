@@ -344,6 +344,11 @@ private:
         MaterialParameterGpuDataVector& materialParameters
     );
     void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry);
+    void setMaterialPassDrawPushConstants(
+        const MaterialPassDrawContext& context,
+        const MaterialPassDrawItem& drawItem,
+        const GeometryResources& geometry
+    );
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
 

@@ -31,44 +31,12 @@ layout(push_constant) uniform NwbAvboitDrawPushConstants{
     vec4 nwbAvboitParams;
 } g_NwbAvboitDraw;
 
-uint nwbAvboitFullWidth(){
-    return g_NwbAvboitDraw.nwbAvboitFrame.x;
-}
-
-uint nwbAvboitFullHeight(){
-    return g_NwbAvboitDraw.nwbAvboitFrame.y;
-}
-
-uint nwbAvboitLowWidth(){
-    return g_NwbAvboitDraw.nwbAvboitFrame.z;
-}
-
-uint nwbAvboitLowHeight(){
-    return g_NwbAvboitDraw.nwbAvboitFrame.w;
-}
-
-uint nwbAvboitVirtualSliceCount(){
-    return g_NwbAvboitDraw.nwbAvboitVolume.x;
-}
-
-uint nwbAvboitPhysicalSliceCount(){
-    return g_NwbAvboitDraw.nwbAvboitVolume.y;
-}
-
-uint nwbAvboitExtinctionWordCount(){
-    return g_NwbAvboitDraw.nwbAvboitVolume.z;
-}
-
-uint nwbAvboitCoverageWordCount(){
-    return g_NwbAvboitDraw.nwbAvboitVolume.w;
-}
+#define NWB_AVBOIT_PUSH_CONSTANTS g_NwbAvboitDraw
+#include "avboit_push_constant_accessors.glsli"
+#undef NWB_AVBOIT_PUSH_CONSTANTS
 
 float nwbAvboitMaterialAlpha(){
     return clamp(g_NwbAvboitDraw.nwbAvboitParams.x, 0.0, 1.0);
-}
-
-float nwbAvboitExtinctionFixedScale(){
-    return max(g_NwbAvboitDraw.nwbAvboitParams.y, 1.0);
 }
 
 float nwbAvboitExtinctionSaturation(){

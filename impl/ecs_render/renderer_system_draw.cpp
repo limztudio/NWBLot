@@ -527,6 +527,33 @@ void RendererSystem::setMaterialPassCommonBufferStates(Core::ICommandList& comma
     commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
+void RendererSystem::setMaterialPassDrawPushConstants(
+    const MaterialPassDrawContext& context,
+    const MaterialPassDrawItem& drawItem,
+    const GeometryResources& geometry
+){
+    if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
+        ECSRenderDetail::SetTransparentDrawPushConstants(
+            context.commandList,
+            geometry.triangleCount,
+            drawItem.instanceIndex,
+            geometry.sourceVertexLayout,
+            context.viewportState,
+            *context.avboitTargets,
+            drawItem.alpha
+        );
+        return;
+    }
+
+    ECSRenderDetail::SetShaderDrivenPushConstants(
+        context.commandList,
+        geometry.triangleCount,
+        drawItem.instanceIndex,
+        geometry.sourceVertexLayout,
+        context.viewportState
+    );
+}
+
 void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
@@ -549,26 +576,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 
         context.commandList.setMeshletState(meshletState);
 
-        if(!MaterialPipelinePassUsesRendererAvboit(context.pass)){
-            ECSRenderDetail::SetShaderDrivenPushConstants(
-                context.commandList,
-                geometry.triangleCount,
-                drawItem.instanceIndex,
-                geometry.sourceVertexLayout,
-                context.viewportState
-            );
-        }
-        else{
-            ECSRenderDetail::SetTransparentDrawPushConstants(
-                context.commandList,
-                geometry.triangleCount,
-                drawItem.instanceIndex,
-                geometry.sourceVertexLayout,
-                context.viewportState,
-                *context.avboitTargets,
-                drawItem.alpha
-            );
-        }
+        setMaterialPassDrawPushConstants(context, drawItem, geometry);
         context.commandList.dispatchMesh(geometry.dispatchGroupCount);
     });
 }
@@ -581,6 +589,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         return;
     if(!m_meshViewBuffer || !createEmulationViewResources() || !m_emulationViewBindingSet)
         return;
+
+    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
         if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer || !m_meshViewBuffer || !m_materialParameterBuffer)
@@ -620,7 +630,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                 .setSlot(0)
                 .setOffset(0)
         );
-        if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
+        if(usesAvboit){
             graphicsState.addBindingSet(nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
         }
@@ -632,17 +642,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setGraphicsState(graphicsState);
 
-        if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
-            ECSRenderDetail::SetTransparentDrawPushConstants(
-                context.commandList,
-                geometry.triangleCount,
-                drawItem.instanceIndex,
-                geometry.sourceVertexLayout,
-                context.viewportState,
-                *context.avboitTargets,
-                drawItem.alpha
-            );
-        }
+        if(usesAvboit)
+            setMaterialPassDrawPushConstants(context, drawItem, geometry);
 
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(geometry.indexCount);

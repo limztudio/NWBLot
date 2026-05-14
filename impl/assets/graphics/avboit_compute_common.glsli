@@ -25,41 +25,9 @@ layout(push_constant) uniform NwbAvboitComputePushConstants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbAvboitFullWidth(){
-    return g_NwbAvboitCompute.nwbAvboitFrame.x;
-}
-
-uint nwbAvboitFullHeight(){
-    return g_NwbAvboitCompute.nwbAvboitFrame.y;
-}
-
-uint nwbAvboitLowWidth(){
-    return g_NwbAvboitCompute.nwbAvboitFrame.z;
-}
-
-uint nwbAvboitLowHeight(){
-    return g_NwbAvboitCompute.nwbAvboitFrame.w;
-}
-
-uint nwbAvboitVirtualSliceCount(){
-    return g_NwbAvboitCompute.nwbAvboitVolume.x;
-}
-
-uint nwbAvboitPhysicalSliceCount(){
-    return g_NwbAvboitCompute.nwbAvboitVolume.y;
-}
-
-uint nwbAvboitExtinctionWordCount(){
-    return g_NwbAvboitCompute.nwbAvboitVolume.z;
-}
-
-uint nwbAvboitCoverageWordCount(){
-    return g_NwbAvboitCompute.nwbAvboitVolume.w;
-}
-
-float nwbAvboitExtinctionFixedScale(){
-    return max(g_NwbAvboitCompute.nwbAvboitParams.y, 1.0);
-}
+#define NWB_AVBOIT_PUSH_CONSTANTS g_NwbAvboitCompute
+#include "avboit_push_constant_accessors.glsli"
+#undef NWB_AVBOIT_PUSH_CONSTANTS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

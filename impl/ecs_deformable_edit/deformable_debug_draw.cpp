@@ -47,14 +47,6 @@ static constexpr f32 s_DisplacementLineScale = 1.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector LoadPoint3(const Float4& value){
-    return VectorSetW(LoadFloat(value), 0.0f);
-}
-
-[[nodiscard]] SIMDVector ScaleAdd(const SIMDVector begin, const SIMDVector direction, const f32 scale){
-    return VectorMultiplyAdd(direction, VectorReplicate(scale), begin);
-}
-
 [[nodiscard]] bool FinitePoint(const SIMDVector point){
     return DeformableValidation::FiniteVector(point, 0x7u);
 }
@@ -306,14 +298,14 @@ void AppendWallVertexBasisDebug(
     AppendLine(
         snapshot,
         position,
-        ScaleAdd(position, normal, s_WallBasisLineLength),
+        VectorMultiplyAdd(normal, VectorReplicate(s_WallBasisLineLength), position),
         s_ColorNormal,
         DeformableDebugPrimitiveKind::Normal
     );
     AppendLine(
         snapshot,
         position,
-        ScaleAdd(position, tangent, s_WallBasisLineLength),
+        VectorMultiplyAdd(tangent, VectorReplicate(s_WallBasisLineLength), position),
         s_ColorTangent,
         DeformableDebugPrimitiveKind::Tangent
     );
@@ -343,7 +335,7 @@ void AppendSkinWeightDebug(const DeformableRuntimeMeshInstance& instance, Deform
         AppendLine(
             snapshot,
             position,
-            ScaleAdd(position, normal, weight * s_SkinWeightLineLength),
+            VectorMultiplyAdd(normal, VectorReplicate(weight * s_SkinWeightLineLength), position),
             s_ColorSkin,
             DeformableDebugPrimitiveKind::SkinWeight
         );
@@ -431,11 +423,11 @@ void AppendPreviewDebug(
     snapshot.previewTriangle = session->hit.triangle;
     snapshot.previewSourceTriangle = session->hit.restSample.sourceTri;
     snapshot.previewPermission = preview->editPermission;
-    const SIMDVector previewCenter = LoadPoint3(preview->center);
-    const SIMDVector posedHitPoint = LoadPoint3(session->hit.position);
-    const SIMDVector previewNormal = LoadPoint3(preview->normal);
-    const SIMDVector previewTangent = LoadPoint3(preview->tangent);
-    const SIMDVector previewBitangent = LoadPoint3(preview->bitangent);
+    const SIMDVector previewCenter = VectorSetW(LoadFloat(preview->center), 0.0f);
+    const SIMDVector posedHitPoint = VectorSetW(LoadFloat(session->hit.position), 0.0f);
+    const SIMDVector previewNormal = VectorSetW(LoadFloat(preview->normal), 0.0f);
+    const SIMDVector previewTangent = VectorSetW(LoadFloat(preview->tangent), 0.0f);
+    const SIMDVector previewBitangent = VectorSetW(LoadFloat(preview->bitangent), 0.0f);
     StoreFloat(previewCenter, &snapshot.previewCenter);
     StoreFloat(previewCenter, &snapshot.previewRestHitPoint);
     StoreFloat(posedHitPoint, &snapshot.previewPosedHitPoint);
@@ -454,21 +446,21 @@ void AppendPreviewDebug(
     AppendLine(
         snapshot,
         previewCenter,
-        ScaleAdd(previewCenter, previewTangent, radius),
+        VectorMultiplyAdd(previewTangent, VectorReplicate(radius), previewCenter),
         s_ColorTangent,
         DeformableDebugPrimitiveKind::Tangent
     );
     AppendLine(
         snapshot,
         previewCenter,
-        ScaleAdd(previewCenter, previewBitangent, radius),
+        VectorMultiplyAdd(previewBitangent, VectorReplicate(radius), previewCenter),
         s_ColorBitangent,
         DeformableDebugPrimitiveKind::Bitangent
     );
     AppendLine(
         snapshot,
         previewCenter,
-        ScaleAdd(previewCenter, previewNormal, normalLength),
+        VectorMultiplyAdd(previewNormal, VectorReplicate(normalLength), previewCenter),
         s_ColorNormal,
         DeformableDebugPrimitiveKind::Normal
     );

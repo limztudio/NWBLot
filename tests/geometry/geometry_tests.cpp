@@ -70,6 +70,23 @@ static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f
     ;
 }
 
+static bool NearlyEqual4(const Float4& value, const f32 x, const f32 y, const f32 z, const f32 w){
+    return
+        NearlyEqual(value.x, x)
+        && NearlyEqual(value.y, y)
+        && NearlyEqual(value.z, z)
+        && NearlyEqual(value.w, w)
+    ;
+}
+
+static bool NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z){
+    return
+        NearlyEqual(value.x, x)
+        && NearlyEqual(value.y, y)
+        && NearlyEqual(value.z, z)
+    ;
+}
+
 static bool NearlyEqualBounds(const MeshletBounds& lhs, const MeshletBounds& rhs){
     return
         NearlyEqual3(lhs.minimum, rhs.minimum.x, rhs.minimum.y, rhs.minimum.z)
@@ -216,10 +233,10 @@ static void TestResolvesCoreFrameMath(TestContext& context){
 
 static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v){
     TangentFrameRebuildVertex vertex;
-    vertex.position = Float3U(x, y, z);
+    vertex.position = Float4(x, y, z, 0.0f);
+    vertex.normal = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    vertex.tangent = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     vertex.uv0 = Float2U(u, v);
-    vertex.normal = Float3U(0.0f, 0.0f, 0.0f);
-    vertex.tangent = Float4U(0.0f, 0.0f, 0.0f, 0.0f);
     return vertex;
 }
 
@@ -403,7 +420,7 @@ static void TestDegenerateUvsUseStableTangentFallback(TestContext& context){
     vertices.push_back(MakeVertex(1.0f, 0.0f, 0.0f, 0.0f, 0.0f));
     vertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 0.0f, 0.0f));
     for(TangentFrameRebuildVertex& vertex : vertices)
-        vertex.tangent = Float4U(0.0f, 1.0f, 0.0f, -1.0f);
+        vertex.tangent = Float4(0.0f, 1.0f, 0.0f, -1.0f);
 
     Vector<u32> indices = MakeTriangleIndices();
 

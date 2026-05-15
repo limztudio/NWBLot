@@ -37,10 +37,16 @@ using MorphWeightLookup = HashMap<
 
 
 struct BlendedMorphDeltaAccumulator{
-    Float4 deltaPosition = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    Float4 deltaNormal = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    Float4 deltaTangent = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+    SIMDVector deltaPosition = VectorZero();
+    SIMDVector deltaNormal = VectorZero();
+    SIMDVector deltaTangent = VectorZero();
     bool active = false;
+};
+
+struct MorphDeltaVectors{
+    SIMDVector deltaPosition;
+    SIMDVector deltaNormal;
+    SIMDVector deltaTangent;
 };
 
 
@@ -76,25 +82,38 @@ struct BlendedMorphDeltaAccumulator{
 [[nodiscard]] inline bool ActiveBlendedMorphDelta(const BlendedMorphDeltaAccumulator& delta){
     return
         delta.active
-        && (ActiveDeltaVector(LoadFloat(delta.deltaPosition), 0x7u)
-        || ActiveDeltaVector(LoadFloat(delta.deltaNormal), 0x7u)
-        || ActiveDeltaVector(LoadFloat(delta.deltaTangent), 0xFu))
+        && (ActiveDeltaVector(delta.deltaPosition, 0x7u)
+        || ActiveDeltaVector(delta.deltaNormal, 0x7u)
+        || ActiveDeltaVector(delta.deltaTangent, 0xFu))
     ;
 }
 
-inline void AccumulateWeightedVector(Float4& target, const SIMDVector source, const SIMDVector weight){
-    StoreFloat(VectorMultiplyAdd(source, weight, LoadFloat(target)), &target);
+[[nodiscard]] inline MorphDeltaVectors LoadMorphDelta(const DeformableMorphDelta& delta){
+    return MorphDeltaVectors{
+        LoadFloat(delta.deltaPosition),
+        LoadFloat(delta.deltaNormal),
+        LoadFloat(delta.deltaTangent),
+    };
+}
+
+[[nodiscard]] inline bool ValidMorphDelta(const DeformableMorphDelta& delta, const MorphDeltaVectors& deltaVectors, const usize vertexCount){
+    return
+        delta.vertexId < vertexCount
+        && DeformableValidation::FiniteVector(deltaVectors.deltaPosition, 0x7u)
+        && DeformableValidation::FiniteVector(deltaVectors.deltaNormal, 0x7u)
+        && DeformableValidation::FiniteVector(deltaVectors.deltaTangent, 0xFu)
+    ;
 }
 
 inline void AccumulateWeightedMorphDelta(
     BlendedMorphDeltaAccumulator& target,
-    const DeformableMorphDelta& source,
+    const MorphDeltaVectors& source,
     const f32 weight){
     target.active = true;
     const SIMDVector weightVector = VectorReplicate(weight);
-    AccumulateWeightedVector(target.deltaPosition, LoadFloat(source.deltaPosition), weightVector);
-    AccumulateWeightedVector(target.deltaNormal, LoadFloat(source.deltaNormal), weightVector);
-    AccumulateWeightedVector(target.deltaTangent, LoadFloat(source.deltaTangent), weightVector);
+    target.deltaPosition = VectorMultiplyAdd(source.deltaPosition, weightVector, target.deltaPosition);
+    target.deltaNormal = VectorMultiplyAdd(source.deltaNormal, weightVector, target.deltaNormal);
+    target.deltaTangent = VectorMultiplyAdd(source.deltaTangent, weightVector, target.deltaTangent);
 }
 
 [[nodiscard]] inline bool ValidateRuntimeMeshVertexCount(const DeformableRuntimeMeshInstance& instance){
@@ -172,7 +191,8 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
             blendedDeltas.resize(vertexCount);
         touchedVertices.reserve(Min(vertexCount, activeInputDeltaCount));
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, vertexCount)){
+            const MorphDeltaVectors deltaVectors = LoadMorphDelta(delta);
+            if(!ValidMorphDelta(delta, deltaVectors, vertexCount)){
                 NWB_LOGGER_ERROR(NWB_TEXT("DeformerSystem: morph '{}' on runtime mesh '{}' contains an invalid delta")
                     , StringConvert(morph.name.c_str())
                     , instance.handle.value
@@ -183,7 +203,7 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
             BlendedMorphDeltaAccumulator& blendedDelta = blendedDeltas[delta.vertexId];
             if(!blendedDelta.active)
                 touchedVertices.push_back(delta.vertexId);
-            AccumulateWeightedMorphDelta(blendedDelta, delta, weight);
+            AccumulateWeightedMorphDelta(blendedDelta, deltaVectors, weight);
         }
     }
 
@@ -204,9 +224,9 @@ template<typename MorphRangeVector, typename MorphDeltaVector>
         outRanges[vertexIndex] = range;
 
         DeformerBlendedMorphDeltaGpu gpuDelta;
-        gpuDelta.deltaPosition = blendedDelta.deltaPosition;
-        gpuDelta.deltaNormal = blendedDelta.deltaNormal;
-        gpuDelta.deltaTangent = blendedDelta.deltaTangent;
+        StoreFloat(blendedDelta.deltaPosition, &gpuDelta.deltaPosition);
+        StoreFloat(blendedDelta.deltaNormal, &gpuDelta.deltaNormal);
+        StoreFloat(blendedDelta.deltaTangent, &gpuDelta.deltaTangent);
         outDeltas.push_back(gpuDelta);
     }
 

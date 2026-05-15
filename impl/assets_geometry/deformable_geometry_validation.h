@@ -221,10 +221,10 @@ inline void BuildRestVertexTangentFrameRebuildInput(
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         const DeformableVertexRest& vertex = vertices[vertexIndex];
         outRebuildVertices.push_back(Core::Geometry::TangentFrameRebuildVertex{
-            vertex.position,
+            Float4(vertex.position.x, vertex.position.y, vertex.position.z, 0.0f),
+            Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f),
+            Float4(vertex.tangent.raw),
             vertex.uv0,
-            vertex.normal,
-            vertex.tangent,
         });
     }
 }
@@ -238,8 +238,8 @@ template<typename RebuildAllocator>
 
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         DeformableVertexRest rebuiltVertex = vertices[vertexIndex];
-        rebuiltVertex.normal = rebuildVertices[vertexIndex].normal;
-        rebuiltVertex.tangent = rebuildVertices[vertexIndex].tangent;
+        rebuiltVertex.normal = Float3U(rebuildVertices[vertexIndex].normal.raw);
+        rebuiltVertex.tangent = Float4U(rebuildVertices[vertexIndex].tangent.raw);
         if(!ValidRestVertexFrame(rebuiltVertex))
             return false;
     }
@@ -252,8 +252,8 @@ inline void ApplyRestVertexTangentFrameRebuild(
     const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = vertices[vertexIndex];
-        vertex.normal = rebuildVertices[vertexIndex].normal;
-        vertex.tangent = rebuildVertices[vertexIndex].tangent;
+        vertex.normal = Float3U(rebuildVertices[vertexIndex].normal.raw);
+        vertex.tangent = Float4U(rebuildVertices[vertexIndex].tangent.raw);
     }
 }
 

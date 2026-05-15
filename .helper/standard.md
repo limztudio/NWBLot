@@ -242,6 +242,8 @@ Updated: 2026-05-04
 - For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
+- Do not add inline/local wrappers that only rename one operation or one function call, such as `return VectorAdd(...)`, `return LoadFoo(...)`, or `return SomeHelper(...)`.
+  - Inline the underlying operation at the call site unless the wrapper defines a stable module boundary, validates or transforms a contract, or carries domain meaning beyond the called expression.
 - Do not add trivial pass-through accessors that only return a private member (`return m_x;`) when they are not needed as a module boundary API.
 - If such access is only needed inside the same module bubble, remove the accessor and use direct member access; use `friend` declarations explicitly where cross-class private access is required.
 - Keep trivial accessors only when they are actually used across module boundaries or are part of a deliberate external API contract.
@@ -307,6 +309,13 @@ Updated: 2026-05-04
 - For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `CustomAllocator` only when data must outlive the current scope.
 - Data captured by async jobs/callbacks (e.g., lambda captures submitted to `ThreadPool`/`JobSystem`) is considered outliving the current scope; do not back such captures with `ScratchArena`.
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena (`CustomCacheAlignedAllocator`, `MemoryCacheAlignedAllocator`, `ScratchCacheAlignedAllocator`) instead of default allocators when arena ownership exists.
+- SIMD math helpers should accept and return SIMD-domain values such as `SIMDVector` or `SIMDMatrix`.
+  - Do not hide repeated `LoadFloat()` / `StoreFloat()` traffic inside small math helpers called from loops.
+  - Load from struct or asset storage at the call-site boundary, keep intermediate values in SIMD variables while composing operations, then store once when the result leaves the SIMD domain.
+  - Boundary helpers with explicit names such as `LoadFoo(...)` or `StoreFoo(...)` are fine, but accumulation, validation, blending, and transform helpers should operate directly on already-loaded vectors.
+- Use `StreamFloat()` only for aligned, write-only output streams that are large enough to justify non-temporal stores.
+  - Do not use streaming stores for values that will be read back soon, read-modify-write accumulators, or unaligned `Float*U` payloads.
+  - Call `StreamFloatFence()` before publishing streamed data across a synchronization boundary.
 
 ## 10. Practical checklist for new code
 - Before every code create/modify action, re-read the current `.helper/standard.md` and apply it as the source of truth (do not rely on memory).

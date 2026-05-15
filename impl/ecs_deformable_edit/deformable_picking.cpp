@@ -46,18 +46,18 @@ struct PreparedJointPaletteEntry{
     SIMDVector dualQuaternionDual = VectorZero();
 };
 
-[[nodiscard]] SIMDVector LoadVertexNormal(const DeformableVertexRest& vertex){
-    return LoadRestVertexNormal(vertex);
-}
+struct MorphDeltaVectors{
+    SIMDVector deltaPosition;
+    SIMDVector deltaNormal;
+    SIMDVector deltaTangent;
+};
 
-[[nodiscard]] SIMDVector LoadVertexTangent(const DeformableVertexRest& vertex){
-    return LoadRestVertexTangent(vertex);
-}
-
-void StoreVertexFrame(const SIMDVector normal, const SIMDVector tangent, DeformableVertexRest& vertex){
-    StoreFloat(normal, &vertex.normal);
-    StoreFloat(tangent, &vertex.tangent);
-}
+struct MorphDeltaAccumulator{
+    SIMDVector deltaPosition = VectorZero();
+    SIMDVector deltaNormal = VectorZero();
+    SIMDVector deltaTangent = VectorZero();
+    bool active = false;
+};
 
 void OrthonormalizeVertexFrame(
     DeformableVertexRest& vertex,
@@ -65,10 +65,11 @@ void OrthonormalizeVertexFrame(
     const SIMDVector fallbackTangent,
     SIMDVector* outNormal = nullptr,
     SIMDVector* outTangent = nullptr){
-    SIMDVector normal = LoadVertexNormal(vertex);
-    SIMDVector tangent = LoadVertexTangent(vertex);
+    SIMDVector normal = LoadRestVertexNormal(vertex);
+    SIMDVector tangent = LoadRestVertexTangent(vertex);
     Core::Geometry::FrameOrthonormalize(normal, tangent, fallbackNormal, fallbackTangent);
-    StoreVertexFrame(normal, tangent, vertex);
+    StoreFloat(normal, &vertex.normal);
+    StoreFloat(tangent, &vertex.tangent);
 
     if(outNormal)
         *outNormal = normal;
@@ -89,6 +90,44 @@ void OrthonormalizeVertexFrame(
     ;
 }
 
+[[nodiscard]] MorphDeltaVectors LoadMorphDelta(const DeformableMorphDelta& delta){
+    return MorphDeltaVectors{
+        LoadFloat(delta.deltaPosition),
+        LoadFloat(delta.deltaNormal),
+        LoadFloat(delta.deltaTangent),
+    };
+}
+
+[[nodiscard]] bool ValidMorphDelta(
+    const DeformableMorphDelta& delta,
+    const MorphDeltaVectors& deltaVectors,
+    const usize vertexCount
+){
+    return
+        delta.vertexId < vertexCount
+        && DeformableValidation::FiniteVector(deltaVectors.deltaPosition, 0x7u)
+        && DeformableValidation::FiniteVector(deltaVectors.deltaNormal, 0x7u)
+        && DeformableValidation::FiniteVector(deltaVectors.deltaTangent, 0xFu)
+    ;
+}
+
+void AccumulateMorphDelta(
+    MorphDeltaAccumulator& accumulator,
+    const MorphDeltaVectors& delta,
+    const SIMDVector weight
+){
+    accumulator.active = true;
+    accumulator.deltaPosition = VectorMultiplyAdd(delta.deltaPosition, weight, accumulator.deltaPosition);
+    accumulator.deltaNormal = VectorMultiplyAdd(delta.deltaNormal, weight, accumulator.deltaNormal);
+    accumulator.deltaTangent = VectorMultiplyAdd(delta.deltaTangent, weight, accumulator.deltaTangent);
+}
+
+void ApplyMorphDelta(const MorphDeltaAccumulator& accumulator, DeformableVertexRest& vertex){
+    StoreFloat(VectorAdd(LoadRestVertexPosition(vertex), accumulator.deltaPosition), &vertex.position);
+    StoreFloat(VectorAdd(LoadRestVertexNormal(vertex), accumulator.deltaNormal), &vertex.normal);
+    StoreFloat(VectorAdd(LoadRestVertexTangent(vertex), accumulator.deltaTangent), &vertex.tangent);
+}
+
 template<typename VertexVector>
 [[nodiscard]] bool ApplyMorphs(const DeformableRuntimeMeshInstance& instance, const DeformableMorphWeightsComponent* weights, VertexVector& vertices){
     if(!HasMorphWeights(weights))
@@ -106,6 +145,13 @@ template<typename VertexVector>
         return false;
 
     const usize vertexCount = vertices.size();
+    Vector<MorphDeltaAccumulator, Core::Alloc::ScratchAllocator<MorphDeltaAccumulator>> accumulators{
+        Core::Alloc::ScratchAllocator<MorphDeltaAccumulator>(scratchArena)
+    };
+    Vector<u32, Core::Alloc::ScratchAllocator<u32>> touchedVertices{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
+
     for(const DeformableMorph& morph : instance.morphs){
         f32 weight = 0.0f;
         if(morph.name){
@@ -119,25 +165,23 @@ template<typename VertexVector>
             return false;
 
         const SIMDVector weightVector = VectorReplicate(weight);
+        if(accumulators.empty())
+            accumulators.resize(vertexCount);
+        touchedVertices.reserve(Min(vertexCount, touchedVertices.size() + morph.deltas.size()));
         for(const DeformableMorphDelta& delta : morph.deltas){
-            if(!DeformableValidation::ValidMorphDelta(delta, vertexCount))
+            const MorphDeltaVectors deltaVectors = LoadMorphDelta(delta);
+            if(!ValidMorphDelta(delta, deltaVectors, vertexCount))
                 return false;
 
-            DeformableVertexRest& vertex = vertices[delta.vertexId];
-            StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaPosition), weightVector, LoadRestVertexPosition(vertex)),
-                &vertex.position
-            );
-            StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaNormal), weightVector, LoadRestVertexNormal(vertex)),
-                &vertex.normal
-            );
-            StoreFloat(
-                VectorMultiplyAdd(LoadFloat(delta.deltaTangent), weightVector, LoadRestVertexTangent(vertex)),
-                &vertex.tangent
-            );
+            MorphDeltaAccumulator& accumulator = accumulators[delta.vertexId];
+            if(!accumulator.active)
+                touchedVertices.push_back(delta.vertexId);
+            AccumulateMorphDelta(accumulator, deltaVectors, weightVector);
         }
     }
+
+    for(const u32 vertexIndex : touchedVertices)
+        ApplyMorphDelta(accumulators[vertexIndex], vertices[vertexIndex]);
     return true;
 }
 
@@ -712,8 +756,8 @@ template<typename VertexVector>
 
     for(usize vertexIndex = 0; vertexIndex < outVertices.size(); ++vertexIndex){
         DeformableVertexRest& vertex = outVertices[vertexIndex];
-        const SIMDVector restNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
-        const SIMDVector restTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
+        const SIMDVector restNormal = LoadRestVertexNormal(vertex);
+        const SIMDVector restTangent = LoadRestVertexTangent(vertex);
 
         SIMDVector preSkinNormal;
         SIMDVector preSkinTangent;
@@ -729,8 +773,8 @@ template<typename VertexVector>
             return false;
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preSkinNormal, preSkinTangent);
 
-        const SIMDVector preDisplacementNormal = __hidden_deformable_picking::LoadVertexNormal(vertex);
-        const SIMDVector preDisplacementTangent = __hidden_deformable_picking::LoadVertexTangent(vertex);
+        const SIMDVector preDisplacementNormal = LoadRestVertexNormal(vertex);
+        const SIMDVector preDisplacementTangent = LoadRestVertexTangent(vertex);
         __hidden_deformable_picking::ApplyDisplacement(displacement, displacementTexture, vertex);
         __hidden_deformable_picking::OrthonormalizeVertexFrame(vertex, preDisplacementNormal, preDisplacementTangent);
         __hidden_deformable_picking::ApplyTransform(inputs.transform, vertex);

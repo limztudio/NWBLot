@@ -497,6 +497,13 @@ NWB_INLINE SIMDVector SIMDCALL LoadInt(const UInt4U& src)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_INLINE void StreamFloatFence()noexcept{
+#if defined(NWB_HAS_SSE4)
+    _mm_sfence();
+#endif
+}
+
+
 NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4* dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     dst->x = src.f[0];
@@ -511,6 +518,14 @@ NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4* dst)noexcept{
 #endif
 #elif defined(NWB_HAS_SSE4)
     _mm_store_ps(dst->raw, src);
+#endif
+}
+
+NWB_INLINE void SIMDCALL StreamFloat(SIMDVector src, Float4* dst)noexcept{
+#if defined(NWB_HAS_SSE4)
+    _mm_stream_ps(dst->raw, src);
+#else
+    StoreFloat(src, dst);
 #endif
 }
 
@@ -561,6 +576,7 @@ NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U* dst)noexcept{
 #endif
 }
 
+
 NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34* dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
@@ -580,6 +596,17 @@ NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34* dst)noexcept{
     _mm_store_ps(&dst->_31, src.v[2]);
 #endif
 }
+
+NWB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float34* dst)noexcept{
+#if defined(NWB_HAS_SSE4)
+    _mm_stream_ps(&dst->_11, src.v[0]);
+    _mm_stream_ps(&dst->_21, src.v[1]);
+    _mm_stream_ps(&dst->_31, src.v[2]);
+#else
+    StoreFloat(src, dst);
+#endif
+}
+
 NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44* dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat44Scalar(src, dst);
@@ -600,6 +627,17 @@ NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44* dst)noexcept{
     _mm_store_ps(&dst->_21, src.v[1]);
     _mm_store_ps(&dst->_31, src.v[2]);
     _mm_store_ps(&dst->_41, src.v[3]);
+#endif
+}
+
+NWB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float44* dst)noexcept{
+#if defined(NWB_HAS_SSE4)
+    _mm_stream_ps(&dst->_11, src.v[0]);
+    _mm_stream_ps(&dst->_21, src.v[1]);
+    _mm_stream_ps(&dst->_31, src.v[2]);
+    _mm_stream_ps(&dst->_41, src.v[3]);
+#else
+    StoreFloat(src, dst);
 #endif
 }
 

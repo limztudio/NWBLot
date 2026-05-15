@@ -155,6 +155,51 @@ using Deque = std::deque<T, Alloc>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ContainerDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename DestinationVector, typename SourceVector>
+[[nodiscard]] inline bool SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source, usize& outSourceOffset){
+    outSourceOffset = 0u;
+    if(destination.empty() || source.empty())
+        return false;
+
+    const auto* const destinationData = destination.data();
+    const auto* const sourceData = source.data();
+    if(destinationData == nullptr || sourceData == nullptr)
+        return false;
+
+    const usize destinationBegin = reinterpret_cast<usize>(destinationData);
+    const usize sourceBegin = reinterpret_cast<usize>(sourceData);
+    if(sourceBegin < destinationBegin)
+        return false;
+
+    using DestinationValue = typename DestinationVector::value_type;
+    const usize byteOffset = sourceBegin - destinationBegin;
+    if((byteOffset % sizeof(DestinationValue)) != 0u)
+        return false;
+
+    const usize sourceOffset = byteOffset / sizeof(DestinationValue);
+    if(sourceOffset >= destination.size())
+        return false;
+
+    outSourceOffset = sourceOffset;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename DestinationVector, typename SourceVector>
 inline void AssignTriviallyCopyableVector(DestinationVector& destination, const SourceVector& source){
     using DestinationValue = typename DestinationVector::value_type;
@@ -162,24 +207,24 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     static_assert(IsSame_V<DestinationValue, SourceValue>, "vector value types must match");
     static_assert(IsTriviallyCopyable_V<DestinationValue>, "vector value type must be trivially copyable");
 
+    const usize sourceSize = source.size();
     if(source.empty()){
         destination.clear();
         return;
     }
-    if(destination.data() == source.data())
+    usize sourceOffset = 0u;
+    if(ContainerDetail::SourceAliasesDestination(destination, source, sourceOffset)){
+        NWB_ASSERT(sourceSize <= destination.size() - sourceOffset);
+        if(sourceSize > destination.size() - sourceOffset)
+            return;
+        for(usize i = 0u; i < sourceSize; ++i)
+            destination[i] = destination[sourceOffset + i];
+        while(destination.size() > sourceSize)
+            destination.pop_back();
         return;
-
-    if constexpr(IsDefaultConstructible_V<DestinationValue>){
-        const usize sourceSize = source.size();
-        NWB_ASSERT(sourceSize <= Limit<usize>::s_Max / sizeof(DestinationValue));
-        destination.resize(sourceSize);
-
-        const usize copyBytes = sourceSize * sizeof(DestinationValue);
-        NWB_MEMCPY(destination.data(), copyBytes, source.data(), copyBytes);
     }
-    else{
-        destination.assign(source.begin(), source.end());
-    }
+
+    destination.assign(source.begin(), source.end());
 }
 
 template<typename DestinationVector, typename SourceVector>
@@ -195,32 +240,24 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     const usize destinationSize = destination.size();
     const usize sourceSize = source.size();
     NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
-    if(destination.data() == source.data()){
-        if constexpr(IsDefaultConstructible_V<DestinationValue>){
-            if(destinationSize == sourceSize){
-                NWB_ASSERT(sourceSize <= Limit<usize>::s_Max / sizeof(DestinationValue));
-                const usize copyBytes = sourceSize * sizeof(DestinationValue);
-                destination.resize(destinationSize + sourceSize);
-                NWB_MEMCPY(destination.data() + destinationSize, copyBytes, destination.data(), copyBytes);
-                return;
-            }
-        }
-
+    usize sourceOffset = 0u;
+    if(ContainerDetail::SourceAliasesDestination(destination, source, sourceOffset)){
+        NWB_ASSERT(sourceSize <= destinationSize - sourceOffset);
+        if(sourceSize > destinationSize - sourceOffset)
+            return;
         destination.reserve(destinationSize + sourceSize);
-        for(usize i = 0; i < sourceSize; ++i)
-            destination.push_back(source[i]);
+        for(usize i = 0u; i < sourceSize; ++i)
+            destination.push_back(destination[sourceOffset + i]);
         return;
     }
 
-    if constexpr(IsDefaultConstructible_V<DestinationValue>){
-        NWB_ASSERT(sourceSize <= Limit<usize>::s_Max / sizeof(DestinationValue));
-        const usize copyBytes = sourceSize * sizeof(DestinationValue);
-        destination.resize(destinationSize + sourceSize);
-        NWB_MEMCPY(destination.data() + destinationSize, copyBytes, source.data(), copyBytes);
+    destination.reserve(destinationSize + sourceSize);
+    if constexpr(requires(DestinationVector& d, const SourceVector& s){ d.insert(d.end(), s.begin(), s.end()); }){
+        destination.insert(destination.end(), source.begin(), source.end());
     }
     else{
-        destination.reserve(destinationSize + sourceSize);
-        destination.insert(destination.end(), source.begin(), source.end());
+        for(usize i = 0u; i < sourceSize; ++i)
+            destination.push_back(source[i]);
     }
 }
 

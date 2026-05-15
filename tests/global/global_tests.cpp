@@ -30,6 +30,24 @@ using CapturingLogger = NWB::Tests::CapturingLogger;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct U32VectorView{
+    using value_type = u32;
+
+    const u32* values = nullptr;
+    usize valueCount = 0u;
+
+    [[nodiscard]] bool empty()const{ return valueCount == 0u; }
+    [[nodiscard]] usize size()const{ return valueCount; }
+    [[nodiscard]] const u32* data()const{ return values; }
+    [[nodiscard]] const u32* begin()const{ return values; }
+    [[nodiscard]] const u32* end()const{ return values + valueCount; }
+    [[nodiscard]] u32 operator[](const usize index)const{ return values[index]; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static void TestPodRoundTrip(TestContext& context){
     Vector<u8> binary;
     const u32 writtenValue = 0x11223344u;
@@ -176,6 +194,33 @@ static void TestAppendTriviallyCopyableVectorSelfAppend(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, values[5u] == 3u);
 }
 
+static void TestTriviallyCopyableVectorAlias(TestContext& context){
+    Vector<u32> values;
+    values.push_back(1u);
+    values.push_back(2u);
+    values.push_back(3u);
+    values.push_back(4u);
+
+    const U32VectorView middle{ values.data() + 1u, 2u };
+    AppendTriviallyCopyableVector(values, middle);
+
+    NWB_GLOBAL_TEST_CHECK(context, values.size() == 6u);
+    NWB_GLOBAL_TEST_CHECK(context, values[0u] == 1u);
+    NWB_GLOBAL_TEST_CHECK(context, values[1u] == 2u);
+    NWB_GLOBAL_TEST_CHECK(context, values[2u] == 3u);
+    NWB_GLOBAL_TEST_CHECK(context, values[3u] == 4u);
+    NWB_GLOBAL_TEST_CHECK(context, values[4u] == 2u);
+    NWB_GLOBAL_TEST_CHECK(context, values[5u] == 3u);
+
+    const U32VectorView assignedMiddle{ values.data() + 1u, 3u };
+    AssignTriviallyCopyableVector(values, assignedMiddle);
+
+    NWB_GLOBAL_TEST_CHECK(context, values.size() == 3u);
+    NWB_GLOBAL_TEST_CHECK(context, values[0u] == 2u);
+    NWB_GLOBAL_TEST_CHECK(context, values[1u] == 3u);
+    NWB_GLOBAL_TEST_CHECK(context, values[2u] == 4u);
+}
+
 static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard guard(logger);
@@ -226,6 +271,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
         __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
         __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
+        __hidden_global_tests::TestTriviallyCopyableVectorAlias(context);
         __hidden_global_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
     });
 }

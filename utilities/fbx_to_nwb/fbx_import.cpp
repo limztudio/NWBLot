@@ -144,6 +144,25 @@ struct SkinExportContext{
     UtilityVector<GeometryJointMatrix> inverseBindMatrices;
 };
 
+[[nodiscard]] bool TriangleHasArea(const FlatGeometryVertex (&vertices)[3]){
+    static constexpr f64 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001;
+
+    const Vec3& a = vertices[0u].vertex.position;
+    const Vec3& b = vertices[1u].vertex.position;
+    const Vec3& c = vertices[2u].vertex.position;
+    const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
+    const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
+    const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
+    const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
+    const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
+    const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
+    const f64 crossX = abY * acZ - abZ * acY;
+    const f64 crossY = abZ * acX - abX * acZ;
+    const f64 crossZ = abX * acY - abY * acX;
+    const f64 areaLengthSquared = crossX * crossX + crossY * crossY + crossZ * crossZ;
+    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
+}
+
 ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
     ufbx_matrix matrix = {};
     const f64 inverseScale = 1.0 / scale;
@@ -445,7 +464,9 @@ bool AppendInstanceGeometry(
             if(options.flipWinding)
                 Swap(cornerIndices[1], cornerIndices[2]);
 
-            for(const u32 cornerIndex : cornerIndices){
+            FlatGeometryVertex triangleVertices[3] = {};
+            for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
+                const u32 cornerIndex = cornerIndices[triangleCornerIndex];
                 ufbx_vec3 position = {};
                 ufbx_vec3 normal = {};
 
@@ -506,8 +527,14 @@ bool AppendInstanceGeometry(
                         return false;
                 }
 
-                outFlatVertices.push_back(flatVertex);
+                triangleVertices[triangleCornerIndex] = flatVertex;
             }
+
+            if(!TriangleHasArea(triangleVertices))
+                continue;
+
+            for(const FlatGeometryVertex& flatVertex : triangleVertices)
+                outFlatVertices.push_back(flatVertex);
         }
     }
 

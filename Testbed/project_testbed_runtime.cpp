@@ -55,15 +55,11 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_DeformableSkinPivotY = -0.5f;
 static constexpr f32 s_DeformableSkinMaxAngle = 0.45f;
+static constexpr f32 s_CharacterCameraTargetY = 0.85f;
 static constexpr f32 s_AccessoryNormalOffset = 0.08f;
 static constexpr f32 s_AccessoryUniformScale = 0.16f;
-static constexpr f32 s_SurfaceEditTargetY = 0.35f;
-static constexpr f32 s_StaticPrimitiveY = -0.75f;
-static constexpr AStringView s_DeformableProxyPath = "project/characters/proxy_deformable";
-static constexpr AStringView s_DeformableImportedPath = "project/characters/imported_deformable";
-static constexpr AStringView s_DeformableCsgCubePath = "project/characters/csg_cube";
-static constexpr AStringView s_DeformableCsgSpherePath = "project/characters/csg_sphere";
-static constexpr AStringView s_DeformableCsgTetrahedronPath = "project/characters/csg_tetrahedron";
+static constexpr f32 s_SurfaceEditTargetY = 0.0f;
+static constexpr AStringView s_DeformableFemalePath = "project/characters/female";
 static constexpr AStringView s_DeformableMaterialPath = "project/materials/mat_deformable_uv";
 static constexpr AStringView s_SurfaceEditOperatorMaterialPath = "project/materials/mat_csg_subtract_preview";
 static constexpr f32 s_SurfaceEditOperatorSurfaceOffsetMin = 0.001f;
@@ -100,11 +96,7 @@ struct EditorClientSize{
 };
 
 static const SurfaceEditTargetDesc s_SurfaceEditTargets[] = {
-    { "plane", s_DeformableImportedPath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.82f, 0.24f, s_PI, true },
-    { "box", s_DeformableProxyPath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.62f, 0.20f, 0.0f, true },
-    { "cube", s_DeformableCsgCubePath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.72f, 0.20f, 0.0f, false },
-    { "sphere", s_DeformableCsgSpherePath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.72f, 0.24f, 0.0f, false },
-    { "tetrahedron", s_DeformableCsgTetrahedronPath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 0.74f, 0.08f, 0.0f, false },
+    { "female", s_DeformableFemalePath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 1.0f, 0.24f, 0.0f, false },
 };
 static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) / sizeof(s_SurfaceEditTargets[0]);
 
@@ -635,7 +627,7 @@ static void ApplyFlyCameraInputToMainCamera(
     if(!FiniteVector3(forward))
         return false;
 
-    const SIMDVector target = VectorSet(0.0f, s_SurfaceEditTargetY, 0.0f, 0.0f);
+    const SIMDVector target = VectorSet(0.0f, s_CharacterCameraTargetY, 0.0f, 0.0f);
     const SIMDVector position = VectorSubtract(
         target,
         VectorMultiply(forward, VectorReplicate(Max(0.5f, preset.distance)))
@@ -651,7 +643,7 @@ static void ApplyFlyCameraInputToMainCamera(
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
     auto cameraEntity = world.createEntity();
     auto& transform = cameraEntity.addComponent<NWB::Impl::TransformComponent>();
-    transform.position = Float4(0.0f, 0.0f, -s_CameraStartDepth);
+    transform.position = Float4(0.0f, s_CharacterCameraTargetY, -s_CameraStartDepth);
     cameraEntity.addComponent<NWB::Impl::CameraComponent>();
     return cameraEntity.id();
 }
@@ -668,25 +660,6 @@ static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     light.type = NWB::Impl::LightType::Directional;
     light.setColor(Float4(1.0f, 0.96f, 0.88f));
     light.setIntensity(s_DefaultDirectionalLightIntensity);
-}
-
-static void CreateRendererEntity(
-    NWB::Core::ECS::World& world,
-    const TestbedGeometryRef& geometry,
-    const TestbedMaterialRef& material,
-    const Float4& position,
-    const f32 uniformScale
-){
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
-    transform.position = position;
-    transform.scale = Float4(uniformScale, uniformScale, uniformScale);
-
-    auto& geometryComponent = entity.addComponent<NWB::Impl::GeometryComponent>();
-    geometryComponent.geometry = geometry;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = material;
 }
 
 [[nodiscard]] static NWB::Impl::DeformableJointMatrix BuildProxySkinJoint(const f32 angleRadians){
@@ -1098,58 +1071,11 @@ void ProjectTestbed::destroyWorld(){
 
 
 bool ProjectTestbed::onStartup(){
-    using TestbedGeometryRef = __hidden_project_testbed_runtime::TestbedGeometryRef;
-    using TestbedMaterialRef = __hidden_project_testbed_runtime::TestbedMaterialRef;
-
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::ActiveCameraComponent>();
     activeCamera.camera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
-    TestbedMaterialRef cubeWarmMaterial;
-    cubeWarmMaterial.virtualPath = Name("project/materials/mat_cube_warm");
-    TestbedMaterialRef cubeCoolMaterial;
-    cubeCoolMaterial.virtualPath = Name("project/materials/mat_cube_cool");
-    TestbedMaterialRef transparentSphereMaterial;
-    transparentSphereMaterial.virtualPath = Name("project/materials/mat_transparent_sphere");
-    TestbedMaterialRef transparentTetrahedronMaterial;
-    transparentTetrahedronMaterial.virtualPath = Name("project/materials/mat_transparent_tetrahedron");
-
-    TestbedGeometryRef cubeGeometry;
-    cubeGeometry.virtualPath = Name("project/meshes/cube");
-    TestbedGeometryRef sphereGeometry;
-    sphereGeometry.virtualPath = Name("project/meshes/sphere");
-    TestbedGeometryRef tetrahedronGeometry;
-    tetrahedronGeometry.virtualPath = Name("project/meshes/tetrahedron");
-
-    __hidden_project_testbed_runtime::CreateRendererEntity(
-        *m_world,
-        cubeGeometry,
-        cubeWarmMaterial,
-        Float4(-1.05f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
-        0.36f
-    );
-    __hidden_project_testbed_runtime::CreateRendererEntity(
-        *m_world,
-        cubeGeometry,
-        cubeCoolMaterial,
-        Float4(-0.35f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
-        0.42f
-    );
-    __hidden_project_testbed_runtime::CreateRendererEntity(
-        *m_world,
-        sphereGeometry,
-        transparentSphereMaterial,
-        Float4(0.4f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
-        0.38f
-    );
-    __hidden_project_testbed_runtime::CreateRendererEntity(
-        *m_world,
-        tetrahedronGeometry,
-        transparentTetrahedronMaterial,
-        Float4(1.05f, __hidden_project_testbed_runtime::s_StaticPrimitiveY, 0.0f),
-        0.4f
-    );
     m_surfaceEditPreviewEntity = __hidden_project_testbed_runtime::CreateSurfaceEditSubtractPreviewEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();
@@ -1164,7 +1090,7 @@ bool ProjectTestbed::onStartup(){
 
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("directional light, shared primitives, selectable deformable CSG targets")
+        NWB_TEXT("directional light and female deformable character")
     );
     logSurfaceEditControls();
     registerInputHandler();

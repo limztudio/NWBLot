@@ -215,6 +215,17 @@ Token Lexer::readNumber(){
         }
     }
 
+    if(!isAtEnd() && (peek() == 'e' || peek() == 'E')){
+        isDouble = true;
+        advance();
+        if(!isAtEnd() && (peek() == '+' || peek() == '-'))
+            advance();
+        if(isAtEnd() || !isDigit(peek()))
+            return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
+        while(!isAtEnd() && isDigit(peek()))
+            advance();
+    }
+
     Token tok;
     tok.type = isDouble ? TokenType::DoubleLiteral : TokenType::IntegerLiteral;
     tok.text = m_source.substr(start, m_current - start);

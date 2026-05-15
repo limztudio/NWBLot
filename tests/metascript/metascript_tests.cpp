@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/metascript/value.h>
+#include <core/metascript/parser.h>
 
 #include <tests/test_context.h>
 
@@ -17,6 +17,7 @@ namespace __hidden_metascript_tests{
 
 
 using TestContext = NWB::Tests::TestContext;
+using Document = NWB::Core::Metascript::Document;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
 
@@ -196,6 +197,35 @@ static void TestAppendSelfMoveCopiesOriginalValue(TestContext& context){
     }
 }
 
+static void TestExponentDoubleLiterals(TestContext& context){
+    DestinationArena arena;
+    Document document(arena.arena);
+    const AString source =
+        "number asset;\n"
+        "asset.values = [2.89785676e-05, -3.66009772E-07, 1e+03, 2E2];\n"
+    ;
+
+    NWB_METASCRIPT_TEST_CHECK(context, document.parse(ViewOf(source)));
+    const Value* values = document.asset().findField(MStringView("values", 6u));
+    NWB_METASCRIPT_TEST_CHECK(context, values != nullptr);
+    if(!values || !values->isList())
+        return;
+
+    const auto& list = values->asList();
+    NWB_METASCRIPT_TEST_CHECK(context, list.size() == 4u);
+    if(list.size() != 4u)
+        return;
+
+    NWB_METASCRIPT_TEST_CHECK(context, list[0u].isDouble());
+    NWB_METASCRIPT_TEST_CHECK(context, list[1u].isDouble());
+    NWB_METASCRIPT_TEST_CHECK(context, list[2u].isDouble());
+    NWB_METASCRIPT_TEST_CHECK(context, list[3u].isDouble());
+    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[0u].asDouble() - 0.0000289785676) < 0.0000000001);
+    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[1u].asDouble() + 0.000000366009772) < 0.0000000001);
+    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[2u].asDouble() - 1000.0) < 0.0000000001);
+    NWB_METASCRIPT_TEST_CHECK(context, Abs(list[3u].asDouble() - 200.0) < 0.0000000001);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -223,6 +253,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_metascript_tests::TestCrossArenaAppendCopiesIntoDestinationArena(context);
         __hidden_metascript_tests::TestListSelfAppendCopiesOriginalValues(context);
         __hidden_metascript_tests::TestAppendSelfMoveCopiesOriginalValue(context);
+        __hidden_metascript_tests::TestExponentDoubleLiterals(context);
     });
 }
 

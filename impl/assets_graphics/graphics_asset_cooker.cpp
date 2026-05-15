@@ -46,7 +46,7 @@ namespace __hidden_graphics_asset_cooker{
 
 static constexpr AStringView s_VolumeName = "graphics";
 static constexpr AStringView s_CookerLogPrefix = "GraphicsAssetCooker";
-static constexpr u64 s_DefaultSegmentSize = 16ull * 1024ull * 1024ull;
+static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
 

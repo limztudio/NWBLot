@@ -6,7 +6,7 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 
-#include <tests/assets_graphics/deformable_test_helpers.h>
+#include <tests/deformable_test_helpers.h>
 #include <tests/capturing_logger.h>
 #include <tests/test_context.h>
 

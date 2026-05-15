@@ -9,7 +9,7 @@
 #include <impl/ecs_deformable_render/deformer_morph_payload.h>
 #include <impl/ecs_deformable_render/deformer_skin_payload.h>
 
-#include <tests/assets_graphics/deformable_test_helpers.h>
+#include <tests/deformable_test_helpers.h>
 #include <tests/capturing_logger.h>
 #include <tests/ecs_test_world.h>
 #include <tests/test_context.h>

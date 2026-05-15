@@ -522,6 +522,13 @@ static NWB::Impl::DeformableRuntimeMeshInstance MakeTriangleInstance(){
     return instance;
 }
 
+static NWB::Impl::DeformablePickingRay MakeDownwardPickingRay(const Float3U& origin){
+    NWB::Impl::DeformablePickingRay ray;
+    ray.setOrigin(origin);
+    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    return ray;
+}
+
 static NWB::Impl::DeformableRuntimeMeshInstance MakeTetrahedronHoleInstance(){
     NWB::Impl::DeformableRuntimeMeshInstance instance;
     instance.entity = NWB::Core::ECS::EntityID(21u, 0u);
@@ -1311,6 +1318,17 @@ static bool BuildRecordedHoleReplaySetup(RecordedHoleReplaySetup& outSetup){
     );
 }
 
+static void CheckSingleRecordedAccessoryState(
+    TestContext& context,
+    const NWB::Impl::DeformableSurfaceEditState& state,
+    const NWB::Impl::DeformableSurfaceEditId editId
+){
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == editId);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
+}
+
 struct SurfaceEditReplayFixture{
     NWB::Impl::DeformableSurfaceEditState loadedState;
     TestAssetManager assets;
@@ -1760,9 +1778,7 @@ static void TestMixedProvenanceRejectsAmbiguousRestTriangle(TestContext& context
     NWB::Impl::SourceSample sample;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 1u, bary, sample));
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(-0.5f, 0.5f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(-0.5f, 0.5f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -1778,9 +1794,7 @@ static void TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(TestCont
     NWB::Impl::SourceSample sample;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 2u, bary, sample));
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(4.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(4.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -1957,9 +1971,7 @@ static void TestPickingVerticesRejectNonFiniteRestData(TestContext& context){
 static void TestRaycastReturnsPoseAndRestHit(TestContext& context){
     const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(0.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -2004,9 +2016,7 @@ static void TestRaycastRejectsUploadDirtyRuntimeMesh(TestContext& context){
     NWB::Impl::DeformableRuntimeMeshInstance instance = MakeTriangleInstance();
     instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::GpuUploadDirty;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(0.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(
@@ -2036,9 +2046,7 @@ static void TestPoseStableRestHitRecovery(TestContext& context){
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(2.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(2.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -2257,9 +2265,7 @@ static void TestPickingUsesEntityTransform(TestContext& context){
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.transform = &transform;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(3.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(3.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -2281,9 +2287,7 @@ static void TestPickingIgnoresJointPaletteForUnskinnedMesh(TestContext& context)
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(0.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -2306,9 +2310,7 @@ static void TestPickingRejectsNonAffineJointPalette(TestContext& context){
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(0.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -2345,9 +2347,7 @@ static void TestPickingRejectsUnusedNonAffineJointPalette(TestContext& context){
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(0.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -2370,9 +2370,7 @@ static void TestPickingRejectsInvalidSkinWeights(TestContext& context){
     NWB::Impl::DeformablePickingInputs inputs;
     inputs.jointPalette = &joints;
 
-    NWB::Impl::DeformablePickingRay ray;
-    ray.setOrigin(Float3U(0.0f, 0.0f, 1.0f));
-    ray.setDirection(Float3U(0.0f, 0.0f, -1.0f));
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(0.0f, 0.0f, 1.0f));
 
     NWB::Impl::DeformablePosedHit hit;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::RaycastDeformableRuntimeMesh(instance, inputs, ray, hit));
@@ -5716,10 +5714,7 @@ static void TestSurfaceEditHealReplaysSurvivingEdits(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].editId == secondEditId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].hole.baseEditRevision == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].result.editRevision == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == secondEditId);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
+    CheckSingleRecordedAccessoryState(context, state, secondEditId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex != oldSecondFirstWallVertex);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
@@ -5780,10 +5775,7 @@ static void TestSurfaceEditResizeReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, state.edits[0].editId == editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.radius, 0.58f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.depth, 0.31f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == editId);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
+    CheckSingleRecordedAccessoryState(context, state, editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
     NWB::Impl::TransformComponent resolvedTransform;
@@ -5845,10 +5837,7 @@ static void TestSurfaceEditMoveReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.restPosition.y, targetRestPosition.y));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.radius, 0.38f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.depth, 0.25f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == editId);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
+    CheckSingleRecordedAccessoryState(context, state, editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
     NWB::Impl::TransformComponent resolvedTransform;
@@ -5923,10 +5912,7 @@ static void TestSurfaceEditPatchReplaysFromCleanBase(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.restPosition.y, targetRestPosition.y));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.radius, 0.48f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(state.edits[0].hole.depth, 0.31f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == editId);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == state.edits[0].result.wallVertexCount);
+    CheckSingleRecordedAccessoryState(context, state, editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
 
     NWB::Impl::TransformComponent resolvedTransform;
@@ -5985,10 +5971,7 @@ static void TestSurfaceEditLoopCutReplaysFromCleanBase(TestContext& context){
         state.edits[0].result.firstWallVertex >= cleanBase.restVertices.size()
             && state.edits[0].result.firstWallVertex < editedInstance.restVertices.size()
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].anchorEditId == editId);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].firstWallVertex == state.edits[0].result.firstWallVertex);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, state.accessories[0].wallVertexCount == wallVertexCount);
+    CheckSingleRecordedAccessoryState(context, state, editId);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, editedInstance.editRevision == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,

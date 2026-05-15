@@ -64,6 +64,39 @@ void WriteVec4(Stream& out, const Vec4& value){
     out << "]";
 }
 
+template<typename Stream>
+void WriteSkinJoints(Stream& out, const GeometrySkinInfluence& skin){
+    out << "["
+        << skin.joint[0u] << ", "
+        << skin.joint[1u] << ", "
+        << skin.joint[2u] << ", "
+        << skin.joint[3u] << "]";
+}
+
+template<typename Stream>
+void WriteSkinWeights(Stream& out, const GeometrySkinInfluence& skin){
+    out << "[";
+    WriteFloat(out, skin.weight[0u]);
+    out << ", ";
+    WriteFloat(out, skin.weight[1u]);
+    out << ", ";
+    WriteFloat(out, skin.weight[2u]);
+    out << ", ";
+    WriteFloat(out, skin.weight[3u]);
+    out << "]";
+}
+
+template<typename Stream>
+void WriteJointMatrix(Stream& out, const GeometryJointMatrix& matrix){
+    out << "[\n";
+    for(const Vec4& column : matrix.columns){
+        out << "        ";
+        WriteVec4(out, column);
+        out << ",\n";
+    }
+    out << "    ]";
+}
+
 bool ChooseIndexType(const AString& requested, const usize vertexCount, AString& outIndexType, AString& outError){
     const AString normalized = ToLower(Trim(requested));
     if(normalized == "auto"){
@@ -103,6 +136,9 @@ bool WriteNwbGeometry(
     const Path& outputPath,
     const UtilityVector<GeometryVertex>& vertices,
     const UtilityVector<u32>& indices,
+    const UtilityVector<GeometrySkinInfluence>& skin,
+    const u32 skeletonJointCount,
+    const UtilityVector<GeometryJointMatrix>& inverseBindMatrices,
     const AString& requestedIndexType,
     const AString& geometryClassText,
     AString& outIndexType,
@@ -123,7 +159,21 @@ bool WriteNwbGeometry(
     }
     const bool writeDeformableGeometry = GeometryClassUsesDeformableRuntime(geometryClass);
     if(GeometryClassUsesSkinning(geometryClass)){
-        outError = "skinned and skinned_deform output require skeleton/skin export, which this converter does not write yet";
+        if(skin.size() != vertices.size()){
+            outError = "skinned geometry skin stream must match vertex count";
+            return false;
+        }
+        if(skeletonJointCount == 0u){
+            outError = "skinned geometry requires at least one skeleton joint";
+            return false;
+        }
+        if(inverseBindMatrices.size() != static_cast<usize>(skeletonJointCount)){
+            outError = "skinned geometry inverse bind matrix count must match skeleton_joint_count";
+            return false;
+        }
+    }
+    else if(!skin.empty() || skeletonJointCount != 0u || !inverseBindMatrices.empty()){
+        outError = "static geometry cannot write skeleton/skin payload";
         return false;
     }
 
@@ -196,7 +246,37 @@ bool WriteNwbGeometry(
     file << "];\n";
 
     if(writeDeformableGeometry){
-        file << "\nasset.skin = {};\n";
+        if(GeometryClassUsesSkinning(geometryClass)){
+            file << "\nasset.skeleton_joint_count = " << skeletonJointCount << ";\n\n";
+
+            file << "asset.inverse_bind_matrices = [\n";
+            for(const GeometryJointMatrix& matrix : inverseBindMatrices){
+                file << "    ";
+                __hidden_nwb_geometry_writer::WriteJointMatrix(file, matrix);
+                file << ",\n";
+            }
+            file << "];\n\n";
+
+            file << "asset.skin = {\n";
+            file << "    \"joints0\": [\n";
+            for(const GeometrySkinInfluence& influence : skin){
+                file << "        ";
+                __hidden_nwb_geometry_writer::WriteSkinJoints(file, influence);
+                file << ",\n";
+            }
+            file << "    ],\n";
+            file << "    \"weights0\": [\n";
+            for(const GeometrySkinInfluence& influence : skin){
+                file << "        ";
+                __hidden_nwb_geometry_writer::WriteSkinWeights(file, influence);
+                file << ",\n";
+            }
+            file << "    ],\n";
+            file << "};\n\n";
+        }
+        else{
+            file << "\nasset.skin = {};\n";
+        }
         file << "asset.morphs = {};\n";
     }
 

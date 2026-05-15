@@ -133,13 +133,257 @@ Vec4 ToVec4(const ufbx_vec4 value){
     };
 }
 
+struct FlatGeometryVertex{
+    GeometryVertex vertex;
+    GeometrySkinInfluence skin;
+};
+static_assert(IsTriviallyCopyable_V<FlatGeometryVertex>);
+
+struct SkinExportContext{
+    UtilityVector<ufbx_node*> joints;
+    UtilityVector<GeometryJointMatrix> inverseBindMatrices;
+};
+
+ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
+    ufbx_matrix matrix = {};
+    const f64 inverseScale = 1.0 / scale;
+    matrix.m00 = inverseScale;
+    matrix.m11 = inverseScale;
+    matrix.m22 = inverseScale;
+    return matrix;
+}
+
+bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
+    for(usize i = 0u; i < 12u; ++i){
+        if(!IsFinite(static_cast<f64>(matrix.v[i])))
+            return false;
+    }
+    return true;
+}
+
+GeometryJointMatrix ToGeometryJointMatrix(const ufbx_matrix& matrix){
+    GeometryJointMatrix result{};
+    result.columns[0] = Vec4{
+        static_cast<f32>(matrix.m00),
+        static_cast<f32>(matrix.m10),
+        static_cast<f32>(matrix.m20),
+        0.0f,
+    };
+    result.columns[1] = Vec4{
+        static_cast<f32>(matrix.m01),
+        static_cast<f32>(matrix.m11),
+        static_cast<f32>(matrix.m21),
+        0.0f,
+    };
+    result.columns[2] = Vec4{
+        static_cast<f32>(matrix.m02),
+        static_cast<f32>(matrix.m12),
+        static_cast<f32>(matrix.m22),
+        0.0f,
+    };
+    result.columns[3] = Vec4{
+        static_cast<f32>(matrix.m03),
+        static_cast<f32>(matrix.m13),
+        static_cast<f32>(matrix.m23),
+        1.0f,
+    };
+    return result;
+}
+
+bool NearlyEqualJointMatrix(const GeometryJointMatrix& lhs, const GeometryJointMatrix& rhs){
+    static constexpr f32 s_Epsilon = 0.0001f;
+    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
+        const Vec4& a = lhs.columns[columnIndex];
+        const Vec4& b = rhs.columns[columnIndex];
+        if(
+            Abs(a.x - b.x) > s_Epsilon
+            || Abs(a.y - b.y) > s_Epsilon
+            || Abs(a.z - b.z) > s_Epsilon
+            || Abs(a.w - b.w) > s_Epsilon
+        ){
+            return false;
+        }
+    }
+    return true;
+}
+
+AString NodeDisplayName(const ufbx_node* node){
+    if(!node)
+        return "<null>";
+    AString name = FromUfbxString(node->name);
+    if(name.empty())
+        return "<unnamed node>";
+    return name;
+}
+
+ufbx_matrix BuildGeometryFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options){
+    const ufbx_matrix scaleInverse = MakeInverseUniformScaleMatrix(options.scale);
+    if(!options.bakeTransforms)
+        return scaleInverse;
+
+    const ufbx_matrix nodeGeometryToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
+    return ufbx_matrix_mul(&nodeGeometryToWorldInverse, &scaleInverse);
+}
+
+ufbx_matrix BuildOutputInverseBindMatrix(
+    const ufbx_skin_cluster& cluster,
+    const MeshInstance& instance,
+    const ImportOptions& options
+){
+    const ufbx_matrix geometryFromOutput = BuildGeometryFromOutputMatrix(instance, options);
+    return ufbx_matrix_mul(&cluster.geometry_to_bone, &geometryFromOutput);
+}
+
+bool FindOrAddJoint(
+    SkinExportContext& context,
+    ufbx_skin_cluster* cluster,
+    const ufbx_matrix& inverseBind,
+    u16& outJoint,
+    AString& outError
+){
+    outJoint = 0u;
+    if(!cluster || !cluster->bone_node){
+        outError = "skin cluster is missing a bone node";
+        return false;
+    }
+    if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= 0.00000001){
+        outError = "skin cluster inverse bind matrix is not finite and invertible";
+        return false;
+    }
+
+    const GeometryJointMatrix convertedMatrix = ToGeometryJointMatrix(inverseBind);
+    for(usize jointIndex = 0u; jointIndex < context.joints.size(); ++jointIndex){
+        if(context.joints[jointIndex] != cluster->bone_node)
+            continue;
+        if(!NearlyEqualJointMatrix(context.inverseBindMatrices[jointIndex], convertedMatrix)){
+            outError = "selected meshes bind skeleton joint \"" + NodeDisplayName(cluster->bone_node)
+                + "\" with different inverse bind matrices";
+            return false;
+        }
+
+        outJoint = static_cast<u16>(jointIndex);
+        return true;
+    }
+
+    if(context.joints.size() > static_cast<usize>(Limit<u16>::s_Max)){
+        outError = "skeleton has more than 65536 joints";
+        return false;
+    }
+
+    outJoint = static_cast<u16>(context.joints.size());
+    context.joints.push_back(cluster->bone_node);
+    context.inverseBindMatrices.push_back(convertedMatrix);
+    return true;
+}
+
+bool BuildClusterJointMap(
+    const MeshInstance& instance,
+    const ImportOptions& options,
+    ufbx_skin_deformer* skin,
+    SkinExportContext& context,
+    UtilityVector<u16>& outClusterJoints,
+    AString& outError
+){
+    outClusterJoints.clear();
+    if(!skin){
+        outError = "skinned geometry requires a skin deformer";
+        return false;
+    }
+    if(skin->clusters.count == 0u){
+        outError = "skin deformer contains no clusters";
+        return false;
+    }
+    if(skin->clusters.count > static_cast<usize>(Limit<u32>::s_Max)){
+        outError = "skin deformer has too many clusters";
+        return false;
+    }
+
+    outClusterJoints.reserve(skin->clusters.count);
+    for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
+        ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
+        if(!cluster){
+            outError = "skin deformer contains a null cluster";
+            return false;
+        }
+
+        const ufbx_matrix inverseBind = BuildOutputInverseBindMatrix(*cluster, instance, options);
+        u16 joint = 0u;
+        if(!FindOrAddJoint(context, cluster, inverseBind, joint, outError))
+            return false;
+        outClusterJoints.push_back(joint);
+    }
+
+    return true;
+}
+
+bool BuildSkinInfluence(
+    ufbx_skin_deformer* skin,
+    const UtilityVector<u16>& clusterJoints,
+    const u32 logicalVertex,
+    GeometrySkinInfluence& outInfluence,
+    AString& outError
+){
+    outInfluence = GeometrySkinInfluence{};
+    if(!skin || logicalVertex >= skin->vertices.count){
+        outError = "skin deformer does not contain weights for every logical vertex";
+        return false;
+    }
+
+    const ufbx_skin_vertex skinVertex = skin->vertices.data[logicalVertex];
+    if(
+        skinVertex.weight_begin > skin->weights.count
+        || skinVertex.num_weights > skin->weights.count - skinVertex.weight_begin
+    ){
+        outError = "skin vertex weight range is out of bounds";
+        return false;
+    }
+
+    f64 weightSum = 0.0;
+    u32 writtenInfluenceCount = 0u;
+    for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
+        if(writtenInfluenceCount == 4u)
+            break;
+
+        const ufbx_skin_weight& weight = skin->weights.data[skinVertex.weight_begin + weightOffset];
+        const f64 value = static_cast<f64>(weight.weight);
+        if(!IsFinite(value)){
+            outError = "skin contains a non-finite weight";
+            return false;
+        }
+        if(value <= 0.0)
+            continue;
+        if(weight.cluster_index >= clusterJoints.size()){
+            outError = "skin weight references an out-of-range cluster";
+            return false;
+        }
+
+        outInfluence.joint[writtenInfluenceCount] = clusterJoints[weight.cluster_index];
+        outInfluence.weight[writtenInfluenceCount] = static_cast<f32>(value);
+        weightSum += value;
+        ++writtenInfluenceCount;
+    }
+
+    if(!IsFinite(weightSum) || weightSum <= 0.0){
+        outError = "skinned geometry contains a vertex with no positive skin weights";
+        return false;
+    }
+
+    const f32 inverseWeightSum = static_cast<f32>(1.0 / weightSum);
+    for(f32& weight : outInfluence.weight)
+        weight *= inverseWeightSum;
+
+    return true;
+}
+
 bool AppendInstanceGeometry(
     const MeshInstance& instance,
     const ImportOptions& options,
     const bool wantsDeformableGeometry,
+    const bool wantsSkinning,
     const Vec4& defaultColor,
     UtilityVector<u32>& inOutTriangleIndices,
-    UtilityVector<GeometryVertex>& outFlatVertices,
+    UtilityVector<FlatGeometryVertex>& outFlatVertices,
+    SkinExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
     bool& inOutSawVertexUvs,
     AString& outError
@@ -168,6 +412,17 @@ bool AppendInstanceGeometry(
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
     const bool importUvs = wantsDeformableGeometry && mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
+    ufbx_skin_deformer* skin = nullptr;
+    UtilityVector<u16> clusterJoints;
+    if(wantsSkinning){
+        if(mesh->skin_deformers.count != 1u){
+            outError = "skinned geometry requires exactly one skin deformer per selected mesh";
+            return false;
+        }
+        skin = mesh->skin_deformers.data[0u];
+        if(!BuildClusterJointMap(instance, options, skin, inOutSkinContext, clusterJoints, outError))
+            return false;
+    }
 
     for(usize faceIndex = 0; faceIndex < mesh->num_faces; ++faceIndex){
         const ufbx_face face = mesh->faces.data[faceIndex];
@@ -195,9 +450,15 @@ bool AppendInstanceGeometry(
                 ufbx_vec3 normal = {};
 
                 if(options.bakeTransforms){
-                    position = ufbx_get_vertex_vec3(&mesh->skinned_position, cornerIndex);
-                    normal = ufbx_get_vertex_vec3(&mesh->skinned_normal, cornerIndex);
-                    if(mesh->skinned_is_local){
+                    position = ufbx_get_vertex_vec3(
+                        wantsSkinning ? &mesh->vertex_position : &mesh->skinned_position,
+                        cornerIndex
+                    );
+                    normal = ufbx_get_vertex_vec3(
+                        wantsSkinning ? &mesh->vertex_normal : &mesh->skinned_normal,
+                        cornerIndex
+                    );
+                    if(wantsSkinning || mesh->skinned_is_local){
                         position = ufbx_transform_position(&node->geometry_to_world, position);
                         normal = ufbx_transform_direction(&normalToWorld, normal);
                     }
@@ -233,7 +494,19 @@ bool AppendInstanceGeometry(
                     return false;
                 }
 
-                outFlatVertices.push_back(vertex);
+                FlatGeometryVertex flatVertex{};
+                flatVertex.vertex = vertex;
+                if(wantsSkinning){
+                    if(cornerIndex >= mesh->vertex_indices.count){
+                        outError = "mesh corner references an out-of-range logical vertex";
+                        return false;
+                    }
+                    const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
+                    if(!BuildSkinInfluence(skin, clusterJoints, logicalVertex, flatVertex.skin, outError))
+                        return false;
+                }
+
+                outFlatVertices.push_back(flatVertex);
             }
         }
     }
@@ -294,6 +567,7 @@ bool LoadScene(const ImportOptions& options, SceneHandle& outScene, AString& out
     loadOptions.ignore_missing_external_files = true;
     loadOptions.generate_missing_normals = true;
     loadOptions.normalize_normals = true;
+    loadOptions.clean_skin_weights = true;
     loadOptions.evaluate_skinning = true;
     loadOptions.evaluate_caches = true;
     loadOptions.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_PRESERVE;
@@ -424,12 +698,18 @@ bool BuildGeometry(
     const Vec4& defaultColor,
     UtilityVector<GeometryVertex>& outVertices,
     UtilityVector<u32>& outIndices,
+    UtilityVector<GeometrySkinInfluence>& outSkin,
+    u32& outSkeletonJointCount,
+    UtilityVector<GeometryJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
     AString& outError
 ){
     outVertices.clear();
     outIndices.clear();
+    outSkin.clear();
+    outSkeletonJointCount = 0u;
+    outInverseBindMatrices.clear();
     outSawVertexColors = false;
     outSawVertexUvs = false;
     outError.clear();
@@ -443,7 +723,7 @@ bool BuildGeometry(
     ))
         return false;
 
-    UtilityVector<GeometryVertex> flatVertices;
+    UtilityVector<__hidden_fbx_import::FlatGeometryVertex> flatVertices;
     flatVertices.reserve(estimatedTriangleCorners);
     outIndices.reserve(estimatedTriangleCorners);
     UtilityVector<u32> triangleIndices;
@@ -453,6 +733,8 @@ bool BuildGeometry(
         return false;
     }
     const bool wantsDeformableGeometry = GeometryClassUsesDeformableRuntime(geometryClass);
+    const bool wantsSkinning = GeometryClassUsesSkinning(geometryClass);
+    __hidden_fbx_import::SkinExportContext skinContext;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             outError = "selected mesh index is out of range";
@@ -463,9 +745,11 @@ bool BuildGeometry(
                 instances[instanceIndex],
                 options,
                 wantsDeformableGeometry,
+                wantsSkinning,
                 defaultColor,
                 triangleIndices,
                 flatVertices,
+                skinContext,
                 outSawVertexColors,
                 outSawVertexUvs,
                 outError
@@ -489,7 +773,7 @@ bool BuildGeometry(
         ufbx_vertex_stream stream = {};
         stream.data = flatVertices.data();
         stream.vertex_count = flatVertices.size();
-        stream.vertex_size = sizeof(GeometryVertex);
+        stream.vertex_size = sizeof(__hidden_fbx_import::FlatGeometryVertex);
 
         ufbx_error error = {};
         const usize uniqueVertexCount = static_cast<usize>(ufbx_generate_indices(
@@ -510,12 +794,27 @@ bool BuildGeometry(
         }
 
         flatVertices.resize(uniqueVertexCount);
-        outVertices = Move(flatVertices);
     }
     else{
         outIndices.resize(flatVertices.size());
         Iota(outIndices.begin(), outIndices.end(), 0u);
-        outVertices = Move(flatVertices);
+    }
+
+    outVertices.reserve(flatVertices.size());
+    if(wantsSkinning)
+        outSkin.reserve(flatVertices.size());
+    for(const __hidden_fbx_import::FlatGeometryVertex& flatVertex : flatVertices){
+        outVertices.push_back(flatVertex.vertex);
+        if(wantsSkinning)
+            outSkin.push_back(flatVertex.skin);
+    }
+    if(wantsSkinning){
+        if(skinContext.joints.empty()){
+            outError = "skinned geometry did not produce any skeleton joints";
+            return false;
+        }
+        outSkeletonJointCount = static_cast<u32>(skinContext.joints.size());
+        outInverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
     return true;

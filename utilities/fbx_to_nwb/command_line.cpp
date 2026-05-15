@@ -362,15 +362,42 @@ int Run(int argc, char** argv, bool& prompted){
 
     UtilityVector<GeometryVertex> vertices;
     UtilityVector<u32> indices;
+    UtilityVector<GeometrySkinInfluence> skin;
+    u32 skeletonJointCount = 0u;
+    UtilityVector<GeometryJointMatrix> inverseBindMatrices;
     bool sawVertexColors = false;
     bool sawVertexUvs = false;
-    if(!BuildGeometry(instances, selection, options, defaultColor, vertices, indices, sawVertexColors, sawVertexUvs, error)){
+    if(!BuildGeometry(
+        instances,
+        selection,
+        options,
+        defaultColor,
+        vertices,
+        indices,
+        skin,
+        skeletonJointCount,
+        inverseBindMatrices,
+        sawVertexColors,
+        sawVertexUvs,
+        error
+    )){
         NWB_CERR << "Failed to build geometry: " << error << "\n";
         return 1;
     }
 
     AString resolvedIndexType;
-    if(!WriteNwbGeometry(outputPath, vertices, indices, options.indexType, options.geometryClass, resolvedIndexType, error)){
+    if(!WriteNwbGeometry(
+        outputPath,
+        vertices,
+        indices,
+        skin,
+        skeletonJointCount,
+        inverseBindMatrices,
+        options.indexType,
+        options.geometryClass,
+        resolvedIndexType,
+        error
+    )){
         NWB_CERR << "Failed to write NWB geometry: " << error << "\n";
         return 1;
     }
@@ -384,6 +411,8 @@ int Run(int argc, char** argv, bool& prompted){
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
     if(IsNormalizedDeformableGeometryClass(options.geometryClass))
         NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+    if(IsNormalizedSkinnedGeometryClass(options.geometryClass))
+        NWB_COUT << "  skeleton joints: " << skeletonJointCount << "\n";
 
     return 0;
 }

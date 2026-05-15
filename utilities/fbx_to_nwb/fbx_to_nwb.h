@@ -32,6 +32,22 @@ static_assert(alignof(GeometryVertex) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<GeometryVertex>);
 
 
+struct GeometrySkinInfluence{
+    u16 joint[4] = {};
+    f32 weight[4] = {};
+};
+static_assert(sizeof(GeometrySkinInfluence) == sizeof(u16) * 4u + sizeof(f32) * 4u);
+static_assert(alignof(GeometrySkinInfluence) == alignof(f32));
+static_assert(IsTriviallyCopyable_V<GeometrySkinInfluence>);
+
+struct GeometryJointMatrix{
+    Vec4 columns[4];
+};
+static_assert(sizeof(GeometryJointMatrix) == sizeof(f32) * 16u);
+static_assert(alignof(GeometryJointMatrix) == alignof(f32));
+static_assert(IsTriviallyCopyable_V<GeometryJointMatrix>);
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -120,6 +136,9 @@ bool BuildGeometry(
     const Vec4& defaultColor,
     UtilityVector<GeometryVertex>& outVertices,
     UtilityVector<u32>& outIndices,
+    UtilityVector<GeometrySkinInfluence>& outSkin,
+    u32& outSkeletonJointCount,
+    UtilityVector<GeometryJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
     AString& outError
@@ -129,6 +148,9 @@ bool WriteNwbGeometry(
     const Path& outputPath,
     const UtilityVector<GeometryVertex>& vertices,
     const UtilityVector<u32>& indices,
+    const UtilityVector<GeometrySkinInfluence>& skin,
+    const u32 skeletonJointCount,
+    const UtilityVector<GeometryJointMatrix>& inverseBindMatrices,
     const AString& requestedIndexType,
     const AString& geometryClassText,
     AString& outIndexType,

@@ -223,13 +223,7 @@ Value& Value::operator+=(const Value& rhs){
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
-            usize rhsIndex = listSize;
-            for(usize i = 0u; i < listSize; ++i){
-                if(&(*m_data.m_list)[i] == &rhs){
-                    rhsIndex = i;
-                    break;
-                }
-            }
+            const usize rhsIndex = valueIndexInList(rhs);
             const bool rhsInList = rhsIndex != listSize;
             m_data.m_list->reserve(listSize + 1u);
             appendListCopy(rhsInList ? (*m_data.m_list)[rhsIndex] : rhs);
@@ -390,6 +384,24 @@ void Value::makeMap(){
     m_data.m_map = allocMap();
 }
 
+usize Value::valueIndexInList(const Value& val)const{
+    NWB_ASSERT(m_type == ValueType::List);
+
+    const usize listSize = m_data.m_list->size();
+    if(listSize == 0u)
+        return listSize;
+
+    const Value* const listBegin = m_data.m_list->data();
+    const Value* const listEnd = listBegin + listSize;
+    const usize valueAddress = reinterpret_cast<usize>(&val);
+    const bool valueBeforeList = valueAddress < reinterpret_cast<usize>(listBegin);
+    const bool valueAfterList = valueAddress >= reinterpret_cast<usize>(listEnd);
+    if(valueBeforeList || valueAfterList)
+        return listSize;
+
+    return static_cast<usize>(&val - listBegin);
+}
+
 
 Value& Value::field(MStringView name){
     if(m_type == ValueType::Null)
@@ -424,23 +436,18 @@ void Value::append(Value&& val){
         makeList();
     NWB_ASSERT(m_type == ValueType::List);
 
+    const usize listSize = m_data.m_list->size();
+    if(listSize == Limit<usize>::s_Max){
+        NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+        return;
+    }
+
     if(valIsSelf){
-        if(m_data.m_list->size() == Limit<usize>::s_Max){
-            NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
-            return;
-        }
         appendListCopy(selfCopy);
         return;
     }
 
-    const usize listSize = m_data.m_list->size();
-    usize valIndex = listSize;
-    for(usize i = 0u; i < listSize; ++i){
-        if(&(*m_data.m_list)[i] == &val){
-            valIndex = i;
-            break;
-        }
-    }
+    const usize valIndex = valueIndexInList(val);
     const bool valInList = valIndex != listSize;
     if(valInList){
         m_data.m_list->reserve(listSize + 1u);

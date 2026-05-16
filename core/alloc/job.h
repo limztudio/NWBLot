@@ -101,6 +101,12 @@ private:
         return defaultArenaSize(threadCount);
     }
 
+    inline void reserveDefaultNodes(const u32 threadCount){
+        const usize reserveCount = defaultNodeReserveCount(threadCount);
+        m_nodes.reserve(reserveCount);
+        m_freeNodes.reserve(reserveCount);
+    }
+
 
 public:
     inline explicit JobSystem(ThreadPool& pool, usize arenaSize = 0)
@@ -109,9 +115,7 @@ public:
         , m_nodes(JobNodeAllocator(m_arena))
         , m_freeNodes(JobFreeNodeAllocator(m_arena))
     {
-        const usize reserveCount = defaultNodeReserveCount(pool.m_threadCount);
-        m_nodes.reserve(reserveCount);
-        m_freeNodes.reserve(reserveCount);
+        reserveDefaultNodes(pool.m_threadCount);
     }
     inline explicit JobSystem(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinityMask, arenaSize))
@@ -120,9 +124,7 @@ public:
         , m_nodes(JobNodeAllocator(m_arena))
         , m_freeNodes(JobFreeNodeAllocator(m_arena))
     {
-        const usize reserveCount = defaultNodeReserveCount(threadCount);
-        m_nodes.reserve(reserveCount);
-        m_freeNodes.reserve(reserveCount);
+        reserveDefaultNodes(threadCount);
     }
     inline explicit JobSystem(u32 threadCount, CoreAffinity::Enum affinity, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinity, arenaSize))
@@ -131,9 +133,7 @@ public:
         , m_nodes(JobNodeAllocator(m_arena))
         , m_freeNodes(JobFreeNodeAllocator(m_arena))
     {
-        const usize reserveCount = defaultNodeReserveCount(threadCount);
-        m_nodes.reserve(reserveCount);
-        m_freeNodes.reserve(reserveCount);
+        reserveDefaultNodes(threadCount);
     }
 
     inline ~JobSystem(){

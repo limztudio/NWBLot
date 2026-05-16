@@ -571,16 +571,35 @@ private:
         return false;
     }
 
+    bool validateNumericOperands(
+        const TokenType::Enum op,
+        const Value& lhs,
+        const Value& rhs,
+        const u32 line,
+        const u32 column,
+        const char* operandError,
+        const bool rejectZeroDivisor = false){
+        if(!(lhs.isNumeric() && rhs.isNumeric())){
+            if(operandError)
+                error(line, column, operandError);
+            return false;
+        }
+        if(rejectZeroDivisor && isZero(rhs)){
+            error(line, column, "division by zero");
+            return false;
+        }
+        if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
+            error(line, column, "integer overflow");
+            return false;
+        }
+        return true;
+    }
+
     bool validateBinaryOperation(const TokenType::Enum op, const Value& lhs, const Value& rhs, const u32 line, const u32 column){
         switch(op){
         case TokenType::Plus:
-            if(lhs.isNumeric() && rhs.isNumeric()){
-                if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
-                    error(line, column, "integer overflow");
-                    return false;
-                }
-                return true;
-            }
+            if(lhs.isNumeric() && rhs.isNumeric())
+                return validateNumericOperands(op, lhs, rhs, line, column, nullptr);
             if(lhs.isString() && rhs.isString()){
                 if(AddUsizeOverflows(lhs.asString().size(), rhs.asString().size())){
                     error(line, column, "string concatenation size overflow");
@@ -598,39 +617,11 @@ private:
             error(line, column, "operator '+' requires numeric, string, or list operands of matching types");
             return false;
         case TokenType::Minus:
-            if(lhs.isNumeric() && rhs.isNumeric()){
-                if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
-                    error(line, column, "integer overflow");
-                    return false;
-                }
-                return true;
-            }
-            error(line, column, "operator '-' requires numeric operands");
-            return false;
+            return validateNumericOperands(op, lhs, rhs, line, column, "operator '-' requires numeric operands");
         case TokenType::Star:
-            if(lhs.isNumeric() && rhs.isNumeric()){
-                if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
-                    error(line, column, "integer overflow");
-                    return false;
-                }
-                return true;
-            }
-            error(line, column, "operator '*' requires numeric operands");
-            return false;
+            return validateNumericOperands(op, lhs, rhs, line, column, "operator '*' requires numeric operands");
         case TokenType::Slash:
-            if(!(lhs.isNumeric() && rhs.isNumeric())){
-                error(line, column, "operator '/' requires numeric operands");
-                return false;
-            }
-            if(isZero(rhs)){
-                error(line, column, "division by zero");
-                return false;
-            }
-            if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
-                error(line, column, "integer overflow");
-                return false;
-            }
-            return true;
+            return validateNumericOperands(op, lhs, rhs, line, column, "operator '/' requires numeric operands", true);
         default:
             break;
         }
@@ -644,13 +635,8 @@ private:
         case TokenType::Equal:
             return true;
         case TokenType::PlusEqual:
-            if(target.isNumeric() && rhs.isNumeric()){
-                if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
-                    error(line, column, "integer overflow");
-                    return false;
-                }
-                return true;
-            }
+            if(target.isNumeric() && rhs.isNumeric())
+                return validateNumericOperands(op, target, rhs, line, column, nullptr);
             if(target.isString() && rhs.isString()){
                 if(AddUsizeOverflows(target.asString().size(), rhs.asString().size())){
                     error(line, column, "string append size overflow");
@@ -669,39 +655,11 @@ private:
             error(line, column, "operator '+=' requires numeric operands, string += string, or a list target");
             return false;
         case TokenType::MinusEqual:
-            if(target.isNumeric() && rhs.isNumeric()){
-                if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
-                    error(line, column, "integer overflow");
-                    return false;
-                }
-                return true;
-            }
-            error(line, column, "operator '-=' requires numeric operands");
-            return false;
+            return validateNumericOperands(op, target, rhs, line, column, "operator '-=' requires numeric operands");
         case TokenType::StarEqual:
-            if(target.isNumeric() && rhs.isNumeric()){
-                if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
-                    error(line, column, "integer overflow");
-                    return false;
-                }
-                return true;
-            }
-            error(line, column, "operator '*=' requires numeric operands");
-            return false;
+            return validateNumericOperands(op, target, rhs, line, column, "operator '*=' requires numeric operands");
         case TokenType::SlashEqual:
-            if(!(target.isNumeric() && rhs.isNumeric())){
-                error(line, column, "operator '/=' requires numeric operands");
-                return false;
-            }
-            if(isZero(rhs)){
-                error(line, column, "division by zero");
-                return false;
-            }
-            if(target.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, target.asInteger(), rhs.asInteger())){
-                error(line, column, "integer overflow");
-                return false;
-            }
-            return true;
+            return validateNumericOperands(op, target, rhs, line, column, "operator '/=' requires numeric operands", true);
         default:
             break;
         }

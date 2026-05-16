@@ -198,15 +198,17 @@ bool DeformableGeometry::validatePayload()const{
     }
     const DeformableValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
         DeformableValidation::FindRuntimePayloadFailure(
-            m_restVertices,
-            m_indices,
-            sourceTriangleCount,
-            m_skeletonJointCount,
-            m_skin,
-            m_inverseBindMatrices,
-            m_sourceSamples,
-            m_editMaskPerTriangle,
-            m_morphs
+            DeformableValidation::RuntimePayloadArrays{
+                m_restVertices,
+                m_indices,
+                sourceTriangleCount,
+                m_skeletonJointCount,
+                m_skin,
+                m_inverseBindMatrices,
+                m_sourceSamples,
+                m_editMaskPerTriangle,
+                m_morphs
+            }
         )
     ;
     if(runtimePayloadFailure.reason != DeformableValidation::RuntimePayloadFailure::None){

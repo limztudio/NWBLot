@@ -320,15 +320,17 @@ template<typename JointMatrixVector>
 
 [[nodiscard]] inline DeformableValidation::RuntimePayloadFailureInfo FindRuntimeMeshPayloadFailure(const DeformableRuntimeMeshInstance& instance){
     return DeformableValidation::FindRuntimePayloadFailure(
-        instance.restVertices,
-        instance.indices,
-        instance.sourceTriangleCount,
-        instance.skeletonJointCount,
-        instance.skin,
-        instance.inverseBindMatrices,
-        instance.sourceSamples,
-        instance.editMaskPerTriangle,
-        instance.morphs
+        DeformableValidation::RuntimePayloadArrays{
+            instance.restVertices,
+            instance.indices,
+            instance.sourceTriangleCount,
+            instance.skeletonJointCount,
+            instance.skin,
+            instance.inverseBindMatrices,
+            instance.sourceSamples,
+            instance.editMaskPerTriangle,
+            instance.morphs
+        }
     );
 }
 

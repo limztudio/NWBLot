@@ -104,6 +104,18 @@ struct RuntimePayloadFailureInfo{
     MorphPayloadFailureInfo morphFailure;
 };
 
+struct RuntimePayloadArrays{
+    const Vector<DeformableVertexRest>& restVertices;
+    const Vector<u32>& indices;
+    u32 sourceTriangleCount;
+    u32 skeletonJointCount;
+    const Vector<SkinInfluence4>& skin;
+    const Vector<DeformableJointMatrix>& inverseBindMatrices;
+    const Vector<SourceSample>& sourceSamples;
+    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle;
+    const Vector<DeformableMorph>& morphs;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -521,16 +533,17 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     return ValidTriangleArea(restVertices, a, b, c);
 }
 
-[[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(
-    const Vector<DeformableVertexRest>& restVertices,
-    const Vector<u32>& indices,
-    const u32 sourceTriangleCount,
-    const u32 skeletonJointCount,
-    const Vector<SkinInfluence4>& skin,
-    const Vector<DeformableJointMatrix>& inverseBindMatrices,
-    const Vector<SourceSample>& sourceSamples,
-    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
-    const Vector<DeformableMorph>& morphs){
+[[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(const RuntimePayloadArrays& payload){
+    const Vector<DeformableVertexRest>& restVertices = payload.restVertices;
+    const Vector<u32>& indices = payload.indices;
+    const u32 sourceTriangleCount = payload.sourceTriangleCount;
+    const u32 skeletonJointCount = payload.skeletonJointCount;
+    const Vector<SkinInfluence4>& skin = payload.skin;
+    const Vector<DeformableJointMatrix>& inverseBindMatrices = payload.inverseBindMatrices;
+    const Vector<SourceSample>& sourceSamples = payload.sourceSamples;
+    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle = payload.editMaskPerTriangle;
+    const Vector<DeformableMorph>& morphs = payload.morphs;
+
     if(restVertices.empty() || indices.empty())
         return MakeRuntimePayloadFailure(RuntimePayloadFailure::IncompleteRestIndexPayload);
     if(
@@ -657,29 +670,8 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     return {};
 }
 
-[[nodiscard]] inline bool ValidRuntimePayloadArrays(
-    const Vector<DeformableVertexRest>& restVertices,
-    const Vector<u32>& indices,
-    const u32 sourceTriangleCount,
-    const u32 skeletonJointCount,
-    const Vector<SkinInfluence4>& skin,
-    const Vector<DeformableJointMatrix>& inverseBindMatrices,
-    const Vector<SourceSample>& sourceSamples,
-    const Vector<DeformableEditMaskFlags>& editMaskPerTriangle,
-    const Vector<DeformableMorph>& morphs){
-    return
-        FindRuntimePayloadFailure(
-            restVertices,
-            indices,
-            sourceTriangleCount,
-            skeletonJointCount,
-            skin,
-            inverseBindMatrices,
-            sourceSamples,
-            editMaskPerTriangle,
-            morphs
-        ).reason == RuntimePayloadFailure::None
-    ;
+[[nodiscard]] inline bool ValidRuntimePayloadArrays(const RuntimePayloadArrays& payload){
+    return FindRuntimePayloadFailure(payload).reason == RuntimePayloadFailure::None;
 }
 
 

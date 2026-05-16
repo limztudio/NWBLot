@@ -4853,15 +4853,17 @@ template<usize sourceCount>
 
     if(
         !DeformableValidation::ValidRuntimePayloadArrays(
-            newRestVertices,
-            newIndices,
-            instance.sourceTriangleCount,
-            instance.skeletonJointCount,
-            newSkin,
-            instance.inverseBindMatrices,
-            newSourceSamples,
-            hasEditMaskPerTriangle ? newEditMaskPerTriangle : instance.editMaskPerTriangle,
-            newMorphs
+            DeformableValidation::RuntimePayloadArrays{
+                newRestVertices,
+                newIndices,
+                instance.sourceTriangleCount,
+                instance.skeletonJointCount,
+                newSkin,
+                instance.inverseBindMatrices,
+                newSourceSamples,
+                hasEditMaskPerTriangle ? newEditMaskPerTriangle : instance.editMaskPerTriangle,
+                newMorphs
+            }
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("DeformableSurfaceEdit: remeshed hole produced invalid runtime payload arrays (entity={} runtime_mesh={} vertices={} triangles={} skin={} source_samples={} edit_masks={} morphs={})")

@@ -7,6 +7,7 @@
 
 #include "deformer_gpu_payload.h"
 
+#include <impl/assets_geometry/deformable_geometry_validation.h>
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
 #include <core/common/log.h>
 

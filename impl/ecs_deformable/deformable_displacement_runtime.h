@@ -142,7 +142,7 @@ namespace DisplacementResolveFailure{
         outFailure = DisplacementResolveFailure::Amplitude;
         return false;
     }
-    if(!DeformableValidation::ActiveWeight(outDisplacement.amplitude))
+    if(!ActiveWeight(outDisplacement.amplitude))
         outDisplacement = DeformableDisplacement{};
     return true;
 }

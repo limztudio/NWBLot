@@ -16,6 +16,7 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_material/material_asset.h>
 #include <impl/ecs_deformable/deformable_runtime_helpers.h>
+#include <impl/ecs_deformable/deformable_runtime_validation.h>
 #include <impl/ecs_geometry/components.h>
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_scene/components.h>

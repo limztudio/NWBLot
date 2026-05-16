@@ -7,7 +7,9 @@
 #include <core/alloc/scratch.h>
 #include <core/ecs/world.h>
 #include <core/geometry/frame_math.h>
+#include <impl/assets_geometry/deformable_geometry_validation.h>
 #include <impl/ecs_deformable/deformable_displacement_runtime.h>
+#include <impl/ecs_deformable/deformable_runtime_validation.h>
 #include <impl/ecs_render/components.h>
 
 

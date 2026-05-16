@@ -7,8 +7,6 @@
 
 #include "deformable_runtime_mesh.h"
 
-#include <impl/assets_geometry/deformable_geometry_validation.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,6 +25,19 @@ namespace DeformableRuntime{
 
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_RigidJointEpsilon = 0.001f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool ActiveWeight(const f32 value){
+    return value > s_Epsilon || value < -s_Epsilon;
+}
+
+[[nodiscard]] inline bool FiniteVector(const SIMDVector value, const u32 activeMask){
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & activeMask) == 0u;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,11 +122,11 @@ template<typename MorphVector, typename MorphWeightLookup>
         VectorGetW(matrix.v[3])
     );
     return
-        DeformableValidation::FiniteVector(matrix.v[0], 0xFu)
-        && DeformableValidation::FiniteVector(matrix.v[1], 0xFu)
-        && DeformableValidation::FiniteVector(matrix.v[2], 0xFu)
-        && DeformableValidation::FiniteVector(matrix.v[3], 0xFu)
-        && Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(DeformableValidation::s_Epsilon))
+        FiniteVector(matrix.v[0], 0xFu)
+        && FiniteVector(matrix.v[1], 0xFu)
+        && FiniteVector(matrix.v[2], 0xFu)
+        && FiniteVector(matrix.v[3], 0xFu)
+        && Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     ;
 }
 
@@ -216,9 +227,9 @@ template<typename JointMatrixVector>
     outNormalMatrix.v[2] = VectorSetW(VectorMultiply(cross01, inverseDeterminant), 0.0f);
     outNormalMatrix.v[3] = VectorZero();
     return
-        DeformableValidation::FiniteVector(outNormalMatrix.v[0], 0x7u)
-        && DeformableValidation::FiniteVector(outNormalMatrix.v[1], 0x7u)
-        && DeformableValidation::FiniteVector(outNormalMatrix.v[2], 0x7u)
+        FiniteVector(outNormalMatrix.v[0], 0x7u)
+        && FiniteVector(outNormalMatrix.v[1], 0x7u)
+        && FiniteVector(outNormalMatrix.v[2], 0x7u)
     ;
 }
 
@@ -231,7 +242,7 @@ template<typename JointMatrixVector>
     result = VectorMultiplyAdd(VectorSplatY(directionVector), normalMatrix.v[1], result);
     result = VectorMultiplyAdd(VectorSplatZ(directionVector), normalMatrix.v[2], result);
     outDirection = VectorSetW(result, 0.0f);
-    return DeformableValidation::FiniteVector(outDirection, 0x7u);
+    return FiniteVector(outDirection, 0x7u);
 }
 
 [[nodiscard]] inline bool IsRigidJointMatrix(const SIMDMatrix& matrix){
@@ -283,7 +294,7 @@ template<typename JointMatrixVector>
 
     const SIMDVector translation = VectorSetW(matrix.v[3], 0.0f);
     outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
-    return DeformableValidation::FiniteVector(outDual, 0xFu);
+    return FiniteVector(outDual, 0xFu);
 }
 
 [[nodiscard]] inline DeformableJointMatrix StoreJointDualQuaternionPayload(const SIMDVector real, const SIMDVector dual){
@@ -303,8 +314,8 @@ template<typename JointMatrixVector>
     dual = VectorScale(dual, invLength);
     dual = VectorSubtract(dual, VectorScale(real, VectorGetX(Vector4Dot(real, dual))));
     return
-        DeformableValidation::FiniteVector(real, 0xFu)
-        && DeformableValidation::FiniteVector(dual, 0xFu)
+        FiniteVector(real, 0xFu)
+        && FiniteVector(dual, 0xFu)
     ;
 }
 
@@ -316,26 +327,6 @@ template<typename JointMatrixVector>
 
 [[nodiscard]] inline SIMDVector TransformDualQuaternionDirection(const SIMDVector real, const SIMDVector direction){
     return Vector3Rotate(direction, real);
-}
-
-[[nodiscard]] inline DeformableValidation::RuntimePayloadFailureInfo FindRuntimeMeshPayloadFailure(const DeformableRuntimeMeshInstance& instance){
-    return DeformableValidation::FindRuntimePayloadFailure(
-        DeformableValidation::RuntimePayloadArrays{
-            instance.restVertices,
-            instance.indices,
-            instance.sourceTriangleCount,
-            instance.skeletonJointCount,
-            instance.skin,
-            instance.inverseBindMatrices,
-            instance.sourceSamples,
-            instance.editMaskPerTriangle,
-            instance.morphs
-        }
-    );
-}
-
-[[nodiscard]] inline bool ValidRuntimeMeshPayloadArrays(const DeformableRuntimeMeshInstance& instance){
-    return FindRuntimeMeshPayloadFailure(instance).reason == DeformableValidation::RuntimePayloadFailure::None;
 }
 
 [[nodiscard]] inline bool ValidateTriangleIndex(const DeformableRuntimeMeshInstance& instance, const u32 triangle, u32 (&outIndices)[3]){

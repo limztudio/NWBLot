@@ -5,6 +5,7 @@ target_sources(nwb_ecs_deformable INTERFACE
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_helpers.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_mesh.h"
     "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deformable_runtime_validation.h"
     "${CMAKE_CURRENT_LIST_DIR}/ecs_deformable.h"
 )
 target_link_libraries(nwb_ecs_deformable INTERFACE

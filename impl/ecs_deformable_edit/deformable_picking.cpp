@@ -658,6 +658,23 @@ void ApplyTransform(const NWB::Impl::TransformComponent* transform, DeformableVe
     return true;
 }
 
+[[nodiscard]] bool ResolveCleanIdentityRestSurfaceSample(
+    const DeformableRuntimeMeshInstance& instance,
+    const u32 triangle,
+    const f32 (&bary)[3],
+    SourceSample& outSample){
+    const usize triangleCount = instance.indices.size() / 3u;
+    if(
+        instance.editRevision != 0u
+        || static_cast<usize>(instance.sourceTriangleCount) != triangleCount
+        || static_cast<usize>(triangle) >= triangleCount
+    )
+        return false;
+
+    outSample.sourceTri = triangle;
+    return DeformableValidation::NormalizeSourceBarycentric(bary, outSample.bary);
+}
+
 template<typename VertexVector>
 [[nodiscard]] SIMDVector ResolveHitNormalFromTriangleVertices(
     const VertexVector& vertices,
@@ -834,7 +851,7 @@ bool ResolveDeformableRestSurfaceSample(
         return false;
 
     if(instance.sourceSamples.empty())
-        return false;
+        return __hidden_deformable_picking::ResolveCleanIdentityRestSurfaceSample(instance, triangle, bary, outSample);
     if(instance.sourceSamples.size() != instance.restVertices.size())
         return false;
     if(instance.sourceTriangleCount == 0u)
@@ -850,7 +867,7 @@ bool ResolveDeformableRestSurfaceSample(
     )
         return false;
     if(sample0.sourceTri != sample1.sourceTri || sample0.sourceTri != sample2.sourceTri)
-        return false;
+        return __hidden_deformable_picking::ResolveCleanIdentityRestSurfaceSample(instance, triangle, bary, outSample);
 
     outSample.sourceTri = sample0.sourceTri;
     f32 rawBary[3] = {};

@@ -1255,16 +1255,24 @@ def wait_for_surface_edit_log(args, log_directory, log_baseline, message):
     return True
 
 
+def request_surface_edit_preview(args, backend, handle):
+    if args.csg_preview_key:
+        backend.send_named_key(handle, args.csg_preview_key)
+        return
+
+    backend.preview_surface_edit(
+        handle,
+        args.csg_click_x,
+        args.csg_click_y,
+    )
+
+
 def apply_surface_edit_csg(args, backend, handle, log_directory=None, log_baseline=None, after_step=None):
     if not args.preview_csg and not args.exercise_csg:
         return
 
     if args.preview_csg:
-        backend.preview_surface_edit(
-            handle,
-            args.csg_click_x,
-            args.csg_click_y,
-        )
+        request_surface_edit_preview(args, backend, handle)
         wait_for_surface_edit_log(
             args,
             log_directory,
@@ -1275,11 +1283,7 @@ def apply_surface_edit_csg(args, backend, handle, log_directory=None, log_baseli
         run_after_step(after_step, "after CSG preview")
         return
 
-    backend.preview_surface_edit(
-        handle,
-        args.csg_click_x,
-        args.csg_click_y,
-    )
+    request_surface_edit_preview(args, backend, handle)
     saw_preview_log = wait_for_surface_edit_log(
         args,
         log_directory,
@@ -1366,6 +1370,7 @@ def parse_args(argv):
     parser.add_argument("--target-settle-seconds", type=float, default=0.3, help="Seconds to wait after target selection.")
     parser.add_argument("--preview-csg", action="store_true", help="Click the editable deformable surface and capture the operator preview without committing.")
     parser.add_argument("--exercise-csg", action="store_true", help="Click the editable deformable surface and commit the preview before capture.")
+    parser.add_argument("--csg-preview-key", default="C", help="Key used to preview CSG at the deterministic smoke point. Set empty to fall back to click coordinates.")
     parser.add_argument("--csg-click-x", type=float, default=0.5, help="Relative window X coordinate for the CSG smoke click.")
     parser.add_argument("--csg-click-y", type=float, default=0.42, help="Relative window Y coordinate for the CSG smoke click.")
     parser.add_argument("--csg-commit-click-x", type=float, default=0.062, help="Relative window X coordinate for the Commit Preview button.")

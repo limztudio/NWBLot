@@ -9,6 +9,7 @@ if(Python3_Interpreter_FOUND AND TARGET testbed)
             "--executable" "$<TARGET_FILE:testbed>"
             "--working-directory" "${NWB_OUTPUT_ROOT}"
             "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/testbed_window_capture.bmp"
+            "--surface-edit-target-key" "2"
             "--exercise-csg"
     )
     set_tests_properties(nwb_testbed_window_capture_smoke PROPERTIES

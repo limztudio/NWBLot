@@ -60,6 +60,7 @@ static constexpr f32 s_AccessoryNormalOffset = 0.08f;
 static constexpr f32 s_AccessoryUniformScale = 0.16f;
 static constexpr f32 s_SurfaceEditTargetY = 0.0f;
 static constexpr AStringView s_DeformableFemalePath = "project/characters/female";
+static constexpr AStringView s_DeformableCsgCubePath = "project/characters/csg_cube";
 static constexpr AStringView s_DeformableMaterialPath = "project/materials/mat_deformable_uv";
 static constexpr AStringView s_SurfaceEditOperatorMaterialPath = "project/materials/mat_csg_subtract_preview";
 static constexpr f32 s_SurfaceEditOperatorSurfaceOffsetMin = 0.001f;
@@ -97,6 +98,7 @@ struct EditorClientSize{
 
 static const SurfaceEditTargetDesc s_SurfaceEditTargets[] = {
     { "female", s_DeformableFemalePath, Float4(0.0f, s_SurfaceEditTargetY, 0.0f), 1.0f, 0.24f, 0.0f, false },
+    { "csg cube", s_DeformableCsgCubePath, Float4(0.0f, s_CharacterCameraTargetY, 0.0f), 0.9f, 0.18f, 0.0f, false },
 };
 static constexpr usize s_SurfaceEditTargetCount = sizeof(s_SurfaceEditTargets) / sizeof(s_SurfaceEditTargets[0]);
 
@@ -2424,7 +2426,24 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
         setKeyState(key, false);
 
     if(action == NWB::Core::InputAction::Press){
-        if(key >= NWB::Core::Key::Number1 && key <= NWB::Core::Key::Number9){
+        if(
+            key == NWB::Core::Key::P
+            || (
+                key == NWB::Core::Key::C
+                && !m_surfaceEditPreviewActive
+            )
+        ){
+            const __hidden_project_testbed_runtime::EditorClientSize clientSize =
+                __hidden_project_testbed_runtime::ResolveEditorClientSize(m_context.graphics)
+            ;
+            if(clientSize.width != 0u && clientSize.height != 0u){
+                m_cursorX = static_cast<f64>(clientSize.width) * 0.5;
+                m_cursorY = static_cast<f64>(clientSize.height) * 0.5;
+                m_cursorPositionValid = true;
+            }
+            previewSurfaceEditAtCursor();
+        }
+        else if(key >= NWB::Core::Key::Number1 && key <= NWB::Core::Key::Number9){
             const usize targetIndex = static_cast<usize>(key - NWB::Core::Key::Number1);
             if(targetIndex < __hidden_project_testbed_runtime::s_SurfaceEditTargetCount)
                 static_cast<void>(selectSurfaceEditTarget(targetIndex));

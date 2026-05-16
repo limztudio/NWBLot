@@ -1772,7 +1772,8 @@ static void TestRestSampleInterpolation(TestContext& context){
 }
 
 static void TestMixedProvenanceRejectsAmbiguousRestTriangle(TestContext& context){
-    const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
+    NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
+    instance.editRevision = 1u;
     const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
 
     NWB::Impl::SourceSample sample;
@@ -1785,6 +1786,39 @@ static void TestMixedProvenanceRejectsAmbiguousRestTriangle(TestContext& context
         context,
         !NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
     );
+}
+
+static void TestCleanIdentityRestSampleAllowsSharedRuntimeTriangle(TestContext& context){
+    const NWB::Impl::DeformableRuntimeMeshInstance instance = MakeQuadMixedProvenanceInstance();
+    const f32 bary[3] = { 0.25f, 0.25f, 0.5f };
+
+    NWB::Impl::SourceSample sample;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveDeformableRestSurfaceSample(instance, 1u, bary, sample)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.sourceTri == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[0], 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[1], 0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(sample.bary[2], 0.5f));
+
+    const NWB::Impl::DeformablePickingRay ray = MakeDownwardPickingRay(Float3U(-0.5f, 0.5f, 1.0f));
+
+    NWB::Impl::DeformablePosedHit hit;
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::RaycastDeformableRuntimeMesh(instance, NWB::Impl::DeformablePickingInputs{}, ray, hit)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.triangle == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, hit.restSample.sourceTri == 1u);
+
+    NWB::Impl::DeformableRuntimeMeshInstance missingSamplesInstance = instance;
+    missingSamplesInstance.sourceSamples.clear();
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::ResolveDeformableRestSurfaceSample(missingSamplesInstance, 1u, bary, sample)
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, sample.sourceTri == 1u);
 }
 
 static void TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(TestContext& context){
@@ -6269,7 +6303,7 @@ static void TestRestSpaceHoleEditRejectsMissingProvenance(TestContext& context){
         [](NWB::Impl::DeformableRuntimeMeshInstance& instance){
             instance.sourceTriangleCount = static_cast<u32>(instance.indices.size() / 3u);
             instance.sourceSamples.clear();
-            instance.editRevision = 0u;
+            instance.editRevision = 1u;
         }
     );
 }
@@ -6290,7 +6324,7 @@ static void TestRestSpaceHoleEditRejectsMixedProvenance(TestContext& context){
         context,
         [](NWB::Impl::DeformableRuntimeMeshInstance& instance){
             AssignFirstUseTriangleSourceSamples(instance);
-            instance.editRevision = 0u;
+            instance.editRevision = 1u;
         }
     );
 }
@@ -6523,6 +6557,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::TestGeometrySystemResolvesGeometryComponent(context);
         __hidden_ecs_graphics_tests::TestRestSampleInterpolation(context);
         __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsAmbiguousRestTriangle(context);
+        __hidden_ecs_graphics_tests::TestCleanIdentityRestSampleAllowsSharedRuntimeTriangle(context);
         __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsRuntimeTriangleOutsideSourceRange(context);
         __hidden_ecs_graphics_tests::TestMixedProvenanceRejectsAfterTopologyChange(context);
         __hidden_ecs_graphics_tests::TestMissingProvenanceRejectsAfterTopologyChange(context);

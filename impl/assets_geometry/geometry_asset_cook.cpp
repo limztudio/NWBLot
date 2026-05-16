@@ -279,7 +279,7 @@ static bool ParseMetadataFloatListField(
         return false;
 
     const auto& list = field->asList();
-    outValues.resize(list.size());
+    outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
         alignas(16) f32 tuple[ComponentCount] = {};
         if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple)){
@@ -287,13 +287,14 @@ static bool ParseMetadataFloatListField(
             return false;
         }
 
-        ElementT& element = outValues[i];
+        ElementT element;
         element.x = tuple[0];
         element.y = tuple[1];
         if constexpr(ComponentCount >= 3u)
             element.z = tuple[2];
         if constexpr(ComponentCount >= 4u)
             element.w = tuple[3];
+        outValues.push_back(element);
     }
 
     if(outValues.empty()){
@@ -568,12 +569,9 @@ static bool BuildGeometryVertices(
     }
 
     outVertices.clear();
-    outVertices.resize(positions.size());
+    outVertices.reserve(positions.size());
     for(usize i = 0; i < positions.size(); ++i){
-        GeometryVertex& vertex = outVertices[i];
-        vertex.position = positions[i];
-        vertex.normal = normals[i];
-        vertex.color0 = colors[i];
+        outVertices.push_back(GeometryVertex{ positions[i], normals[i], colors[i] });
     }
     return true;
 }

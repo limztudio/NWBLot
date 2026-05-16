@@ -16,52 +16,6 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logger_client{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static bool BuildPayload(const MessageType& msg, Vector<u8>& outPayload){
-    const auto& [time, type, str] = msg;
-    constexpr usize fixedPayloadBytes = sizeof(decltype(time)) + sizeof(decltype(type)) + sizeof(tchar);
-    if(str.size() > (Limit<usize>::s_Max - fixedPayloadBytes) / sizeof(tchar)){
-        outPayload.clear();
-        return false;
-    }
-
-    const usize strBytes = str.size() * sizeof(tchar);
-    const usize payloadSize = fixedPayloadBytes + strBytes;
-
-    outPayload.clear();
-    outPayload.resize(payloadSize);
-
-    usize payloadOffset = 0u;
-    auto appendPayloadBytes = [&](const void* source, const usize sourceBytes){
-        if(sourceBytes == 0u)
-            return;
-
-        NWB_MEMCPY(outPayload.data() + payloadOffset, payloadSize - payloadOffset, source, sourceBytes);
-        payloadOffset += sourceBytes;
-    };
-
-    appendPayloadBytes(&time, sizeof(time));
-    appendPayloadBytes(&type, sizeof(type));
-    appendPayloadBytes(str.c_str(), strBytes);
-    constexpr tchar nullTerminator = 0;
-    appendPayloadBytes(&nullTerminator, sizeof(nullTerminator));
-    NWB_ASSERT(payloadOffset == payloadSize);
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
 bool Client::globalInit(){
     CURLcode ret;
 
@@ -121,13 +75,13 @@ bool Client::internalUpdate(){
         if(!try_dequeue(msg))
             return true;
 
-        if(!__hidden_logger_client::BuildPayload(msg, m_pendingPayload)){
+        if(!BuildMessagePayload(msg, m_pendingPayload)){
             const MessageType fallbackMsg = MakeTuple(
                 Timer{},
                 Type::Error,
                 TString(NWB_TEXT("Logger client dropped an oversized message"))
             );
-            if(!__hidden_logger_client::BuildPayload(fallbackMsg, m_pendingPayload))
+            if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
                 return true;
         }
         m_hasPendingPayload = true;

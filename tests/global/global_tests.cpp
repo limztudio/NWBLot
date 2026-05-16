@@ -164,6 +164,38 @@ static void TestBinaryVectorPayloadRoundTrip(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, parsed == source);
 }
 
+static void TestFixedVectorBinaryPayloadRoundTrip(TestContext& context){
+    FixedVector<u8, 16u> fixedBinary;
+    const u32 writtenValue = 0x55667788u;
+    AppendPOD(fixedBinary, writtenValue);
+
+    usize podCursor = 0u;
+    u32 readValue = 0u;
+    NWB_GLOBAL_TEST_CHECK(context, ReadPOD(fixedBinary, podCursor, readValue));
+    NWB_GLOBAL_TEST_CHECK(context, readValue == writtenValue);
+    NWB_GLOBAL_TEST_CHECK(context, podCursor == sizeof(writtenValue));
+
+    Vector<u8> vectorBinary;
+    const u16 values[] = { 4u, 5u, 6u };
+    for(const u16 value : values)
+        AppendPOD(vectorBinary, value);
+
+    usize vectorCursor = 0u;
+    FixedVector<u16, 4u> parsedValues;
+    NWB_GLOBAL_TEST_CHECK(context, ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, parsedValues) == BinaryVectorPayloadFailure::None);
+    NWB_GLOBAL_TEST_CHECK(context, vectorCursor == vectorBinary.size());
+    NWB_GLOBAL_TEST_CHECK(context, parsedValues.size() == 3u);
+    NWB_GLOBAL_TEST_CHECK(context, parsedValues[0u] == values[0u]);
+    NWB_GLOBAL_TEST_CHECK(context, parsedValues[1u] == values[1u]);
+    NWB_GLOBAL_TEST_CHECK(context, parsedValues[2u] == values[2u]);
+
+    vectorCursor = 0u;
+    FixedVector<u16, 2u> tooSmall;
+    NWB_GLOBAL_TEST_CHECK(context, ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall) == BinaryVectorPayloadFailure::OutputOverflow);
+    NWB_GLOBAL_TEST_CHECK(context, vectorCursor == 0u);
+    NWB_GLOBAL_TEST_CHECK(context, tooSmall.empty());
+}
+
 static void TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(TestContext& context){
     Vector<u8> truncated;
     const u32 source = 0x12345678u;
@@ -269,6 +301,7 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_global_tests::TestStringTableText(context);
         __hidden_global_tests::TestInvalidStringTableReads(context);
         __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
+        __hidden_global_tests::TestFixedVectorBinaryPayloadRoundTrip(context);
         __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
         __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
         __hidden_global_tests::TestTriviallyCopyableVectorAlias(context);

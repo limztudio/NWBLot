@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/binary.h>
+
 #include <fstream>
 
 
@@ -55,9 +57,126 @@ using MessageQueue = ParallelQueue<MessageType>;
     }
 }
 
+[[nodiscard]] inline bool IsValidMessageType(Type::Enum type){
+    switch(type){
+    case Type::Info:
+    case Type::EssentialInfo:
+    case Type::Warning:
+    case Type::CriticalWarning:
+    case Type::Error:
+    case Type::Fatal:
+        return true;
+    }
+    return false;
+}
+
 [[nodiscard]] inline TString FormatMessageForProcessing(const MessageType& msg){
     const auto& [time, type, str] = msg;
     return StringFormat(NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
+}
+
+namespace MessagePayloadDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ByteView{
+    using value_type = u8;
+
+    const u8* bytes = nullptr;
+    usize byteCount = 0u;
+
+    [[nodiscard]] usize size()const{ return byteCount; }
+    [[nodiscard]] const u8* data()const{ return bytes; }
+    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+template<typename PayloadContainer>
+[[nodiscard]] inline bool BuildMessagePayload(const MessageType& msg, PayloadContainer& outPayload){
+    const auto& [time, type, str] = msg;
+    outPayload.clear();
+
+    if(!IsValidMessageType(type))
+        return false;
+
+    usize payloadBytes = 0u;
+    if(
+        !AddBinaryReserveBytes(payloadBytes, sizeof(time))
+        || !AddBinaryReserveBytes(payloadBytes, sizeof(type))
+        || !AddBinaryRepeatedReserveBytes(payloadBytes, str.size(), sizeof(tchar))
+        || !AddBinaryReserveBytes(payloadBytes, sizeof(tchar))
+    )
+        return false;
+
+    if constexpr(requires(PayloadContainer& p, usize bytes){ p.reserve(bytes); })
+        outPayload.reserve(payloadBytes);
+
+    AppendPOD(outPayload, time);
+    AppendPOD(outPayload, type);
+    ::BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, str.c_str(), str.size() * sizeof(tchar));
+
+    constexpr tchar s_NullTerminator = 0;
+    AppendPOD(outPayload, s_NullTerminator);
+
+    NWB_ASSERT(outPayload.size() == payloadBytes);
+    return outPayload.size() == payloadBytes;
+}
+
+[[nodiscard]] inline bool ParseMessagePayload(
+    const void* contents,
+    const usize totalSize,
+    MessageType& outMessage,
+    const tchar*& outError
+){
+    outMessage = MessageType{};
+    outError = nullptr;
+
+    if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
+        outError = NWB_TEXT("Received a truncated message");
+        return false;
+    }
+    if(!contents){
+        outError = NWB_TEXT("Received a malformed message payload");
+        return false;
+    }
+
+    const MessagePayloadDetail::ByteView payload{ static_cast<const u8*>(contents), totalSize };
+    usize cursor = 0u;
+
+    Timer time{};
+    Type::Enum type{};
+    if(!ReadPOD(payload, cursor, time) || !ReadPOD(payload, cursor, type)){
+        outError = NWB_TEXT("Received a truncated message");
+        return false;
+    }
+
+    if(!IsValidMessageType(type)){
+        outError = NWB_TEXT("Received a message with an invalid type");
+        return false;
+    }
+
+    const usize textBytes = totalSize - cursor;
+    if(textBytes < sizeof(tchar) || (textBytes % sizeof(tchar)) != 0u){
+        outError = NWB_TEXT("Received a malformed message payload");
+        return false;
+    }
+
+    const auto* msgText = reinterpret_cast<const tchar*>(payload.data() + cursor);
+    const usize msgCharCount = textBytes / sizeof(tchar);
+    if(msgText[msgCharCount - 1u] != 0){
+        outError = NWB_TEXT("Received a non-null-terminated message");
+        return false;
+    }
+
+    outMessage = MakeTuple(Move(time), type, TString(msgText, msgCharCount - 1u));
+    return true;
 }
 
 

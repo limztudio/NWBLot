@@ -20,6 +20,9 @@ namespace BinaryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename>
+inline constexpr bool s_DependentFalse = false;
+
 template<typename Container>
 inline void RequireByteContainer(){
     using ByteType = typename Container::value_type;
@@ -44,10 +47,12 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
     if constexpr(requires(Container& c, const ByteType* first, const ByteType* last){ c.insert(c.end(), first, last); }){
         outBinary.insert(outBinary.end(), typedBytes, typedBytes + byteCount);
     }
-    else if constexpr(requires(Container& c, usize n){ c.resize(n); c.data(); }){
-        const usize offset = outBinary.size();
-        outBinary.resize(offset + byteCount);
-        NWB_MEMCPY(outBinary.data() + offset, byteCount, typedBytes, byteCount);
+    else if constexpr(requires(Container& c, ByteType value){ c.push_back(value); }){
+        for(usize i = 0u; i < byteCount; ++i)
+            outBinary.push_back(typedBytes[i]);
+    }
+    else{
+        static_assert(s_DependentFalse<Container>, "binary helpers require insert or push_back support");
     }
 }
 
@@ -90,6 +95,20 @@ template<typename Container>
         NWB_MEMCPY(outBytes, byteCount, binary.data() + inOutOffset, byteCount);
     inOutOffset += byteCount;
     return true;
+}
+
+template<typename ValueContainer>
+[[nodiscard]] inline bool CanStoreValueCount(const ValueContainer& values, const usize count){
+    if constexpr(requires(const ValueContainer& c){ c.max_size(); })
+        return count <= values.max_size();
+    else
+        return true;
+}
+
+template<typename ValueContainer>
+inline void ReserveValueCount(ValueContainer& values, const usize count){
+    if constexpr(requires(ValueContainer& c, usize n){ c.reserve(n); })
+        values.reserve(count);
 }
 
 
@@ -273,16 +292,23 @@ template<typename Container, typename ValueContainer>
     if(!BinaryDetail::CanReadBytes(binary, inOutOffset, byteCount))
         return BinaryVectorPayloadFailure::SourceTruncated;
 
-    if constexpr(IsDefaultConstructible_V<ValueType>){
-        static_cast<void>(initialValue);
-        outValues.resize(static_cast<usize>(count));
+    const usize valueCount = static_cast<usize>(count);
+    if(!BinaryDetail::CanStoreValueCount(outValues, valueCount))
+        return BinaryVectorPayloadFailure::OutputOverflow;
+
+    BinaryDetail::ReserveValueCount(outValues, valueCount);
+
+    usize cursor = inOutOffset;
+    for(usize i = 0u; i < valueCount; ++i){
+        ValueType value = initialValue;
+        if(!ReadPOD(binary, cursor, value)){
+            outValues.clear();
+            return BinaryVectorPayloadFailure::SourceTruncated;
+        }
+        outValues.push_back(value);
     }
-    else{
-        outValues.resize(static_cast<usize>(count), initialValue);
-    }
-    if(byteCount > 0u)
-        NWB_MEMCPY(outValues.data(), byteCount, binary.data() + inOutOffset, byteCount);
-    inOutOffset += byteCount;
+
+    inOutOffset = cursor;
     return BinaryVectorPayloadFailure::None;
 }
 

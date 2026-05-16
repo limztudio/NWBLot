@@ -83,73 +83,8 @@ struct ConnectionInfo{
 
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
 
-[[nodiscard]] bool ValidMessageType(const Type::Enum type){
-    switch(type){
-    case Type::Info:
-    case Type::EssentialInfo:
-    case Type::Warning:
-    case Type::CriticalWarning:
-    case Type::Error:
-    case Type::Fatal:
-        return true;
-    }
-    return false;
-}
-
 static void EnqueueServerMessage(Server& server, const tchar* message, const Type::Enum type){
     server.enqueue(StringFormat(NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
-}
-
-[[nodiscard]] bool ParseReceivedMessage(
-    const void* contents,
-    const usize totalSize,
-    MessageType& outMessage,
-    const tchar*& outError
-){
-    outMessage = MessageType{};
-    outError = nullptr;
-
-    if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
-        outError = NWB_TEXT("Received a truncated message");
-        return false;
-    }
-    if(!contents){
-        outError = NWB_TEXT("Received a malformed message payload");
-        return false;
-    }
-
-    const auto* ptr = static_cast<const u8*>(contents);
-    usize sizeLeft = totalSize;
-
-    Timer time{};
-    NWB_MEMCPY(&time, sizeof(time), ptr, sizeof(time));
-    ptr += sizeof(time);
-    sizeLeft -= sizeof(time);
-
-    Type::Enum type{};
-    NWB_MEMCPY(&type, sizeof(type), ptr, sizeof(type));
-    ptr += sizeof(type);
-    sizeLeft -= sizeof(type);
-
-    if(!ValidMessageType(type)){
-        outError = NWB_TEXT("Received a message with an invalid type");
-        return false;
-    }
-
-    if(sizeLeft < sizeof(tchar) || (sizeLeft % sizeof(tchar)) != 0u){
-        outError = NWB_TEXT("Received a malformed message payload");
-        return false;
-    }
-
-    const auto* msgText = reinterpret_cast<const tchar*>(ptr);
-    const usize msgCharCount = sizeLeft / sizeof(tchar);
-    if(msgText[msgCharCount - 1u] != 0){
-        outError = NWB_TEXT("Received a non-null-terminated message");
-        return false;
-    }
-
-    outMessage = MakeTuple(Move(time), type, TString(msgText, msgCharCount - 1u));
-    return true;
 }
 
 [[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection){
@@ -284,7 +219,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     MessageType message;
     const tchar* error = nullptr;
-    if(__hidden_logger_server::ParseReceivedMessage(info->buffer, info->size, message, error))
+    if(ParseMessagePayload(info->buffer, info->size, message, error))
         thisPtr->enqueue(Move(message));
     else{
         __hidden_logger_server::EnqueueServerMessage(

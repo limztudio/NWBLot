@@ -576,7 +576,6 @@ NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U* dst)noexcept{
 #endif
 }
 
-
 NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34* dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);

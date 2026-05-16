@@ -34,7 +34,7 @@ static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
 static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
 static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
 static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
-static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001f;
+static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 1.0e-20f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

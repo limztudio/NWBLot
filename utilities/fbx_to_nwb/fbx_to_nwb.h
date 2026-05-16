@@ -51,6 +51,8 @@ static_assert(IsTriviallyCopyable_V<GeometryJointMatrix>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
+
 struct ImportOptions{
     AString inputPath;
     AString outputPath;
@@ -59,6 +61,7 @@ struct ImportOptions{
     AString indexType = "auto";
     AString defaultColorText = "1,1,1,1";
     f64 scale = 1.0;
+    f64 triangleAreaLengthSquaredEpsilon = s_DefaultTriangleAreaLengthSquaredEpsilon;
     bool preserveSpace = false;
     bool includeHidden = false;
     bool bakeTransforms = true;

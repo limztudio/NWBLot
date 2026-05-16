@@ -254,6 +254,11 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::Option* meshOption = app.add_option("-m,--mesh", options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* indexTypeOption = app.add_option("--index-type", options.indexType, "Index type: auto, u16, or u32");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
+    app.add_option(
+        "--triangle-area-length-squared-epsilon",
+        options.triangleAreaLengthSquaredEpsilon,
+        "Minimum squared triangle cross-product length kept during import"
+    );
     CLI::Option* defaultColorOption = app.add_option("--default-color", options.defaultColorText, "Default RGBA color, for example 1,1,1,1");
     CLI::Option* preserveSpaceOption = app.add_flag("--preserve-space", options.preserveSpace, "Keep the FBX source axes and units");
     CLI::Option* includeHiddenOption = app.add_flag("--include-hidden", options.includeHidden, "Include hidden FBX mesh nodes");
@@ -295,6 +300,10 @@ int Run(int argc, char** argv, bool& prompted){
 
     if(!IsFinite(options.scale) || options.scale <= 0.0){
         NWB_CERR << "--scale must be a positive finite number.\n";
+        return 1;
+    }
+    if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0){
+        NWB_CERR << "--triangle-area-length-squared-epsilon must be a finite non-negative number.\n";
         return 1;
     }
 

@@ -144,9 +144,50 @@ struct SkinExportContext{
     UtilityVector<GeometryJointMatrix> inverseBindMatrices;
 };
 
-[[nodiscard]] bool TriangleHasArea(const FlatGeometryVertex (&vertices)[3]){
-    static constexpr f64 s_TriangleAreaLengthSquaredEpsilon = 0.000000000001;
+struct PositionKey{
+    u32 x = 0u;
+    u32 y = 0u;
+    u32 z = 0u;
+};
 
+struct PositionKeyHasher{
+    usize operator()(const PositionKey& key)const{
+        usize seed = Hasher<u32>{}(key.x);
+        seed ^= Hasher<u32>{}(key.y) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+        seed ^= Hasher<u32>{}(key.z) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+        return seed;
+    }
+};
+
+struct PositionKeyEqual{
+    bool operator()(const PositionKey& lhs, const PositionKey& rhs)const{
+        return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+    }
+};
+
+using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
+
+[[nodiscard]] u32 FloatPositionBits(f32 value){
+    if(value == 0.0f)
+        value = 0.0f;
+
+    u32 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+[[nodiscard]] PositionKey MakePositionKey(const Vec3& position){
+    return PositionKey{
+        FloatPositionBits(position.x),
+        FloatPositionBits(position.y),
+        FloatPositionBits(position.z),
+    };
+}
+
+[[nodiscard]] bool TriangleHasArea(
+    const FlatGeometryVertex (&vertices)[3],
+    const f64 triangleAreaLengthSquaredEpsilon
+){
     const Vec3& a = vertices[0u].vertex.position;
     const Vec3& b = vertices[1u].vertex.position;
     const Vec3& c = vertices[2u].vertex.position;
@@ -160,7 +201,153 @@ struct SkinExportContext{
     const f64 crossY = abZ * acX - abX * acZ;
     const f64 crossZ = abX * acY - abY * acX;
     const f64 areaLengthSquared = crossX * crossX + crossY * crossY + crossZ * crossZ;
-    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
+    return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
+}
+
+[[nodiscard]] Vec3 TriangleAreaNormal(const Vec3& a, const Vec3& b, const Vec3& c){
+    const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
+    const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
+    const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
+    const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
+    const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
+    const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
+    return Vec3{
+        static_cast<f32>(abY * acZ - abZ * acY),
+        static_cast<f32>(abZ * acX - abX * acZ),
+        static_cast<f32>(abX * acY - abY * acX),
+    };
+}
+
+[[nodiscard]] f64 LengthSquared(const Vec3& value){
+    return
+        static_cast<f64>(value.x) * static_cast<f64>(value.x)
+        + static_cast<f64>(value.y) * static_cast<f64>(value.y)
+        + static_cast<f64>(value.z) * static_cast<f64>(value.z)
+    ;
+}
+
+[[nodiscard]] Vec3 LoadCornerOutputPosition(
+    const ufbx_mesh& mesh,
+    const ufbx_node& node,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const u32 cornerIndex){
+    ufbx_vec3 position = {};
+    if(options.bakeTransforms){
+        position = ufbx_get_vertex_vec3(
+            wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position,
+            cornerIndex
+        );
+        if(wantsSkinning || mesh.skinned_is_local)
+            position = ufbx_transform_position(&node.geometry_to_world, position);
+    }
+    else{
+        position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
+    }
+
+    Vec3 outputPosition = ToVec3(position);
+    outputPosition.x = static_cast<f32>(static_cast<f64>(outputPosition.x) * options.scale);
+    outputPosition.y = static_cast<f32>(static_cast<f64>(outputPosition.y) * options.scale);
+    outputPosition.z = static_cast<f32>(static_cast<f64>(outputPosition.z) * options.scale);
+    return outputPosition;
+}
+
+[[nodiscard]] Vec3 LoadCornerOutputNormal(
+    const ufbx_mesh& mesh,
+    const ufbx_matrix& normalToWorld,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const u32 cornerIndex){
+    ufbx_vec3 normal = {};
+    if(options.bakeTransforms){
+        normal = ufbx_get_vertex_vec3(
+            wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal,
+            cornerIndex
+        );
+        if(wantsSkinning || mesh.skinned_is_local)
+            normal = ufbx_transform_direction(&normalToWorld, normal);
+    }
+    else{
+        normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
+    }
+
+    Vec3 outputNormal = ToVec3(normal);
+    if(!Normalize(outputNormal))
+        outputNormal = Vec3{ 0.0f, 0.0f, 1.0f };
+    return outputNormal;
+}
+
+[[nodiscard]] bool BuildSmoothPositionNormals(
+    const ufbx_mesh& mesh,
+    const ufbx_node& node,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    UtilityVector<u32>& inOutTriangleIndices,
+    PositionNormalMap& outNormals,
+    AString& outError){
+    outNormals.clear();
+    outNormals.reserve(mesh.num_vertices);
+
+    inOutTriangleIndices.resize(static_cast<usize>(mesh.max_face_triangles) * 3u);
+    for(usize faceIndex = 0; faceIndex < mesh.num_faces; ++faceIndex){
+        const ufbx_face face = mesh.faces.data[faceIndex];
+        if(face.num_indices < 3u)
+            continue;
+
+        const u32 triangleCount = ufbx_triangulate_face(
+            inOutTriangleIndices.data(),
+            inOutTriangleIndices.size(),
+            &mesh,
+            face
+        );
+
+        for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
+            u32 cornerIndices[3] = {
+                inOutTriangleIndices[triangleIndex * 3u + 0u],
+                inOutTriangleIndices[triangleIndex * 3u + 1u],
+                inOutTriangleIndices[triangleIndex * 3u + 2u],
+            };
+            if(options.flipWinding)
+                Swap(cornerIndices[1], cornerIndices[2]);
+
+            Vec3 positions[3] = {};
+            for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
+                const u32 cornerIndex = cornerIndices[triangleCornerIndex];
+                if(cornerIndex >= mesh.vertex_indices.count){
+                    outError = "mesh corner references an out-of-range logical vertex";
+                    return false;
+                }
+
+                positions[triangleCornerIndex] = LoadCornerOutputPosition(
+                    mesh,
+                    node,
+                    options,
+                    wantsSkinning,
+                    cornerIndex
+                );
+            }
+
+            const Vec3 areaNormal = TriangleAreaNormal(positions[0u], positions[1u], positions[2u]);
+            const f64 areaLengthSquared = LengthSquared(areaNormal);
+            if(!IsFinite(areaLengthSquared) || areaLengthSquared <= options.triangleAreaLengthSquaredEpsilon)
+                continue;
+
+            for(const Vec3& position : positions){
+                const PositionKey key = MakePositionKey(position);
+                auto result = outNormals.emplace(key, areaNormal);
+                if(!result.second){
+                    Vec3& normal = result.first.value();
+                    normal.x += areaNormal.x;
+                    normal.y += areaNormal.y;
+                    normal.z += areaNormal.z;
+                }
+            }
+        }
+    }
+
+    for(auto it = outNormals.begin(); it != outNormals.end(); ++it)
+        static_cast<void>(Normalize(it.value()));
+    return true;
 }
 
 ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
@@ -427,7 +614,6 @@ bool AppendInstanceGeometry(
         return false;
     }
 
-    inOutTriangleIndices.resize(static_cast<usize>(mesh->max_face_triangles) * 3u);
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
     const bool importUvs = wantsDeformableGeometry && mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
@@ -443,6 +629,11 @@ bool AppendInstanceGeometry(
             return false;
     }
 
+    PositionNormalMap smoothNormals;
+    if(!BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
+        return false;
+
+    inOutTriangleIndices.resize(static_cast<usize>(mesh->max_face_triangles) * 3u);
     for(usize faceIndex = 0; faceIndex < mesh->num_faces; ++faceIndex){
         const ufbx_face face = mesh->faces.data[faceIndex];
         if(face.num_indices < 3u)
@@ -467,36 +658,20 @@ bool AppendInstanceGeometry(
             FlatGeometryVertex triangleVertices[3] = {};
             for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
                 const u32 cornerIndex = cornerIndices[triangleCornerIndex];
-                ufbx_vec3 position = {};
-                ufbx_vec3 normal = {};
-
-                if(options.bakeTransforms){
-                    position = ufbx_get_vertex_vec3(
-                        wantsSkinning ? &mesh->vertex_position : &mesh->skinned_position,
-                        cornerIndex
-                    );
-                    normal = ufbx_get_vertex_vec3(
-                        wantsSkinning ? &mesh->vertex_normal : &mesh->skinned_normal,
-                        cornerIndex
-                    );
-                    if(wantsSkinning || mesh->skinned_is_local){
-                        position = ufbx_transform_position(&node->geometry_to_world, position);
-                        normal = ufbx_transform_direction(&normalToWorld, normal);
-                    }
+                if(cornerIndex >= mesh->vertex_indices.count){
+                    outError = "mesh corner references an out-of-range logical vertex";
+                    return false;
                 }
-                else{
-                    position = ufbx_get_vertex_vec3(&mesh->vertex_position, cornerIndex);
-                    normal = ufbx_get_vertex_vec3(&mesh->vertex_normal, cornerIndex);
-                }
+                const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
 
                 GeometryVertex vertex;
-                vertex.position = ToVec3(position);
-                vertex.position.x = static_cast<f32>(static_cast<f64>(vertex.position.x) * options.scale);
-                vertex.position.y = static_cast<f32>(static_cast<f64>(vertex.position.y) * options.scale);
-                vertex.position.z = static_cast<f32>(static_cast<f64>(vertex.position.z) * options.scale);
-                vertex.normal = ToVec3(normal);
+                vertex.position = LoadCornerOutputPosition(*mesh, *node, options, wantsSkinning, cornerIndex);
+                vertex.normal = Vec3{ 0.0f, 0.0f, 0.0f };
+                auto foundNormal = smoothNormals.find(MakePositionKey(vertex.position));
+                if(foundNormal != smoothNormals.end())
+                    vertex.normal = foundNormal.value();
                 if(!Normalize(vertex.normal))
-                    vertex.normal = Vec3{ 0.0f, 0.0f, 1.0f };
+                    vertex.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
 
                 vertex.uv0 = Vec2{};
                 if(importUvs){
@@ -518,11 +693,6 @@ bool AppendInstanceGeometry(
                 FlatGeometryVertex flatVertex{};
                 flatVertex.vertex = vertex;
                 if(wantsSkinning){
-                    if(cornerIndex >= mesh->vertex_indices.count){
-                        outError = "mesh corner references an out-of-range logical vertex";
-                        return false;
-                    }
-                    const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
                     if(!BuildSkinInfluence(skin, clusterJoints, logicalVertex, flatVertex.skin, outError))
                         return false;
                 }
@@ -530,7 +700,7 @@ bool AppendInstanceGeometry(
                 triangleVertices[triangleCornerIndex] = flatVertex;
             }
 
-            if(!TriangleHasArea(triangleVertices))
+            if(!TriangleHasArea(triangleVertices, options.triangleAreaLengthSquaredEpsilon))
                 continue;
 
             for(const FlatGeometryVertex& flatVertex : triangleVertices)

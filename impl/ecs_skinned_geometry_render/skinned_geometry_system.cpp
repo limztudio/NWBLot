@@ -298,6 +298,17 @@ void SkinnedGeometrySystem::render(Core::IFramebuffer* framebuffer){
     }
 }
 
+void SkinnedGeometrySystem::invalidateResources(){
+    m_runtimeResources.clear();
+    m_runtimeMeshCache.clear();
+
+    m_bindingLayout.reset();
+    m_computeShader.reset();
+    m_computePipeline.reset();
+    m_defaultSkinBuffer.reset();
+    m_defaultJointPaletteBuffer.reset();
+}
+
 bool SkinnedGeometrySystem::ensurePipeline(){
     Core::IDevice* device = m_graphics.getDevice();
 

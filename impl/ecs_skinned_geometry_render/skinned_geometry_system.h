@@ -75,6 +75,7 @@ public:
 public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
     virtual void render(Core::IFramebuffer* framebuffer)override;
+    virtual void invalidateResources()override;
 
     virtual usize runtimeGeometryCandidateCount()override;
     virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor)override;

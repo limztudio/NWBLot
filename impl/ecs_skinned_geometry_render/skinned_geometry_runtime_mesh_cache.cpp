@@ -140,9 +140,7 @@ void SkinnedGeometryRuntimeMeshCache::update(Core::ECS::World& world){
     auto skinnedGeometryView = world.view<SkinnedGeometryComponent>();
     const usize rendererCandidateCount = skinnedGeometryView.candidateCount();
     if(rendererCandidateCount == 0u){
-        m_handleToEntity.clear();
-        m_instances.clear();
-        m_sources.clear();
+        clear();
         return;
     }
 
@@ -173,6 +171,12 @@ void SkinnedGeometryRuntimeMeshCache::update(Core::ECS::World& world){
         releaseSource(instance.source.name());
         it = m_instances.erase(it);
     }
+}
+
+void SkinnedGeometryRuntimeMeshCache::clear(){
+    m_handleToEntity.clear();
+    m_instances.clear();
+    m_sources.clear();
 }
 
 RuntimeMeshHandle SkinnedGeometryRuntimeMeshCache::handleForEntity(const Core::ECS::EntityID entity)const{

@@ -384,7 +384,8 @@ private:
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();
     [[nodiscard]] bool createDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
-    void resetDeferredFrameTargets(){ m_deferredTargets = DeferredFrameTargets{}; }
+    void resetAvboitFrameTargets(AvboitFrameTargets& targets);
+    void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
 

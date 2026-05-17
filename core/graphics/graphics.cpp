@@ -161,6 +161,13 @@ static bool ValidateMeshSetupDesc(const Graphics::MeshSetupDesc& desc){
     return true;
 }
 
+static void WaitForSubmittedGpuWork(const Graphics& graphics){
+    graphics.waitAllJobs();
+
+    if(IDevice* device = graphics.getDevice())
+        device->waitForIdle();
+}
+
 
 struct BufferSetupJobData{
     Graphics::BufferSetupDesc setupDesc;
@@ -448,7 +455,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 }
 
 void Graphics::destroy(){
-    waitAllJobs();
+    __hidden_graphics::WaitForSubmittedGpuWork(*this);
 
     invalidateRenderPassResources();
     m_renderPasses.clear();
@@ -487,6 +494,7 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 }
 
 void Graphics::removeRenderPass(IRenderPass& pass){
+    __hidden_graphics::WaitForSubmittedGpuWork(*this);
     pass.invalidateResources();
     m_renderPasses.remove(&pass);
 }
@@ -553,6 +561,7 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 void Graphics::backBufferResizing(){
+    __hidden_graphics::WaitForSubmittedGpuWork(*this);
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();
 

@@ -14,6 +14,50 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
+    targets.occupancyBindingSet.reset();
+    targets.depthWarpBindingSet.reset();
+    targets.extinctionBindingSet.reset();
+    targets.integrateBindingSet.reset();
+    targets.accumulateBindingSet.reset();
+
+    targets.lowFramebuffer.reset();
+    targets.accumulationFramebuffer.reset();
+
+    targets.lowRasterTarget.reset();
+    targets.accumColor.reset();
+    targets.accumExtinction.reset();
+    targets.transmittanceTexture.reset();
+
+    targets.coverageBuffer.reset();
+    targets.depthWarpBuffer.reset();
+    targets.controlBuffer.reset();
+    targets.extinctionBuffer.reset();
+    targets.extinctionOverflowBuffer.reset();
+
+    targets = AvboitFrameTargets{};
+}
+
+void RendererSystem::resetDeferredFrameTargets(){
+    m_deferredTargets.lightingBindingSet.reset();
+    m_deferredTargets.compositeBindingSet.reset();
+    resetAvboitFrameTargets(m_deferredTargets.avboit);
+
+    m_deferredTargets.framebuffer.reset();
+    m_deferredTargets.opaqueLightingFramebuffer.reset();
+
+    m_deferredTargets.albedo.reset();
+    m_deferredTargets.normal.reset();
+    m_deferredTargets.worldPosition.reset();
+    m_deferredTargets.opaqueColor.reset();
+    m_deferredTargets.depth.reset();
+
+    m_deferredTargets = DeferredFrameTargets{};
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 height){
     if(width == 0 || height == 0){
         resetDeferredFrameTargets();

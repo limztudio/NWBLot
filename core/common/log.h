@@ -96,74 +96,56 @@ NWB_COMMON_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_OCCUR_INFO
-#define NWB_LOGGER_INFO(...)                                                                                                   \
+#define NWB_LOGGER_IGNORE_MESSAGE(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+
+#define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \
         ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
-            ::NWB::Core::Common::LogType::Info,                                                                                \
+            ::NWB::Core::Common::LogType::Type,                                                                                \
             StringFormat(__VA_ARGS__)                                                                                          \
         );                                                                                                                     \
     }while(false)
+
+#define NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Type, BreakMacro, ...)                                                            \
+    do{                                                                                                                        \
+        ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
+            ::NWB::Core::Common::LogType::Type,                                                                                \
+            StringFormat(__VA_ARGS__)                                                                                          \
+        );                                                                                                                     \
+        BreakMacro;                                                                                                            \
+    }while(false)
+
+
+#if NWB_OCCUR_INFO
+#define NWB_LOGGER_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(Info, __VA_ARGS__)
 #else
-#define NWB_LOGGER_INFO(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_LOGGER_INFO(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
 #if NWB_OCCUR_ESSENTIAL_INFO
-#define NWB_LOGGER_ESSENTIAL_INFO(...)                                                                                         \
-    do{                                                                                                                        \
-        ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
-            ::NWB::Core::Common::LogType::EssentialInfo,                                                                        \
-            StringFormat(__VA_ARGS__)                                                                                          \
-        );                                                                                                                      \
-    }while(false)
+#define NWB_LOGGER_ESSENTIAL_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(EssentialInfo, __VA_ARGS__)
 #else
-#define NWB_LOGGER_ESSENTIAL_INFO(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_LOGGER_ESSENTIAL_INFO(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
 #if NWB_OCCUR_WARNING
-#define NWB_LOGGER_WARNING(...)                                                                                                \
-    do{                                                                                                                        \
-        ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
-            ::NWB::Core::Common::LogType::Warning,                                                                             \
-            StringFormat(__VA_ARGS__)                                                                                          \
-        );                                                                                                                     \
-    }while(false)
+#define NWB_LOGGER_WARNING(...) NWB_LOGGER_ENQUEUE_MESSAGE(Warning, __VA_ARGS__)
 #else
-#define NWB_LOGGER_WARNING(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_LOGGER_WARNING(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
 #if NWB_OCCUR_CRITICAL_WARNING
-#define NWB_LOGGER_CRITICAL_WARNING(...)                                                                                       \
-    do{                                                                                                                        \
-        ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
-            ::NWB::Core::Common::LogType::CriticalWarning,                                                                      \
-            StringFormat(__VA_ARGS__)                                                                                          \
-        );                                                                                                                      \
-    }while(false)
+#define NWB_LOGGER_CRITICAL_WARNING(...) NWB_LOGGER_ENQUEUE_MESSAGE(CriticalWarning, __VA_ARGS__)
 #else
-#define NWB_LOGGER_CRITICAL_WARNING(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_LOGGER_CRITICAL_WARNING(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
 #if NWB_OCCUR_ERROR
-#define NWB_LOGGER_ERROR(...)                                                                                                  \
-    do{                                                                                                                        \
-        ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
-            ::NWB::Core::Common::LogType::Error,                                                                               \
-            StringFormat(__VA_ARGS__)                                                                                          \
-        );                                                                                                                     \
-        NWB_SOFTBREAK;                                                                                                         \
-    }while(false)
-#define NWB_LOGGER_FATAL(...)                                                                                                  \
-    do{                                                                                                                        \
-        ::NWB::Core::Common::LoggerDetail::EnqueueLogMessage(                                                                  \
-            ::NWB::Core::Common::LogType::Fatal,                                                                               \
-            StringFormat(__VA_ARGS__)                                                                                          \
-        );                                                                                                                     \
-        NWB_HARDBREAK;                                                                                                         \
-    }while(false)
+#define NWB_LOGGER_ERROR(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Error, NWB_SOFTBREAK, __VA_ARGS__)
+#define NWB_LOGGER_FATAL(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Fatal, NWB_HARDBREAK, __VA_ARGS__)
 #else
-#define NWB_LOGGER_ERROR(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
-#define NWB_LOGGER_FATAL(...) static_cast<void>(sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0)))
+#define NWB_LOGGER_ERROR(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
+#define NWB_LOGGER_FATAL(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
 

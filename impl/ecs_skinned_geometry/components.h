@@ -60,19 +60,6 @@ struct RuntimeMeshHandle{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SkinnedGeometryMorphWeight{
-    Name morph = NAME_NONE;
-    f32 weight = 0.0f;
-};
-
-struct SkinnedGeometryMorphWeightsComponent{
-    Vector<SkinnedGeometryMorphWeight> weights;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SkinnedGeometrySkinningMode{
     enum Enum : u32{
         LinearBlend = 0,
@@ -106,15 +93,6 @@ struct SkinnedGeometrySkeletonPoseComponent{
     Vector<u32> parentJoints;
     Vector<SkinnedGeometryJointMatrix> localJoints;
     u32 skinningMode = SkinnedGeometrySkinningMode::LinearBlend;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkinnedGeometryDisplacementComponent{
-    f32 amplitudeScale = 1.0f;
-    bool enabled = true;
 };
 
 

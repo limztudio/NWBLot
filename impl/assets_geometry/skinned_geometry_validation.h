@@ -27,7 +27,6 @@ namespace SkinnedGeometryValidation{
 
 
 static constexpr f32 s_Epsilon = 0.000001f;
-static constexpr f32 s_BarycentricSumEpsilon = 0.001f;
 static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
 static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
@@ -39,25 +38,6 @@ static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 1.0e-20f;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace MorphPayloadFailure{
-    enum Enum : u8{
-        None,
-        MorphCountLimit,
-        EmptyMorph,
-        DuplicateMorphName,
-        MorphDeltaCountLimit,
-        InvalidMorphDelta,
-        DuplicateMorphDeltaVertex,
-    };
-};
-
-struct MorphPayloadFailureInfo{
-    MorphPayloadFailure::Enum reason = MorphPayloadFailure::None;
-    usize morphIndex = 0;
-    usize deltaIndex = 0;
-    u32 vertexId = 0;
-};
 
 namespace RestVertexPayloadFailure{
     enum Enum : u8{
@@ -84,11 +64,6 @@ namespace RuntimePayloadFailure{
         InvalidInverseBindMatrices,
         InvalidSkinInfluence,
         SkinJointOutOfRange,
-        SourceSampleCountMismatch,
-        InvalidSourceSample,
-        EditMaskCountMismatch,
-        InvalidEditMask,
-        MorphPayload,
     };
 };
 
@@ -101,37 +76,19 @@ struct RuntimePayloadFailureInfo{
     usize expectedCount = 0;
     u32 failedJoint = 0;
     RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None;
-    MorphPayloadFailureInfo morphFailure;
 };
 
 struct RuntimePayloadArrays{
     const Vector<SkinnedGeometryVertex>& restVertices;
     const Vector<u32>& indices;
-    u32 sourceTriangleCount;
     u32 skeletonJointCount;
     const Vector<SkinInfluence4>& skin;
     const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices;
-    const Vector<SourceSample>& sourceSamples;
-    const Vector<SkinnedGeometryEditMaskFlags>& editMaskPerTriangle;
-    const Vector<SkinnedGeometryMorph>& morphs;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] inline MorphPayloadFailureInfo MakeMorphPayloadFailure(
-    const MorphPayloadFailure::Enum reason,
-    const usize morphIndex = 0,
-    const usize deltaIndex = 0,
-    const u32 vertexId = 0){
-    MorphPayloadFailureInfo info;
-    info.reason = reason;
-    info.morphIndex = morphIndex;
-    info.deltaIndex = deltaIndex;
-    info.vertexId = vertexId;
-    return info;
-}
 
 [[nodiscard]] inline RuntimePayloadFailureInfo MakeRuntimePayloadFailure(
     const RuntimePayloadFailure::Enum reason,
@@ -141,8 +98,7 @@ struct RuntimePayloadArrays{
     const usize count = 0,
     const usize expectedCount = 0,
     const u32 failedJoint = 0,
-    const RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None,
-    const MorphPayloadFailureInfo& morphFailure = {}
+    const RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None
 ){
     RuntimePayloadFailureInfo info;
     info.reason = reason;
@@ -153,22 +109,7 @@ struct RuntimePayloadArrays{
     info.expectedCount = expectedCount;
     info.failedJoint = failedJoint;
     info.restVertexFailure = restVertexFailure;
-    info.morphFailure = morphFailure;
     return info;
-}
-
-[[nodiscard]] inline TString MorphPayloadFailureMorphNameText(
-    const Vector<SkinnedGeometryMorph>& morphs,
-    const MorphPayloadFailureInfo& failure){
-    const SkinnedGeometryMorph* morph = failure.morphIndex < morphs.size()
-        ? &morphs[failure.morphIndex]
-        : nullptr
-    ;
-    return
-        (morph && morph->name)
-            ? StringConvert(morph->name.c_str())
-            : TString(NWB_TEXT("<unnamed>"))
-    ;
 }
 
 [[nodiscard]] inline bool ActiveWeight(const f32 value){
@@ -309,74 +250,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     ApplyRestVertexTangentFrameRebuild(vertices, rebuildVertices);
 }
 
-[[nodiscard]] inline bool ValidBarycentric(SIMDVector baryVector, const f32 minimumBarycentric){
-    const f32 barySum = VectorGetX(Vector3Dot(baryVector, s_SIMDOne));
-    return
-        FiniteVector(baryVector, 0x7u)
-        && Vector3GreaterOrEqual(baryVector, VectorReplicate(minimumBarycentric))
-        && Abs(barySum - 1.0f) <= s_BarycentricSumEpsilon
-    ;
-}
-
-[[nodiscard]] inline bool ValidBarycentric(const f32 (&bary)[3], const f32 minimumBarycentric){
-    return ValidBarycentric(VectorSet(bary[0], bary[1], bary[2], 0.0f), minimumBarycentric);
-}
-
-[[nodiscard]] inline bool ValidBarycentric(const Float4& bary, const f32 minimumBarycentric){
-    return ValidBarycentric(LoadFloat(bary), minimumBarycentric);
-}
-
-[[nodiscard]] inline bool ValidSourceBarycentric(const f32 (&bary)[3]){
-    return ValidBarycentric(bary, 0.0f);
-}
-
-[[nodiscard]] inline bool ValidSourceBarycentric(const Float4& bary){
-    return ValidBarycentric(bary, 0.0f);
-}
-
-[[nodiscard]] inline bool ValidLooseBarycentric(const f32 (&bary)[3]){
-    return ValidBarycentric(bary, -s_Epsilon);
-}
-
-[[nodiscard]] inline bool ValidLooseBarycentric(const Float4& bary){
-    return ValidBarycentric(bary, -s_Epsilon);
-}
-
-[[nodiscard]] inline bool NormalizeSourceBarycentricVector(const SIMDVector baryVector, f32 (&outBary)[3]){
-    if(!ValidBarycentric(baryVector, -s_Epsilon))
-        return false;
-
-    const SIMDVector clampedBary = VectorClamp(baryVector, VectorZero(), s_SIMDOne);
-    const f32 barySum = VectorGetX(Vector3Dot(clampedBary, s_SIMDOne));
-    if(!IsFinite(barySum) || barySum <= s_Epsilon)
-        return false;
-
-    const SIMDVector normalizedBary = VectorScale(clampedBary, 1.0f / barySum);
-    if(!ValidBarycentric(normalizedBary, 0.0f))
-        return false;
-
-    outBary[0] = VectorGetX(normalizedBary);
-    outBary[1] = VectorGetY(normalizedBary);
-    outBary[2] = VectorGetZ(normalizedBary);
-    return true;
-}
-
-[[nodiscard]] inline bool NormalizeSourceBarycentric(const f32 (&bary)[3], f32 (&outBary)[3]){
-    return NormalizeSourceBarycentricVector(VectorSet(bary[0], bary[1], bary[2], 0.0f), outBary);
-}
-
-[[nodiscard]] inline bool NormalizeSourceBarycentric(const Float4& bary, f32 (&outBary)[3]){
-    return NormalizeSourceBarycentricVector(LoadFloat(bary), outBary);
-}
-
-[[nodiscard]] inline bool ValidSourceSample(const SourceSample& sample, const u32 sourceTriangleCount){
-    return
-        sourceTriangleCount != 0u
-        && sample.sourceTri < sourceTriangleCount
-        && ValidSourceBarycentric(sample.bary)
-    ;
-}
-
 [[nodiscard]] inline bool ValidSkinInfluence(const SkinInfluence4& skin){
     const SIMDVector weights = VectorSet(skin.weight[0], skin.weight[1], skin.weight[2], skin.weight[3]);
     const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
@@ -445,77 +318,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
     return true;
 }
 
-[[nodiscard]] inline bool ValidMorphDelta(const SkinnedGeometryMorphDelta& delta, const usize vertexCount){
-    const SIMDVector deltaPosition = LoadFloat(delta.deltaPosition);
-    const SIMDVector deltaNormal = LoadFloat(delta.deltaNormal);
-    const SIMDVector deltaTangent = LoadFloat(delta.deltaTangent);
-    return
-        delta.vertexId < vertexCount
-        && FiniteVector(deltaPosition, 0x7u)
-        && FiniteVector(deltaNormal, 0x7u)
-        && FiniteVector(deltaTangent, 0xFu)
-    ;
-}
-
-[[nodiscard]] inline MorphPayloadFailureInfo FindMorphPayloadFailure(
-    const Vector<SkinnedGeometryMorph>& morphs,
-    const usize vertexCount){
-    if(morphs.size() > static_cast<usize>(Limit<u32>::s_Max))
-        return MakeMorphPayloadFailure(MorphPayloadFailure::MorphCountLimit);
-    if(morphs.empty())
-        return {};
-
-    Core::Alloc::ScratchArena<> scratchArena;
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenMorphNames(
-        0,
-        Hasher<NameHash>(),
-        EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
-    );
-    seenMorphNames.reserve(morphs.size());
-
-    HashSet<u32, Hasher<u32>, EqualTo<u32>, Core::Alloc::ScratchAllocator<u32>> seenDeltaVertices(
-        0,
-        Hasher<u32>(),
-        EqualTo<u32>(),
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
-    );
-
-    for(usize morphIndex = 0; morphIndex < morphs.size(); ++morphIndex){
-        const SkinnedGeometryMorph& morph = morphs[morphIndex];
-        if(!morph.name || morph.deltas.empty())
-            return MakeMorphPayloadFailure(MorphPayloadFailure::EmptyMorph, morphIndex);
-        if(morph.deltas.size() > static_cast<usize>(Limit<u32>::s_Max))
-            return MakeMorphPayloadFailure(MorphPayloadFailure::MorphDeltaCountLimit, morphIndex);
-        const auto morphNameInsert = seenMorphNames.insert(morph.name.hash());
-        if(!morphNameInsert.second)
-            return MakeMorphPayloadFailure(MorphPayloadFailure::DuplicateMorphName, morphIndex);
-
-        seenDeltaVertices.clear();
-        seenDeltaVertices.reserve(morph.deltas.size());
-
-        for(usize deltaIndex = 0; deltaIndex < morph.deltas.size(); ++deltaIndex){
-            const SkinnedGeometryMorphDelta& delta = morph.deltas[deltaIndex];
-            if(!ValidMorphDelta(delta, vertexCount))
-                return MakeMorphPayloadFailure(
-                    MorphPayloadFailure::InvalidMorphDelta,
-                    morphIndex,
-                    deltaIndex,
-                    delta.vertexId
-                );
-            const auto deltaVertexInsert = seenDeltaVertices.insert(delta.vertexId);
-            if(!deltaVertexInsert.second)
-                return MakeMorphPayloadFailure(
-                    MorphPayloadFailure::DuplicateMorphDeltaVertex,
-                    morphIndex,
-                    deltaIndex,
-                    delta.vertexId
-                );
-        }
-    }
-    return {};
-}
-
 [[nodiscard]] inline bool ValidTriangleArea(const Vector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
     const SIMDVector aPosition = LoadSkinnedGeometryVertexPosition(restVertices[a]);
     const SIMDVector ab = VectorSubtract(LoadSkinnedGeometryVertexPosition(restVertices[b]), aPosition);
@@ -536,13 +338,9 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
 [[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(const RuntimePayloadArrays& payload){
     const Vector<SkinnedGeometryVertex>& restVertices = payload.restVertices;
     const Vector<u32>& indices = payload.indices;
-    const u32 sourceTriangleCount = payload.sourceTriangleCount;
     const u32 skeletonJointCount = payload.skeletonJointCount;
     const Vector<SkinInfluence4>& skin = payload.skin;
     const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices = payload.inverseBindMatrices;
-    const Vector<SourceSample>& sourceSamples = payload.sourceSamples;
-    const Vector<SkinnedGeometryEditMaskFlags>& editMaskPerTriangle = payload.editMaskPerTriangle;
-    const Vector<SkinnedGeometryMorph>& morphs = payload.morphs;
 
     if(restVertices.empty() || indices.empty())
         return MakeRuntimePayloadFailure(RuntimePayloadFailure::IncompleteRestIndexPayload);
@@ -574,28 +372,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
         );
     if(!ValidInverseBindMatrices(inverseBindMatrices, skeletonJointCount))
         return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidInverseBindMatrices);
-    if(!sourceSamples.empty() && sourceSamples.size() != restVertices.size())
-        return MakeRuntimePayloadFailure(
-            RuntimePayloadFailure::SourceSampleCountMismatch,
-            0,
-            0,
-            0,
-            sourceSamples.size(),
-            restVertices.size()
-        );
-    if(!sourceSamples.empty() && sourceTriangleCount == 0u)
-        return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidSourceSample);
-    const usize triangleCount = indices.size() / 3u;
-    if(!editMaskPerTriangle.empty() && editMaskPerTriangle.size() != triangleCount){
-        return MakeRuntimePayloadFailure(
-            RuntimePayloadFailure::EditMaskCountMismatch,
-            0,
-            0,
-            0,
-            editMaskPerTriangle.size(),
-            triangleCount
-        );
-    }
 
     for(usize vertexIndex = 0; vertexIndex < restVertices.size(); ++vertexIndex){
         const RestVertexPayloadFailure::Enum restVertexFailure = FindRestVertexPayloadFailure(restVertices[vertexIndex]);
@@ -642,29 +418,6 @@ inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
                 0,
                 failedJoint
             );
-    }
-    for(usize vertexIndex = 0; vertexIndex < sourceSamples.size(); ++vertexIndex){
-        if(!ValidSourceSample(sourceSamples[vertexIndex], sourceTriangleCount))
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidSourceSample, vertexIndex);
-    }
-    for(usize triangleIndex = 0; triangleIndex < editMaskPerTriangle.size(); ++triangleIndex){
-        if(!ValidSkinnedGeometryEditMaskFlags(editMaskPerTriangle[triangleIndex]))
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidEditMask, 0, triangleIndex * 3u);
-    }
-
-    const MorphPayloadFailureInfo morphFailure = FindMorphPayloadFailure(morphs, restVertices.size());
-    if(morphFailure.reason != MorphPayloadFailure::None){
-        return MakeRuntimePayloadFailure(
-            RuntimePayloadFailure::MorphPayload,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            RestVertexPayloadFailure::None,
-            morphFailure
-        );
     }
 
     return {};

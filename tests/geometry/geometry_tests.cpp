@@ -35,8 +35,6 @@ using MeshletBounds = NWB::Core::Geometry::MeshletBounds;
 using MeshletCluster = NWB::Core::Geometry::MeshletCluster;
 using MeshTopologyEdge = NWB::Core::Geometry::MeshTopologyEdge;
 using Float4BlendSource = NWB::Core::Geometry::AttributeTransferFloat4BlendSource;
-using MorphBlendSource = NWB::Core::Geometry::AttributeTransferMorphBlendSource;
-using MorphDelta = NWB::Core::Geometry::AttributeTransferMorphDelta;
 using SkinBlendSource = NWB::Core::Geometry::AttributeTransferSkinBlendSource;
 using SkinInfluence4 = NWB::Core::Geometry::AttributeTransferSkinInfluence4;
 using SurfacePatchWallVertex = NWB::Core::Geometry::SurfacePatchWallVertex;
@@ -175,28 +173,6 @@ static void CheckBuildMeshletsRejected(
     );
 }
 
-static void CheckMeshletDeformationBoundsRejected(
-    TestContext& context,
-    const Vector<Float3U>& positions,
-    const Vector<u32>& vertexIndices,
-    const MeshletCluster& meshlet,
-    const Vector<f32>& expansion,
-    const f32 baseExpansion,
-    MeshletBounds& bounds
-){
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        !NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            expansion,
-            baseExpansion,
-            bounds
-        )
-    );
-}
-
 static void TestResolvesCoreFrameMath(TestContext& context){
     SIMDVector normal = VectorSet(0.0f, 0.0f, 5.0f, 0.0f);
     SIMDVector tangent = VectorSet(2.0f, 1.0f, 0.0f, -0.25f);
@@ -330,71 +306,6 @@ static void TestBlendFloat4RejectsInvalidInput(TestContext& context){
     sources[1].value = Float4U(0.0f, 1.0f, 0.0f, 1.0f);
     sources[1].weight = -0.25f;
     NWB_GEOMETRY_TEST_CHECK(context, !NWB::Core::Geometry::BlendFloat4(sources, LengthOf(sources), blended));
-}
-
-static MorphDelta MakeMorphDelta(
-    const u32 vertexId,
-    const f32 positionZ,
-    const f32 normalY,
-    const f32 tangentX,
-    const f32 tangentW){
-    MorphDelta delta;
-    delta.vertexId = vertexId;
-    delta.deltaPosition = Float3U(0.0f, 0.0f, positionZ);
-    delta.deltaNormal = Float3U(0.0f, normalY, 0.0f);
-    delta.deltaTangent = Float4U(tangentX, 0.0f, 0.0f, tangentW);
-    return delta;
-}
-
-static void TestBlendsMorphDeltaWeights(TestContext& context){
-    const MorphDelta first = MakeMorphDelta(4u, 0.4f, 0.2f, 0.6f, -0.4f);
-    const MorphDelta second = MakeMorphDelta(8u, 0.2f, 0.4f, 0.2f, 0.2f);
-    MorphBlendSource sources[2] = {};
-    sources[0].delta = &first;
-    sources[0].weight = 0.25f;
-    sources[1].delta = &second;
-    sources[1].weight = 0.5f;
-
-    MorphDelta blended;
-    bool hasDelta = false;
-    NWB_GEOMETRY_TEST_CHECK(context, NWB::Core::Geometry::BlendMorphDelta(sources, LengthOf(sources), 19u, blended, hasDelta));
-    NWB_GEOMETRY_TEST_CHECK(context, hasDelta);
-    NWB_GEOMETRY_TEST_CHECK(context, NWB::Core::Geometry::ActiveMorphDelta(blended));
-    NWB_GEOMETRY_TEST_CHECK(context, blended.vertexId == 19u);
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(blended.deltaPosition, 0.0f, 0.0f, 0.2f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(blended.deltaNormal, 0.0f, 0.25f, 0.0f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual4(blended.deltaTangent, 0.25f, 0.0f, 0.0f, 0.0f));
-}
-
-static void TestBlendMorphDeltaReportsInactiveOutput(TestContext& context){
-    const MorphDelta zeroDelta = MakeMorphDelta(3u, 0.0f, 0.0f, 0.0f, 0.0f);
-    MorphBlendSource sources[2] = {};
-    sources[0].delta = nullptr;
-    sources[0].weight = 1.0f;
-    sources[1].delta = &zeroDelta;
-    sources[1].weight = 1.0f;
-
-    MorphDelta blended;
-    bool hasDelta = true;
-    NWB_GEOMETRY_TEST_CHECK(context, NWB::Core::Geometry::BlendMorphDelta(sources, LengthOf(sources), 11u, blended, hasDelta));
-    NWB_GEOMETRY_TEST_CHECK(context, !hasDelta);
-    NWB_GEOMETRY_TEST_CHECK(context, blended.vertexId == 11u);
-}
-
-static void TestBlendMorphDeltaRejectsInvalidInput(TestContext& context){
-    MorphDelta invalidDelta = MakeMorphDelta(3u, 0.0f, 0.0f, 0.0f, 0.0f);
-    invalidDelta.deltaPosition.z = Limit<f32>::s_QuietNaN;
-    MorphBlendSource sources[1] = {};
-    sources[0].delta = &invalidDelta;
-    sources[0].weight = 1.0f;
-
-    MorphDelta blended;
-    bool hasDelta = false;
-    NWB_GEOMETRY_TEST_CHECK(context, !NWB::Core::Geometry::BlendMorphDelta(sources, LengthOf(sources), 11u, blended, hasDelta));
-
-    invalidDelta.deltaPosition.z = 0.25f;
-    sources[0].weight = -0.25f;
-    NWB_GEOMETRY_TEST_CHECK(context, !NWB::Core::Geometry::BlendMorphDelta(sources, LengthOf(sources), 11u, blended, hasDelta));
 }
 
 static void TestRebuildsFlatQuadFrame(TestContext& context){
@@ -1055,79 +966,6 @@ static void TestBuildsSingleQuadMeshlet(TestContext& context){
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.maximum, 1.0f, 1.0f, 0.0f));
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(meshlet.bounds.center, 0.0f, 0.0f, 0.0f));
     NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(meshlet.bounds.radius, Sqrt(2.0f)));
-
-    Vector<f32> noVertexExpansion;
-    MeshletBounds recomputedBounds;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            noVertexExpansion,
-            0.0f,
-            recomputedBounds
-        )
-    );
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(recomputedBounds.minimum, -1.0f, -1.0f, 0.0f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(recomputedBounds.maximum, 1.0f, 1.0f, 0.0f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(recomputedBounds.center, 0.0f, 0.0f, 0.0f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(recomputedBounds.radius, Sqrt(2.0f)));
-}
-
-static void TestComputesMeshletDeformationBounds(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(-1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, -1.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 1.0f, 0.0f));
-    positions.push_back(Float3U(-1.0f, 1.0f, 0.0f));
-
-    Vector<u32> vertexIndices;
-    vertexIndices.push_back(0u);
-    vertexIndices.push_back(1u);
-    vertexIndices.push_back(2u);
-    vertexIndices.push_back(3u);
-
-    MeshletCluster meshlet;
-    meshlet.firstVertex = 0u;
-    meshlet.vertexCount = 4u;
-
-    Vector<f32> noVertexExpansion;
-    MeshletBounds bounds;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            noVertexExpansion,
-            0.25f,
-            bounds
-        )
-    );
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.minimum, -1.25f, -1.25f, -0.25f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.maximum, 1.25f, 1.25f, 0.25f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.center, 0.0f, 0.0f, 0.0f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual(bounds.radius, Sqrt(2.0f) + 0.25f));
-
-    Vector<f32> vertexExpansion;
-    vertexExpansion.resize(positions.size(), 0.0f);
-    vertexExpansion[2u] = 0.5f;
-    NWB_GEOMETRY_TEST_CHECK(
-        context,
-        NWB::Core::Geometry::ComputeMeshletDeformationBounds(
-            positions,
-            vertexIndices,
-            meshlet,
-            vertexExpansion,
-            0.0f,
-            bounds
-        )
-    );
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.minimum, -1.0f, -1.0f, -0.5f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.maximum, 1.5f, 1.5f, 0.5f));
-    NWB_GEOMETRY_TEST_CHECK(context, NearlyEqual3(bounds.center, 0.25f, 0.25f, 0.0f));
-    NWB_GEOMETRY_TEST_CHECK(context, bounds.radius >= Sqrt(2.0f));
 }
 
 static void TestMeshletBuilderSplitsByLimits(TestContext& context){
@@ -1289,38 +1127,6 @@ static void TestMeshletBuilderRejectsInvalidInput(TestContext& context){
     CheckBuildMeshletsRejected(context, positions, indices, config, meshlets, vertexIndices, localIndices);
 }
 
-static void TestRejectsInvalidMeshletDeformationBounds(TestContext& context){
-    Vector<Float3U> positions;
-    positions.push_back(Float3U(0.0f, 0.0f, 0.0f));
-    positions.push_back(Float3U(1.0f, 0.0f, 0.0f));
-    positions.push_back(Float3U(0.0f, 1.0f, 0.0f));
-
-    Vector<u32> vertexIndices;
-    vertexIndices.push_back(0u);
-    vertexIndices.push_back(1u);
-    vertexIndices.push_back(2u);
-
-    MeshletCluster meshlet;
-    meshlet.firstVertex = 0u;
-    meshlet.vertexCount = 3u;
-
-    Vector<f32> expansion;
-    MeshletBounds bounds;
-    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, -0.01f, bounds);
-
-    expansion.resize(positions.size() - 1u, 0.0f);
-    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, 0.0f, bounds);
-
-    expansion.resize(positions.size(), 0.0f);
-    expansion[1u] = Limit<f32>::s_QuietNaN;
-    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, 0.0f, bounds);
-
-    expansion[1u] = 0.0f;
-    vertexIndices[2u] = 3u;
-    CheckMeshletDeformationBoundsRejected(context, positions, vertexIndices, meshlet, expansion, 0.0f, bounds);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -1341,9 +1147,6 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_geometry_tests::TestBlendSkinInfluenceRejectsInvalidInput(context);
         __hidden_geometry_tests::TestBlendsFloat4Weights(context);
         __hidden_geometry_tests::TestBlendFloat4RejectsInvalidInput(context);
-        __hidden_geometry_tests::TestBlendsMorphDeltaWeights(context);
-        __hidden_geometry_tests::TestBlendMorphDeltaReportsInactiveOutput(context);
-        __hidden_geometry_tests::TestBlendMorphDeltaRejectsInvalidInput(context);
         __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
         __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
         __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
@@ -1365,11 +1168,9 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_geometry_tests::TestAppendsSurfacePatchCapTriangles(context);
         __hidden_geometry_tests::TestRejectsMalformedSurfacePatchCapTriangles(context);
         __hidden_geometry_tests::TestBuildsSingleQuadMeshlet(context);
-        __hidden_geometry_tests::TestComputesMeshletDeformationBounds(context);
         __hidden_geometry_tests::TestMeshletBuilderSplitsByLimits(context);
         __hidden_geometry_tests::TestMeshletBuilderRebuildsDeterministically(context);
         __hidden_geometry_tests::TestMeshletBuilderRejectsInvalidInput(context);
-        __hidden_geometry_tests::TestRejectsInvalidMeshletDeformationBounds(context);
     });
 }
 

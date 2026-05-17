@@ -6,7 +6,6 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 
-#include <tests/skinned_geometry_test_helpers.h>
 #include <tests/capturing_logger.h>
 #include <tests/test_context.h>
 
@@ -33,7 +32,6 @@ namespace __hidden_assets_graphics_tests{
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeQuadTriangleIndices;
-using NWB::Tests::MakeSourceSample;
 using NWB::Tests::MakeTriangleIndices;
 
 
@@ -150,18 +148,6 @@ asset.skin = {
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
     )
 
-#define NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_NORMAL R"(        "delta_normal": [
-            [0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-        ],
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_TANGENT R"(        "delta_tangent": [
-            [0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0],
-        ],
-)"
-
 #define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
@@ -245,10 +231,7 @@ static constexpr AStringView s_MismatchedGeometryMeta =
 
 static constexpr AStringView s_MinimalSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
-    R"(asset.source_samples = {};
-)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {};
-)";
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_GeneratedFrameSkinnedGeometryMeta =
     "geometry asset;\n\n"
@@ -257,31 +240,21 @@ static constexpr AStringView s_GeneratedFrameSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {};
-)";
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_U32IndexTypeSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {};
-)";
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_EmptyListOptionalSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.colors = [];
-asset.source_samples = [];
-)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = [];
-)";
+)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_EmptyMapOptionalSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.colors = {};
-asset.source_samples = {};
-)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {};
-)";
+)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_NativeCharacterMockSkinnedGeometryMeta = R"(geometry asset;
 
@@ -317,18 +290,6 @@ asset.indices = [
     [0, 2, 3],
 ];
 
-asset.edit_masks = [1, 2];
-
-asset.source_samples = {
-    "source_tri": [0, 0, 0, 1],
-    "bary": [
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.0, 1.0],
-    ],
-};
-
 asset.skeleton_joint_count = 2;
 
 asset.inverse_bind_matrices = [
@@ -360,25 +321,6 @@ asset.skin = {
         [1.0, 0.0, 0.0, 0.0],
     ],
 };
-
-asset.displacement = {
-    "space": "tangent",
-    "mode": "scalar",
-    "field": "uv_ramp",
-    "amplitude": 0.125,
-};
-
-asset.morphs = {
-    "lift": {
-        "vertex_ids": [1, 2],
-        "delta_position": [
-            [0.0, 0.0, 0.25],
-            [0.0, 0.0, 0.5],
-        ],
-)" NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_NORMAL
-    NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_TANGENT
-    R"(    },
-};
 )";
 
 static constexpr AStringView s_NonnormalizedSkinSkinnedGeometryMeta =
@@ -406,18 +348,14 @@ static constexpr AStringView s_SkinnedOnlySkinnedGeometryMeta =
 #if defined(NWB_FINAL)
 static constexpr AStringView s_MissingGeometryClassSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {};
-)";
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_StaticClassSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(
         NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS,
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     )
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {};
-)";
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_MismatchedSkinnedGeometryMeta =
     "geometry asset;\n\n"
@@ -457,92 +395,6 @@ static constexpr AStringView s_MismatchedSkinSkinnedGeometryMeta =
 };
 )";
 
-static constexpr AStringView s_MismatchedSourceSamplesSkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.source_samples = {
-    "source_tri": [0, 0, 0],
-    "bary": [
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-    ],
-};
-)";
-
-static constexpr AStringView s_UnreferencedVertexGeneratedSourceSampleSkinnedGeometryMeta = R"(geometry asset;
-
-asset.geometry_class = "skinned";
-
-asset.index_type = "u16";
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.0,  0.5, 0.0],
-    [ 2.0,  2.0, 0.0],
-];
-
-)" NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
-    R"(asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [0.5, 1.0],
-    [1.0, 1.0],
-];
-
-asset.indices = [
-    [0, 1, 2],
-];
-
-asset.skeleton_joint_count = 1;
-
-asset.skin = {
-    "joints0": [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-    ],
-    "weights0": [
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-    ],
-};
-)";
-
-static constexpr AStringView s_MismatchedMorphSkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {
-    "lift": {
-        "vertex_ids": [1, 2],
-        "delta_position": [
-            [0.0, 0.0, 0.25],
-        ],
-)" NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_NORMAL
-    NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_TANGENT
-    R"(    },
-};
-)";
-
-static constexpr AStringView s_MissingMorphTangentSkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.morphs = {
-    "lift": {
-        "vertex_ids": [1, 2],
-        "delta_position": [
-            [0.0, 0.0, 0.25],
-            [0.0, 0.0, 0.5],
-        ],
-)" NWB_ASSETS_GRAPHICS_TEST_ZERO_MORPH_DELTA_NORMAL
-    R"(    },
-};
-)";
-
 static constexpr AStringView s_SourceImportSkinnedGeometryMeta = R"(geometry asset;
 
 asset.geometry_class = "skinned";
@@ -551,12 +403,6 @@ asset.source = {
     "format": "external",
     "path": "mesh.bin",
 };
-)";
-
-static constexpr AStringView s_MismatchedEditMaskSkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-    R"(asset.edit_masks = [1, 1];
 )";
 #endif
 
@@ -604,35 +450,6 @@ static bool WriteTextFile(const Path& filePath, const AStringView text){
 
     file.write(text.data(), static_cast<GlobalFilesystemDetail::StreamSize>(text.size()));
     return static_cast<bool>(file);
-}
-
-static AString BuildTextureDisplacementSkinnedGeometryMeta(
-    const AStringView space,
-    const AStringView mode,
-    const AStringView texturePath
-){
-    AString meta(s_MinimalSkinnedGeometryMeta.data(), s_MinimalSkinnedGeometryMeta.size());
-    const auto append = [&](const AStringView text){ meta.append(text.data(), text.size()); };
-    append(R"(
-
-asset.displacement = {
-    "space": ")");
-    append(space);
-    append(R"(",
-    "mode": ")");
-    append(mode);
-    append(R"(",
-    "field": "texture",
-    "texture": ")");
-    append(texturePath);
-    append(R"(",
-    "amplitude": 0.5,
-    "bias": -0.25,
-    "uv_scale": [2.0, 3.0],
-    "uv_offset": [0.25, 0.5],
-};
-)");
-    return meta;
 }
 
 static const char* AssetsGraphicsTestConfigurationName(){
@@ -868,8 +685,6 @@ static void CheckMinimalSkinnedGeometryDefaults(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.w == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().empty());
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
 }
 
 template<typename AssetT, typename CheckLoadedAssetFn>
@@ -985,15 +800,6 @@ static NWB::Impl::SkinnedGeometryJointMatrix MakeJointMatrix(const f32 tx, const
     return matrix;
 }
 
-static NWB::Impl::SkinnedGeometryMorphDelta MakeMorphDelta(const u32 vertexId, const f32 zDelta){
-    NWB::Impl::SkinnedGeometryMorphDelta delta;
-    delta.vertexId = vertexId;
-    delta.deltaPosition = Float3U(0.f, 0.f, zDelta);
-    delta.deltaNormal = Float3U(0.f, 0.f, 0.f);
-    delta.deltaTangent = Float4U(0.f, 0.f, 0.f, 0.f);
-    return delta;
-}
-
 #if defined(NWB_FINAL)
 template<typename T>
 static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offset, const T value){
@@ -1016,18 +822,6 @@ static usize SkinnedGeometryHeaderCountOffset(const usize countIndex){
     return (sizeof(u32) * 3u) + (sizeof(u64) * countIndex);
 }
 
-static usize SkinnedGeometryMorphDeltaCountOffset(const NWB::Impl::SkinnedGeometry& geometry){
-    return (sizeof(u32) * 3u)
-        + (sizeof(u64) * 9u)
-        + (geometry.restVertices().size() * sizeof(NWB::Impl::SkinnedGeometryVertex))
-        + (geometry.indices().size() * sizeof(u32))
-        + (geometry.skin().size() * sizeof(NWB::Impl::SkinInfluence4))
-        + (geometry.inverseBindMatrices().size() * sizeof(NWB::Impl::SkinnedGeometryJointMatrix))
-        + (geometry.sourceSamples().size() * sizeof(NWB::Impl::SourceSample))
-        + (geometry.editMaskPerTriangle().size() * sizeof(NWB::Impl::SkinnedGeometryEditMaskFlags))
-        + (sizeof(u32) * 2u)
-    ;
-}
 #endif
 
 static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(){
@@ -1049,51 +843,13 @@ static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(){
     Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices;
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
 
-    Vector<NWB::Impl::SourceSample> sourceSamples;
-    sourceSamples.push_back(MakeSourceSample(0u, 1.f, 0.f, 0.f));
-    sourceSamples.push_back(MakeSourceSample(0u, 0.f, 1.f, 0.f));
-    sourceSamples.push_back(MakeSourceSample(0u, 0.f, 0.f, 1.f));
-    sourceSamples.push_back(MakeSourceSample(1u, 0.f, 0.f, 1.f));
-
-    Vector<NWB::Impl::SkinnedGeometryEditMaskFlags> editMasks;
-    editMasks.push_back(NWB::Impl::SkinnedGeometryEditMaskFlag::Editable);
-    editMasks.push_back(NWB::Impl::SkinnedGeometryEditMaskFlag::Restricted);
-
-    Vector<NWB::Impl::SkinnedGeometryMorph> morphs;
-    morphs.resize(1u);
-    morphs[0].name = Name("lift");
-    morphs[0].nameText = CompactString("lift");
-    morphs[0].deltas.push_back(MakeMorphDelta(1u, 0.25f));
-    morphs[0].deltas.push_back(MakeMorphDelta(2u, 0.5f));
-
-    NWB::Impl::SkinnedGeometryDisplacement displacement;
-    displacement.mode = NWB::Impl::SkinnedGeometryDisplacementMode::ScalarUvRamp;
-    displacement.amplitude = 0.125f;
-
     geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
     geometry.setSkeletonJointCount(1u);
     geometry.setInverseBindMatrices(Move(inverseBindMatrices));
-    geometry.setSourceSamples(Move(sourceSamples));
-    geometry.setEditMaskPerTriangle(Move(editMasks));
-    geometry.setDisplacement(displacement);
-    geometry.setMorphs(Move(morphs));
     return geometry;
-}
-
-static NWB::Impl::SkinnedGeometryDisplacementTexture BuildValidDisplacementTexture(){
-    NWB::Impl::SkinnedGeometryDisplacementTexture texture(Name("tests/textures/displacement_height"));
-    texture.setSize(2u, 2u);
-
-    Vector<Float4U> texels;
-    texels.push_back(Float4U(0.0f, 0.0f, 0.0f, 0.0f));
-    texels.push_back(Float4U(0.25f, 0.0f, 0.0f, 0.0f));
-    texels.push_back(Float4U(0.5f, 0.0f, 0.0f, 0.0f));
-    texels.push_back(Float4U(1.0f, 0.0f, 0.0f, 0.0f));
-    texture.setTexels(Move(texels));
-    return texture;
 }
 
 static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(){
@@ -1184,22 +940,6 @@ static void CheckSkinnedSkinnedGeometryPayload(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == expectedSkeletonJointCount);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices().size() == expectedInverseBindMatrixCount);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices()[expectedInverseBindMatrixIndex].rows[3].x == -0.25f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 4u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().size() == 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(
-        context,
-        loadedGeometry.editMaskPerTriangle()[1] == NWB::Impl::SkinnedGeometryEditMaskFlag::Restricted
-    );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(
-        context,
-        loadedGeometry.displacement().mode == NWB::Impl::SkinnedGeometryDisplacementMode::ScalarUvRamp
-    );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacement().amplitude == 0.125f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].name == Name("lift"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas.size() == 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].vertexId == 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].deltas[1].deltaPosition.z == 0.5f);
 }
 
 template<typename CodecT, typename BuildAssetFnT>
@@ -1253,20 +993,6 @@ static void TestGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& contex
     );
 }
 
-static void TestSkinnedGeometryDisplacementTextureCodecRoundTrip(TestContext& context){
-    NWB::Impl::SkinnedGeometryDisplacementTexture texture = BuildValidDisplacementTexture();
-
-    NWB::Impl::SkinnedGeometryDisplacementTextureAssetCodec codec;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::SkinnedGeometryDisplacementTexture& loadedTexture =
-        CheckCodecRoundTrip(context, texture, codec, loadedAsset)
-    ;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.width() == 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.height() == 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.texels().size() == 4u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.texels()[3].x == 1.0f);
-}
-
 static void TestSkinnedGeometryCodecRoundTrip(TestContext& context){
     NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
 
@@ -1275,38 +1001,6 @@ static void TestSkinnedGeometryCodecRoundTrip(TestContext& context){
     const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.virtualPath() == geometry.virtualPath());
     CheckSkinnedSkinnedGeometryPayload(context, loadedGeometry, 1u, 1u, 0u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].nameText.view() == AStringView("lift"));
-}
-
-static void TestSkinnedGeometryCodecRoundTripsTextureDisplacement(TestContext& context){
-    auto checkRoundTrip = [&](const u32 mode, const AStringView texturePathText){
-        NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
-        NWB::Impl::SkinnedGeometryDisplacement displacement;
-        displacement.mode = mode;
-        displacement.texture.virtualPath = Name(texturePathText);
-        displacement.amplitude = 0.5f;
-        displacement.bias = -0.25f;
-        displacement.uvScale = Float2U(2.0f, 3.0f);
-        displacement.uvOffset = Float2U(0.25f, 0.5f);
-        geometry.setDisplacement(displacement);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.setDisplacementTextureVirtualPathText(texturePathText));
-
-        NWB::Impl::SkinnedGeometryAssetCodec codec;
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
-        const NWB::Impl::SkinnedGeometryDisplacement& loadedDisplacement = loadedGeometry.displacement();
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.mode == mode);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.texture.name() == Name(texturePathText));
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacementTextureVirtualPathText().view() == texturePathText);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.amplitude == 0.5f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.bias == -0.25f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvScale.x == 2.0f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvOffset.y == 0.5f);
-    };
-
-    checkRoundTrip(NWB::Impl::SkinnedGeometryDisplacementMode::ScalarTexture, "tests/textures/displacement_height");
-    checkRoundTrip(NWB::Impl::SkinnedGeometryDisplacementMode::VectorTangentTexture, "tests/textures/displacement_tangent");
-    checkRoundTrip(NWB::Impl::SkinnedGeometryDisplacementMode::VectorObjectTexture, "tests/textures/displacement_object");
 }
 
 static void TestMinimalSkinnedGeometryCodecRoundTrip(TestContext& context){
@@ -1320,12 +1014,6 @@ static void TestMinimalSkinnedGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().empty());
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(
-        context,
-        loadedGeometry.displacement().mode == NWB::Impl::SkinnedGeometryDisplacementMode::None
-    );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
 }
 
 static void TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
@@ -1346,34 +1034,13 @@ static void TestSkinnedGeometryCodecRejectsMalformedCounts(TestContext& context)
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
-    const usize morphCountOffset = SkinnedGeometryHeaderCountOffset(7u);
-    const u64 invalidMorphCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, morphCountOffset, invalidMorphCount));
+    const usize skeletonJointCountOffset = SkinnedGeometryHeaderCountOffset(3u);
+    const u64 invalidJointCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, skeletonJointCountOffset, invalidJointCount));
 
     CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("payload counts exceed u32 limits")));
-#else
-    static_cast<void>(context);
-#endif
-}
-
-static void TestSkinnedGeometryCodecRejectsUnusedStringTable(TestContext& context){
-#if defined(NWB_FINAL)
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry();
-    NWB::Impl::SkinnedGeometryAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, SkinnedGeometryHeaderCountOffset(8u), 1u));
-    binary.push_back(0u);
-
-    CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), binary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unexpected string table")));
 #else
     static_cast<void>(context);
 #endif
@@ -1404,27 +1071,16 @@ static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext&
         NWB::Core::Assets::AssetBytes malformed = binary;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
             malformed,
-            SkinnedGeometryHeaderCountOffset(5u),
+            SkinnedGeometryHeaderCountOffset(4u),
             static_cast<u64>(geometry.restVertices().size() - 1u)
         ));
 
         CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), malformed);
     }
 
-    {
-        NWB::Core::Assets::AssetBytes malformed = binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
-            malformed,
-            SkinnedGeometryMorphDeltaCountOffset(geometry),
-            static_cast<u64>(Limit<u32>::s_Max) + 1ull
-        ));
-
-        CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), malformed);
-    }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin count must be empty or match vertex count")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("source sample count must be empty or match vertex count")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("morph delta count exceeds u32 limits")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrix count must be empty or match skeleton joint count")));
 #else
     static_cast<void>(context);
 #endif
@@ -1523,8 +1179,6 @@ static void TestSkinnedGeometryCookerGeneratesMissingFrames(TestContext& context
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.z == 0.0f);
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.w == 1.0f);
             }
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[2u].bary[2u] == 1.0f);
         }
     );
 }
@@ -1538,11 +1192,6 @@ static void TestSkinnedGeometryCookerU32IndexType(TestContext& context){
         [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices()[2] == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[0].sourceTri == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[0].bary[0] == 1.f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[1].bary[1] == 1.f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[2].bary[2] == 1.f);
         }
     );
 }
@@ -1579,8 +1228,6 @@ static void TestSkinnedGeometryCookerNativeCharacterMock(TestContext& context){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[3].color0.w == 0.5f);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.75f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].sourceTri == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples()[3].bary[2] == 1.f);
         }
     );
 }
@@ -1613,86 +1260,8 @@ static void TestSkinnedGeometryCookerSkinnedClass(TestContext& context){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().empty());
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(
-                context,
-                loadedGeometry.displacement().mode == NWB::Impl::SkinnedGeometryDisplacementMode::None
-            );
         }
     );
-}
-
-static void TestSkinnedGeometryCookerTextureDisplacementModes(TestContext& context){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    auto checkCookedDisplacement = [&](
-        const AStringView caseName,
-        const AStringView space,
-        const AStringView mode,
-        const AStringView texturePath,
-        const u32 expectedMode
-    ){
-        const AString meta = BuildTextureDisplacementSkinnedGeometryMeta(space, mode, texturePath);
-
-        Path root;
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!CookAndLoadMinimalAssetByKind(
-            context,
-            testArena,
-            AStringView(meta.data(), meta.size()),
-            caseName,
-            root,
-            loadedAsset,
-            MinimalAssetKind::SkinnedGeometry
-        ))
-            return;
-
-        {
-            const NWB::Impl::SkinnedGeometry& loadedGeometry =
-                static_cast<const NWB::Impl::SkinnedGeometry&>(*loadedAsset)
-            ;
-            const NWB::Impl::SkinnedGeometryDisplacement& displacement = loadedGeometry.displacement();
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.mode == expectedMode);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.texture.name() == Name(texturePath));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacementTextureVirtualPathText().view() == texturePath);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.amplitude == 0.5f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.bias == -0.25f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvScale.x == 2.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvScale.y == 3.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvOffset.x == 0.25f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.uvOffset.y == 0.5f);
-        }
-
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(root, errorCode));
-    };
-
-    checkCookedDisplacement(
-        "cooked_scalar_texture_displacement",
-        "tangent",
-        "scalar",
-        "tests/textures/cooked_scalar_height",
-        NWB::Impl::SkinnedGeometryDisplacementMode::ScalarTexture
-    );
-    checkCookedDisplacement(
-        "cooked_vector_tangent_displacement",
-        "tangent",
-        "vector",
-        "tests/textures/cooked_vector_tangent",
-        NWB::Impl::SkinnedGeometryDisplacementMode::VectorTangentTexture
-    );
-    checkCookedDisplacement(
-        "cooked_vector_object_displacement",
-        "object",
-        "vector",
-        "tests/textures/cooked_vector_object",
-        NWB::Impl::SkinnedGeometryDisplacementMode::VectorObjectTexture
-    );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
 static void TestSkinnedGeometryCookerValidationFailures(TestContext& context){
@@ -1721,27 +1290,14 @@ static void TestSkinnedGeometryCookerValidationFailures(TestContext& context){
     expectCookFailure(s_MismatchedSkinnedGeometryMeta, "mismatched_streams");
     expectCookFailure(s_MissingIndexTypeSkinnedGeometryMeta, "missing_index_type");
     expectCookFailure(s_MismatchedSkinSkinnedGeometryMeta, "mismatched_skin");
-    expectCookFailure(s_MismatchedSourceSamplesSkinnedGeometryMeta, "mismatched_source_samples");
-    expectCookFailure(s_UnreferencedVertexGeneratedSourceSampleSkinnedGeometryMeta, "unreferenced_source_sample_generation");
-    expectCookFailure(s_MismatchedMorphSkinnedGeometryMeta, "mismatched_morph");
-    expectCookFailure(s_MissingMorphTangentSkinnedGeometryMeta, "missing_morph_tangent");
     expectCookFailure(s_SourceImportSkinnedGeometryMeta, "source_import");
-    expectCookFailure(s_MismatchedEditMaskSkinnedGeometryMeta, "mismatched_edit_mask");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 11u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("geometry_class must be skinned")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("source samples must match vertex count")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("cannot generate source sample for unreferenced vertex")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(
-        context,
-        logger.sawErrorContaining(NWB_TEXT("morph 'lift' stream counts must match and must not be empty"))
-    );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("morph 'lift' requires 'delta_tangent' list")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("offline converter to emit native .nwb streams")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("edit mask count must match triangle count")));
 #else
     static_cast<void>(context);
 #endif
@@ -1852,72 +1408,11 @@ static void TestSkinnedGeometryValidationFailures(TestContext& context){
         vertices[2].position = Float3U(0.0f, -0.5f, 0.0f);
         geometry.setRestVertices(Move(vertices));
     });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SourceSample> sourceSamples = geometry.sourceSamples();
-        sourceSamples[0].sourceTri = 99u;
-        geometry.setSourceSamples(Move(sourceSamples));
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SourceSample> sourceSamples = geometry.sourceSamples();
-        sourceSamples[0] = MakeSourceSample(0u, 0.25f, 0.25f, 0.25f);
-        geometry.setSourceSamples(Move(sourceSamples));
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SourceSample> sourceSamples = geometry.sourceSamples();
-        sourceSamples.pop_back();
-        geometry.setSourceSamples(Move(sourceSamples));
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryEditMaskFlags> editMasks = geometry.editMaskPerTriangle();
-        editMasks[0] = static_cast<NWB::Impl::SkinnedGeometryEditMaskFlags>(
-            NWB::Impl::SkinnedGeometryEditMaskFlag::Editable | NWB::Impl::SkinnedGeometryEditMaskFlag::Forbidden
-        );
-        geometry.setEditMaskPerTriangle(Move(editMasks));
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        NWB::Impl::SkinnedGeometryDisplacement displacement = geometry.displacement();
-        displacement.mode = 99u;
-        geometry.setDisplacement(displacement);
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        NWB::Impl::SkinnedGeometryDisplacement displacement;
-        displacement.amplitude = 0.25f;
-        geometry.setDisplacement(displacement);
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryMorph> morphs = geometry.morphs();
-        NWB::Impl::SkinnedGeometryMorph duplicateMorph;
-        duplicateMorph.name = morphs[0].name;
-        duplicateMorph.deltas.push_back(MakeMorphDelta(3u, 0.125f));
-        morphs.push_back(Move(duplicateMorph));
-        geometry.setMorphs(Move(morphs));
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryMorph> morphs = geometry.morphs();
-        morphs[0].deltas[1].vertexId = morphs[0].deltas[0].vertexId;
-        geometry.setMorphs(Move(morphs));
-    });
-
-    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryMorph> morphs = geometry.morphs();
-        morphs[0].deltas[0].vertexId = 99u;
-        geometry.setMorphs(Move(morphs));
-    });
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 25u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 16u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("degenerate normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("invalid normal/tangent frame")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 is degenerate")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("triangle 0 has zero area")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("contains duplicate morph")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("edit mask 0 is invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("no skeleton joint count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices are invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("exceeds skeleton joint count")));
@@ -1977,15 +1472,12 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     return NWB::Tests::RunTestSuite("assets graphics", [](NWB::Tests::TestContext& context){
         __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryDisplacementTextureCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestGeometryCodecRejectsUnsupportedBinaryVersion(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTripsTextureDisplacement(context);
         __hidden_assets_graphics_tests::TestMinimalSkinnedGeometryCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnusedStringTable(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
         __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
         __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
@@ -1997,7 +1489,6 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNativeCharacterMock(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNormalizesSkinWeights(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCookerSkinnedClass(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerTextureDisplacementModes(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryCookerValidationFailures(context);
         __hidden_assets_graphics_tests::TestSkinnedGeometryValidationFailures(context);
         __hidden_assets_graphics_tests::TestGeometryClassPolicyHelpers(context);

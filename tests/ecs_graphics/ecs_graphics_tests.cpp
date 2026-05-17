@@ -2,11 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_skinned_geometry/skinned_geometry_runtime_names.h>
-#include <impl/ecs_skinned_geometry_render/skinned_geometry_morph_payload.h>
+#include <impl/ecs_skinned_geometry_render/skinned_geometry_runtime_resource_names.h>
 #include <impl/ecs_skinned_geometry_render/skinned_geometry_skin_payload.h>
 
-#include <tests/skinned_geometry_test_helpers.h>
 #include <tests/capturing_logger.h>
 #include <tests/ecs_test_world.h>
 #include <tests/test_context.h>
@@ -38,7 +36,6 @@ namespace __hidden_ecs_graphics_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
-using NWB::Tests::MakeSourceSample;
 using NWB::Tests::MakeTriangleIndices;
 
 
@@ -228,206 +225,13 @@ static NWB::Impl::SkinnedGeometryRuntimeMeshInstance MakeTriangleInstance(){
     instance.entity = NWB::Core::ECS::EntityID(1u, 0u);
     instance.handle.value = 42u;
     instance.editRevision = 7u;
-    instance.sourceTriangleCount = 10u;
     instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 0.5f));
     instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 1.0f));
     instance.indices = MakeTriangleIndices();
-    instance.sourceSamples.push_back(MakeSourceSample(9u, 1.0f, 0.0f, 0.0f));
-    instance.sourceSamples.push_back(MakeSourceSample(9u, 0.0f, 1.0f, 0.0f));
-    instance.sourceSamples.push_back(MakeSourceSample(9u, 0.0f, 0.0f, 1.0f));
     return instance;
 }
-static void TestSkinnedGeometryMorphPayloadPreblendsDuplicateWeightsAndMorphs(TestContext& context){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance = MakeTriangleInstance();
-
-    NWB::Impl::SkinnedGeometryMorph raiseMorph;
-    raiseMorph.name = Name("raise");
-    NWB::Impl::SkinnedGeometryMorphDelta raiseDelta{};
-    raiseDelta.vertexId = 1u;
-    raiseDelta.deltaPosition = Float3U(2.0f, 0.0f, 0.0f);
-    raiseDelta.deltaNormal = Float3U(0.0f, 0.0f, 1.0f);
-    raiseDelta.deltaTangent = Float4U(0.0f, 0.5f, 0.0f, 0.0f);
-    raiseMorph.deltas.push_back(raiseDelta);
-    instance.morphs.push_back(raiseMorph);
-
-    NWB::Impl::SkinnedGeometryMorph liftMorph;
-    liftMorph.name = Name("lift");
-    NWB::Impl::SkinnedGeometryMorphDelta liftDelta{};
-    liftDelta.vertexId = 1u;
-    liftDelta.deltaPosition = Float3U(-1.0f, 0.0f, 3.0f);
-    liftDelta.deltaNormal = Float3U(0.25f, 0.0f, 0.0f);
-    liftMorph.deltas.push_back(liftDelta);
-    instance.morphs.push_back(liftMorph);
-
-    NWB::Impl::SkinnedGeometryMorphWeightsComponent weights;
-    weights.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("raise"), 0.25f });
-    weights.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("raise"), 0.5f });
-    weights.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("lift"), 0.5f });
-
-    Vector<NWB::Impl::SkinnedGeometryVertexMorphRangeGpu> ranges;
-    Vector<NWB::Impl::SkinnedGeometryBlendedMorphDeltaGpu> deltas;
-    usize signature = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::SkinnedGeometryMorphPayload::BuildBlendedMorphPayload(instance, &weights, ranges, deltas, signature)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == instance.restVertices.size());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, deltas.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[0u].deltaCount == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[1u].firstDelta == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[1u].deltaCount == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].deltaCount == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaPosition.x, 1.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaPosition.z, 1.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaNormal.x, 0.125f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaNormal.z, 0.75f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[0u].deltaTangent.y, 0.375f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, signature != 0u);
-}
-
-static void TestSkinnedGeometryMorphPayloadSignatureChangesWithWeights(TestContext& context){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance = MakeTriangleInstance();
-
-    NWB::Impl::SkinnedGeometryMorph morph;
-    morph.name = Name("raise");
-    NWB::Impl::SkinnedGeometryMorphDelta delta{};
-    delta.vertexId = 1u;
-    delta.deltaPosition = Float3U(2.0f, 0.0f, 0.0f);
-    morph.deltas.push_back(delta);
-    instance.morphs.push_back(morph);
-
-    NWB::Impl::SkinnedGeometryMorphWeightsComponent lightWeight;
-    lightWeight.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("raise"), 0.25f });
-
-    Vector<NWB::Impl::SkinnedGeometryVertexMorphRangeGpu> lightRanges;
-    Vector<NWB::Impl::SkinnedGeometryBlendedMorphDeltaGpu> lightDeltas;
-    usize lightSignature = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::SkinnedGeometryMorphPayload::BuildBlendedMorphPayload(
-            instance,
-            &lightWeight,
-            lightRanges,
-            lightDeltas,
-            lightSignature
-        )
-    );
-
-    NWB::Impl::SkinnedGeometryMorphWeightsComponent heavyWeight;
-    heavyWeight.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("raise"), 0.75f });
-
-    Vector<NWB::Impl::SkinnedGeometryVertexMorphRangeGpu> heavyRanges;
-    Vector<NWB::Impl::SkinnedGeometryBlendedMorphDeltaGpu> heavyDeltas;
-    usize heavySignature = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::SkinnedGeometryMorphPayload::BuildBlendedMorphPayload(
-            instance,
-            &heavyWeight,
-            heavyRanges,
-            heavyDeltas,
-            heavySignature
-        )
-    );
-
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, lightDeltas.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, heavyDeltas.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(lightDeltas[0u].deltaPosition.x, 0.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(heavyDeltas[0u].deltaPosition.x, 1.5f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, lightSignature != 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, heavySignature != 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, lightSignature != heavySignature);
-}
-
-static void TestSkinnedGeometryMorphPayloadSignatureChangesWithEditRevision(TestContext& context){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance = MakeTriangleInstance();
-
-    NWB::Impl::SkinnedGeometryMorph morph;
-    morph.name = Name("raise");
-    NWB::Impl::SkinnedGeometryMorphDelta delta{};
-    delta.vertexId = 1u;
-    delta.deltaPosition = Float3U(2.0f, 0.0f, 0.0f);
-    morph.deltas.push_back(delta);
-    instance.morphs.push_back(morph);
-
-    NWB::Impl::SkinnedGeometryMorphWeightsComponent weight;
-    weight.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("raise"), 0.5f });
-
-    Vector<NWB::Impl::SkinnedGeometryVertexMorphRangeGpu> baseRanges;
-    Vector<NWB::Impl::SkinnedGeometryBlendedMorphDeltaGpu> baseDeltas;
-    usize baseSignature = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::SkinnedGeometryMorphPayload::BuildBlendedMorphPayload(
-            instance,
-            &weight,
-            baseRanges,
-            baseDeltas,
-            baseSignature
-        )
-    );
-
-    instance.editRevision += 1u;
-
-    Vector<NWB::Impl::SkinnedGeometryVertexMorphRangeGpu> editedRanges;
-    Vector<NWB::Impl::SkinnedGeometryBlendedMorphDeltaGpu> editedDeltas;
-    usize editedSignature = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::SkinnedGeometryMorphPayload::BuildBlendedMorphPayload(
-            instance,
-            &weight,
-            editedRanges,
-            editedDeltas,
-            editedSignature
-        )
-    );
-
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseDeltas.size() == editedDeltas.size());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseRanges.size() == editedRanges.size());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseSignature != 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, editedSignature != 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, baseSignature != editedSignature);
-}
-
-static void TestSkinnedGeometryMorphPayloadBuildsSparseVertexRanges(TestContext& context){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance = MakeTriangleInstance();
-
-    NWB::Impl::SkinnedGeometryMorph morph;
-    morph.name = Name("sparse");
-    NWB::Impl::SkinnedGeometryMorphDelta firstDelta{};
-    firstDelta.vertexId = 0u;
-    firstDelta.deltaPosition = Float3U(0.0f, 0.0f, 1.0f);
-    morph.deltas.push_back(firstDelta);
-    NWB::Impl::SkinnedGeometryMorphDelta secondDelta{};
-    secondDelta.vertexId = 2u;
-    secondDelta.deltaPosition = Float3U(0.0f, 2.0f, 0.0f);
-    morph.deltas.push_back(secondDelta);
-    instance.morphs.push_back(morph);
-
-    NWB::Impl::SkinnedGeometryMorphWeightsComponent weights;
-    weights.weights.push_back(NWB::Impl::SkinnedGeometryMorphWeight{ Name("sparse"), 1.0f });
-
-    Vector<NWB::Impl::SkinnedGeometryVertexMorphRangeGpu> ranges;
-    Vector<NWB::Impl::SkinnedGeometryBlendedMorphDeltaGpu> deltas;
-    usize signature = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        NWB::Impl::SkinnedGeometryMorphPayload::BuildBlendedMorphPayload(instance, &weights, ranges, deltas, signature)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == instance.restVertices.size());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, deltas.size() == 2u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[0u].firstDelta == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[0u].deltaCount == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[1u].deltaCount == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].firstDelta == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges[2u].deltaCount == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[ranges[0u].firstDelta].deltaPosition.z, 1.0f));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(deltas[ranges[2u].firstDelta].deltaPosition.y, 2.0f));
-}
-
 static NWB::Impl::SkinnedGeometryJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
@@ -676,10 +480,6 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_ecs_graphics_tests::TestLightComponents(context);
         __hidden_ecs_graphics_tests::TestGeometrySystemResolvesGeometryComponent(context);
         __hidden_ecs_graphics_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
-        __hidden_ecs_graphics_tests::TestSkinnedGeometryMorphPayloadPreblendsDuplicateWeightsAndMorphs(context);
-        __hidden_ecs_graphics_tests::TestSkinnedGeometryMorphPayloadSignatureChangesWithWeights(context);
-        __hidden_ecs_graphics_tests::TestSkinnedGeometryMorphPayloadSignatureChangesWithEditRevision(context);
-        __hidden_ecs_graphics_tests::TestSkinnedGeometryMorphPayloadBuildsSparseVertexRanges(context);
         __hidden_ecs_graphics_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
         __hidden_ecs_graphics_tests::TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(context);
     });

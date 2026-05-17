@@ -10,19 +10,6 @@
 
 layout(local_size_x = 64) in;
 
-struct NwbSkinnedGeometryVertexMorphRange{
-    uint firstDelta;
-    uint deltaCount;
-    uint padding0;
-    uint padding1;
-};
-
-struct NwbSkinnedGeometryBlendedMorphDelta{
-    vec4 deltaPosition;
-    vec4 deltaNormal;
-    vec4 deltaTangent;
-};
-
 struct NwbSkinnedGeometrySkinInfluence{
     uvec4 joint;
     vec4 weight;
@@ -39,16 +26,8 @@ layout(std430, binding = 0) readonly buffer NwbSkinnedGeometryRestVerticesBuffer
     float nwbSkinnedGeometryRestVertexScalars[];
 };
 
-layout(std430, binding = 1) buffer NwbSkinnedGeometryDeformedVerticesBuffer{
-    float nwbSkinnedGeometryDeformedVertexScalars[];
-};
-
-layout(std430, binding = 2) readonly buffer NwbSkinnedGeometryMorphRangesBuffer{
-    NwbSkinnedGeometryVertexMorphRange nwbSkinnedGeometryMorphRanges[];
-};
-
-layout(std430, binding = 3) readonly buffer NwbSkinnedGeometryMorphDeltasBuffer{
-    NwbSkinnedGeometryBlendedMorphDelta nwbSkinnedGeometryMorphDeltas[];
+layout(std430, binding = 1) buffer NwbSkinnedGeometrySkinnedVerticesBuffer{
+    float nwbSkinnedGeometrySkinnedVertexScalars[];
 };
 
 layout(std430, binding = 4) readonly buffer NwbSkinnedGeometrySkinInfluencesBuffer{
@@ -59,14 +38,9 @@ layout(std430, binding = 5) readonly buffer NwbSkinnedGeometryJointPaletteBuffer
     NwbSkinnedGeometryJointMatrix nwbSkinnedGeometryJointPalette[];
 };
 
-layout(binding = 6) uniform texture2D g_NwbSkinnedGeometryDisplacementTexture;
-layout(binding = 7) uniform sampler g_NwbSkinnedGeometryDisplacementSampler;
-
 layout(push_constant) uniform NwbSkinnedGeometryPushConstants{
     uvec4 payload0;
     uvec4 payload1;
-    vec4 payload2;
-    vec4 payload3;
 } g_NwbSkinnedGeometryPushConstants;
 
 
@@ -77,48 +51,24 @@ uint nwbSkinnedGeometryVertexCount(){
     return g_NwbSkinnedGeometryPushConstants.payload0.x;
 }
 
-uint nwbSkinnedGeometryMorphRangeCount(){
+uint nwbSkinnedGeometryRestScalarStride(){
     return g_NwbSkinnedGeometryPushConstants.payload0.y;
 }
 
-uint nwbSkinnedGeometryRestScalarStride(){
+uint nwbSkinnedGeometrySkinnedScalarStride(){
     return g_NwbSkinnedGeometryPushConstants.payload0.z;
 }
 
-uint nwbSkinnedGeometryDeformedScalarStride(){
+uint nwbSkinnedGeometrySkinCount(){
     return g_NwbSkinnedGeometryPushConstants.payload0.w;
 }
 
-uint nwbSkinnedGeometrySkinCount(){
+uint nwbSkinnedGeometryJointCount(){
     return g_NwbSkinnedGeometryPushConstants.payload1.x;
 }
 
-uint nwbSkinnedGeometryJointCount(){
-    return g_NwbSkinnedGeometryPushConstants.payload1.y;
-}
-
-uint nwbSkinnedGeometryDisplacementMode(){
-    return g_NwbSkinnedGeometryPushConstants.payload1.z;
-}
-
 uint nwbSkinnedGeometrySkinningMode(){
-    return g_NwbSkinnedGeometryPushConstants.payload1.w;
-}
-
-float nwbSkinnedGeometryDisplacementAmplitude(){
-    return g_NwbSkinnedGeometryPushConstants.payload2.x;
-}
-
-float nwbSkinnedGeometryDisplacementBias(){
-    return g_NwbSkinnedGeometryPushConstants.payload2.y;
-}
-
-vec2 nwbSkinnedGeometryDisplacementUvScale(){
-    return g_NwbSkinnedGeometryPushConstants.payload2.zw;
-}
-
-vec2 nwbSkinnedGeometryDisplacementUvOffset(){
-    return g_NwbSkinnedGeometryPushConstants.payload3.xy;
+    return g_NwbSkinnedGeometryPushConstants.payload1.y;
 }
 
 bool nwbSkinnedGeometryFiniteFloat(const float value){
@@ -133,9 +83,9 @@ bool nwbSkinnedGeometryFiniteVec4(const vec4 value){
     return !any(isnan(value)) && !any(isinf(value));
 }
 
-void nwbSkinnedGeometryCopyRestPayload(const uint restBase, const uint deformedBase, const uint restScalarStride){
+void nwbSkinnedGeometryCopyRestPayload(const uint restBase, const uint skinnedBase, const uint restScalarStride){
     for(uint i = 0u; i < restScalarStride; ++i)
-        nwbSkinnedGeometryDeformedVertexScalars[deformedBase + i] = nwbSkinnedGeometryRestVertexScalars[restBase + i];
+        nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + i] = nwbSkinnedGeometryRestVertexScalars[restBase + i];
 }
 
 mat4 nwbSkinnedGeometryLoadJointMatrix(const uint jointId){
@@ -362,182 +312,6 @@ void nwbSkinnedGeometryApplySkin(const uint vertexId, inout vec3 position, inout
         return;
 }
 
-vec2 nwbSkinnedGeometryDisplacementTextureCoord(const vec2 uv0){
-    return clamp(
-        (uv0 * nwbSkinnedGeometryDisplacementUvScale()) + nwbSkinnedGeometryDisplacementUvOffset(),
-        vec2(0.0),
-        vec2(1.0)
-    );
-}
-
-vec4 nwbSkinnedGeometrySampleDisplacementTextureCoord(const vec2 uv){
-    return texture(
-        sampler2D(g_NwbSkinnedGeometryDisplacementTexture, g_NwbSkinnedGeometryDisplacementSampler),
-        clamp(uv, vec2(0.0), vec2(1.0))
-    );
-}
-
-vec4 nwbSkinnedGeometrySampleDisplacementTexture(const vec2 uv0){
-    return nwbSkinnedGeometrySampleDisplacementTextureCoord(nwbSkinnedGeometryDisplacementTextureCoord(uv0));
-}
-
-float nwbSkinnedGeometryDisplacementTextureCoordStep(const int size){
-    return size > 1 ? 1.0 / float(size - 1) : 1.0;
-}
-
-struct NwbSkinnedGeometryDisplacementTextureSampling{
-    vec2 uv;
-    float du;
-    float dv;
-};
-
-bool nwbSkinnedGeometryPrepareDisplacementTextureSampling(
-    const vec2 uv0,
-    out NwbSkinnedGeometryDisplacementTextureSampling outSampling
-){
-    const ivec2 textureExtent = textureSize(
-        sampler2D(g_NwbSkinnedGeometryDisplacementTexture, g_NwbSkinnedGeometryDisplacementSampler),
-        0
-    );
-    if(textureExtent.x <= 1 && textureExtent.y <= 1)
-        return false;
-
-    outSampling.uv = nwbSkinnedGeometryDisplacementTextureCoord(uv0);
-    outSampling.du = nwbSkinnedGeometryDisplacementTextureCoordStep(textureExtent.x);
-    outSampling.dv = nwbSkinnedGeometryDisplacementTextureCoordStep(textureExtent.y);
-    return true;
-}
-
-void nwbSkinnedGeometryApplyScalarTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0){
-    NwbSkinnedGeometryDisplacementTextureSampling sampling;
-    if(!nwbSkinnedGeometryPrepareDisplacementTextureSampling(uv0, sampling))
-        return;
-
-    const float amplitude = nwbSkinnedGeometryDisplacementAmplitude();
-    const float heightU =
-        nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv + vec2(sampling.du, 0.0)).x
-        - nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv - vec2(sampling.du, 0.0)).x
-    ;
-    const float heightV =
-        nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv + vec2(0.0, sampling.dv)).x
-        - nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv - vec2(0.0, sampling.dv)).x
-    ;
-    const vec3 bitangent = nwbSkinnedGeometrySafeNormalize(
-        cross(normal, tangent.xyz),
-        vec3(0.0, 1.0, 0.0)
-    ) * nwbSkinnedGeometryTangentHandedness(tangent.w, 1.0);
-    const vec3 adjustedNormal = normal
-        - tangent.xyz * (heightU * amplitude * 0.5)
-        - bitangent * (heightV * amplitude * 0.5)
-    ;
-    normal = nwbSkinnedGeometrySafeNormalize(adjustedNormal, normal);
-    tangent.xyz = nwbSkinnedGeometryResolveFrameTangent(normal, tangent.xyz, tangent.xyz);
-}
-
-vec3 nwbSkinnedGeometryVectorTextureOffsetToWorld(const vec3 sampleValue, const uint mode, const vec3 normal, const vec4 tangent){
-    const uint vectorTangentTextureMode = 3u;
-    vec3 vectorOffset = (sampleValue + vec3(nwbSkinnedGeometryDisplacementBias())) * nwbSkinnedGeometryDisplacementAmplitude();
-    if(mode != vectorTangentTextureMode)
-        return vectorOffset;
-
-    const vec3 bitangent = nwbSkinnedGeometrySafeNormalize(
-        cross(normal, tangent.xyz),
-        vec3(0.0, 1.0, 0.0)
-    ) * nwbSkinnedGeometryTangentHandedness(tangent.w, 1.0);
-    return tangent.xyz * vectorOffset.x
-        + bitangent * vectorOffset.y
-        + normal * vectorOffset.z
-    ;
-}
-
-void nwbSkinnedGeometryApplyVectorTextureNormal(inout vec3 normal, inout vec4 tangent, const vec2 uv0, const uint mode){
-    NwbSkinnedGeometryDisplacementTextureSampling sampling;
-    if(!nwbSkinnedGeometryPrepareDisplacementTextureSampling(uv0, sampling))
-        return;
-
-    const vec3 right = nwbSkinnedGeometryVectorTextureOffsetToWorld(
-        nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv + vec2(sampling.du, 0.0)).xyz,
-        mode,
-        normal,
-        tangent
-    );
-    const vec3 left = nwbSkinnedGeometryVectorTextureOffsetToWorld(
-        nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv - vec2(sampling.du, 0.0)).xyz,
-        mode,
-        normal,
-        tangent
-    );
-    const vec3 up = nwbSkinnedGeometryVectorTextureOffsetToWorld(
-        nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv + vec2(0.0, sampling.dv)).xyz,
-        mode,
-        normal,
-        tangent
-    );
-    const vec3 down = nwbSkinnedGeometryVectorTextureOffsetToWorld(
-        nwbSkinnedGeometrySampleDisplacementTextureCoord(sampling.uv - vec2(0.0, sampling.dv)).xyz,
-        mode,
-        normal,
-        tangent
-    );
-    if(!nwbSkinnedGeometryFiniteVec3(right)
-        || !nwbSkinnedGeometryFiniteVec3(left)
-        || !nwbSkinnedGeometryFiniteVec3(up)
-        || !nwbSkinnedGeometryFiniteVec3(down)
-    )
-        return;
-
-    const vec3 derivativeU = (right - left) * 0.5;
-    const vec3 derivativeV = (up - down) * 0.5;
-    const float handedness = nwbSkinnedGeometryTangentHandedness(tangent.w, 1.0);
-    const vec3 bitangent = nwbSkinnedGeometrySafeNormalize(
-        cross(normal, tangent.xyz),
-        vec3(0.0, 1.0, 0.0)
-    ) * handedness;
-    const vec3 displacedTangent = tangent.xyz + derivativeU;
-    const vec3 displacedBitangent = bitangent + derivativeV;
-    const vec3 adjustedNormal = cross(displacedTangent, displacedBitangent) * handedness;
-    normal = nwbSkinnedGeometrySafeNormalize(adjustedNormal, normal);
-    tangent.xyz = nwbSkinnedGeometryResolveFrameTangent(normal, displacedTangent, tangent.xyz);
-    tangent.w = handedness;
-}
-
-void nwbSkinnedGeometryApplyDisplacement(inout vec3 position, inout vec3 normal, inout vec4 tangent, const vec2 uv0){
-    const uint noneMode = 0u;
-    const uint scalarUvRampMode = 1u;
-    const uint scalarTextureMode = 2u;
-    const uint vectorTangentTextureMode = 3u;
-    const uint vectorObjectTextureMode = 4u;
-    const uint displacementMode = nwbSkinnedGeometryDisplacementMode();
-    if(displacementMode == noneMode)
-        return;
-
-    const float amplitude = nwbSkinnedGeometryDisplacementAmplitude();
-    if(abs(amplitude) <= 0.000001)
-        return;
-
-    if(displacementMode == scalarUvRampMode){
-        position += normal * (clamp(uv0.x, 0.0, 1.0) * amplitude);
-        return;
-    }
-
-    const vec4 sampleValue = nwbSkinnedGeometrySampleDisplacementTexture(uv0);
-    if(displacementMode == scalarTextureMode){
-        position += normal * ((sampleValue.x + nwbSkinnedGeometryDisplacementBias()) * amplitude);
-        nwbSkinnedGeometryApplyScalarTextureNormal(normal, tangent, uv0);
-        return;
-    }
-
-    vec3 vectorOffset = nwbSkinnedGeometryVectorTextureOffsetToWorld(sampleValue.xyz, displacementMode, normal, tangent);
-    if(!nwbSkinnedGeometryFiniteVec3(vectorOffset))
-        return;
-
-    if(displacementMode != vectorTangentTextureMode && displacementMode != vectorObjectTextureMode)
-        return;
-
-    nwbSkinnedGeometryApplyVectorTextureNormal(normal, tangent, uv0, displacementMode);
-    position += vectorOffset;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -548,9 +322,9 @@ void main(){
         return;
 
     const uint restScalarStride = nwbSkinnedGeometryRestScalarStride();
-    const uint deformedScalarStride = nwbSkinnedGeometryDeformedScalarStride();
+    const uint skinnedScalarStride = nwbSkinnedGeometrySkinnedScalarStride();
     const uint restBase = vertexId * restScalarStride;
-    const uint deformedBase = vertexId * deformedScalarStride;
+    const uint skinnedBase = vertexId * skinnedScalarStride;
 
     vec3 position = vec3(
         nwbSkinnedGeometryRestVertexScalars[restBase + 0u],
@@ -568,30 +342,9 @@ void main(){
         nwbSkinnedGeometryRestVertexScalars[restBase + 8u],
         nwbSkinnedGeometryRestVertexScalars[restBase + 9u]
     );
-    const vec2 uv0 = vec2(
-        nwbSkinnedGeometryRestVertexScalars[restBase + 10u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 11u]
-    );
     const vec3 restPosition = position;
     const vec3 restNormal = normal;
     const vec4 restTangent = tangent;
-
-    if(nwbSkinnedGeometryMorphRangeCount() == nwbSkinnedGeometryVertexCount()){
-        const NwbSkinnedGeometryVertexMorphRange morph = nwbSkinnedGeometryMorphRanges[vertexId];
-        for(uint deltaIndex = 0u; deltaIndex < morph.deltaCount; ++deltaIndex){
-            const NwbSkinnedGeometryBlendedMorphDelta delta = nwbSkinnedGeometryMorphDeltas[morph.firstDelta + deltaIndex];
-            position += delta.deltaPosition.xyz;
-            normal += delta.deltaNormal.xyz;
-            tangent += delta.deltaTangent;
-        }
-    }
-
-    if(!nwbSkinnedGeometryFiniteVec3(position))
-        position = restPosition;
-    if(!nwbSkinnedGeometryFiniteVec3(normal))
-        normal = restNormal;
-    if(!nwbSkinnedGeometryFiniteVec4(tangent))
-        tangent = restTangent;
 
     nwbSkinnedGeometryOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
     const vec3 preSkinPosition = position;
@@ -605,31 +358,19 @@ void main(){
     if(!nwbSkinnedGeometryFiniteVec4(tangent))
         tangent = preSkinTangent;
     nwbSkinnedGeometryOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
-    const vec3 preDisplacementPosition = position;
-    const vec3 preDisplacementNormal = normal;
-    const vec4 preDisplacementTangent = tangent;
-    nwbSkinnedGeometryApplyDisplacement(position, normal, tangent, uv0);
-    if(!nwbSkinnedGeometryFiniteVec3(position))
-        position = preDisplacementPosition;
-    if(!nwbSkinnedGeometryFiniteVec3(normal))
-        normal = preDisplacementNormal;
-    if(!nwbSkinnedGeometryFiniteVec4(tangent))
-        tangent = preDisplacementTangent;
-    nwbSkinnedGeometryOrthonormalizeFrame(normal, tangent, preDisplacementNormal, preDisplacementTangent);
 
-    nwbSkinnedGeometryCopyRestPayload(restBase, deformedBase, restScalarStride);
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 0u] = position.x;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 1u] = position.y;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 2u] = position.z;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 3u] = normal.x;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 4u] = normal.y;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 5u] = normal.z;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 6u] = tangent.x;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 7u] = tangent.y;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 8u] = tangent.z;
-    nwbSkinnedGeometryDeformedVertexScalars[deformedBase + 9u] = tangent.w;
+    nwbSkinnedGeometryCopyRestPayload(restBase, skinnedBase, restScalarStride);
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 0u] = position.x;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 1u] = position.y;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 2u] = position.z;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 3u] = normal.x;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 4u] = normal.y;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 5u] = normal.z;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 6u] = tangent.x;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 7u] = tangent.y;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 8u] = tangent.z;
+    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 9u] = tangent.w;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

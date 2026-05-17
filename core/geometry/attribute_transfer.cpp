@@ -24,23 +24,12 @@ static constexpr f32 s_WeightEpsilon = 0.000001f;
 static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 static constexpr usize s_MaxSkinBlendSourceCount = 4u;
 static constexpr usize s_MaxAccumulatedSkinWeights = s_MaxSkinBlendSourceCount * 4u;
-static constexpr usize s_MaxMorphBlendSourceCount = 4u;
 static constexpr usize s_MaxFloat4BlendSourceCount = 4u;
 
 struct SkinWeightSample{
     u16 joint = 0;
     f32 weight = 0.0f;
 };
-
-struct MorphDeltaVectors{
-    SIMDVector deltaPosition;
-    SIMDVector deltaNormal;
-    SIMDVector deltaTangent;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] bool ActiveWeight(const f32 weight){
     return weight > s_WeightEpsilon || weight < -s_WeightEpsilon;
@@ -100,52 +89,6 @@ struct MorphDeltaVectors{
     samples[bestIndex].weight = 0.0f;
     return true;
 }
-
-[[nodiscard]] MorphDeltaVectors LoadMorphDelta(const AttributeTransferMorphDelta& delta){
-    return MorphDeltaVectors{
-        LoadFloat(delta.deltaPosition),
-        LoadFloat(delta.deltaNormal),
-        LoadFloat(delta.deltaTangent),
-    };
-}
-
-void StoreMorphDelta(const MorphDeltaVectors& source, AttributeTransferMorphDelta& target){
-    StoreFloat(source.deltaPosition, &target.deltaPosition);
-    StoreFloat(source.deltaNormal, &target.deltaNormal);
-    StoreFloat(source.deltaTangent, &target.deltaTangent);
-}
-
-[[nodiscard]] bool ValidMorphDelta(const MorphDeltaVectors& delta){
-    return
-        FiniteVector(delta.deltaPosition, 0x7u)
-        && FiniteVector(delta.deltaNormal, 0x7u)
-        && FiniteVector(delta.deltaTangent, 0xFu)
-    ;
-}
-
-[[nodiscard]] bool ActiveMorphDelta(const MorphDeltaVectors& delta){
-    const SIMDVector epsilon = VectorReplicate(s_WeightEpsilon);
-    return
-        !Vector3LessOrEqual(VectorAbs(delta.deltaPosition), epsilon)
-        || !Vector3LessOrEqual(VectorAbs(delta.deltaNormal), epsilon)
-        || !Vector4LessOrEqual(VectorAbs(delta.deltaTangent), epsilon)
-    ;
-}
-
-void AccumulateMorphDelta(
-    MorphDeltaVectors& target,
-    const MorphDeltaVectors& source,
-    const f32 weight
-){
-    const SIMDVector weightVector = VectorReplicate(weight);
-    target.deltaPosition = VectorMultiplyAdd(source.deltaPosition, weightVector, target.deltaPosition);
-    target.deltaNormal = VectorMultiplyAdd(source.deltaNormal, weightVector, target.deltaNormal);
-    target.deltaTangent = VectorMultiplyAdd(source.deltaTangent, weightVector, target.deltaTangent);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 }; // namespace __hidden_geometry_attribute_transfer
 
@@ -224,59 +167,6 @@ bool BlendSkinInfluence4(
         outInfluence.weight[influenceIndex] *= invSelectedWeightSum;
 
     return ValidSkinInfluence4(outInfluence);
-}
-
-bool ActiveMorphDelta(const AttributeTransferMorphDelta& delta){
-    return __hidden_geometry_attribute_transfer::ActiveMorphDelta(
-        __hidden_geometry_attribute_transfer::LoadMorphDelta(delta)
-    );
-}
-
-bool BlendMorphDelta(
-    const AttributeTransferMorphBlendSource* sources,
-    const usize sourceCount,
-    const u32 outputVertex,
-    AttributeTransferMorphDelta& outDelta,
-    bool& outHasDelta
-){
-    using namespace __hidden_geometry_attribute_transfer;
-
-    outDelta = AttributeTransferMorphDelta{};
-    outDelta.vertexId = outputVertex;
-    outHasDelta = false;
-    if(!sources || sourceCount == 0u || sourceCount > s_MaxMorphBlendSourceCount)
-        return false;
-
-    MorphDeltaVectors blendedDelta{ VectorZero(), VectorZero(), VectorZero() };
-    for(usize sourceIndex = 0u; sourceIndex < sourceCount; ++sourceIndex){
-        const AttributeTransferMorphBlendSource& source = sources[sourceIndex];
-        if(!IsFinite(source.weight) || source.weight < 0.0f)
-            return false;
-        if(!ActiveWeight(source.weight))
-            continue;
-        if(!source.delta)
-            continue;
-
-        const MorphDeltaVectors sourceDelta = LoadMorphDelta(*source.delta);
-        if(!ValidMorphDelta(sourceDelta))
-            return false;
-
-        AccumulateMorphDelta(blendedDelta, sourceDelta, source.weight);
-        outHasDelta = true;
-    }
-
-    if(!outHasDelta || !ActiveMorphDelta(blendedDelta)){
-        outDelta = AttributeTransferMorphDelta{};
-        outDelta.vertexId = outputVertex;
-        outHasDelta = false;
-        return true;
-    }
-
-    if(!ValidMorphDelta(blendedDelta))
-        return false;
-
-    StoreMorphDelta(blendedDelta, outDelta);
-    return true;
 }
 
 bool BlendFloat4(

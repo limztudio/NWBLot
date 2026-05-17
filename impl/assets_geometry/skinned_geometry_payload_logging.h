@@ -25,69 +25,6 @@ namespace SkinnedGeometryValidation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void LogMorphPayloadFailure(
-    const tchar* contextText,
-    const tchar* subjectText,
-    const TString& sourceText,
-    const Vector<SkinnedGeometryMorph>& morphs,
-    const MorphPayloadFailureInfo& failure){
-    const TString morphNameText = MorphPayloadFailureMorphNameText(morphs, failure);
-
-    switch(failure.reason){
-    case MorphPayloadFailure::MorphCountLimit:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' morph count exceeds u32 limits")
-            , contextText
-            , subjectText
-            , sourceText
-        );
-        break;
-    case MorphPayloadFailure::EmptyMorph:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' morph {} is unnamed or empty")
-            , contextText
-            , subjectText
-            , sourceText
-            , failure.morphIndex
-        );
-        break;
-    case MorphPayloadFailure::DuplicateMorphName:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' contains duplicate morph '{}'")
-            , contextText
-            , subjectText
-            , sourceText
-            , morphNameText
-        );
-        break;
-    case MorphPayloadFailure::MorphDeltaCountLimit:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' morph '{}' delta count exceeds u32 limits")
-            , contextText
-            , subjectText
-            , sourceText
-            , morphNameText
-        );
-        break;
-    case MorphPayloadFailure::InvalidMorphDelta:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' morph '{}' delta {} is invalid")
-            , contextText
-            , subjectText
-            , sourceText
-            , morphNameText
-            , failure.deltaIndex
-        );
-        break;
-    case MorphPayloadFailure::DuplicateMorphDeltaVertex:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' morph '{}' has duplicate vertex {}")
-            , contextText
-            , subjectText
-            , sourceText
-            , morphNameText
-            , failure.vertexId
-        );
-        break;
-    case MorphPayloadFailure::None:
-        break;
-    }
-}
-
 inline void LogRestVertexPayloadFailure(
     const tchar* contextText,
     const tchar* subjectText,
@@ -133,7 +70,6 @@ inline void LogRuntimePayloadFailure(
     const tchar* contextText,
     const tchar* subjectText,
     const TString& sourceText,
-    const Vector<SkinnedGeometryMorph>& morphs,
     const RuntimePayloadFailureInfo& failure){
     switch(failure.reason){
     case RuntimePayloadFailure::IncompleteRestIndexPayload:
@@ -234,43 +170,6 @@ inline void LogRuntimePayloadFailure(
             , failure.vertexIndex
             , failure.count
         );
-        break;
-    case RuntimePayloadFailure::SourceSampleCountMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' source sample count {} does not match vertex count {}")
-            , contextText
-            , subjectText
-            , sourceText
-            , failure.count
-            , failure.expectedCount
-        );
-        break;
-    case RuntimePayloadFailure::InvalidSourceSample:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' source sample {} is invalid")
-            , contextText
-            , subjectText
-            , sourceText
-            , failure.vertexIndex
-        );
-        break;
-    case RuntimePayloadFailure::EditMaskCountMismatch:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' edit mask count {} does not match triangle count {}")
-            , contextText
-            , subjectText
-            , sourceText
-            , failure.count
-            , failure.expectedCount
-        );
-        break;
-    case RuntimePayloadFailure::InvalidEditMask:
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: {} '{}' edit mask {} is invalid")
-            , contextText
-            , subjectText
-            , sourceText
-            , failure.indexBase / 3u
-        );
-        break;
-    case RuntimePayloadFailure::MorphPayload:
-        LogMorphPayloadFailure(contextText, subjectText, sourceText, morphs, failure.morphFailure);
         break;
     case RuntimePayloadFailure::None:
         break;

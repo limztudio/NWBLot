@@ -34,13 +34,6 @@ UniquePtr<Core::Assets::IAssetCodec> CreateSkinnedGeometryAssetCodec(){
 }
 Core::Assets::AssetCodecAutoRegistrar s_SkinnedGeometryAssetCodecAutoRegistrar(&CreateSkinnedGeometryAssetCodec);
 
-UniquePtr<Core::Assets::IAssetCodec> CreateSkinnedGeometryDisplacementTextureAssetCodec(){
-    return MakeUnique<SkinnedGeometryDisplacementTextureAssetCodec>();
-}
-Core::Assets::AssetCodecAutoRegistrar s_SkinnedGeometryDisplacementTextureAssetCodecAutoRegistrar(
-    &CreateSkinnedGeometryDisplacementTextureAssetCodec
-);
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,120 +44,9 @@ Core::Assets::AssetCodecAutoRegistrar s_SkinnedGeometryDisplacementTextureAssetC
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SkinnedGeometryDisplacementTexture::setSize(const u32 width, const u32 height){
-    m_width = width;
-    m_height = height;
-}
-
-bool SkinnedGeometryDisplacementTexture::validatePayload()const{
-    const TString texturePathText = Core::Assets::AssetVirtualPathText(*this);
-
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::validatePayload failed: virtual path is empty"));
-        return false;
-    }
-    if(m_width == 0u || m_height == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::validatePayload failed: texture '{}' dimensions are empty")
-            , texturePathText
-        );
-        return false;
-    }
-    if(m_width > Limit<u32>::s_Max / m_height){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::validatePayload failed: texture '{}' dimensions overflow")
-            , texturePathText
-        );
-        return false;
-    }
-
-    const usize requiredTexelCount = static_cast<usize>(m_width) * static_cast<usize>(m_height);
-    if(m_texels.size() != requiredTexelCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::validatePayload failed: texture '{}' texel count {} does not match dimensions {}x{}")
-            , texturePathText
-            , m_texels.size()
-            , m_width
-            , m_height
-        );
-        return false;
-    }
-
-    for(usize i = 0; i < m_texels.size(); ++i){
-        const Float4U& texel = m_texels[i];
-        if(!IsFinite(texel.x) || !IsFinite(texel.y) || !IsFinite(texel.z) || !IsFinite(texel.w)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::validatePayload failed: texture '{}' texel {} is not finite")
-                , texturePathText
-                , i
-            );
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool SkinnedGeometryDisplacementTexture::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::loadBinary failed: virtual path is empty"));
-        return false;
-    }
-
-    m_width = 0u;
-    m_height = 0u;
-    m_texels.clear();
-
-    const tchar* const loadFailureContext = NWB_TEXT("SkinnedGeometryDisplacementTexture::loadBinary");
-    usize cursor = 0u;
-    SkinnedGeometryBinaryPayload::SkinnedGeometryDisplacementTextureHeaderBinary header;
-    if(!GeometryBinaryPayload::ReadHeader(
-        binary,
-        cursor,
-        header,
-        SkinnedGeometryBinaryPayload::s_SkinnedGeometryDisplacementTextureMagic,
-        SkinnedGeometryBinaryPayload::s_SkinnedGeometryDisplacementTextureVersion,
-        loadFailureContext
-    ))
-        return false;
-
-    const u32 width = header.width;
-    const u32 height = header.height;
-    const u64 texelCount = header.texelCount;
-    if(width == 0u || height == 0u || width > Limit<u32>::s_Max / height){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::loadBinary failed: invalid dimensions"));
-        return false;
-    }
-    if(texelCount != static_cast<u64>(width) * static_cast<u64>(height)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryDisplacementTexture::loadBinary failed: texel count does not match dimensions"));
-        return false;
-    }
-
-    m_width = width;
-    m_height = height;
-    if(!GeometryBinaryPayload::ReadVector(
-        binary,
-        cursor,
-        texelCount,
-        m_texels,
-        loadFailureContext,
-        NWB_TEXT("texels")
-    ))
-        return false;
-    if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
-        return false;
-
-    return validatePayload();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool SkinnedGeometry::validatePayload()const{
     const TString geometryPathText = Core::Assets::AssetVirtualPathText(*this);
 
-    const usize indexCount = m_indices.size();
-    const u32 sourceTriangleCount = indexCount <= static_cast<usize>(Limit<u32>::s_Max)
-        ? static_cast<u32>(indexCount / 3u)
-        : 0u
-    ;
     if(!GeometryClassUsesSkinnedGeometryRuntime(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")
             , geometryPathText
@@ -181,33 +63,14 @@ bool SkinnedGeometry::validatePayload()const{
         );
         return false;
     }
-    const bool hasSkinnedGeometryPayload = !m_sourceSamples.empty() || !m_editMaskPerTriangle.empty() || !m_morphs.empty();
-    if(!GeometryClassAcceptsSkinnedGeometryPayload(m_geometryClass, hasSkinnedGeometryPayload)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry skinned geometry runtime or morph payload")
-            , geometryPathText
-            , StringConvert(GeometryClassText(m_geometryClass))
-        );
-        return false;
-    }
-    if(!GeometryClassAcceptsSkinnedGeometryPayload(m_geometryClass, m_displacement.mode != SkinnedGeometryDisplacementMode::None)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' class '{}' cannot carry displacement payload")
-            , geometryPathText
-            , StringConvert(GeometryClassText(m_geometryClass))
-        );
-        return false;
-    }
     const SkinnedGeometryValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
         SkinnedGeometryValidation::FindRuntimePayloadFailure(
             SkinnedGeometryValidation::RuntimePayloadArrays{
                 m_restVertices,
                 m_indices,
-                sourceTriangleCount,
                 m_skeletonJointCount,
                 m_skin,
-                m_inverseBindMatrices,
-                m_sourceSamples,
-                m_editMaskPerTriangle,
-                m_morphs
+                m_inverseBindMatrices
             }
         )
     ;
@@ -216,37 +79,9 @@ bool SkinnedGeometry::validatePayload()const{
             NWB_TEXT("SkinnedGeometry::validatePayload failed"),
             NWB_TEXT("geometry"),
             geometryPathText,
-            m_morphs,
             runtimePayloadFailure
         );
         return false;
-    }
-
-    if(!ValidSkinnedGeometryDisplacementDescriptor(m_displacement)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' displacement descriptor is invalid")
-            , geometryPathText
-        );
-        return false;
-    }
-    if(
-        !m_displacementTextureVirtualPathText.empty()
-        && !SkinnedGeometryBinaryPayload::StableTextMatchesName(
-                m_displacementTextureVirtualPathText,
-                m_displacement.texture.name()
-            )
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' displacement texture path text does not match asset ref")
-            , geometryPathText
-        );
-        return false;
-    }
-    for(const SkinnedGeometryMorph& morph : m_morphs){
-        if(!morph.nameText.empty() && !SkinnedGeometryBinaryPayload::StableTextMatchesName(morph.nameText, morph.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' morph name text does not match morph name")
-                , geometryPathText
-            );
-            return false;
-        }
     }
 
     return true;
@@ -264,11 +99,6 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_skin.clear();
     m_skeletonJointCount = 0u;
     m_inverseBindMatrices.clear();
-    m_sourceSamples.clear();
-    m_editMaskPerTriangle.clear();
-    m_displacement = SkinnedGeometryDisplacement{};
-    m_displacementTextureVirtualPathText.clear();
-    m_morphs.clear();
 
     const tchar* const loadFailureContext = NWB_TEXT("SkinnedGeometry::loadBinary");
     usize cursor = 0;
@@ -289,10 +119,6 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     const u64 skinCount = header.skinCount;
     const u64 skeletonJointCount = header.skeletonJointCount;
     const u64 inverseBindMatrixCount = header.inverseBindMatrixCount;
-    const u64 sourceSampleCount = header.sourceSampleCount;
-    const u64 editMaskCount = header.editMaskCount;
-    const u64 morphCount = header.morphCount;
-    const u64 stringTableByteCount = header.stringTableByteCount;
     if(!GeometryClassUsesSkinnedGeometryRuntime(geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: invalid geometry class"));
         return false;
@@ -303,10 +129,6 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         || skinCount > static_cast<u64>(Limit<u32>::s_Max)
         || skeletonJointCount > static_cast<u64>(Limit<u32>::s_Max)
         || inverseBindMatrixCount > static_cast<u64>(Limit<u32>::s_Max)
-        || sourceSampleCount > static_cast<u64>(Limit<u32>::s_Max)
-        || editMaskCount > static_cast<u64>(Limit<u32>::s_Max)
-        || morphCount > static_cast<u64>(Limit<u32>::s_Max)
-        || stringTableByteCount > static_cast<u64>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: payload counts exceed u32 limits"));
         return false;
@@ -335,21 +157,8 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count"));
         return false;
     }
-    if(sourceSampleCount != 0u && sourceSampleCount != vertexCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: source sample count must be empty or match vertex count"));
-        return false;
-    }
-    const u64 triangleCount = indexCount / 3u;
-    if(editMaskCount != 0u && editMaskCount != triangleCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: edit mask count must be empty or match triangle count"));
-        return false;
-    }
     if(!GeometryClassMatchesSkinPayload(geometryClass, skinCount != 0u)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: geometry class does not match skin payload"));
-        return false;
-    }
-    if(!GeometryClassAcceptsSkinnedGeometryPayload(geometryClass, sourceSampleCount != 0u || editMaskCount != 0u || morphCount != 0u)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: geometry class cannot carry skinned geometry runtime or morph payload"));
         return false;
     }
 
@@ -366,118 +175,6 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     m_skeletonJointCount = static_cast<u32>(skeletonJointCount);
     if(!readVector(inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
         return false;
-    if(!readVector(sourceSampleCount, m_sourceSamples, NWB_TEXT("source samples")))
-        return false;
-    if(!readVector(editMaskCount, m_editMaskPerTriangle, NWB_TEXT("edit masks")))
-        return false;
-
-    if(morphCount > 0u){
-        constexpr usize minMorphHeaderSize = sizeof(SkinnedGeometryBinaryPayload::SkinnedGeometryMorphHeaderBinary);
-        const usize remainingBytes = cursor <= binary.size() ? binary.size() - cursor : 0u;
-        if(morphCount > static_cast<u64>(remainingBytes / minMorphHeaderSize)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: malformed morph table"));
-            return false;
-        }
-    }
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u32, Core::Alloc::ScratchAllocator<u32>> morphNameOffsets{ Core::Alloc::ScratchAllocator<u32>(scratchArena) };
-    morphNameOffsets.reserve(static_cast<usize>(morphCount));
-    m_morphs.reserve(static_cast<usize>(morphCount));
-    for(u64 morphIndex = 0; morphIndex < morphCount; ++morphIndex){
-        SkinnedGeometryBinaryPayload::SkinnedGeometryMorphHeaderBinary morphHeader;
-        if(!ReadPOD(binary, cursor, morphHeader)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: malformed morph header"));
-            return false;
-        }
-        if(morphHeader.reserved != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: unsupported morph header reserved data"));
-            return false;
-        }
-        if(morphHeader.deltaCount > static_cast<u64>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: morph delta count exceeds u32 limits"));
-            return false;
-        }
-
-        SkinnedGeometryMorph morph;
-        if(!readVector(morphHeader.deltaCount, morph.deltas, NWB_TEXT("morph deltas")))
-            return false;
-        m_morphs.push_back(Move(morph));
-        morphNameOffsets.push_back(morphHeader.nameOffset);
-    }
-    SkinnedGeometryBinaryPayload::SkinnedGeometryDisplacementBinary displacementBinary;
-    if(!ReadPOD(binary, cursor, displacementBinary)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: malformed displacement descriptor"));
-        return false;
-    }
-    if(displacementBinary.reserved != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: unsupported displacement reserved data"));
-        return false;
-    }
-    m_displacement = SkinnedGeometryBinaryPayload::BuildDisplacement(displacementBinary);
-    if(!GeometryClassAcceptsSkinnedGeometryPayload(m_geometryClass, m_displacement.mode != SkinnedGeometryDisplacementMode::None)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: geometry class cannot carry displacement payload"));
-        return false;
-    }
-    const bool requiresStringTable =
-        morphCount != 0u
-        || SkinnedGeometryDisplacementModeUsesTexture(displacementBinary.mode)
-    ;
-    if(!requiresStringTable && stringTableByteCount != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: unexpected string table"));
-        return false;
-    }
-    if(requiresStringTable && stringTableByteCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: missing string table"));
-        return false;
-    }
-
-    if(
-        cursor > binary.size()
-        || static_cast<usize>(stringTableByteCount) > binary.size() - cursor
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: malformed string table"));
-        return false;
-    }
-    const usize stringTableOffset = cursor;
-    cursor += static_cast<usize>(stringTableByteCount);
-    for(usize morphIndex = 0; morphIndex < m_morphs.size(); ++morphIndex){
-        CompactString morphNameText;
-        if(
-            !::ReadStringTableText(
-                binary,
-                stringTableOffset,
-                static_cast<usize>(stringTableByteCount),
-                morphNameOffsets[morphIndex],
-                morphNameText
-            )
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: malformed morph name string"));
-            return false;
-        }
-        m_morphs[morphIndex].name = Name(morphNameText.view());
-        m_morphs[morphIndex].nameText = Move(morphNameText);
-    }
-    if(SkinnedGeometryDisplacementModeUsesTexture(displacementBinary.mode)){
-        CompactString texturePathText;
-        if(
-            !::ReadStringTableText(
-                binary,
-                stringTableOffset,
-                static_cast<usize>(stringTableByteCount),
-                displacementBinary.texturePathOffset,
-                texturePathText
-            )
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: malformed displacement texture path string"));
-            return false;
-        }
-        m_displacement.texture.virtualPath = Name(texturePathText.view());
-        m_displacementTextureVirtualPathText = Move(texturePathText);
-    }
-    else if(displacementBinary.texturePathOffset != Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: unexpected displacement texture path"));
-        return false;
-    }
 
     if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;

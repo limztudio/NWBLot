@@ -152,7 +152,6 @@ using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
 using DiscoveredNwbFileVector = ShaderCook::CookVector<DiscoveredNwbFile>;
 using GeometryCookEntryVector = ShaderCook::CookVector<GeometryCookEntry>;
 using SkinnedGeometryCookEntryVector = ShaderCook::CookVector<SkinnedGeometryCookEntry>;
-using SkinnedGeometryDisplacementTextureCookEntryVector = ShaderCook::CookVector<SkinnedGeometryDisplacementTextureCookEntry>;
 using MaterialCookEntryVector = ShaderCook::CookVector<MaterialCookEntry>;
 
 struct ParsedAssetMetadata{
@@ -160,7 +159,6 @@ struct ParsedAssetMetadata{
     ShaderEntryVector shaderEntries;
     GeometryCookEntryVector geometryEntries;
     SkinnedGeometryCookEntryVector skinnedGeometryEntries;
-    SkinnedGeometryDisplacementTextureCookEntryVector skinnedGeometryDisplacementTextureEntries;
     MaterialCookEntryVector materialEntries;
 
     explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
@@ -168,7 +166,6 @@ struct ParsedAssetMetadata{
         , shaderEntries(ShaderCook::CookAllocator<ShaderCook::ShaderEntry>(arena))
         , geometryEntries(ShaderCook::CookAllocator<GeometryCookEntry>(arena))
         , skinnedGeometryEntries(ShaderCook::CookAllocator<SkinnedGeometryCookEntry>(arena))
-        , skinnedGeometryDisplacementTextureEntries(ShaderCook::CookAllocator<SkinnedGeometryDisplacementTextureCookEntry>(arena))
         , materialEntries(ShaderCook::CookAllocator<MaterialCookEntry>(arena))
     {}
 };
@@ -872,7 +869,6 @@ static bool ParseAssetMetadata(
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.geometryEntries.reserve(nwbFiles.size());
     outMetadata.skinnedGeometryEntries.reserve(nwbFiles.size());
-    outMetadata.skinnedGeometryDisplacementTextureEntries.reserve(nwbFiles.size());
 
     HashSet<
         PreparedShaderKey,
@@ -1005,20 +1001,6 @@ static bool ParseAssetMetadata(
             continue;
         }
 
-        if(assetType == SkinnedGeometryDisplacementTexture::AssetTypeName()){
-            SkinnedGeometryDisplacementTextureCookEntry textureEntry;
-            if(!ParseSkinnedGeometryDisplacementTextureCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, textureEntry))
-                return false;
-
-            if(!AppendUniquePropertyAssetEntry(
-                textureEntry,
-                seenPropertyAssetPathHashes,
-                outMetadata.skinnedGeometryDisplacementTextureEntries
-            ))
-                return false;
-            continue;
-        }
-
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: unsupported asset type '{}' in meta '{}'")
             , StringConvert(rawAssetTypeText)
             , PathToString<tchar>(nwbFile)
@@ -1034,8 +1016,6 @@ static bool ParseAssetMetadata(
         if(!outMetadata.geometryEntries.empty())
             return true;
         if(!outMetadata.skinnedGeometryEntries.empty())
-            return true;
-        if(!outMetadata.skinnedGeometryDisplacementTextureEntries.empty())
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no graphics asset metadata found in asset roots"));
@@ -1435,27 +1415,6 @@ static bool AppendSkinnedGeometryAssetsToVolume(
     );
 }
 
-static bool AppendSkinnedGeometryDisplacementTexturesToVolume(
-    SkinnedGeometryDisplacementTextureCookEntryVector& textureEntries,
-    Core::Filesystem::VolumeSession& volumeSession,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
-){
-    return AppendBuiltAssetsToVolume<SkinnedGeometryDisplacementTexture, SkinnedGeometryDisplacementTextureAssetCodec>(
-        NWB_TEXT("skinned geometry displacement texture"),
-        textureEntries,
-        volumeSession,
-        inOutSeenVirtualPathHashes,
-        true,
-        [](SkinnedGeometryDisplacementTextureCookEntry& textureEntry, SkinnedGeometryDisplacementTexture& outTexture){
-            return BuildSkinnedGeometryDisplacementTextureAsset(textureEntry, outTexture);
-        }
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -1535,12 +1494,6 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         preparedPlan.plannedFileCount
     ))
         return false;
-    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
-        static_cast<u64>(parsedMetadata.skinnedGeometryDisplacementTextureEntries.size()),
-        preparedPlan.plannedFileCount
-    ))
-        return false;
-
     if(!__hidden_graphics_asset_cooker::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
         return false;
 
@@ -1615,13 +1568,6 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             seenVirtualPathHashes
         ))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendSkinnedGeometryDisplacementTexturesToVolume(
-            parsedMetadata.skinnedGeometryDisplacementTextureEntries,
-            volumeSession,
-            seenVirtualPathHashes
-        ))
-            return false;
-
         if(!volumeSession.flush()){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to flush staged volume metadata"));
             return false;

@@ -31,22 +31,6 @@ struct AttributeTransferSkinBlendSource{
 static_assert(IsStandardLayout_V<AttributeTransferSkinBlendSource>, "AttributeTransferSkinBlendSource must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<AttributeTransferSkinBlendSource>, "AttributeTransferSkinBlendSource must stay cheap to copy");
 
-struct AttributeTransferMorphDelta{
-    u32 vertexId = 0;
-    Float3U deltaPosition;
-    Float3U deltaNormal;
-    Float4U deltaTangent;
-};
-static_assert(IsStandardLayout_V<AttributeTransferMorphDelta>, "AttributeTransferMorphDelta must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<AttributeTransferMorphDelta>, "AttributeTransferMorphDelta must stay cheap to copy");
-
-struct AttributeTransferMorphBlendSource{
-    const AttributeTransferMorphDelta* delta = nullptr;
-    f32 weight = 0.0f;
-};
-static_assert(IsStandardLayout_V<AttributeTransferMorphBlendSource>, "AttributeTransferMorphBlendSource must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<AttributeTransferMorphBlendSource>, "AttributeTransferMorphBlendSource must stay cheap to copy");
-
 struct AttributeTransferFloat4BlendSource{
     Float4U value;
     f32 weight = 0.0f;
@@ -64,16 +48,6 @@ static_assert(IsTriviallyCopyable_V<AttributeTransferFloat4BlendSource>, "Attrib
     const AttributeTransferSkinBlendSource* sources,
     usize sourceCount,
     AttributeTransferSkinInfluence4& outInfluence
-);
-
-[[nodiscard]] bool ActiveMorphDelta(const AttributeTransferMorphDelta& delta);
-
-[[nodiscard]] bool BlendMorphDelta(
-    const AttributeTransferMorphBlendSource* sources,
-    usize sourceCount,
-    u32 outputVertex,
-    AttributeTransferMorphDelta& outDelta,
-    bool& outHasDelta
 );
 
 [[nodiscard]] bool BlendFloat4(

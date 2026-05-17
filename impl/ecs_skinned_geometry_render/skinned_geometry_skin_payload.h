@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "skinned_geometry_gpu_payload.h"
+#include "skinned_geometry_runtime_mesh.h"
 
 #include <impl/assets_geometry/skinned_geometry_validation.h>
 #include <impl/ecs_skinned_geometry/skinned_geometry_runtime_helpers.h>
@@ -16,6 +16,23 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct alignas(Float4) SkinnedGeometrySkinInfluenceGpu{
+    u32 joint[4] = {};
+    Float4 weight = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+};
+static_assert(
+    sizeof(SkinnedGeometrySkinInfluenceGpu) == sizeof(f32) * 8u,
+    "SkinnedGeometry skin influence GPU layout drifted"
+);
+static_assert(
+    alignof(SkinnedGeometrySkinInfluenceGpu) >= alignof(Float4),
+    "SkinnedGeometry skin influence GPU layout must stay SIMD-aligned"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +105,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         SIMDMatrix jointMatrix;
         if(
             !SkinnedGeometryRuntime::ResolveSkinningJointMatrix(
-                instance,
+                instance.inverseBindMatrices,
                 static_cast<u32>(jointIndex),
                 sourceJoints[jointIndex],
                 jointMatrix

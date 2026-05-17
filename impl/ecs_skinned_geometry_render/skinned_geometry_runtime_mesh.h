@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include "components.h"
-
 #include <core/graphics/common.h>
+#include <impl/ecs_skinned_geometry/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,17 +25,12 @@ struct SkinnedGeometryRuntimeMeshInstance{
     u32 geometryClass = GeometryClass::Skinned;
     Vector<SkinnedGeometryVertex> restVertices;
     Vector<u32> indices;
-    u32 sourceTriangleCount = 0;
     u32 skeletonJointCount = 0;
     Vector<SkinInfluence4> skin;
     Vector<SkinnedGeometryJointMatrix> inverseBindMatrices;
-    Vector<SourceSample> sourceSamples;
-    Vector<SkinnedGeometryEditMaskFlags> editMaskPerTriangle;
-    SkinnedGeometryDisplacement displacement;
-    Vector<SkinnedGeometryMorph> morphs;
     Core::BufferHandle restVertexBuffer;
     Core::BufferHandle indexBuffer;
-    Core::BufferHandle deformedVertexBuffer;
+    Core::BufferHandle skinnedVertexBuffer;
     u32 editRevision = 0;
     RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
 
@@ -48,11 +42,10 @@ struct SkinnedGeometryRuntimeMeshInstance{
             && GeometryClassUsesSkinnedGeometryRuntime(geometryClass)
             && !restVertices.empty()
             && !indices.empty()
-            && (sourceSamples.empty() || sourceTriangleCount != 0u)
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && restVertexBuffer != nullptr
             && indexBuffer != nullptr
-            && deformedVertexBuffer != nullptr
+            && skinnedVertexBuffer != nullptr
         ;
     }
 };

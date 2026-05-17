@@ -188,10 +188,6 @@ template<typename VertexAllocator>
     return IsFinite(outBounds.radius);
 }
 
-[[nodiscard]] bool ValidExpansionRadius(const f32 radius){
-    return IsFinite(radius) && radius >= 0.0f;
-}
-
 template<typename DestinationAllocator>
 void AppendMeshletIndices(
     const PendingMeshlet::ScratchIndexVector& source,
@@ -309,120 +305,6 @@ bool BuildMeshlets(
         return fail();
 
     return true;
-}
-
-bool ComputeMeshletDeformationBounds(
-    const Vector<Float3U>& positions,
-    const Vector<u32>& meshletVertexIndices,
-    const MeshletCluster& meshlet,
-    const Vector<f32>& vertexExpansionRadii,
-    const f32 uniformExpansionRadius,
-    MeshletBounds& outBounds
-){
-    using namespace __hidden_geometry_meshlet_cluster;
-
-    outBounds = MeshletBounds{};
-    if(
-        positions.empty()
-        || meshletVertexIndices.empty()
-        || meshlet.vertexCount == 0u
-        || meshlet.firstVertex > meshletVertexIndices.size()
-        || meshlet.vertexCount > meshletVertexIndices.size() - meshlet.firstVertex
-        || !ValidExpansionRadius(uniformExpansionRadius)
-        || (!vertexExpansionRadii.empty() && vertexExpansionRadii.size() != positions.size())
-    )
-        return false;
-
-    const bool hasVertexExpansion = !vertexExpansionRadii.empty();
-    const usize meshletVertexBegin = static_cast<usize>(meshlet.firstVertex);
-    const usize meshletVertexEnd = meshletVertexBegin + static_cast<usize>(meshlet.vertexCount);
-    const auto loadExpandedVertexBounds = [&](const usize meshletVertexIndex, SIMDVector& outMinimum, SIMDVector& outMaximum) -> bool{
-        const u32 vertex = meshletVertexIndices[meshletVertexIndex];
-        if(vertex >= positions.size())
-            return false;
-
-        const SIMDVector position = LoadFloat(positions[vertex]);
-        if(!FiniteVector(position, 0x7u))
-            return false;
-
-        f32 expansionRadius = uniformExpansionRadius;
-        if(hasVertexExpansion){
-            if(!ValidExpansionRadius(vertexExpansionRadii[vertex]))
-                return false;
-            expansionRadius += vertexExpansionRadii[vertex];
-            if(!ValidExpansionRadius(expansionRadius))
-                return false;
-        }
-
-        const SIMDVector radiusVector = VectorReplicate(expansionRadius);
-        const SIMDVector expandedMinimum = VectorSubtract(position, radiusVector);
-        const SIMDVector expandedMaximum = VectorAdd(position, radiusVector);
-        if(!FiniteVector(expandedMinimum, 0x7u) || !FiniteVector(expandedMaximum, 0x7u))
-            return false;
-
-        outMinimum = expandedMinimum;
-        outMaximum = expandedMaximum;
-        return true;
-    };
-
-    SIMDVector minimum = VectorZero();
-    SIMDVector maximum = VectorZero();
-    if(!loadExpandedVertexBounds(meshletVertexBegin, minimum, maximum))
-        return false;
-    for(usize meshletVertexIndex = meshletVertexBegin + 1u; meshletVertexIndex < meshletVertexEnd; ++meshletVertexIndex){
-        SIMDVector expandedMinimum = VectorZero();
-        SIMDVector expandedMaximum = VectorZero();
-        if(!loadExpandedVertexBounds(meshletVertexIndex, expandedMinimum, expandedMaximum))
-            return false;
-
-        minimum = VectorMin(minimum, expandedMinimum);
-        maximum = VectorMax(maximum, expandedMaximum);
-    }
-
-    const SIMDVector center = VectorScale(VectorAdd(minimum, maximum), 0.5f);
-    if(!FiniteVector(center, 0x7u))
-        return false;
-
-    if(!hasVertexExpansion){
-        f32 radiusSquared = 0.0f;
-        for(usize meshletVertexIndex = meshletVertexBegin; meshletVertexIndex < meshletVertexEnd; ++meshletVertexIndex){
-            const u32 vertex = meshletVertexIndices[meshletVertexIndex];
-            const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), center);
-            const f32 offsetLengthSquared = VectorGetX(Vector3LengthSq(offset));
-            if(!IsFinite(offsetLengthSquared))
-                return false;
-            radiusSquared = Max(radiusSquared, offsetLengthSquared);
-        }
-        if(!IsFinite(radiusSquared))
-            return false;
-
-        StoreFloat(minimum, &outBounds.minimum);
-        StoreFloat(maximum, &outBounds.maximum);
-        StoreFloat(center, &outBounds.center);
-        outBounds.radius = Sqrt(radiusSquared) + uniformExpansionRadius;
-        return IsFinite(outBounds.radius);
-    }
-
-    f32 radius = 0.0f;
-    for(usize meshletVertexIndex = meshletVertexBegin; meshletVertexIndex < meshletVertexEnd; ++meshletVertexIndex){
-        const u32 vertex = meshletVertexIndices[meshletVertexIndex];
-        const f32 expansionRadius = uniformExpansionRadius + vertexExpansionRadii[vertex];
-
-        const SIMDVector offset = VectorSubtract(LoadFloat(positions[vertex]), center);
-        const f32 offsetLengthSquared = VectorGetX(Vector3LengthSq(offset));
-        if(!IsFinite(offsetLengthSquared))
-            return false;
-        const f32 vertexRadius = Sqrt(offsetLengthSquared) + expansionRadius;
-        if(!IsFinite(vertexRadius))
-            return false;
-        radius = Max(radius, vertexRadius);
-    }
-
-    StoreFloat(minimum, &outBounds.minimum);
-    StoreFloat(maximum, &outBounds.maximum);
-    StoreFloat(center, &outBounds.center);
-    outBounds.radius = radius;
-    return IsFinite(outBounds.radius);
 }
 
 

@@ -277,7 +277,6 @@ bool WriteNwbGeometry(
         else{
             file << "\nasset.skin = {};\n";
         }
-        file << "asset.morphs = {};\n";
     }
 
     if(!file){

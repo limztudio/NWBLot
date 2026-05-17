@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "skinned_geometry_runtime_mesh.h"
+#include "components.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,49 +43,8 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool HasMorphWeights(const SkinnedGeometryMorphWeightsComponent* weights){
-    return weights && !weights->weights.empty();
-}
-
 [[nodiscard]] inline bool HasSkeletonPose(const SkinnedGeometrySkeletonPoseComponent* pose){
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
-}
-
-template<typename MorphVector, typename MorphWeightLookup>
-[[nodiscard]] inline bool BuildMorphWeightSumLookup(const MorphVector& morphs, const SkinnedGeometryMorphWeightsComponent* weights, MorphWeightLookup& outWeights, Name& outFailedMorph){
-    outWeights.clear();
-    outFailedMorph = NAME_NONE;
-
-    if(!HasMorphWeights(weights))
-        return true;
-
-    outWeights.reserve(morphs.size());
-    for(const SkinnedGeometryMorph& morph : morphs){
-        if(!morph.name)
-            continue;
-
-        outWeights.emplace(morph.name.hash(), 0.0f);
-    }
-    if(outWeights.empty())
-        return true;
-
-    for(const SkinnedGeometryMorphWeight& weight : weights->weights){
-        auto iterWeight = outWeights.find(weight.morph.hash());
-        if(iterWeight == outWeights.end())
-            continue;
-        if(!IsFinite(weight.weight)){
-            outFailedMorph = weight.morph;
-            return false;
-        }
-
-        const f32 resolvedWeight = iterWeight.value() + weight.weight;
-        if(!IsFinite(resolvedWeight)){
-            outFailedMorph = weight.morph;
-            return false;
-        }
-        iterWeight.value() = resolvedWeight;
-    }
-    return true;
 }
 
 [[nodiscard]] inline SIMDMatrix LoadJointMatrix(const SkinnedGeometryJointMatrix& matrix){
@@ -146,19 +105,19 @@ template<typename MorphVector, typename MorphWeightLookup>
 }
 
 [[nodiscard]] inline bool ResolveSkinningJointMatrix(
-    const SkinnedGeometryRuntimeMeshInstance& instance,
+    const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices,
     const u32 jointIndex,
     const SkinnedGeometryJointMatrix& poseJoint,
     SIMDMatrix& outMatrix){
     outMatrix = LoadJointMatrix(poseJoint);
     if(!IsInvertibleAffineJointMatrix(outMatrix))
         return false;
-    if(instance.inverseBindMatrices.empty())
+    if(inverseBindMatrices.empty())
         return true;
-    if(jointIndex >= instance.inverseBindMatrices.size())
+    if(jointIndex >= inverseBindMatrices.size())
         return false;
 
-    const SIMDMatrix inverseBind = LoadJointMatrix(instance.inverseBindMatrices[jointIndex]);
+    const SIMDMatrix inverseBind = LoadJointMatrix(inverseBindMatrices[jointIndex]);
     if(!IsInvertibleAffineJointMatrix(inverseBind))
         return false;
 
@@ -327,21 +286,6 @@ template<typename JointMatrixVector>
 
 [[nodiscard]] inline SIMDVector TransformDualQuaternionDirection(const SIMDVector real, const SIMDVector direction){
     return Vector3Rotate(direction, real);
-}
-
-[[nodiscard]] inline bool ValidateTriangleIndex(const SkinnedGeometryRuntimeMeshInstance& instance, const u32 triangle, u32 (&outIndices)[3]){
-    const usize indexBase = static_cast<usize>(triangle) * 3u;
-    if(indexBase > instance.indices.size() || instance.indices.size() - indexBase < 3u)
-        return false;
-
-    outIndices[0] = instance.indices[indexBase + 0u];
-    outIndices[1] = instance.indices[indexBase + 1u];
-    outIndices[2] = instance.indices[indexBase + 2u];
-    return
-        outIndices[0] < instance.restVertices.size()
-        && outIndices[1] < instance.restVertices.size()
-        && outIndices[2] < instance.restVertices.size()
-    ;
 }
 
 };

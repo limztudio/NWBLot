@@ -10,9 +10,9 @@
 #include <core/graphics/graphics.h>
 #include <impl/assets_geometry/skinned_geometry_asset.h>
 #include <impl/assets_geometry/skinned_geometry_payload_logging.h>
-#include <impl/ecs_skinned_geometry/skinned_geometry_runtime_names.h>
-#include <impl/ecs_skinned_geometry/skinned_geometry_runtime_validation.h>
 #include <core/common/log.h>
+
+#include "skinned_geometry_runtime_resource_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +31,7 @@ namespace __hidden_skinned_geometry_runtime_mesh_cache{
 
 
 static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag::All;
-// uploadRuntimeMeshBuffers seeds the deformed draw buffer from the rest pose,
+// uploadRuntimeMeshBuffers seeds the skinned draw buffer from the rest pose,
 // so the upload also satisfies the static skinned geometry input update.
 static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     RuntimeMeshDirtyFlag::TopologyDirty
@@ -57,6 +57,20 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     return expanded;
 }
 
+[[nodiscard]] SkinnedGeometryValidation::RuntimePayloadFailureInfo FindRuntimeMeshPayloadFailure(
+    const SkinnedGeometryRuntimeMeshInstance& instance
+){
+    return SkinnedGeometryValidation::FindRuntimePayloadFailure(
+        SkinnedGeometryValidation::RuntimePayloadArrays{
+            instance.restVertices,
+            instance.indices,
+            instance.skeletonJointCount,
+            instance.skin,
+            instance.inverseBindMatrices
+        }
+    );
+}
+
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const SkinnedGeometryRuntimeMeshInstance& instance){
     const auto sourceText = [&instance]() -> TString{
         return
@@ -72,13 +86,6 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         );
         return false;
     }
-    if(!ValidSkinnedGeometryDisplacementDescriptor(instance.displacement)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' has an invalid displacement descriptor")
-            , sourceText()
-        );
-        return false;
-    }
-
     const bool hasSkin = !instance.skin.empty();
     if(!GeometryClassMatchesSkinPayload(instance.geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' class '{}' does not match skin payload")
@@ -87,30 +94,14 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         );
         return false;
     }
-    const bool hasSkinnedGeometryPayload = !instance.sourceSamples.empty() || !instance.editMaskPerTriangle.empty() || !instance.morphs.empty();
-    if(!GeometryClassAcceptsSkinnedGeometryPayload(instance.geometryClass, hasSkinnedGeometryPayload)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry skinned geometry runtime or morph payload")
-            , sourceText()
-            , StringConvert(GeometryClassText(instance.geometryClass))
-        );
-        return false;
-    }
-    if(!GeometryClassAcceptsSkinnedGeometryPayload(instance.geometryClass, instance.displacement.mode != SkinnedGeometryDisplacementMode::None)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' class '{}' cannot carry displacement payload")
-            , sourceText()
-            , StringConvert(GeometryClassText(instance.geometryClass))
-        );
-        return false;
-    }
     const SkinnedGeometryValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
-        SkinnedGeometryRuntime::FindRuntimeMeshPayloadFailure(instance)
+        FindRuntimeMeshPayloadFailure(instance)
     ;
     if(runtimePayloadFailure.reason != SkinnedGeometryValidation::RuntimePayloadFailure::None){
         SkinnedGeometryValidation::LogRuntimePayloadFailure(
             NWB_TEXT("SkinnedGeometryRuntimeMeshCache"),
             NWB_TEXT("runtime mesh"),
             sourceText(),
-            instance.morphs,
             runtimePayloadFailure
         );
         return false;
@@ -282,14 +273,9 @@ bool SkinnedGeometryRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID enti
     instance.geometryClass = geometry->geometryClass();
     instance.restVertices = geometry->restVertices();
     instance.indices = geometry->indices();
-    instance.sourceTriangleCount = static_cast<u32>(geometry->indices().size() / 3u);
     instance.skeletonJointCount = geometry->skeletonJointCount();
     instance.skin = geometry->skin();
     instance.inverseBindMatrices = geometry->inverseBindMatrices();
-    instance.sourceSamples = geometry->sourceSamples();
-    instance.editMaskPerTriangle = geometry->editMaskPerTriangle();
-    instance.displacement = geometry->displacement();
-    instance.morphs = geometry->morphs();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
 
     if(!uploadRuntimeMeshBuffers(instance)){
@@ -373,8 +359,8 @@ bool SkinnedGeometryRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedGeometryRu
 
     const Name restVertexBufferName = deriveRuntimeBufferName(instance, AStringView("rest_vb"));
     const Name indexBufferName = deriveRuntimeBufferName(instance, AStringView("index"));
-    const Name deformedVertexBufferName = deriveRuntimeBufferName(instance, AStringView("deformed_vb"));
-    if(!restVertexBufferName || !indexBufferName || !deformedVertexBufferName)
+    const Name skinnedVertexBufferName = deriveRuntimeBufferName(instance, AStringView("skinned_vb"));
+    if(!restVertexBufferName || !indexBufferName || !skinnedVertexBufferName)
         return false;
 
     Core::Graphics::BufferSetupDesc restVertexSetup;
@@ -409,19 +395,19 @@ bool SkinnedGeometryRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedGeometryRu
         return false;
     }
 
-    Core::Graphics::BufferSetupDesc deformedVertexSetup;
-    deformedVertexSetup.bufferDesc
+    Core::Graphics::BufferSetupDesc skinnedVertexSetup;
+    skinnedVertexSetup.bufferDesc
         .setByteSize(static_cast<u64>(restVertexBytes))
         .setStructStride(sizeof(SkinnedGeometryVertex))
         .setCanHaveUAVs(true)
         .setIsVertexBuffer(true)
-        .setDebugName(deformedVertexBufferName)
+        .setDebugName(skinnedVertexBufferName)
     ;
-    deformedVertexSetup.data = instance.restVertices.data();
-    deformedVertexSetup.dataSize = restVertexBytes;
-    instance.deformedVertexBuffer = m_graphics.setupBuffer(deformedVertexSetup);
-    if(!instance.deformedVertexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: failed to create deformed vertex buffer for '{}'")
+    skinnedVertexSetup.data = instance.restVertices.data();
+    skinnedVertexSetup.dataSize = restVertexBytes;
+    instance.skinnedVertexBuffer = m_graphics.setupBuffer(skinnedVertexSetup);
+    if(!instance.skinnedVertexBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: failed to create skinned vertex buffer for '{}'")
             , StringConvert(instance.source.name().c_str())
         );
         return false;

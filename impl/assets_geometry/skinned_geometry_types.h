@@ -8,8 +8,6 @@
 #include "../global.h"
 #include "geometry_class.h"
 
-#include <core/assets/asset_ref.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,13 +16,6 @@ NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class SkinnedGeometryDisplacementTexture;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 struct alignas(16) SkinnedGeometryVertex{
     Float3U position;
@@ -113,131 +104,6 @@ static_assert(alignof(SkinnedGeometryJointMatrix) >= alignof(Float4), "SkinnedGe
     matrix.rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     return matrix;
 }
-
-struct SourceSample{
-    u32 sourceTri = 0;
-    f32 bary[3] = {};
-};
-static_assert(IsStandardLayout_V<SourceSample>, "SourceSample must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<SourceSample>, "SourceSample must stay binary-serializable");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace SkinnedGeometryEditMaskFlag{
-    enum Enum : u8{
-        Editable = 1u << 0u,
-        Restricted = 1u << 1u,
-        Forbidden = 1u << 2u,
-        RequiresRepair = 1u << 3u,
-    };
-};
-using SkinnedGeometryEditMaskFlags = u8;
-
-static constexpr SkinnedGeometryEditMaskFlags s_SkinnedGeometryEditMaskDefault = SkinnedGeometryEditMaskFlag::Editable;
-static constexpr SkinnedGeometryEditMaskFlags s_SkinnedGeometryEditMaskKnownFlags =
-    SkinnedGeometryEditMaskFlag::Editable
-    | SkinnedGeometryEditMaskFlag::Restricted
-    | SkinnedGeometryEditMaskFlag::Forbidden
-    | SkinnedGeometryEditMaskFlag::RequiresRepair
-;
-
-[[nodiscard]] inline bool ValidSkinnedGeometryEditMaskFlags(const SkinnedGeometryEditMaskFlags flags){
-    if(flags == 0u || (flags & ~s_SkinnedGeometryEditMaskKnownFlags) != 0u)
-        return false;
-
-    return (flags & (SkinnedGeometryEditMaskFlag::Editable | SkinnedGeometryEditMaskFlag::Forbidden))
-        != (SkinnedGeometryEditMaskFlag::Editable | SkinnedGeometryEditMaskFlag::Forbidden)
-    ;
-}
-
-[[nodiscard]] inline bool SkinnedGeometryEditMaskAllowsCommit(const SkinnedGeometryEditMaskFlags flags){
-    return
-        ValidSkinnedGeometryEditMaskFlags(flags)
-        && (flags & SkinnedGeometryEditMaskFlag::Forbidden) == 0u
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace SkinnedGeometryDisplacementMode{
-    enum Enum : u32{
-        None = 0,
-        ScalarUvRamp = 1,
-        ScalarTexture = 2,
-        VectorTangentTexture = 3,
-        VectorObjectTexture = 4,
-        PoseDrivenScalar = 5,
-        PoseDrivenVector = 6,
-    };
-};
-
-[[nodiscard]] inline bool SkinnedGeometryDisplacementModeUsesTexture(const u32 mode){
-    return
-        mode == SkinnedGeometryDisplacementMode::ScalarTexture
-        || mode == SkinnedGeometryDisplacementMode::VectorTangentTexture
-        || mode == SkinnedGeometryDisplacementMode::VectorObjectTexture
-    ;
-}
-
-struct SkinnedGeometryDisplacement{
-    Core::Assets::AssetRef<SkinnedGeometryDisplacementTexture> texture;
-    u32 mode = SkinnedGeometryDisplacementMode::None;
-    f32 amplitude = 0.0f;
-    f32 bias = 0.0f;
-    Float2U uvScale = Float2U(1.0f, 1.0f);
-    Float2U uvOffset = Float2U(0.0f, 0.0f);
-};
-static_assert(IsStandardLayout_V<SkinnedGeometryDisplacement>, "SkinnedGeometryDisplacement must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<SkinnedGeometryDisplacement>, "SkinnedGeometryDisplacement must stay cheap to copy");
-
-[[nodiscard]] inline bool ValidSkinnedGeometryDisplacementDescriptor(const SkinnedGeometryDisplacement& displacement){
-    if(
-        !IsFinite(displacement.amplitude)
-        || !IsFinite(displacement.bias)
-        || !IsFinite(displacement.uvScale.x)
-        || !IsFinite(displacement.uvScale.y)
-        || !IsFinite(displacement.uvOffset.x)
-        || !IsFinite(displacement.uvOffset.y)
-    )
-        return false;
-
-    if(displacement.mode == SkinnedGeometryDisplacementMode::None){
-        return
-            displacement.amplitude == 0.0f
-            && displacement.bias == 0.0f
-            && !displacement.texture.valid()
-        ;
-    }
-    if(displacement.mode == SkinnedGeometryDisplacementMode::ScalarUvRamp)
-        return !displacement.texture.valid() && displacement.bias == 0.0f;
-    if(SkinnedGeometryDisplacementModeUsesTexture(displacement.mode))
-        return displacement.texture.valid();
-
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkinnedGeometryMorphDelta{
-    u32 vertexId = 0;
-    Float3U deltaPosition;
-    Float3U deltaNormal;
-    Float4U deltaTangent;
-};
-static_assert(IsStandardLayout_V<SkinnedGeometryMorphDelta>, "SkinnedGeometryMorphDelta must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<SkinnedGeometryMorphDelta>, "SkinnedGeometryMorphDelta must stay binary-serializable");
-
-struct SkinnedGeometryMorph{
-    Name name = NAME_NONE;
-    CompactString nameText;
-    Vector<SkinnedGeometryMorphDelta> deltas;
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

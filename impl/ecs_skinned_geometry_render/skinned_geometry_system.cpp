@@ -4,6 +4,7 @@
 
 #include "skinned_geometry_system.h"
 
+#include "skinned_geometry_runtime_mesh_cache.h"
 #include "skinned_geometry_skin_payload.h"
 
 #include <core/alloc/scratch.h>
@@ -131,7 +132,7 @@ SkinnedGeometrySystem::SkinnedGeometrySystem(
     , m_assetManager(assetManager)
     , m_runtimeGeometryRegistry(runtimeGeometryRegistry)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_runtimeMeshCache(arena, graphics, assetManager)
+    , m_runtimeMeshCache(Core::MakeCustomUnique<SkinnedGeometryRuntimeMeshCache>(arena, arena, graphics, assetManager))
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
 {
     writeAccess<SkinnedGeometryComponent>();
@@ -149,7 +150,7 @@ SkinnedGeometrySystem::~SkinnedGeometrySystem()
 
 void SkinnedGeometrySystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(delta);
-    m_runtimeMeshCache.update(world);
+    m_runtimeMeshCache->update(world);
 }
 
 usize SkinnedGeometrySystem::runtimeGeometryCandidateCount(){
@@ -178,7 +179,7 @@ bool SkinnedGeometrySystem::resolveRuntimeGeometry(const Core::ECS::EntityID ent
     if(!renderer || !renderer->runtimeMesh.valid())
         return false;
 
-    const SkinnedGeometryRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer->runtimeMesh);
+    const SkinnedGeometryRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(renderer->runtimeMesh);
     if(!instance || !instance->valid() || instance->entity != entity)
         return false;
     if(instance->indices.size() > static_cast<usize>(Limit<u32>::s_Max))
@@ -221,7 +222,7 @@ void SkinnedGeometrySystem::render(Core::IFramebuffer* framebuffer){
         for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
             const RuntimeResources& resources = it.value();
             const SkinnedGeometryRuntimeMeshInstance* instance =
-                m_runtimeMeshCache.findInstance(resources.handle)
+                m_runtimeMeshCache->findInstance(resources.handle)
             ;
             if(!instance || !instance->valid() || instance->editRevision != resources.editRevision){
                 it = m_runtimeResources.erase(it);
@@ -262,7 +263,7 @@ void SkinnedGeometrySystem::render(Core::IFramebuffer* framebuffer){
                 return;
 
             SkinnedGeometryRuntimeMeshInstance* instance =
-                m_runtimeMeshCache.findInstance(renderer.runtimeMesh)
+                m_runtimeMeshCache->findInstance(renderer.runtimeMesh)
             ;
             if(!instance || !instance->valid())
                 return;
@@ -299,7 +300,7 @@ void SkinnedGeometrySystem::render(Core::IFramebuffer* framebuffer){
 
 void SkinnedGeometrySystem::invalidateResources(){
     m_runtimeResources.clear();
-    m_runtimeMeshCache.clear();
+    m_runtimeMeshCache->clear();
 
     m_bindingLayout.reset();
     m_computeShader.reset();

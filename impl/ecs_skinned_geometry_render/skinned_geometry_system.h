@@ -7,8 +7,26 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
-#include <impl/ecs_skinned_geometry_render/skinned_geometry_runtime_mesh_cache.h>
 #include <impl/ecs_geometry/runtime_geometry.h>
+#include <impl/ecs_skinned_geometry/components.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class AssetManager;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +39,8 @@ NWB_IMPL_BEGIN
 
 
 class Shader;
+class SkinnedGeometryRuntimeMeshCache;
+struct SkinnedGeometryRuntimeMeshInstance;
 struct SkinnedGeometrySkinInfluenceGpu;
 
 
@@ -108,7 +128,7 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     IRuntimeGeometryRegistry& m_runtimeGeometryRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
-    SkinnedGeometryRuntimeMeshCache m_runtimeMeshCache;
+    Core::CustomUniquePtr<SkinnedGeometryRuntimeMeshCache> m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, RuntimeResourceMapAllocator> m_runtimeResources;
     Core::BindingLayoutHandle m_bindingLayout;

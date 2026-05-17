@@ -6,6 +6,7 @@
 
 
 #include <core/graphics/common.h>
+#include <impl/assets_geometry/skinned_geometry_types.h>
 #include <impl/ecs_skinned_geometry/components.h>
 
 

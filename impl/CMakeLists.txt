@@ -1,3 +1,4 @@
+add_subdirectory(skinned_geometry)
 add_subdirectory(assets_shader)
 add_subdirectory(assets_material)
 add_subdirectory(assets_geometry)

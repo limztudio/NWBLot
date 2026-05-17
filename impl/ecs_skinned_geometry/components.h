@@ -9,9 +9,7 @@
 
 #include <core/assets/asset_ref.h>
 #include <core/ecs/entity_id.h>
-#include <impl/assets_geometry/skinned_geometry_types.h>
-
-#include <cstddef>
+#include <impl/skinned_geometry/skinned_geometry_joint_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

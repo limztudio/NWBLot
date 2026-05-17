@@ -15,6 +15,7 @@ target_link_libraries(nwb_ecs_skinned_geometry_render PUBLIC
     nwb_graphics
 )
 target_link_libraries(nwb_ecs_skinned_geometry_render PRIVATE
+    nwb_assets_geometry
     nwb_assets_shader_loader
     nwb_ecs_render_components
 )

@@ -167,6 +167,22 @@ struct PositionKeyEqual{
 
 using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
 
+[[nodiscard]] bool EnsureTriangleIndexScratchCapacity(
+    const ufbx_mesh& mesh,
+    UtilityVector<u32>& inOutTriangleIndices,
+    AString& outError
+){
+    if(mesh.max_face_triangles > Limit<usize>::s_Max / 3u){
+        outError = "mesh face triangulation scratch size overflows";
+        return false;
+    }
+
+    const usize triangleIndexCapacity = static_cast<usize>(mesh.max_face_triangles) * 3u;
+    if(inOutTriangleIndices.size() < triangleIndexCapacity)
+        inOutTriangleIndices.resize(triangleIndexCapacity);
+    return true;
+}
+
 [[nodiscard]] u32 FloatPositionBits(f32 value){
     if(value == 0.0f)
         value = 0.0f;
@@ -288,7 +304,8 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
     outNormals.clear();
     outNormals.reserve(mesh.num_vertices);
 
-    inOutTriangleIndices.resize(static_cast<usize>(mesh.max_face_triangles) * 3u);
+    if(!EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices, outError))
+        return false;
     for(usize faceIndex = 0; faceIndex < mesh.num_faces; ++faceIndex){
         const ufbx_face face = mesh.faces.data[faceIndex];
         if(face.num_indices < 3u)
@@ -503,7 +520,14 @@ bool BuildClusterJointMap(
         outError = "skin deformer has too many clusters";
         return false;
     }
+    if(skin->clusters.count > Limit<usize>::s_Max - context.joints.size()){
+        outError = "skin deformer cluster count overflows skeleton joint capacity";
+        return false;
+    }
 
+    const usize reservedJointCount = context.joints.size() + skin->clusters.count;
+    context.joints.reserve(reservedJointCount);
+    context.inverseBindMatrices.reserve(reservedJointCount);
     outClusterJoints.reserve(skin->clusters.count);
     for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
         ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
@@ -609,11 +633,6 @@ bool AppendInstanceGeometry(
         return false;
     }
 
-    if(mesh->max_face_triangles > Limit<usize>::s_Max / 3u){
-        outError = "mesh face triangulation scratch size overflows";
-        return false;
-    }
-
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
     const bool importUvs = wantsSkinnedGeometry && mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
@@ -633,7 +652,8 @@ bool AppendInstanceGeometry(
     if(!BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
         return false;
 
-    inOutTriangleIndices.resize(static_cast<usize>(mesh->max_face_triangles) * 3u);
+    if(!EnsureTriangleIndexScratchCapacity(*mesh, inOutTriangleIndices, outError))
+        return false;
     for(usize faceIndex = 0; faceIndex < mesh->num_faces; ++faceIndex){
         const ufbx_face face = mesh->faces.data[faceIndex];
         if(face.num_indices < 3u)

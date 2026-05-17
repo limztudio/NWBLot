@@ -22,14 +22,19 @@ namespace __hidden_renderer_system_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using SourceVertexWordVector = Vector<u32, Core::Alloc::ScratchAllocator<u32>>;
+
 [[nodiscard]] static u32 FloatWord(const f32 value){
     return std::bit_cast<u32>(value);
 }
 
-[[nodiscard]] static bool BuildStaticGeometrySourceWords(const Geometry& geometry, Vector<u32>& outWords, usize& outBytes){
+[[nodiscard]] static bool BuildStaticGeometrySourceWords(const Geometry& geometry, SourceVertexWordVector& outWords, usize& outBytes){
+    outWords.clear();
     outBytes = 0u;
 
     const usize vertexCount = geometry.vertexCount();
+    if(vertexCount == 0u)
+        return false;
     if(vertexCount > Limit<usize>::s_Max / ECSRenderDetail::s_StaticGeometrySourceWordStride)
         return false;
 
@@ -40,19 +45,18 @@ namespace __hidden_renderer_system_geometry{
     const Vector<Float3U>& positions = geometry.positions();
     const Vector<Half4U>& normals = geometry.normals();
     const Vector<Half4U>& colors = geometry.colors();
-    outWords.resize(wordCount);
+    outWords.reserve(wordCount);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        const usize wordOffset = vertexIndex * ECSRenderDetail::s_StaticGeometrySourceWordStride;
         const Float3U& position = positions[vertexIndex];
         const Half4U& normal = normals[vertexIndex];
         const Half4U& color = colors[vertexIndex];
-        outWords[wordOffset + 0u] = FloatWord(position.x);
-        outWords[wordOffset + 1u] = FloatWord(position.y);
-        outWords[wordOffset + 2u] = FloatWord(position.z);
-        outWords[wordOffset + 3u] = normal.packed[0];
-        outWords[wordOffset + 4u] = normal.packed[1];
-        outWords[wordOffset + 5u] = color.packed[0];
-        outWords[wordOffset + 6u] = color.packed[1];
+        outWords.push_back(FloatWord(position.x));
+        outWords.push_back(FloatWord(position.y));
+        outWords.push_back(FloatWord(position.z));
+        outWords.push_back(normal.packed[0]);
+        outWords.push_back(normal.packed[1]);
+        outWords.push_back(color.packed[0]);
+        outWords.push_back(color.packed[1]);
     }
     outBytes = wordCount * sizeof(u32);
     return true;
@@ -137,7 +141,10 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
         return false;
     }
 
-    Vector<u32> sourceVertexWords;
+    Core::Alloc::ScratchArena<> scratchArena;
+    __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{
+        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+    };
     usize sourceVertexBytes = 0u;
     if(!__hidden_renderer_system_geometry::BuildStaticGeometrySourceWords(geometry, sourceVertexWords, sourceVertexBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' source vertex stream size overflows"), StringConvert(geometryPath.c_str()));

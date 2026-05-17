@@ -4,7 +4,7 @@
 
 #version 460
 
-#include "bxdf.glsli"
+#include <bxdf.glsli>
 #include "mesh_gbuffer_io.glsli"
 
 

@@ -155,8 +155,6 @@ inline bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& 
 inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
-        Core::Format::RGBA8_UNORM,
-        Core::Format::BGRA8_UNORM,
     };
     constexpr Core::FormatSupport::Mask requiredSupport =
         Core::FormatSupport::Texture
@@ -169,7 +167,6 @@ inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
 inline Core::Format::Enum SelectGBufferVectorFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
-        Core::Format::RGBA32_FLOAT,
     };
     constexpr Core::FormatSupport::Mask requiredSupport =
         Core::FormatSupport::Texture

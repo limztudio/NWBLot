@@ -8,6 +8,164 @@
 #include "type.h"
 #include "constant.h"
 
+#include <bit>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace HalfConvertDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] NWB_INLINE Half FloatToHalfScalar(const f32 value)noexcept{
+    u32 bits = std::bit_cast<u32>(value);
+    const u32 sign = (bits & 0x80000000u) >> 16u;
+    bits &= 0x7fffffffu;
+
+    u32 result = 0u;
+    if(bits >= 0x47800000u){
+        result = 0x7c00u | ((bits > 0x7f800000u) ? (0x0200u | ((bits >> 13u) & 0x03ffu)) : 0u);
+    }
+    else if(bits <= 0x33000000u){
+        result = 0u;
+    }
+    else if(bits < 0x38800000u){
+        const u32 shift = 125u - (bits >> 23u);
+        bits = 0x800000u | (bits & 0x7fffffu);
+        result = bits >> (shift + 1u);
+        const u32 sticky = (bits & ((1u << shift) - 1u)) != 0u ? 1u : 0u;
+        result += (result | sticky) & ((bits >> shift) & 1u);
+    }
+    else{
+        bits += 0xc8000000u;
+        result = ((bits + 0x0fffu + ((bits >> 13u) & 1u)) >> 13u) & 0x7fffu;
+    }
+
+    return static_cast<Half>(result | sign);
+}
+
+[[nodiscard]] NWB_INLINE f32 HalfToFloatScalar(const Half value)noexcept{
+    u32 mantissa = static_cast<u32>(value & 0x03ffu);
+    i32 exponent = static_cast<i32>(value & 0x7c00u);
+    if(exponent == 0x7c00){
+        exponent = 0x8f;
+    }
+    else if(exponent != 0){
+        exponent = static_cast<i32>((value >> 10u) & 0x1fu);
+    }
+    else if(mantissa != 0u){
+        exponent = 1;
+        do{
+            --exponent;
+            mantissa <<= 1u;
+        }while((mantissa & 0x0400u) == 0u);
+        mantissa &= 0x03ffu;
+    }
+    else{
+        exponent = -112;
+    }
+
+    const u32 result =
+        ((static_cast<u32>(value) & 0x8000u) << 16u)
+        | (static_cast<u32>(exponent + 112) << 23u)
+        | (mantissa << 13u)
+    ;
+    return std::bit_cast<f32>(result);
+}
+
+#if defined(NWB_HAS_F16C)
+[[nodiscard]] NWB_INLINE Half FloatToHalfF16C(const f32 value)noexcept{
+    const __m128 floatValue = _mm_set_ss(value);
+    const __m128i halfValue = _mm_cvtps_ph(floatValue, 0);
+    return static_cast<Half>(_mm_cvtsi128_si32(halfValue));
+}
+
+[[nodiscard]] NWB_INLINE f32 HalfToFloatF16C(const Half value)noexcept{
+    const __m128i halfValue = _mm_cvtsi32_si128(static_cast<int>(value));
+    const __m128 floatValue = _mm_cvtph_ps(halfValue);
+    return _mm_cvtss_f32(floatValue);
+}
+
+NWB_INLINE Half* FloatBufferToHalfF16C(Half* outHalfBuffer, const f32* floatBuffer, const usize count)noexcept{
+    usize i = 0u;
+    const usize vectorCount = count >> 2u;
+    for(usize vectorIndex = 0u; vectorIndex < vectorCount; ++vectorIndex){
+        const __m128 floatValue = _mm_loadu_ps(floatBuffer + i);
+        const __m128i halfValue = _mm_cvtps_ph(floatValue, 0);
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(outHalfBuffer + i), halfValue);
+        i += 4u;
+    }
+
+    for(; i < count; ++i)
+        outHalfBuffer[i] = FloatToHalfF16C(floatBuffer[i]);
+    return outHalfBuffer;
+}
+
+NWB_INLINE f32* HalfBufferToFloatF16C(f32* outFloatBuffer, const Half* halfBuffer, const usize count)noexcept{
+    usize i = 0u;
+    const usize vectorCount = count >> 2u;
+    for(usize vectorIndex = 0u; vectorIndex < vectorCount; ++vectorIndex){
+        const __m128i halfValue = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(halfBuffer + i));
+        const __m128 floatValue = _mm_cvtph_ps(halfValue);
+        _mm_storeu_ps(outFloatBuffer + i, floatValue);
+        i += 4u;
+    }
+
+    for(; i < count; ++i)
+        outFloatBuffer[i] = HalfToFloatF16C(halfBuffer[i]);
+    return outFloatBuffer;
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] NWB_INLINE Half ConvertFloatToHalf(const f32 value)noexcept{
+#if defined(NWB_HAS_F16C)
+    return HalfConvertDetail::FloatToHalfF16C(value);
+#else
+    return HalfConvertDetail::FloatToHalfScalar(value);
+#endif
+}
+
+[[nodiscard]] NWB_INLINE f32 ConvertHalfToFloat(const Half value)noexcept{
+#if defined(NWB_HAS_F16C)
+    return HalfConvertDetail::HalfToFloatF16C(value);
+#else
+    return HalfConvertDetail::HalfToFloatScalar(value);
+#endif
+}
+
+NWB_INLINE Half* ConvertFloatBufferToHalf(Half* outHalfBuffer, const f32* floatBuffer, const usize count)noexcept{
+#if defined(NWB_HAS_F16C)
+    return HalfConvertDetail::FloatBufferToHalfF16C(outHalfBuffer, floatBuffer, count);
+#else
+    for(usize i = 0; i < count; ++i)
+        outHalfBuffer[i] = ConvertFloatToHalf(floatBuffer[i]);
+    return outHalfBuffer;
+#endif
+}
+
+NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBuffer, const usize count)noexcept{
+#if defined(NWB_HAS_F16C)
+    return HalfConvertDetail::HalfBufferToFloatF16C(outFloatBuffer, halfBuffer, count);
+#else
+    for(usize i = 0; i < count; ++i)
+        outFloatBuffer[i] = ConvertHalfToFloat(halfBuffer[i]);
+    return outFloatBuffer;
+#endif
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

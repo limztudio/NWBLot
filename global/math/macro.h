@@ -12,8 +12,12 @@
 #define NWB_HAS_SSE4 1
 #endif
 
-#if defined(__FMA__) || defined(__F16C__) || defined(_M_FMA) || defined(_M_F16C)
+#if defined(__FMA__) || defined(_M_FMA)
 #define NWB_HAS_FMA3 1
+#endif
+
+#if defined(__F16C__) || defined(_M_F16C)
+#define NWB_HAS_F16C 1
 #endif
 
 #if defined(__AVX__) || defined(__AVX2__) || defined(_M_AVX) || defined(_M_AVX2)
@@ -36,11 +40,15 @@
 #define NWB_HAS_SSE4 1
 #endif
 
+#if defined(NWB_HAS_F16C) && !defined(NWB_HAS_SSE4)
+#define NWB_HAS_SSE4 1
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_HAS_SSE4) && !defined(NWB_HAS_FMA3) && !defined(NWB_HAS_AVX2) && !defined(NWB_HAS_NEON)
+#if !defined(NWB_HAS_SSE4) && !defined(NWB_HAS_FMA3) && !defined(NWB_HAS_F16C) && !defined(NWB_HAS_AVX2) && !defined(NWB_HAS_NEON)
 #define NWB_HAS_SCALAR 1
 #endif
 
@@ -66,7 +74,7 @@
 #include <smmintrin.h>
 #endif
 
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_AVX2)
+#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_F16C) || defined(NWB_HAS_AVX2)
 #include <immintrin.h>
 #endif
 

@@ -180,6 +180,62 @@ static void TestGlslRefractCriticalAngle(TestContext& context){
     NWB_MATH_TEST_CHECK(context, NearlyEqual4(Vector3Refract(totalInternalIncident, normal, 2.0f), 0.0f, 0.0f, 0.0f, 0.0f));
 }
 
+static void TestHalfFloatScalarConversion(TestContext& context){
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(0.0f) == static_cast<Half>(0x0000u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-0.0f) == static_cast<Half>(0x8000u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(1.0f) == static_cast<Half>(0x3c00u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-2.0f) == static_cast<Half>(0xc000u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(65504.0f) == static_cast<Half>(0x7bffu));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(Limit<f32>::s_Infinity) == static_cast<Half>(0x7c00u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(-Limit<f32>::s_Infinity) == static_cast<Half>(0xfc00u));
+
+    const Half quietNaN = ConvertFloatToHalf(Limit<f32>::s_QuietNaN);
+    NWB_MATH_TEST_CHECK(context, (quietNaN & static_cast<Half>(0x7c00u)) == static_cast<Half>(0x7c00u));
+    NWB_MATH_TEST_CHECK(context, (quietNaN & static_cast<Half>(0x03ffu)) != static_cast<Half>(0u));
+
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(5.9604644775390625e-8f) == static_cast<Half>(0x0001u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(6.103515625e-5f) == static_cast<Half>(0x0400u));
+    NWB_MATH_TEST_CHECK(context, ConvertFloatToHalf(1.00048828125f) == static_cast<Half>(0x3c00u));
+
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x0000u)), 0.0f));
+    NWB_MATH_TEST_CHECK(context, SignBit(ConvertHalfToFloat(static_cast<Half>(0x8000u))));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x3c00u)), 1.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0xc000u)), -2.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(ConvertHalfToFloat(static_cast<Half>(0x7bffu)), 65504.0f));
+    NWB_MATH_TEST_CHECK(context, ConvertHalfToFloat(static_cast<Half>(0x7c00u)) == Limit<f32>::s_Infinity);
+    NWB_MATH_TEST_CHECK(context, ConvertHalfToFloat(static_cast<Half>(0xfc00u)) == -Limit<f32>::s_Infinity);
+    NWB_MATH_TEST_CHECK(context, IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u))));
+}
+
+static void TestHalfFloatBufferConversion(TestContext& context){
+    f32 source[6] = {
+        0.0f,
+        -1.5f,
+        1.0f,
+        65504.0f,
+        5.9604644775390625e-8f,
+        Limit<f32>::s_Infinity
+    };
+    Half packed[6] = {};
+    f32 unpacked[6] = {};
+
+    NWB_MATH_TEST_CHECK(context, ConvertFloatBufferToHalf(packed, source, 6u) == packed);
+    NWB_MATH_TEST_CHECK(context, packed[0] == static_cast<Half>(0x0000u));
+    NWB_MATH_TEST_CHECK(context, packed[1] == static_cast<Half>(0xbe00u));
+    NWB_MATH_TEST_CHECK(context, packed[2] == static_cast<Half>(0x3c00u));
+    NWB_MATH_TEST_CHECK(context, packed[3] == static_cast<Half>(0x7bffu));
+    NWB_MATH_TEST_CHECK(context, packed[4] == static_cast<Half>(0x0001u));
+    NWB_MATH_TEST_CHECK(context, packed[5] == static_cast<Half>(0x7c00u));
+
+    NWB_MATH_TEST_CHECK(context, ConvertHalfBufferToFloat(unpacked, packed, 6u) == unpacked);
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[0], 0.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[1], -1.5f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[2], 1.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[3], 65504.0f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(unpacked[4], 5.9604644775390625e-8f));
+    NWB_MATH_TEST_CHECK(context, unpacked[5] == Limit<f32>::s_Infinity);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -207,6 +263,8 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
         __hidden_math_tests::TestVector4CrossBasisOrientation(context);
         __hidden_math_tests::TestGlslNamedScalarFunctions(context);
         __hidden_math_tests::TestGlslRefractCriticalAngle(context);
+        __hidden_math_tests::TestHalfFloatScalarConversion(context);
+        __hidden_math_tests::TestHalfFloatBufferConversion(context);
     });
 }
 

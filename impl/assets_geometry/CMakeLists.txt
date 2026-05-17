@@ -23,6 +23,7 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_payload_logging.h"
+        "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_tangent_frame_rebuild.h"
         "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_validation.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_binary_payload.h"

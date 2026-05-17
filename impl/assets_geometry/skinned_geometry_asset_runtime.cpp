@@ -8,7 +8,6 @@
 #include "skinned_geometry_payload_logging.h"
 #include "geometry_binary_payload.h"
 
-#include <core/alloc/scratch.h>
 #include <core/assets/asset_auto_registration.h>
 #include <global/binary.h>
 #include <core/common/log.h>

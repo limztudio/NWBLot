@@ -57,13 +57,17 @@ AStringView GeometryClassText(const u32 geometryClass){
     return NWB::Core::Geometry::GeometryClassText(geometryClass);
 }
 
-AStringView SupportedGeometryClassText(){
-    return NWB::Core::Geometry::SupportedGeometryClassText();
+AString GeometryClassOptionsText(){
+    AString text;
+    text += GeometryClassText(NWB::Core::Geometry::GeometryClass::Static);
+    text += " or ";
+    text += GeometryClassText(NWB::Core::Geometry::GeometryClass::Skinned);
+    return text;
 }
 
 AString GeometryClassErrorText(){
     AString error = "NWB geometry_class must be ";
-    error += SupportedGeometryClassText();
+    error += GeometryClassOptionsText();
     return error;
 }
 

@@ -20,7 +20,6 @@ if(TARGET nwb_graphics_cook)
         nwb_graphics_cook
         nwb_metascript
         nwb_filesystem
-        nwb_geometry
     )
     target_compile_definitions(nwb_assets_graphics_cook PRIVATE NWB_COOK=1)
 endif()

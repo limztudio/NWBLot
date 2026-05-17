@@ -25,8 +25,6 @@ using Core::Geometry::GeometryClassText;
 using Core::Geometry::GeometryClassUsesSkinnedGeometryRuntime;
 using Core::Geometry::GeometryClassUsesSkinning;
 using Core::Geometry::ParseGeometryClassText;
-using Core::Geometry::SupportedSkinnedGeometryClassText;
-using Core::Geometry::SupportedGeometryClassText;
 using Core::Geometry::ValidGeometryClass;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

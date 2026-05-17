@@ -13,7 +13,6 @@
 #include "skinned_geometry_binary_payload.h"
 #include "geometry_binary_payload.h"
 
-#include <core/alloc/scratch.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 

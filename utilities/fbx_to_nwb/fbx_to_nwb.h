@@ -104,7 +104,7 @@ AString UnquotePath(AString value);
 AString ToLower(AString value);
 AString NormalizeGeometryClassText(AString value);
 AStringView GeometryClassText(u32 geometryClass);
-AStringView SupportedGeometryClassText();
+AString GeometryClassOptionsText();
 AString GeometryClassErrorText();
 bool ParseGeometryClassText(const AString& value, u32& outGeometryClass);
 bool ParseNormalizedGeometryClassText(AStringView value, u32& outGeometryClass);

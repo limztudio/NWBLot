@@ -12,7 +12,6 @@
 #include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_geometry/skinned_geometry_asset.h>
-#include <impl/assets_geometry/skinned_geometry_validation.h>
 #include <impl/assets_shader/shader_asset_loader.h>
 #include <impl/ecs_render/components.h>
 #include <core/common/log.h>

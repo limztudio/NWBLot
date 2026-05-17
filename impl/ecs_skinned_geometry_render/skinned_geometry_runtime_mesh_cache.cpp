@@ -4,7 +4,6 @@
 
 #include "skinned_geometry_runtime_mesh_cache.h"
 
-#include <core/alloc/scratch.h>
 #include <core/assets/asset_manager.h>
 #include <core/ecs/world.h>
 #include <core/graphics/graphics.h>

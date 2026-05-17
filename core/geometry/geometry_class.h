@@ -40,14 +40,6 @@ inline constexpr GeometryClassInfo s_GeometryClassInfos[] = {
     { GeometryClass::Skinned, "skinned", true },
 };
 
-[[nodiscard]] inline AStringView SupportedGeometryClassText(){
-    return "static or skinned";
-}
-
-[[nodiscard]] inline AStringView SupportedSkinnedGeometryClassText(){
-    return "skinned";
-}
-
 [[nodiscard]] inline const GeometryClassInfo* FindGeometryClassInfo(const u32 geometryClass){
     for(const GeometryClassInfo& info : s_GeometryClassInfos){
         if(info.geometryClass == geometryClass)

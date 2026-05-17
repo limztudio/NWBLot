@@ -173,7 +173,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         for(u32 influenceIndex = 0; influenceIndex < 4u; ++influenceIndex){
             const u32 joint = static_cast<u32>(sourceSkin.joint[influenceIndex]);
             const f32 weight = sourceSkin.weight[influenceIndex];
-            if(SkinnedGeometryValidation::ActiveWeight(weight) && joint >= jointCount){
+            if(SkinnedGeometryRuntime::ActiveWeight(weight) && joint >= jointCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometrySystem: runtime mesh '{}' vertex {} references joint {} outside palette size {}")
                     , instance.handle.value
                     , vertexIndex

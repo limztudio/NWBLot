@@ -172,7 +172,7 @@ bool ConfigurePromptsAfterLoad(
     if(!presence.geometryClass && !options.acceptDefaults){
         AString geometryClass;
         AString prompt = "NWB geometry_class (";
-        prompt += SupportedGeometryClassText();
+        prompt += GeometryClassOptionsText();
         prompt += ")";
         PromptString(prompt, options.geometryClass, geometryClass, prompted);
         options.geometryClass = geometryClass;
@@ -249,7 +249,7 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::Option* inputOption = app.add_option("input", options.inputPath, "Input FBX file path");
     CLI::Option* outputOption = app.add_option("-o,--output", options.outputPath, "Output NWB geometry metadata path");
     AString geometryClassDescription = "NWB geometry_class: ";
-    geometryClassDescription += SupportedGeometryClassText();
+    geometryClassDescription += GeometryClassOptionsText();
     CLI::Option* geometryClassOption = app.add_option("--geometry-class", options.geometryClass, geometryClassDescription);
     CLI::Option* meshOption = app.add_option("-m,--mesh", options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* indexTypeOption = app.add_option("--index-type", options.indexType, "Index type: auto, u16, or u32");

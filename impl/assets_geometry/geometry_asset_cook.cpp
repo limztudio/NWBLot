@@ -11,6 +11,7 @@
 #include "geometry_asset_cook.h"
 
 #include "skinned_geometry_validation.h"
+#include "skinned_geometry_tangent_frame_rebuild.h"
 #include "geometry_binary_payload.h"
 
 #include <core/alloc/scratch.h>
@@ -422,11 +423,12 @@ static bool ParseGeometryClassField(
     if(ParseGeometryClassText(classText, outGeometryClass))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported geometry_class '{}', expected {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported geometry_class '{}', expected {} or {}")
         , metaKind
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(classText)
-        , StringConvert(SupportedGeometryClassText())
+        , StringConvert(GeometryClassText(GeometryClass::Static))
+        , StringConvert(GeometryClassText(GeometryClass::Skinned))
     );
     return false;
 }
@@ -458,7 +460,7 @@ static bool ParseSkinnedGeometryClassField(
 
     NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class must be {}")
         , PathToString<tchar>(nwbFilePath)
-        , StringConvert(SupportedSkinnedGeometryClassText())
+        , StringConvert(GeometryClassText(GeometryClass::Skinned))
     );
     return false;
 }
@@ -788,7 +790,7 @@ static bool GenerateMissingSkinnedGeometryFrames(
         return true;
 
     Core::Geometry::TangentFrameRebuildResult rebuildResult;
-    if(!SkinnedGeometryValidation::RebuildRestVertexTangentFrames(vertices, indices, &rebuildResult)){
+    if(!SkinnedGeometryTangentFrameRebuild::Rebuild(vertices, indices, &rebuildResult)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': failed to generate missing normal/tangent frames")
             , PathToString<tchar>(nwbFilePath)
         );

@@ -7,9 +7,6 @@
 
 #include "skinned_geometry_types.h"
 
-#include <core/alloc/scratch.h>
-#include <core/geometry/tangent_frame_rebuild.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -112,10 +109,6 @@ struct RuntimePayloadArrays{
     return info;
 }
 
-[[nodiscard]] inline bool ActiveWeight(const f32 value){
-    return value > s_Epsilon || value < -s_Epsilon;
-}
-
 [[nodiscard]] inline bool FiniteVector(SIMDVector value, const u32 activeMask){
     const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
     return (VectorMoveMask(invalid) & activeMask) == 0u;
@@ -159,103 +152,6 @@ struct RuntimePayloadArrays{
         return RestVertexPayloadFailure::InvalidFrame;
 
     return RestVertexPayloadFailure::None;
-}
-
-[[nodiscard]] inline bool ValidRestVertexFrame(const SkinnedGeometryVertex& vertex){
-    return FindRestVertexPayloadFailure(vertex) == RestVertexPayloadFailure::None;
-}
-
-template<typename RebuildAllocator>
-inline void BuildRestVertexTangentFrameRebuildInput(
-    const Vector<SkinnedGeometryVertex>& vertices,
-    Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& outRebuildVertices){
-    outRebuildVertices.clear();
-    outRebuildVertices.reserve(vertices.size());
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        const SkinnedGeometryVertex& vertex = vertices[vertexIndex];
-        Float4 position;
-        Float4 normal;
-        Float4 tangent;
-        Float2U uv0;
-        StoreFloat(LoadSkinnedGeometryVertexPosition(vertex), &position);
-        StoreFloat(LoadSkinnedGeometryVertexNormal(vertex), &normal);
-        StoreFloat(LoadSkinnedGeometryVertexTangent(vertex), &tangent);
-        StoreFloat(LoadSkinnedGeometryVertexUv0(vertex), &uv0);
-        outRebuildVertices.push_back(Core::Geometry::TangentFrameRebuildVertex{
-            position,
-            normal,
-            tangent,
-            uv0,
-        });
-    }
-}
-
-template<typename RebuildAllocator>
-[[nodiscard]] inline bool ValidRestVertexTangentFrameRebuild(
-    const Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
-    if(rebuildVertices.size() != vertices.size())
-        return false;
-
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        SkinnedGeometryVertex rebuiltVertex = vertices[vertexIndex];
-        StoreSkinnedGeometryVertexNormal(rebuiltVertex, Float3U(rebuildVertices[vertexIndex].normal.raw));
-        StoreSkinnedGeometryVertexTangent(rebuiltVertex, Float4U(rebuildVertices[vertexIndex].tangent.raw));
-        if(!ValidRestVertexFrame(rebuiltVertex))
-            return false;
-    }
-    return true;
-}
-
-template<typename RebuildAllocator>
-inline void ApplyRestVertexTangentFrameRebuild(
-    Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
-    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
-        SkinnedGeometryVertex& vertex = vertices[vertexIndex];
-        StoreSkinnedGeometryVertexNormal(vertex, Float3U(rebuildVertices[vertexIndex].normal.raw));
-        StoreSkinnedGeometryVertexTangent(vertex, Float4U(rebuildVertices[vertexIndex].tangent.raw));
-    }
-}
-
-[[nodiscard]] inline bool RebuildRestVertexTangentFrames(
-    Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<u32>& indices,
-    Core::Geometry::TangentFrameRebuildResult* outResult = nullptr){
-    Core::Alloc::ScratchArena<> scratchArena;
-    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
-    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
-    BuildRestVertexTangentFrameRebuildInput(vertices, rebuildVertices);
-
-    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, outResult))
-        return false;
-
-    if(!ValidRestVertexTangentFrameRebuild(vertices, rebuildVertices))
-        return false;
-
-    ApplyRestVertexTangentFrameRebuild(vertices, rebuildVertices);
-    return true;
-}
-
-inline void ApplyCleanRestVertexTangentFrameRebuildIfPossible(
-    Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<u32>& indices){
-    Core::Alloc::ScratchArena<> scratchArena;
-    using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
-    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
-    BuildRestVertexTangentFrameRebuildInput(vertices, rebuildVertices);
-
-    Core::Geometry::TangentFrameRebuildResult rebuildResult;
-    if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, &rebuildResult))
-        return;
-    if(rebuildResult.degenerateUvTriangleCount != 0u || rebuildResult.fallbackTangentVertexCount != 0u)
-        return;
-    if(!ValidRestVertexTangentFrameRebuild(vertices, rebuildVertices))
-        return;
-
-    ApplyRestVertexTangentFrameRebuild(vertices, rebuildVertices);
 }
 
 [[nodiscard]] inline bool ValidSkinInfluence(const SkinInfluence4& skin){

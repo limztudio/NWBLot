@@ -69,16 +69,6 @@ inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const 
 }
 
 template<typename Container>
-[[nodiscard]] inline bool AppendBytes(Container& outBinary, const void* bytes, const usize byteCount){
-    RequireByteContainer<Container>();
-    if(!CanAppendBytes(outBinary, byteCount))
-        return false;
-
-    AppendBytesUnchecked(outBinary, bytes, byteCount);
-    return true;
-}
-
-template<typename Container>
 [[nodiscard]] inline bool CanReadBytes(const Container& binary, const usize offset, const usize byteCount){
     if(offset > binary.size())
         return false;
@@ -104,13 +94,6 @@ template<typename ValueContainer>
     else
         return true;
 }
-
-template<typename ValueContainer>
-inline void ReserveValueCount(ValueContainer& values, const usize count){
-    if constexpr(requires(ValueContainer& c, usize n){ c.reserve(n); })
-        values.reserve(count);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -219,11 +202,6 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline bool AppendString(Container& outBinary, const CompactString& text){
-    return AppendString(outBinary, text.view());
-}
-
-template<typename Container>
 [[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
     usize cursor = inOutOffset;
     AStringView parsedText;
@@ -277,12 +255,12 @@ template<typename Container, typename ValueContainer>
     const Container& binary,
     usize& inOutOffset,
     const u64 count,
-    ValueContainer& outValues,
-    const typename ValueContainer::value_type& initialValue
+    ValueContainer& outValues
 ){
+    using ValueType = typename ValueContainer::value_type;
+    static_assert(IsTriviallyCopyable_V<ValueType>, "binary vector payloads require trivially-copyable elements");
     BinaryDetail::RequireByteContainer<Container>();
 
-    using ValueType = typename ValueContainer::value_type;
     outValues.clear();
 
     usize byteCount = 0u;
@@ -296,11 +274,12 @@ template<typename Container, typename ValueContainer>
     if(!BinaryDetail::CanStoreValueCount(outValues, valueCount))
         return BinaryVectorPayloadFailure::OutputOverflow;
 
-    BinaryDetail::ReserveValueCount(outValues, valueCount);
+    if constexpr(requires(ValueContainer& c, usize n){ c.reserve(n); })
+        outValues.reserve(valueCount);
 
     usize cursor = inOutOffset;
     for(usize i = 0u; i < valueCount; ++i){
-        ValueType value = initialValue;
+        ValueType value = {};
         if(!ReadPOD(binary, cursor, value)){
             outValues.clear();
             return BinaryVectorPayloadFailure::SourceTruncated;
@@ -310,17 +289,6 @@ template<typename Container, typename ValueContainer>
 
     inOutOffset = cursor;
     return BinaryVectorPayloadFailure::None;
-}
-
-template<typename Container, typename ValueContainer>
-[[nodiscard]] inline BinaryVectorPayloadFailure::Enum ReadBinaryVectorPayload(
-    const Container& binary,
-    usize& inOutOffset,
-    const u64 count,
-    ValueContainer& outValues
-){
-    using ValueType = typename ValueContainer::value_type;
-    return ReadBinaryVectorPayload(binary, inOutOffset, count, outValues, ValueType{});
 }
 
 template<typename Container, typename ValueContainer>
@@ -367,10 +335,6 @@ template<typename Container, typename ValueContainer>
     ;
 }
 
-[[nodiscard]] inline bool AddBinaryStringReserveBytes(usize& inOutBytes, const CompactString& text){
-    return AddBinaryStringReserveBytes(inOutBytes, text.view());
-}
-
 template<typename Container>
 [[nodiscard]] inline bool AddBinaryVectorReserveBytes(usize& inOutBytes, const Container& values){
     using ValueType = typename Container::value_type;
@@ -393,10 +357,6 @@ template<typename Container>
     return AddBinaryReserveBytes(inOutBytes, byteCount);
 }
 
-[[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const CompactString& text){
-    return AddStringTableTextReserveBytes(inOutBytes, text.view());
-}
-
 template<typename Container>
 [[nodiscard]] inline bool AppendStringTableText(Container& outStringTable, const AStringView text, u32& outOffset){
     outOffset = Limit<u32>::s_Max;
@@ -411,11 +371,6 @@ template<typename Container>
     BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
     outStringTable.push_back(typename Container::value_type{});
     return true;
-}
-
-template<typename Container>
-[[nodiscard]] inline bool AppendStringTableText(Container& outStringTable, const CompactString& text, u32& outOffset){
-    return AppendStringTableText(outStringTable, text.view(), outOffset);
 }
 
 template<typename Container>

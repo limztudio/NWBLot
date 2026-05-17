@@ -32,5 +32,4 @@ target_link_libraries(nwb_ecs_render PRIVATE
     nwb_ecs_camera
     nwb_ecs_lighting
     nwb_ecs_scene
-    nwb_geometry
 )

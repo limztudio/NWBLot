@@ -1,0 +1,39 @@
+# Dependency Inversion Exceptions
+
+Updated: 2026-05-18
+
+Read this before changing code for the dependency-inversion cleanup schedule.
+
+## Accepted Shape
+
+Project-owned assets may implement an engine-defined runtime contract without being treated as dependency inversion.
+
+This includes project material/shader assets, such as BxDF shader stages under a project asset tree, being referenced by project material metadata and consumed by the engine through typed asset references, virtual asset paths, or declared shader-stage contracts.
+
+It also includes engine render-pass shaders declaring a project include root for a named project shader hook, such as a project-owned BxDF lighting include, when that include is the project's implementation of the material/lighting contract.
+
+The ownership direction is:
+
+```text
+engine/runtime defines contract or shader hook
+project asset implements contract or hook
+project metadata selects asset, or shader metadata declares the project include root
+engine/runtime consumes selected asset through asset APIs or declared shader hook
+```
+
+That shape is allowed because the engine depends on the abstract asset/material contract, not on project code or project-specific implementation details.
+
+## Still Invalid
+
+Do not use this exception to justify these shapes:
+
+- Core modules including or linking implementation/project modules.
+- Compatibility aliases in `core/*` that expose implementation ECS types.
+- Engine default assets owning project-specific BxDF/material policy.
+- Project-specific shader or material implementations placed under `impl/assets/graphics/` only because an engine path needs a default.
+- Engine shaders depending on arbitrary project shader internals instead of a narrow declared hook.
+- Hardcoded engine lookups of one project asset when the project should provide metadata or typed `AssetRef<T>` selection.
+
+## Scheduler Rule
+
+When the dependency-inversion cleanup schedule runs, read this file first. If a dependency shape matches the accepted shape above, leave it in place and continue looking for real inversions elsewhere.

@@ -117,7 +117,7 @@ Frame::~Frame(){
 
 bool Frame::startup(){
     if(!m_graphics.init(data<Common::FrameData>())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics initialization failed"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Frame: graphics initialization failed"));
         return false;
     }
 

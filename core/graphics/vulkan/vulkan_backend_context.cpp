@@ -880,6 +880,8 @@ bool BackendContext::pickPhysicalDevice(){
         m_presentQueueFamily = selection.presentQueueFamily;
     };
     DeviceSelection fallbackSelection;
+    bool skippedWindowedCpuDevice = false;
+    bool sawWindowedGpuCandidate = false;
 
     for(i32 deviceIndex = firstDevice; deviceIndex <= lastDevice; ++deviceIndex){
         VkPhysicalDevice dev = devices[deviceIndex];
@@ -887,6 +889,13 @@ bool BackendContext::pickPhysicalDevice(){
         vkGetPhysicalDeviceProperties(dev, &prop);
 
         errorStream << "\n" << prop.deviceName << ":";
+        if(!m_deviceParams.headlessDevice && prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU){
+            errorStream << "\n  - CPU Vulkan devices are not supported for windowed rendering";
+            skippedWindowedCpuDevice = true;
+            continue;
+        }
+        if(!m_deviceParams.headlessDevice)
+            sawWindowedGpuCandidate = true;
 
         HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), Alloc::ScratchAllocator<AString>(scratchArena));
         requiredExtensions.reserve(m_enabledExtensions.device.size());
@@ -1011,6 +1020,11 @@ bool BackendContext::pickPhysicalDevice(){
     if(fallbackSelection.device != VK_NULL_HANDLE){
         applySelection(fallbackSelection);
         return true;
+    }
+
+    if(skippedWindowedCpuDevice && !sawWindowedGpuCandidate){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
+        return false;
     }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
@@ -1157,6 +1171,21 @@ bool BackendContext::createVulkanDevice(){
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
             NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(samplerFilterMinmaxExtensionName));
             m_enabledExtensions.device.erase(samplerFilterMinmaxExtensionName);
+        }
+    }
+
+    {
+        const AString meshShaderExtensionName = VK_EXT_MESH_SHADER_EXTENSION_NAME;
+        const auto meshShaderIt = m_enabledExtensions.device.find(meshShaderExtensionName);
+        if(
+            meshShaderIt != m_enabledExtensions.device.end()
+            && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU
+        ){
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so renderer uses compute emulation instead of native mesh shaders.")
+                , StringConvert(meshShaderExtensionName)
+                , StringConvert(physicalDeviceProperties.deviceName)
+            );
+            m_enabledExtensions.device.erase(meshShaderExtensionName);
         }
     }
 

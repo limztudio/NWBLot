@@ -64,6 +64,24 @@ bool Client::internalInit(NotNull<const char*> url){
         return false;
     }
 
+    ret = curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
+    if(ret != CURLE_OK){
+        enqueue(StringFormat(NWB_TEXT("Failed to set no-signal mode on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        return false;
+    }
+
+    ret = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, 1000L);
+    if(ret != CURLE_OK){
+        enqueue(StringFormat(NWB_TEXT("Failed to set connect timeout on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        return false;
+    }
+
+    ret = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, 2000L);
+    if(ret != CURLE_OK){
+        enqueue(StringFormat(NWB_TEXT("Failed to set request timeout on {}: {}"), CLIENT_NAME, StringConvert(curl_easy_strerror(ret))), Type::Fatal);
+        return false;
+    }
+
     return true;
 }
 bool Client::internalUpdate(){

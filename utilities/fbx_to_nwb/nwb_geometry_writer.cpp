@@ -157,7 +157,7 @@ bool WriteNwbGeometry(
         outError = GeometryClassErrorText();
         return false;
     }
-    const bool writeDeformableGeometry = GeometryClassUsesDeformableRuntime(geometryClass);
+    const bool writeSkinnedGeometry = GeometryClassUsesSkinnedGeometryRuntime(geometryClass);
     if(GeometryClassUsesSkinning(geometryClass)){
         if(skin.size() != vertices.size()){
             outError = "skinned geometry skin stream must match vertex count";
@@ -193,7 +193,7 @@ bool WriteNwbGeometry(
     }
     file.precision(9);
 
-    file << (writeDeformableGeometry ? "deformable_geometry asset;\n\n" : "geometry asset;\n\n");
+    file << "geometry asset;\n\n";
     file << "asset.geometry_class = \"" << GeometryClassText(geometryClass) << "\";\n\n";
     file << "asset.index_type = \"" << outIndexType << "\";\n\n";
 
@@ -213,7 +213,7 @@ bool WriteNwbGeometry(
     }
     file << "];\n\n";
 
-    if(writeDeformableGeometry){
+    if(writeSkinnedGeometry){
         file << "asset.tangents = [\n";
         for(const GeometryVertex& vertex : vertices){
             file << "    ";
@@ -245,7 +245,7 @@ bool WriteNwbGeometry(
     }
     file << "];\n";
 
-    if(writeDeformableGeometry){
+    if(writeSkinnedGeometry){
         if(GeometryClassUsesSkinning(geometryClass)){
             file << "\nasset.skeleton_joint_count = " << skeletonJointCount << ";\n\n";
 

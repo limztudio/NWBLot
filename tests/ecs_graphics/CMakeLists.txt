@@ -3,9 +3,8 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ecs_graphics_tests.cpp"
 )
 target_link_libraries(nwb_ecs_graphics_tests PRIVATE
-    nwb_ecs_deformable
-    nwb_ecs_deformable_edit
-    nwb_ecs_deformable_render
+    nwb_ecs_skinned_geometry
+    nwb_ecs_skinned_geometry_render
     nwb_ecs_camera
     nwb_ecs_geometry
     nwb_ecs_lighting

@@ -123,23 +123,21 @@ static void TestGeometryClassMetadata(TestContext& context){
         AStringView text;
         u32 geometryClass;
         bool usesSkinning;
-        bool allowsRuntimeDeform;
+        bool usesSkinnedGeometryRuntime;
     };
 
     const Case cases[] = {
         { "static", GeometryClass::Static, false, false },
-        { "static_deform", GeometryClass::StaticDeform, false, true },
-        { "skinned", GeometryClass::Skinned, true, false },
-        { "skinned_deform", GeometryClass::SkinnedDeform, true, true },
+        { "skinned", GeometryClass::Skinned, true, true },
     };
 
     NWB_GEOMETRY_TEST_CHECK(
         context,
-        SupportedGeometryClassText() == AStringView("static, static_deform, skinned, or skinned_deform")
+        SupportedGeometryClassText() == AStringView("static or skinned")
     );
     NWB_GEOMETRY_TEST_CHECK(
         context,
-        SupportedDeformableGeometryClassText() == AStringView("static_deform, skinned, or skinned_deform")
+        SupportedSkinnedGeometryClassText() == AStringView("skinned")
     );
 
     for(const Case& testCase : cases){
@@ -151,7 +149,7 @@ static void TestGeometryClassMetadata(TestContext& context){
         NWB_GEOMETRY_TEST_CHECK(context, GeometryClassUsesSkinning(testCase.geometryClass) == testCase.usesSkinning);
         NWB_GEOMETRY_TEST_CHECK(
             context,
-            GeometryClassAllowsRuntimeDeform(testCase.geometryClass) == testCase.allowsRuntimeDeform
+            GeometryClassUsesSkinnedGeometryRuntime(testCase.geometryClass) == testCase.usesSkinnedGeometryRuntime
         );
     }
 

@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "deformable_geometry_asset.h"
+#include "skinned_geometry_asset.h"
 #include "geometry_asset.h"
 
 #include <core/metascript/parser.h>
@@ -36,23 +36,23 @@ struct GeometryCookEntry{
     bool use32BitIndices = false;
 };
 
-struct DeformableGeometryCookEntry{
+struct SkinnedGeometryCookEntry{
     Name virtualPath = NAME_NONE;
-    Vector<DeformableVertexRest> restVertices;
+    Vector<SkinnedGeometryVertex> restVertices;
     Vector<u32> indices;
     u32 geometryClass = GeometryClass::Invalid;
     Vector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0u;
-    Vector<DeformableJointMatrix> inverseBindMatrices;
+    Vector<SkinnedGeometryJointMatrix> inverseBindMatrices;
     Vector<SourceSample> sourceSamples;
-    Vector<DeformableEditMaskFlags> editMaskPerTriangle;
-    DeformableDisplacement displacement;
+    Vector<SkinnedGeometryEditMaskFlags> editMaskPerTriangle;
+    SkinnedGeometryDisplacement displacement;
     CompactString displacementTextureVirtualPathText;
-    Vector<DeformableMorph> morphs;
+    Vector<SkinnedGeometryMorph> morphs;
     bool use32BitIndices = true;
 };
 
-struct DeformableDisplacementTextureCookEntry{
+struct SkinnedGeometryDisplacementTextureCookEntry{
     Name virtualPath = NAME_NONE;
     u32 width = 0u;
     u32 height = 0u;
@@ -70,26 +70,26 @@ struct DeformableDisplacementTextureCookEntry{
     const Core::Metascript::Document& doc,
     GeometryCookEntry& outEntry
 );
-[[nodiscard]] bool ParseDeformableGeometryCookMetadata(
+[[nodiscard]] bool ParseSkinnedGeometryCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    DeformableGeometryCookEntry& outEntry
+    SkinnedGeometryCookEntry& outEntry
 );
-[[nodiscard]] bool ParseDeformableDisplacementTextureCookMetadata(
+[[nodiscard]] bool ParseSkinnedGeometryDisplacementTextureCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    DeformableDisplacementTextureCookEntry& outEntry
+    SkinnedGeometryDisplacementTextureCookEntry& outEntry
 );
 
 [[nodiscard]] bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry);
-[[nodiscard]] bool BuildDeformableGeometryAsset(DeformableGeometryCookEntry& geometryEntry, DeformableGeometry& outGeometry);
-[[nodiscard]] bool BuildDeformableDisplacementTextureAsset(
-    DeformableDisplacementTextureCookEntry& textureEntry,
-    DeformableDisplacementTexture& outTexture
+[[nodiscard]] bool BuildSkinnedGeometryAsset(SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry);
+[[nodiscard]] bool BuildSkinnedGeometryDisplacementTextureAsset(
+    SkinnedGeometryDisplacementTextureCookEntry& textureEntry,
+    SkinnedGeometryDisplacementTexture& outTexture
 );
 
 

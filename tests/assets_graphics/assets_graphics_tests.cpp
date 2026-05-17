@@ -2,11 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_geometry/deformable_geometry_asset.h>
+#include <impl/assets_geometry/skinned_geometry_asset.h>
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 
-#include <tests/deformable_test_helpers.h>
+#include <tests/skinned_geometry_test_helpers.h>
 #include <tests/capturing_logger.h>
 #include <tests/test_context.h>
 
@@ -56,15 +56,7 @@ using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
 )"
 
-#define NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS R"(asset.geometry_class = "static_deform";
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_CLASS R"(asset.geometry_class = "skinned";
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_CLASS R"(asset.geometry_class = "skinned_deform";
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS R"(asset.geometry_class = "skinned";
 
 )"
 
@@ -106,7 +98,24 @@ using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
 
 )"
 
-#define NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_STREAMS(indexType) \
+#define NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN R"(asset.skeleton_joint_count = 1;
+
+asset.skin = {
+    "joints0": [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ],
+    "weights0": [
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+    ],
+};
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(indexType) \
     indexType \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
@@ -114,36 +123,30 @@ using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 
-#define NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_PREFIX(geometryClass, indexType) \
-    "deformable_geometry asset;\n\n" \
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(geometryClass, indexType) \
+    "geometry asset;\n\n" \
     geometryClass \
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_STREAMS(indexType)
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(indexType)
 
-#define NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_DEFORMABLE_TRIANGLE_PREFIX(indexType) \
-    "deformable_geometry asset;\n\n" \
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_STREAMS(indexType)
+#define NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX(indexType) \
+    "geometry asset;\n\n" \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(indexType)
 
-#define NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS, \
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX( \
+        NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS, \
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
     )
 
-#define NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U32_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS, \
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX( \
+        NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS, \
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32 \
     )
 
 #define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_SKINNED_CLASS, \
-        NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
-    )
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_CLASS, \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX( \
+        NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS, \
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
     )
 
@@ -240,49 +243,49 @@ static constexpr AStringView s_MismatchedGeometryMeta =
 #endif
 
 
-static constexpr AStringView s_MinimalDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_MinimalSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.source_samples = {};
-asset.skin = {};
-asset.morphs = {};
+)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = {};
 )";
 
-static constexpr AStringView s_GeneratedFrameDeformableMeta =
-    "deformable_geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
+static constexpr AStringView s_GeneratedFrameSkinnedGeometryMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-    R"(asset.skin = {};
-asset.morphs = {};
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = {};
 )";
 
-static constexpr AStringView s_U32IndexTypeDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U32_PREFIX
-    R"(asset.skin = {};
-asset.morphs = {};
+static constexpr AStringView s_U32IndexTypeSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = {};
 )";
 
-static constexpr AStringView s_EmptyListOptionalDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_EmptyListOptionalSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.colors = [];
 asset.source_samples = [];
-asset.skin = [];
-asset.morphs = [];
+)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = [];
 )";
 
-static constexpr AStringView s_EmptyMapOptionalDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_EmptyMapOptionalSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.colors = {};
 asset.source_samples = {};
-asset.skin = {};
-asset.morphs = {};
+)" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = {};
 )";
 
-static constexpr AStringView s_NativeCharacterMockDeformableMeta = R"(deformable_geometry asset;
+static constexpr AStringView s_NativeCharacterMockSkinnedGeometryMeta = R"(geometry asset;
 
-asset.geometry_class = "skinned_deform";
+asset.geometry_class = "skinned";
 
 asset.index_type = "u16";
 
@@ -378,8 +381,8 @@ asset.morphs = {
 };
 )";
 
-static constexpr AStringView s_NonnormalizedSkinDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_NonnormalizedSkinSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.skeleton_joint_count = 2;
 
 asset.skin = {
@@ -396,43 +399,29 @@ asset.skin = {
 };
 )";
 
-static constexpr AStringView s_SkinnedOnlyDeformableMeta =
+static constexpr AStringView s_SkinnedOnlySkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX
-    R"(asset.skeleton_joint_count = 1;
-
-asset.skin = {
-    "joints0": [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-    ],
-    "weights0": [
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-    ],
-};
-)";
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_MissingGeometryClassDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_DEFORMABLE_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
-    R"(asset.skin = {};
-asset.morphs = {};
+static constexpr AStringView s_MissingGeometryClassSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = {};
 )";
 
-static constexpr AStringView s_StaticClassDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_PREFIX(
+static constexpr AStringView s_StaticClassSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(
         NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS,
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     )
-    R"(asset.skin = {};
-asset.morphs = {};
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
+    R"(asset.morphs = {};
 )";
 
-static constexpr AStringView s_MismatchedDeformableMeta =
-    "deformable_geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
+static constexpr AStringView s_MismatchedSkinnedGeometryMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
@@ -444,17 +433,17 @@ static constexpr AStringView s_MismatchedDeformableMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-static constexpr AStringView s_MissingIndexTypeDeformableMeta =
-    "deformable_geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
+static constexpr AStringView s_MissingIndexTypeSkinnedGeometryMeta =
+    "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-static constexpr AStringView s_MismatchedSkinDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_MismatchedSkinSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     R"(asset.skin = {
     "joints0": [
         [0, 0, 0, 0],
@@ -468,8 +457,9 @@ static constexpr AStringView s_MismatchedSkinDeformableMeta =
 };
 )";
 
-static constexpr AStringView s_MismatchedSourceSamplesDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_MismatchedSourceSamplesSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
     R"(asset.source_samples = {
     "source_tri": [0, 0, 0],
     "bary": [
@@ -479,9 +469,9 @@ static constexpr AStringView s_MismatchedSourceSamplesDeformableMeta =
 };
 )";
 
-static constexpr AStringView s_UnreferencedVertexGeneratedSourceSampleDeformableMeta = R"(deformable_geometry asset;
+static constexpr AStringView s_UnreferencedVertexGeneratedSourceSampleSkinnedGeometryMeta = R"(geometry asset;
 
-asset.geometry_class = "static_deform";
+asset.geometry_class = "skinned";
 
 asset.index_type = "u16";
 
@@ -504,10 +494,28 @@ asset.positions = [
 asset.indices = [
     [0, 1, 2],
 ];
+
+asset.skeleton_joint_count = 1;
+
+asset.skin = {
+    "joints0": [
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ],
+    "weights0": [
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+    ],
+};
 )";
 
-static constexpr AStringView s_MismatchedMorphDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_MismatchedMorphSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
     R"(asset.morphs = {
     "lift": {
         "vertex_ids": [1, 2],
@@ -520,8 +528,9 @@ static constexpr AStringView s_MismatchedMorphDeformableMeta =
 };
 )";
 
-static constexpr AStringView s_MissingMorphTangentDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_MissingMorphTangentSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
     R"(asset.morphs = {
     "lift": {
         "vertex_ids": [1, 2],
@@ -534,9 +543,9 @@ static constexpr AStringView s_MissingMorphTangentDeformableMeta =
 };
 )";
 
-static constexpr AStringView s_SourceImportDeformableMeta = R"(deformable_geometry asset;
+static constexpr AStringView s_SourceImportSkinnedGeometryMeta = R"(geometry asset;
 
-asset.geometry_class = "static_deform";
+asset.geometry_class = "skinned";
 
 asset.source = {
     "format": "external",
@@ -544,26 +553,30 @@ asset.source = {
 };
 )";
 
-static constexpr AStringView s_MismatchedEditMaskDeformableMeta =
-    NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+static constexpr AStringView s_MismatchedEditMaskSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
     R"(asset.edit_masks = [1, 1];
 )";
 #endif
 
 
+
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_TRIANGLE_U16_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX
-#undef NWB_ASSETS_GRAPHICS_TEST_DEFORMABLE_TRIANGLE_U16_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_DEFORM_CLASS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_CLASS
-#undef NWB_ASSETS_GRAPHICS_TEST_STATIC_DEFORM_CLASS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
 #undef NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
 #undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
 #undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
@@ -593,12 +606,12 @@ static bool WriteTextFile(const Path& filePath, const AStringView text){
     return static_cast<bool>(file);
 }
 
-static AString BuildTextureDisplacementDeformableMeta(
+static AString BuildTextureDisplacementSkinnedGeometryMeta(
     const AStringView space,
     const AStringView mode,
     const AStringView texturePath
 ){
-    AString meta(s_MinimalDeformableMeta.data(), s_MinimalDeformableMeta.size());
+    AString meta(s_MinimalSkinnedGeometryMeta.data(), s_MinimalSkinnedGeometryMeta.size());
     const auto append = [&](const AStringView text){ meta.append(text.data(), text.size()); };
     append(R"(
 
@@ -688,14 +701,14 @@ static bool CookSingleMinimalAssetMeta(
     );
 }
 
-static bool CookSingleDeformableMeta(
+static bool CookSingleSkinnedGeometryMeta(
     const AStringView metaText,
     const AStringView caseName,
     TestArena& testArena,
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    static constexpr MinimalAssetCookInfo s_CookInfo{ "characters", "minimal_deformable.nwb" };
+    static constexpr MinimalAssetCookInfo s_CookInfo{ "characters", "minimal_skinned_geometry.nwb" };
     return CookSingleMinimalAssetMeta(metaText, caseName, s_CookInfo, testArena, outRoot, outOutputDirectory);
 }
 
@@ -739,16 +752,16 @@ static bool LoadCookedAsset(
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
-static bool LoadCookedMinimalDeformable(
+static bool LoadCookedMinimalSkinnedGeometry(
     TestContext& context,
     TestArena& testArena,
     const Path& outputDirectory,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
-    return LoadCookedAsset<NWB::Impl::DeformableGeometryAssetCodec>(
+    return LoadCookedAsset<NWB::Impl::SkinnedGeometryAssetCodec>(
         context,
         testArena,
         outputDirectory,
-        Name("project/characters/minimal_deformable"),
+        Name("project/characters/minimal_skinned_geometry"),
         outLoadedAsset
     );
 }
@@ -772,7 +785,7 @@ using LoadCookedAssetFn = bool(*)(TestContext&, TestArena&, const Path&, UniqueP
 
 namespace MinimalAssetKind{
     enum Enum : u8{
-        Deformable = 0u,
+        SkinnedGeometry = 0u,
         Geometry = 1u,
     };
 };
@@ -817,9 +830,9 @@ static bool CookAndLoadMinimalAssetByKind(
     CookSingleMetaFn cookSingleMeta = nullptr;
     LoadCookedAssetFn loadCookedAsset = nullptr;
     switch(assetKind){
-    case MinimalAssetKind::Deformable:
-        cookSingleMeta = CookSingleDeformableMeta;
-        loadCookedAsset = LoadCookedMinimalDeformable;
+    case MinimalAssetKind::SkinnedGeometry:
+        cookSingleMeta = CookSingleSkinnedGeometryMeta;
+        loadCookedAsset = LoadCookedMinimalSkinnedGeometry;
         break;
     case MinimalAssetKind::Geometry:
         cookSingleMeta = CookSingleGeometryMeta;
@@ -842,18 +855,19 @@ static bool CookAndLoadMinimalAssetByKind(
     );
 }
 
-static void CheckMinimalDeformableGeometryDefaults(
+static void CheckMinimalSkinnedGeometryDefaults(
     TestContext& context,
     const NWB::Core::Assets::IAsset& loadedAsset){
-    const NWB::Impl::DeformableGeometry& loadedGeometry =
-        static_cast<const NWB::Impl::DeformableGeometry&>(loadedAsset)
+    const NWB::Impl::SkinnedGeometry& loadedGeometry =
+        static_cast<const NWB::Impl::SkinnedGeometry&>(loadedAsset)
     ;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::StaticDeform);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.x == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.w == 1.f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().empty());
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().empty());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
 }
@@ -948,8 +962,8 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
     static_cast<void>(RemoveAllIfExists(root, errorCode));
 }
 
-static NWB::Impl::DeformableVertexRest MakeRestVertex(const f32 x, const f32 y, const f32 u, const f32 v){
-    NWB::Impl::DeformableVertexRest vertex;
+static NWB::Impl::SkinnedGeometryVertex MakeRestVertex(const f32 x, const f32 y, const f32 u, const f32 v){
+    NWB::Impl::SkinnedGeometryVertex vertex;
     vertex.position = Float3U(x, y, 0.f);
     vertex.normal = Float3U(0.f, 0.f, 1.f);
     vertex.tangent = Float4U(1.f, 0.f, 0.f, 1.f);
@@ -965,14 +979,14 @@ static NWB::Impl::SkinInfluence4 MakeRootSkin(){
     return skin;
 }
 
-static NWB::Impl::DeformableJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
-    NWB::Impl::DeformableJointMatrix matrix = NWB::Impl::MakeIdentityDeformableJointMatrix();
+static NWB::Impl::SkinnedGeometryJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
+    NWB::Impl::SkinnedGeometryJointMatrix matrix = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
     matrix.rows[3] = Float4(tx, ty, tz, 1.0f);
     return matrix;
 }
 
-static NWB::Impl::DeformableMorphDelta MakeMorphDelta(const u32 vertexId, const f32 zDelta){
-    NWB::Impl::DeformableMorphDelta delta;
+static NWB::Impl::SkinnedGeometryMorphDelta MakeMorphDelta(const u32 vertexId, const f32 zDelta){
+    NWB::Impl::SkinnedGeometryMorphDelta delta;
     delta.vertexId = vertexId;
     delta.deltaPosition = Float3U(0.f, 0.f, zDelta);
     delta.deltaNormal = Float3U(0.f, 0.f, 0.f);
@@ -998,28 +1012,28 @@ static bool OverwriteU64(NWB::Core::Assets::AssetBytes& binary, const usize offs
     return OverwritePOD(binary, offset, value);
 }
 
-static usize DeformableHeaderCountOffset(const usize countIndex){
+static usize SkinnedGeometryHeaderCountOffset(const usize countIndex){
     return (sizeof(u32) * 3u) + (sizeof(u64) * countIndex);
 }
 
-static usize DeformableMorphDeltaCountOffset(const NWB::Impl::DeformableGeometry& geometry){
+static usize SkinnedGeometryMorphDeltaCountOffset(const NWB::Impl::SkinnedGeometry& geometry){
     return (sizeof(u32) * 3u)
         + (sizeof(u64) * 9u)
-        + (geometry.restVertices().size() * sizeof(NWB::Impl::DeformableVertexRest))
+        + (geometry.restVertices().size() * sizeof(NWB::Impl::SkinnedGeometryVertex))
         + (geometry.indices().size() * sizeof(u32))
         + (geometry.skin().size() * sizeof(NWB::Impl::SkinInfluence4))
-        + (geometry.inverseBindMatrices().size() * sizeof(NWB::Impl::DeformableJointMatrix))
+        + (geometry.inverseBindMatrices().size() * sizeof(NWB::Impl::SkinnedGeometryJointMatrix))
         + (geometry.sourceSamples().size() * sizeof(NWB::Impl::SourceSample))
-        + (geometry.editMaskPerTriangle().size() * sizeof(NWB::Impl::DeformableEditMaskFlags))
+        + (geometry.editMaskPerTriangle().size() * sizeof(NWB::Impl::SkinnedGeometryEditMaskFlags))
         + (sizeof(u32) * 2u)
     ;
 }
 #endif
 
-static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
-    NWB::Impl::DeformableGeometry geometry(Name("tests/characters/proxy_deformable"));
+static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(){
+    NWB::Impl::SkinnedGeometry geometry(Name("tests/characters/proxy_skinned_geometry"));
 
-    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    Vector<NWB::Impl::SkinnedGeometryVertex> vertices;
     vertices.push_back(MakeRestVertex(-0.5f, -0.5f, 0.f, 0.f));
     vertices.push_back(MakeRestVertex(0.5f, -0.5f, 1.f, 0.f));
     vertices.push_back(MakeRestVertex(0.5f, 0.5f, 1.f, 1.f));
@@ -1032,7 +1046,7 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     for(NWB::Impl::SkinInfluence4& influence : skin)
         influence = MakeRootSkin();
 
-    Vector<NWB::Impl::DeformableJointMatrix> inverseBindMatrices;
+    Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices;
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
 
     Vector<NWB::Impl::SourceSample> sourceSamples;
@@ -1041,22 +1055,22 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     sourceSamples.push_back(MakeSourceSample(0u, 0.f, 0.f, 1.f));
     sourceSamples.push_back(MakeSourceSample(1u, 0.f, 0.f, 1.f));
 
-    Vector<NWB::Impl::DeformableEditMaskFlags> editMasks;
-    editMasks.push_back(NWB::Impl::DeformableEditMaskFlag::Editable);
-    editMasks.push_back(NWB::Impl::DeformableEditMaskFlag::Restricted);
+    Vector<NWB::Impl::SkinnedGeometryEditMaskFlags> editMasks;
+    editMasks.push_back(NWB::Impl::SkinnedGeometryEditMaskFlag::Editable);
+    editMasks.push_back(NWB::Impl::SkinnedGeometryEditMaskFlag::Restricted);
 
-    Vector<NWB::Impl::DeformableMorph> morphs;
+    Vector<NWB::Impl::SkinnedGeometryMorph> morphs;
     morphs.resize(1u);
     morphs[0].name = Name("lift");
     morphs[0].nameText = CompactString("lift");
     morphs[0].deltas.push_back(MakeMorphDelta(1u, 0.25f));
     morphs[0].deltas.push_back(MakeMorphDelta(2u, 0.5f));
 
-    NWB::Impl::DeformableDisplacement displacement;
-    displacement.mode = NWB::Impl::DeformableDisplacementMode::ScalarUvRamp;
+    NWB::Impl::SkinnedGeometryDisplacement displacement;
+    displacement.mode = NWB::Impl::SkinnedGeometryDisplacementMode::ScalarUvRamp;
     displacement.amplitude = 0.125f;
 
-    geometry.setGeometryClass(NWB::Impl::GeometryClass::SkinnedDeform);
+    geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
@@ -1069,8 +1083,8 @@ static NWB::Impl::DeformableGeometry BuildValidDeformableGeometry(){
     return geometry;
 }
 
-static NWB::Impl::DeformableDisplacementTexture BuildValidDisplacementTexture(){
-    NWB::Impl::DeformableDisplacementTexture texture(Name("tests/textures/displacement_height"));
+static NWB::Impl::SkinnedGeometryDisplacementTexture BuildValidDisplacementTexture(){
+    NWB::Impl::SkinnedGeometryDisplacementTexture texture(Name("tests/textures/displacement_height"));
     texture.setSize(2u, 2u);
 
     Vector<Float4U> texels;
@@ -1082,19 +1096,26 @@ static NWB::Impl::DeformableDisplacementTexture BuildValidDisplacementTexture(){
     return texture;
 }
 
-static NWB::Impl::DeformableGeometry BuildMinimalDeformableGeometry(){
-    NWB::Impl::DeformableGeometry geometry(Name("tests/characters/minimal_deformable"));
+static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(){
+    NWB::Impl::SkinnedGeometry geometry(Name("tests/characters/minimal_skinned_geometry"));
 
-    Vector<NWB::Impl::DeformableVertexRest> vertices;
+    Vector<NWB::Impl::SkinnedGeometryVertex> vertices;
     vertices.push_back(MakeRestVertex(-0.5f, -0.5f, 0.f, 0.f));
     vertices.push_back(MakeRestVertex(0.5f, -0.5f, 1.f, 0.f));
     vertices.push_back(MakeRestVertex(0.f, 0.5f, 0.5f, 1.f));
 
     Vector<u32> indices = MakeTriangleIndices();
 
-    geometry.setGeometryClass(NWB::Impl::GeometryClass::StaticDeform);
+    Vector<NWB::Impl::SkinInfluence4> skin;
+    skin.resize(vertices.size());
+    for(NWB::Impl::SkinInfluence4& influence : skin)
+        influence = MakeRootSkin();
+
+    geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
+    geometry.setSkin(Move(skin));
+    geometry.setSkeletonJointCount(1u);
     return geometry;
 }
 
@@ -1150,13 +1171,13 @@ static void CheckCodecRejectsBinary(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
 }
 
-static void CheckSkinnedDeformableGeometryPayload(
+static void CheckSkinnedSkinnedGeometryPayload(
     TestContext& context,
-    const NWB::Impl::DeformableGeometry& loadedGeometry,
+    const NWB::Impl::SkinnedGeometry& loadedGeometry,
     const u32 expectedSkeletonJointCount,
     const u32 expectedInverseBindMatrixCount,
     const u32 expectedInverseBindMatrixIndex){
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::SkinnedDeform);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
@@ -1167,11 +1188,11 @@ static void CheckSkinnedDeformableGeometryPayload(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().size() == 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
         context,
-        loadedGeometry.editMaskPerTriangle()[1] == NWB::Impl::DeformableEditMaskFlag::Restricted
+        loadedGeometry.editMaskPerTriangle()[1] == NWB::Impl::SkinnedGeometryEditMaskFlag::Restricted
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
         context,
-        loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::ScalarUvRamp
+        loadedGeometry.displacement().mode == NWB::Impl::SkinnedGeometryDisplacementMode::ScalarUvRamp
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacement().amplitude == 0.125f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().size() == 1u);
@@ -1232,12 +1253,12 @@ static void TestGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& contex
     );
 }
 
-static void TestDeformableDisplacementTextureCodecRoundTrip(TestContext& context){
-    NWB::Impl::DeformableDisplacementTexture texture = BuildValidDisplacementTexture();
+static void TestSkinnedGeometryDisplacementTextureCodecRoundTrip(TestContext& context){
+    NWB::Impl::SkinnedGeometryDisplacementTexture texture = BuildValidDisplacementTexture();
 
-    NWB::Impl::DeformableDisplacementTextureAssetCodec codec;
+    NWB::Impl::SkinnedGeometryDisplacementTextureAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::DeformableDisplacementTexture& loadedTexture =
+    const NWB::Impl::SkinnedGeometryDisplacementTexture& loadedTexture =
         CheckCodecRoundTrip(context, texture, codec, loadedAsset)
     ;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.width() == 2u);
@@ -1246,21 +1267,21 @@ static void TestDeformableDisplacementTextureCodecRoundTrip(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedTexture.texels()[3].x == 1.0f);
 }
 
-static void TestDeformableGeometryCodecRoundTrip(TestContext& context){
-    NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+static void TestSkinnedGeometryCodecRoundTrip(TestContext& context){
+    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
 
-    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Impl::SkinnedGeometryAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::DeformableGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
+    const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.virtualPath() == geometry.virtualPath());
-    CheckSkinnedDeformableGeometryPayload(context, loadedGeometry, 1u, 1u, 0u);
+    CheckSkinnedSkinnedGeometryPayload(context, loadedGeometry, 1u, 1u, 0u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs()[0].nameText.view() == AStringView("lift"));
 }
 
-static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext& context){
+static void TestSkinnedGeometryCodecRoundTripsTextureDisplacement(TestContext& context){
     auto checkRoundTrip = [&](const u32 mode, const AStringView texturePathText){
-        NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
-        NWB::Impl::DeformableDisplacement displacement;
+        NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
+        NWB::Impl::SkinnedGeometryDisplacement displacement;
         displacement.mode = mode;
         displacement.texture.virtualPath = Name(texturePathText);
         displacement.amplitude = 0.5f;
@@ -1270,10 +1291,10 @@ static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext
         geometry.setDisplacement(displacement);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, geometry.setDisplacementTextureVirtualPathText(texturePathText));
 
-        NWB::Impl::DeformableGeometryAssetCodec codec;
+        NWB::Impl::SkinnedGeometryAssetCodec codec;
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        const NWB::Impl::DeformableGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
-        const NWB::Impl::DeformableDisplacement& loadedDisplacement = loadedGeometry.displacement();
+        const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
+        const NWB::Impl::SkinnedGeometryDisplacement& loadedDisplacement = loadedGeometry.displacement();
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.mode == mode);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.texture.name() == Name(texturePathText));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacementTextureVirtualPathText().view() == texturePathText);
@@ -1283,48 +1304,49 @@ static void TestDeformableGeometryCodecRoundTripsTextureDisplacement(TestContext
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedDisplacement.uvOffset.y == 0.5f);
     };
 
-    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::ScalarTexture, "tests/textures/displacement_height");
-    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::VectorTangentTexture, "tests/textures/displacement_tangent");
-    checkRoundTrip(NWB::Impl::DeformableDisplacementMode::VectorObjectTexture, "tests/textures/displacement_object");
+    checkRoundTrip(NWB::Impl::SkinnedGeometryDisplacementMode::ScalarTexture, "tests/textures/displacement_height");
+    checkRoundTrip(NWB::Impl::SkinnedGeometryDisplacementMode::VectorTangentTexture, "tests/textures/displacement_tangent");
+    checkRoundTrip(NWB::Impl::SkinnedGeometryDisplacementMode::VectorObjectTexture, "tests/textures/displacement_object");
 }
 
-static void TestMinimalDeformableGeometryCodecRoundTrip(TestContext& context){
-    NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
+static void TestMinimalSkinnedGeometryCodecRoundTrip(TestContext& context){
+    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry();
 
-    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Impl::SkinnedGeometryAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::DeformableGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
+    const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::StaticDeform);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().empty());
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().empty());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(
         context,
-        loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::None
+        loadedGeometry.displacement().mode == NWB::Impl::SkinnedGeometryDisplacementMode::None
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
 }
 
-static void TestDeformableGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
-    CheckCodecRejectsUnsupportedBinaryVersion<NWB::Impl::DeformableGeometryAssetCodec>(
+static void TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
+    CheckCodecRejectsUnsupportedBinaryVersion<NWB::Impl::SkinnedGeometryAssetCodec>(
         context,
-        BuildMinimalDeformableGeometry,
+        BuildMinimalSkinnedGeometry,
         0u
     );
 }
 
-static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& context){
+static void TestSkinnedGeometryCodecRejectsMalformedCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
-    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry();
+    NWB::Impl::SkinnedGeometryAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
-    const usize morphCountOffset = DeformableHeaderCountOffset(7u);
+    const usize morphCountOffset = SkinnedGeometryHeaderCountOffset(7u);
     const u64 invalidMorphCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, morphCountOffset, invalidMorphCount));
 
@@ -1336,17 +1358,17 @@ static void TestDeformableGeometryCodecRejectsMalformedCounts(TestContext& conte
 #endif
 }
 
-static void TestDeformableGeometryCodecRejectsUnusedStringTable(TestContext& context){
+static void TestSkinnedGeometryCodecRejectsUnusedStringTable(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    NWB::Impl::DeformableGeometry geometry = BuildMinimalDeformableGeometry();
-    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry();
+    NWB::Impl::SkinnedGeometryAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, DeformableHeaderCountOffset(8u), 1u));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, SkinnedGeometryHeaderCountOffset(8u), 1u));
     binary.push_back(0u);
 
     CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), binary);
@@ -1357,13 +1379,13 @@ static void TestDeformableGeometryCodecRejectsUnusedStringTable(TestContext& con
 #endif
 }
 
-static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestContext& context){
+static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
-    NWB::Impl::DeformableGeometryAssetCodec codec;
+    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
+    NWB::Impl::SkinnedGeometryAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
@@ -1371,7 +1393,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
         NWB::Core::Assets::AssetBytes malformed = binary;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
             malformed,
-            DeformableHeaderCountOffset(2u),
+            SkinnedGeometryHeaderCountOffset(2u),
             static_cast<u64>(geometry.restVertices().size() - 1u)
         ));
 
@@ -1382,7 +1404,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
         NWB::Core::Assets::AssetBytes malformed = binary;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
             malformed,
-            DeformableHeaderCountOffset(5u),
+            SkinnedGeometryHeaderCountOffset(5u),
             static_cast<u64>(geometry.restVertices().size() - 1u)
         ));
 
@@ -1393,7 +1415,7 @@ static void TestDeformableGeometryCodecRejectsMalformedDependentCounts(TestConte
         NWB::Core::Assets::AssetBytes malformed = binary;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
             malformed,
-            DeformableMorphDeltaCountOffset(geometry),
+            SkinnedGeometryMorphDeltaCountOffset(geometry),
             static_cast<u64>(Limit<u32>::s_Max) + 1ull
         ));
 
@@ -1472,27 +1494,27 @@ static void TestGeometryCookerValidationFailures(TestContext& context){
 #endif
 }
 
-static void TestDeformableGeometryCookerMinimalAsset(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+static void TestSkinnedGeometryCookerMinimalAsset(TestContext& context){
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_MinimalDeformableMeta,
+        s_MinimalSkinnedGeometryMeta,
         "minimal",
-        MinimalAssetKind::Deformable,
-        [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
-            CheckMinimalDeformableGeometryDefaults(context, loadedGeometry);
+        MinimalAssetKind::SkinnedGeometry,
+        [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
+            CheckMinimalSkinnedGeometryDefaults(context, loadedGeometry);
         }
     );
 }
 
-static void TestDeformableGeometryCookerGeneratesMissingFrames(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+static void TestSkinnedGeometryCookerGeneratesMissingFrames(TestContext& context){
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_GeneratedFrameDeformableMeta,
+        s_GeneratedFrameSkinnedGeometryMeta,
         "generated_frames",
-        MinimalAssetKind::Deformable,
-        [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
+        MinimalAssetKind::SkinnedGeometry,
+        [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
-            for(const NWB::Impl::DeformableVertexRest& vertex : loadedGeometry.restVertices()){
+            for(const NWB::Impl::SkinnedGeometryVertex& vertex : loadedGeometry.restVertices()){
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.x == 0.0f);
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.y == 0.0f);
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.z == 1.0f);
@@ -1507,13 +1529,13 @@ static void TestDeformableGeometryCookerGeneratesMissingFrames(TestContext& cont
     );
 }
 
-static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+static void TestSkinnedGeometryCookerU32IndexType(TestContext& context){
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_U32IndexTypeDeformableMeta,
+        s_U32IndexTypeSkinnedGeometryMeta,
         "u32_index_type",
-        MinimalAssetKind::Deformable,
-        [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
+        MinimalAssetKind::SkinnedGeometry,
+        [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices()[2] == 2u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 3u);
@@ -1525,35 +1547,35 @@ static void TestDeformableGeometryCookerU32IndexType(TestContext& context){
     );
 }
 
-static void TestDeformableGeometryCookerExplicitEmptyOptionalLists(TestContext& context){
-    auto expectCookedDefaultOptionals = [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
-        CheckMinimalDeformableGeometryDefaults(context, loadedGeometry);
+static void TestSkinnedGeometryCookerExplicitEmptyOptionalLists(TestContext& context){
+    auto expectCookedDefaultOptionals = [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
+        CheckMinimalSkinnedGeometryDefaults(context, loadedGeometry);
     };
 
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_EmptyListOptionalDeformableMeta,
+        s_EmptyListOptionalSkinnedGeometryMeta,
         "empty_optional_lists",
-        MinimalAssetKind::Deformable,
+        MinimalAssetKind::SkinnedGeometry,
         expectCookedDefaultOptionals
     );
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_EmptyMapOptionalDeformableMeta,
+        s_EmptyMapOptionalSkinnedGeometryMeta,
         "empty_optional_maps",
-        MinimalAssetKind::Deformable,
+        MinimalAssetKind::SkinnedGeometry,
         expectCookedDefaultOptionals
     );
 }
 
-static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+static void TestSkinnedGeometryCookerNativeCharacterMock(TestContext& context){
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_NativeCharacterMockDeformableMeta,
+        s_NativeCharacterMockSkinnedGeometryMeta,
         "native_character_mock",
-        MinimalAssetKind::Deformable,
-        [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
-            CheckSkinnedDeformableGeometryPayload(context, loadedGeometry, 2u, 2u, 1u);
+        MinimalAssetKind::SkinnedGeometry,
+        [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
+            CheckSkinnedSkinnedGeometryPayload(context, loadedGeometry, 2u, 2u, 1u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[3].color0.w == 0.5f);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.75f);
@@ -1563,13 +1585,13 @@ static void TestDeformableGeometryCookerNativeCharacterMock(TestContext& context
     );
 }
 
-static void TestDeformableGeometryCookerNormalizesSkinWeights(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+static void TestSkinnedGeometryCookerNormalizesSkinWeights(TestContext& context){
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_NonnormalizedSkinDeformableMeta,
+        s_NonnormalizedSkinSkinnedGeometryMeta,
         "nonnormalized_skin",
-        MinimalAssetKind::Deformable,
-        [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
+        MinimalAssetKind::SkinnedGeometry,
+        [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 2u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[0u].weight[0] == 1.0f);
@@ -1581,28 +1603,28 @@ static void TestDeformableGeometryCookerNormalizesSkinWeights(TestContext& conte
     );
 }
 
-static void TestDeformableGeometryCookerSkinnedClass(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::DeformableGeometry>(
+static void TestSkinnedGeometryCookerSkinnedClass(TestContext& context){
+    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedGeometry>(
         context,
-        s_SkinnedOnlyDeformableMeta,
+        s_SkinnedOnlySkinnedGeometryMeta,
         "skinned_only",
-        MinimalAssetKind::Deformable,
-        [&](const NWB::Impl::DeformableGeometry& loadedGeometry){
+        MinimalAssetKind::SkinnedGeometry,
+        [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().empty());
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.sourceSamples().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.editMaskPerTriangle().empty());
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.morphs().empty());
             NWB_ASSETS_GRAPHICS_TEST_CHECK(
                 context,
-                loadedGeometry.displacement().mode == NWB::Impl::DeformableDisplacementMode::None
+                loadedGeometry.displacement().mode == NWB::Impl::SkinnedGeometryDisplacementMode::None
             );
         }
     );
 }
 
-static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& context){
+static void TestSkinnedGeometryCookerTextureDisplacementModes(TestContext& context){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1614,7 +1636,7 @@ static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& co
         const AStringView texturePath,
         const u32 expectedMode
     ){
-        const AString meta = BuildTextureDisplacementDeformableMeta(space, mode, texturePath);
+        const AString meta = BuildTextureDisplacementSkinnedGeometryMeta(space, mode, texturePath);
 
         Path root;
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
@@ -1625,15 +1647,15 @@ static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& co
             caseName,
             root,
             loadedAsset,
-            MinimalAssetKind::Deformable
+            MinimalAssetKind::SkinnedGeometry
         ))
             return;
 
         {
-            const NWB::Impl::DeformableGeometry& loadedGeometry =
-                static_cast<const NWB::Impl::DeformableGeometry&>(*loadedAsset)
+            const NWB::Impl::SkinnedGeometry& loadedGeometry =
+                static_cast<const NWB::Impl::SkinnedGeometry&>(*loadedAsset)
             ;
-            const NWB::Impl::DeformableDisplacement& displacement = loadedGeometry.displacement();
+            const NWB::Impl::SkinnedGeometryDisplacement& displacement = loadedGeometry.displacement();
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.mode == expectedMode);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, displacement.texture.name() == Name(texturePath));
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.displacementTextureVirtualPathText().view() == texturePath);
@@ -1654,26 +1676,26 @@ static void TestDeformableGeometryCookerTextureDisplacementModes(TestContext& co
         "tangent",
         "scalar",
         "tests/textures/cooked_scalar_height",
-        NWB::Impl::DeformableDisplacementMode::ScalarTexture
+        NWB::Impl::SkinnedGeometryDisplacementMode::ScalarTexture
     );
     checkCookedDisplacement(
         "cooked_vector_tangent_displacement",
         "tangent",
         "vector",
         "tests/textures/cooked_vector_tangent",
-        NWB::Impl::DeformableDisplacementMode::VectorTangentTexture
+        NWB::Impl::SkinnedGeometryDisplacementMode::VectorTangentTexture
     );
     checkCookedDisplacement(
         "cooked_vector_object_displacement",
         "object",
         "vector",
         "tests/textures/cooked_vector_object",
-        NWB::Impl::DeformableDisplacementMode::VectorObjectTexture
+        NWB::Impl::SkinnedGeometryDisplacementMode::VectorObjectTexture
     );
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
-static void TestDeformableGeometryCookerValidationFailures(TestContext& context){
+static void TestSkinnedGeometryCookerValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -1682,7 +1704,7 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
     auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
         Path root;
         Path outputDirectory;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookSingleDeformableMeta(
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookSingleSkinnedGeometryMeta(
             metaText,
             caseName,
             testArena,
@@ -1694,20 +1716,20 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
-    expectCookFailure(s_MissingGeometryClassDeformableMeta, "missing_geometry_class");
-    expectCookFailure(s_StaticClassDeformableMeta, "static_class");
-    expectCookFailure(s_MismatchedDeformableMeta, "mismatched_streams");
-    expectCookFailure(s_MissingIndexTypeDeformableMeta, "missing_index_type");
-    expectCookFailure(s_MismatchedSkinDeformableMeta, "mismatched_skin");
-    expectCookFailure(s_MismatchedSourceSamplesDeformableMeta, "mismatched_source_samples");
-    expectCookFailure(s_UnreferencedVertexGeneratedSourceSampleDeformableMeta, "unreferenced_source_sample_generation");
-    expectCookFailure(s_MismatchedMorphDeformableMeta, "mismatched_morph");
-    expectCookFailure(s_MissingMorphTangentDeformableMeta, "missing_morph_tangent");
-    expectCookFailure(s_SourceImportDeformableMeta, "source_import");
-    expectCookFailure(s_MismatchedEditMaskDeformableMeta, "mismatched_edit_mask");
+    expectCookFailure(s_MissingGeometryClassSkinnedGeometryMeta, "missing_geometry_class");
+    expectCookFailure(s_StaticClassSkinnedGeometryMeta, "static_class");
+    expectCookFailure(s_MismatchedSkinnedGeometryMeta, "mismatched_streams");
+    expectCookFailure(s_MissingIndexTypeSkinnedGeometryMeta, "missing_index_type");
+    expectCookFailure(s_MismatchedSkinSkinnedGeometryMeta, "mismatched_skin");
+    expectCookFailure(s_MismatchedSourceSamplesSkinnedGeometryMeta, "mismatched_source_samples");
+    expectCookFailure(s_UnreferencedVertexGeneratedSourceSampleSkinnedGeometryMeta, "unreferenced_source_sample_generation");
+    expectCookFailure(s_MismatchedMorphSkinnedGeometryMeta, "mismatched_morph");
+    expectCookFailure(s_MissingMorphTangentSkinnedGeometryMeta, "missing_morph_tangent");
+    expectCookFailure(s_SourceImportSkinnedGeometryMeta, "source_import");
+    expectCookFailure(s_MismatchedEditMaskSkinnedGeometryMeta, "mismatched_edit_mask");
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 11u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("geometry_class must be static_deform")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("geometry_class must be skinned")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));
@@ -1726,166 +1748,166 @@ static void TestDeformableGeometryCookerValidationFailures(TestContext& context)
 }
 
 template<typename MutateFnT>
-static void CheckInvalidDeformableGeometry(TestContext& context, MutateFnT mutate){
-    NWB::Impl::DeformableGeometry geometry = BuildValidDeformableGeometry();
+static void CheckInvalidSkinnedGeometry(TestContext& context, MutateFnT mutate){
+    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
     mutate(geometry);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
 }
 
-static void TestDeformableGeometryValidationFailures(TestContext& context){
+static void TestSkinnedGeometryValidationFailures(TestContext& context){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[0].normal = Float3U(0.f, 0.f, 0.f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[0].tangent = Float4U(1.f, 0.f, 0.f, 0.f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[0].tangent = Float4U(0.f, 0.f, 1.f, 1.f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[0].tangent = Float4U(1.f, 0.f, 0.f, 2.f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[0].normal = Float3U(0.f, 0.f, 2.f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[0].tangent = Float4U(0.70710677f, 0.f, 0.70710677f, 1.f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
         skin[0].weight[0] = 0.5f;
         geometry.setSkin(Move(skin));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
         skin.pop_back();
         geometry.setSkin(Move(skin));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         geometry.setSkeletonJointCount(0u);
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
         inverseBindMatrices.push_back(MakeJointMatrix(0.0f, 0.0f, 0.0f));
         geometry.setInverseBindMatrices(Move(inverseBindMatrices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
         inverseBindMatrices[0u].rows[3].w = 0.0f;
         geometry.setInverseBindMatrices(Move(inverseBindMatrices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
         skin[0].joint[0] = 1u;
         geometry.setSkin(Move(skin));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<u32> indices = geometry.indices();
         indices.pop_back();
         geometry.setIndices(Move(indices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<u32> indices = geometry.indices();
         indices[2] = 99u;
         geometry.setIndices(Move(indices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<u32> indices = geometry.indices();
         indices[2] = indices[1];
         geometry.setIndices(Move(indices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableVertexRest> vertices = geometry.restVertices();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
         vertices[2].position = Float3U(0.0f, -0.5f, 0.0f);
         geometry.setRestVertices(Move(vertices));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SourceSample> sourceSamples = geometry.sourceSamples();
         sourceSamples[0].sourceTri = 99u;
         geometry.setSourceSamples(Move(sourceSamples));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SourceSample> sourceSamples = geometry.sourceSamples();
         sourceSamples[0] = MakeSourceSample(0u, 0.25f, 0.25f, 0.25f);
         geometry.setSourceSamples(Move(sourceSamples));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SourceSample> sourceSamples = geometry.sourceSamples();
         sourceSamples.pop_back();
         geometry.setSourceSamples(Move(sourceSamples));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableEditMaskFlags> editMasks = geometry.editMaskPerTriangle();
-        editMasks[0] = static_cast<NWB::Impl::DeformableEditMaskFlags>(
-            NWB::Impl::DeformableEditMaskFlag::Editable | NWB::Impl::DeformableEditMaskFlag::Forbidden
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryEditMaskFlags> editMasks = geometry.editMaskPerTriangle();
+        editMasks[0] = static_cast<NWB::Impl::SkinnedGeometryEditMaskFlags>(
+            NWB::Impl::SkinnedGeometryEditMaskFlag::Editable | NWB::Impl::SkinnedGeometryEditMaskFlag::Forbidden
         );
         geometry.setEditMaskPerTriangle(Move(editMasks));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        NWB::Impl::DeformableDisplacement displacement = geometry.displacement();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        NWB::Impl::SkinnedGeometryDisplacement displacement = geometry.displacement();
         displacement.mode = 99u;
         geometry.setDisplacement(displacement);
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        NWB::Impl::DeformableDisplacement displacement;
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        NWB::Impl::SkinnedGeometryDisplacement displacement;
         displacement.amplitude = 0.25f;
         geometry.setDisplacement(displacement);
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableMorph> morphs = geometry.morphs();
-        NWB::Impl::DeformableMorph duplicateMorph;
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryMorph> morphs = geometry.morphs();
+        NWB::Impl::SkinnedGeometryMorph duplicateMorph;
         duplicateMorph.name = morphs[0].name;
         duplicateMorph.deltas.push_back(MakeMorphDelta(3u, 0.125f));
         morphs.push_back(Move(duplicateMorph));
         geometry.setMorphs(Move(morphs));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableMorph> morphs = geometry.morphs();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryMorph> morphs = geometry.morphs();
         morphs[0].deltas[1].vertexId = morphs[0].deltas[0].vertexId;
         geometry.setMorphs(Move(morphs));
     });
 
-    CheckInvalidDeformableGeometry(context, [](NWB::Impl::DeformableGeometry& geometry){
-        Vector<NWB::Impl::DeformableMorph> morphs = geometry.morphs();
+    CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
+        Vector<NWB::Impl::SkinnedGeometryMorph> morphs = geometry.morphs();
         morphs[0].deltas[0].vertexId = 99u;
         geometry.setMorphs(Move(morphs));
     });
@@ -1910,13 +1932,12 @@ static void TestGeometryClassPolicyHelpers(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassMatchesSkinPayload(GeometryClass::Static, false));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::Static, true));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassMatchesSkinPayload(GeometryClass::Skinned, true));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::SkinnedDeform, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::Skinned, false));
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::Static, false));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::Static, true));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::Skinned, true));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::StaticDeform, true));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsRuntimeDeformPayload(GeometryClass::SkinnedDeform, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Static, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Static, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Skinned, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Skinned, true));
 }
 
 static void TestFormatBlockDimensions(TestContext& context){
@@ -1956,29 +1977,29 @@ static int EntryPoint(const isize argc, tchar** argv, void*){
 
     return NWB::Tests::RunTestSuite("assets graphics", [](NWB::Tests::TestContext& context){
         __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
-        __hidden_assets_graphics_tests::TestDeformableDisplacementTextureCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryDisplacementTextureCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
         __hidden_assets_graphics_tests::TestGeometryCodecRejectsUnsupportedBinaryVersion(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRoundTripsTextureDisplacement(context);
-        __hidden_assets_graphics_tests::TestMinimalDeformableGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsUnsupportedBinaryVersion(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedCounts(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsUnusedStringTable(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCodecRejectsMalformedDependentCounts(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTripsTextureDisplacement(context);
+        __hidden_assets_graphics_tests::TestMinimalSkinnedGeometryCodecRoundTrip(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnusedStringTable(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
         __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
         __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
         __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerMinimalAsset(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerGeneratesMissingFrames(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerU32IndexType(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerExplicitEmptyOptionalLists(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerNativeCharacterMock(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerNormalizesSkinWeights(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerSkinnedClass(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerTextureDisplacementModes(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryCookerValidationFailures(context);
-        __hidden_assets_graphics_tests::TestDeformableGeometryValidationFailures(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerMinimalAsset(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerGeneratesMissingFrames(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerU32IndexType(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerExplicitEmptyOptionalLists(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNativeCharacterMock(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNormalizesSkinWeights(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerSkinnedClass(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerTextureDisplacementModes(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerValidationFailures(context);
+        __hidden_assets_graphics_tests::TestSkinnedGeometryValidationFailures(context);
         __hidden_assets_graphics_tests::TestGeometryClassPolicyHelpers(context);
         __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
     });

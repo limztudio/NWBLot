@@ -6,7 +6,7 @@
 
 #include <core/ecs/ecs.h>
 #include <core/graphics/graphics.h>
-#include <impl/ecs_deformable_render/ecs_deformable_render.h>
+#include <impl/ecs_skinned_geometry_render/ecs_skinned_geometry_render.h>
 #include <impl/ecs_geometry/ecs_geometry.h>
 #include <impl/ecs_render/ecs_render.h>
 #include <impl/ecs_ui/ecs_ui.h>
@@ -61,15 +61,15 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
         return false;
     }
-    auto& deformerSystem = world->addSystem<NWB::Impl::DeformerSystem>(
+    auto& skinnedGeometrySystem = world->addSystem<NWB::Impl::SkinnedGeometrySystem>(
         *world,
         context.graphics,
         context.assetManager,
         geometrySystem,
         context.shaderPathResolver
     );
-    if(!world->getSystem<NWB::Impl::DeformerSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core deformer system was not created"));
+    if(!world->getSystem<NWB::Impl::SkinnedGeometrySystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: skinned geometry system was not created"));
         return false;
     }
     auto& uiSystem = world->addSystem<NWB::Impl::UiSystem>(
@@ -83,7 +83,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core UI system was not created"));
         return false;
     }
-    context.graphics.addRenderPassToBack(deformerSystem);
+    context.graphics.addRenderPassToBack(skinnedGeometrySystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiSystem);
 
@@ -99,9 +99,9 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    auto* deformerSystem = world->getSystem<NWB::Impl::DeformerSystem>();
-    if(!deformerSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core deformer system is null"));
+    auto* skinnedGeometrySystem = world->getSystem<NWB::Impl::SkinnedGeometrySystem>();
+    if(!skinnedGeometrySystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: skinned geometry system is null"));
         return;
     }
 
@@ -123,7 +123,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    context.graphics.removeRenderPass(*deformerSystem);
+    context.graphics.removeRenderPass(*skinnedGeometrySystem);
     context.graphics.removeRenderPass(*rendererSystem);
     context.graphics.removeRenderPass(*uiSystem);
 

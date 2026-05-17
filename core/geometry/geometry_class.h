@@ -20,9 +20,7 @@ NWB_GEOMETRY_BEGIN
 namespace GeometryClass{
     enum Enum : u32{
         Static = 0,
-        StaticDeform = 1,
-        Skinned = 2,
-        SkinnedDeform = 3,
+        Skinned = 1,
         Invalid = Limit<u32>::s_Max,
     };
 };
@@ -35,22 +33,19 @@ struct GeometryClassInfo{
     u32 geometryClass = GeometryClass::Invalid;
     AStringView text;
     bool usesSkinning = false;
-    bool allowsRuntimeDeform = false;
 };
 
 inline constexpr GeometryClassInfo s_GeometryClassInfos[] = {
-    { GeometryClass::Static, "static", false, false },
-    { GeometryClass::StaticDeform, "static_deform", false, true },
-    { GeometryClass::Skinned, "skinned", true, false },
-    { GeometryClass::SkinnedDeform, "skinned_deform", true, true },
+    { GeometryClass::Static, "static", false },
+    { GeometryClass::Skinned, "skinned", true },
 };
 
 [[nodiscard]] inline AStringView SupportedGeometryClassText(){
-    return "static, static_deform, skinned, or skinned_deform";
+    return "static or skinned";
 }
 
-[[nodiscard]] inline AStringView SupportedDeformableGeometryClassText(){
-    return "static_deform, skinned, or skinned_deform";
+[[nodiscard]] inline AStringView SupportedSkinnedGeometryClassText(){
+    return "skinned";
 }
 
 [[nodiscard]] inline const GeometryClassInfo* FindGeometryClassInfo(const u32 geometryClass){
@@ -86,17 +81,12 @@ inline constexpr GeometryClassInfo s_GeometryClassInfos[] = {
     return GeometryClassUsesSkinning(geometryClass) == hasSkin;
 }
 
-[[nodiscard]] inline bool GeometryClassAllowsRuntimeDeform(const u32 geometryClass){
-    const GeometryClassInfo* info = FindGeometryClassInfo(geometryClass);
-    return info && info->allowsRuntimeDeform;
+[[nodiscard]] inline bool GeometryClassUsesSkinnedGeometryRuntime(const u32 geometryClass){
+    return geometryClass == GeometryClass::Skinned;
 }
 
-[[nodiscard]] inline bool GeometryClassAcceptsRuntimeDeformPayload(const u32 geometryClass, const bool hasPayload){
-    return GeometryClassAllowsRuntimeDeform(geometryClass) || !hasPayload;
-}
-
-[[nodiscard]] inline bool GeometryClassUsesDeformableRuntime(const u32 geometryClass){
-    return geometryClass != GeometryClass::Static && ValidGeometryClass(geometryClass);
+[[nodiscard]] inline bool GeometryClassAcceptsSkinnedGeometryPayload(const u32 geometryClass, const bool hasPayload){
+    return GeometryClassUsesSkinnedGeometryRuntime(geometryClass) || !hasPayload;
 }
 
 [[nodiscard]] inline AStringView GeometryClassText(const u32 geometryClass){

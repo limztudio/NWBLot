@@ -681,7 +681,7 @@ class LinuxX11Capture:
         self._fill_input_event_prefix(event.xmotion, window, x, y)
         event.xmotion.is_hint = b"\0"
         if not self.x11.XSendEvent(self.display, window, False, self.POINTER_MOTION_MASK, ctypes.byref(event)):
-            raise SmokeFailure("failed to send CSG pointer motion")
+            raise SmokeFailure("failed to send pointer motion")
         self.x11.XFlush(self.display)
 
     def send_button_event(self, window, event_type, x, y):
@@ -692,7 +692,7 @@ class LinuxX11Capture:
         event.xbutton.button = self.BUTTON_LEFT
         event_mask = self.BUTTON_PRESS_MASK if event_type == self.BUTTON_PRESS else self.BUTTON_RELEASE_MASK
         if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
-            raise SmokeFailure("failed to send CSG mouse button event")
+            raise SmokeFailure("failed to send mouse button event")
         self.x11.XFlush(self.display)
 
     def send_key_event(self, window, event_type, keycode):
@@ -702,7 +702,7 @@ class LinuxX11Capture:
         event.xkey.keycode = keycode
         event_mask = self.KEY_PRESS_MASK if event_type == self.KEY_PRESS else self.KEY_RELEASE_MASK
         if not self.x11.XSendEvent(self.display, window, False, event_mask, ctypes.byref(event)):
-            raise SmokeFailure("failed to send CSG key event")
+            raise SmokeFailure("failed to send key event")
         self.x11.XFlush(self.display)
 
     def send_named_key(self, window, key_name):
@@ -721,15 +721,6 @@ class LinuxX11Capture:
         self.send_key_event(window, self.KEY_PRESS, keycode)
         time.sleep(0.05)
         self.send_key_event(window, self.KEY_RELEASE, keycode)
-
-    def select_surface_edit_target(self, window, target_key):
-        self.send_named_key(window, str(target_key))
-
-    def select_surface_edit_operator(self, window, operator_key):
-        self.send_named_key(window, f"F{operator_key}")
-
-    def select_surface_edit_camera_view(self, window, camera_view_key):
-        self.send_named_key(window, f"F{camera_view_key + 4}")
 
     def _validated_window_size(self, window):
         attributes = self.get_attributes(window)
@@ -789,18 +780,6 @@ class LinuxX11Capture:
         event.y_root = root_y
         event.state = state
         event.same_screen = True
-
-    def preview_surface_edit(self, window, relative_x, relative_y):
-        click_x, click_y = self._relative_window_point(window, relative_x, relative_y)
-        self._click_window_point(window, click_x, click_y, 0.1)
-
-    def commit_surface_edit_preview(self, window, commit_relative_x, commit_relative_y, commit_key):
-        if commit_key:
-            self.send_named_key(window, commit_key)
-            return
-
-        commit_x, commit_y = self._relative_window_point(window, commit_relative_x, commit_relative_y)
-        self._click_window_point(window, commit_x, commit_y, 0.05)
 
     def capture_window(self, window, output_path):
         self.x11.XRaiseWindow(self.display, window)
@@ -1071,15 +1050,6 @@ class WindowsCapture:
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
 
-    def select_surface_edit_target(self, hwnd, target_key):
-        self.send_named_key(hwnd, str(target_key))
-
-    def select_surface_edit_operator(self, hwnd, operator_key):
-        self.send_named_key(hwnd, f"F{operator_key}")
-
-    def select_surface_edit_camera_view(self, hwnd, camera_view_key):
-        self.send_named_key(hwnd, f"F{camera_view_key + 4}")
-
     def send_named_key(self, hwnd, key_name):
         virtual_key = self.VIRTUAL_KEYS.get(str(key_name))
         if virtual_key is None:
@@ -1089,16 +1059,6 @@ class WindowsCapture:
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYDOWN, virtual_key, 0)
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)
-
-    def preview_surface_edit(self, hwnd, relative_x, relative_y):
-        self._post_click(hwnd, self._relative_lparam(hwnd, relative_x, relative_y), 0.1)
-
-    def commit_surface_edit_preview(self, hwnd, commit_relative_x, commit_relative_y, commit_key):
-        if commit_key:
-            self.send_named_key(hwnd, commit_key)
-            return
-
-        self._post_click(hwnd, self._relative_lparam(hwnd, commit_relative_x, commit_relative_y), 0.05)
 
     def capture_window(self, hwnd, output_path):
         rect = self._window_rect(hwnd)
@@ -1224,91 +1184,6 @@ def validate_capture_result(result):
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
 
 
-def apply_surface_edit_selection(args, backend, handle, after_step=None):
-    if args.surface_edit_target_key is not None:
-        backend.select_surface_edit_target(handle, args.surface_edit_target_key)
-        time.sleep(args.target_settle_seconds)
-        run_after_step(after_step, "after target selection")
-
-    if args.surface_edit_operator_key is not None:
-        backend.select_surface_edit_operator(handle, args.surface_edit_operator_key)
-        time.sleep(args.target_settle_seconds)
-        run_after_step(after_step, "after operator selection")
-
-    if args.camera_view_key is not None:
-        backend.select_surface_edit_camera_view(handle, args.camera_view_key)
-        time.sleep(args.target_settle_seconds)
-        run_after_step(after_step, "after camera view selection")
-
-
-def wait_for_surface_edit_log(args, log_directory, log_baseline, message):
-    if not log_directory:
-        return False
-
-    wait_for_log_message(
-        log_directory,
-        log_baseline,
-        "logserver_*.log",
-        message,
-        args.csg_log_timeout,
-    )
-    return True
-
-
-def request_surface_edit_preview(args, backend, handle):
-    if args.csg_preview_key:
-        backend.send_named_key(handle, args.csg_preview_key)
-        return
-
-    backend.preview_surface_edit(
-        handle,
-        args.csg_click_x,
-        args.csg_click_y,
-    )
-
-
-def apply_surface_edit_csg(args, backend, handle, log_directory=None, log_baseline=None, after_step=None):
-    if not args.preview_csg and not args.exercise_csg:
-        return
-
-    if args.preview_csg:
-        request_surface_edit_preview(args, backend, handle)
-        wait_for_surface_edit_log(
-            args,
-            log_directory,
-            log_baseline,
-            "Surface edit: selected preview radius=",
-        )
-        time.sleep(args.csg_settle_seconds)
-        run_after_step(after_step, "after CSG preview")
-        return
-
-    request_surface_edit_preview(args, backend, handle)
-    saw_preview_log = wait_for_surface_edit_log(
-        args,
-        log_directory,
-        log_baseline,
-        "Surface edit: selected preview radius=",
-    )
-    if not saw_preview_log:
-        time.sleep(args.csg_settle_seconds)
-
-    backend.commit_surface_edit_preview(
-        handle,
-        args.csg_commit_click_x,
-        args.csg_commit_click_y,
-        args.csg_commit_key,
-    )
-    wait_for_surface_edit_log(
-        args,
-        log_directory,
-        log_baseline,
-        "Surface edit: committed hole rev=",
-    )
-    time.sleep(args.csg_settle_seconds)
-    run_after_step(after_step, "after CSG exercise")
-
-
 def capture_checked_window(args, backend, handle):
     result = backend.capture_window(handle, args.output)
     validate_capture_result(result)
@@ -1316,8 +1191,6 @@ def capture_checked_window(args, backend, handle):
 
 
 def capture_existing_handle(args, backend):
-    apply_surface_edit_selection(args, backend, args.window_handle)
-    apply_surface_edit_csg(args, backend, args.window_handle)
     return capture_checked_window(args, backend, args.window_handle)
 
 
@@ -1343,9 +1216,7 @@ def launch_and_capture(args, backend):
         time.sleep(args.settle_seconds)
         ensure_process_running(testbed_process, "before capture")
 
-        after_step = lambda stage: ensure_process_running(testbed_process, stage)
-        apply_surface_edit_selection(args, backend, handle, after_step)
-        apply_surface_edit_csg(args, backend, handle, log_directory, log_baseline, after_step)
+        ensure_process_running(testbed_process, "before checked capture")
         return capture_checked_window(args, backend, handle)
     finally:
         terminate_process(testbed_process, "testbed")
@@ -1364,20 +1235,6 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
-    parser.add_argument("--surface-edit-target-key", type=int, choices=range(1, 10), help="Number key to press before capture/CSG.")
-    parser.add_argument("--surface-edit-operator-key", type=int, choices=range(1, 5), help="F-key operator mesh to press before capture/CSG: 1 cylinder, 2 box, 3 triangle, 4 cone.")
-    parser.add_argument("--camera-view-key", type=int, choices=range(1, 5), help="F5-F8 camera preset index to press before capture/CSG.")
-    parser.add_argument("--target-settle-seconds", type=float, default=0.3, help="Seconds to wait after target selection.")
-    parser.add_argument("--preview-csg", action="store_true", help="Click the editable deformable surface and capture the operator preview without committing.")
-    parser.add_argument("--exercise-csg", action="store_true", help="Click the editable deformable surface and commit the preview before capture.")
-    parser.add_argument("--csg-preview-key", default="C", help="Key used to preview CSG at the deterministic smoke point. Set empty to fall back to click coordinates.")
-    parser.add_argument("--csg-click-x", type=float, default=0.5, help="Relative window X coordinate for the CSG smoke click.")
-    parser.add_argument("--csg-click-y", type=float, default=0.42, help="Relative window Y coordinate for the CSG smoke click.")
-    parser.add_argument("--csg-commit-click-x", type=float, default=0.062, help="Relative window X coordinate for the Commit Preview button.")
-    parser.add_argument("--csg-commit-click-y", type=float, default=0.384, help="Relative window Y coordinate for the Commit Preview button.")
-    parser.add_argument("--csg-commit-key", default="C", help="Key used to commit an active CSG preview. Set empty to fall back to the commit click coordinates.")
-    parser.add_argument("--csg-settle-seconds", type=float, default=1.0, help="Seconds to wait after CSG input before capture.")
-    parser.add_argument("--csg-log-timeout", type=float, default=10.0, help="Seconds to wait for the committed CSG log message.")
     parser.add_argument(
         "--software-vulkan",
         choices=("auto", "on", "off"),
@@ -1396,14 +1253,6 @@ def parse_args(argv):
         parser.error("--executable is required unless --window-handle is provided")
     require_positive_arg(parser, "--timeout", args.timeout)
     require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
-    require_non_negative_arg(parser, "--csg-settle-seconds", args.csg_settle_seconds)
-    require_positive_arg(parser, "--csg-log-timeout", args.csg_log_timeout)
-    if args.preview_csg and args.exercise_csg:
-        parser.error("--preview-csg and --exercise-csg are mutually exclusive")
-    require_unit_interval_arg(parser, "--csg-click-x", args.csg_click_x)
-    require_unit_interval_arg(parser, "--csg-click-y", args.csg_click_y)
-    require_unit_interval_arg(parser, "--csg-commit-click-x", args.csg_commit_click_x)
-    require_unit_interval_arg(parser, "--csg-commit-click-y", args.csg_commit_click_y)
 
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()

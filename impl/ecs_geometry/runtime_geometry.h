@@ -30,7 +30,7 @@ class Geometry;
 namespace MeshSourceLayout{
     enum Enum : u32{
         GeometryVertex = 0u,
-        DeformableVertex = 1u,
+        SkinnedGeometryVertex = 1u,
     };
 };
 

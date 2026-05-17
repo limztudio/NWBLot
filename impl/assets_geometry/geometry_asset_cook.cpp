@@ -10,7 +10,7 @@
 
 #include "geometry_asset_cook.h"
 
-#include "deformable_geometry_validation.h"
+#include "skinned_geometry_validation.h"
 #include "geometry_binary_payload.h"
 
 #include <core/alloc/scratch.h>
@@ -125,7 +125,7 @@ namespace MetadataU32ValueFailure{
 };
 
 static constexpr const tchar* s_GeometryMetaKind = NWB_TEXT("Geometry");
-static constexpr const tchar* s_DeformableGeometryMetaKind = NWB_TEXT("Deformable geometry");
+static constexpr const tchar* s_SkinnedGeometryMetaKind = NWB_TEXT("SkinnedGeometry geometry");
 
 static const Core::Metascript::Value* FindRequiredMetadataListField(
     const Path& nwbFilePath,
@@ -460,20 +460,20 @@ static bool ParseStaticGeometryClassField(const Path& nwbFilePath, const Core::M
     return false;
 }
 
-static bool ParseDeformableGeometryClassField(
+static bool ParseSkinnedGeometryClassField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     u32& outGeometryClass
 ){
-    if(!ParseGeometryClassField(nwbFilePath, asset, s_DeformableGeometryMetaKind, outGeometryClass))
+    if(!ParseGeometryClassField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, outGeometryClass))
         return false;
 
-    if(GeometryClassUsesDeformableRuntime(outGeometryClass))
+    if(GeometryClassUsesSkinnedGeometryRuntime(outGeometryClass))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class must be {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class must be {}")
         , PathToString<tchar>(nwbFilePath)
-        , StringConvert(SupportedDeformableGeometryClassText())
+        , StringConvert(SupportedSkinnedGeometryClassText())
     );
     return false;
 }
@@ -650,18 +650,18 @@ static bool ParseFiniteF32Value(
     const AStringView label,
     f32& outValue
 ){
-    return ParseMetadataFiniteF32Value(nwbFilePath, value, s_DeformableGeometryMetaKind, label, outValue);
+    return ParseMetadataFiniteF32Value(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValue);
 }
 
 static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, u32& outValue){
-    return ParseMetadataU32Value(nwbFilePath, value, s_DeformableGeometryMetaKind, label, outValue);
+    return ParseMetadataU32Value(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValue);
 }
 
 static const Core::Metascript::Value* FindRequiredListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const AStringView fieldName){
-    return FindRequiredMetadataListField(nwbFilePath, map, s_DeformableGeometryMetaKind, fieldName);
+    return FindRequiredMetadataListField(nwbFilePath, map, s_SkinnedGeometryMetaKind, fieldName);
 }
 
 template<usize ComponentCount>
@@ -671,7 +671,7 @@ static bool ParseF32Tuple(
     const AStringView label,
     f32 (&outValues)[ComponentCount]
 ){
-    return ParseMetadataF32Tuple(nwbFilePath, value, s_DeformableGeometryMetaKind, label, outValues);
+    return ParseMetadataF32Tuple(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValues);
 }
 
 template<usize ComponentCount>
@@ -682,7 +682,7 @@ static bool ParseU16Tuple(
     u16 (&outValues)[ComponentCount]
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' must be a {}-component integer list")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' must be a {}-component integer list")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
             , ComponentCount
@@ -696,12 +696,12 @@ static bool ParseU16Tuple(
         const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], parsed);
         if(failure != MetadataU32ValueFailure::None){
             const AString componentLabel = MakeIndexedLabel(label, i);
-            LogMetadataU32ValueFailure(nwbFilePath, s_DeformableGeometryMetaKind, componentLabel, failure);
+            LogMetadataU32ValueFailure(nwbFilePath, s_SkinnedGeometryMetaKind, componentLabel, failure);
             return false;
         }
         if(parsed > Limit<u16>::s_Max){
             const AString componentLabel = MakeIndexedLabel(label, i);
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' contains a value that exceeds u16")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' contains a value that exceeds u16")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(componentLabel)
             );
@@ -719,7 +719,7 @@ static bool ParseFloatListField(
     const AStringView fieldName,
     ElementVectorT& outValues
 ){
-    return ParseMetadataFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, s_DeformableGeometryMetaKind, fieldName, outValues);
+    return ParseMetadataFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, s_SkinnedGeometryMetaKind, fieldName, outValues);
 }
 
 template<typename ValueVectorT>
@@ -742,7 +742,7 @@ static bool ParseU32ListField(
         const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], value);
         if(failure != MetadataU32ValueFailure::None){
             const AString label = MakeIndexedLabel(fieldName, i);
-            LogMetadataU32ValueFailure(nwbFilePath, s_DeformableGeometryMetaKind, label, failure);
+            LogMetadataU32ValueFailure(nwbFilePath, s_SkinnedGeometryMetaKind, label, failure);
             outValues.clear();
             return false;
         }
@@ -774,28 +774,28 @@ static bool ParseOptionalFloatListField(
     return ParseFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, fieldName, outValues);
 }
 
-static bool ParseDeformableIndexType(const Path& nwbFilePath, const Core::Metascript::Value& asset, bool& outUse32BitIndices){
-    return ParseMetadataIndexType(nwbFilePath, asset, s_DeformableGeometryMetaKind, outUse32BitIndices);
+static bool ParseSkinnedGeometryIndexType(const Path& nwbFilePath, const Core::Metascript::Value& asset, bool& outUse32BitIndices){
+    return ParseMetadataIndexType(nwbFilePath, asset, s_SkinnedGeometryMetaKind, outUse32BitIndices);
 }
 
-static bool ParseDeformableIndexField(
+static bool ParseSkinnedGeometryIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const bool use32BitIndices,
     Vector<u32>& outIndices
 ){
-    return ParseMetadataIndexField(nwbFilePath, asset, s_DeformableGeometryMetaKind, use32BitIndices, outIndices);
+    return ParseMetadataIndexField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, use32BitIndices, outIndices);
 }
 
 template<typename PositionVectorT, typename NormalVectorT, typename TangentVectorT, typename UvVectorT, typename ColorVectorT>
-static bool BuildDeformableRestVertices(
+static bool BuildGeometryRestVertices(
     const Path& nwbFilePath,
     const PositionVectorT& positions,
     const NormalVectorT& normals,
     const TangentVectorT& tangents,
     const UvVectorT& uv0,
     const ColorVectorT& colors,
-    Vector<DeformableVertexRest>& outVertices
+    Vector<SkinnedGeometryVertex>& outVertices
 ){
     if(
         positions.size() != normals.size()
@@ -803,7 +803,7 @@ static bool BuildDeformableRestVertices(
         || positions.size() != uv0.size()
         || positions.size() != colors.size()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': rest vertex stream counts must match")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': rest vertex stream counts must match")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -812,7 +812,7 @@ static bool BuildDeformableRestVertices(
     outVertices.clear();
     outVertices.reserve(positions.size());
     for(usize i = 0; i < positions.size(); ++i){
-        DeformableVertexRest vertex;
+        SkinnedGeometryVertex vertex;
         vertex.position = positions[i];
         vertex.normal = normals[i];
         vertex.tangent = tangents[i];
@@ -823,18 +823,18 @@ static bool BuildDeformableRestVertices(
     return true;
 }
 
-static bool GenerateMissingDeformableFrames(
+static bool GenerateMissingSkinnedGeometryFrames(
     const Path& nwbFilePath,
     const bool normalsProvided,
     const bool tangentsProvided,
-    Vector<DeformableVertexRest>& vertices,
+    Vector<SkinnedGeometryVertex>& vertices,
     const Vector<u32>& indices){
     if(normalsProvided && tangentsProvided)
         return true;
 
     Core::Geometry::TangentFrameRebuildResult rebuildResult;
-    if(!DeformableValidation::RebuildRestVertexTangentFrames(vertices, indices, &rebuildResult)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': failed to generate missing normal/tangent frames")
+    if(!SkinnedGeometryValidation::RebuildRestVertexTangentFrames(vertices, indices, &rebuildResult)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': failed to generate missing normal/tangent frames")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -851,7 +851,7 @@ static bool NormalizeSkinInfluenceWeights(
     for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
         const f32 weight = influence.weight[influenceIndex];
         if(!IsFinite(weight) || weight < 0.0f){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' weights must be finite and non-negative")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' weights must be finite and non-negative")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(label)
             );
@@ -860,8 +860,8 @@ static bool NormalizeSkinInfluenceWeights(
         weightSum += weight;
     }
 
-    if(!IsFinite(weightSum) || weightSum <= DeformableValidation::s_Epsilon){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' weights must contain a positive total")
+    if(!IsFinite(weightSum) || weightSum <= SkinnedGeometryValidation::s_Epsilon){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -872,8 +872,8 @@ static bool NormalizeSkinInfluenceWeights(
     for(f32& weight : influence.weight)
         weight *= inverseWeightSum;
 
-    if(!DeformableValidation::ValidSkinInfluence(influence)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' weights failed normalization")
+    if(!SkinnedGeometryValidation::ValidSkinInfluence(influence)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' weights failed normalization")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -897,7 +897,7 @@ static bool ParseSkinInfluences(
         if(IsExplicitEmptyOptionalField(*skin))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'skin' must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'skin' must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     if(skin->asMap().empty())
@@ -906,7 +906,7 @@ static bool ParseSkinInfluences(
     const Core::Metascript::Value* joints = FindField(*skin, "joints0");
     const Core::Metascript::Value* weights = FindField(*skin, "weights0");
     if(!joints || !joints->isList() || !weights || !weights->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'skin' requires 'joints0' and 'weights0' lists")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'skin' requires 'joints0' and 'weights0' lists")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -914,7 +914,7 @@ static bool ParseSkinInfluences(
     const auto& jointList = joints->asList();
     const auto& weightList = weights->asList();
     if(jointList.size() != vertexCount || weightList.size() != vertexCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': skin streams must match vertex count")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': skin streams must match vertex count")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -951,20 +951,20 @@ static bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const u32 skeletonJointCount,
-    Vector<DeformableJointMatrix>& outMatrices){
+    Vector<SkinnedGeometryJointMatrix>& outMatrices){
     outMatrices.clear();
 
     const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
     if(!matrices || IsExplicitEmptyOptionalField(*matrices))
         return true;
     if(!matrices->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'inverse_bind_matrices' must be a list")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'inverse_bind_matrices' must be a list")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
     if(skeletonJointCount == 0u || matrices->asList().size() != skeletonJointCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse bind matrix count must match skeleton_joint_count")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': inverse bind matrix count must match skeleton_joint_count")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -975,27 +975,27 @@ static bool ParseInverseBindMatrices(
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
         const Core::Metascript::Value& matrixValue = matrixList[matrixIndex];
         if(!matrixValue.isList() || matrixValue.asList().size() != 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] must contain four columns")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': inverse_bind_matrices[{}] must contain four columns")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex
             );
             return false;
         }
 
-        DeformableJointMatrix matrix{};
+        SkinnedGeometryJointMatrix matrix{};
         const auto& columns = matrixValue.asList();
         const AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
             alignas(16) f32 column[4] = {};
             const AString columnLabel = MakeIndexedLabel(label, columnIndex);
-            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_DeformableGeometryMetaKind, columnLabel, column)){
+            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedGeometryMetaKind, columnLabel, column)){
                 return false;
             }
             matrix.rows[columnIndex] = Float4(column[0u], column[1u], column[2u], column[3u]);
         }
 
-        if(!DeformableValidation::ValidAffineJointMatrix(matrix)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
+        if(!SkinnedGeometryValidation::ValidAffineJointMatrix(matrix)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex
             );
@@ -1024,7 +1024,7 @@ static bool ParseSourceSamples(
         if(IsExplicitEmptyOptionalField(*sourceSamples))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'source_samples' must be a map")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'source_samples' must be a map")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1040,7 +1040,7 @@ static bool ParseSourceSamples(
     if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, *sourceSamples, "bary", bary))
         return false;
     if(sourceTri.size() != vertexCount || bary.size() != vertexCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': source samples must match vertex count")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': source samples must match vertex count")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1066,13 +1066,13 @@ static bool GenerateIdentitySourceSamples(
     Vector<SourceSample>& outSourceSamples){
     outSourceSamples.clear();
     if(vertexCount == 0u || vertexCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid vertex count")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': cannot generate source samples for invalid vertex count")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
     if(indices.empty() || (indices.size() % 3u) != 0u || (indices.size() / 3u) > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': cannot generate source samples for invalid indices")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': cannot generate source samples for invalid indices")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1088,7 +1088,7 @@ static bool GenerateIdentitySourceSamples(
         for(u32 cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
             const u32 vertexIndex = indices[indexBase + cornerIndex];
             if(vertexIndex >= vertexCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': source sample generation found vertex index {} outside vertex count {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': source sample generation found vertex index {} outside vertex count {}")
                     , PathToString<tchar>(nwbFilePath)
                     , vertexIndex
                     , vertexCount
@@ -1110,7 +1110,7 @@ static bool GenerateIdentitySourceSamples(
         if(assigned[vertexIndex] != 0u)
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': cannot generate source sample for unreferenced vertex {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': cannot generate source sample for unreferenced vertex {}")
             , PathToString<tchar>(nwbFilePath)
             , vertexIndex
         );
@@ -1124,7 +1124,7 @@ static bool ParseEditMasks(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const usize triangleCount,
-    Vector<DeformableEditMaskFlags>& outEditMaskPerTriangle){
+    Vector<SkinnedGeometryEditMaskFlags>& outEditMaskPerTriangle){
     outEditMaskPerTriangle.clear();
 
     const Core::Metascript::Value* editMasks = FindField(asset, "edit_masks");
@@ -1138,7 +1138,7 @@ static bool ParseEditMasks(
     if(!ParseU32ListField(nwbFilePath, asset, "edit_masks", parsedFlags))
         return false;
     if(parsedFlags.size() != triangleCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit mask count must match triangle count")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': edit mask count must match triangle count")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1146,17 +1146,17 @@ static bool ParseEditMasks(
 
     outEditMaskPerTriangle.reserve(parsedFlags.size());
     for(usize i = 0; i < parsedFlags.size(); ++i){
-        if(parsedFlags[i] > Limit<DeformableEditMaskFlags>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] exceeds u8")
+        if(parsedFlags[i] > Limit<SkinnedGeometryEditMaskFlags>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': edit_masks[{}] exceeds u8")
                 , PathToString<tchar>(nwbFilePath)
                 , i
             );
             return false;
         }
 
-        const DeformableEditMaskFlags flags = static_cast<DeformableEditMaskFlags>(parsedFlags[i]);
-        if(!ValidDeformableEditMaskFlags(flags)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': edit_masks[{}] is invalid")
+        const SkinnedGeometryEditMaskFlags flags = static_cast<SkinnedGeometryEditMaskFlags>(parsedFlags[i]);
+        if(!ValidSkinnedGeometryEditMaskFlags(flags)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': edit_masks[{}] is invalid")
                 , PathToString<tchar>(nwbFilePath)
                 , i
             );
@@ -1176,7 +1176,7 @@ static bool ParseRequiredStringField(
 
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(!field || !field->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' must be a string")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' must be a string")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -1187,7 +1187,7 @@ static bool ParseRequiredStringField(
     outText.assign(text.data(), text.size());
     CanonicalizeTextInPlace(outText);
     if(outText.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -1228,9 +1228,9 @@ static bool ParseOptionalFloat2Field(
 static bool ParseDisplacement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    DeformableDisplacement& outDisplacement,
+    SkinnedGeometryDisplacement& outDisplacement,
     CompactString& outTexturePathText){
-    outDisplacement = DeformableDisplacement{};
+    outDisplacement = SkinnedGeometryDisplacement{};
     outTexturePathText.clear();
 
     const Core::Metascript::Value* displacement = FindField(asset, "displacement");
@@ -1240,7 +1240,7 @@ static bool ParseDisplacement(
         if(IsExplicitEmptyOptionalField(*displacement))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'displacement' must be a map")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'displacement' must be a map")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1270,12 +1270,12 @@ static bool ParseDisplacement(
         return false;
 
     if(space == "tangent" && mode == "scalar" && field == "uv_ramp"){
-        outDisplacement.mode = DeformableDisplacementMode::ScalarUvRamp;
-        return ValidDeformableDisplacementDescriptor(outDisplacement);
+        outDisplacement.mode = SkinnedGeometryDisplacementMode::ScalarUvRamp;
+        return ValidSkinnedGeometryDisplacementDescriptor(outDisplacement);
     }
 
     if(field != "texture"){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': displacement field must be 'uv_ramp' or 'texture'")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': displacement field must be 'uv_ramp' or 'texture'")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1287,19 +1287,19 @@ static bool ParseDisplacement(
 
     outDisplacement.texture.virtualPath = ToName(texturePath);
     if(!outTexturePathText.assign(texturePath)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': displacement texture path exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': displacement texture path exceeds CompactString capacity")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
     }
     if(space == "tangent" && mode == "scalar")
-        outDisplacement.mode = DeformableDisplacementMode::ScalarTexture;
+        outDisplacement.mode = SkinnedGeometryDisplacementMode::ScalarTexture;
     else if(space == "tangent" && mode == "vector")
-        outDisplacement.mode = DeformableDisplacementMode::VectorTangentTexture;
+        outDisplacement.mode = SkinnedGeometryDisplacementMode::VectorTangentTexture;
     else if(space == "object" && mode == "vector")
-        outDisplacement.mode = DeformableDisplacementMode::VectorObjectTexture;
+        outDisplacement.mode = SkinnedGeometryDisplacementMode::VectorObjectTexture;
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': unsupported displacement texture space='{}' mode='{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': unsupported displacement texture space='{}' mode='{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(space)
             , StringConvert(mode)
@@ -1307,10 +1307,10 @@ static bool ParseDisplacement(
         return false;
     }
 
-    return ValidDeformableDisplacementDescriptor(outDisplacement);
+    return ValidSkinnedGeometryDisplacementDescriptor(outDisplacement);
 }
 
-static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& asset, Vector<DeformableMorph>& outMorphs){
+static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& asset, Vector<SkinnedGeometryMorph>& outMorphs){
     outMorphs.clear();
 
     const Core::Metascript::Value* morphs = FindField(asset, "morphs");
@@ -1320,11 +1320,11 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         if(IsExplicitEmptyOptionalField(*morphs))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': 'morphs' must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'morphs' must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    Vector<DeformableMorph> parsedMorphs;
+    Vector<SkinnedGeometryMorph> parsedMorphs;
     parsedMorphs.reserve(morphs->asMap().size());
     Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<u32> vertexIds{Core::Alloc::ScratchAllocator<u32>(scratchArena)};
@@ -1335,13 +1335,13 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         const AStringView morphNameView(morphName.data(), morphName.size());
         const Name morphNameId = ToName(morphNameView);
         if(!morphNameId){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph names must not be empty")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': morph names must not be empty")
                 , PathToString<tchar>(nwbFilePath)
             );
             return false;
         }
         if(!morphValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' must be a map")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': morph '{}' must be a map")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(morphNameView)
             );
@@ -1355,7 +1355,7 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         if(!ParseFloatListField<Float3U, 3u>(nwbFilePath, morphValue, "delta_normal", deltaNormals))
             return false;
         if(!FindField(morphValue, "delta_tangent")){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' requires 'delta_tangent' list")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': morph '{}' requires 'delta_tangent' list")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(morphNameView)
             );
@@ -1369,17 +1369,17 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
             || vertexIds.size() != deltaNormals.size()
             || vertexIds.size() != deltaTangents.size()
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' stream counts must match and must not be empty")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': morph '{}' stream counts must match and must not be empty")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(morphNameView)
             );
             return false;
         }
 
-        DeformableMorph morph;
+        SkinnedGeometryMorph morph;
         morph.name = morphNameId;
         if(!morph.nameText.assign(morphNameView)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': morph '{}' exceeds CompactString capacity")
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': morph '{}' exceeds CompactString capacity")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(morphNameView)
             );
@@ -1387,7 +1387,7 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
         }
         morph.deltas.reserve(vertexIds.size());
         for(usize i = 0; i < vertexIds.size(); ++i){
-            DeformableMorphDelta delta;
+            SkinnedGeometryMorphDelta delta;
             delta.vertexId = vertexIds[i];
             delta.deltaPosition = deltaPositions[i];
             delta.deltaNormal = deltaNormals[i];
@@ -1402,26 +1402,26 @@ static bool ParseMorphs(const Path& nwbFilePath, const Core::Metascript::Value& 
     return true;
 }
 
-static bool RejectDeformableGeometrySourceField(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
+static bool RejectSkinnedGeometrySourceField(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
     if(!FindField(asset, "source"))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': external 'source' imports are not supported; use an offline converter to emit native .nwb streams")
+    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': external 'source' imports are not supported; use an offline converter to emit native .nwb streams")
         , PathToString<tchar>(discoveredFile.filePath)
     );
     return false;
 }
 
-static bool ParseDeformableGeometryMeta(
+static bool ParseSkinnedGeometryMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
-    DeformableGeometryCookEntry& outEntry
+    SkinnedGeometryCookEntry& outEntry
 ){
     outEntry = {};
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': asset is not a map")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': asset is not a map")
             , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
@@ -1432,14 +1432,14 @@ static bool ParseDeformableGeometryMeta(
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
         asset,
-        "DeformableGeometry",
+        "SkinnedGeometry",
         outEntry.virtualPath
     ))
         return false;
 
-    if(!RejectDeformableGeometrySourceField(discoveredFile, asset))
+    if(!RejectSkinnedGeometrySourceField(discoveredFile, asset))
         return false;
-    if(!ParseDeformableGeometryClassField(discoveredFile.filePath, asset, outEntry.geometryClass))
+    if(!ParseSkinnedGeometryClassField(discoveredFile.filePath, asset, outEntry.geometryClass))
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
@@ -1448,7 +1448,7 @@ static bool ParseDeformableGeometryMeta(
     ScratchVector<Float4U> tangents{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
     ScratchVector<Float2U> uv0{Core::Alloc::ScratchAllocator<Float2U>(scratchArena)};
     ScratchVector<Float4U> colors{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
-    if(!ParseDeformableIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
+    if(!ParseSkinnedGeometryIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
     if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
         return false;
@@ -1472,7 +1472,7 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
         return false;
-    if(!ParseDeformableIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices))
+    if(!ParseSkinnedGeometryIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices))
         return false;
     if(!normalsProvided)
         normals.assign(positions.size(), Float3U(0.0f, 0.0f, 1.0f));
@@ -1485,9 +1485,9 @@ static bool ParseDeformableGeometryMeta(
     }
     else
         BuildDefaultColors(positions.size(), colors);
-    if(!BuildDeformableRestVertices(discoveredFile.filePath, positions, normals, tangents, uv0, colors, outEntry.restVertices))
+    if(!BuildGeometryRestVertices(discoveredFile.filePath, positions, normals, tangents, uv0, colors, outEntry.restVertices))
         return false;
-    if(!GenerateMissingDeformableFrames(
+    if(!GenerateMissingSkinnedGeometryFrames(
         discoveredFile.filePath,
         normalsProvided,
         tangentsProvided,
@@ -1502,7 +1502,7 @@ static bool ParseDeformableGeometryMeta(
     if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
         return false;
     if(!GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' does not match skin payload")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class '{}' does not match skin payload")
             , PathToString<tchar>(discoveredFile.filePath)
             , StringConvert(GeometryClassText(outEntry.geometryClass))
         );
@@ -1519,7 +1519,7 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(
         !sourceSamplesProvided
-        && GeometryClassAllowsRuntimeDeform(outEntry.geometryClass)
+        && GeometryClassUsesSkinnedGeometryRuntime(outEntry.geometryClass)
         && !GenerateIdentitySourceSamples(
                 discoveredFile.filePath,
                 outEntry.indices,
@@ -1539,16 +1539,16 @@ static bool ParseDeformableGeometryMeta(
         return false;
     if(!ParseMorphs(discoveredFile.filePath, asset, outEntry.morphs))
         return false;
-    const bool hasSurfaceEditPayload = !outEntry.sourceSamples.empty() || !outEntry.editMaskPerTriangle.empty() || !outEntry.morphs.empty();
-    if(!GeometryClassAcceptsRuntimeDeformPayload(outEntry.geometryClass, hasSurfaceEditPayload)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' cannot define surface edit or morph payload")
+    const bool hasSkinnedGeometryPayload = !outEntry.sourceSamples.empty() || !outEntry.editMaskPerTriangle.empty() || !outEntry.morphs.empty();
+    if(!GeometryClassAcceptsSkinnedGeometryPayload(outEntry.geometryClass, hasSkinnedGeometryPayload)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class '{}' cannot define skinned geometry runtime or morph payload")
             , PathToString<tchar>(discoveredFile.filePath)
             , StringConvert(GeometryClassText(outEntry.geometryClass))
         );
         return false;
     }
-    if(!GeometryClassAcceptsRuntimeDeformPayload(outEntry.geometryClass, outEntry.displacement.mode != DeformableDisplacementMode::None)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable geometry meta '{}': geometry_class '{}' cannot define displacement")
+    if(!GeometryClassAcceptsSkinnedGeometryPayload(outEntry.geometryClass, outEntry.displacement.mode != SkinnedGeometryDisplacementMode::None)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class '{}' cannot define displacement")
             , PathToString<tchar>(discoveredFile.filePath)
             , StringConvert(GeometryClassText(outEntry.geometryClass))
         );
@@ -1558,16 +1558,16 @@ static bool ParseDeformableGeometryMeta(
     return true;
 }
 
-static bool ParseDeformableDisplacementTextureMeta(
+static bool ParseSkinnedGeometryDisplacementTextureMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
-    DeformableDisplacementTextureCookEntry& outEntry
+    SkinnedGeometryDisplacementTextureCookEntry& outEntry
 ){
     outEntry = {};
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable displacement texture meta '{}': asset is not a map")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry displacement texture meta '{}': asset is not a map")
             , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
@@ -1578,7 +1578,7 @@ static bool ParseDeformableDisplacementTextureMeta(
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
         asset,
-        "DeformableDisplacementTexture",
+        "SkinnedGeometryDisplacementTexture",
         outEntry.virtualPath
     ))
         return false;
@@ -1592,13 +1592,13 @@ static bool ParseDeformableDisplacementTextureMeta(
     if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "texels", outEntry.texels))
         return false;
     if(outEntry.width == 0u || outEntry.height == 0u || outEntry.width > Limit<u32>::s_Max / outEntry.height){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable displacement texture meta '{}': dimensions are invalid")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry displacement texture meta '{}': dimensions are invalid")
             , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
     }
     if(outEntry.texels.size() != static_cast<usize>(outEntry.width) * static_cast<usize>(outEntry.height)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deformable displacement texture meta '{}': texel count must match width * height")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry displacement texture meta '{}': texel count must match width * height")
             , PathToString<tchar>(discoveredFile.filePath)
         );
         return false;
@@ -1607,8 +1607,8 @@ static bool ParseDeformableDisplacementTextureMeta(
     return true;
 }
 
-static bool BuildDeformableGeometryAsset(DeformableGeometryCookEntry& geometryEntry, DeformableGeometry& outGeometry){
-    outGeometry = DeformableGeometry(geometryEntry.virtualPath);
+static bool BuildSkinnedGeometryAsset(SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
+    outGeometry = SkinnedGeometry(geometryEntry.virtualPath);
 
     outGeometry.setGeometryClass(geometryEntry.geometryClass);
     outGeometry.setRestVertices(Move(geometryEntry.restVertices));
@@ -1648,45 +1648,45 @@ bool ParseGeometryCookMetadata(
     return __hidden_geometry_asset_cook::ParseGeometryMeta(discoveredFile, doc, outEntry);
 }
 
-bool ParseDeformableGeometryCookMetadata(
+bool ParseSkinnedGeometryCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    DeformableGeometryCookEntry& outEntry
+    SkinnedGeometryCookEntry& outEntry
 ){
     __hidden_geometry_asset_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_geometry_asset_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_geometry_asset_cook::ParseDeformableGeometryMeta(discoveredFile, doc, outEntry);
+    return __hidden_geometry_asset_cook::ParseSkinnedGeometryMeta(discoveredFile, doc, outEntry);
 }
 
-bool ParseDeformableDisplacementTextureCookMetadata(
+bool ParseSkinnedGeometryDisplacementTextureCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    DeformableDisplacementTextureCookEntry& outEntry
+    SkinnedGeometryDisplacementTextureCookEntry& outEntry
 ){
     __hidden_geometry_asset_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_geometry_asset_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_geometry_asset_cook::ParseDeformableDisplacementTextureMeta(discoveredFile, doc, outEntry);
+    return __hidden_geometry_asset_cook::ParseSkinnedGeometryDisplacementTextureMeta(discoveredFile, doc, outEntry);
 }
 
 bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry){
     return __hidden_geometry_asset_cook::BuildGeometryAsset(geometryEntry, outGeometry);
 }
 
-bool BuildDeformableGeometryAsset(DeformableGeometryCookEntry& geometryEntry, DeformableGeometry& outGeometry){
-    return __hidden_geometry_asset_cook::BuildDeformableGeometryAsset(geometryEntry, outGeometry);
+bool BuildSkinnedGeometryAsset(SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
+    return __hidden_geometry_asset_cook::BuildSkinnedGeometryAsset(geometryEntry, outGeometry);
 }
 
-bool BuildDeformableDisplacementTextureAsset(
-    DeformableDisplacementTextureCookEntry& textureEntry,
-    DeformableDisplacementTexture& outTexture
+bool BuildSkinnedGeometryDisplacementTextureAsset(
+    SkinnedGeometryDisplacementTextureCookEntry& textureEntry,
+    SkinnedGeometryDisplacementTexture& outTexture
 ){
-    outTexture = DeformableDisplacementTexture(textureEntry.virtualPath);
+    outTexture = SkinnedGeometryDisplacementTexture(textureEntry.virtualPath);
     outTexture.setSize(textureEntry.width, textureEntry.height);
     outTexture.setTexels(Move(textureEntry.texels));
     return outTexture.validatePayload();

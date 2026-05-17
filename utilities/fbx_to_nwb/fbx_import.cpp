@@ -584,7 +584,7 @@ bool BuildSkinInfluence(
 bool AppendInstanceGeometry(
     const MeshInstance& instance,
     const ImportOptions& options,
-    const bool wantsDeformableGeometry,
+    const bool wantsSkinnedGeometry,
     const bool wantsSkinning,
     const Vec4& defaultColor,
     UtilityVector<u32>& inOutTriangleIndices,
@@ -615,7 +615,7 @@ bool AppendInstanceGeometry(
     }
 
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
-    const bool importUvs = wantsDeformableGeometry && mesh->vertex_uv.exists;
+    const bool importUvs = wantsSkinnedGeometry && mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
     ufbx_skin_deformer* skin = nullptr;
     UtilityVector<u16> clusterJoints;
@@ -929,7 +929,7 @@ bool BuildGeometry(
         outError = GeometryClassErrorText();
         return false;
     }
-    const bool wantsDeformableGeometry = GeometryClassUsesDeformableRuntime(geometryClass);
+    const bool wantsSkinnedGeometry = GeometryClassUsesSkinnedGeometryRuntime(geometryClass);
     const bool wantsSkinning = GeometryClassUsesSkinning(geometryClass);
     __hidden_fbx_import::SkinExportContext skinContext;
     for(const usize instanceIndex : selection){
@@ -941,7 +941,7 @@ bool BuildGeometry(
             !__hidden_fbx_import::AppendInstanceGeometry(
                 instances[instanceIndex],
                 options,
-                wantsDeformableGeometry,
+                wantsSkinnedGeometry,
                 wantsSkinning,
                 defaultColor,
                 triangleIndices,

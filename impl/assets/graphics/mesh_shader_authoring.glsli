@@ -102,8 +102,8 @@ layout(location = 4) out vec3 outWorldPosition[];
 
 
 const uint NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE = 10u;
-const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX = 1u;
-const uint NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE = 16u;
+const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_SKINNED_GEOMETRY_VERTEX = 1u;
+const uint NWB_MESH_SKINNED_GEOMETRY_VERTEX_SCALAR_STRIDE = 16u;
 
 const uint NWB_MATERIAL_PARAMETER_TYPE_FLOAT = 1u;
 const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
@@ -175,9 +175,9 @@ uint nwbMeshTriangleIndex(){
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
     const uint indexBase = triangleIndex * 3u;
     const uint sourceVertexIndex = nwbMeshSourceIndices[indexBase + corner];
-    const bool deformableLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_DEFORMABLE_VERTEX;
-    const uint scalarStride = deformableLayout
-        ? NWB_MESH_DEFORMABLE_VERTEX_SCALAR_STRIDE
+    const bool skinnedGeometryLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_SKINNED_GEOMETRY_VERTEX;
+    const uint scalarStride = skinnedGeometryLayout
+        ? NWB_MESH_SKINNED_GEOMETRY_VERTEX_SCALAR_STRIDE
         : NWB_MESH_SOURCE_VERTEX_SCALAR_STRIDE
     ;
     const uint scalarBase = sourceVertexIndex * scalarStride;
@@ -188,7 +188,7 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
         nwbMeshSourceVertexScalars[scalarBase + 1u],
         nwbMeshSourceVertexScalars[scalarBase + 2u]
     );
-    if(deformableLayout){
+    if(skinnedGeometryLayout){
         sourceVertex.normal = vec3(
             nwbMeshSourceVertexScalars[scalarBase + 3u],
             nwbMeshSourceVertexScalars[scalarBase + 4u],

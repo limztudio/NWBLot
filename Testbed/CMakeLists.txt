@@ -17,9 +17,8 @@ target_link_libraries(testbed PRIVATE
     nwb_ecs_geometry
     nwb_ecs_lighting
     nwb_ecs_scene
-    nwb_ecs_deformable
-    nwb_ecs_deformable_edit
-    nwb_ecs_deformable_render
+    nwb_ecs_skinned_geometry
+    nwb_ecs_skinned_geometry_render
     nwb_ecs_render
     nwb_ecs_ui
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_geometry>"

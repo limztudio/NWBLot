@@ -151,24 +151,24 @@ using PreparedShaderVector = Vector<PreparedShaderEntry, ShaderCook::CookAllocat
 using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
 using DiscoveredNwbFileVector = ShaderCook::CookVector<DiscoveredNwbFile>;
 using GeometryCookEntryVector = ShaderCook::CookVector<GeometryCookEntry>;
-using DeformableGeometryCookEntryVector = ShaderCook::CookVector<DeformableGeometryCookEntry>;
-using DeformableDisplacementTextureCookEntryVector = ShaderCook::CookVector<DeformableDisplacementTextureCookEntry>;
+using SkinnedGeometryCookEntryVector = ShaderCook::CookVector<SkinnedGeometryCookEntry>;
+using SkinnedGeometryDisplacementTextureCookEntryVector = ShaderCook::CookVector<SkinnedGeometryDisplacementTextureCookEntry>;
 using MaterialCookEntryVector = ShaderCook::CookVector<MaterialCookEntry>;
 
 struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
     ShaderEntryVector shaderEntries;
     GeometryCookEntryVector geometryEntries;
-    DeformableGeometryCookEntryVector deformableGeometryEntries;
-    DeformableDisplacementTextureCookEntryVector deformableDisplacementTextureEntries;
+    SkinnedGeometryCookEntryVector skinnedGeometryEntries;
+    SkinnedGeometryDisplacementTextureCookEntryVector skinnedGeometryDisplacementTextureEntries;
     MaterialCookEntryVector materialEntries;
 
     explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
         : includeMetadata(ShaderCook::CookAllocator<Pair<const AString, ShaderCook::IncludeEntry>>(arena))
         , shaderEntries(ShaderCook::CookAllocator<ShaderCook::ShaderEntry>(arena))
         , geometryEntries(ShaderCook::CookAllocator<GeometryCookEntry>(arena))
-        , deformableGeometryEntries(ShaderCook::CookAllocator<DeformableGeometryCookEntry>(arena))
-        , deformableDisplacementTextureEntries(ShaderCook::CookAllocator<DeformableDisplacementTextureCookEntry>(arena))
+        , skinnedGeometryEntries(ShaderCook::CookAllocator<SkinnedGeometryCookEntry>(arena))
+        , skinnedGeometryDisplacementTextureEntries(ShaderCook::CookAllocator<SkinnedGeometryDisplacementTextureCookEntry>(arena))
         , materialEntries(ShaderCook::CookAllocator<MaterialCookEntry>(arena))
     {}
 };
@@ -848,6 +848,19 @@ static bool ReserveShaderIndexRecords(
     return true;
 }
 
+[[nodiscard]] static bool MetadataDeclaresSkinnedGeometry(const Core::Metascript::Document& doc){
+    const Core::Metascript::Value& asset = doc.asset();
+    if(!asset.isMap())
+        return false;
+
+    const Core::Metascript::Value* geometryClass = asset.findField("geometry_class");
+    if(!geometryClass || !geometryClass->isString())
+        return false;
+
+    const Core::Metascript::MStringView text = geometryClass->asString();
+    return AStringView(text.data(), text.size()) == AStringView("skinned");
+}
+
 static bool ParseAssetMetadata(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
@@ -858,8 +871,8 @@ static bool ParseAssetMetadata(
     outMetadata.shaderEntries.reserve(nwbFiles.size());
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.geometryEntries.reserve(nwbFiles.size());
-    outMetadata.deformableGeometryEntries.reserve(nwbFiles.size());
-    outMetadata.deformableDisplacementTextureEntries.reserve(nwbFiles.size());
+    outMetadata.skinnedGeometryEntries.reserve(nwbFiles.size());
+    outMetadata.skinnedGeometryDisplacementTextureEntries.reserve(nwbFiles.size());
 
     HashSet<
         PreparedShaderKey,
@@ -972,6 +985,16 @@ static bool ParseAssetMetadata(
             continue;
         }
 
+        if(assetType == Geometry::AssetTypeName() && MetadataDeclaresSkinnedGeometry(doc)){
+            SkinnedGeometryCookEntry geometryEntry;
+            if(!ParseSkinnedGeometryCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, geometryEntry))
+                return false;
+
+            if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.skinnedGeometryEntries))
+                return false;
+            continue;
+        }
+
         if(assetType == Geometry::AssetTypeName()){
             GeometryCookEntry geometryEntry;
             if(!ParseGeometryCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, geometryEntry))
@@ -982,25 +1005,15 @@ static bool ParseAssetMetadata(
             continue;
         }
 
-        if(assetType == DeformableGeometry::AssetTypeName()){
-            DeformableGeometryCookEntry geometryEntry;
-            if(!ParseDeformableGeometryCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, geometryEntry))
-                return false;
-
-            if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.deformableGeometryEntries))
-                return false;
-            continue;
-        }
-
-        if(assetType == DeformableDisplacementTexture::AssetTypeName()){
-            DeformableDisplacementTextureCookEntry textureEntry;
-            if(!ParseDeformableDisplacementTextureCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, textureEntry))
+        if(assetType == SkinnedGeometryDisplacementTexture::AssetTypeName()){
+            SkinnedGeometryDisplacementTextureCookEntry textureEntry;
+            if(!ParseSkinnedGeometryDisplacementTextureCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, textureEntry))
                 return false;
 
             if(!AppendUniquePropertyAssetEntry(
                 textureEntry,
                 seenPropertyAssetPathHashes,
-                outMetadata.deformableDisplacementTextureEntries
+                outMetadata.skinnedGeometryDisplacementTextureEntries
             ))
                 return false;
             continue;
@@ -1020,9 +1033,9 @@ static bool ParseAssetMetadata(
         }
         if(!outMetadata.geometryEntries.empty())
             return true;
-        if(!outMetadata.deformableGeometryEntries.empty())
+        if(!outMetadata.skinnedGeometryEntries.empty())
             return true;
-        if(!outMetadata.deformableDisplacementTextureEntries.empty())
+        if(!outMetadata.skinnedGeometryDisplacementTextureEntries.empty())
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no graphics asset metadata found in asset roots"));
@@ -1405,36 +1418,36 @@ static bool AppendGeometryAssetsToVolume(
     );
 }
 
-static bool AppendDeformableGeometryAssetsToVolume(
-    DeformableGeometryCookEntryVector& geometryEntries,
+static bool AppendSkinnedGeometryAssetsToVolume(
+    SkinnedGeometryCookEntryVector& geometryEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    return AppendBuiltAssetsToVolume<DeformableGeometry, DeformableGeometryAssetCodec>(
-        NWB_TEXT("deformable geometry"),
+    return AppendBuiltAssetsToVolume<SkinnedGeometry, SkinnedGeometryAssetCodec>(
+        NWB_TEXT("skinned geometry"),
         geometryEntries,
         volumeSession,
         inOutSeenVirtualPathHashes,
         true,
-        [](DeformableGeometryCookEntry& geometryEntry, DeformableGeometry& outGeometry){
-            return BuildDeformableGeometryAsset(geometryEntry, outGeometry);
+        [](SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
+            return BuildSkinnedGeometryAsset(geometryEntry, outGeometry);
         }
     );
 }
 
-static bool AppendDeformableDisplacementTexturesToVolume(
-    DeformableDisplacementTextureCookEntryVector& textureEntries,
+static bool AppendSkinnedGeometryDisplacementTexturesToVolume(
+    SkinnedGeometryDisplacementTextureCookEntryVector& textureEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    return AppendBuiltAssetsToVolume<DeformableDisplacementTexture, DeformableDisplacementTextureAssetCodec>(
-        NWB_TEXT("deformable displacement texture"),
+    return AppendBuiltAssetsToVolume<SkinnedGeometryDisplacementTexture, SkinnedGeometryDisplacementTextureAssetCodec>(
+        NWB_TEXT("skinned geometry displacement texture"),
         textureEntries,
         volumeSession,
         inOutSeenVirtualPathHashes,
         true,
-        [](DeformableDisplacementTextureCookEntry& textureEntry, DeformableDisplacementTexture& outTexture){
-            return BuildDeformableDisplacementTextureAsset(textureEntry, outTexture);
+        [](SkinnedGeometryDisplacementTextureCookEntry& textureEntry, SkinnedGeometryDisplacementTexture& outTexture){
+            return BuildSkinnedGeometryDisplacementTextureAsset(textureEntry, outTexture);
         }
     );
 }
@@ -1518,12 +1531,12 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
-        static_cast<u64>(parsedMetadata.deformableGeometryEntries.size()),
+        static_cast<u64>(parsedMetadata.skinnedGeometryEntries.size()),
         preparedPlan.plannedFileCount
     ))
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
-        static_cast<u64>(parsedMetadata.deformableDisplacementTextureEntries.size()),
+        static_cast<u64>(parsedMetadata.skinnedGeometryDisplacementTextureEntries.size()),
         preparedPlan.plannedFileCount
     ))
         return false;
@@ -1596,14 +1609,14 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         if(!__hidden_graphics_asset_cooker::AppendGeometryAssetsToVolume(parsedMetadata.geometryEntries, volumeSession, seenVirtualPathHashes))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendDeformableGeometryAssetsToVolume(
-            parsedMetadata.deformableGeometryEntries,
+        if(!__hidden_graphics_asset_cooker::AppendSkinnedGeometryAssetsToVolume(
+            parsedMetadata.skinnedGeometryEntries,
             volumeSession,
             seenVirtualPathHashes
         ))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendDeformableDisplacementTexturesToVolume(
-            parsedMetadata.deformableDisplacementTextureEntries,
+        if(!__hidden_graphics_asset_cooker::AppendSkinnedGeometryDisplacementTexturesToVolume(
+            parsedMetadata.skinnedGeometryDisplacementTextureEntries,
             volumeSession,
             seenVirtualPathHashes
         ))

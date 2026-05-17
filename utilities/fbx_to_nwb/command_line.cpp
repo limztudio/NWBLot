@@ -418,7 +418,7 @@ int Run(int argc, char** argv, bool& prompted){
         << "  geometry_class: " << options.geometryClass << "\n"
         << "  index_type: " << resolvedIndexType << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
-    if(IsNormalizedDeformableGeometryClass(options.geometryClass))
+    if(IsNormalizedSkinnedGeometryClass(options.geometryClass))
         NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
     if(IsNormalizedSkinnedGeometryClass(options.geometryClass))
         NWB_COUT << "  skeleton joints: " << skeletonJointCount << "\n";

@@ -29,8 +29,8 @@ class Geometry;
 
 namespace MeshSourceLayout{
     enum Enum : u32{
-        GeometryVertex = 0u,
-        SkinnedGeometryVertex = 1u,
+        StaticGeometryStreams = 0u,
+        SkinnedGeometryRuntime = 1u,
     };
 };
 
@@ -44,7 +44,7 @@ struct RuntimeGeometryDesc{
     Core::BufferHandle shaderVertexBuffer;
     Core::BufferHandle shaderIndexBuffer;
     u32 indexCount = 0u;
-    u32 sourceVertexLayout = MeshSourceLayout::GeometryVertex;
+    u32 sourceVertexLayout = MeshSourceLayout::StaticGeometryStreams;
     u64 version = 0u;
 
     [[nodiscard]] bool valid()const noexcept{

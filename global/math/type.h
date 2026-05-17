@@ -17,6 +17,65 @@ using Float16 = Half;
 static_assert(sizeof(Half) == 2u, "Half must stay a 16-bit IEEE 754 binary16 storage type");
 static_assert(alignof(Half) == alignof(u16), "Half storage alignment must match u16");
 
+struct Half2U{
+    union{
+        struct{
+            Half x;
+            Half y;
+        };
+        Half raw[2];
+        u32 packed;
+    };
+
+    constexpr Half2U()noexcept
+        : packed(0u)
+    {
+    }
+    constexpr Half2U(const Half xValue, const Half yValue)noexcept
+        : x(xValue), y(yValue)
+    {
+    }
+    explicit constexpr Half2U(const u32 packedValue)noexcept
+        : packed(packedValue)
+    {
+    }
+};
+static_assert(sizeof(Half2U) == sizeof(u32), "Half2U must stay a packed 32-bit payload");
+static_assert(alignof(Half2U) == alignof(u32), "Half2U must stay word-aligned");
+static_assert(IsStandardLayout_V<Half2U>, "Half2U must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<Half2U>, "Half2U must stay binary-serializable");
+
+struct Half4U{
+    union{
+        struct{
+            Half x;
+            Half y;
+            Half z;
+            Half w;
+        };
+        Half raw[4];
+        Half2U pair[2];
+        u32 packed[2];
+    };
+
+    constexpr Half4U()noexcept
+        : packed{0u, 0u}
+    {
+    }
+    constexpr Half4U(const Half xValue, const Half yValue, const Half zValue, const Half wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+    constexpr Half4U(const Half2U xyValue, const Half2U zwValue)noexcept
+        : pair{xyValue, zwValue}
+    {
+    }
+};
+static_assert(sizeof(Half4U) == sizeof(u32) * 2u, "Half4U must stay a packed 64-bit payload");
+static_assert(alignof(Half4U) == alignof(u32), "Half4U must stay word-aligned");
+static_assert(IsStandardLayout_V<Half4U>, "Half4U must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<Half4U>, "Half4U must stay binary-serializable");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

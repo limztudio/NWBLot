@@ -156,13 +156,13 @@ static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.0000
 }
 
 static NWB::Impl::SkinnedGeometryVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){
-    NWB::Impl::SkinnedGeometryVertex vertex;
-    vertex.position = Float3U(x, y, z);
-    vertex.normal = Float3U(0.0f, 0.0f, 1.0f);
-    vertex.tangent = Float4U(1.0f, 0.0f, 0.0f, 1.0f);
-    vertex.uv0 = Float2U(u, 0.0f);
-    vertex.color0 = Float4U(1.0f, 1.0f, 1.0f, 1.0f);
-    return vertex;
+    return NWB::Impl::MakeSkinnedGeometryVertex(
+        Float3U(x, y, z),
+        Float3U(0.0f, 0.0f, 1.0f),
+        Float4U(1.0f, 0.0f, 0.0f, 1.0f),
+        Float2U(u, 0.0f),
+        Float4U(1.0f, 1.0f, 1.0f, 1.0f)
+    );
 }
 
 static NWB::Impl::SkinnedGeometryJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){

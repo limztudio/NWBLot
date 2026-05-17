@@ -31,7 +31,9 @@ NWB_IMPL_BEGIN
 
 struct GeometryCookEntry{
     Name virtualPath = NAME_NONE;
-    Vector<GeometryVertex> vertices;
+    Vector<Float3U> positions;
+    Vector<Half4U> normals;
+    Vector<Half4U> colors;
     Vector<u32> indices;
     bool use32BitIndices = false;
 };

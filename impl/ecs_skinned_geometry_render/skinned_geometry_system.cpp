@@ -36,12 +36,12 @@ namespace __hidden_skinned_geometry_system{
 
 
 static constexpr u32 s_SkinnedGeometryGroupSize = 64u;
-static constexpr u32 s_SkinnedGeometryVertexScalarStride = sizeof(SkinnedGeometryVertex) / sizeof(f32);
+static constexpr u32 s_SkinnedGeometryVertexWordStride = sizeof(SkinnedGeometryVertex) / sizeof(u32);
 
 struct SkinnedGeometryPushConstants{
     u32 vertexCount = 0;
-    u32 restScalarStride = 0;
-    u32 skinnedScalarStride = 0;
+    u32 restWordStride = 0;
+    u32 skinnedWordStride = 0;
     u32 skinCount = 0;
     u32 jointCount = 0;
     u32 skinningMode = SkinnedGeometrySkinningMode::LinearBlend;
@@ -195,7 +195,7 @@ bool SkinnedGeometrySystem::resolveRuntimeGeometry(const Core::ECS::EntityID ent
     outGeometry.shaderVertexBuffer = instance->skinnedVertexBuffer;
     outGeometry.shaderIndexBuffer = instance->indexBuffer;
     outGeometry.indexCount = static_cast<u32>(instance->indices.size());
-    outGeometry.sourceVertexLayout = MeshSourceLayout::SkinnedGeometryVertex;
+    outGeometry.sourceVertexLayout = MeshSourceLayout::SkinnedGeometryRuntime;
     outGeometry.version = instance->editRevision;
     return outGeometry.valid();
 }
@@ -453,8 +453,8 @@ bool SkinnedGeometrySystem::dispatchRuntimeMesh(
 
     __hidden_skinned_geometry_system::SkinnedGeometryPushConstants pushConstants;
     pushConstants.vertexCount = static_cast<u32>(instance.restVertices.size());
-    pushConstants.restScalarStride = __hidden_skinned_geometry_system::s_SkinnedGeometryVertexScalarStride;
-    pushConstants.skinnedScalarStride = __hidden_skinned_geometry_system::s_SkinnedGeometryVertexScalarStride;
+    pushConstants.restWordStride = __hidden_skinned_geometry_system::s_SkinnedGeometryVertexWordStride;
+    pushConstants.skinnedWordStride = __hidden_skinned_geometry_system::s_SkinnedGeometryVertexWordStride;
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
     pushConstants.skinningMode = hasActiveSkin

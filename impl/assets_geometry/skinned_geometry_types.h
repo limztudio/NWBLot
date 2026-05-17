@@ -17,65 +17,69 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-struct alignas(16) SkinnedGeometryVertex{
+struct SkinnedGeometryVertex{
     Float3U position;
-    Float3U normal;
-    Float4U tangent;
+    Half4U normal;
+    Half4U tangent;
     Float2U uv0;
-    Float4U color0;
+    Half4U color0;
 };
 static_assert(IsStandardLayout_V<SkinnedGeometryVertex>, "SkinnedGeometryVertex must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<SkinnedGeometryVertex>, "SkinnedGeometryVertex must stay binary-serializable");
-static_assert(sizeof(SkinnedGeometryVertex) == sizeof(f32) * 16u, "SkinnedGeometryVertex GPU/source layout drifted");
-static_assert(alignof(SkinnedGeometryVertex) >= alignof(Float4), "SkinnedGeometryVertex must stay SIMD-aligned");
-static_assert(offsetof(SkinnedGeometryVertex, position) == sizeof(f32) * 0u, "SkinnedGeometryVertex position layout drifted");
-static_assert(offsetof(SkinnedGeometryVertex, normal) == sizeof(f32) * 3u, "SkinnedGeometryVertex normal layout drifted");
-static_assert(offsetof(SkinnedGeometryVertex, tangent) == sizeof(f32) * 6u, "SkinnedGeometryVertex tangent layout drifted");
-static_assert(offsetof(SkinnedGeometryVertex, uv0) == sizeof(f32) * 10u, "SkinnedGeometryVertex uv0 layout drifted");
-static_assert(offsetof(SkinnedGeometryVertex, color0) == sizeof(f32) * 12u, "SkinnedGeometryVertex color0 layout drifted");
-
-[[nodiscard]] inline SIMDVector LoadSkinnedGeometryVertexLane(const SkinnedGeometryVertex& vertex, const usize lane)noexcept{
-    NWB_ASSERT(lane < 4u);
-    const f32* values = vertex.position.raw + (lane * 4u);
-#if defined(NWB_HAS_SCALAR)
-    return VectorSet(values[0], values[1], values[2], values[3]);
-#elif defined(NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    return vld1q_f32_ex(values, 128);
-#else
-    return vld1q_f32(values);
-#endif
-#elif defined(NWB_HAS_SSE4)
-    return _mm_load_ps(values);
-#endif
-}
+static_assert(sizeof(SkinnedGeometryVertex) == sizeof(u32) * 11u, "SkinnedGeometryVertex GPU/source layout drifted");
+static_assert(offsetof(SkinnedGeometryVertex, position) == sizeof(u32) * 0u, "SkinnedGeometryVertex position layout drifted");
+static_assert(offsetof(SkinnedGeometryVertex, normal) == sizeof(u32) * 3u, "SkinnedGeometryVertex normal layout drifted");
+static_assert(offsetof(SkinnedGeometryVertex, tangent) == sizeof(u32) * 5u, "SkinnedGeometryVertex tangent layout drifted");
+static_assert(offsetof(SkinnedGeometryVertex, uv0) == sizeof(u32) * 7u, "SkinnedGeometryVertex uv0 layout drifted");
+static_assert(offsetof(SkinnedGeometryVertex, color0) == sizeof(u32) * 9u, "SkinnedGeometryVertex color0 layout drifted");
 
 [[nodiscard]] inline SIMDVector LoadSkinnedGeometryVertexPosition(const SkinnedGeometryVertex& vertex)noexcept{
-    return VectorSetW(LoadSkinnedGeometryVertexLane(vertex, 0u), 0.0f);
+    return VectorSetW(LoadFloat(vertex.position), 0.0f);
 }
 
 [[nodiscard]] inline SIMDVector LoadSkinnedGeometryVertexNormal(const SkinnedGeometryVertex& vertex)noexcept{
-    const SIMDVector lane0 = LoadSkinnedGeometryVertexLane(vertex, 0u);
-    const SIMDVector lane1 = LoadSkinnedGeometryVertexLane(vertex, 1u);
-    return VectorSetW(VectorPermute<3, 4, 5, 6>(lane0, lane1), 0.0f);
+    const Float4U normal = LoadHalf4U(vertex.normal);
+    return VectorSetW(LoadFloat(normal), 0.0f);
 }
 
 [[nodiscard]] inline SIMDVector LoadSkinnedGeometryVertexTangent(const SkinnedGeometryVertex& vertex)noexcept{
-    const SIMDVector lane1 = LoadSkinnedGeometryVertexLane(vertex, 1u);
-    const SIMDVector lane2 = LoadSkinnedGeometryVertexLane(vertex, 2u);
-    return VectorPermute<2, 3, 4, 5>(lane1, lane2);
+    return LoadFloat(LoadHalf4U(vertex.tangent));
 }
 
 [[nodiscard]] inline SIMDVector LoadSkinnedGeometryVertexUv0(const SkinnedGeometryVertex& vertex)noexcept{
-    const SIMDVector uv0 = VectorPermute<2, 3, 2, 3>(
-        LoadSkinnedGeometryVertexLane(vertex, 2u),
-        LoadSkinnedGeometryVertexLane(vertex, 2u)
-    );
-    return VectorSetW(VectorSetZ(uv0, 0.0f), 0.0f);
+    return VectorSetW(VectorSetZ(LoadFloat(vertex.uv0), 0.0f), 0.0f);
 }
 
 [[nodiscard]] inline SIMDVector LoadSkinnedGeometryVertexColor0(const SkinnedGeometryVertex& vertex)noexcept{
-    return LoadSkinnedGeometryVertexLane(vertex, 3u);
+    return LoadFloat(LoadHalf4U(vertex.color0));
+}
+
+inline void StoreSkinnedGeometryVertexNormal(SkinnedGeometryVertex& vertex, const Float3U& normal)noexcept{
+    vertex.normal = MakeHalf4U(normal.x, normal.y, normal.z, 0.0f);
+}
+
+inline void StoreSkinnedGeometryVertexTangent(SkinnedGeometryVertex& vertex, const Float4U& tangent)noexcept{
+    vertex.tangent = MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w);
+}
+
+inline void StoreSkinnedGeometryVertexColor0(SkinnedGeometryVertex& vertex, const Float4U& color0)noexcept{
+    vertex.color0 = MakeHalf4U(color0.x, color0.y, color0.z, color0.w);
+}
+
+[[nodiscard]] inline SkinnedGeometryVertex MakeSkinnedGeometryVertex(
+    const Float3U& position,
+    const Float3U& normal,
+    const Float4U& tangent,
+    const Float2U& uv0,
+    const Float4U& color0
+)noexcept{
+    SkinnedGeometryVertex vertex;
+    vertex.position = position;
+    StoreSkinnedGeometryVertexNormal(vertex, normal);
+    StoreSkinnedGeometryVertexTangent(vertex, tangent);
+    vertex.uv0 = uv0;
+    StoreSkinnedGeometryVertexColor0(vertex, color0);
+    return vertex;
 }
 
 

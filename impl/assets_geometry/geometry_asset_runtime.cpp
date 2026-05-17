@@ -31,6 +31,11 @@ UniquePtr<Core::Assets::IAssetCodec> CreateGeometryAssetCodec(){
 }
 Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateGeometryAssetCodec);
 
+[[nodiscard]] static bool FiniteVector(const SIMDVector value, const u32 activeMask){
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & activeMask) == 0u;
+}
+
 
 };
 
@@ -41,14 +46,21 @@ Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateG
 bool Geometry::validatePayload()const{
     const TString geometryPathText = Core::Assets::AssetVirtualPathText(*this);
 
-    if(m_vertices.empty() || m_indices.empty()){
+    if(m_positions.empty() || m_normals.empty() || m_colors.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' has incomplete payload")
             , geometryPathText
         );
         return false;
     }
 
-    if(m_vertices.size() > static_cast<usize>(Limit<u32>::s_Max) || m_indices.size() > static_cast<usize>(Limit<u32>::s_Max)){
+    if(m_positions.size() != m_normals.size() || m_positions.size() != m_colors.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' stream counts do not match")
+            , geometryPathText
+        );
+        return false;
+    }
+
+    if(m_positions.size() > static_cast<usize>(Limit<u32>::s_Max) || m_indices.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' exceeds u32 vertex/index count limits")
             , geometryPathText
         );
@@ -62,19 +74,14 @@ bool Geometry::validatePayload()const{
         return false;
     }
 
-    for(usize i = 0; i < m_vertices.size(); ++i){
-        const GeometryVertex& vertex = m_vertices[i];
+    for(usize i = 0; i < m_positions.size(); ++i){
+        const SIMDVector position = VectorSetW(LoadFloat(m_positions[i]), 0.0f);
+        const SIMDVector normal = VectorSetW(LoadFloat(LoadHalf4U(m_normals[i])), 0.0f);
+        const SIMDVector color0 = LoadFloat(LoadHalf4U(m_colors[i]));
         const bool finite =
-            IsFinite(vertex.position.x)
-            && IsFinite(vertex.position.y)
-            && IsFinite(vertex.position.z)
-            && IsFinite(vertex.normal.x)
-            && IsFinite(vertex.normal.y)
-            && IsFinite(vertex.normal.z)
-            && IsFinite(vertex.color0.x)
-            && IsFinite(vertex.color0.y)
-            && IsFinite(vertex.color0.z)
-            && IsFinite(vertex.color0.w)
+            __hidden_geometry_asset::FiniteVector(position, 0x7u)
+            && __hidden_geometry_asset::FiniteVector(normal, 0x7u)
+            && __hidden_geometry_asset::FiniteVector(color0, 0xFu)
         ;
         if(!finite){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex {} contains non-finite data")
@@ -84,11 +91,7 @@ bool Geometry::validatePayload()const{
             return false;
         }
 
-        const f32 normalLengthSquared =
-            (vertex.normal.x * vertex.normal.x)
-            + (vertex.normal.y * vertex.normal.y)
-            + (vertex.normal.z * vertex.normal.z)
-        ;
+        const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
         if(!IsFinite(normalLengthSquared) || Abs(normalLengthSquared - 1.0f) > 0.001f){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' vertex {} has an invalid normal")
                 , geometryPathText
@@ -99,11 +102,11 @@ bool Geometry::validatePayload()const{
     }
 
     for(const u32 indexValue : m_indices){
-        if(indexValue >= m_vertices.size()){
+        if(indexValue >= m_positions.size()){
             NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' references vertex index {} but only has {} vertices")
                 , geometryPathText
                 , indexValue
-                , m_vertices.size()
+                , m_positions.size()
             );
             return false;
         }
@@ -119,7 +122,9 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    m_vertices.clear();
+    m_positions.clear();
+    m_normals.clear();
+    m_colors.clear();
     m_indices.clear();
 
     const tchar* const loadFailureContext = NWB_TEXT("Geometry::loadBinary");
@@ -153,7 +158,11 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
         return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
     };
-    if(!readVector(vertexCount, m_vertices, NWB_TEXT("vertices")))
+    if(!readVector(vertexCount, m_positions, NWB_TEXT("positions")))
+        return false;
+    if(!readVector(vertexCount, m_normals, NWB_TEXT("normals")))
+        return false;
+    if(!readVector(vertexCount, m_colors, NWB_TEXT("colors")))
         return false;
     if(!readVector(indexCount, m_indices, NWB_TEXT("indices")))
         return false;

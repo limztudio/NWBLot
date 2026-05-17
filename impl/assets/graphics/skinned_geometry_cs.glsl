@@ -23,11 +23,11 @@ struct NwbSkinnedGeometryJointMatrix{
 };
 
 layout(std430, binding = 0) readonly buffer NwbSkinnedGeometryRestVerticesBuffer{
-    float nwbSkinnedGeometryRestVertexScalars[];
+    uint nwbSkinnedGeometryRestVertexWords[];
 };
 
 layout(std430, binding = 1) buffer NwbSkinnedGeometrySkinnedVerticesBuffer{
-    float nwbSkinnedGeometrySkinnedVertexScalars[];
+    uint nwbSkinnedGeometrySkinnedVertexWords[];
 };
 
 layout(std430, binding = 4) readonly buffer NwbSkinnedGeometrySkinInfluencesBuffer{
@@ -51,11 +51,11 @@ uint nwbSkinnedGeometryVertexCount(){
     return g_NwbSkinnedGeometryPushConstants.payload0.x;
 }
 
-uint nwbSkinnedGeometryRestScalarStride(){
+uint nwbSkinnedGeometryRestWordStride(){
     return g_NwbSkinnedGeometryPushConstants.payload0.y;
 }
 
-uint nwbSkinnedGeometrySkinnedScalarStride(){
+uint nwbSkinnedGeometrySkinnedWordStride(){
     return g_NwbSkinnedGeometryPushConstants.payload0.z;
 }
 
@@ -83,9 +83,35 @@ bool nwbSkinnedGeometryFiniteVec4(const vec4 value){
     return !any(isnan(value)) && !any(isinf(value));
 }
 
-void nwbSkinnedGeometryCopyRestPayload(const uint restBase, const uint skinnedBase, const uint restScalarStride){
-    for(uint i = 0u; i < restScalarStride; ++i)
-        nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + i] = nwbSkinnedGeometryRestVertexScalars[restBase + i];
+void nwbSkinnedGeometryCopyRestPayload(const uint restBase, const uint skinnedBase, const uint restWordStride){
+    for(uint i = 0u; i < restWordStride; ++i)
+        nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + i] = nwbSkinnedGeometryRestVertexWords[restBase + i];
+}
+
+vec3 nwbSkinnedGeometryLoadRestPosition(const uint restBase){
+    return vec3(
+        uintBitsToFloat(nwbSkinnedGeometryRestVertexWords[restBase + 0u]),
+        uintBitsToFloat(nwbSkinnedGeometryRestVertexWords[restBase + 1u]),
+        uintBitsToFloat(nwbSkinnedGeometryRestVertexWords[restBase + 2u])
+    );
+}
+
+vec4 nwbSkinnedGeometryLoadRestHalf4(const uint restBase){
+    return vec4(
+        unpackHalf2x16(nwbSkinnedGeometryRestVertexWords[restBase + 0u]),
+        unpackHalf2x16(nwbSkinnedGeometryRestVertexWords[restBase + 1u])
+    );
+}
+
+void nwbSkinnedGeometryStoreSkinnedPosition(const uint skinnedBase, const vec3 position){
+    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = floatBitsToUint(position.x);
+    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = floatBitsToUint(position.y);
+    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 2u] = floatBitsToUint(position.z);
+}
+
+void nwbSkinnedGeometryStoreSkinnedHalf4(const uint skinnedBase, const vec4 value){
+    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = packHalf2x16(value.xy);
+    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = packHalf2x16(value.zw);
 }
 
 mat4 nwbSkinnedGeometryLoadJointMatrix(const uint jointId){
@@ -321,27 +347,14 @@ void main(){
     if(vertexId >= nwbSkinnedGeometryVertexCount())
         return;
 
-    const uint restScalarStride = nwbSkinnedGeometryRestScalarStride();
-    const uint skinnedScalarStride = nwbSkinnedGeometrySkinnedScalarStride();
-    const uint restBase = vertexId * restScalarStride;
-    const uint skinnedBase = vertexId * skinnedScalarStride;
+    const uint restWordStride = nwbSkinnedGeometryRestWordStride();
+    const uint skinnedWordStride = nwbSkinnedGeometrySkinnedWordStride();
+    const uint restBase = vertexId * restWordStride;
+    const uint skinnedBase = vertexId * skinnedWordStride;
 
-    vec3 position = vec3(
-        nwbSkinnedGeometryRestVertexScalars[restBase + 0u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 1u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 2u]
-    );
-    vec3 normal = vec3(
-        nwbSkinnedGeometryRestVertexScalars[restBase + 3u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 4u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 5u]
-    );
-    vec4 tangent = vec4(
-        nwbSkinnedGeometryRestVertexScalars[restBase + 6u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 7u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 8u],
-        nwbSkinnedGeometryRestVertexScalars[restBase + 9u]
-    );
+    vec3 position = nwbSkinnedGeometryLoadRestPosition(restBase);
+    vec3 normal = nwbSkinnedGeometryLoadRestHalf4(restBase + 3u).xyz;
+    vec4 tangent = nwbSkinnedGeometryLoadRestHalf4(restBase + 5u);
     const vec3 restPosition = position;
     const vec3 restNormal = normal;
     const vec4 restTangent = tangent;
@@ -359,17 +372,10 @@ void main(){
         tangent = preSkinTangent;
     nwbSkinnedGeometryOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
 
-    nwbSkinnedGeometryCopyRestPayload(restBase, skinnedBase, restScalarStride);
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 0u] = position.x;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 1u] = position.y;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 2u] = position.z;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 3u] = normal.x;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 4u] = normal.y;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 5u] = normal.z;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 6u] = tangent.x;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 7u] = tangent.y;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 8u] = tangent.z;
-    nwbSkinnedGeometrySkinnedVertexScalars[skinnedBase + 9u] = tangent.w;
+    nwbSkinnedGeometryCopyRestPayload(restBase, skinnedBase, restWordStride);
+    nwbSkinnedGeometryStoreSkinnedPosition(skinnedBase, position);
+    nwbSkinnedGeometryStoreSkinnedHalf4(skinnedBase + 3u, vec4(normal, 0.0));
+    nwbSkinnedGeometryStoreSkinnedHalf4(skinnedBase + 5u, tangent);
 }
 
 

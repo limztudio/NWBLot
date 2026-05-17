@@ -541,22 +541,30 @@ static void BuildDefaultColors(const usize vertexCount, ColorVectorT& outColors)
 }
 
 template<typename PositionVectorT, typename NormalVectorT, typename ColorVectorT>
-static bool BuildGeometryVertices(
+static bool BuildGeometryStreams(
     const Path& nwbFilePath,
     const PositionVectorT& positions,
     const NormalVectorT& normals,
     const ColorVectorT& colors,
-    Vector<GeometryVertex>& outVertices
+    Vector<Float3U>& outPositions,
+    Vector<Half4U>& outNormals,
+    Vector<Half4U>& outColors
 ){
     if(positions.size() != normals.size() || positions.size() != colors.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex stream counts must match"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    outVertices.clear();
-    outVertices.reserve(positions.size());
+    outPositions.clear();
+    outNormals.clear();
+    outColors.clear();
+    outPositions.reserve(positions.size());
+    outNormals.reserve(positions.size());
+    outColors.reserve(positions.size());
     for(usize i = 0; i < positions.size(); ++i){
-        outVertices.push_back(GeometryVertex{ positions[i], normals[i], colors[i] });
+        outPositions.push_back(positions[i]);
+        outNormals.push_back(MakeGeometryNormalStreamValue(normals[i]));
+        outColors.push_back(MakeGeometryColorStreamValue(colors[i]));
     }
     return true;
 }
@@ -617,14 +625,22 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     else
         BuildDefaultColors(positions.size(), colors);
 
-    if(!BuildGeometryVertices(discoveredFile.filePath, positions, normals, colors, outEntry.vertices))
+    if(!BuildGeometryStreams(
+        discoveredFile.filePath,
+        positions,
+        normals,
+        colors,
+        outEntry.positions,
+        outEntry.normals,
+        outEntry.colors
+    ))
         return false;
     return ParseMetadataIndexField(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices, outEntry.indices);
 }
 
 static bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry){
     outGeometry = Geometry(geometryEntry.virtualPath);
-    outGeometry.setVertices(Move(geometryEntry.vertices));
+    outGeometry.setStreams(Move(geometryEntry.positions), Move(geometryEntry.normals), Move(geometryEntry.colors));
     outGeometry.setIndices(Move(geometryEntry.indices));
     return outGeometry.validatePayload();
 }
@@ -751,13 +767,13 @@ static bool BuildGeometryRestVertices(
     outVertices.clear();
     outVertices.reserve(positions.size());
     for(usize i = 0; i < positions.size(); ++i){
-        SkinnedGeometryVertex vertex;
-        vertex.position = positions[i];
-        vertex.normal = normals[i];
-        vertex.tangent = tangents[i];
-        vertex.uv0 = uv0[i];
-        vertex.color0 = colors[i];
-        outVertices.push_back(vertex);
+        outVertices.push_back(MakeSkinnedGeometryVertex(
+            positions[i],
+            normals[i],
+            tangents[i],
+            uv0[i],
+            colors[i]
+        ));
     }
     return true;
 }
@@ -1129,7 +1145,9 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
 
     usize reserveBytes = sizeof(GeometryBinaryPayload::GeometryHeaderBinary);
-    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, geometry.vertices())
+    const bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, geometry.positions())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.normals())
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.colors())
         && AddBinaryVectorReserveBytes(reserveBytes, geometry.indices())
     ;
 
@@ -1138,14 +1156,18 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         outBinary.reserve(reserveBytes);
 
     GeometryBinaryPayload::GeometryHeaderBinary header;
-    header.vertexCount = static_cast<u64>(geometry.vertices().size());
+    header.vertexCount = static_cast<u64>(geometry.vertexCount());
     header.indexCount = static_cast<u64>(geometry.indices().size());
     AppendPOD(outBinary, header);
     const tchar* const serializeFailureContext = NWB_TEXT("GeometryAssetCodec::serialize");
     auto appendVector = [&](const auto& values, const tchar* label){
         return GeometryBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
     };
-    if(!appendVector(geometry.vertices(), NWB_TEXT("vertices")))
+    if(!appendVector(geometry.positions(), NWB_TEXT("positions")))
+        return false;
+    if(!appendVector(geometry.normals(), NWB_TEXT("normals")))
+        return false;
+    if(!appendVector(geometry.colors(), NWB_TEXT("colors")))
         return false;
 
     return appendVector(geometry.indices(), NWB_TEXT("indices"));

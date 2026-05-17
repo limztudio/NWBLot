@@ -681,8 +681,9 @@ static void CheckMinimalSkinnedGeometryDefaults(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.x == 1.f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[0].color0.w == 1.f);
+    const Float4U color0 = LoadHalf4U(loadedGeometry.restVertices()[0].color0);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.x == 1.f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.w == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
 }
@@ -778,13 +779,13 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
 }
 
 static NWB::Impl::SkinnedGeometryVertex MakeRestVertex(const f32 x, const f32 y, const f32 u, const f32 v){
-    NWB::Impl::SkinnedGeometryVertex vertex;
-    vertex.position = Float3U(x, y, 0.f);
-    vertex.normal = Float3U(0.f, 0.f, 1.f);
-    vertex.tangent = Float4U(1.f, 0.f, 0.f, 1.f);
-    vertex.uv0 = Float2U(u, v);
-    vertex.color0 = Float4U(1.f, 1.f, 1.f, 1.f);
-    return vertex;
+    return NWB::Impl::MakeSkinnedGeometryVertex(
+        Float3U(x, y, 0.f),
+        Float3U(0.f, 0.f, 1.f),
+        Float4U(1.f, 0.f, 0.f, 1.f),
+        Float2U(u, v),
+        Float4U(1.f, 1.f, 1.f, 1.f)
+    );
 }
 
 static NWB::Impl::SkinInfluence4 MakeRootSkin(){
@@ -875,25 +876,25 @@ static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(){
     return geometry;
 }
 
-static NWB::Impl::GeometryVertex MakeGeometryVertex(const Float3U& position, const Float4U& color){
-    NWB::Impl::GeometryVertex vertex;
-    vertex.position = position;
-    vertex.normal = Float3U(0.f, 0.f, 1.f);
-    vertex.color0 = color;
-    return vertex;
-}
-
 static NWB::Impl::Geometry BuildMinimalGeometry(){
     NWB::Impl::Geometry geometry(Name("tests/meshes/minimal_geometry"));
 
-    Vector<NWB::Impl::GeometryVertex> vertices;
-    vertices.push_back(MakeGeometryVertex(Float3U(-0.5f, -0.5f, 0.f), Float4U(1.f, 0.f, 0.f, 1.f)));
-    vertices.push_back(MakeGeometryVertex(Float3U(0.5f, -0.5f, 0.f), Float4U(0.f, 1.f, 0.f, 1.f)));
-    vertices.push_back(MakeGeometryVertex(Float3U(0.f, 0.5f, 0.f), Float4U(0.f, 0.f, 1.f, 1.f)));
+    Vector<Float3U> positions;
+    positions.push_back(Float3U(-0.5f, -0.5f, 0.f));
+    positions.push_back(Float3U(0.5f, -0.5f, 0.f));
+    positions.push_back(Float3U(0.f, 0.5f, 0.f));
+
+    Vector<Half4U> normals;
+    normals.assign(positions.size(), NWB::Impl::MakeGeometryNormalStreamValue(Float3U(0.f, 0.f, 1.f)));
+
+    Vector<Half4U> colors;
+    colors.push_back(NWB::Impl::MakeGeometryColorStreamValue(Float4U(1.f, 0.f, 0.f, 1.f)));
+    colors.push_back(NWB::Impl::MakeGeometryColorStreamValue(Float4U(0.f, 1.f, 0.f, 1.f)));
+    colors.push_back(NWB::Impl::MakeGeometryColorStreamValue(Float4U(0.f, 0.f, 1.f, 1.f)));
 
     Vector<u32> indices = MakeTriangleIndices();
 
-    geometry.setVertices(Move(vertices));
+    geometry.setStreams(Move(positions), Move(normals), Move(colors));
     geometry.setIndices(Move(indices));
     return geometry;
 }
@@ -977,11 +978,11 @@ static void TestGeometryCodecRoundTrip(TestContext& context){
     NWB::Impl::GeometryAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     const NWB::Impl::Geometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertexCount() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[1].position.x == 0.5f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[1].normal.z == 1.f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[1].color0.y == 1.f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.positions()[1].x == 0.5f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.normals()[1]).z == 1.f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.colors()[1]).y == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices()[2] == 2u);
 }
 
@@ -1094,11 +1095,11 @@ static void TestGeometryCookerTypedStreams(TestContext& context){
         MinimalAssetKind::Geometry,
         [&](const NWB::Impl::Geometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Static);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices().size() == 3u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertexCount() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].position.x == -0.5f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].normal.z == 1.f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[2].color0.z == 1.f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.positions()[0].x == -0.5f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.normals()[0]).z == 1.f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.colors()[2]).z == 1.f);
         }
     );
 }
@@ -1110,9 +1111,10 @@ static void TestGeometryCookerDefaultColors(TestContext& context){
         "default_color_geometry",
         MinimalAssetKind::Geometry,
         [&](const NWB::Impl::Geometry& loadedGeometry){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].color0.x == 1.f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertices()[0].color0.w == 1.f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertexCount() == 3u);
+            const Float4U color0 = LoadHalf4U(loadedGeometry.colors()[0]);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.x == 1.f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.w == 1.f);
         }
     );
 }
@@ -1171,13 +1173,15 @@ static void TestSkinnedGeometryCookerGeneratesMissingFrames(TestContext& context
         [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
             for(const NWB::Impl::SkinnedGeometryVertex& vertex : loadedGeometry.restVertices()){
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.x == 0.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.y == 0.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.normal.z == 1.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.x == 1.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.y == 0.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.z == 0.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, vertex.tangent.w == 1.0f);
+                const Float4U normal = LoadHalf4U(vertex.normal);
+                const Float4U tangent = LoadHalf4U(vertex.tangent);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.x == 0.0f);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.y == 0.0f);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.z == 1.0f);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.x == 1.0f);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.y == 0.0f);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.z == 0.0f);
+                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.w == 1.0f);
             }
         }
     );
@@ -1225,7 +1229,7 @@ static void TestSkinnedGeometryCookerNativeCharacterMock(TestContext& context){
         MinimalAssetKind::SkinnedGeometry,
         [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
             CheckSkinnedSkinnedGeometryPayload(context, loadedGeometry, 2u, 2u, 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices()[3].color0.w == 0.5f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.restVertices()[3].color0).w == 0.5f);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].joint[1] == 1u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin()[1].weight[0] == 0.75f);
         }
@@ -1317,37 +1321,37 @@ static void TestSkinnedGeometryValidationFailures(TestContext& context){
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
-        vertices[0].normal = Float3U(0.f, 0.f, 0.f);
+        NWB::Impl::StoreSkinnedGeometryVertexNormal(vertices[0], Float3U(0.f, 0.f, 0.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4U(1.f, 0.f, 0.f, 0.f);
+        NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(1.f, 0.f, 0.f, 0.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4U(0.f, 0.f, 1.f, 1.f);
+        NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(0.f, 0.f, 1.f, 1.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4U(1.f, 0.f, 0.f, 2.f);
+        NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(1.f, 0.f, 0.f, 2.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
-        vertices[0].normal = Float3U(0.f, 0.f, 2.f);
+        NWB::Impl::StoreSkinnedGeometryVertexNormal(vertices[0], Float3U(0.f, 0.f, 2.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
         Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
-        vertices[0].tangent = Float4U(0.70710677f, 0.f, 0.70710677f, 1.f);
+        NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(0.70710677f, 0.f, 0.70710677f, 1.f));
         geometry.setRestVertices(Move(vertices));
     });
 

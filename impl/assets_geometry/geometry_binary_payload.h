@@ -26,7 +26,7 @@ namespace GeometryBinaryPayload{
 
 
 inline constexpr u32 s_GeometryMagic = 0x47454F31u; // GEO1
-inline constexpr u32 s_GeometryVersion = 1u;
+inline constexpr u32 s_GeometryVersion = 3u;
 
 #pragma pack(push, 1)
 struct GeometryHeaderBinary{

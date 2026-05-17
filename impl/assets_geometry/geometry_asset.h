@@ -20,14 +20,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct GeometryVertex{
-    Float3U position;
-    Float3U normal;
-    Float4U color0;
-};
-static_assert(IsStandardLayout_V<GeometryVertex>, "GeometryVertex must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<GeometryVertex>, "GeometryVertex must stay binary-serializable");
-static_assert(sizeof(GeometryVertex) == sizeof(f32) * 10u, "GeometryVertex GPU/source layout drifted");
+[[nodiscard]] inline Half4U MakeGeometryNormalStreamValue(const Float3U& normal)noexcept{
+    return MakeHalf4U(normal.x, normal.y, normal.z, 0.0f);
+}
+
+[[nodiscard]] inline Half4U MakeGeometryColorStreamValue(const Float4U& color0)noexcept{
+    return MakeHalf4U(color0.x, color0.y, color0.z, color0.w);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,16 +49,25 @@ public:
     [[nodiscard]] bool validatePayload()const;
 
 public:
-    void setVertices(Vector<GeometryVertex>&& vertices){ m_vertices = Move(vertices); }
+    void setStreams(Vector<Float3U>&& positions, Vector<Half4U>&& normals, Vector<Half4U>&& colors){
+        m_positions = Move(positions);
+        m_normals = Move(normals);
+        m_colors = Move(colors);
+    }
     void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
 
-    [[nodiscard]] const Vector<GeometryVertex>& vertices()const{ return m_vertices; }
+    [[nodiscard]] const Vector<Float3U>& positions()const{ return m_positions; }
+    [[nodiscard]] const Vector<Half4U>& normals()const{ return m_normals; }
+    [[nodiscard]] const Vector<Half4U>& colors()const{ return m_colors; }
     [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
+    [[nodiscard]] usize vertexCount()const{ return m_positions.size(); }
     [[nodiscard]] u32 geometryClass()const{ return GeometryClass::Static; }
 
 
 private:
-    Vector<GeometryVertex> m_vertices;
+    Vector<Float3U> m_positions;
+    Vector<Half4U> m_normals;
+    Vector<Half4U> m_colors;
     Vector<u32> m_indices;
 };
 

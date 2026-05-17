@@ -173,11 +173,19 @@ inline void BuildRestVertexTangentFrameRebuildInput(
     outRebuildVertices.reserve(vertices.size());
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         const SkinnedGeometryVertex& vertex = vertices[vertexIndex];
+        Float4 position;
+        Float4 normal;
+        Float4 tangent;
+        Float2U uv0;
+        StoreFloat(LoadSkinnedGeometryVertexPosition(vertex), &position);
+        StoreFloat(LoadSkinnedGeometryVertexNormal(vertex), &normal);
+        StoreFloat(LoadSkinnedGeometryVertexTangent(vertex), &tangent);
+        StoreFloat(LoadSkinnedGeometryVertexUv0(vertex), &uv0);
         outRebuildVertices.push_back(Core::Geometry::TangentFrameRebuildVertex{
-            Float4(vertex.position.x, vertex.position.y, vertex.position.z, 0.0f),
-            Float4(vertex.normal.x, vertex.normal.y, vertex.normal.z, 0.0f),
-            Float4(vertex.tangent.raw),
-            vertex.uv0,
+            position,
+            normal,
+            tangent,
+            uv0,
         });
     }
 }
@@ -191,8 +199,8 @@ template<typename RebuildAllocator>
 
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         SkinnedGeometryVertex rebuiltVertex = vertices[vertexIndex];
-        rebuiltVertex.normal = Float3U(rebuildVertices[vertexIndex].normal.raw);
-        rebuiltVertex.tangent = Float4U(rebuildVertices[vertexIndex].tangent.raw);
+        StoreSkinnedGeometryVertexNormal(rebuiltVertex, Float3U(rebuildVertices[vertexIndex].normal.raw));
+        StoreSkinnedGeometryVertexTangent(rebuiltVertex, Float4U(rebuildVertices[vertexIndex].tangent.raw));
         if(!ValidRestVertexFrame(rebuiltVertex))
             return false;
     }
@@ -205,8 +213,8 @@ inline void ApplyRestVertexTangentFrameRebuild(
     const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         SkinnedGeometryVertex& vertex = vertices[vertexIndex];
-        vertex.normal = Float3U(rebuildVertices[vertexIndex].normal.raw);
-        vertex.tangent = Float4U(rebuildVertices[vertexIndex].tangent.raw);
+        StoreSkinnedGeometryVertexNormal(vertex, Float3U(rebuildVertices[vertexIndex].normal.raw));
+        StoreSkinnedGeometryVertexTangent(vertex, Float4U(rebuildVertices[vertexIndex].tangent.raw));
     }
 }
 

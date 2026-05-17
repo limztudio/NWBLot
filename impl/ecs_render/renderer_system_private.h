@@ -40,7 +40,7 @@ namespace ECSRenderDetail{
 
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
-inline constexpr u32 s_StaticGeometryVertexStride = sizeof(GeometryVertex);
+inline constexpr u32 s_StaticGeometrySourceWordStride = 7u;
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 inline constexpr u32 s_TrianglesPerWorkgroup = 32u;
 inline constexpr u32 s_MeshDispatchFlagScissorCull = 1u << 0u;

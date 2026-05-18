@@ -1003,8 +1003,10 @@ bool BuildGeometry(
         flatVertices.resize(uniqueVertexCount);
     }
     else{
-        outIndices.resize(flatVertices.size());
-        Iota(outIndices.begin(), outIndices.end(), 0u);
+        outIndices.clear();
+        outIndices.reserve(flatVertices.size());
+        for(usize index = 0u; index < flatVertices.size(); ++index)
+            outIndices.push_back(static_cast<u32>(index));
     }
 
     outVertices.reserve(flatVertices.size());

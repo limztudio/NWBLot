@@ -214,9 +214,7 @@ static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
 
 static void AssignSingleJointSkin(NWB::Impl::SkinnedGeometryRuntimeMeshInstance& instance, const u16 joint){
     instance.geometryClass = NWB::Impl::GeometryClass::Skinned;
-    instance.skin.resize(instance.restVertices.size());
-    for(NWB::Impl::SkinInfluence4& skin : instance.skin)
-        skin = MakeSingleJointSkin(joint);
+    instance.skin.assign(instance.restVertices.size(), MakeSingleJointSkin(joint));
     instance.skeletonJointCount = Max(instance.skeletonJointCount, static_cast<u32>(joint) + 1u);
 }
 

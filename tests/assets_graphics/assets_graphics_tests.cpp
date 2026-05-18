@@ -837,9 +837,7 @@ static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(){
     Vector<u32> indices = MakeQuadTriangleIndices();
 
     Vector<NWB::Impl::SkinInfluence4> skin;
-    skin.resize(vertices.size());
-    for(NWB::Impl::SkinInfluence4& influence : skin)
-        influence = MakeRootSkin();
+    skin.assign(vertices.size(), MakeRootSkin());
 
     Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices;
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
@@ -864,9 +862,7 @@ static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(){
     Vector<u32> indices = MakeTriangleIndices();
 
     Vector<NWB::Impl::SkinInfluence4> skin;
-    skin.resize(vertices.size());
-    for(NWB::Impl::SkinInfluence4& influence : skin)
-        influence = MakeRootSkin();
+    skin.assign(vertices.size(), MakeRootSkin());
 
     geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
     geometry.setRestVertices(Move(vertices));

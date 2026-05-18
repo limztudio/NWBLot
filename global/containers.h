@@ -190,6 +190,33 @@ template<typename DestinationVector, typename SourceVector>
     return true;
 }
 
+template<typename Container>
+inline void ReserveGrowingCapacity(Container& container, const usize requiredCapacity){
+    if constexpr(requires(const Container& c){ c.capacity(); }){
+        if(requiredCapacity <= container.capacity())
+            return;
+
+        usize nextCapacity = container.capacity() > 1u ? static_cast<usize>(container.capacity()) : 1u;
+        while(nextCapacity < requiredCapacity){
+            if(nextCapacity > Limit<usize>::s_Max / 2u){
+                nextCapacity = requiredCapacity;
+                break;
+            }
+
+            nextCapacity *= 2u;
+        }
+
+        if constexpr(requires(const Container& c){ c.max_size(); }){
+            if(nextCapacity > container.max_size())
+                nextCapacity = requiredCapacity;
+        }
+
+        container.reserve(nextCapacity);
+    }
+    else
+        container.reserve(requiredCapacity);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -245,13 +272,13 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
         NWB_ASSERT(sourceSize <= destinationSize - sourceOffset);
         if(sourceSize > destinationSize - sourceOffset)
             return;
-        destination.reserve(destinationSize + sourceSize);
+        ContainerDetail::ReserveGrowingCapacity(destination, destinationSize + sourceSize);
         for(usize i = 0u; i < sourceSize; ++i)
             destination.push_back(destination[sourceOffset + i]);
         return;
     }
 
-    destination.reserve(destinationSize + sourceSize);
+    ContainerDetail::ReserveGrowingCapacity(destination, destinationSize + sourceSize);
     if constexpr(requires(DestinationVector& d, const SourceVector& s){ d.insert(d.end(), s.begin(), s.end()); }){
         destination.insert(destination.end(), source.begin(), source.end());
     }

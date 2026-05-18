@@ -234,25 +234,15 @@ static void TestExponentDoubleLiterals(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("metascript", [](NWB::Tests::TestContext& context){
-        __hidden_metascript_tests::TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(context);
-        __hidden_metascript_tests::TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(context);
-        __hidden_metascript_tests::TestCrossArenaListConcatCopiesIntoResultArena(context);
-        __hidden_metascript_tests::TestCrossArenaAppendCopiesIntoDestinationArena(context);
-        __hidden_metascript_tests::TestListSelfAppendCopiesOriginalValues(context);
-        __hidden_metascript_tests::TestAppendSelfMoveCopiesOriginalValue(context);
-        __hidden_metascript_tests::TestExponentDoubleLiterals(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("metascript", [](NWB::Tests::TestContext& context){
+    __hidden_metascript_tests::TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(context);
+    __hidden_metascript_tests::TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(context);
+    __hidden_metascript_tests::TestCrossArenaListConcatCopiesIntoResultArena(context);
+    __hidden_metascript_tests::TestCrossArenaAppendCopiesIntoDestinationArena(context);
+    __hidden_metascript_tests::TestListSelfAppendCopiesOriginalValues(context);
+    __hidden_metascript_tests::TestAppendSelfMoveCopiesOriginalValue(context);
+    __hidden_metascript_tests::TestExponentDoubleLiterals(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

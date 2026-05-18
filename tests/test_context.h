@@ -7,7 +7,7 @@
 
 #include <core/alloc/core.h>
 #include <core/alloc/custom.h>
-#include <core/common/common.h>
+#include <core/common/application_entry.h>
 
 #include <global/global.h>
 
@@ -124,6 +124,14 @@ template<typename RunTests>
     NWB_COUT << suiteName << " tests passed: " << context.passed << '\n';
     return 0;
 }
+
+#define NWB_DEFINE_TEST_ENTRY_POINT(suiteName, ...) \
+    static int EntryPoint(const isize argc, tchar** argv, void*){ \
+        static_cast<void>(argc); \
+        static_cast<void>(argv); \
+        return ::NWB::Tests::RunTestSuite(suiteName, __VA_ARGS__); \
+    } \
+    NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
 
 };
 

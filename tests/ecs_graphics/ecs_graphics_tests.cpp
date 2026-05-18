@@ -468,27 +468,17 @@ static void TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(TestContex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
+NWB_DEFINE_TEST_ENTRY_POINT("ecs graphics", [](NWB::Tests::TestContext& context){
+    __hidden_ecs_graphics_tests::CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    return NWB::Tests::RunTestSuite("ecs graphics", [](NWB::Tests::TestContext& context){
-        __hidden_ecs_graphics_tests::CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-        __hidden_ecs_graphics_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
-        __hidden_ecs_graphics_tests::TestLightComponents(context);
-        __hidden_ecs_graphics_tests::TestGeometrySystemResolvesGeometryComponent(context);
-        __hidden_ecs_graphics_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
-        __hidden_ecs_graphics_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
-        __hidden_ecs_graphics_tests::TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+    __hidden_ecs_graphics_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
+    __hidden_ecs_graphics_tests::TestLightComponents(context);
+    __hidden_ecs_graphics_tests::TestGeometrySystemResolvesGeometryComponent(context);
+    __hidden_ecs_graphics_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
+    __hidden_ecs_graphics_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
+    __hidden_ecs_graphics_tests::TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

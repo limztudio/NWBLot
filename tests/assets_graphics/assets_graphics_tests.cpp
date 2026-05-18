@@ -1470,40 +1470,30 @@ static void TestFormatBlockDimensions(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("assets graphics", [](NWB::Tests::TestContext& context){
-        __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
-        __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestGeometryCodecRejectsUnsupportedBinaryVersion(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestMinimalSkinnedGeometryCodecRoundTrip(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
-        __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
-        __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
-        __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerMinimalAsset(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerGeneratesMissingFrames(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerU32IndexType(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerExplicitEmptyOptionalLists(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNativeCharacterMock(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNormalizesSkinWeights(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerSkinnedClass(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryCookerValidationFailures(context);
-        __hidden_assets_graphics_tests::TestSkinnedGeometryValidationFailures(context);
-        __hidden_assets_graphics_tests::TestGeometryClassPolicyHelpers(context);
-        __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& context){
+    __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
+    __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestGeometryCodecRejectsUnsupportedBinaryVersion(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestMinimalSkinnedGeometryCodecRoundTrip(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
+    __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
+    __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
+    __hidden_assets_graphics_tests::TestGeometryCookerValidationFailures(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerMinimalAsset(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerGeneratesMissingFrames(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerU32IndexType(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerExplicitEmptyOptionalLists(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNativeCharacterMock(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerNormalizesSkinWeights(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerSkinnedClass(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryCookerValidationFailures(context);
+    __hidden_assets_graphics_tests::TestSkinnedGeometryValidationFailures(context);
+    __hidden_assets_graphics_tests::TestGeometryClassPolicyHelpers(context);
+    __hidden_assets_graphics_tests::TestFormatBlockDimensions(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

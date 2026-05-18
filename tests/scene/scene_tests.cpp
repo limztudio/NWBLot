@@ -237,20 +237,10 @@ static void TestSceneCameraResolution(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("scene", [](NWB::Tests::TestContext& context){
-        __hidden_scene_tests::TestSceneAndMainCamera(context);
-        __hidden_scene_tests::TestSceneCameraResolution(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("scene", [](NWB::Tests::TestContext& context){
+    __hidden_scene_tests::TestSceneAndMainCamera(context);
+    __hidden_scene_tests::TestSceneCameraResolution(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

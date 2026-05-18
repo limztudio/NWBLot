@@ -252,26 +252,16 @@ static void TestHalfFloatBufferConversion(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("math", [](NWB::Tests::TestContext& context){
-        __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);
-        __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
-        __hidden_math_tests::TestVector3RotateQuarterTurn(context);
-        __hidden_math_tests::TestVector4CrossBasisOrientation(context);
-        __hidden_math_tests::TestGlslNamedScalarFunctions(context);
-        __hidden_math_tests::TestGlslRefractCriticalAngle(context);
-        __hidden_math_tests::TestHalfFloatScalarConversion(context);
-        __hidden_math_tests::TestHalfFloatBufferConversion(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("math", [](NWB::Tests::TestContext& context){
+    __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);
+    __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
+    __hidden_math_tests::TestVector3RotateQuarterTurn(context);
+    __hidden_math_tests::TestVector4CrossBasisOrientation(context);
+    __hidden_math_tests::TestGlslNamedScalarFunctions(context);
+    __hidden_math_tests::TestGlslRefractCriticalAngle(context);
+    __hidden_math_tests::TestHalfFloatScalarConversion(context);
+    __hidden_math_tests::TestHalfFloatBufferConversion(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

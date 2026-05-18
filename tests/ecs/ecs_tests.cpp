@@ -282,25 +282,15 @@ static void TestDuplicateSchedulerAddIsStable(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("ecs", [](NWB::Tests::TestContext& context){
-        __hidden_ecs_tests::TestComponentStorageAndView(context);
-        __hidden_ecs_tests::TestEmptyViewDoesNotAllocateComponentPools(context);
-        __hidden_ecs_tests::TestComponentLifetime(context);
-        __hidden_ecs_tests::TestMessageBus(context);
-        __hidden_ecs_tests::TestSystemTick(context);
-        __hidden_ecs_tests::TestDuplicateComponentAddIsStable(context);
-        __hidden_ecs_tests::TestDuplicateSchedulerAddIsStable(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("ecs", [](NWB::Tests::TestContext& context){
+    __hidden_ecs_tests::TestComponentStorageAndView(context);
+    __hidden_ecs_tests::TestEmptyViewDoesNotAllocateComponentPools(context);
+    __hidden_ecs_tests::TestComponentLifetime(context);
+    __hidden_ecs_tests::TestMessageBus(context);
+    __hidden_ecs_tests::TestSystemTick(context);
+    __hidden_ecs_tests::TestDuplicateComponentAddIsStable(context);
+    __hidden_ecs_tests::TestDuplicateSchedulerAddIsStable(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

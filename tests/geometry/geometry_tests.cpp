@@ -190,23 +190,13 @@ static void TestRejectsDegenerateTriangle(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("geometry", [](NWB::Tests::TestContext& context){
-        __hidden_geometry_tests::TestGeometryClassMetadata(context);
-        __hidden_geometry_tests::TestResolvesCoreFrameMath(context);
-        __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
-        __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
-        __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("geometry", [](NWB::Tests::TestContext& context){
+    __hidden_geometry_tests::TestGeometryClassMetadata(context);
+    __hidden_geometry_tests::TestResolvesCoreFrameMath(context);
+    __hidden_geometry_tests::TestRebuildsFlatQuadFrame(context);
+    __hidden_geometry_tests::TestDegenerateUvsUseStableTangentFallback(context);
+    __hidden_geometry_tests::TestRejectsDegenerateTriangle(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

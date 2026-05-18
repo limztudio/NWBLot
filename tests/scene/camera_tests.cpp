@@ -108,19 +108,9 @@ static void TestCameraProjectionHelpers(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("scene camera", [](NWB::Tests::TestContext& context){
-        __hidden_scene_camera_tests::TestCameraProjectionHelpers(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("scene camera", [](NWB::Tests::TestContext& context){
+    __hidden_scene_camera_tests::TestCameraProjectionHelpers(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

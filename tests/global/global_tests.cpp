@@ -289,30 +289,20 @@ static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int EntryPoint(const isize argc, tchar** argv, void*){
-    static_cast<void>(argc);
-    static_cast<void>(argv);
-
-    return NWB::Tests::RunTestSuite("global", [](NWB::Tests::TestContext& context){
-        __hidden_global_tests::TestPodRoundTrip(context);
-        __hidden_global_tests::TestLengthPrefixedStringRoundTrip(context);
-        __hidden_global_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
-        __hidden_global_tests::TestRejectedCompactStringAssignResetsText(context);
-        __hidden_global_tests::TestStringTableText(context);
-        __hidden_global_tests::TestInvalidStringTableReads(context);
-        __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
-        __hidden_global_tests::TestFixedVectorBinaryPayloadRoundTrip(context);
-        __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
-        __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
-        __hidden_global_tests::TestTriviallyCopyableVectorAlias(context);
-        __hidden_global_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
-    });
-}
-
-
-#include <core/common/application_entry.h>
-
-NWB_DEFINE_APPLICATION_ENTRY_POINT(EntryPoint)
+NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
+    __hidden_global_tests::TestPodRoundTrip(context);
+    __hidden_global_tests::TestLengthPrefixedStringRoundTrip(context);
+    __hidden_global_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
+    __hidden_global_tests::TestRejectedCompactStringAssignResetsText(context);
+    __hidden_global_tests::TestStringTableText(context);
+    __hidden_global_tests::TestInvalidStringTableReads(context);
+    __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
+    __hidden_global_tests::TestFixedVectorBinaryPayloadRoundTrip(context);
+    __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
+    __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
+    __hidden_global_tests::TestTriviallyCopyableVectorAlias(context);
+    __hidden_global_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
+})
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

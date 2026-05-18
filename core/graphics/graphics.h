@@ -108,24 +108,24 @@ public:
     bool createInstance(const InstanceParameters& params);
     bool setDebugRuntimeEnabled(bool enabled);
     void setPipelineCacheDirectory(const Path& directory);
-    bool runFrame();
+    bool runFrame(){ return animateRenderPresent(); }
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
 
 public:
-    [[nodiscard]] IDevice* getDevice()const noexcept;
-    [[nodiscard]] bool enumerateAdapters(Vector<AdapterInfo>& outAdapters);
+    [[nodiscard]] IDevice* getDevice()const noexcept{ return m_backend->getDevice(); }
+    [[nodiscard]] bool enumerateAdapters(Vector<AdapterInfo>& outAdapters){ return m_backend->enumerateAdapters(outAdapters); }
 
     void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
     void removeRenderPass(IRenderPass& pass);
 
-    [[nodiscard]] const tchar* getRendererString()const;
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
+    [[nodiscard]] const tchar* getRendererString()const{ return m_backend->getRendererString(); }
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return m_backend->getGraphicsAPI(); }
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
     void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
-    void reportLiveObjects()const;
+    void reportLiveObjects()const{ m_backend->reportLiveObjects(); }
 
     void getWindowDimensions(i32& width, i32& height)const;
     void getDPIScaleInfo(f32& x, f32& y)const;
@@ -133,15 +133,15 @@ public:
     void setWindowTitle(NotNull<const tchar*> title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
-    [[nodiscard]] ITexture* getCurrentBackBuffer()const;
-    [[nodiscard]] ITexture* getBackBuffer(u32 index)const;
-    [[nodiscard]] u32 getCurrentBackBufferIndex()const;
-    [[nodiscard]] u32 getBackBufferCount()const;
-    [[nodiscard]] IFramebuffer* getCurrentFramebuffer()const;
+    [[nodiscard]] ITexture* getCurrentBackBuffer()const{ return m_backend->getCurrentBackBuffer(); }
+    [[nodiscard]] ITexture* getBackBuffer(u32 index)const{ return m_backend->getBackBuffer(index); }
+    [[nodiscard]] u32 getCurrentBackBufferIndex()const{ return m_backend->getCurrentBackBufferIndex(); }
+    [[nodiscard]] u32 getBackBufferCount()const{ return m_backend->getBackBufferCount(); }
+    [[nodiscard]] IFramebuffer* getCurrentFramebuffer()const{ return getFramebuffer(getCurrentBackBufferIndex()); }
     [[nodiscard]] IFramebuffer* getFramebuffer(u32 index)const;
 
-    [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
-    [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;
+    [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const{ return getDevice()->createBuffer(desc); }
+    [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const{ return getDevice()->createTexture(desc); }
 
     [[nodiscard]] BufferHandle setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
@@ -156,7 +156,7 @@ public:
     [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
     void waitJob(JobHandle handle)const;
-    void waitAllJobs()const;
+    void waitAllJobs()const{ m_jobSystem.waitAll(); }
 
 
     void backBufferResizing();

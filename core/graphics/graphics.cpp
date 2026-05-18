@@ -412,10 +412,6 @@ void Graphics::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
-bool Graphics::runFrame(){
-    return animateRenderPresent();
-}
-
 void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     m_windowVisible = windowVisible;
     m_windowIsInFocus = windowIsInFocus;
@@ -459,14 +455,6 @@ void Graphics::destroy(){
     m_instanceCreated = false;
 }
 
-IDevice* Graphics::getDevice()const noexcept{
-    return m_backend->getDevice();
-}
-
-bool Graphics::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
-    return m_backend->enumerateAdapters(outAdapters);
-}
-
 void Graphics::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_front(&pass);
@@ -496,18 +484,6 @@ void Graphics::removeRenderPass(IRenderPass& pass){
     m_renderPasses.remove(&pass);
 }
 
-const tchar* Graphics::getRendererString()const{
-    return m_backend->getRendererString();
-}
-
-GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
-    return m_backend->getGraphicsAPI();
-}
-
-void Graphics::reportLiveObjects()const{
-    m_backend->reportLiveObjects();
-}
-
 void Graphics::getWindowDimensions(i32& width, i32& height)const{
     width = m_swapChainState.backBufferWidth;
     height = m_swapChainState.backBufferHeight;
@@ -529,26 +505,6 @@ void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callba
     m_pointerScaleChangedCallback = callback;
     m_pointerScaleChangedUserData = userData;
     notifyPointerScaleChanged();
-}
-
-ITexture* Graphics::getCurrentBackBuffer()const{
-    return m_backend->getCurrentBackBuffer();
-}
-
-ITexture* Graphics::getBackBuffer(u32 index)const{
-    return m_backend->getBackBuffer(index);
-}
-
-u32 Graphics::getCurrentBackBufferIndex()const{
-    return m_backend->getCurrentBackBufferIndex();
-}
-
-u32 Graphics::getBackBufferCount()const{
-    return m_backend->getBackBufferCount();
-}
-
-IFramebuffer* Graphics::getCurrentFramebuffer()const{
-    return getFramebuffer(getCurrentBackBufferIndex());
 }
 
 IFramebuffer* Graphics::getFramebuffer(u32 index)const{
@@ -695,14 +651,6 @@ bool Graphics::animateRenderPresent(){
 
     ++m_frameIndex;
     return true;
-}
-
-BufferHandle Graphics::createBuffer(const BufferDesc& desc)const{
-    return getDevice()->createBuffer(desc);
-}
-
-TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
-    return getDevice()->createTexture(desc);
 }
 
 BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
@@ -918,11 +866,6 @@ void Graphics::waitJob(JobHandle handle)const{
 
     m_jobSystem.wait(handle);
 }
-
-void Graphics::waitAllJobs()const{
-    m_jobSystem.waitAll();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

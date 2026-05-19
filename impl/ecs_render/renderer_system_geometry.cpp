@@ -22,7 +22,7 @@ namespace __hidden_renderer_system_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SourceVertexWordVector = Vector<u32, Core::Alloc::ScratchAllocator<u32>>;
+using SourceVertexWordVector = Vector<u32, ContainerDetail::ArenaAllocator<u32, Core::Alloc::ScratchArena<>>>;
 
 [[nodiscard]] static u32 FloatWord(const f32 value){
     return std::bit_cast<u32>(value);
@@ -143,7 +143,7 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
 
     Core::Alloc::ScratchArena<> scratchArena;
     __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{
-        Core::Alloc::ScratchAllocator<u32>(scratchArena)
+        ContainerDetail::ArenaAllocator<u32, Core::Alloc::ScratchArena<>>(scratchArena)
     };
     usize sourceVertexBytes = 0u;
     if(!__hidden_renderer_system_geometry::BuildStaticGeometrySourceWords(geometry, sourceVertexWords, sourceVertexBytes)){

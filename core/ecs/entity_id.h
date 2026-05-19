@@ -79,8 +79,8 @@ class EntityManager{
     friend class World;
 
 private:
-    using GenerationAllocator = Alloc::CustomAllocator<u16>;
-    using FreeIndexAllocator = Alloc::CustomAllocator<u32>;
+    using GenerationAllocator = ContainerDetail::ArenaAllocator<u16, Alloc::CustomArena>;
+    using FreeIndexAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::CustomArena>;
 
 
 public:

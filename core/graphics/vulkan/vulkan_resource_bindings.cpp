@@ -497,7 +497,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         return true;
     }
 
-    Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> descriptorSetLayouts{ Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena) };
+    Vector<VkDescriptorSetLayout, ContainerDetail::ArenaAllocator<VkDescriptorSetLayout, Alloc::ScratchArena<>>> descriptorSetLayouts{ ContainerDetail::ArenaAllocator<VkDescriptorSetLayout, Alloc::ScratchArena<>>(scratchArena) };
     u32 pushConstantByteSize = 0;
     usize descriptorSetLayoutCount = 0;
 
@@ -610,8 +610,8 @@ bool DescriptorHeapManager::tryEnablePipeline(
     FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
     u32& outPushDataSize,
     VkPipelineCreateFlags2CreateInfo& outFlags2,
-    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchAllocator<VkDescriptorSetAndBindingMappingEXT>>& outMappings,
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT>>& outStageMappings
+    Vector<VkDescriptorSetAndBindingMappingEXT, ContainerDetail::ArenaAllocator<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>>>& outMappings,
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, ContainerDetail::ArenaAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>>>& outStageMappings
 ){
     outPushRanges.clear();
     outPushDataSize = 0;
@@ -1121,13 +1121,13 @@ void DescriptorHeapManager::shutdownHeap(HeapStorage& heap){
 
 BindingLayout::BindingLayout(const VulkanContext& context)
     : RefCounter<IBindingLayout>(context.threadPool)
-    , m_descriptorSetLayouts(Alloc::CustomAllocator<VkDescriptorSetLayout>(context.objectArena))
-    , m_descriptorHeapBindings(Alloc::CustomAllocator<DescriptorHeapBindingMeta>(context.objectArena))
+    , m_descriptorSetLayouts(ContainerDetail::ArenaAllocator<VkDescriptorSetLayout, Alloc::CustomArena>(context.objectArena))
+    , m_descriptorHeapBindings(ContainerDetail::ArenaAllocator<DescriptorHeapBindingMeta, Alloc::CustomArena>(context.objectArena))
     , m_descriptorHeapBindingLookup(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),
-        Alloc::CustomAllocator<Pair<const u32, usize>>(context.objectArena)
+        ContainerDetail::ArenaAllocator<Pair<const u32, usize>, Alloc::CustomArena>(context.objectArena)
     )
     , m_context(context)
 {}
@@ -1150,8 +1150,8 @@ BindingLayout::~BindingLayout(){
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
     : RefCounter<IDescriptorTable>(context.threadPool)
-    , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
-    , m_writtenItems(Alloc::CustomAllocator<BindingSetItem>(context.objectArena))
+    , m_descriptorSets(ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::CustomArena>(context.objectArena))
+    , m_writtenItems(ContainerDetail::ArenaAllocator<BindingSetItem, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
 {}
 DescriptorTable::~DescriptorTable(){
@@ -1167,9 +1167,9 @@ DescriptorTable::~DescriptorTable(){
 
 BindingSet::BindingSet(const VulkanContext& context)
     : RefCounter<IBindingSet>(context.threadPool)
-    , m_descriptorSets(Alloc::CustomAllocator<VkDescriptorSet>(context.objectArena))
-    , m_descriptorHeapPushIndices(Alloc::CustomAllocator<u32>(context.objectArena))
-    , m_descriptorHeapAllocations(Alloc::CustomAllocator<DescriptorHeapAllocation>(context.objectArena))
+    , m_descriptorSets(ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::CustomArena>(context.objectArena))
+    , m_descriptorHeapPushIndices(ContainerDetail::ArenaAllocator<u32, Alloc::CustomArena>(context.objectArena))
+    , m_descriptorHeapAllocations(ContainerDetail::ArenaAllocator<DescriptorHeapAllocation, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
 {}
 BindingSet::~BindingSet(){
@@ -1197,13 +1197,13 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     auto* layout = NewArenaObject<BindingLayout>(m_context.objectArena, m_context);
     layout->m_desc = desc;
 
-    Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
+    Vector<VkDescriptorSetLayoutBinding, ContainerDetail::ArenaAllocator<VkDescriptorSetLayoutBinding, Alloc::ScratchArena<>>> bindings{ ContainerDetail::ArenaAllocator<VkDescriptorSetLayoutBinding, Alloc::ScratchArena<>>(scratchArena) };
     bindings.reserve(desc.bindings.size());
-    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> bindingSlots(
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, ContainerDetail::ArenaAllocator<u32, Alloc::ScratchArena<>>> bindingSlots(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),
-        Alloc::ScratchAllocator<u32>(scratchArena)
+        ContainerDetail::ArenaAllocator<u32, Alloc::ScratchArena<>>(scratchArena)
     );
     bindingSlots.reserve(desc.bindings.size());
 
@@ -1333,15 +1333,15 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layout->m_isBindless = true;
     layout->m_bindlessDesc = desc;
 
-    Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>> bindings{ Alloc::ScratchAllocator<VkDescriptorSetLayoutBinding>(scratchArena) };
+    Vector<VkDescriptorSetLayoutBinding, ContainerDetail::ArenaAllocator<VkDescriptorSetLayoutBinding, Alloc::ScratchArena<>>> bindings{ ContainerDetail::ArenaAllocator<VkDescriptorSetLayoutBinding, Alloc::ScratchArena<>>(scratchArena) };
     bindings.reserve(desc.registerSpaces.size());
-    Vector<VkDescriptorBindingFlags, Alloc::ScratchAllocator<VkDescriptorBindingFlags>> bindingFlags{ Alloc::ScratchAllocator<VkDescriptorBindingFlags>(scratchArena) };
+    Vector<VkDescriptorBindingFlags, ContainerDetail::ArenaAllocator<VkDescriptorBindingFlags, Alloc::ScratchArena<>>> bindingFlags{ ContainerDetail::ArenaAllocator<VkDescriptorBindingFlags, Alloc::ScratchArena<>>(scratchArena) };
     bindingFlags.reserve(desc.registerSpaces.size());
-    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<u32>> registerSpaceSlots(
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, ContainerDetail::ArenaAllocator<u32, Alloc::ScratchArena<>>> registerSpaceSlots(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),
-        Alloc::ScratchAllocator<u32>(scratchArena)
+        ContainerDetail::ArenaAllocator<u32, Alloc::ScratchArena<>>(scratchArena)
     );
     registerSpaceSlots.reserve(desc.registerSpaces.size());
 
@@ -1447,7 +1447,7 @@ DescriptorTableHandle Device::createDescriptorTable(const BindingLayoutHandle& l
         ? layout->m_bindlessDesc.registerSpaces.size()
         : layout->m_desc.bindings.size()
     ;
-    Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
+    Vector<VkDescriptorPoolSize, ContainerDetail::ArenaAllocator<VkDescriptorPoolSize, Alloc::ScratchArena<>>> poolSizes{ ContainerDetail::ArenaAllocator<VkDescriptorPoolSize, Alloc::ScratchArena<>>(scratchArena) };
     poolSizes.reserve(poolSizeCapacity);
 
     const bool poolSizesAdded = layout->m_isBindless
@@ -1528,17 +1528,17 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     }
 
     Alloc::ScratchArena<> scratchArena;
-    using DescriptorSetVector = Vector<VkDescriptorSet, Alloc::CustomAllocator<VkDescriptorSet>>;
-    using WrittenItemVector = Vector<BindingSetItem, Alloc::CustomAllocator<BindingSetItem>>;
+    using DescriptorSetVector = Vector<VkDescriptorSet, ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::CustomArena>>;
+    using WrittenItemVector = Vector<BindingSetItem, ContainerDetail::ArenaAllocator<BindingSetItem, Alloc::CustomArena>>;
 
     auto commitResize = [&](VkDescriptorPool newPool, DescriptorSetVector& newDescriptorSets, u32 newCapacity) -> bool{
         VkDescriptorPool oldPool = table->m_descriptorPool;
         const u32 oldCapacity = table->m_capacity;
 
-        DescriptorSetVector oldDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
+        DescriptorSetVector oldDescriptorSets{ ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::CustomArena>(m_context.objectArena) };
         oldDescriptorSets = Move(table->m_descriptorSets);
 
-        WrittenItemVector oldWrittenItems{ Alloc::CustomAllocator<BindingSetItem>(m_context.objectArena) };
+        WrittenItemVector oldWrittenItems{ ContainerDetail::ArenaAllocator<BindingSetItem, Alloc::CustomArena>(m_context.objectArena) };
         oldWrittenItems = Move(table->m_writtenItems);
 
         table->m_descriptorPool = newPool;
@@ -1582,7 +1582,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         if(table->m_layout->m_descriptorSetLayouts.empty())
             return;
 
-        Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
+        Vector<VkDescriptorPoolSize, ContainerDetail::ArenaAllocator<VkDescriptorPoolSize, Alloc::ScratchArena<>>> poolSizes{ ContainerDetail::ArenaAllocator<VkDescriptorPoolSize, Alloc::ScratchArena<>>(scratchArena) };
         poolSizes.reserve(table->m_layout->m_bindlessDesc.registerSpaces.size());
 
         if(!VulkanDetail::AddBindlessLayoutDescriptorPoolSizes(poolSizes, table->m_layout->m_bindlessDesc, newSize)){
@@ -1591,7 +1591,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         }
 
         VkDescriptorPool newPool = VK_NULL_HANDLE;
-        DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
+        DescriptorSetVector newDescriptorSets{ ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::CustomArena>(m_context.objectArena) };
 
         auto poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
         poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
@@ -1630,7 +1630,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         return;
     }
 
-    Vector<VkDescriptorPoolSize, Alloc::ScratchAllocator<VkDescriptorPoolSize>> poolSizes{ Alloc::ScratchAllocator<VkDescriptorPoolSize>(scratchArena) };
+    Vector<VkDescriptorPoolSize, ContainerDetail::ArenaAllocator<VkDescriptorPoolSize, Alloc::ScratchArena<>>> poolSizes{ ContainerDetail::ArenaAllocator<VkDescriptorPoolSize, Alloc::ScratchArena<>>(scratchArena) };
     poolSizes.reserve(table->m_layout->m_desc.bindings.size());
     if(!VulkanDetail::AddBindingLayoutDescriptorPoolSizes(poolSizes, table->m_layout->m_desc, newSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resize descriptor table: descriptor pool size overflows"));
@@ -1638,7 +1638,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     }
 
     VkDescriptorPool newPool = VK_NULL_HANDLE;
-    DescriptorSetVector newDescriptorSets{ Alloc::CustomAllocator<VkDescriptorSet>(m_context.objectArena) };
+    DescriptorSetVector newDescriptorSets{ ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::CustomArena>(m_context.objectArena) };
 
     auto poolInfo = VulkanDetail::MakeVkStruct<VkDescriptorPoolCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO);
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
@@ -1653,7 +1653,7 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
     }
 
     if(!table->m_layout->m_descriptorSetLayouts.empty()){
-        Vector<VkDescriptorSetLayout, Alloc::ScratchAllocator<VkDescriptorSetLayout>> layouts(newSize, table->m_layout->m_descriptorSetLayouts[0], Alloc::ScratchAllocator<VkDescriptorSetLayout>(scratchArena));
+        Vector<VkDescriptorSetLayout, ContainerDetail::ArenaAllocator<VkDescriptorSetLayout, Alloc::ScratchArena<>>> layouts(newSize, table->m_layout->m_descriptorSetLayouts[0], ContainerDetail::ArenaAllocator<VkDescriptorSetLayout, Alloc::ScratchArena<>>(scratchArena));
 
         auto allocInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetAllocateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO);
         allocInfo.descriptorPool = newPool;
@@ -1898,11 +1898,11 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
 
     Alloc::ScratchArena<> scratchArena(s_DescriptorBindingScratchArenaBytes);
 
-    Vector<VkWriteDescriptorSet, Alloc::ScratchAllocator<VkWriteDescriptorSet>> writes{ Alloc::ScratchAllocator<VkWriteDescriptorSet>(scratchArena) };
-    Vector<VkDescriptorBufferInfo, Alloc::ScratchAllocator<VkDescriptorBufferInfo>> bufferInfos{ Alloc::ScratchAllocator<VkDescriptorBufferInfo>(scratchArena) };
-    Vector<VkDescriptorImageInfo, Alloc::ScratchAllocator<VkDescriptorImageInfo>> imageInfos{ Alloc::ScratchAllocator<VkDescriptorImageInfo>(scratchArena) };
-    Vector<VkBufferView, Alloc::ScratchAllocator<VkBufferView>> texelBufferViews{ Alloc::ScratchAllocator<VkBufferView>(scratchArena) };
-    Vector<VkWriteDescriptorSetAccelerationStructureKHR, Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>> asInfos{ Alloc::ScratchAllocator<VkWriteDescriptorSetAccelerationStructureKHR>(scratchArena) };
+    Vector<VkWriteDescriptorSet, ContainerDetail::ArenaAllocator<VkWriteDescriptorSet, Alloc::ScratchArena<>>> writes{ ContainerDetail::ArenaAllocator<VkWriteDescriptorSet, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkDescriptorBufferInfo, ContainerDetail::ArenaAllocator<VkDescriptorBufferInfo, Alloc::ScratchArena<>>> bufferInfos{ ContainerDetail::ArenaAllocator<VkDescriptorBufferInfo, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkDescriptorImageInfo, ContainerDetail::ArenaAllocator<VkDescriptorImageInfo, Alloc::ScratchArena<>>> imageInfos{ ContainerDetail::ArenaAllocator<VkDescriptorImageInfo, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkBufferView, ContainerDetail::ArenaAllocator<VkBufferView, Alloc::ScratchArena<>>> texelBufferViews{ ContainerDetail::ArenaAllocator<VkBufferView, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkWriteDescriptorSetAccelerationStructureKHR, ContainerDetail::ArenaAllocator<VkWriteDescriptorSetAccelerationStructureKHR, Alloc::ScratchArena<>>> asInfos{ ContainerDetail::ArenaAllocator<VkWriteDescriptorSetAccelerationStructureKHR, Alloc::ScratchArena<>>(scratchArena) };
 
     writes.reserve(desc.bindings.size());
     bufferInfos.reserve(desc.bindings.size());
@@ -2109,7 +2109,7 @@ void CommandList::bindDescriptorHeapState(
         return;
 
     Alloc::ScratchArena<> scratchArena(s_DescriptorBindingScratchArenaBytes);
-    Vector<u32, Alloc::ScratchAllocator<u32>> pushWords(pushDataSize / sizeof(u32), 0u, Alloc::ScratchAllocator<u32>(scratchArena));
+    Vector<u32, ContainerDetail::ArenaAllocator<u32, Alloc::ScratchArena<>>> pushWords(pushDataSize / sizeof(u32), 0u, ContainerDetail::ArenaAllocator<u32, Alloc::ScratchArena<>>(scratchArena));
 
     for(const DescriptorHeapPushRange& range : pushRanges){
         if(range.pushWordCount == 0)

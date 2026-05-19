@@ -23,8 +23,8 @@ class Graphics{
 private:
     using BackendOwner = CustomUniquePtr<IGraphicsBackend>;
     using BackendPtr = NotNullUniquePtr<IGraphicsBackend, BackendOwner::deleter_type>;
-    using RenderPassListAllocator = Alloc::CustomAllocator<IRenderPass*>;
-    using SwapChainFramebufferVectorAllocator = Alloc::CustomAllocator<FramebufferHandle>;
+    using RenderPassListAllocator = ContainerDetail::ArenaAllocator<IRenderPass*, Alloc::CustomArena>;
+    using SwapChainFramebufferVectorAllocator = ContainerDetail::ArenaAllocator<FramebufferHandle, Alloc::CustomArena>;
 
 
 public:

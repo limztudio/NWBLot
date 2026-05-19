@@ -76,9 +76,9 @@ class ComponentPool final : public IComponentPool{
 
 
 public:
-    using SparseAllocator = Alloc::CustomAllocator<u32>;
-    using EntityIdAllocator = Alloc::CustomAllocator<EntityID>;
-    using ComponentAllocator = Alloc::CustomAllocator<T>;
+    using SparseAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::CustomArena>;
+    using EntityIdAllocator = ContainerDetail::ArenaAllocator<EntityID, Alloc::CustomArena>;
+    using ComponentAllocator = ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>;
 
 
 private:

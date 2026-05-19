@@ -190,8 +190,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     // Step 1: Collect shader stages
-    PipelineShaderStageVector shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
-    PipelineSpecializationInfoVector specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    PipelineShaderStageVector shaderStages{ ContainerDetail::ArenaAllocator<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>(scratchArena) };
+    PipelineSpecializationInfoVector specInfos{ ContainerDetail::ArenaAllocator<VkSpecializationInfo, Alloc::ScratchArena<>>(scratchArena) };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     shaderStages.reserve(5);
     specInfos.reserve(5);

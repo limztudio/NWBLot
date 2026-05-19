@@ -62,7 +62,7 @@ private:
 
 class AssetCookerRegistry final{
 private:
-    using CookerMapAllocator = Alloc::CustomAllocator<Pair<const Name, UniquePtr<IAssetCooker>>>;
+    using CookerMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCooker>>, Alloc::CustomArena>;
     using CookerMap = HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>, CookerMapAllocator>;
 
 

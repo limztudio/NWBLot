@@ -32,7 +32,7 @@ using IndexSequenceFor = ::IndexSequenceFor<Ts...>;
 template<typename... Ts>
 using ViewDenseIndexTuple = Tuple<Conditional_T<true, u32, Ts>...>;
 
-using ViewEntityVector = Vector<EntityID, Alloc::CustomAllocator<EntityID>>;
+using ViewEntityVector = Vector<EntityID, ContainerDetail::ArenaAllocator<EntityID, Alloc::CustomArena>>;
 
 template<typename... Ts>
 inline constexpr auto ForwardAsTuple(Ts&&... values){

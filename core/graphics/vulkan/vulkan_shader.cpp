@@ -231,9 +231,9 @@ Sampler::~Sampler(){
 
 Shader::Shader(const VulkanContext& context)
     : RefCounter<IShader>(context.threadPool)
-    , m_bytecode(Alloc::CustomAllocator<u8>(context.objectArena))
-    , m_specializationEntries(Alloc::CustomAllocator<VkSpecializationMapEntry>(context.objectArena))
-    , m_specializationData(Alloc::CustomAllocator<u32>(context.objectArena))
+    , m_bytecode(ContainerDetail::ArenaAllocator<u8, Alloc::CustomArena>(context.objectArena))
+    , m_specializationEntries(ContainerDetail::ArenaAllocator<VkSpecializationMapEntry, Alloc::CustomArena>(context.objectArena))
+    , m_specializationData(ContainerDetail::ArenaAllocator<u32, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
 {}
 Shader::~Shader(){
@@ -258,8 +258,8 @@ VkSpecializationInfo Shader::makeSpecializationInfo()const{
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     : RefCounter<IShaderLibrary>(context.threadPool)
-    , m_bytecode(Alloc::CustomAllocator<u8>(context.objectArena))
-    , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), Alloc::CustomAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>>(context.objectArena))
+    , m_bytecode(ContainerDetail::ArenaAllocator<u8, Alloc::CustomArena>(context.objectArena))
+    , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), ContainerDetail::ArenaAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
 {}
 ShaderLibrary::~ShaderLibrary(){}
@@ -443,9 +443,9 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 InputLayout::InputLayout(const VulkanContext& context)
     : RefCounter<IInputLayout>(context.threadPool)
-    , m_attributes(Alloc::CustomAllocator<VertexAttributeDesc>(context.objectArena))
-    , m_bindings(Alloc::CustomAllocator<VkVertexInputBindingDescription>(context.objectArena))
-    , m_vkAttributes(Alloc::CustomAllocator<VkVertexInputAttributeDescription>(context.objectArena))
+    , m_attributes(ContainerDetail::ArenaAllocator<VertexAttributeDesc, Alloc::CustomArena>(context.objectArena))
+    , m_bindings(ContainerDetail::ArenaAllocator<VkVertexInputBindingDescription, Alloc::CustomArena>(context.objectArena))
+    , m_vkAttributes(ContainerDetail::ArenaAllocator<VkVertexInputAttributeDescription, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
 {}
 
@@ -475,11 +475,11 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     };
 
     Alloc::ScratchArena<> scratchArena;
-    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchAllocator<Pair<const u32, VertexBindingBuildInfo>>> bindingInfos(
+    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, ContainerDetail::ArenaAllocator<Pair<const u32, VertexBindingBuildInfo>, Alloc::ScratchArena<>>> bindingInfos(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),
-        Alloc::ScratchAllocator<Pair<const u32, VertexBindingBuildInfo>>(scratchArena)
+        ContainerDetail::ArenaAllocator<Pair<const u32, VertexBindingBuildInfo>, Alloc::ScratchArena<>>(scratchArena)
     );
     bindingInfos.reserve(attributeCount);
 
@@ -625,7 +625,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 Framebuffer::Framebuffer(const VulkanContext& context)
     : RefCounter<IFramebuffer>(context.threadPool)
-    , m_resources(Alloc::CustomAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>>(context.objectArena))
+    , m_resources(ContainerDetail::ArenaAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
 {}
 Framebuffer::~Framebuffer(){

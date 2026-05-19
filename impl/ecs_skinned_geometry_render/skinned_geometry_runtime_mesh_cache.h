@@ -82,9 +82,9 @@ private:
         [[nodiscard]] const SkinnedGeometry* geometry()const;
     };
 
-    using SourceMapAllocator = Core::Alloc::CustomAllocator<Pair<const Name, SkinnedGeometrySource>>;
-    using InstanceMapAllocator = Core::Alloc::CustomAllocator<Pair<const Core::ECS::EntityID, SkinnedGeometryRuntimeMeshInstance>>;
-    using HandleMapAllocator = Core::Alloc::CustomAllocator<Pair<const u64, Core::ECS::EntityID>>;
+    using SourceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, SkinnedGeometrySource>, Core::Alloc::CustomArena>;
+    using InstanceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Core::ECS::EntityID, SkinnedGeometryRuntimeMeshInstance>, Core::Alloc::CustomArena>;
+    using HandleMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, Core::ECS::EntityID>, Core::Alloc::CustomArena>;
 
 
 public:

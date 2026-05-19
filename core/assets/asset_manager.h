@@ -62,7 +62,7 @@ private:
         Name virtualPath = NAME_NONE;
     };
 
-    using RequestMapAllocator = Alloc::CustomAllocator<Pair<const u64, RequestRecord>>;
+    using RequestMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RequestRecord>, Alloc::CustomArena>;
     using RequestMap = HashMap<u64, RequestRecord, Hasher<u64>, EqualTo<u64>, RequestMapAllocator>;
 
 

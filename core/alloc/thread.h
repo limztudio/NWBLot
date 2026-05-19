@@ -174,8 +174,8 @@ private:
         Atomic<i32> activeWorkers{ 0 };
     };
 
-    using WorkerAllocator = MemoryAllocator<JoiningThread>;
-    using TaskAllocator = MemoryAllocator<TaskItem>;
+    using WorkerList = Vector<JoiningThread, MemoryArena>;
+    using TaskQueue = Deque<TaskItem, MemoryArena>;
 
 
 private:
@@ -218,9 +218,9 @@ private:
 public:
     inline explicit ThreadPool(u32 threadCount, u64 affinityMask = 0, usize arenaSize = 0)
         : m_arena(arenaSize > 0 ? arenaSize : defaultArenaSize(threadCount))
-        , m_tasks(TaskAllocator(m_arena))
+        , m_tasks(TaskQueue::allocator_type(m_arena))
         , m_threadCount(threadCount)
-        , m_workers(WorkerAllocator(m_arena))
+        , m_workers(WorkerList::allocator_type(m_arena))
     {
         m_workers.reserve(threadCount);
         for(u32 i = 0; i < threadCount; ++i){
@@ -432,14 +432,14 @@ private:
 
 private:
     MemoryArena m_arena;
-    Deque<TaskItem, TaskAllocator> m_tasks;
+    TaskQueue m_tasks;
     Atomic<ParallelForDesc*> m_pfWork{ nullptr };
     Futex m_taskMutex;
     Futex m_pfMutex;
     ConditionVariableAny m_taskAvailable;
     Atomic<usize> m_pendingCount{ 0 };
     u32 m_threadCount;
-    Vector<JoiningThread, WorkerAllocator> m_workers;
+    WorkerList m_workers;
 };
 
 

@@ -19,7 +19,7 @@ NWB_ASSETS_BEGIN
 
 class AssetRegistry final : NoCopy{
 private:
-    using CodecMapAllocator = Alloc::CustomAllocator<Pair<const Name, UniquePtr<IAssetCodec>>>;
+    using CodecMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCodec>>, Alloc::CustomArena>;
     using CodecMap = HashMap<Name, UniquePtr<IAssetCodec>, Hasher<Name>, EqualTo<Name>, CodecMapAllocator>;
 
 

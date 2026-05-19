@@ -27,7 +27,7 @@ NWB_METASCRIPT_BEGIN
 
 
 template<typename T>
-using MAllocator = Alloc::CustomAllocator<T>;
+using MAllocator = ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>;
 
 using MChar = char;
 using MString = BasicString<MChar, MAllocator<MChar>>;

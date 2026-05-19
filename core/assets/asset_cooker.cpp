@@ -30,7 +30,7 @@ static AString DescribeAvailableCookers(const CookerMap& cookers){
         return "(none)";
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<CompactString, Alloc::ScratchAllocator<CompactString>> types{Alloc::ScratchAllocator<CompactString>(scratchArena)};
+    Vector<CompactString, ContainerDetail::ArenaAllocator<CompactString, Alloc::ScratchArena<>>> types{ContainerDetail::ArenaAllocator<CompactString, Alloc::ScratchArena<>>(scratchArena)};
     types.reserve(cookers.size());
     for(const auto& [_, cooker] : cookers)
         types.push_back(cooker->assetTypeText());

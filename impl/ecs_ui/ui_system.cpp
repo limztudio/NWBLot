@@ -307,8 +307,8 @@ UiSystem::UiSystem(
     , m_input(input)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_textures(Core::Alloc::CustomAllocator<UiTextureResourcePtr>(arena))
-    , m_textureUploadScratch(Core::Alloc::CustomAllocator<u8>(arena))
+    , m_textures(ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::CustomArena>(arena))
+    , m_textureUploadScratch(ContainerDetail::ArenaAllocator<u8, Core::Alloc::CustomArena>(arena))
 {
     readAccess<UiComponent>();
 

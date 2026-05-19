@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 
 
 struct GraphicsCookEnvironment{
-    using AssetRootVector = Vector<Path, Core::Alloc::CustomAllocator<Path>>;
+    using AssetRootVector = Vector<Path, ContainerDetail::ArenaAllocator<Path, Core::Alloc::CustomArena>>;
 
     CompactString configuration;
     Path repoRoot;
@@ -38,7 +38,7 @@ struct GraphicsCookEnvironment{
     Path cacheDirectory;
 
     explicit GraphicsCookEnvironment(Core::Alloc::CustomArena& arena)
-        : assetRoots(Core::Alloc::CustomAllocator<Path>(arena))
+        : assetRoots(ContainerDetail::ArenaAllocator<Path, Core::Alloc::CustomArena>(arena))
     {}
 };
 

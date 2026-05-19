@@ -23,9 +23,9 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_device(device)
     , m_context(device.m_context)
     , m_aftermathMarkerTracker()
-    , m_pendingImageBarriers(Alloc::CustomAllocator<VkImageMemoryBarrier2>(device.m_context.objectArena))
-    , m_pendingBufferBarriers(Alloc::CustomAllocator<VkBufferMemoryBarrier2>(device.m_context.objectArena))
-    , m_pendingCompactions(Alloc::CustomAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>>(device.m_context.objectArena))
+    , m_pendingImageBarriers(ContainerDetail::ArenaAllocator<VkImageMemoryBarrier2, Alloc::CustomArena>(device.m_context.objectArena))
+    , m_pendingBufferBarriers(ContainerDetail::ArenaAllocator<VkBufferMemoryBarrier2, Alloc::CustomArena>(device.m_context.objectArena))
+    , m_pendingCompactions(ContainerDetail::ArenaAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>, Alloc::CustomArena>(device.m_context.objectArena))
 {
     if(m_device.isAftermathEnabled())
         m_device.getAftermathCrashDumpHelper().registerAftermathMarkerTracker(m_aftermathMarkerTracker);

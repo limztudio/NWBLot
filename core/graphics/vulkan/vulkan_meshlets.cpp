@@ -48,8 +48,8 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;
 
-    PipelineShaderStageVector shaderStages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
-    PipelineSpecializationInfoVector specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    PipelineShaderStageVector shaderStages{ ContainerDetail::ArenaAllocator<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>(scratchArena) };
+    PipelineSpecializationInfoVector specInfos{ ContainerDetail::ArenaAllocator<VkSpecializationInfo, Alloc::ScratchArena<>>(scratchArena) };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
     shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
     specInfos.reserve(s_MeshletPipelineStageReserveCount);

@@ -368,16 +368,16 @@ bool SkinnedGeometrySystem::dispatchRuntimeMesh(
     const SkinnedGeometrySkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchAllocator<SkinnedGeometrySkinInfluenceGpu>> skinInfluences{
-        Core::Alloc::ScratchAllocator<SkinnedGeometrySkinInfluenceGpu>(scratchArena)
+    Vector<SkinnedGeometrySkinInfluenceGpu, ContainerDetail::ArenaAllocator<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>>> skinInfluences{
+        ContainerDetail::ArenaAllocator<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>>(scratchArena)
     };
-    Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchAllocator<SkinnedGeometryJointMatrix>> jointMatrices{
-        Core::Alloc::ScratchAllocator<SkinnedGeometryJointMatrix>(scratchArena)
+    Vector<SkinnedGeometryJointMatrix, ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>> jointMatrices{
+        ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>(scratchArena)
     };
     u32 resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkinnedGeometrySkinningMode::LinearBlend;
     if(SkinnedGeometryRuntime::HasSkeletonPose(skeletonPose)){
-        Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchAllocator<SkinnedGeometryJointMatrix>> poseJoints{
-            Core::Alloc::ScratchAllocator<SkinnedGeometryJointMatrix>(scratchArena)
+        Vector<SkinnedGeometryJointMatrix, ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>> poseJoints{
+            ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>(scratchArena)
         };
         if(!SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, resolvedSkinningMode)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometrySystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);

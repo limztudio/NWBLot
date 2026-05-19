@@ -296,7 +296,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchAllocator<CooperativeVectorConvertMatrixLayoutDesc const*>> validDescs{ Alloc::ScratchAllocator<CooperativeVectorConvertMatrixLayoutDesc const*>(scratchArena) };
+    Vector<CooperativeVectorConvertMatrixLayoutDesc const*, ContainerDetail::ArenaAllocator<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchArena<>>> validDescs{ ContainerDetail::ArenaAllocator<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchArena<>>(scratchArena) };
     validDescs.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){
@@ -327,8 +327,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         validDescs.push_back(&convertDesc);
     }
 
-    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>> vkConvertDescs(validDescs.size(), Alloc::ScratchAllocator<VkConvertCooperativeVectorMatrixInfoNV>(scratchArena));
-    Vector<usize, Alloc::ScratchAllocator<usize>> dstSizes(validDescs.size(), Alloc::ScratchAllocator<usize>(scratchArena));
+    Vector<VkConvertCooperativeVectorMatrixInfoNV, ContainerDetail::ArenaAllocator<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena<>>> vkConvertDescs(validDescs.size(), ContainerDetail::ArenaAllocator<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena<>>(scratchArena));
+    Vector<usize, ContainerDetail::ArenaAllocator<usize, Alloc::ScratchArena<>>> dstSizes(validDescs.size(), ContainerDetail::ArenaAllocator<usize, Alloc::ScratchArena<>>(scratchArena));
 
     auto buildConvertDesc = [&](usize i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = *validDescs[i];
@@ -410,7 +410,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
 
     Alloc::ScratchArena<> scratchArena;
 
-    SparseImageMemoryRequirementsVector sparseReqs{ Alloc::ScratchAllocator<VkSparseImageMemoryRequirements>(scratchArena) };
+    SparseImageMemoryRequirementsVector sparseReqs{ ContainerDetail::ArenaAllocator<VkSparseImageMemoryRequirements, Alloc::ScratchArena<>>(scratchArena) };
     VulkanDetail::GetImageSparseMemoryRequirements(m_context.device, texture->m_image, sparseReqs);
 
     if(!sparseReqs.empty()){
@@ -446,7 +446,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         &formatPropCount, nullptr
     );
 
-    Vector<VkSparseImageFormatProperties, Alloc::ScratchAllocator<VkSparseImageFormatProperties>> formatProps(formatPropCount, Alloc::ScratchAllocator<VkSparseImageFormatProperties>(scratchArena));
+    Vector<VkSparseImageFormatProperties, ContainerDetail::ArenaAllocator<VkSparseImageFormatProperties, Alloc::ScratchArena<>>> formatProps(formatPropCount, ContainerDetail::ArenaAllocator<VkSparseImageFormatProperties, Alloc::ScratchArena<>>(scratchArena));
     if(formatPropCount > 0){
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,

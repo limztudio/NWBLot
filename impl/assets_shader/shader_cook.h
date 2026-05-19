@@ -34,7 +34,7 @@ class ShaderCook{
 public:
     using CookArena = Core::Alloc::CustomArena;
     template<typename T>
-    using CookAllocator = Core::Alloc::CustomAllocator<T>;
+    using CookAllocator = ContainerDetail::ArenaAllocator<T, Core::Alloc::CustomArena>;
 
 public:
     template<typename T>
@@ -138,13 +138,13 @@ private:
     template<typename MapT>
     using ScratchDefineEntryVector = Vector<
         DefineEntryPtr<MapT>,
-        Core::Alloc::ScratchAllocator<DefineEntryPtr<MapT>>
+        ContainerDetail::ArenaAllocator<DefineEntryPtr<MapT>, Core::Alloc::ScratchArena<>>
     >;
 
     template<typename MapT>
     ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena<>& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
-        ScratchDefineEntryVector<MapT> entries{Core::Alloc::ScratchAllocator<EntryPtr>(scratchArena)};
+        ScratchDefineEntryVector<MapT> entries{ContainerDetail::ArenaAllocator<EntryPtr, Core::Alloc::ScratchArena<>>(scratchArena)};
         entries.reserve(map.size());
         for(const auto& [name, value] : map)
             entries.push_back(EntryPtr{ &name, &value });

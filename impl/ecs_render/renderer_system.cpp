@@ -143,10 +143,10 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena<> scratchArena;
-    MaterialPassDrawItemVector opaqueMeshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
-    MaterialPassDrawItemVector opaqueComputeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
-    InstanceGpuDataVector instanceData{Core::Alloc::ScratchAllocator<InstanceGpuData>(scratchArena)};
-    MaterialParameterGpuDataVector materialParameters{Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)};
+    MaterialPassDrawItemVector opaqueMeshDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
+    MaterialPassDrawItemVector opaqueComputeDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
+    InstanceGpuDataVector instanceData{ContainerDetail::ArenaAllocator<InstanceGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
+    MaterialParameterGpuDataVector materialParameters{ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());

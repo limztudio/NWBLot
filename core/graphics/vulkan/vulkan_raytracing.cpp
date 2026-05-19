@@ -138,13 +138,13 @@ bool ComputeShaderTableByteSize(u32 recordCount, u32 handleSizeAligned, u32 base
     return true;
 }
 
-using MicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchAllocator<VkMicromapUsageEXT>>;
-using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>>;
-using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>>;
-using BlasLssDataVector = Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>>;
-using BlasRangeInfoVector = Vector<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>>;
-using BlasPrimitiveCountVector = Vector<uint32_t, Alloc::ScratchAllocator<uint32_t>>;
-using BlasTransformOffsetVector = Vector<usize, Alloc::ScratchAllocator<usize>>;
+using MicromapUsageVector = Vector<VkMicromapUsageEXT, ContainerDetail::ArenaAllocator<VkMicromapUsageEXT, Alloc::ScratchArena<>>>;
+using BlasGeometryVector = Vector<VkAccelerationStructureGeometryKHR, ContainerDetail::ArenaAllocator<VkAccelerationStructureGeometryKHR, Alloc::ScratchArena<>>>;
+using BlasSpheresDataVector = Vector<VkAccelerationStructureGeometrySpheresDataNV, ContainerDetail::ArenaAllocator<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchArena<>>>;
+using BlasLssDataVector = Vector<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, ContainerDetail::ArenaAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchArena<>>>;
+using BlasRangeInfoVector = Vector<VkAccelerationStructureBuildRangeInfoKHR, ContainerDetail::ArenaAllocator<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchArena<>>>;
+using BlasPrimitiveCountVector = Vector<uint32_t, ContainerDetail::ArenaAllocator<uint32_t, Alloc::ScratchArena<>>>;
+using BlasTransformOffsetVector = Vector<usize, ContainerDetail::ArenaAllocator<usize, Alloc::ScratchArena<>>>;
 
 struct BlasGeometryScratch{
     BlasGeometryVector geometries;
@@ -155,12 +155,12 @@ struct BlasGeometryScratch{
     BlasTransformOffsetVector transformOffsets;
 
     explicit BlasGeometryScratch(Alloc::ScratchArena<>& scratchArena)
-        : geometries(Alloc::ScratchAllocator<VkAccelerationStructureGeometryKHR>(scratchArena))
-        , spheresData(Alloc::ScratchAllocator<VkAccelerationStructureGeometrySpheresDataNV>(scratchArena))
-        , lssData(Alloc::ScratchAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV>(scratchArena))
-        , rangeInfos(Alloc::ScratchAllocator<VkAccelerationStructureBuildRangeInfoKHR>(scratchArena))
-        , primitiveCounts(Alloc::ScratchAllocator<uint32_t>(scratchArena))
-        , transformOffsets(Alloc::ScratchAllocator<usize>(scratchArena))
+        : geometries(ContainerDetail::ArenaAllocator<VkAccelerationStructureGeometryKHR, Alloc::ScratchArena<>>(scratchArena))
+        , spheresData(ContainerDetail::ArenaAllocator<VkAccelerationStructureGeometrySpheresDataNV, Alloc::ScratchArena<>>(scratchArena))
+        , lssData(ContainerDetail::ArenaAllocator<VkAccelerationStructureGeometryLinearSweptSpheresDataNV, Alloc::ScratchArena<>>(scratchArena))
+        , rangeInfos(ContainerDetail::ArenaAllocator<VkAccelerationStructureBuildRangeInfoKHR, Alloc::ScratchArena<>>(scratchArena))
+        , primitiveCounts(ContainerDetail::ArenaAllocator<uint32_t, Alloc::ScratchArena<>>(scratchArena))
+        , transformOffsets(ContainerDetail::ArenaAllocator<usize, Alloc::ScratchArena<>>(scratchArena))
     {}
 
     void resizeForSizeQuery(usize geometryCount){
@@ -823,7 +823,7 @@ OpacityMicromap::~OpacityMicromap(){
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
     : RefCounter<IRayTracingPipeline>(context.threadPool)
-    , m_shaderGroupHandles(Alloc::CustomAllocator<u8>(context.objectArena))
+    , m_shaderGroupHandles(ContainerDetail::ArenaAllocator<u8, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
     , m_device(device)
 {}
@@ -980,7 +980,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
     Alloc::ScratchArena<> scratchArena;
-    VulkanDetail::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
+    VulkanDetail::MicromapUsageVector usageCounts{ ContainerDetail::ArenaAllocator<VkMicromapUsageEXT, Alloc::ScratchArena<>>(scratchArena) };
     if(!VulkanDetail::BuildOpacityMicromapUsageCounts(desc.counts, usageCounts, NWB_TEXT("create opacity micromap")))
         return nullptr;
 
@@ -1138,9 +1138,9 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     Alloc::ScratchArena<> scratchArena(s_RayTracingScratchArenaBytes);
 
-    PipelineShaderStageVector stages{ Alloc::ScratchAllocator<VkPipelineShaderStageCreateInfo>(scratchArena) };
-    Vector<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>> groups{ Alloc::ScratchAllocator<VkRayTracingShaderGroupCreateInfoKHR>(scratchArena) };
-    PipelineSpecializationInfoVector specInfos{ Alloc::ScratchAllocator<VkSpecializationInfo>(scratchArena) };
+    PipelineShaderStageVector stages{ ContainerDetail::ArenaAllocator<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkRayTracingShaderGroupCreateInfoKHR, ContainerDetail::ArenaAllocator<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchArena<>>> groups{ ContainerDetail::ArenaAllocator<VkRayTracingShaderGroupCreateInfoKHR, Alloc::ScratchArena<>>(scratchArena) };
+    PipelineSpecializationInfoVector specInfos{ ContainerDetail::ArenaAllocator<VkSpecializationInfo, Alloc::ScratchArena<>>(scratchArena) };
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 
     stages.reserve(maxShaderStages);
@@ -2220,7 +2220,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicrom
         buildFlags = VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
 
     Alloc::ScratchArena<> scratchArena;
-    VulkanDetail::MicromapUsageVector usageCounts{ Alloc::ScratchAllocator<VkMicromapUsageEXT>(scratchArena) };
+    VulkanDetail::MicromapUsageVector usageCounts{ ContainerDetail::ArenaAllocator<VkMicromapUsageEXT, Alloc::ScratchArena<>>(scratchArena) };
     if(!VulkanDetail::BuildOpacityMicromapUsageCounts(ommDesc.counts, usageCounts, NWB_TEXT("build opacity micromap")))
         return;
 

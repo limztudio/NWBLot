@@ -36,7 +36,7 @@ class MessageBus : NoCopy{
 private:
     class IMessageChannel;
     using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
-    using ChannelVectorAllocator = Alloc::CustomAllocator<MessageChannelPtr>;
+    using ChannelVectorAllocator = ContainerDetail::ArenaAllocator<MessageChannelPtr, Alloc::CustomArena>;
     using ChannelLock = SharedMutex::scoped_lock;
 
 
@@ -93,13 +93,13 @@ private:
             Optional<T> m_value;
         };
 
-        using PendingAllocator = Alloc::CustomCacheAlignedAllocator<PendingMessage>;
+        using PendingAllocator = ContainerDetail::ArenaCacheAlignedAllocator<PendingMessage, Alloc::CustomArena>;
 
 
     public:
         explicit MessageChannel(Alloc::CustomArena& arena)
             : m_pending(PendingAllocator(arena))
-            , m_readBuffer(Alloc::CustomAllocator<T>(arena))
+            , m_readBuffer(ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>(arena))
         {}
 
     public:
@@ -150,7 +150,7 @@ private:
 
     private:
         ParallelQueue<PendingMessage, PendingAllocator> m_pending;
-        Vector<T, Alloc::CustomAllocator<T>> m_readBuffer;
+        Vector<T, ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>> m_readBuffer;
     };
 
     using ChannelVector = Vector<MessageChannelPtr, ChannelVectorAllocator>;

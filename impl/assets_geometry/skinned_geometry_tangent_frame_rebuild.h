@@ -85,7 +85,7 @@ inline void ApplyOutput(
     Core::Geometry::TangentFrameRebuildResult* outResult = nullptr){
     Core::Alloc::ScratchArena<> scratchArena;
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    using RebuildAllocator = Core::Alloc::ScratchAllocator<RebuildVertex>;
+    using RebuildAllocator = ContainerDetail::ArenaAllocator<RebuildVertex, Core::Alloc::ScratchArena<>>;
     Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
     BuildInput(vertices, rebuildVertices);
 

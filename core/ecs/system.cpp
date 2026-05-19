@@ -164,12 +164,12 @@ void SystemScheduler::rebuild(){
     //  - One does not write a component that the other reads
 
     Alloc::ScratchArena<> scratchArena(4096);
-    using ScratchComponentAccessAllocator = Alloc::ScratchAllocator<ComponentAccess>;
-    using ScratchSystemAllocator = Alloc::ScratchAllocator<ISystem*>;
+    using ScratchComponentAccessAllocator = ContainerDetail::ArenaAllocator<ComponentAccess, Alloc::ScratchArena<>>;
+    using ScratchSystemAllocator = ContainerDetail::ArenaAllocator<ISystem*, Alloc::ScratchArena<>>;
 
-    Vector<u8, Alloc::ScratchAllocator<u8>> assignedSystems(
+    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>> assignedSystems(
         systemCount, 0,
-        Alloc::ScratchAllocator<u8>(scratchArena)
+        ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>(scratchArena)
     );
 
     usize componentAccessReserve = 0;

@@ -308,11 +308,11 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
 static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
-    HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenNwbPaths(
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Core::Alloc::ScratchArena<>>> seenNwbPaths(
         0,
         Hasher<AString>(),
         EqualTo<AString>(),
-        Core::Alloc::ScratchAllocator<AString>(scratchArena)
+        ContainerDetail::ArenaAllocator<AString, Core::Alloc::ScratchArena<>>(scratchArena)
     );
 
     outNwbFiles.clear();
@@ -395,11 +395,11 @@ template<typename AssetRootVector>
 static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector& assetRoots, const ShaderCook::ShaderEntry& entry, ShaderCook::CookVector<Path>& outIncludeDirectories){
     Core::Alloc::ScratchArena<> scratchArena;
     ErrorCode errorCode;
-    HashSet<AString, Hasher<AString>, EqualTo<AString>, Core::Alloc::ScratchAllocator<AString>> seenIncludeDirectories(
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Core::Alloc::ScratchArena<>>> seenIncludeDirectories(
         0,
         Hasher<AString>(),
         EqualTo<AString>(),
-        Core::Alloc::ScratchAllocator<AString>(scratchArena)
+        ContainerDetail::ArenaAllocator<AString, Core::Alloc::ScratchArena<>>(scratchArena)
     );
 
     outIncludeDirectories.clear();
@@ -585,12 +585,12 @@ static bool ValidateAndNormalizeMaterials(
         const PreparedShaderEntry*,
         PreparedShaderKeyHasher,
         EqualTo<PreparedShaderKey>,
-        Core::Alloc::ScratchAllocator<Pair<const PreparedShaderKey, const PreparedShaderEntry*>>
+        ContainerDetail::ArenaAllocator<Pair<const PreparedShaderKey, const PreparedShaderEntry*>, Core::Alloc::ScratchArena<>>
     > preparedShaderLookup(
         0,
         PreparedShaderKeyHasher(),
         EqualTo<PreparedShaderKey>(),
-        Core::Alloc::ScratchAllocator<Pair<const PreparedShaderKey, const PreparedShaderEntry*>>(scratchArena)
+        ContainerDetail::ArenaAllocator<Pair<const PreparedShaderKey, const PreparedShaderEntry*>, Core::Alloc::ScratchArena<>>(scratchArena)
     );
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
@@ -735,12 +735,12 @@ static bool GetVariantBytecode(
         AString,
         Hasher<AString>,
         EqualTo<AString>,
-        Core::Alloc::ScratchAllocator<Pair<const AString, AString>>
+        ContainerDetail::ArenaAllocator<Pair<const AString, AString>, Core::Alloc::ScratchArena<>>
     > mergedDefines(
         0,
         Hasher<AString>(),
         EqualTo<AString>(),
-        Core::Alloc::ScratchAllocator<Pair<const AString, AString>>(scratchArena)
+        ContainerDetail::ArenaAllocator<Pair<const AString, AString>, Core::Alloc::ScratchArena<>>(scratchArena)
     );
     if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: define count overflow for entry '{}'"), StringConvert(entry.name));
@@ -754,8 +754,8 @@ static bool GetVariantBytecode(
     for(const auto& [defineName, value] : entry.implicitDefines)
         mergedDefines.insert_or_assign(defineName, value);
 
-    Vector<Core::ShaderMacroDefinition, Core::Alloc::ScratchAllocator<Core::ShaderMacroDefinition>> compileDefines{
-        Core::Alloc::ScratchAllocator<Core::ShaderMacroDefinition>(scratchArena)
+    Vector<Core::ShaderMacroDefinition, ContainerDetail::ArenaAllocator<Core::ShaderMacroDefinition, Core::Alloc::ScratchArena<>>> compileDefines{
+        ContainerDetail::ArenaAllocator<Core::ShaderMacroDefinition, Core::Alloc::ScratchArena<>>(scratchArena)
     };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation")
@@ -882,11 +882,11 @@ static bool ParseAssetMetadata(
         ShaderCook::CookAllocator<PreparedShaderKey>(cookArena)
     };
     Core::Alloc::ScratchArena<> scratchArena;
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchAllocator<NameHash>> seenPropertyAssetPathHashes(
+    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ContainerDetail::ArenaAllocator<NameHash, Core::Alloc::ScratchArena<>>> seenPropertyAssetPathHashes(
         0,
         Hasher<NameHash>(),
         EqualTo<NameHash>(),
-        Core::Alloc::ScratchAllocator<NameHash>(scratchArena)
+        ContainerDetail::ArenaAllocator<NameHash, Core::Alloc::ScratchArena<>>(scratchArena)
     );
 
     seenShaderIdentityKeys.reserve(nwbFiles.size());

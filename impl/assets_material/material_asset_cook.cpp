@@ -724,8 +724,8 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, static_cast<u32>(material.parameters().size()));
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MaterialParameterGpuData, Core::Alloc::ScratchAllocator<MaterialParameterGpuData>> sortedParams{
-        Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)
+    Vector<MaterialParameterGpuData, ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>> sortedParams{
+        ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>(scratchArena)
     };
     sortedParams.reserve(material.parameters().size());
     for(const MaterialParameterGpuData& parameter : material.parameters())

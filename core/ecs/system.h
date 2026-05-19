@@ -54,7 +54,7 @@ class ISystem{
 
 
 private:
-    using AccessAllocator = Alloc::CustomAllocator<ComponentAccess>;
+    using AccessAllocator = ContainerDetail::ArenaAllocator<ComponentAccess, Alloc::CustomArena>;
 
 
 public:
@@ -91,9 +91,9 @@ private:
 
 class SystemScheduler{
 private:
-    using SystemAllocator = Alloc::CustomAllocator<ISystem*>;
+    using SystemAllocator = ContainerDetail::ArenaAllocator<ISystem*, Alloc::CustomArena>;
     using Stage = Vector<ISystem*, SystemAllocator>;
-    using StageAllocator = Alloc::CustomAllocator<Stage>;
+    using StageAllocator = ContainerDetail::ArenaAllocator<Stage, Alloc::CustomArena>;
 
 
 public:

@@ -3844,7 +3844,7 @@ struct ShaderCompilerRequest{
     AStringView variantName;
     const ShaderMacroDefinition* defines = nullptr;
     u32 defineCount = 0;
-    const Vector<Path, Alloc::CustomAllocator<Path>>& includeDirectories;
+    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>>& includeDirectories;
     const Path& sourcePath;
 };
 

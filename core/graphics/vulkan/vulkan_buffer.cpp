@@ -49,8 +49,8 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
 
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IBuffer>(context.threadPool)
-    , m_versionTracking(Alloc::CustomAllocator<u64>(context.objectArena))
-    , m_bufferViews(Alloc::CustomAllocator<BufferViewEntry>(context.objectArena))
+    , m_versionTracking(ContainerDetail::ArenaAllocator<u64, Alloc::CustomArena>(context.objectArena))
+    , m_bufferViews(ContainerDetail::ArenaAllocator<BufferViewEntry, Alloc::CustomArena>(context.objectArena))
     , m_context(context)
     , m_allocator(allocator)
 {}

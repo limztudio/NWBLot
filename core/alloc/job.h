@@ -40,7 +40,7 @@ private:
 
 private:
     using JobFunction = InplaceFunction<s_JobInlineStorageBytes>;
-    using ReadyBatch = Vector<JobHandle, ScratchAllocator<JobHandle>>;
+    using ReadyBatch = Vector<JobHandle, ScratchArena<>>;
 
 
 private:
@@ -49,10 +49,10 @@ private:
     };
 
     struct JobNode{
-        using DependencyAllocator = MemoryAllocator<JobHandle>;
+        using DependencyList = Vector<JobHandle, MemoryArena>;
 
         JobFunction func;
-        Vector<JobHandle, DependencyAllocator> dependents;
+        DependencyList dependents;
         JobSignal* completionSignal = nullptr;
         u32 generation = 1;
         u32 remainingDependencies = 0;
@@ -62,14 +62,14 @@ private:
 
     public:
         inline explicit JobNode(MemoryArena& arena)
-            : dependents(DependencyAllocator(arena))
+            : dependents(DependencyList::allocator_type(arena))
         {}
     };
 
 
 private:
-    using JobNodeAllocator = MemoryAllocator<JobNode>;
-    using JobFreeNodeAllocator = MemoryAllocator<u32>;
+    using JobNodeList = Vector<JobNode, MemoryArena>;
+    using JobFreeNodeList = Vector<u32, MemoryArena>;
 
 
 private:
@@ -112,8 +112,8 @@ public:
     inline explicit JobSystem(ThreadPool& pool, usize arenaSize = 0)
         : m_pool(pool)
         , m_arena(resolveArenaSize(pool.m_threadCount, arenaSize))
-        , m_nodes(JobNodeAllocator(m_arena))
-        , m_freeNodes(JobFreeNodeAllocator(m_arena))
+        , m_nodes(JobNodeList::allocator_type(m_arena))
+        , m_freeNodes(JobFreeNodeList::allocator_type(m_arena))
     {
         reserveDefaultNodes(pool.m_threadCount);
     }
@@ -121,8 +121,8 @@ public:
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinityMask, arenaSize))
         , m_pool(*m_ownedPool)
         , m_arena(resolveArenaSize(threadCount, arenaSize))
-        , m_nodes(JobNodeAllocator(m_arena))
-        , m_freeNodes(JobFreeNodeAllocator(m_arena))
+        , m_nodes(JobNodeList::allocator_type(m_arena))
+        , m_freeNodes(JobFreeNodeList::allocator_type(m_arena))
     {
         reserveDefaultNodes(threadCount);
     }
@@ -130,8 +130,8 @@ public:
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinity, arenaSize))
         , m_pool(*m_ownedPool)
         , m_arena(resolveArenaSize(threadCount, arenaSize))
-        , m_nodes(JobNodeAllocator(m_arena))
-        , m_freeNodes(JobFreeNodeAllocator(m_arena))
+        , m_nodes(JobNodeList::allocator_type(m_arena))
+        , m_freeNodes(JobFreeNodeList::allocator_type(m_arena))
     {
         reserveDefaultNodes(threadCount);
     }
@@ -383,7 +383,7 @@ private:
 
     inline JobHandle complete(JobHandle handle, bool allowInline){
         ScratchArena<> scratchArena;
-        ReadyBatch readyJobs{ScratchAllocator<JobHandle>(scratchArena)};
+        ReadyBatch readyJobs{ReadyBatch::allocator_type(scratchArena)};
         JobSignal* completionSignal = nullptr;
         JobHandle inlineContinuation;
 
@@ -443,8 +443,8 @@ private:
     ThreadPool& m_pool;
 
     MemoryArena m_arena;
-    Vector<JobNode, JobNodeAllocator> m_nodes;
-    Vector<u32, JobFreeNodeAllocator> m_freeNodes;
+    JobNodeList m_nodes;
+    JobFreeNodeList m_freeNodes;
 
     mutable Futex m_mutex;
     Atomic<usize> m_pendingJobCount{ 0 };

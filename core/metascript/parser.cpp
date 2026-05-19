@@ -97,8 +97,8 @@ public:
 
 
 private:
-    using ScratchPath = Vector<MStringView, Alloc::ScratchAllocator<MStringView>>;
-    using ScratchString = BasicString<MChar, Alloc::ScratchAllocator<MChar>>;
+    using ScratchPath = Vector<MStringView, ContainerDetail::ArenaAllocator<MStringView, Alloc::ScratchArena<>>>;
+    using ScratchString = BasicString<MChar, ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>>;
 
 
     bool parseDeclaration(MString& outAssetType, MString& outAssetVariable){
@@ -140,7 +140,7 @@ private:
             return false;
         }
 
-        ScratchPath path{Alloc::ScratchAllocator<MStringView>(m_scratchArena)};
+        ScratchPath path{ContainerDetail::ArenaAllocator<MStringView, Alloc::ScratchArena<>>(m_scratchArena)};
         path.reserve(4);
         path.push_back(firstName);
 
@@ -314,7 +314,7 @@ private:
             const auto name = m_current.text;
             advance();
 
-            ScratchPath path{Alloc::ScratchAllocator<MStringView>(m_scratchArena)};
+            ScratchPath path{ContainerDetail::ArenaAllocator<MStringView, Alloc::ScratchArena<>>(m_scratchArena)};
             path.reserve(4);
             path.push_back(name);
 
@@ -696,7 +696,7 @@ private:
 
     void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
-        ScratchString msg{Alloc::ScratchAllocator<MChar>(m_scratchArena)};
+        ScratchString msg{ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>(m_scratchArena)};
         if(
             expected.size() <= Limit<usize>::s_Max - 8u
             && desc.size() <= Limit<usize>::s_Max - expected.size() - 8u
@@ -801,7 +801,7 @@ bool Document::parse(IMetaReader& reader){
         constexpr usize chunkSize = 4096;
 
         Alloc::ScratchArena<> scratchArena(chunkSize);
-        BasicString<MChar, Alloc::ScratchAllocator<MChar>> buffer{Alloc::ScratchAllocator<MChar>(scratchArena)};
+        BasicString<MChar, ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>> buffer{ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>(scratchArena)};
         buffer.reserve(chunkSize);
         MChar chunk[chunkSize];
 

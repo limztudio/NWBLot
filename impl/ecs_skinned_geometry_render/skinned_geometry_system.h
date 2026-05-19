@@ -121,7 +121,7 @@ private:
 
 
 private:
-    using RuntimeResourceMapAllocator = Core::Alloc::CustomAllocator<Pair<const u64, RuntimeResources>>;
+    using RuntimeResourceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RuntimeResources>, Core::Alloc::CustomArena>;
 
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;

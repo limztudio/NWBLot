@@ -119,10 +119,10 @@ private:
         u64 size = 0;
     };
 
-    using SegmentPathAllocator = Alloc::CustomAllocator<Path>;
+    using SegmentPathAllocator = ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>;
     using SegmentPathVector = Vector<Path, SegmentPathAllocator>;
 
-    using FileMapAllocator = Alloc::CustomAllocator<Pair<const Name, FileRecord>>;
+    using FileMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, FileRecord>, Alloc::CustomArena>;
     using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, FileMapAllocator>;
 
 

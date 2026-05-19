@@ -695,7 +695,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 
 static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Path, Core::Alloc::ScratchAllocator<Path>> movedBackupFiles{ Core::Alloc::ScratchAllocator<Path>(scratchArena) };
+    Vector<Path, ContainerDetail::ArenaAllocator<Path, Core::Alloc::ScratchArena<>>> movedBackupFiles{ ContainerDetail::ArenaAllocator<Path, Core::Alloc::ScratchArena<>>(scratchArena) };
     if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
         return false;
 
@@ -1313,8 +1313,8 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<FileLayout, Core::Alloc::ScratchAllocator<FileLayout>> layouts{
-        Core::Alloc::ScratchAllocator<FileLayout>(scratchArena)
+    Vector<FileLayout, ContainerDetail::ArenaAllocator<FileLayout, Core::Alloc::ScratchArena<>>> layouts{
+        ContainerDetail::ArenaAllocator<FileLayout, Core::Alloc::ScratchArena<>>(scratchArena)
     };
     layouts.reserve(m_files.size());
 
@@ -1612,10 +1612,10 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexData(
+    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> indexData(
         static_cast<usize>(header.indexBytes),
         0,
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+        ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena)
     );
     if(header.indexBytes > 0 && !readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "failed to read metadata index");
@@ -1701,8 +1701,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MetadataIndexRecord, Core::Alloc::ScratchAllocator<MetadataIndexRecord>> sortedRecords{
-        Core::Alloc::ScratchAllocator<MetadataIndexRecord>(scratchArena)
+    Vector<MetadataIndexRecord, ContainerDetail::ArenaAllocator<MetadataIndexRecord, Core::Alloc::ScratchArena<>>> sortedRecords{
+        ContainerDetail::ArenaAllocator<MetadataIndexRecord, Core::Alloc::ScratchArena<>>(scratchArena)
     };
     sortedRecords.reserve(m_files.size());
     for(const auto& [path, record] : m_files)
@@ -1715,7 +1715,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         }
     );
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> indexBytes{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
+    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> indexBytes{ ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena) };
     if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
@@ -1757,7 +1757,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> metadataBuffer{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };
+    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> metadataBuffer{ ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena) };
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
     ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
@@ -1881,10 +1881,10 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchAllocator<u8>> moveBuffer(
+    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> moveBuffer(
         static_cast<usize>(moveChunkBytes),
         0,
-        Core::Alloc::ScratchAllocator<u8>(scratchArena)
+        ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena)
     );
 
     if(destinationOffset < sourceOffset){

@@ -31,10 +31,10 @@ void RendererSystem::renderMaterialPass(
     commandList.endRenderPass();
 
     Core::Alloc::ScratchArena<> scratchArena;
-    MaterialPassDrawItemVector meshDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
-    MaterialPassDrawItemVector computeDrawItems{Core::Alloc::ScratchAllocator<MaterialPassDrawItem>(scratchArena)};
-    InstanceGpuDataVector instanceData{Core::Alloc::ScratchAllocator<InstanceGpuData>(scratchArena)};
-    MaterialParameterGpuDataVector materialParameters{Core::Alloc::ScratchAllocator<MaterialParameterGpuData>(scratchArena)};
+    MaterialPassDrawItemVector meshDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
+    MaterialPassDrawItemVector computeDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
+    InstanceGpuDataVector instanceData{ContainerDetail::ArenaAllocator<InstanceGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
+    MaterialParameterGpuDataVector materialParameters{ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
@@ -93,13 +93,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
         ECSRenderDetail::MaterialParameterBlock,
         Hasher<Name>,
         EqualTo<Name>,
-        Core::Alloc::ScratchAllocator<MaterialParameterBlockPair>
+        ContainerDetail::ArenaAllocator<MaterialParameterBlockPair, Core::Alloc::ScratchArena<>>
     >;
     MaterialParameterBlockMap materialParameterBlocks(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),
-        Core::Alloc::ScratchAllocator<MaterialParameterBlockPair>(materialParameters.get_allocator())
+        ContainerDetail::ArenaAllocator<MaterialParameterBlockPair, Core::Alloc::ScratchArena<>>(materialParameters.get_allocator())
     );
     materialParameterBlocks.reserve(rendererCapacity);
 

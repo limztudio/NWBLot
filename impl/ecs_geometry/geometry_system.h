@@ -40,7 +40,7 @@ NWB_IMPL_BEGIN
 
 class GeometrySystem final : public Core::ECS::ISystem, public IRuntimeGeometryRegistry{
 private:
-    using RuntimeGeometryProviderAllocator = Core::Alloc::CustomAllocator<IRuntimeGeometryProvider*>;
+    using RuntimeGeometryProviderAllocator = ContainerDetail::ArenaAllocator<IRuntimeGeometryProvider*, Core::Alloc::CustomArena>;
 
 
 public:

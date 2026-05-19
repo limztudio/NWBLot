@@ -35,31 +35,10 @@
 #include "compressed_pair.h"
 #include "fixed_vector.h"
 #include "basic_string.h"
+#include "container/adaptor.h"
 #include "filesystem.h"
 #include "name.h"
 #include "sync.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace NWB::Core::Alloc{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-class GeneralAllocator;
-
-template<typename T>
-class CacheAlignedAllocator;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,54 +81,166 @@ constexpr auto Tie(Args&... args){ return std::tie(args...); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, Alloc>;
-
-template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
-using ParallelHashMap = tbb::concurrent_unordered_map<T, V, Hash, Equal, Alloc>;
-
-template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
-using ParallelVector = tbb::concurrent_vector<T, Alloc>;
-
-template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
-using ParallelQueue = tbb::concurrent_queue<T, Alloc>;
-
-template<typename T, typename Alloc = NWB::Core::Alloc::CacheAlignedAllocator<T>>
-using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, Alloc>;
+namespace ContainerDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using HashSet = tsl::robin_set<T, Hash, Equal, Alloc>;
+template<typename T, typename First, typename Second, typename Third>
+struct HashSetSelector{
+private:
+    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
 
-template<typename T, typename V, typename Hash = Hasher<T>, typename Equal = EqualTo<T>, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
-using HashMap = tsl::robin_map<T, V, Hash, Equal, Alloc>;
+    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
+    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
+    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
+    using Allocator = ArenaAllocatorFor_T<T, Resource>;
+
+public:
+    using Type = tsl::robin_set<T, Hash, Equal, Allocator>;
+};
+
+template<typename T, typename First>
+struct HashSetSelector<T, First, void, void>{
+private:
+    using Allocator = ArenaAllocatorFor_T<T, First>;
+
+public:
+    using Type = tsl::robin_set<T, Hasher<T>, EqualTo<T>, Allocator>;
+};
+
+template<typename T, typename V, typename First, typename Second, typename Third>
+struct HashMapSelector{
+private:
+    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+
+    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
+    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
+    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
+    using Value = typename tsl::robin_map<T, V, Hash, Equal>::value_type;
+    using Allocator = ArenaAllocatorFor_T<Value, Resource>;
+
+public:
+    using Type = tsl::robin_map<T, V, Hash, Equal, Allocator>;
+};
+
+template<typename T, typename V, typename First>
+struct HashMapSelector<T, V, First, void, void>{
+private:
+    using Value = typename tsl::robin_map<T, V, Hasher<T>, EqualTo<T>>::value_type;
+    using Allocator = ArenaAllocatorFor_T<Value, First>;
+
+public:
+    using Type = tsl::robin_map<T, V, Hasher<T>, EqualTo<T>, Allocator>;
+};
+
+template<typename T, typename First, typename Second, typename Third>
+struct ParallelHashSetSelector{
+private:
+    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+
+    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
+    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
+    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
+    using Allocator = ArenaAllocatorFor_T<T, Resource>;
+
+public:
+    using Type = tbb::concurrent_unordered_set<T, Hash, Equal, Allocator>;
+};
+
+template<typename T, typename First>
+struct ParallelHashSetSelector<T, First, void, void>{
+private:
+    using Allocator = ArenaAllocatorFor_T<T, First>;
+
+public:
+    using Type = tbb::concurrent_unordered_set<T, Hasher<T>, EqualTo<T>, Allocator>;
+};
+
+template<typename T, typename V, typename First, typename Second, typename Third>
+struct ParallelHashMapSelector{
+private:
+    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+
+    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
+    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
+    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
+    using Value = typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type;
+    using Allocator = ArenaAllocatorFor_T<Value, Resource>;
+
+public:
+    using Type = tbb::concurrent_unordered_map<T, V, Hash, Equal, Allocator>;
+};
+
+template<typename T, typename V, typename First>
+struct ParallelHashMapSelector<T, V, First, void, void>{
+private:
+    using Value = typename tbb::concurrent_unordered_map<T, V, Hasher<T>, EqualTo<T>>::value_type;
+    using Allocator = ArenaAllocatorFor_T<Value, First>;
+
+public:
+    using Type = tbb::concurrent_unordered_map<T, V, Hasher<T>, EqualTo<T>, Allocator>;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename First, typename Second = void, typename Third = void>
+using ParallelHashSet = typename ContainerDetail::ParallelHashSetSelector<T, First, Second, Third>::Type;
+
+template<typename T, typename V, typename First, typename Second = void, typename Third = void>
+using ParallelHashMap = typename ContainerDetail::ParallelHashMapSelector<T, V, First, Second, Third>::Type;
+
+template<typename T, typename ArenaT>
+using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+
+template<typename T, typename ArenaT>
+using ParallelQueue = tbb::concurrent_queue<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+
+template<typename T, typename ArenaT>
+using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename First, typename Second = void, typename Third = void>
+using HashSet = typename ContainerDetail::HashSetSelector<T, First, Second, Third>::Type;
+
+template<typename T, typename V, typename First, typename Second = void, typename Third = void>
+using HashMap = typename ContainerDetail::HashMapSelector<T, V, First, Second, Third>::Type;
 
 template<typename T, usize N>
 using Array = std::array<T, N>;
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using ForwardList = std::forward_list<T, Alloc>;
+template<typename T, typename ArenaT>
+using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using List = std::list<T, Alloc>;
+template<typename T, typename ArenaT>
+using List = std::list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using Vector = std::vector<T, Alloc>;
+template<typename T, typename ArenaT>
+using Vector = std::vector<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using Set = std::set<T, std::less<T>, Alloc>;
+template<typename T, typename ArenaT>
+using Set = std::set<T, std::less<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-template<typename T, typename V, typename Alloc = NWB::Core::Alloc::GeneralAllocator<Pair<T, V>>>
-using Map = std::map<T, V, std::less<T>, Alloc>;
+template<typename T, typename V, typename ArenaT>
+using Map = std::map<T, V, std::less<T>, ContainerDetail::ArenaAllocatorFor_T<typename std::map<T, V>::value_type, ArenaT>>;
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using Queue = std::queue<T, std::deque<T, Alloc>>;
+template<typename T, typename ArenaT>
+using Queue = std::queue<T, std::deque<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>>;
 
-template<typename T, typename Alloc = NWB::Core::Alloc::GeneralAllocator<T>>
-using Deque = std::deque<T, Alloc>;
+template<typename T, typename ArenaT>
+using Deque = std::deque<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

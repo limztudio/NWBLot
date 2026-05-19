@@ -192,7 +192,7 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     }
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<const Record*, Alloc::ScratchAllocator<const Record*>> sortedRecords{Alloc::ScratchAllocator<const Record*>(scratchArena)};
+    Vector<const Record*, ContainerDetail::ArenaAllocator<const Record*, Alloc::ScratchArena<>>> sortedRecords{ContainerDetail::ArenaAllocator<const Record*, Alloc::ScratchArena<>>(scratchArena)};
     sortedRecords.reserve(records.size());
     for(const Record& record : records)
         sortedRecords.push_back(&record);

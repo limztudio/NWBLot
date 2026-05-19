@@ -9,9 +9,12 @@
 #include <string>
 #include <sstream>
 #include <format>
+#include <iterator>
 
+#include "assert.h"
 #include "generic.h"
 #include "type.h"
+#include "container/adaptor.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -27,17 +30,23 @@ using AStringView = BasicStringView<char>;
 using WStringView = BasicStringView<wchar>;
 using TStringView = BasicStringView<tchar>;
 
-template<typename T, typename Allocator = std::allocator<T>>
-using BasicString = std::basic_string<T, std::char_traits<T>, Allocator>;
-using AString = BasicString<char>;
-using WString = BasicString<wchar>;
-using TString = BasicString<tchar>;
+template<typename T, typename ArenaT>
+using BasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+template<typename ArenaT>
+using AString = BasicString<char, ArenaT>;
+template<typename ArenaT>
+using WString = BasicString<wchar, ArenaT>;
+template<typename ArenaT>
+using TString = BasicString<tchar, ArenaT>;
 
-template<typename T, typename Allocator = std::allocator<T>>
-using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, Allocator>;
-using AStringStream = BasicStringStream<char>;
-using WStringStream = BasicStringStream<wchar>;
-using TStringStream = BasicStringStream<tchar>;
+template<typename T, typename ArenaT>
+using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
+template<typename ArenaT>
+using AStringStream = BasicStringStream<char, ArenaT>;
+template<typename ArenaT>
+using WStringStream = BasicStringStream<wchar, ArenaT>;
+template<typename ArenaT>
+using TStringStream = BasicStringStream<tchar, ArenaT>;
 
 using AFormatContext = std::format_context;
 using WFormatContext = std::wformat_context;
@@ -110,7 +119,8 @@ concept FromWcharView = IsConvertible_V<In, WStringView>;
 template<typename In>
 concept FromCharView = IsConvertible_V<In, AStringView>;
 
-inline void AppendUtf8CodePoint(AString& out, u32 codePoint){
+template<typename ArenaT>
+inline void AppendUtf8CodePoint(AString<ArenaT>& out, u32 codePoint){
     if(codePoint <= 0x7F){
         out.push_back(static_cast<char>(codePoint));
         return;
@@ -140,11 +150,12 @@ inline void AppendUtf8CodePoint(AString& out, u32 codePoint){
     out.push_back('?');
 }
 
-[[nodiscard]] inline AString WideToUtf8(WStringView src){
+template<typename ArenaT>
+[[nodiscard]] inline AString<ArenaT> WideToUtf8(ArenaT& arena, WStringView src){
+    AString<ArenaT> dst{ContainerDetail::ArenaAllocator<char, ArenaT>(arena)};
     if(src.empty())
-        return AString();
+        return dst;
 
-    AString dst;
     dst.reserve(src.size());
 
     for(usize i = 0; i < src.size(); ++i){
@@ -185,61 +196,71 @@ inline void AppendUtf8CodePoint(AString& out, u32 codePoint){
 
 
 #if defined(NWB_UNICODE)
-template<typename In> requires BasicStringDetail::FromCharView<In>
-inline TString StringConvert(const In& raw){
+template<typename ArenaT, typename In> requires BasicStringDetail::FromCharView<In>
+inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
     AStringView src(raw);
+    TString<ArenaT> dst{ContainerDetail::ArenaAllocator<tchar, ArenaT>(arena)};
     if(src.empty())
-        return TString();
+        return dst;
 
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
     NWB_ASSERT(len != 0);
-    TString dst(len, 0);
+    dst.resize(len);
     MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
     return dst;
 #else
-    TString dst(src.size(), 0);
+    dst.resize(src.size());
     for(usize i = 0u; i < src.size(); ++i)
         dst[i] = static_cast<wchar>(static_cast<unsigned char>(src[i]));
     return dst;
 #endif
 }
 
-template<typename In>
-inline TString StringConvert(const In& src){ return TString(src); }
+template<typename ArenaT, typename In>
+inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
+    return TString<ArenaT>(src, ContainerDetail::ArenaAllocator<tchar, ArenaT>(arena));
+}
 #else
-template<typename In> requires BasicStringDetail::FromWcharView<In>
-inline TString StringConvert(const In& raw){
+template<typename ArenaT, typename In> requires BasicStringDetail::FromWcharView<In>
+inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
     const WStringView src(raw);
     if(src.empty())
-        return TString();
+        return TString<ArenaT>{ContainerDetail::ArenaAllocator<tchar, ArenaT>(arena)};
 
 #if defined(NWB_PLATFORM_WINDOWS)
     const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
     NWB_ASSERT(len != 0);
-    TString dst(len, 0);
+    TString<ArenaT> dst{ContainerDetail::ArenaAllocator<tchar, ArenaT>(arena)};
+    dst.resize(len);
     WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
     return dst;
 #else
-    return BasicStringDetail::WideToUtf8(src);
+    return BasicStringDetail::WideToUtf8(arena, src);
 #endif
 }
 
-template<typename In>
-inline TString StringConvert(const In& src){ return TString(src); }
+template<typename ArenaT, typename In>
+inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
+    return TString<ArenaT>(src, ContainerDetail::ArenaAllocator<tchar, ArenaT>(arena));
+}
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename... T>
-inline AString StringFormat(AFormatString<T...> fmt, T&&... args){
-    return std::vformat(fmt.get(), std::make_format_args<AFormatContext>(args...));
+template<typename ArenaT, typename... T>
+inline AString<ArenaT> StringFormat(ArenaT& arena, AFormatString<T...> fmt, T&&... args){
+    AString<ArenaT> output{ContainerDetail::ArenaAllocator<char, ArenaT>(arena)};
+    std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<AFormatContext>(args...));
+    return output;
 }
-template<typename... T>
-inline WString StringFormat(WFormatString<T...> fmt, T&&... args){
-    return std::vformat(fmt.get(), std::make_format_args<WFormatContext>(args...));
+template<typename ArenaT, typename... T>
+inline WString<ArenaT> StringFormat(ArenaT& arena, WFormatString<T...> fmt, T&&... args){
+    WString<ArenaT> output{ContainerDetail::ArenaAllocator<wchar, ArenaT>(arena)};
+    std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<WFormatContext>(args...));
+    return output;
 }
 
 

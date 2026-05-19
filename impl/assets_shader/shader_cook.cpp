@@ -167,7 +167,7 @@ template <typename VisitedSet, typename ScratchArena>
 static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, ScratchArena& scratchArena){
     ErrorCode errorCode;
 
-    Deque<Path, Alloc::ScratchAllocator<Path>> pending{Alloc::ScratchAllocator<Path>(scratchArena)};
+    Deque<Path, ContainerDetail::ArenaAllocator<Path, Alloc::ScratchArena<>>> pending{ContainerDetail::ArenaAllocator<Path, Alloc::ScratchArena<>>(scratchArena)};
     pending.push_back(startPath);
     AString sourceText;
     Path includePath;
@@ -257,7 +257,7 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         return false;
     }
 
-    HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> seenDefines{Alloc::ScratchAllocator<AString>(scratchArena)};
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>> seenDefines{ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>(scratchArena)};
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AStringView segment){
@@ -731,7 +731,7 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
 
     outDependencies.clear();
 
-    HashSet<AString, Hasher<AString>, EqualTo<AString>, Alloc::ScratchAllocator<AString>> visited{Alloc::ScratchAllocator<AString>(scratchArena)};
+    HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>> visited{ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>(scratchArena)};
     return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
 }
 
@@ -853,13 +853,13 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
         AString,
         Hasher<AString>,
         EqualTo<AString>,
-        Alloc::ScratchAllocator<ScratchDefineComboPair>
+        ContainerDetail::ArenaAllocator<ScratchDefineComboPair, Alloc::ScratchArena<>>
     >;
     ScratchDefineCombo assignments(
         0,
         Hasher<AString>(),
         EqualTo<AString>(),
-        Alloc::ScratchAllocator<ScratchDefineComboPair>(scratchArena)
+        ContainerDetail::ArenaAllocator<ScratchDefineComboPair, Alloc::ScratchArena<>>(scratchArena)
     );
     usize assignmentReserve = 1u;
     for(const char ch : trimmedSignatureView){
@@ -931,7 +931,7 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
 
     outChecksum = FNV64_OFFSET_BASIS;
 
-    Vector<SortedDependencyItem, Alloc::ScratchAllocator<SortedDependencyItem>> sortedDependencies{Alloc::ScratchAllocator<SortedDependencyItem>(scratchArena)};
+    Vector<SortedDependencyItem, ContainerDetail::ArenaAllocator<SortedDependencyItem, Alloc::ScratchArena<>>> sortedDependencies{ContainerDetail::ArenaAllocator<SortedDependencyItem, Alloc::ScratchArena<>>(scratchArena)};
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item;
@@ -943,7 +943,7 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
 
     Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){ return lhs.canonicalPath < rhs.canonicalPath; });
 
-    Vector<u8, Alloc::ScratchAllocator<u8>> dependencyBytes{Alloc::ScratchAllocator<u8>(scratchArena)};
+    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>> dependencyBytes{ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>(scratchArena)};
     for(const SortedDependencyItem& item : sortedDependencies){
         outChecksum = UpdateFnv64TextExact(outChecksum, AStringView(item.canonicalPath));
         outChecksum = UpdateFnv64(outChecksum, &s_NewlineByte, 1);

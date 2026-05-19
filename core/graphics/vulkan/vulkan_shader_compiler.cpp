@@ -111,7 +111,7 @@ private:
 
 
 public:
-    explicit ShaderFileIncluder(const Vector<Path, Alloc::CustomAllocator<Path>>& includeDirectories)
+    explicit ShaderFileIncluder(const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>>& includeDirectories)
         : m_includeDirectories(includeDirectories)
     {}
 
@@ -195,7 +195,7 @@ public:
 
 
 private:
-    const Vector<Path, Alloc::CustomAllocator<Path>>& m_includeDirectories;
+    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>>& m_includeDirectories;
 };
 
 

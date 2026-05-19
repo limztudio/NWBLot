@@ -38,7 +38,7 @@ namespace __hidden_geometry_asset_cook{
 
 
 template<typename T>
-using ScratchVector = Vector<T, Core::Alloc::ScratchAllocator<T>>;
+using ScratchVector = Vector<T, ContainerDetail::ArenaAllocator<T, Core::Alloc::ScratchArena<>>>;
 
 struct DiscoveredNwbFile{
     Path assetRoot;
@@ -610,9 +610,9 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    ScratchVector<Float3U> positions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
-    ScratchVector<Float3U> normals{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
-    ScratchVector<Float4U> colors{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
+    ScratchVector<Float3U> positions{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float3U> normals{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float4U> colors{ContainerDetail::ArenaAllocator<Float4U, Core::Alloc::ScratchArena<>>(scratchArena)};
     if(!ParseMetadataIndexType(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices))
         return false;
     if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "positions", positions))
@@ -1004,11 +1004,11 @@ static bool ParseSkinnedGeometryMeta(
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    ScratchVector<Float3U> positions{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
-    ScratchVector<Float3U> normals{Core::Alloc::ScratchAllocator<Float3U>(scratchArena)};
-    ScratchVector<Float4U> tangents{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
-    ScratchVector<Float2U> uv0{Core::Alloc::ScratchAllocator<Float2U>(scratchArena)};
-    ScratchVector<Float4U> colors{Core::Alloc::ScratchAllocator<Float4U>(scratchArena)};
+    ScratchVector<Float3U> positions{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float3U> normals{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float4U> tangents{ContainerDetail::ArenaAllocator<Float4U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float2U> uv0{ContainerDetail::ArenaAllocator<Float2U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float4U> colors{ContainerDetail::ArenaAllocator<Float4U, Core::Alloc::ScratchArena<>>(scratchArena)};
     if(!ParseSkinnedGeometryIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
     if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))

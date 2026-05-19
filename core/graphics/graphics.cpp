@@ -22,7 +22,7 @@ namespace __hidden_graphics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using UploadBytesAllocator = Alloc::CustomAllocator<u8>;
+using UploadBytesAllocator = ContainerDetail::ArenaAllocator<u8, Alloc::CustomArena>;
 using UploadBytes = Vector<u8, UploadBytesAllocator>;
 
 

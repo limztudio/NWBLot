@@ -509,32 +509,32 @@ Device::Device(const DeviceDesc& desc)
         auto& arena = m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
         auto* q = new(mem) Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
-        m_queues[static_cast<u32>(CommandQueue::Graphics)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
+        m_queues[static_cast<u32>(CommandQueue::Graphics)] = GlobalUniquePtr<Queue>(q, GlobalUniquePtr<Queue>::deleter_type(arena));
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
         auto& arena = m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
         auto* q = new(mem) Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
-        m_queues[static_cast<u32>(CommandQueue::Compute)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
+        m_queues[static_cast<u32>(CommandQueue::Compute)] = GlobalUniquePtr<Queue>(q, GlobalUniquePtr<Queue>::deleter_type(arena));
     }
     if(desc.transferQueue && desc.transferQueueIndex >= 0){
         auto& arena = m_context.objectArena;
         auto* mem = arena.allocate<Queue>(1);
         auto* q = new(mem) Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
-        m_queues[static_cast<u32>(CommandQueue::Copy)] = CustomUniquePtr<Queue>(q, CustomUniquePtr<Queue>::deleter_type(arena));
+        m_queues[static_cast<u32>(CommandQueue::Copy)] = GlobalUniquePtr<Queue>(q, GlobalUniquePtr<Queue>::deleter_type(arena));
     }
 
     {
         auto& arena = m_context.objectArena;
         auto* mem = arena.allocate<UploadManager>(1);
         auto* p = new(mem) UploadManager(*this, s_DefaultUploadChunkSize, 0, false);
-        m_uploadManager = CustomUniquePtr<UploadManager>(p, CustomUniquePtr<UploadManager>::deleter_type(arena));
+        m_uploadManager = GlobalUniquePtr<UploadManager>(p, GlobalUniquePtr<UploadManager>::deleter_type(arena));
     }
     {
         auto& arena = m_context.objectArena;
         auto* mem = arena.allocate<UploadManager>(1);
         auto* p = new(mem) UploadManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true);
-        m_scratchManager = CustomUniquePtr<UploadManager>(p, CustomUniquePtr<UploadManager>::deleter_type(arena));
+        m_scratchManager = GlobalUniquePtr<UploadManager>(p, GlobalUniquePtr<UploadManager>::deleter_type(arena));
     }
 }
 Device::~Device(){

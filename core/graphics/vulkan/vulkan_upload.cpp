@@ -71,10 +71,10 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
-    , m_chunkPool(ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::CustomArena>(m_device.m_context.objectArena))
+    , m_chunkPool(ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::GlobalArena>(m_device.m_context.objectArena))
 {
     for(auto& chunks : m_activeChunks)
-        chunks = BufferChunkList(ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::CustomArena>(m_device.m_context.objectArena));
+        chunks = BufferChunkList(ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::GlobalArena>(m_device.m_context.objectArena));
 }
 UploadManager::~UploadManager(){
     m_chunkPool.clear();

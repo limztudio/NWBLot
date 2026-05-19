@@ -135,12 +135,12 @@ struct SystemMemoryAllocator{
 
 class GraphicsAllocator : NoCopy{
 public:
-    GraphicsAllocator(Alloc::MemoryArena& persistentArena, Alloc::CustomArena& objectArena);
+    GraphicsAllocator(Alloc::PersistentArena& persistentArena, Alloc::GlobalArena& objectArena);
 
 
 public:
     [[nodiscard]] const SystemMemoryAllocator& getSystemMemoryAllocator()const noexcept{ return m_systemMemoryAllocator; }
-    [[nodiscard]] Alloc::CustomArena& getObjectArena()noexcept{ return m_objectArena; }
+    [[nodiscard]] Alloc::GlobalArena& getObjectArena()noexcept{ return m_objectArena; }
 
 
 private:
@@ -150,9 +150,9 @@ private:
 
 
 private:
-    Alloc::MemoryArena& m_persistentArena;
+    Alloc::PersistentArena& m_persistentArena;
     SystemMemoryAllocator m_systemMemoryAllocator;
-    Alloc::CustomArena& m_objectArena;
+    Alloc::GlobalArena& m_objectArena;
 };
 
 
@@ -3844,13 +3844,13 @@ struct ShaderCompilerRequest{
     AStringView variantName;
     const ShaderMacroDefinition* defines = nullptr;
     u32 defineCount = 0;
-    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>>& includeDirectories;
+    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>>& includeDirectories;
     const Path& sourcePath;
 };
 
 class IShaderCompiler : NoCopy{
 public:
-    IShaderCompiler(Alloc::CustomArena& memoryArena)
+    IShaderCompiler(Alloc::GlobalArena& memoryArena)
         : m_memoryArena(memoryArena)
     {}
     virtual ~IShaderCompiler() = default;
@@ -3861,12 +3861,12 @@ public:
 
 
 protected:
-    Alloc::CustomArena& m_memoryArena;
+    Alloc::GlobalArena& m_memoryArena;
 };
 
-using ShaderCompilerFactory = CustomUniquePtr<IShaderCompiler> (*)(Alloc::CustomArena& memoryArena);
+using ShaderCompilerFactory = GlobalUniquePtr<IShaderCompiler> (*)(Alloc::GlobalArena& memoryArena);
 
-[[nodiscard]] CustomUniquePtr<IShaderCompiler> CreateDefaultShaderCompiler(Alloc::CustomArena& memoryArena);
+[[nodiscard]] GlobalUniquePtr<IShaderCompiler> CreateDefaultShaderCompiler(Alloc::GlobalArena& memoryArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

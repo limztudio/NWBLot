@@ -60,7 +60,7 @@ using namespace MetascriptDetail;
 
 class Parser{
 public:
-    Parser(MStringView source, Alloc::CustomArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
+    Parser(MStringView source, Alloc::GlobalArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
         : m_lexer(source)
         , m_arena(arena)
         , m_scratchArena(4096)
@@ -752,7 +752,7 @@ private:
 
 private:
     Lexer m_lexer;
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
     Alloc::ScratchArena<> m_scratchArena;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
@@ -772,7 +772,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Document::Document(Alloc::CustomArena& arena)
+Document::Document(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_assetType(MAllocator<MChar>(arena))
     , m_assetVariable(MAllocator<MChar>(arena))

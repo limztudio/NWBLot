@@ -82,7 +82,7 @@ public:
 
 public:
     SkinnedGeometrySystem(
-        Core::Alloc::CustomArena& arena,
+        Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
@@ -121,14 +121,14 @@ private:
 
 
 private:
-    using RuntimeResourceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RuntimeResources>, Core::Alloc::CustomArena>;
+    using RuntimeResourceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RuntimeResources>, Core::Alloc::GlobalArena>;
 
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     IRuntimeGeometryRegistry& m_runtimeGeometryRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
-    Core::CustomUniquePtr<SkinnedGeometryRuntimeMeshCache> m_runtimeMeshCache;
+    Core::GlobalUniquePtr<SkinnedGeometryRuntimeMeshCache> m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, RuntimeResourceMapAllocator> m_runtimeResources;
     Core::BindingLayoutHandle m_bindingLayout;

@@ -119,15 +119,15 @@ private:
         u64 size = 0;
     };
 
-    using SegmentPathAllocator = ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>;
+    using SegmentPathAllocator = ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>;
     using SegmentPathVector = Vector<Path, SegmentPathAllocator>;
 
-    using FileMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, FileRecord>, Alloc::CustomArena>;
+    using FileMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, FileRecord>, Alloc::GlobalArena>;
     using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, FileMapAllocator>;
 
 
 public:
-    explicit VolumeFileSystem(Alloc::CustomArena& arena);
+    explicit VolumeFileSystem(Alloc::GlobalArena& arena);
     ~VolumeFileSystem();
 
 
@@ -218,7 +218,7 @@ private:
     u64 m_nextFreeOffset = 0;
     usize m_maxSegments = 0;
 
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
     SegmentPathVector m_segmentPaths;
     FileMap m_files;
 };
@@ -226,7 +226,7 @@ private:
 
 class VolumeSession final : NoCopy{
 public:
-    explicit VolumeSession(Alloc::CustomArena& arena);
+    explicit VolumeSession(Alloc::GlobalArena& arena);
 
 
 public:

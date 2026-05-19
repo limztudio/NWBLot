@@ -43,7 +43,7 @@ namespace DeviceExtensionFeature{
 
 class BackendContext final : public IGraphicsBackend{
 private:
-    using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature::Enum, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::CustomArena>>;
+    using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature::Enum, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::GlobalArena>>;
 
     struct ExtEntry{
         const char* name;
@@ -51,14 +51,14 @@ private:
     };
 
     struct VulkanExtensionSet{
-        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::CustomArena>> instance;
-        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::CustomArena>> layers;
+        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>> instance;
+        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>> layers;
         DeviceExtensionMap device;
 
-        explicit VulkanExtensionSet(Alloc::CustomArena& arena)
-            : instance(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::CustomArena>(arena))
-            , layers(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::CustomArena>(arena))
-            , device(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::CustomArena>(arena))
+        explicit VulkanExtensionSet(Alloc::GlobalArena& arena)
+            : instance(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>(arena))
+            , layers(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>(arena))
+            , device(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::GlobalArena>(arena))
         {}
     };
 
@@ -66,7 +66,7 @@ private:
         VkImage image;
         TextureHandle rhiHandle;
     };
-    using SemaphoreVector = Vector<VkSemaphore, ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::CustomArena>>;
+    using SemaphoreVector = Vector<VkSemaphore, ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>>;
 
 
 private:
@@ -168,7 +168,7 @@ private:
     SwapChainRuntimeState& m_swapChainState;
     GraphicsAllocator& m_allocator;
     Alloc::ThreadPool& m_threadPool;
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
     Common::FrameParam m_platformFrameParam = {};
 
 private:
@@ -200,7 +200,7 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
     bool m_swapChainMutableFormatSupported = false;
 
-    Vector<SwapChainImage, ContainerDetail::ArenaAllocator<SwapChainImage, Alloc::CustomArena>> m_swapChainImages;
+    Vector<SwapChainImage, ContainerDetail::ArenaAllocator<SwapChainImage, Alloc::GlobalArena>> m_swapChainImages;
     u32 m_swapChainIndex = static_cast<u32>(-1);
 
     DeviceHandle m_rhiDevice;
@@ -209,8 +209,8 @@ private:
     SemaphoreVector m_presentSemaphores;
     u32 m_acquireSemaphoreIndex = 0;
 
-    ::Queue<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::CustomArena>> m_framesInFlight;
-    Vector<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::CustomArena>> m_queryPool;
+    ::Queue<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>> m_framesInFlight;
+    Vector<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>> m_queryPool;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
     bool m_bufferDeviceAddressSupported = false;

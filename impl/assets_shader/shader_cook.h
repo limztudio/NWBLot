@@ -32,9 +32,9 @@ NWB_IMPL_BEGIN
 
 class ShaderCook{
 public:
-    using CookArena = Core::Alloc::CustomArena;
+    using CookArena = Core::Alloc::GlobalArena;
     template<typename T>
-    using CookAllocator = ContainerDetail::ArenaAllocator<T, Core::Alloc::CustomArena>;
+    using CookAllocator = ContainerDetail::ArenaAllocator<T, Core::Alloc::GlobalArena>;
 
 public:
     template<typename T>
@@ -157,7 +157,7 @@ private:
     CookArena& m_memoryArena;
 
 private:
-    Core::CustomUniquePtr<Core::IShaderCompiler> m_compiler;
+    Core::GlobalUniquePtr<Core::IShaderCompiler> m_compiler;
 };
 
 

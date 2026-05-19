@@ -22,7 +22,7 @@ void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize si
     if(!userData)
         return nullptr;
 
-    auto* arena = static_cast<Alloc::MemoryArena*>(userData);
+    auto* arena = static_cast<Alloc::PersistentArena*>(userData);
     return arena->allocate(alignment, size);
 }
 
@@ -31,7 +31,7 @@ void* GraphicsAllocator::reallocatePersistentSystemMemory(void* userData, void* 
     if(!userData)
         return nullptr;
 
-    auto* arena = static_cast<Alloc::MemoryArena*>(userData);
+    auto* arena = static_cast<Alloc::PersistentArena*>(userData);
     return arena->reallocate(original, alignment, size);
 }
 
@@ -39,11 +39,11 @@ void GraphicsAllocator::freePersistentSystemMemory(void* userData, void* memory)
     if(!userData || !memory)
         return;
 
-    auto* arena = static_cast<Alloc::MemoryArena*>(userData);
+    auto* arena = static_cast<Alloc::PersistentArena*>(userData);
     arena->deallocate(memory, 1, 0);
 }
 
-GraphicsAllocator::GraphicsAllocator(Alloc::MemoryArena& persistentArena, Alloc::CustomArena& objectArena)
+GraphicsAllocator::GraphicsAllocator(Alloc::PersistentArena& persistentArena, Alloc::GlobalArena& objectArena)
     : m_persistentArena(persistentArena)
     , m_systemMemoryAllocator{
         &m_persistentArena

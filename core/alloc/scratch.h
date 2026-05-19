@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "base.h"
 #include "global.h"
 #include "core.h"
 
@@ -25,22 +26,23 @@ inline constexpr usize s_MaxAlignSize = 512;
 
 
 template<usize maxAlignSize = s_MaxAlignSize>
-class ScratchArena : NoCopy{
+class ScratchArena : public ArenaBase{
 private:
     class Chunk{
         friend class ScratchArena;
 
 
     public:
-        inline Chunk(usize align, usize size)
+        inline Chunk(usize align, usize size, const char* log)
             : m_size(Alignment(align, size))
+            , m_arenaLog(log)
             , m_remaining(m_size)
             , m_next(nullptr)
-            , m_buffer(CoreAllocAligned(m_size, align, "NWB::Core::Alloc::ScratchArena::Chunk::constructor"))
+            , m_buffer(CoreAllocAligned(m_size, align, m_arenaLog.get()))
             , m_available(m_buffer)
         {}
         ~Chunk(){
-            CoreFreeAligned(m_buffer, "NWB::Core::Alloc::ScratchArena::Chunk::destructor");
+            CoreFreeAligned(m_buffer, m_arenaLog.get());
         }
 
 
@@ -68,6 +70,7 @@ private:
 
     private:
         const usize m_size;
+        NotNull<const char*> m_arenaLog;
         usize m_remaining;
         Chunk* m_next;
 
@@ -82,7 +85,9 @@ private:
 
 
 public:
-    ScratchArena(usize initSize = 1024){
+    explicit ScratchArena(usize initSize = 1024, const char* allocationLog = "NWB::Core::Alloc::ScratchArena")
+        : ArenaBase(allocationLog)
+    {
         for(usize i = 0; i < LengthOf(m_bucket); ++i){
             auto& bucket = m_bucket[i];
             bucket.head = nullptr;
@@ -120,11 +125,11 @@ public:
             bucket.size = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
 
         if(!bucket.head){
-            bucket.head = new Chunk(align, bucket.size);
+            bucket.head = new Chunk(align, bucket.size, log());
             bucket.last = bucket.head;
         }
         else if(size > bucket.last->m_remaining){
-            bucket.last->add(new Chunk(align, bucket.size));
+            bucket.last->add(new Chunk(align, bucket.size, log()));
             bucket.last = bucket.last->m_next;
         }
         return bucket.last->allocate(size);

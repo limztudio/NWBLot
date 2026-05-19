@@ -37,7 +37,7 @@ bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipeli
 
 
 RendererSystem::RendererSystem(
-    Core::Alloc::CustomArena& arena,
+    Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,

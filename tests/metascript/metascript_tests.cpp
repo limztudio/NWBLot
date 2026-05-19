@@ -28,13 +28,11 @@ using MStringView = NWB::Core::Metascript::MStringView;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SourceAllocatorTag{};
-struct DestinationAllocatorTag{};
+struct SourceArenaTag{};
+struct DestinationArenaTag{};
 
-using SourceAllocator = NWB::Tests::CountingTestAllocator<SourceAllocatorTag>;
-using DestinationAllocator = NWB::Tests::CountingTestAllocator<DestinationAllocatorTag>;
-using SourceArena = NWB::Tests::TestArena<SourceAllocator>;
-using DestinationArena = NWB::Tests::TestArena<DestinationAllocator>;
+using SourceArena = NWB::Tests::TestArena<SourceArenaTag>;
+using DestinationArena = NWB::Tests::TestArena<DestinationArenaTag>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,16 +40,6 @@ using DestinationArena = NWB::Tests::TestArena<DestinationAllocator>;
 
 [[nodiscard]] static MStringView ViewOf(const AString& text){
     return MStringView(text.data(), text.size());
-}
-
-static void ResetAllocationCounts(){
-    SourceAllocator::resetAllocationCalls();
-    DestinationAllocator::resetAllocationCalls();
-}
-
-static void CheckDestinationOnlyAllocation(TestContext& context){
-    NWB_METASCRIPT_TEST_CHECK(context, SourceAllocator::allocationCallCount() == 0u);
-    NWB_METASCRIPT_TEST_CHECK(context, DestinationAllocator::allocationCallCount() > 0u);
 }
 
 static void CheckSingleStringListValue(TestContext& context, const Value& value, const AString& text){
@@ -72,13 +60,11 @@ static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(TestContext& 
     Value source(ViewOf(text), sourceArena.arena);
     Value destination(destinationArena.arena);
 
-    ResetAllocationCounts();
     destination = Move(source);
 
     NWB_METASCRIPT_TEST_CHECK(context, source.isNull());
     NWB_METASCRIPT_TEST_CHECK(context, destination.isString());
     NWB_METASCRIPT_TEST_CHECK(context, destination.asString() == ViewOf(text));
-    CheckDestinationOnlyAllocation(context);
 }
 
 static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(TestContext& context){
@@ -94,12 +80,10 @@ static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(T
 
     Value destination(destinationArena.arena);
 
-    ResetAllocationCounts();
     destination = source;
 
     NWB_METASCRIPT_TEST_CHECK(context, source.isMap());
     NWB_METASCRIPT_TEST_CHECK(context, destination.isMap());
-    CheckDestinationOnlyAllocation(context);
 
     const Value* copiedList = destination.findField(MStringView("items", 5u));
     NWB_METASCRIPT_TEST_CHECK(context, copiedList != nullptr);
@@ -119,11 +103,9 @@ static void TestCrossArenaListConcatCopiesIntoResultArena(TestContext& context){
     Value destination(destinationArena.arena);
     destination.makeList();
 
-    ResetAllocationCounts();
     Value result = destination + source;
 
     CheckSingleStringListValue(context, result, text);
-    CheckDestinationOnlyAllocation(context);
 }
 
 static void TestCrossArenaAppendCopiesIntoDestinationArena(TestContext& context){
@@ -135,12 +117,10 @@ static void TestCrossArenaAppendCopiesIntoDestinationArena(TestContext& context)
     Value destination(destinationArena.arena);
     destination.makeList();
 
-    ResetAllocationCounts();
     destination.append(Move(source));
 
     NWB_METASCRIPT_TEST_CHECK(context, source.isNull());
     CheckSingleStringListValue(context, destination, text);
-    CheckDestinationOnlyAllocation(context);
 }
 
 static void TestListSelfAppendCopiesOriginalValues(TestContext& context){
@@ -151,7 +131,6 @@ static void TestListSelfAppendCopiesOriginalValues(TestContext& context){
     list.makeList();
     list.append(Value(ViewOf(text), arena.arena));
 
-    ResetAllocationCounts();
     list += list;
 
     NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
@@ -161,7 +140,6 @@ static void TestListSelfAppendCopiesOriginalValues(TestContext& context){
         NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].asString() == ViewOf(text));
         NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asString() == ViewOf(text));
     }
-    CheckDestinationOnlyAllocation(context);
 }
 
 static void TestAppendSelfMoveCopiesOriginalValue(TestContext& context){

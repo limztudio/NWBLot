@@ -54,11 +54,11 @@ class ISystem{
 
 
 private:
-    using AccessAllocator = ContainerDetail::ArenaAllocator<ComponentAccess, Alloc::CustomArena>;
+    using AccessAllocator = ContainerDetail::ArenaAllocator<ComponentAccess, Alloc::GlobalArena>;
 
 
 public:
-    explicit ISystem(Alloc::CustomArena& arena);
+    explicit ISystem(Alloc::GlobalArena& arena);
     ISystem(const ISystem&) = delete;
     ISystem& operator=(const ISystem&) = delete;
     virtual ~ISystem() = default;
@@ -91,13 +91,13 @@ private:
 
 class SystemScheduler{
 private:
-    using SystemAllocator = ContainerDetail::ArenaAllocator<ISystem*, Alloc::CustomArena>;
+    using SystemAllocator = ContainerDetail::ArenaAllocator<ISystem*, Alloc::GlobalArena>;
     using Stage = Vector<ISystem*, SystemAllocator>;
-    using StageAllocator = ContainerDetail::ArenaAllocator<Stage, Alloc::CustomArena>;
+    using StageAllocator = ContainerDetail::ArenaAllocator<Stage, Alloc::GlobalArena>;
 
 
 public:
-    explicit SystemScheduler(Alloc::CustomArena& arena);
+    explicit SystemScheduler(Alloc::GlobalArena& arena);
     ~SystemScheduler() = default;
 
 
@@ -110,7 +110,7 @@ public:
 
 
 private:
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
 
     // Each stage is a group of systems that can safely run in parallel
     Vector<Stage, StageAllocator> m_stages;

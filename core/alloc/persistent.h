@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "base.h"
 #include "global.h"
 #include "core.h"
 
@@ -20,7 +21,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MemoryArena : NoCopy{
+class PersistentArena : public ArenaBase{
 public:
     inline static usize StructureAlignedSize(usize byte){
         const usize overhead = AddSize(static_cast<usize>(tlsf_size()), 8);
@@ -29,17 +30,18 @@ public:
 
 
 public:
-    MemoryArena(usize maxSize)
-        : m_bucket(CoreAlloc(maxSize, "NWB::Core::Alloc::MemoryArena::constructor"))
+    PersistentArena(usize maxSize, const char* allocationLog = "NWB::Core::Alloc::PersistentArena")
+        : ArenaBase(allocationLog)
+        , m_bucket(CoreAlloc(maxSize, allocationLog))
         , m_maxSize(maxSize)
         , m_handle(tlsf_create_with_pool(m_bucket, m_maxSize))
     {
     }
-    ~MemoryArena(){
+    ~PersistentArena(){
         tlsf_destroy(m_handle);
         m_handle = nullptr;
 
-        CoreFree(m_bucket, "NWB::Core::Alloc::MemoryArena::destructor");
+        CoreFree(m_bucket, log());
         m_bucket = nullptr;
     }
 
@@ -90,20 +92,20 @@ NWB_ALLOC_END
 
 
 template<typename T>
-using MemoryUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::MemoryArena>>;
+using PersistentUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::PersistentArena>>;
 
 template<typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, MemoryUniquePtr<T>>::type MakeMemoryUnique(NWB::Core::Alloc::MemoryArena& arena, Args&&... args){
-    return MemoryUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), MemoryUniquePtr<T>::deleter_type(arena));
+inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args){
+    return PersistentUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), PersistentUniquePtr<T>::deleter_type(arena));
 }
 template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, MemoryUniquePtr<T>>::type MakeMemoryUnique(NWB::Core::Alloc::MemoryArena& arena, usize n){
+inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
-    return MemoryUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], MemoryUniquePtr<T>::deleter_type(arena, n));
+    return PersistentUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], PersistentUniquePtr<T>::deleter_type(arena, n));
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
-MakeMemoryUnique(Args&&...) = delete;
+MakePersistentUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

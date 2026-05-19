@@ -35,11 +35,11 @@ private:
         u32 next;
     };
 
-    using ComponentPoolPtr = CustomUniquePtr<IComponentPool>;
-    using SystemPtr = CustomUniquePtr<ISystem>;
-    using EntityComponentHeadAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::CustomArena>;
-    using EntityComponentNodeAllocator = ContainerDetail::ArenaAllocator<EntityComponentNode, Alloc::CustomArena>;
-    using PoolMapAllocator = ContainerDetail::ArenaAllocator<Pair<const ComponentTypeId, ComponentPoolPtr>, Alloc::CustomArena>;
+    using ComponentPoolPtr = GlobalUniquePtr<IComponentPool>;
+    using SystemPtr = GlobalUniquePtr<ISystem>;
+    using EntityComponentHeadAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>;
+    using EntityComponentNodeAllocator = ContainerDetail::ArenaAllocator<EntityComponentNode, Alloc::GlobalArena>;
+    using PoolMapAllocator = ContainerDetail::ArenaAllocator<Pair<const ComponentTypeId, ComponentPoolPtr>, Alloc::GlobalArena>;
     using PoolMap = HashMap<
         ComponentTypeId,
         ComponentPoolPtr,
@@ -53,13 +53,13 @@ private:
         SystemPtr system;
     };
 
-    using SystemVectorAllocator = ContainerDetail::ArenaAllocator<SystemEntry, Alloc::CustomArena>;
+    using SystemVectorAllocator = ContainerDetail::ArenaAllocator<SystemEntry, Alloc::GlobalArena>;
 
     static constexpr u32 s_InvalidEntityComponentNode = Limit<u32>::s_Max;
 
 
 public:
-    World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool);
+    World(Alloc::GlobalArena& arena, Alloc::ThreadPool& threadPool);
     ~World();
 
 
@@ -94,7 +94,7 @@ public:
     T& addSystem(Args&&... args){
         static_assert(IsBaseOf_V<ISystem, T>, "addSystem requires T to derive from ISystem");
 
-        auto ptr = MakeCustomUnique<T>(m_arena, m_arena, Forward<Args>(args)...);
+        auto ptr = MakeGlobalUnique<T>(m_arena, m_arena, Forward<Args>(args)...);
         T& ref = *ptr;
         m_scheduler.addSystem(ref);
         m_systems.push_back(SystemEntry{ SystemType<T>(), Move(ptr) });
@@ -225,7 +225,7 @@ private:
         if(itr != m_pools.end())
             return checked_cast<ComponentPool<T>*>(itr.value().get());
 
-        auto pool = MakeCustomUnique<ComponentPool<T>>(m_arena, m_arena);
+        auto pool = MakeGlobalUnique<ComponentPool<T>>(m_arena, m_arena);
         auto* raw = pool.get();
         m_pools.emplace(typeId, Move(pool));
         return raw;
@@ -253,7 +253,7 @@ private:
 
 
 private:
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
 
     EntityManager m_entityManager;
     Vector<u32, EntityComponentHeadAllocator> m_entityComponentHeads;

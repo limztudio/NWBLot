@@ -35,8 +35,8 @@ inline MessageTypeId MessageType(){
 class MessageBus : NoCopy{
 private:
     class IMessageChannel;
-    using MessageChannelPtr = CustomUniquePtr<IMessageChannel>;
-    using ChannelVectorAllocator = ContainerDetail::ArenaAllocator<MessageChannelPtr, Alloc::CustomArena>;
+    using MessageChannelPtr = GlobalUniquePtr<IMessageChannel>;
+    using ChannelVectorAllocator = ContainerDetail::ArenaAllocator<MessageChannelPtr, Alloc::GlobalArena>;
     using ChannelLock = SharedMutex::scoped_lock;
 
 
@@ -93,13 +93,13 @@ private:
             Optional<T> m_value;
         };
 
-        using PendingAllocator = ContainerDetail::ArenaCacheAlignedAllocator<PendingMessage, Alloc::CustomArena>;
+        using PendingAllocator = ContainerDetail::ArenaCacheAlignedAllocator<PendingMessage, Alloc::GlobalArena>;
 
 
     public:
-        explicit MessageChannel(Alloc::CustomArena& arena)
+        explicit MessageChannel(Alloc::GlobalArena& arena)
             : m_pending(PendingAllocator(arena))
-            , m_readBuffer(ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>(arena))
+            , m_readBuffer(ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>(arena))
         {}
 
     public:
@@ -150,7 +150,7 @@ private:
 
     private:
         ParallelQueue<PendingMessage, PendingAllocator> m_pending;
-        Vector<T, ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>> m_readBuffer;
+        Vector<T, ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>> m_readBuffer;
     };
 
     using ChannelVector = Vector<MessageChannelPtr, ChannelVectorAllocator>;
@@ -167,7 +167,7 @@ private:
 
 
 public:
-    explicit MessageBus(Alloc::CustomArena& arena)
+    explicit MessageBus(Alloc::GlobalArena& arena)
         : m_arena(arena)
         , m_channels(ChannelVectorAllocator(arena))
     {}
@@ -259,7 +259,7 @@ private:
         if(slot)
             return checked_cast<MessageChannel<T>*>(slot.get());
 
-        auto channel = MakeCustomUnique<MessageChannel<T>>(m_arena, m_arena);
+        auto channel = MakeGlobalUnique<MessageChannel<T>>(m_arena, m_arena);
         auto* raw = channel.get();
         slot = Move(channel);
         m_hasChannels.store(true, MemoryOrder::release);
@@ -286,7 +286,7 @@ private:
 
 
 private:
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
     mutable SharedMutex m_channelsMutex;
     Atomic<bool> m_hasChannels{ false };
     ChannelVector m_channels;

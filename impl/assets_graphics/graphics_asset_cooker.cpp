@@ -50,7 +50,7 @@ static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
 
-UniquePtr<Core::Assets::IAssetCooker> CreateGraphicsAssetCooker(Core::Alloc::CustomArena& arena){
+UniquePtr<Core::Assets::IAssetCooker> CreateGraphicsAssetCooker(Core::Alloc::GlobalArena& arena){
     return MakeUnique<GraphicsAssetCooker>(arena);
 }
 Core::Assets::AssetCookerAutoRegistrar s_GraphicsAssetCookerAutoRegistrar(&CreateGraphicsAssetCooker);

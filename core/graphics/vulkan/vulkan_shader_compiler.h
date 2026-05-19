@@ -28,7 +28,7 @@ NWB_VULKAN_BEGIN
 
 class VulkanShaderCompiler final : public IShaderCompiler{
 public:
-    VulkanShaderCompiler(Alloc::CustomArena& memoryArena);
+    VulkanShaderCompiler(Alloc::GlobalArena& memoryArena);
 
 
 public:

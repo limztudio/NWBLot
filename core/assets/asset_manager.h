@@ -62,12 +62,12 @@ private:
         Name virtualPath = NAME_NONE;
     };
 
-    using RequestMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RequestRecord>, Alloc::CustomArena>;
+    using RequestMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RequestRecord>, Alloc::GlobalArena>;
     using RequestMap = HashMap<u64, RequestRecord, Hasher<u64>, EqualTo<u64>, RequestMapAllocator>;
 
 
 public:
-    explicit AssetManager(Alloc::CustomArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
+    explicit AssetManager(Alloc::GlobalArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
 
 
 public:

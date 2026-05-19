@@ -7,7 +7,7 @@
 
 #include "components.h"
 
-#include <core/alloc/custom.h>
+#include <core/alloc/general.h>
 #include <core/assets/global.h>
 #include <core/ecs/system.h>
 #include <core/graphics/common.h>
@@ -50,7 +50,7 @@ public:
 
 public:
     UiSystem(
-        Core::Alloc::CustomArena& arena,
+        Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::InputDispatcher& input,
@@ -83,9 +83,9 @@ private:
         u32 width = 0;
         u32 height = 0;
     };
-    using UiTextureResourcePtr = Core::CustomUniquePtr<UiTextureResource>;
-    using UiTextureResourceVector = Vector<UiTextureResourcePtr, ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::CustomArena>>;
-    using UiTextureUploadVector = Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::CustomArena>>;
+    using UiTextureResourcePtr = Core::GlobalUniquePtr<UiTextureResource>;
+    using UiTextureResourceVector = Vector<UiTextureResourcePtr, ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::GlobalArena>>;
+    using UiTextureUploadVector = Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::GlobalArena>>;
 
     struct UiPushConstants{
         Float4 scaleTranslate = Float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -111,7 +111,7 @@ private:
     void renderDrawData(Core::ICommandList& commandList, Core::IFramebuffer* framebuffer, ImDrawData& drawData);
 
 private:
-    Core::Alloc::CustomArena& m_arena;
+    Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::InputDispatcher& m_input;

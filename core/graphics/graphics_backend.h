@@ -53,14 +53,14 @@ public:
 };
 
 
-using GraphicsBackendFactory = CustomUniquePtr<IGraphicsBackend> (*)(
+using GraphicsBackendFactory = GlobalUniquePtr<IGraphicsBackend> (*)(
     const DeviceCreationParameters& params,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool
 );
 
-[[nodiscard]] CustomUniquePtr<IGraphicsBackend> CreateDefaultGraphicsBackend(
+[[nodiscard]] GlobalUniquePtr<IGraphicsBackend> CreateDefaultGraphicsBackend(
     const DeviceCreationParameters& params,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,

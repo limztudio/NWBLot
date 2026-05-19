@@ -483,13 +483,6 @@ struct WriteSegmentBytesOp{
     }
 };
 
-static void* BuildArenaAlloc(usize size){ return NWB::Core::Alloc::CoreAlloc(size, "filesystem_build_volume"); }
-static void BuildArenaFree(void* ptr){ NWB::Core::Alloc::CoreFree(ptr, "filesystem_build_volume"); }
-static void* BuildArenaAllocAligned(usize size, usize align){
-    return NWB::Core::Alloc::CoreAllocAligned(size, align, "filesystem_build_volume");
-}
-static void BuildArenaFreeAligned(void* ptr){ NWB::Core::Alloc::CoreFreeAligned(ptr, "filesystem_build_volume"); }
-
 using StagedVolumePaths = StagedDirectoryPaths;
 
 template<typename FileNameVector>
@@ -796,12 +789,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
     if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_filesystem::s_VolumePublishLogPrefix, "backup directory"))
         return false;
 
-    Alloc::CustomArena arena(
-        __hidden_filesystem::BuildArenaAlloc,
-        __hidden_filesystem::BuildArenaFree,
-        __hidden_filesystem::BuildArenaAllocAligned,
-        __hidden_filesystem::BuildArenaFreeAligned
-    );
+    Alloc::GlobalArena arena("filesystem_build_volume");
 
     {
         VolumeSession volumeSession(arena);
@@ -852,7 +840,7 @@ bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VolumeFileSystem::VolumeFileSystem(Alloc::CustomArena& arena)
+VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_segmentPaths(SegmentPathAllocator(m_arena))
     , m_files(0, Hasher<Name>(), EqualTo<Name>(), FileMapAllocator(m_arena))
@@ -1990,7 +1978,7 @@ Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VolumeSession::VolumeSession(Alloc::CustomArena& arena)
+VolumeSession::VolumeSession(Alloc::GlobalArena& arena)
     : m_volumeFileSystem(arena)
 {}
 

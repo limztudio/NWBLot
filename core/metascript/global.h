@@ -6,7 +6,7 @@
 
 
 #include <core/global.h>
-#include <core/alloc/custom.h>
+#include <core/alloc/general.h>
 #include <core/alloc/arena_object.h>
 
 
@@ -27,7 +27,7 @@ NWB_METASCRIPT_BEGIN
 
 
 template<typename T>
-using MAllocator = ContainerDetail::ArenaAllocator<T, Alloc::CustomArena>;
+using MAllocator = ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>;
 
 using MChar = char;
 using MString = BasicString<MChar, MAllocator<MChar>>;

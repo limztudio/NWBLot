@@ -25,7 +25,7 @@ namespace ECS{
 };
 
 namespace Alloc{
-    class CustomArena;
+    class GlobalArena;
     class ThreadPool;
     class JobSystem;
 };
@@ -60,7 +60,7 @@ struct ProjectRuntimeContext{
 
     Core::Graphics& graphics;
     Core::InputDispatcher& input;
-    Core::Alloc::CustomArena& objectArena;
+    Core::Alloc::GlobalArena& objectArena;
     Core::Alloc::ThreadPool& threadPool;
     Core::Alloc::JobSystem& jobSystem;
     Core::Assets::AssetManager& assetManager;

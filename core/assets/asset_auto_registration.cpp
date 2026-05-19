@@ -127,7 +127,7 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     );
 }
 
-void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::CustomArena& arena){
+void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::GlobalArena& arena){
     Alloc::ScratchArena<> scratchArena;
     __hidden_asset_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{ContainerDetail::ArenaAllocator<AssetCookerFactory, Alloc::ScratchArena<>>(scratchArena)};
     {

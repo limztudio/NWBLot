@@ -126,7 +126,7 @@ const SkinnedGeometry* SkinnedGeometryRuntimeMeshCache::SkinnedGeometrySource::g
 }
 
 
-SkinnedGeometryRuntimeMeshCache::SkinnedGeometryRuntimeMeshCache(Core::Alloc::CustomArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
+SkinnedGeometryRuntimeMeshCache::SkinnedGeometryRuntimeMeshCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
     : m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_sources(0, Hasher<Name>(), EqualTo<Name>(), SourceMapAllocator(arena))

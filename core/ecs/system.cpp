@@ -80,7 +80,7 @@ void mergeSystemAccess(StageAccessContainer& stageAccesses, const SystemAccessCo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ISystem::ISystem(Alloc::CustomArena& arena)
+ISystem::ISystem(Alloc::GlobalArena& arena)
     : m_access(AccessAllocator(arena))
 {}
 
@@ -103,7 +103,7 @@ void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SystemScheduler::SystemScheduler(Alloc::CustomArena& arena)
+SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_stages(StageAllocator(arena))
     , m_allSystems(SystemAllocator(arena))

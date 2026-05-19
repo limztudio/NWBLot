@@ -35,7 +35,7 @@ public:
 
 
 public:
-    explicit Document(Alloc::CustomArena& arena);
+    explicit Document(Alloc::GlobalArena& arena);
 
 
 public:
@@ -54,7 +54,7 @@ public:
 
 
 private:
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
     MString m_assetType;
     MString m_assetVariable;
     VariableMap m_variables;

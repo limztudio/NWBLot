@@ -16,7 +16,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetRegistry::AssetRegistry(Alloc::CustomArena& arena)
+AssetRegistry::AssetRegistry(Alloc::GlobalArena& arena)
     : m_codecs(0, Hasher<Name>(), EqualTo<Name>(), CodecMapAllocator(arena))
 {}
 

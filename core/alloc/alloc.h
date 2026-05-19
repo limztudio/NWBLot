@@ -9,11 +9,11 @@
 
 #include "core.h"
 
+#include "base.h"
 #include "general.h"
 #include "arena_object.h"
-#include "custom.h"
 #include "scratch.h"
-#include "memory.h"
+#include "persistent.h"
 #include "thread.h"
 #include "job.h"
 

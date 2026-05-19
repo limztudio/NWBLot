@@ -27,9 +27,7 @@ using TestContext = NWB::Tests::TestContext;
 #define NWB_SCENE_TEST_CHECK NWB_TEST_CHECK
 
 
-struct SceneTestAllocatorTag;
-using SceneTestAllocator = NWB::Tests::CountingTestAllocator<SceneTestAllocatorTag>;
-using TestWorld = NWB::Tests::EcsTestWorldWithAllocator<SceneTestAllocator>;
+using TestWorld = NWB::Tests::EcsTestWorld;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

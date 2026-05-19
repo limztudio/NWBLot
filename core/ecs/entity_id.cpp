@@ -14,7 +14,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EntityManager::EntityManager(Alloc::CustomArena& arena)
+EntityManager::EntityManager(Alloc::GlobalArena& arena)
     : m_generations(GenerationAllocator(arena))
     , m_freeIndices(FreeIndexAllocator(arena))
     , m_aliveCount(0)

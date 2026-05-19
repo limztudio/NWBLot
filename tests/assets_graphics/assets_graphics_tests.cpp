@@ -38,9 +38,8 @@ using NWB::Tests::MakeTriangleIndices;
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
 
 
-struct AssetsGraphicsTestAllocatorTag;
-using AssetsGraphicsTestAllocator = NWB::Tests::CountingTestAllocator<AssetsGraphicsTestAllocatorTag>;
-using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestAllocator>;
+struct AssetsGraphicsTestArenaTag{};
+using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
 
 #define NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 R"(asset.index_type = "u16";
 

@@ -119,7 +119,7 @@ static Core::BufferHandle SetupStructuredBuffer(
 
 
 SkinnedGeometrySystem::SkinnedGeometrySystem(
-    Core::Alloc::CustomArena& arena,
+    Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
@@ -132,7 +132,7 @@ SkinnedGeometrySystem::SkinnedGeometrySystem(
     , m_assetManager(assetManager)
     , m_runtimeGeometryRegistry(runtimeGeometryRegistry)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_runtimeMeshCache(Core::MakeCustomUnique<SkinnedGeometryRuntimeMeshCache>(arena, arena, graphics, assetManager))
+    , m_runtimeMeshCache(Core::MakeGlobalUnique<SkinnedGeometryRuntimeMeshCache>(arena, arena, graphics, assetManager))
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
 {
     writeAccess<SkinnedGeometryComponent>();

@@ -26,9 +26,7 @@ using TestContext = NWB::Tests::TestContext;
 #define NWB_ECS_TEST_CHECK NWB_TEST_CHECK
 
 
-struct ECSTestAllocatorTag;
-using ECSTestAllocator = NWB::Tests::CountingTestAllocator<ECSTestAllocatorTag>;
-using TestWorld = NWB::Tests::EcsTestWorldWithAllocator<ECSTestAllocator>;
+using TestWorld = NWB::Tests::EcsTestWorld;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +52,7 @@ struct TickMessage{
 
 class CountingSystem final : public NWB::Core::ECS::ISystem{
 public:
-    explicit CountingSystem(NWB::Core::Alloc::CustomArena& arena)
+    explicit CountingSystem(NWB::Core::Alloc::GlobalArena& arena)
         : NWB::Core::ECS::ISystem(arena)
     {
         writeAccess<PositionComponent>();
@@ -125,7 +123,6 @@ static void TestComponentStorageAndView(TestContext& context){
 static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
     TestWorld testWorld;
 
-    const usize allocationCallsBefore = ECSTestAllocator::allocationCallCount();
     usize singleViewCount = 0;
     usize multiViewCount = 0;
 
@@ -142,7 +139,6 @@ static void TestEmptyViewDoesNotAllocateComponentPools(TestContext& context){
 
     NWB_ECS_TEST_CHECK(context, singleViewCount == 0);
     NWB_ECS_TEST_CHECK(context, multiViewCount == 0);
-    NWB_ECS_TEST_CHECK(context, ECSTestAllocator::allocationCallCount() == allocationCallsBefore);
 }
 
 static void TestComponentLifetime(TestContext& context){

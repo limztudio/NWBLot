@@ -491,7 +491,7 @@ bool BuildTextureImageViewCreateInfo(
 
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<ITexture>(context.threadPool)
-    , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), ContainerDetail::ArenaAllocator<Pair<const TextureViewKey, VkImageView>, Alloc::CustomArena>(context.objectArena))
+    , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), ContainerDetail::ArenaAllocator<Pair<const TextureViewKey, VkImageView>, Alloc::GlobalArena>(context.objectArena))
     , m_context(context)
     , m_allocator(allocator)
 {}
@@ -581,7 +581,7 @@ Object Texture::getNativeView(ObjectType objectType, Format::Enum format, Textur
 
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<IStagingTexture>(context.threadPool)
-    , m_mipLayouts(ContainerDetail::ArenaAllocator<VulkanDetail::StagingTextureMipLayout, Alloc::CustomArena>(context.objectArena))
+    , m_mipLayouts(ContainerDetail::ArenaAllocator<VulkanDetail::StagingTextureMipLayout, Alloc::GlobalArena>(context.objectArena))
     , m_context(context)
     , m_allocator(allocator)
 {}

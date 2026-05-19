@@ -18,7 +18,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetManager::AssetManager(Alloc::CustomArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource)
+AssetManager::AssetManager(Alloc::GlobalArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource)
     : m_registry(registry)
     , m_binarySource(binarySource)
     , m_requests(0, Hasher<u64>(), EqualTo<u64>(), RequestMapAllocator(arena))

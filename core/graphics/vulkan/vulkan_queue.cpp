@@ -18,9 +18,9 @@ NWB_VULKAN_BEGIN
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 queueFamilyIndex)
     : RefCounter<IResource>(context.threadPool)
-    , m_referencedResources(ContainerDetail::ArenaAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::CustomArena>(context.objectArena))
-    , m_referencedStagingBuffers(ContainerDetail::ArenaAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::CustomArena>(context.objectArena))
-    , m_referencedAccelStructHandles(ContainerDetail::ArenaAllocator<VkAccelerationStructureKHR, Alloc::CustomArena>(context.objectArena))
+    , m_referencedResources(ContainerDetail::ArenaAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::GlobalArena>(context.objectArena))
+    , m_referencedStagingBuffers(ContainerDetail::ArenaAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::GlobalArena>(context.objectArena))
+    , m_referencedAccelStructHandles(ContainerDetail::ArenaAllocator<VkAccelerationStructureKHR, Alloc::GlobalArena>(context.objectArena))
     , m_context(context)
 {
     // Use TRANSIENT flag to hint that command buffers are short-lived
@@ -83,15 +83,15 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
-    , m_waitSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::CustomArena>(context.objectArena))
-    , m_waitSemaphoreValues(ContainerDetail::ArenaAllocator<u64, Alloc::CustomArena>(context.objectArena))
-    , m_signalSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::CustomArena>(context.objectArena))
-    , m_signalSemaphoreValues(ContainerDetail::ArenaAllocator<u64, Alloc::CustomArena>(context.objectArena))
+    , m_waitSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(context.objectArena))
+    , m_waitSemaphoreValues(ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>(context.objectArena))
+    , m_signalSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(context.objectArena))
+    , m_signalSemaphoreValues(ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>(context.objectArena))
     , m_lastRecordingID(0)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
-    , m_commandBuffersInFlight(ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::CustomArena>(context.objectArena))
-    , m_commandBuffersPool(ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::CustomArena>(context.objectArena))
+    , m_commandBuffersInFlight(ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::GlobalArena>(context.objectArena))
+    , m_commandBuffersPool(ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::GlobalArena>(context.objectArena))
 {
     auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;

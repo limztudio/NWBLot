@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 
 
 struct GraphicsCookEnvironment{
-    using AssetRootVector = Vector<Path, ContainerDetail::ArenaAllocator<Path, Core::Alloc::CustomArena>>;
+    using AssetRootVector = Vector<Path, ContainerDetail::ArenaAllocator<Path, Core::Alloc::GlobalArena>>;
 
     CompactString configuration;
     Path repoRoot;
@@ -37,8 +37,8 @@ struct GraphicsCookEnvironment{
     Path outputDirectory;
     Path cacheDirectory;
 
-    explicit GraphicsCookEnvironment(Core::Alloc::CustomArena& arena)
-        : assetRoots(ContainerDetail::ArenaAllocator<Path, Core::Alloc::CustomArena>(arena))
+    explicit GraphicsCookEnvironment(Core::Alloc::GlobalArena& arena)
+        : assetRoots(ContainerDetail::ArenaAllocator<Path, Core::Alloc::GlobalArena>(arena))
     {}
 };
 
@@ -51,7 +51,7 @@ struct GraphicsCookResult{
 
 class GraphicsAssetCooker final : public Core::Assets::IAssetCooker{
 public:
-    explicit GraphicsAssetCooker(Core::Alloc::CustomArena& arena)
+    explicit GraphicsAssetCooker(Core::Alloc::GlobalArena& arena)
         : IAssetCooker(arena, CompactString("graphics"))
     {}
 

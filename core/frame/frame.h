@@ -68,8 +68,8 @@ public:
     [[nodiscard]] inline InputDispatcher& input(){ return m_input; }
     [[nodiscard]] inline const InputDispatcher& input()const{ return m_input; }
 
-    [[nodiscard]] inline Alloc::CustomArena& projectObjectArena(){ return m_projectObjectArena; }
-    [[nodiscard]] inline const Alloc::CustomArena& projectObjectArena()const{ return m_projectObjectArena; }
+    [[nodiscard]] inline Alloc::GlobalArena& projectObjectArena(){ return m_projectObjectArena; }
+    [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const{ return m_projectObjectArena; }
 
     [[nodiscard]] inline Alloc::ThreadPool& projectThreadPool(){ return m_projectThreadPool; }
     [[nodiscard]] inline const Alloc::ThreadPool& projectThreadPool()const{ return m_projectThreadPool; }
@@ -92,14 +92,14 @@ private:
     Common::FrameData m_data;
     BasicString<tchar> m_appliedWindowTitle;
 
-    Alloc::MemoryArena m_graphicsPersistentArena;
-    Alloc::CustomArena m_graphicsObjectArena;
+    Alloc::PersistentArena m_graphicsPersistentArena;
+    Alloc::GlobalArena m_graphicsObjectArena;
     GraphicsAllocator m_graphicsAllocator;
     Alloc::ThreadPool m_graphicsThreadPool;
     Alloc::JobSystem m_graphicsJobSystem;
     InputDispatcher m_input;
 
-    Alloc::CustomArena m_projectObjectArena;
+    Alloc::GlobalArena m_projectObjectArena;
     Alloc::ThreadPool m_projectThreadPool;
     Alloc::JobSystem m_projectJobSystem;
 

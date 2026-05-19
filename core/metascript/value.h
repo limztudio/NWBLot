@@ -40,10 +40,10 @@ public:
 
 
 public:
-    explicit Value(Alloc::CustomArena& arena);
-    Value(i64 val, Alloc::CustomArena& arena);
-    Value(f64 val, Alloc::CustomArena& arena);
-    Value(MStringView val, Alloc::CustomArena& arena);
+    explicit Value(Alloc::GlobalArena& arena);
+    Value(i64 val, Alloc::GlobalArena& arena);
+    Value(f64 val, Alloc::GlobalArena& arena);
+    Value(MStringView val, Alloc::GlobalArena& arena);
     ~Value();
     Value(const Value& other);
     Value(Value&& other)noexcept;
@@ -61,7 +61,7 @@ public:
 
 
 public:
-    [[nodiscard]] Alloc::CustomArena& arena()const{ return m_arena; }
+    [[nodiscard]] Alloc::GlobalArena& arena()const{ return m_arena; }
     [[nodiscard]] ValueType::Enum type()const{ return m_type; }
     [[nodiscard]] bool isNull()const{ return m_type == ValueType::Null; }
     [[nodiscard]] bool isInteger()const{ return m_type == ValueType::Integer; }
@@ -143,7 +143,7 @@ private:
 
 
 private:
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
     ValueType::Enum m_type = ValueType::Null;
 
     union{

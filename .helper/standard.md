@@ -230,9 +230,9 @@ Updated: 2026-05-04
 - For function-local containers that are only temporary working storage and do not escape the function, prefer `Core::Alloc::ScratchArena` with `Core::Alloc::ScratchAllocator` over the default heap allocator.
   - Keep default/custom owning allocators for containers that are returned, moved into persistent asset/component/runtime state, stored as members, or passed to APIs that intentionally own the result.
   - When using scratch-backed containers, reserve or size them so normal execution does not depend on interleaved reallocations.
-- For non-temporary containers inside a subsystem/domain that already owns an arena, use that domain arena explicitly (`Alloc::CustomAllocator`, `Alloc::MemoryAllocator`, or a local domain alias) instead of the default allocator.
+- For non-temporary containers inside a subsystem/domain that already owns an arena, use that domain arena explicitly (`ContainerDetail::ArenaAllocator`, `Alloc::PersistentArena`, or a local domain alias) instead of the default allocator.
   - Persistent registries, runtime caches, cook plans, queues, and member containers should be constructed from the owning domain arena.
-  - Do not rely on a default `CustomAllocator` arena when the correct domain arena is available.
+  - Do not rely on a default allocator when the correct domain arena is available.
 - For generic core std types used across modules (e.g., `std::max_align_t`), add/use a `global/type.h` alias (`MaxAlign`) instead of direct `std::` usage in module code.
 - When wrapping `std::` functions that return a meaningful value *and* accept an error-code out parameter (e.g., `std::filesystem::exists(path, ec)`), the wrapper must preserve the original return value; do not collapse it into the error code.
   - The return value carries the answer (e.g., "does the file exist?"), the `ErrorCode&` carries the failure reason (e.g., permission denied). These are two different pieces of information — "file does not exist" is a valid `false` result, not an error.
@@ -288,8 +288,9 @@ Updated: 2026-05-04
 - For scoped mutex locking, prefer `ScopedLock lock(m_mutex);` (or `ScopedLock lock(otherMutex);`) instead of lock-type-specific scoped-lock forms when possible.
 
 ## 7. Ownership and memory patterns
-- Prefer engine ownership types (`UniquePtr`, `RefCountPtr`, `CustomUniquePtr`) over raw owning pointers.
-- Use arena/custom allocators in core paths (`Alloc::CustomArena`, scratch allocators, `NewArenaObject`).
+- Prefer engine ownership types (`UniquePtr`, `RefCountPtr`, `GlobalUniquePtr`) over raw owning pointers.
+- Use arena/global allocators in core paths (`Alloc::GlobalArena`, scratch allocators, `NewArenaObject`).
+- Concrete arena types inherit from `Alloc::ArenaBase`; keep shared arena metadata such as allocation log labels there.
 - Follow RAII cleanup in destructors for Vulkan/system handles and reset handles to null after destroy/free.
 
 ## 8. Error handling and diagnostics
@@ -306,9 +307,9 @@ Updated: 2026-05-04
 - Use thread pool and chunking thresholds for larger CPU-side memory/data operations.
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
-- For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `CustomAllocator` only when data must outlive the current scope.
+- For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `GlobalArena` or another owning domain arena only when data must outlive the current scope.
 - Data captured by async jobs/callbacks (e.g., lambda captures submitted to `ThreadPool`/`JobSystem`) is considered outliving the current scope; do not back such captures with `ScratchArena`.
-- For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena (`CustomCacheAlignedAllocator`, `MemoryCacheAlignedAllocator`, `ScratchCacheAlignedAllocator`) instead of default allocators when arena ownership exists.
+- For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena instead of default allocators when arena ownership exists.
 - SIMD math helpers should accept and return SIMD-domain values such as `SIMDVector` or `SIMDMatrix`.
   - Do not hide repeated `LoadFloat()` / `StoreFloat()` traffic inside small math helpers called from loops.
   - Load from struct or asset storage at the call-site boundary, keep intermediate values in SIMD variables while composing operations, then store once when the result leaves the SIMD domain.

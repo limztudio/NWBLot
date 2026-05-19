@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GeometrySystem::GeometrySystem(Core::Alloc::CustomArena& arena, Core::ECS::World& world)
+GeometrySystem::GeometrySystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
     : Core::ECS::ISystem(arena)
     , m_world(world)
     , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))

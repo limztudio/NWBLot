@@ -292,7 +292,7 @@ static Core::ShaderHandle CreateShaderFromAsset(
 
 
 UiSystem::UiSystem(
-    Core::Alloc::CustomArena& arena,
+    Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
     Core::InputDispatcher& input,
@@ -307,8 +307,8 @@ UiSystem::UiSystem(
     , m_input(input)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_textures(ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::CustomArena>(arena))
-    , m_textureUploadScratch(ContainerDetail::ArenaAllocator<u8, Core::Alloc::CustomArena>(arena))
+    , m_textures(ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::GlobalArena>(arena))
+    , m_textureUploadScratch(ContainerDetail::ArenaAllocator<u8, Core::Alloc::GlobalArena>(arena))
 {
     readAccess<UiComponent>();
 
@@ -753,7 +753,7 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
         if(resource)
             destroyTexture(textureData);
 
-        auto createdResource = Core::MakeCustomUnique<UiTextureResource>(m_arena);
+        auto createdResource = Core::MakeGlobalUnique<UiTextureResource>(m_arena);
         if(!createdResource){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to allocate texture resource"));
             return false;

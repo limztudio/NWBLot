@@ -53,9 +53,7 @@ static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& co
 }
 
 
-struct ECSGraphicsTestAllocatorTag;
-using ECSGraphicsTestAllocator = NWB::Tests::CountingTestAllocator<ECSGraphicsTestAllocatorTag>;
-using TestWorld = NWB::Tests::EcsTestWorldWithAllocator<ECSGraphicsTestAllocator>;
+using TestWorld = NWB::Tests::EcsTestWorld;
 
 static void TestLightComponents(TestContext& context){
     TestWorld testWorld;

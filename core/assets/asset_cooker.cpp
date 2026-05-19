@@ -75,7 +75,7 @@ static AString DescribeAvailableCookers(const CookerMap& cookers){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetCookerRegistry::AssetCookerRegistry(Alloc::CustomArena& arena)
+AssetCookerRegistry::AssetCookerRegistry(Alloc::GlobalArena& arena)
     : m_assetCookers(0, Hasher<Name>(), EqualTo<Name>(), CookerMapAllocator(arena))
 {}
 

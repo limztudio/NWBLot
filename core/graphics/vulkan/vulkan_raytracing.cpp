@@ -823,7 +823,7 @@ OpacityMicromap::~OpacityMicromap(){
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
     : RefCounter<IRayTracingPipeline>(context.threadPool)
-    , m_shaderGroupHandles(ContainerDetail::ArenaAllocator<u8, Alloc::CustomArena>(context.objectArena))
+    , m_shaderGroupHandles(ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>(context.objectArena))
     , m_context(context)
     , m_device(device)
 {}

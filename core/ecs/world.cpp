@@ -15,7 +15,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-World::World(Alloc::CustomArena& arena, Alloc::ThreadPool& threadPool)
+World::World(Alloc::GlobalArena& arena, Alloc::ThreadPool& threadPool)
     : Alloc::ITaskScheduler(threadPool)
     , m_arena(arena)
     , m_entityManager(m_arena)

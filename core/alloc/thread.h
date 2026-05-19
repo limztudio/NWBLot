@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "persistent.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,8 +175,8 @@ private:
         Atomic<i32> activeWorkers{ 0 };
     };
 
-    using WorkerList = Vector<JoiningThread, MemoryArena>;
-    using TaskQueue = Deque<TaskItem, MemoryArena>;
+    using WorkerList = Vector<JoiningThread, PersistentArena>;
+    using TaskQueue = Deque<TaskItem, PersistentArena>;
 
 
 private:
@@ -185,7 +186,7 @@ private:
         const usize taskCount = SizeOf<8>(static_cast<usize>(threadCount));
         const usize taskBytes = SizeOf<sizeof(TaskItem)>(taskCount);
         const usize total = AddSize(AddSize(workerBytes, taskBytes), 4096);
-        return MemoryArena::StructureAlignedSize(total > 32768 ? total : 32768);
+        return PersistentArena::StructureAlignedSize(total > 32768 ? total : 32768);
     }
 
     static inline usize computeChunkCount(usize maxChunks, usize totalThreads){
@@ -431,7 +432,7 @@ private:
 
 
 private:
-    MemoryArena m_arena;
+    PersistentArena m_arena;
     TaskQueue m_tasks;
     Atomic<ParallelForDesc*> m_pfWork{ nullptr };
     Futex m_taskMutex;

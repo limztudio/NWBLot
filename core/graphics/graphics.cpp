@@ -22,7 +22,7 @@ namespace __hidden_graphics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using UploadBytesAllocator = ContainerDetail::ArenaAllocator<u8, Alloc::CustomArena>;
+using UploadBytesAllocator = ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>;
 using UploadBytes = Vector<u8, UploadBytesAllocator>;
 
 
@@ -167,7 +167,7 @@ struct BufferSetupJobData{
     BufferHandle& outBuffer;
 
 
-    BufferSetupJobData(Alloc::CustomArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
+    BufferSetupJobData(Alloc::GlobalArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
         : setupDesc(desc)
         , uploadBytes(UploadBytesAllocator(arena))
         , outBuffer(output)
@@ -180,7 +180,7 @@ struct TextureSetupJobData{
     TextureHandle& outTexture;
 
 
-    TextureSetupJobData(Alloc::CustomArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
+    TextureSetupJobData(Alloc::GlobalArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
         : setupDesc(desc)
         , uploadBytes(UploadBytesAllocator(arena))
         , outTexture(output)
@@ -194,7 +194,7 @@ struct MeshSetupJobData{
     Graphics::MeshResource& outMesh;
 
 
-    MeshSetupJobData(Alloc::CustomArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
+    MeshSetupJobData(Alloc::GlobalArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
         : setupDesc(desc)
         , vertexBytes(UploadBytesAllocator(arena))
         , indexBytes(UploadBytesAllocator(arena))
@@ -203,7 +203,7 @@ struct MeshSetupJobData{
 };
 
 
-static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize dataSize){
+static UploadBytes CopyBytes(Alloc::GlobalArena& arena, const void* data, usize dataSize){
     UploadBytes bytes{UploadBytesAllocator(arena)};
     if(!data || dataSize == 0)
         return bytes;
@@ -217,7 +217,7 @@ static UploadBytes CopyBytes(Alloc::CustomArena& arena, const void* data, usize 
 template<typename JobData, typename Desc, typename Output, typename Validate, typename ConfigurePayload, typename ExecutePayload>
 static Graphics::JobHandle SubmitSetupUploadJob(
     Graphics& graphics,
-    Alloc::CustomArena& arena,
+    Alloc::GlobalArena& arena,
     Alloc::JobSystem& jobSystem,
     const Desc& desc,
     Output& output,
@@ -230,7 +230,7 @@ static Graphics::JobHandle SubmitSetupUploadJob(
         return {};
     }
 
-    auto payload = MakeCustomUnique<JobData>(arena, arena, desc, output);
+    auto payload = MakeGlobalUnique<JobData>(arena, arena, desc, output);
     configurePayload(*payload, arena);
 
     return jobSystem.submit([&graphics, payload = Move(payload), executePayload = Forward<ExecutePayload>(executePayload)]() mutable{
@@ -238,7 +238,7 @@ static Graphics::JobHandle SubmitSetupUploadJob(
     });
 }
 
-static void ConfigureBufferSetupPayload(BufferSetupJobData& payload, Alloc::CustomArena& arena){
+static void ConfigureBufferSetupPayload(BufferSetupJobData& payload, Alloc::GlobalArena& arena){
     payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.dataSize);
     payload.setupDesc.data = nullptr;
     payload.setupDesc.dataSize = payload.uploadBytes.size();
@@ -250,7 +250,7 @@ static void ExecuteBufferSetupPayload(Graphics& graphics, BufferSetupJobData& pa
     payload.outBuffer = graphics.setupBuffer(payload.setupDesc);
 }
 
-static void ConfigureTextureSetupPayload(TextureSetupJobData& payload, Alloc::CustomArena& arena){
+static void ConfigureTextureSetupPayload(TextureSetupJobData& payload, Alloc::GlobalArena& arena){
     payload.uploadBytes = CopyBytes(arena, payload.setupDesc.data, payload.setupDesc.uploadDataSize);
     payload.setupDesc.data = nullptr;
     payload.setupDesc.uploadDataSize = payload.uploadBytes.size();
@@ -270,7 +270,7 @@ static bool CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     return true;
 }
 
-static CustomUniquePtr<IGraphicsBackend> CreateBackend(
+static GlobalUniquePtr<IGraphicsBackend> CreateBackend(
     const DeviceCreationParameters& deviceParams,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
@@ -806,7 +806,7 @@ Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshReso
         return {};
     }
 
-    auto payload = MakeCustomUnique<__hidden_graphics::MeshSetupJobData>(
+    auto payload = MakeGlobalUnique<__hidden_graphics::MeshSetupJobData>(
         m_allocator.getObjectArena(),
         m_allocator.getObjectArena(),
         desc,

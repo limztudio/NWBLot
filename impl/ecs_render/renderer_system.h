@@ -85,7 +85,7 @@ static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
-    using MaterialParameterVectorAllocator = ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::CustomArena>;
+    using MaterialParameterVectorAllocator = ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::GlobalArena>;
     using MaterialParameterVector = Vector<MaterialParameterGpuData, MaterialParameterVectorAllocator>;
 
 
@@ -138,7 +138,7 @@ private:
         bool transparent = false;
         bool valid = false;
 
-        explicit MaterialSurfaceInfo(Core::Alloc::CustomArena& arena)
+        explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
             : parameters(MaterialParameterVectorAllocator(arena))
         {}
     };
@@ -166,10 +166,10 @@ private:
     using InstanceGpuDataVector = Vector<InstanceGpuData, ContainerDetail::ArenaAllocator<InstanceGpuData, Core::Alloc::ScratchArena<>>>;
     using MaterialParameterGpuDataVector = Vector<MaterialParameterGpuData, ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>>;
 
-    using GeometryResourcesMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, GeometryResources>, Core::Alloc::CustomArena>;
-    using MaterialSurfaceInfoMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, MaterialSurfaceInfo>, Core::Alloc::CustomArena>;
-    using MaterialPipelineMapAllocator = ContainerDetail::ArenaAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>, Core::Alloc::CustomArena>;
-    using LoggedMaterialPathMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, RenderPath::Enum>, Core::Alloc::CustomArena>;
+    using GeometryResourcesMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, GeometryResources>, Core::Alloc::GlobalArena>;
+    using MaterialSurfaceInfoMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, MaterialSurfaceInfo>, Core::Alloc::GlobalArena>;
+    using MaterialPipelineMapAllocator = ContainerDetail::ArenaAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>, Core::Alloc::GlobalArena>;
+    using LoggedMaterialPathMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, RenderPath::Enum>, Core::Alloc::GlobalArena>;
 public:
     struct AvboitFrameTargets{
         u32 fullWidth = 0;
@@ -290,7 +290,7 @@ public:
 
 public:
     RendererSystem(
-        Core::Alloc::CustomArena& arena,
+        Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
         Core::Assets::AssetManager& assetManager,
@@ -418,7 +418,7 @@ private:
 
 
 private:
-    Core::Alloc::CustomArena& m_arena;
+    Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;

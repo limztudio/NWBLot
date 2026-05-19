@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "memory.h"
+#include "persistent.h"
 #include "arena_object.h"
 #include "scratch.h"
 #include "thread.h"
@@ -49,7 +49,7 @@ private:
     };
 
     struct JobNode{
-        using DependencyList = Vector<JobHandle, MemoryArena>;
+        using DependencyList = Vector<JobHandle, PersistentArena>;
 
         JobFunction func;
         DependencyList dependents;
@@ -61,15 +61,15 @@ private:
 
 
     public:
-        inline explicit JobNode(MemoryArena& arena)
+        inline explicit JobNode(PersistentArena& arena)
             : dependents(DependencyList::allocator_type(arena))
         {}
     };
 
 
 private:
-    using JobNodeList = Vector<JobNode, MemoryArena>;
-    using JobFreeNodeList = Vector<u32, MemoryArena>;
+    using JobNodeList = Vector<JobNode, PersistentArena>;
+    using JobFreeNodeList = Vector<u32, PersistentArena>;
 
 
 private:
@@ -91,7 +91,7 @@ private:
         const usize freeListBytes = SizeOf<sizeof(u32)>(reserveCount);
         const usize total = AddSize(AddSize(AddSize(nodeBytes, dependencyBytes), freeListBytes), 4096);
         const usize arenaSize = total > s_DefaultMinimumArenaSize ? total : s_DefaultMinimumArenaSize;
-        return MemoryArena::StructureAlignedSize(arenaSize);
+        return PersistentArena::StructureAlignedSize(arenaSize);
     }
 
     static inline usize resolveArenaSize(u32 threadCount, usize arenaSize){
@@ -442,7 +442,7 @@ private:
     UniquePtr<ThreadPool> m_ownedPool;
     ThreadPool& m_pool;
 
-    MemoryArena m_arena;
+    PersistentArena m_arena;
     JobNodeList m_nodes;
     JobFreeNodeList m_freeNodes;
 

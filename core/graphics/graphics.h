@@ -21,10 +21,10 @@ NWB_CORE_BEGIN
 
 class Graphics{
 private:
-    using BackendOwner = CustomUniquePtr<IGraphicsBackend>;
+    using BackendOwner = GlobalUniquePtr<IGraphicsBackend>;
     using BackendPtr = NotNullUniquePtr<IGraphicsBackend, BackendOwner::deleter_type>;
-    using RenderPassListAllocator = ContainerDetail::ArenaAllocator<IRenderPass*, Alloc::CustomArena>;
-    using SwapChainFramebufferVectorAllocator = ContainerDetail::ArenaAllocator<FramebufferHandle, Alloc::CustomArena>;
+    using RenderPassListAllocator = ContainerDetail::ArenaAllocator<IRenderPass*, Alloc::GlobalArena>;
+    using SwapChainFramebufferVectorAllocator = ContainerDetail::ArenaAllocator<FramebufferHandle, Alloc::GlobalArena>;
 
 
 public:

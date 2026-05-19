@@ -22,13 +22,13 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CustomUniquePtr<IGraphicsBackend> CreateDefaultGraphicsBackend(
+GlobalUniquePtr<IGraphicsBackend> CreateDefaultGraphicsBackend(
     const DeviceCreationParameters& params,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool
 ){
-    return MakeCustomUnique<Vulkan::BackendContext>(allocator.getObjectArena(), params, swapChainState, allocator, threadPool);
+    return MakeGlobalUnique<Vulkan::BackendContext>(allocator.getObjectArena(), params, swapChainState, allocator, threadPool);
 }
 
 
@@ -356,12 +356,12 @@ BackendContext::BackendContext(
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
-    , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::CustomArena>(m_arena))
-    , m_swapChainImages(ContainerDetail::ArenaAllocator<SwapChainImage, Alloc::CustomArena>(m_arena))
-    , m_acquireSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::CustomArena>(m_arena))
-    , m_presentSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::CustomArena>(m_arena))
-    , m_framesInFlight(Deque<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::CustomArena>>(ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::CustomArena>(m_arena)))
-    , m_queryPool(ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::CustomArena>(m_arena))
+    , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::GlobalArena>(m_arena))
+    , m_swapChainImages(ContainerDetail::ArenaAllocator<SwapChainImage, Alloc::GlobalArena>(m_arena))
+    , m_acquireSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(m_arena))
+    , m_presentSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(m_arena))
+    , m_framesInFlight(Deque<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>>(ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>(m_arena)))
+    , m_queryPool(ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>(m_arena))
 {
     initDefaultExtensions();
 }

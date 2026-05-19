@@ -5,50 +5,50 @@
 #pragma once
 
 
-#include <core/alloc/general.h>
-#include <core/alloc/thread.h>
-#include <core/ecs/world.h>
-
-#include <tests/test_context.h>
-
-#include <global/global.h>
+#include "global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_BEGIN
+NWB_ALLOC_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Tests{
+class ArenaBase : NoCopy{
+protected:
+    static constexpr usize s_LogCapacity = 128;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+protected:
+    explicit ArenaBase(const char* allocationLog)
+        : m_log{}
+    {
+        NWB_ASSERT_MSG(allocationLog, NWB_TEXT("ArenaBase allocationLog must be non-null"));
+
+        const char* source = allocationLog ? allocationLog : "";
+        usize i = 0;
+        for(; i + 1 < LengthOf(m_log) && source[i] != '\0'; ++i)
+            m_log[i] = source[i];
+        m_log[i] = '\0';
+    }
+    ~ArenaBase() = default;
+
+protected:
+    [[nodiscard]] inline const char* log()const{ return m_log; }
 
 
-struct EcsTestWorld{
-    Core::Alloc::GlobalArena arena;
-    Core::Alloc::ThreadPool threadPool;
-    Core::ECS::World world;
-
-    EcsTestWorld()
-        : arena("NWB::Tests::EcsTestWorld")
-        , threadPool(0)
-        , world(arena, threadPool)
-    {}
+private:
+    char m_log[s_LogCapacity];
 };
 
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_END
+NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

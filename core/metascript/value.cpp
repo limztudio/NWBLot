@@ -36,25 +36,25 @@ inline void ReserveGrowingCapacity(Container& container, const usize requiredCap
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Value::Value(Alloc::CustomArena& arena)
+Value::Value(Alloc::GlobalArena& arena)
     : m_arena(arena)
 {}
 
-Value::Value(i64 val, Alloc::CustomArena& arena)
+Value::Value(i64 val, Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_type(ValueType::Integer)
 {
     m_data.m_integer = val;
 }
 
-Value::Value(f64 val, Alloc::CustomArena& arena)
+Value::Value(f64 val, Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_type(ValueType::Double)
 {
     m_data.m_double = val;
 }
 
-Value::Value(MStringView val, Alloc::CustomArena& arena)
+Value::Value(MStringView val, Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_type(ValueType::String)
 {

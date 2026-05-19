@@ -25,8 +25,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CustomUniquePtr<IShaderCompiler> CreateDefaultShaderCompiler(Alloc::CustomArena& memoryArena){
-    return MakeCustomUnique<Vulkan::VulkanShaderCompiler>(memoryArena, memoryArena);
+GlobalUniquePtr<IShaderCompiler> CreateDefaultShaderCompiler(Alloc::GlobalArena& memoryArena){
+    return MakeGlobalUnique<Vulkan::VulkanShaderCompiler>(memoryArena, memoryArena);
 }
 
 
@@ -111,7 +111,7 @@ private:
 
 
 public:
-    explicit ShaderFileIncluder(const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>>& includeDirectories)
+    explicit ShaderFileIncluder(const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>>& includeDirectories)
         : m_includeDirectories(includeDirectories)
     {}
 
@@ -195,7 +195,7 @@ public:
 
 
 private:
-    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::CustomArena>>& m_includeDirectories;
+    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>>& m_includeDirectories;
 };
 
 
@@ -208,7 +208,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VulkanShaderCompiler::VulkanShaderCompiler(Alloc::CustomArena& memoryArena)
+VulkanShaderCompiler::VulkanShaderCompiler(Alloc::GlobalArena& memoryArena)
     : IShaderCompiler(memoryArena)
 {}
 

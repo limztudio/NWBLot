@@ -32,7 +32,7 @@ struct AssetCookOptions{
 
 class IAssetCooker{
 public:
-    IAssetCooker(Alloc::CustomArena& arena, const CompactString& assetTypeText)
+    IAssetCooker(Alloc::GlobalArena& arena, const CompactString& assetTypeText)
         : m_arena(arena)
         , m_assetTypeText(assetTypeText)
         , m_assetType(assetTypeText.empty() ? NAME_NONE : Name(assetTypeText.view()))
@@ -48,7 +48,7 @@ public:
 
 
 protected:
-    Alloc::CustomArena& m_arena;
+    Alloc::GlobalArena& m_arena;
 
 
 private:
@@ -62,12 +62,12 @@ private:
 
 class AssetCookerRegistry final{
 private:
-    using CookerMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCooker>>, Alloc::CustomArena>;
+    using CookerMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCooker>>, Alloc::GlobalArena>;
     using CookerMap = HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>, CookerMapAllocator>;
 
 
 public:
-    explicit AssetCookerRegistry(Alloc::CustomArena& arena);
+    explicit AssetCookerRegistry(Alloc::GlobalArena& arena);
 
     bool registerCooker(UniquePtr<IAssetCooker>&& cooker);
 

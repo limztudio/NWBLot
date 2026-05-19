@@ -19,12 +19,12 @@ NWB_ASSETS_BEGIN
 
 class AssetRegistry final : NoCopy{
 private:
-    using CodecMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCodec>>, Alloc::CustomArena>;
+    using CodecMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCodec>>, Alloc::GlobalArena>;
     using CodecMap = HashMap<Name, UniquePtr<IAssetCodec>, Hasher<Name>, EqualTo<Name>, CodecMapAllocator>;
 
 
 public:
-    explicit AssetRegistry(Alloc::CustomArena& arena);
+    explicit AssetRegistry(Alloc::GlobalArena& arena);
 
     bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
     bool unregisterCodec(const Name& assetType);

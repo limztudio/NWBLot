@@ -6,7 +6,7 @@
 
 
 #include <core/alloc/core.h>
-#include <core/alloc/custom.h>
+#include <core/alloc/general.h>
 #include <core/common/application_entry.h>
 
 #include <global/global.h>
@@ -44,48 +44,12 @@ struct TestContext{
 
 #define NWB_TEST_CHECK(context, expression) (context).checkTrue((expression), #expression, __FILE__, __LINE__)
 
-template<typename Tag>
-struct CountingTestAllocator{
-    inline static usize allocationCalls = 0u;
-
-    static void resetAllocationCalls(){
-        allocationCalls = 0u;
-    }
-
-    [[nodiscard]] static usize allocationCallCount(){
-        return allocationCalls;
-    }
-
-    static void* allocate(usize size){
-        ++allocationCalls;
-        return Core::Alloc::CoreAlloc(size, "NWB::Tests::CountingTestAllocator::allocate");
-    }
-
-    static void free(void* ptr){
-        Core::Alloc::CoreFree(ptr, "NWB::Tests::CountingTestAllocator::free");
-    }
-
-    static void* allocateAligned(usize size, usize align){
-        ++allocationCalls;
-        return Core::Alloc::CoreAllocAligned(size, align, "NWB::Tests::CountingTestAllocator::allocateAligned");
-    }
-
-    static void freeAligned(void* ptr){
-        Core::Alloc::CoreFreeAligned(ptr, "NWB::Tests::CountingTestAllocator::freeAligned");
-    }
-};
-
-template<typename AllocatorHooks>
+template<typename Tag = void>
 struct TestArena{
-    Core::Alloc::CustomArena arena;
+    Core::Alloc::GlobalArena arena;
 
     TestArena()
-        : arena(
-            &AllocatorHooks::allocate,
-            &AllocatorHooks::free,
-            &AllocatorHooks::allocateAligned,
-            &AllocatorHooks::freeAligned
-        )
+        : arena("NWB::Tests::TestArena")
     {}
 };
 

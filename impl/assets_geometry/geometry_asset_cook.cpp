@@ -38,7 +38,8 @@ namespace __hidden_geometry_asset_cook{
 
 
 template<typename T>
-using ScratchVector = Vector<T, ContainerDetail::ArenaAllocator<T, Core::Alloc::ScratchArena<>>>;
+using ScratchVector = Vector<T, Core::Alloc::ScratchArena<>>;
+using ScratchString = AString<Core::Alloc::ScratchArena<>>;
 
 struct DiscoveredNwbFile{
     Path assetRoot;
@@ -93,12 +94,12 @@ static const Core::Metascript::Value* FindField(const Core::Metascript::Value& m
     return map.findField(Core::Metascript::MStringView(fieldName.data(), fieldName.size()));
 }
 
-static AString MakeIndexedLabel(const AStringView baseLabel, const usize index){
+static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena<>& arena, const AStringView baseLabel, const usize index){
     char indexBuffer[32] = {};
     const AStringView indexText = FormatDecimal(index, indexBuffer);
     NWB_ASSERT(!indexText.empty());
 
-    AString label;
+    ScratchString label{arena};
     label.reserve(baseLabel.size() + indexText.size() + 2u);
     label.append(baseLabel.data(), baseLabel.size());
     label += '[';
@@ -219,7 +220,8 @@ static bool ParseMetadataF32TupleWithLabel(
         if(failure == MetadataF32ValueFailure::None)
             continue;
 
-        const AString componentLabel = MakeIndexedLabel(label, i);
+        Core::Alloc::ScratchArena<> labelArena;
+        const ScratchString componentLabel = MakeIndexedLabel(labelArena, label, i);
         LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
         return false;
     }
@@ -246,7 +248,8 @@ static bool ParseMetadataF32TupleListElement(
     const usize elementIndex,
     f32 (&outValues)[ComponentCount]
 ){
-    const AString label = MakeIndexedLabel(fieldName, elementIndex);
+    Core::Alloc::ScratchArena<> labelArena;
+    const ScratchString label = MakeIndexedLabel(labelArena, fieldName, elementIndex);
     return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues);
 }
 
@@ -477,7 +480,8 @@ static bool FillMetadataIndexRecursive(
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0; i < list.size(); ++i){
-            const AString childLabel = MakeIndexedLabel(label, i);
+            Core::Alloc::ScratchArena<> labelArena;
+            const ScratchString childLabel = MakeIndexedLabel(labelArena, label, i);
             if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices))
                 return false;
         }
@@ -548,9 +552,9 @@ static bool BuildGeometryStreams(
     const PositionVectorT& positions,
     const NormalVectorT& normals,
     const ColorVectorT& colors,
-    Vector<Float3U>& outPositions,
-    Vector<Half4U>& outNormals,
-    Vector<Half4U>& outColors
+    Core::Assets::AssetVector<Float3U>& outPositions,
+    Core::Assets::AssetVector<Half4U>& outNormals,
+    Core::Assets::AssetVector<Half4U>& outColors
 ){
     if(positions.size() != normals.size() || positions.size() != colors.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': vertex stream counts must match"), PathToString<tchar>(nwbFilePath));
@@ -587,7 +591,7 @@ static bool RejectUnsupportedGeometryFields(const DiscoveredNwbFile& discoveredF
 }
 
 static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Document& doc, GeometryCookEntry& outEntry){
-    outEntry = {};
+    outEntry = GeometryCookEntry(outEntry.positions.get_allocator().arena());
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
@@ -610,9 +614,9 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    ScratchVector<Float3U> positions{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
-    ScratchVector<Float3U> normals{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
-    ScratchVector<Float4U> colors{ContainerDetail::ArenaAllocator<Float4U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float3U> positions{scratchArena};
+    ScratchVector<Float3U> normals{scratchArena};
+    ScratchVector<Float4U> colors{scratchArena};
     if(!ParseMetadataIndexType(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices))
         return false;
     if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "positions", positions))
@@ -641,7 +645,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
 }
 
 static bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry){
-    outGeometry = Geometry(geometryEntry.virtualPath);
+    outGeometry = Geometry(geometryEntry.positions.get_allocator().arena(), geometryEntry.virtualPath);
     outGeometry.setStreams(Move(geometryEntry.positions), Move(geometryEntry.normals), Move(geometryEntry.colors));
     outGeometry.setIndices(Move(geometryEntry.indices));
     return outGeometry.validatePayload();
@@ -682,12 +686,14 @@ static bool ParseU16Tuple(
         u32 parsed = 0u;
         const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], parsed);
         if(failure != MetadataU32ValueFailure::None){
-            const AString componentLabel = MakeIndexedLabel(label, i);
+            Core::Alloc::ScratchArena<> labelArena;
+            const ScratchString componentLabel = MakeIndexedLabel(labelArena, label, i);
             LogMetadataU32ValueFailure(nwbFilePath, s_SkinnedGeometryMetaKind, componentLabel, failure);
             return false;
         }
         if(parsed > Limit<u16>::s_Max){
-            const AString componentLabel = MakeIndexedLabel(label, i);
+            Core::Alloc::ScratchArena<> labelArena;
+            const ScratchString componentLabel = MakeIndexedLabel(labelArena, label, i);
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' contains a value that exceeds u16")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(componentLabel)
@@ -739,7 +745,7 @@ static bool ParseSkinnedGeometryIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const bool use32BitIndices,
-    Vector<u32>& outIndices
+    Core::Assets::AssetVector<u32>& outIndices
 ){
     return ParseMetadataIndexField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, use32BitIndices, outIndices);
 }
@@ -752,7 +758,7 @@ static bool BuildGeometryRestVertices(
     const TangentVectorT& tangents,
     const UvVectorT& uv0,
     const ColorVectorT& colors,
-    Vector<SkinnedGeometryVertex>& outVertices
+    Core::Assets::AssetVector<SkinnedGeometryVertex>& outVertices
 ){
     if(
         positions.size() != normals.size()
@@ -784,8 +790,8 @@ static bool GenerateMissingSkinnedGeometryFrames(
     const Path& nwbFilePath,
     const bool normalsProvided,
     const bool tangentsProvided,
-    Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<u32>& indices){
+    Core::Assets::AssetVector<SkinnedGeometryVertex>& vertices,
+    const Core::Assets::AssetVector<u32>& indices){
     if(normalsProvided && tangentsProvided)
         return true;
 
@@ -843,7 +849,7 @@ static bool ParseSkinInfluences(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const usize vertexCount,
-    Vector<SkinInfluence4>& outSkin
+    Core::Assets::AssetVector<SkinInfluence4>& outSkin
 ){
     outSkin.clear();
 
@@ -879,8 +885,9 @@ static bool ParseSkinInfluences(
 
     outSkin.reserve(vertexCount);
     for(usize i = 0; i < vertexCount; ++i){
-        const AString jointLabel = MakeIndexedLabel("skin.joints0", i);
-        const AString weightLabel = MakeIndexedLabel("skin.weights0", i);
+        Core::Alloc::ScratchArena<> labelArena;
+        const ScratchString jointLabel = MakeIndexedLabel(labelArena, "skin.joints0", i);
+        const ScratchString weightLabel = MakeIndexedLabel(labelArena, "skin.weights0", i);
         SkinInfluence4 influence;
         if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, influence.joint))
             return false;
@@ -908,7 +915,7 @@ static bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const u32 skeletonJointCount,
-    Vector<SkinnedGeometryJointMatrix>& outMatrices){
+    Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& outMatrices){
     outMatrices.clear();
 
     const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
@@ -941,10 +948,11 @@ static bool ParseInverseBindMatrices(
 
         SkinnedGeometryJointMatrix matrix{};
         const auto& columns = matrixValue.asList();
-        const AString label = MakeIndexedLabel("inverse_bind_matrices", matrixIndex);
+        Core::Alloc::ScratchArena<> labelArena;
+        const ScratchString label = MakeIndexedLabel(labelArena, "inverse_bind_matrices", matrixIndex);
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
             alignas(16) f32 column[4] = {};
-            const AString columnLabel = MakeIndexedLabel(label, columnIndex);
+            const ScratchString columnLabel = MakeIndexedLabel(labelArena, label, columnIndex);
             if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedGeometryMetaKind, columnLabel, column)){
                 return false;
             }
@@ -978,7 +986,7 @@ static bool ParseSkinnedGeometryMeta(
     const Core::Metascript::Document& doc,
     SkinnedGeometryCookEntry& outEntry
 ){
-    outEntry = {};
+    outEntry = SkinnedGeometryCookEntry(outEntry.restVertices.get_allocator().arena());
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
@@ -1004,11 +1012,11 @@ static bool ParseSkinnedGeometryMeta(
         return false;
 
     Core::Alloc::ScratchArena<> scratchArena;
-    ScratchVector<Float3U> positions{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
-    ScratchVector<Float3U> normals{ContainerDetail::ArenaAllocator<Float3U, Core::Alloc::ScratchArena<>>(scratchArena)};
-    ScratchVector<Float4U> tangents{ContainerDetail::ArenaAllocator<Float4U, Core::Alloc::ScratchArena<>>(scratchArena)};
-    ScratchVector<Float2U> uv0{ContainerDetail::ArenaAllocator<Float2U, Core::Alloc::ScratchArena<>>(scratchArena)};
-    ScratchVector<Float4U> colors{ContainerDetail::ArenaAllocator<Float4U, Core::Alloc::ScratchArena<>>(scratchArena)};
+    ScratchVector<Float3U> positions{scratchArena};
+    ScratchVector<Float3U> normals{scratchArena};
+    ScratchVector<Float4U> tangents{scratchArena};
+    ScratchVector<Float2U> uv0{scratchArena};
+    ScratchVector<Float4U> colors{scratchArena};
     if(!ParseSkinnedGeometryIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
     if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
@@ -1073,7 +1081,7 @@ static bool ParseSkinnedGeometryMeta(
 }
 
 static bool BuildSkinnedGeometryAsset(SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
-    outGeometry = SkinnedGeometry(geometryEntry.virtualPath);
+    outGeometry = SkinnedGeometry(geometryEntry.restVertices.get_allocator().arena(), geometryEntry.virtualPath);
 
     outGeometry.setGeometryClass(geometryEntry.geometryClass);
     outGeometry.setRestVertices(Move(geometryEntry.restVertices));

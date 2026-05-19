@@ -36,13 +36,14 @@ struct MaterialCookEntry{
     using ParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
 
     Name virtualPath = NAME_NONE;
-    AString shaderVariant = Core::ShaderArchive::s_DefaultVariant;
+    ShaderCook::CookString shaderVariant;
     StageShaderMap stageShaders;
     ParameterMap parameters;
 
     explicit MaterialCookEntry(ShaderCook::CookArena& arena)
-        : stageShaders(ShaderCook::CookAllocator<Pair<const Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>>(arena))
-        , parameters(ShaderCook::CookAllocator<Pair<const CompactString, CompactString>>(arena))
+        : shaderVariant(Core::ShaderArchive::s_DefaultVariant, arena)
+        , stageShaders(0, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena)
+        , parameters(0, Hasher<CompactString>(), EqualTo<CompactString>(), arena)
     {}
 
     void reset(){

@@ -7,6 +7,7 @@
 
 #include "../global.h"
 
+#include <core/alloc/general.h>
 #include <core/assets/asset_ref.h>
 #include <core/ecs/entity_id.h>
 #include <impl/skinned_geometry/skinned_geometry_joint_types.h>
@@ -77,8 +78,14 @@ namespace SkinnedGeometrySkinningMode{
 
 
 struct SkinnedGeometryJointPaletteComponent{
-    Vector<SkinnedGeometryJointMatrix> joints;
+    using JointVector = Vector<SkinnedGeometryJointMatrix, Core::Alloc::GlobalArena>;
+
+    JointVector joints;
     u32 skinningMode = SkinnedGeometrySkinningMode::LinearBlend;
+
+    explicit SkinnedGeometryJointPaletteComponent(Core::Alloc::GlobalArena& arena)
+        : joints(arena)
+    {}
 };
 
 
@@ -88,9 +95,17 @@ struct SkinnedGeometryJointPaletteComponent{
 inline constexpr u32 s_SkinnedGeometrySkeletonRootParent = Limit<u32>::s_Max;
 
 struct SkinnedGeometrySkeletonPoseComponent{
-    Vector<u32> parentJoints;
-    Vector<SkinnedGeometryJointMatrix> localJoints;
+    using ParentJointVector = Vector<u32, Core::Alloc::GlobalArena>;
+    using JointVector = Vector<SkinnedGeometryJointMatrix, Core::Alloc::GlobalArena>;
+
+    ParentJointVector parentJoints;
+    JointVector localJoints;
     u32 skinningMode = SkinnedGeometrySkinningMode::LinearBlend;
+
+    explicit SkinnedGeometrySkeletonPoseComponent(Core::Alloc::GlobalArena& arena)
+        : parentJoints(arena)
+        , localJoints(arena)
+    {}
 };
 
 

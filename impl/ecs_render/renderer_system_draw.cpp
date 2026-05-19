@@ -31,10 +31,10 @@ void RendererSystem::renderMaterialPass(
     commandList.endRenderPass();
 
     Core::Alloc::ScratchArena<> scratchArena;
-    MaterialPassDrawItemVector meshDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
-    MaterialPassDrawItemVector computeDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
-    InstanceGpuDataVector instanceData{ContainerDetail::ArenaAllocator<InstanceGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
-    MaterialParameterGpuDataVector materialParameters{ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
+    MaterialPassDrawItemVector meshDrawItems{scratchArena};
+    MaterialPassDrawItemVector computeDrawItems{scratchArena};
+    InstanceGpuDataVector instanceData{scratchArena};
+    MaterialParameterGpuDataVector materialParameters{scratchArena};
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
@@ -87,19 +87,18 @@ void RendererSystem::gatherMaterialPassDrawItems(
     instanceData.reserve(rendererCapacity);
     materialParameters.reserve(rendererCapacity);
 
-    using MaterialParameterBlockPair = Pair<Name, ECSRenderDetail::MaterialParameterBlock>;
     using MaterialParameterBlockMap = HashMap<
         Name,
         ECSRenderDetail::MaterialParameterBlock,
         Hasher<Name>,
         EqualTo<Name>,
-        ContainerDetail::ArenaAllocator<MaterialParameterBlockPair, Core::Alloc::ScratchArena<>>
+        Core::Alloc::ScratchArena<>
     >;
     MaterialParameterBlockMap materialParameterBlocks(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),
-        ContainerDetail::ArenaAllocator<MaterialParameterBlockPair, Core::Alloc::ScratchArena<>>(materialParameters.get_allocator())
+        materialParameters.get_allocator().arena()
     );
     materialParameterBlocks.reserve(rendererCapacity);
 
@@ -251,7 +250,7 @@ bool RendererSystem::createMeshShaderResources(){
     if(m_meshBindingLayout)
         return true;
 
-    Core::BindingLayoutDesc bindingLayoutDesc;
+    Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
@@ -272,7 +271,7 @@ bool RendererSystem::createMeshShaderResources(){
 
 bool RendererSystem::createComputeEmulationResources(){
     if(!m_computeBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
@@ -329,7 +328,7 @@ bool RendererSystem::createEmulationViewResources(){
 
     Core::IDevice* device = m_graphics.getDevice();
     if(!m_emulationViewBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
 
@@ -343,7 +342,7 @@ bool RendererSystem::createEmulationViewResources(){
     if(m_emulationViewBindingSet)
         return true;
 
-    Core::BindingSetDesc bindingSetDesc;
+    Core::BindingSetDesc bindingSetDesc(m_arena);
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
 
     m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_emulationViewBindingLayout);

@@ -79,8 +79,8 @@ class EntityManager{
     friend class World;
 
 private:
-    using GenerationAllocator = ContainerDetail::ArenaAllocator<u16, Alloc::GlobalArena>;
-    using FreeIndexAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>;
+    using GenerationAllocator = Alloc::GlobalArena;
+    using FreeIndexAllocator = Alloc::GlobalArena;
 
 
 public:
@@ -100,8 +100,8 @@ private:
 
 
 private:
-    Vector<u16, GenerationAllocator> m_generations;
-    Vector<u32, FreeIndexAllocator> m_freeIndices;
+    Vector<u16, Alloc::GlobalArena> m_generations;
+    Vector<u32, Alloc::GlobalArena> m_freeIndices;
     usize m_aliveCount;
 };
 

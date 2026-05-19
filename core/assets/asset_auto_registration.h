@@ -20,7 +20,7 @@ NWB_ASSETS_BEGIN
 
 
 using AssetCodecFactory = UniquePtr<IAssetCodec>(*)();
-using AssetCookerFactory = UniquePtr<IAssetCooker>(*)(Alloc::GlobalArena& arena);
+using AssetCookerFactory = UniquePtr<IAssetCooker>(*)(AssetArena& arena);
 
 
 class AssetCodecAutoRegistrar final : public Core::Common::Initializerable{
@@ -60,7 +60,7 @@ private:
 
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry);
-void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::GlobalArena& arena);
+void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

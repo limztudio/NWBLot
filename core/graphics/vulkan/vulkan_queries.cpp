@@ -232,7 +232,7 @@ void CommandList::beginMarker(const AStringView name){
     if(!useDebugUtils && !useDebugMarker && !useAftermath)
         return;
 
-    const AString markerName(name);
+    const GraphicsString markerName(name, m_context.objectArena);
 
     if(useDebugUtils){
         auto label = VulkanDetail::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);

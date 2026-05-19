@@ -341,13 +341,29 @@ template<typename CharT>
 
     return Name(text);
 }
-template<typename CharT>
-[[nodiscard]] inline Name ToName(const BasicString<CharT>& text){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline Name ToName(const BasicString<CharT, ArenaT>& text){
     return ToName(BasicStringView<CharT>(text));
+}
+template<typename StringT>
+    requires requires(const StringT& text){
+        typename StringT::value_type;
+        text.data();
+        text.size();
+    }
+[[nodiscard]] inline Name ToName(const StringT& text){
+    using CharT = typename StringT::value_type;
+    return ToName(BasicStringView<CharT>(text.data(), text.size()));
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace NameDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 inline u64 UpdateFnv64U64(u64 hash, const u64 value){
@@ -362,7 +378,13 @@ inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
 inline constexpr u64 s_DerivePrefixHash = FNV1a64(s_DerivePrefix, FNV64_OFFSET_BASIS);
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] inline bool BeginDerivedNameHash(const Name& baseName, NameHash& outDerivedHash){
@@ -399,18 +421,18 @@ template<typename CharT>
 
     return FinishDerivedNameHash(derivedHash);
 }
-template<typename CharT>
-[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicString<CharT>& suffix){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicString<CharT, ArenaT>& suffix){
     return DeriveName(baseName, BasicStringView<CharT>(suffix));
 }
 
 
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> EncodeNameHash(const Name& name){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> EncodeNameHash(ArenaT& arena, const Name& name){
     static constexpr u32 s_NameHashLaneCount = 8;
     static constexpr usize s_NameHashHexLength = s_NameHashLaneCount * 16;
 
-    BasicString<CharT> encoded;
+    BasicString<CharT, ArenaT> encoded{arena};
     encoded.reserve(s_NameHashHexLength);
 
     const NameHash& hash = name.hash();
@@ -441,8 +463,8 @@ template<typename CharT>
     outName = Name(hash);
     return true;
 }
-template<typename CharT>
-[[nodiscard]] inline bool DecodeNameHash(const BasicString<CharT>& encodedHash, Name& outName){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline bool DecodeNameHash(const BasicString<CharT, ArenaT>& encodedHash, Name& outName){
     return DecodeNameHash(BasicStringView<CharT>(encodedHash), outName);
 }
 
@@ -472,6 +494,7 @@ struct hash<NameHash>{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

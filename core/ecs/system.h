@@ -54,7 +54,7 @@ class ISystem{
 
 
 private:
-    using AccessAllocator = ContainerDetail::ArenaAllocator<ComponentAccess, Alloc::GlobalArena>;
+    using AccessAllocator = Alloc::GlobalArena;
 
 
 public:
@@ -82,7 +82,7 @@ protected:
 private:
     void registerAccess(ComponentTypeId typeId, AccessMode::Enum mode);
 
-    Vector<ComponentAccess, AccessAllocator> m_access;
+    Vector<ComponentAccess, Alloc::GlobalArena> m_access;
 };
 
 
@@ -91,9 +91,9 @@ private:
 
 class SystemScheduler{
 private:
-    using SystemAllocator = ContainerDetail::ArenaAllocator<ISystem*, Alloc::GlobalArena>;
-    using Stage = Vector<ISystem*, SystemAllocator>;
-    using StageAllocator = ContainerDetail::ArenaAllocator<Stage, Alloc::GlobalArena>;
+    using SystemAllocator = Alloc::GlobalArena;
+    using Stage = Vector<ISystem*, Alloc::GlobalArena>;
+    using StageAllocator = Alloc::GlobalArena;
 
 
 public:
@@ -113,7 +113,7 @@ private:
     Alloc::GlobalArena& m_arena;
 
     // Each stage is a group of systems that can safely run in parallel
-    Vector<Stage, StageAllocator> m_stages;
+    Vector<Stage, Alloc::GlobalArena> m_stages;
     Stage m_allSystems;
     bool m_dirty;
 };

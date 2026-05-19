@@ -18,10 +18,11 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetManager::AssetManager(Alloc::GlobalArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource)
+AssetManager::AssetManager(AssetArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource)
     : m_registry(registry)
     , m_binarySource(binarySource)
-    , m_requests(0, Hasher<u64>(), EqualTo<u64>(), RequestMapAllocator(arena))
+    , m_arena(arena)
+    , m_requests(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {}
 
 
@@ -43,7 +44,7 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
         return false;
     }
 
-    AssetBytes binary;
+    AssetBytes binary{m_arena};
     if(!m_binarySource.readAssetBinary(virtualPath, binary)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'")
             , StringConvert(virtualPath.c_str())
@@ -99,7 +100,7 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
 
 void AssetManager::processPending(){
     Alloc::ScratchArena<> scratchArena;
-    Vector<u64, ContainerDetail::ArenaAllocator<u64, Alloc::ScratchArena<>>> pendingRequestIds{ContainerDetail::ArenaAllocator<u64, Alloc::ScratchArena<>>(scratchArena)};
+    Vector<u64, Alloc::ScratchArena<>> pendingRequestIds{scratchArena};
     {
         ScopedLock lock(m_mutex);
         pendingRequestIds.reserve(m_requests.size());

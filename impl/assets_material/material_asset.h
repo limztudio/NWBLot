@@ -58,13 +58,18 @@ public:
     static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
 
     using StageShaderArray = Array<Core::Assets::AssetRef<Shader>, s_ShaderStageCount>;
-    using ParameterVector = Vector<MaterialParameterGpuData>;
+    using ParameterVector = Core::Assets::AssetVector<MaterialParameterGpuData>;
 
 
 public:
-    Material() = default;
-    explicit Material(const Name& virtualPath)
+    explicit Material(Core::Assets::AssetArena& arena)
+        : m_shaderVariant(arena)
+        , m_parameters(arena)
+    {}
+    Material(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<Material>(virtualPath)
+        , m_shaderVariant(arena)
+        , m_parameters(arena)
     {}
 
 
@@ -78,7 +83,7 @@ public:
     bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
 
 public:
-    [[nodiscard]] const AString& shaderVariant()const{ return m_shaderVariant; }
+    [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
     [[nodiscard]] const ParameterVector& parameters()const{ return m_parameters; }
@@ -97,7 +102,7 @@ private:
 
 
 private:
-    AString m_shaderVariant;
+    Core::Assets::AssetString m_shaderVariant;
     StageShaderArray m_stageShaders;
     ParameterVector m_parameters;
     f32 m_alpha = 1.f;

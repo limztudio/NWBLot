@@ -35,32 +35,38 @@ template<typename CharT>
 
     return text.substr(begin, end - begin);
 }
-template<typename CharT>
-[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT>& text){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>& text){
     return TrimView<CharT>(BasicStringView<CharT>{text});
 }
-template<typename CharT>
-BasicStringView<CharT> TrimView(const BasicString<CharT>&&) = delete;
-
-
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> Trim(const BasicStringView<CharT> text){
-    return BasicString<CharT>(TrimView(text));
+template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text){
+    using CharT = typename StringT::value_type;
+    return TrimView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> Trim(const BasicString<CharT>& text){
-    return Trim<CharT>(BasicStringView<CharT>{text});
+template<typename CharT, typename ArenaT>
+BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>&&) = delete;
+
+
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> Trim(ArenaT& arena, const BasicStringView<CharT> text){
+    return BasicString<CharT, ArenaT>(TrimView(text), arena);
+}
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> Trim(const BasicString<CharT, ArenaT>& text){
+    return BasicString<CharT, ArenaT>(TrimView<CharT>(BasicStringView<CharT>{text}), text.get_allocator());
 }
 
 
-template<typename CharT>
-inline void TrimTrailingCarriageReturn(BasicString<CharT>& inOutLine){
+template<typename CharT, typename ArenaT>
+inline void TrimTrailingCarriageReturn(BasicString<CharT, ArenaT>& inOutLine){
     if(!inOutLine.empty() && inOutLine.back() == CharT('\r'))
         inOutLine.pop_back();
 }
 
 
-inline void StripUtf8Bom(AString& inOutText){
+template<typename StringT>
+inline void StripUtf8Bom(StringT& inOutText){
     if(inOutText.size() < 3)
         return;
 
@@ -77,12 +83,12 @@ inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream);
 inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
 
 
-template<typename CharT>
-[[nodiscard]] inline bool ReadTextLine(BasicStringStream<CharT>& stream, BasicString<CharT>& outLine){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline bool ReadTextLine(BasicStringStream<CharT, ArenaT>& stream, BasicString<CharT, ArenaT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));
 }
-template<typename CharT, typename Traits>
-[[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, BasicString<CharT>& outLine){
+template<typename CharT, typename Traits, typename ArenaT>
+[[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, BasicString<CharT, ArenaT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));
 }
 
@@ -124,20 +130,88 @@ template<usize N>
 }
 
 
-[[nodiscard]] inline i32 Stoi(const AString& str, usize* pos = nullptr, i32 base = 10){ return std::stoi(str, pos, base); }
-[[nodiscard]] inline i64 Stoll(const AString& str, usize* pos = nullptr, i32 base = 10){ return std::stoll(str, pos, base); }
-[[nodiscard]] inline u64 Stoull(const AString& str, usize* pos = nullptr, i32 base = 10){ return std::stoull(str, pos, base); }
-[[nodiscard]] inline f32 Stof(const AString& str, usize* pos = nullptr){ return std::stof(str, pos); }
-[[nodiscard]] inline f64 Stod(const AString& str, usize* pos = nullptr){ return std::stod(str, pos); }
+template<typename ArenaT>
+[[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoi(str, pos, base); }
+template<typename ArenaT>
+[[nodiscard]] inline i64 Stoll(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoll(str, pos, base); }
+template<typename ArenaT>
+[[nodiscard]] inline u64 Stoull(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = 10){ return std::stoull(str, pos, base); }
+template<typename ArenaT>
+[[nodiscard]] inline f32 Stof(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stof(str, pos); }
+template<typename ArenaT>
+[[nodiscard]] inline f64 Stod(const AString<ArenaT>& str, usize* pos = nullptr){ return std::stod(str, pos); }
+
+
+template<typename CharT = char, typename ArenaT, typename PathT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> PathToString(ArenaT& arena, const PathT& path){
+    if constexpr(SameAs<CharT, char>)
+        return BasicString<CharT, ArenaT>(path.generic_string(), arena);
+    else
+        return BasicString<CharT, ArenaT>(path.generic_wstring(), arena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace TextUtilsDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename CharT, typename PathT>
+struct PathToStringArg{
+    const PathT& path;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename CharT = char, typename PathT>
-[[nodiscard]] inline BasicString<CharT> PathToString(const PathT& path){
-    if constexpr(SameAs<CharT, char>)
-        return path.generic_string();
-    else
-        return path.generic_wstring();
+[[nodiscard]] inline TextUtilsDetail::PathToStringArg<CharT, PathT> PathToString(const PathT& path){
+    return TextUtilsDetail::PathToStringArg<CharT, PathT>{ path };
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace std{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename RequestedCharT, typename PathT, typename FormatCharT>
+struct formatter<TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>, FormatCharT>{
+    constexpr auto parse(basic_format_parse_context<FormatCharT>& ctx){
+        return ctx.begin();
+    }
+
+    template<typename FormatContext>
+    auto format(const TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>& arg, FormatContext& ctx)const{
+        auto out = ctx.out();
+        BasicStringDetail::WriteConvertedText<FormatCharT>(out, arg.path.native());
+        return out;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename CharT>
@@ -170,8 +244,8 @@ template<typename CharT>
 
     return true;
 }
-template<typename CharT>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT>& text, const BasicStringView<CharT> expected){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected){
     return EqualsAsciiIgnoreCase<CharT>(BasicStringView<CharT>{text}, expected);
 }
 template<typename CharT, usize N>
@@ -197,12 +271,12 @@ inline constexpr bool IsSafeCacheNameChar(CharT ch){
     return alphaNum || safePunctuation;
 }
 
-template<typename CharT, bool Canonical>
-[[nodiscard]] inline BasicString<CharT> BuildSafeCacheNameImpl(const BasicStringView<CharT> text){
+template<typename CharT, typename ArenaT, bool Canonical>
+[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheNameImpl(ArenaT& arena, const BasicStringView<CharT> text){
     if(text.empty())
-        return BasicString<CharT>();
+        return BasicString<CharT, ArenaT>(arena);
 
-    BasicString<CharT> output(text.data(), text.size());
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
     for(CharT& ch : output){
         if constexpr(Canonical)
             ch = Canonicalize(ch);
@@ -224,13 +298,41 @@ template<typename CharT, bool Canonical>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> BuildSafeCacheName(const BasicStringView<CharT> text){
-    return TextUtilsDetail::BuildSafeCacheNameImpl<CharT, false>(text);
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
+    return TextUtilsDetail::BuildSafeCacheNameImpl<CharT, ArenaT, false>(arena, text);
 }
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> BuildSafeCacheName(const BasicString<CharT>& text){
-    return BuildSafeCacheName<CharT>(BasicStringView<CharT>{text});
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(const BasicString<CharT, ArenaT>& text){
+    if(text.empty())
+        return BasicString<CharT, ArenaT>(text.get_allocator());
+
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
+    for(CharT& ch : output){
+        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
+            ch = CharT('_');
+    }
+    return output;
+}
+template<typename StringT>
+    requires requires(const StringT& text){
+        typename StringT::value_type;
+        text.empty();
+        text.data();
+        text.size();
+        text.get_allocator();
+    }
+[[nodiscard]] inline StringT BuildSafeCacheName(const StringT& text){
+    using CharT = typename StringT::value_type;
+    if(text.empty())
+        return StringT(text.get_allocator());
+
+    StringT output(text.data(), text.size(), text.get_allocator());
+    for(CharT& ch : output){
+        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
+            ch = CharT('_');
+    }
+    return output;
 }
 
 
@@ -250,33 +352,65 @@ inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const Sr
     dst[writeIndex] = DstCharT{};
 }
 
-template<typename CharT>
-inline void CanonicalizeTextInPlace(BasicString<CharT>& inOutText){
-    for(CharT& ch : inOutText)
+template<typename StringT>
+inline void CanonicalizeTextInPlace(StringT& inOutText){
+    for(auto& ch : inOutText)
         ch = Canonicalize(ch);
 }
 
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> CanonicalizeText(const BasicStringView<CharT> text){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> CanonicalizeText(ArenaT& arena, const BasicStringView<CharT> text){
     if(text.empty())
-        return BasicString<CharT>();
+        return BasicString<CharT, ArenaT>(arena);
 
-    BasicString<CharT> output(text.data(), text.size());
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
     CanonicalizeTextInPlace(output);
     return output;
 }
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> CanonicalizeText(const BasicString<CharT>& text){
-    return CanonicalizeText<CharT>(BasicStringView<CharT>{text});
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> CanonicalizeText(const BasicString<CharT, ArenaT>& text){
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
+    CanonicalizeTextInPlace(output);
+    return output;
 }
 
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> BuildCanonicalSafeCacheName(const BasicStringView<CharT> text){
-    return TextUtilsDetail::BuildSafeCacheNameImpl<CharT, true>(text);
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(ArenaT& arena, const BasicStringView<CharT> text){
+    return TextUtilsDetail::BuildSafeCacheNameImpl<CharT, ArenaT, true>(arena, text);
 }
-template<typename CharT>
-[[nodiscard]] inline BasicString<CharT> BuildCanonicalSafeCacheName(const BasicString<CharT>& text){
-    return BuildCanonicalSafeCacheName<CharT>(BasicStringView<CharT>{text});
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(const BasicString<CharT, ArenaT>& text){
+    if(text.empty())
+        return BasicString<CharT, ArenaT>(text.get_allocator());
+
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
+    for(CharT& ch : output){
+        ch = Canonicalize(ch);
+        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
+            ch = CharT('_');
+    }
+    return output;
+}
+template<typename StringT>
+    requires requires(const StringT& text){
+        typename StringT::value_type;
+        text.empty();
+        text.data();
+        text.size();
+        text.get_allocator();
+    }
+[[nodiscard]] inline StringT BuildCanonicalSafeCacheName(const StringT& text){
+    using CharT = typename StringT::value_type;
+    if(text.empty())
+        return StringT(text.get_allocator());
+
+    StringT output(text.data(), text.size(), text.get_allocator());
+    for(CharT& ch : output){
+        ch = Canonicalize(ch);
+        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
+            ch = CharT('_');
+    }
+    return output;
 }
 
 
@@ -288,9 +422,19 @@ template<typename CharT>
     }
     return false;
 }
-template<typename CharT>
-[[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT>& text){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text){
     return HasEmbeddedNull(BasicStringView<CharT>(text));
+}
+template<typename StringT>
+    requires requires(const StringT& text){
+        typename StringT::value_type;
+        text.data();
+        text.size();
+    }
+[[nodiscard]] inline bool HasEmbeddedNull(const StringT& text){
+    using CharT = typename StringT::value_type;
+    return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
 }
 
 

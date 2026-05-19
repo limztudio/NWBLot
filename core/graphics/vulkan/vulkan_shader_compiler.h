@@ -32,7 +32,7 @@ public:
 
 
 public:
-    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode)override;
+    virtual bool compileVariant(const ShaderCompilerRequest& request, GraphicsBytes& outBytecode)override;
 };
 
 

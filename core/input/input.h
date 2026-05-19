@@ -208,7 +208,19 @@ namespace HandlerMutationType{
 
 
 class InputDispatcher{
+private:
+    struct HandlerMutation{
+        HandlerMutationType::Enum type = HandlerMutationType::Remove;
+        IInputEventHandler* handler = nullptr;
+    };
+
+    using HandlerList = List<IInputEventHandler*, Alloc::GlobalArena>;
+    using HandlerMutationVector = Vector<HandlerMutation, Alloc::GlobalArena>;
+
+
 public:
+    InputDispatcher();
+
     void addHandlerToFront(IInputEventHandler& handler);
     void addHandlerToBack(IInputEventHandler& handler);
     void removeHandler(IInputEventHandler& handler);
@@ -223,11 +235,6 @@ public:
 
 
 private:
-    struct HandlerMutation{
-        HandlerMutationType::Enum type = HandlerMutationType::Remove;
-        IInputEventHandler* handler = nullptr;
-    };
-
     template<typename DispatchFunc>
     void dispatchToHandlers(DispatchFunc&& dispatchFunc){
         ++m_dispatchDepth;
@@ -251,8 +258,9 @@ private:
 
 
 private:
-    List<IInputEventHandler*> m_handlers;
-    Vector<HandlerMutation> m_pendingHandlerMutations;
+    Alloc::GlobalArena m_arena;
+    HandlerList m_handlers;
+    HandlerMutationVector m_pendingHandlerMutations;
     usize m_pendingHandlerRemovalCount = 0;
     u32 m_dispatchDepth = 0;
     f32 m_mousePositionScaleX = 1.f;

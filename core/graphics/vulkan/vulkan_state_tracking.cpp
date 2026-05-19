@@ -49,7 +49,7 @@ bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const Resourc
 }
 
 void AppendTextureStateBarrier(
-    Vector<VkImageMemoryBarrier2, ContainerDetail::ArenaAllocator<VkImageMemoryBarrier2, Alloc::GlobalArena>>& barriers,
+    Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& barriers,
     const VkImage image,
     const VkImageAspectFlags aspectMask,
     const ArraySlice arraySlice,
@@ -67,7 +67,7 @@ void AppendTextureStateBarrier(
 }
 
 void AppendTextureStateBarriersBefore(
-    Vector<VkImageMemoryBarrier2, ContainerDetail::ArenaAllocator<VkImageMemoryBarrier2, Alloc::GlobalArena>>& barriers,
+    Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& barriers,
     const VkImage image,
     const VkImageAspectFlags aspectMask,
     const TextureSubresourceSet& subresources,
@@ -411,12 +411,12 @@ void CommandList::setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask 
 
 
 StateTracker::StateTracker(const VulkanContext& context)
-    : m_permanentTextureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), ContainerDetail::ArenaAllocator<Pair<const ITexture*, ResourceStates::Mask>, Alloc::GlobalArena>(context.objectArena))
-    , m_permanentBufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), ContainerDetail::ArenaAllocator<Pair<const IBuffer*, ResourceStates::Mask>, Alloc::GlobalArena>(context.objectArena))
-    , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), ContainerDetail::ArenaAllocator<Pair<const TextureSubresourceStateKey, ResourceStates::Mask>, Alloc::GlobalArena>(context.objectArena))
-    , m_bufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), ContainerDetail::ArenaAllocator<Pair<const IBuffer*, ResourceStates::Mask>, Alloc::GlobalArena>(context.objectArena))
-    , m_textureUavBarriers(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), ContainerDetail::ArenaAllocator<Pair<const ITexture*, bool>, Alloc::GlobalArena>(context.objectArena))
-    , m_bufferUavBarriers(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), ContainerDetail::ArenaAllocator<Pair<const IBuffer*, bool>, Alloc::GlobalArena>(context.objectArena))
+    : m_permanentTextureStates(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), context.objectArena)
+    , m_permanentBufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), context.objectArena)
+    , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
+    , m_bufferStates(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), context.objectArena)
+    , m_textureUavBarriers(0, Hasher<ITexture*>(), EqualTo<ITexture*>(), context.objectArena)
+    , m_bufferUavBarriers(0, Hasher<IBuffer*>(), EqualTo<IBuffer*>(), context.objectArena)
     , m_context(context)
 {}
 StateTracker::~StateTracker(){}
@@ -552,8 +552,8 @@ void StateTracker::beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask sta
 }
 
 void StateTracker::appendKeepInitialStateBarriers(
-    Vector<VkImageMemoryBarrier2, ContainerDetail::ArenaAllocator<VkImageMemoryBarrier2, Alloc::GlobalArena>>& imageBarriers,
-    Vector<VkBufferMemoryBarrier2, ContainerDetail::ArenaAllocator<VkBufferMemoryBarrier2, Alloc::GlobalArena>>& bufferBarriers
+    Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
+    Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
 ){
     for(auto it = m_textureStates.begin(); it != m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;

@@ -26,6 +26,8 @@
 
 #include "project_entry.h"
 
+#include <string>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,8 +70,12 @@ struct UpdateCallbackContext{
 };
 
 struct LoaderOptions{
-    AString logAddress;
+    AString<NWB::Core::Alloc::GlobalArena> logAddress;
     bool enableGpuDebug = false;
+
+    explicit LoaderOptions(NWB::Core::Alloc::GlobalArena& arena)
+        : logAddress(arena)
+    {}
 };
 
 bool ProjectTickCallback(void* userData, f32 delta){
@@ -83,7 +89,7 @@ bool HasGraphicsVolumeSegment(const Path& mountDirectory){
     if(!IsDirectory(mountDirectory, errorCode) || errorCode)
         return false;
 
-    const Path segmentPath = mountDirectory / NWB::Core::Filesystem::MakeVolumeSegmentFileName("graphics", 0);
+    const Path segmentPath = mountDirectory / NWB::Core::Filesystem::MakeVolumeSegmentFileName("graphics", 0).c_str();
     errorCode.clear();
     return FileExists(segmentPath, errorCode) && !errorCode;
 }
@@ -137,9 +143,9 @@ private:
 
 bool LoadShaderArchiveRecords(
     const NWB::Core::Assets::IAssetBinarySource& assetBinarySource,
-    Vector<NWB::Core::ShaderArchive::Record>& outRecords
+    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
-    NWB::Core::Assets::AssetBytes indexBinary;
+    NWB::Core::Assets::AssetBytes indexBinary{outRecords.get_allocator().arena()};
     if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
         return false;
 
@@ -219,7 +225,9 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
             NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
 
-            Vector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords;
+            NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{
+                frame.projectObjectArena()
+            };
             if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
                 NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
                     , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
@@ -287,11 +295,12 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
-    __hidden_loader::LoaderOptions options;
+    NWB::Core::Alloc::GlobalArena commandLineArena("NWB::Loader::CommandLine");
+    __hidden_loader::LoaderOptions options(commandLineArena);
     {
         CLI::App app{ "loader" };
 
-        AString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
+        std::string address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
         u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
@@ -305,7 +314,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             return -1;
         }
 
-        options.logAddress = StringFormat("{}:{}", address, port);
+        options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
     }
 
     return MainLogic(options, inst);

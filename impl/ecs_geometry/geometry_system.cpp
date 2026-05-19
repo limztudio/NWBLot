@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 GeometrySystem::GeometrySystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
     : Core::ECS::ISystem(arena)
     , m_world(world)
-    , m_runtimeGeometryProviders(RuntimeGeometryProviderAllocator(arena))
+    , m_runtimeGeometryProviders(arena)
 {
     readAccess<GeometryComponent>();
 }

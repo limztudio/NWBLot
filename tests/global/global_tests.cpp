@@ -22,6 +22,9 @@ namespace __hidden_global_tests{
 
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
+using AString = NWB::Tests::TestAString;
+template<typename T>
+using Vector = NWB::Tests::TestVector<T>;
 
 
 #define NWB_GLOBAL_TEST_CHECK NWB_TEST_CHECK

@@ -70,25 +70,23 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     );
 }
 
-[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(const SkinnedGeometryRuntimeMeshInstance& instance){
-    const auto sourceText = [&instance]() -> TString{
-        return
-            instance.source.name()
-                ? StringConvert(instance.source.name().c_str())
-                : TString(NWB_TEXT("<unnamed>"))
-        ;
-    };
+[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const SkinnedGeometryRuntimeMeshInstance& instance){
+    TString<Core::Alloc::GlobalArena> sourceText{arena};
+    if(instance.source.name())
+        sourceText = StringConvert(arena, instance.source.name().c_str());
+    else
+        sourceText.assign(NWB_TEXT("<unnamed>"));
 
     if(!GeometryClassUsesSkinnedGeometryRuntime(instance.geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' has invalid geometry class")
-            , sourceText()
+            , TStringView(sourceText)
         );
         return false;
     }
     const bool hasSkin = !instance.skin.empty();
     if(!GeometryClassMatchesSkinPayload(instance.geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' class '{}' does not match skin payload")
-            , sourceText()
+            , TStringView(sourceText)
             , StringConvert(GeometryClassText(instance.geometryClass))
         );
         return false;
@@ -100,7 +98,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         SkinnedGeometryValidation::LogRuntimePayloadFailure(
             NWB_TEXT("SkinnedGeometryRuntimeMeshCache"),
             NWB_TEXT("runtime mesh"),
-            sourceText(),
+            TStringView(sourceText),
             runtimePayloadFailure
         );
         return false;
@@ -127,11 +125,12 @@ const SkinnedGeometry* SkinnedGeometryRuntimeMeshCache::SkinnedGeometrySource::g
 
 
 SkinnedGeometryRuntimeMeshCache::SkinnedGeometryRuntimeMeshCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager)
-    : m_graphics(graphics)
+    : m_arena(arena)
+    , m_graphics(graphics)
     , m_assetManager(assetManager)
-    , m_sources(0, Hasher<Name>(), EqualTo<Name>(), SourceMapAllocator(arena))
-    , m_instances(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), InstanceMapAllocator(arena))
-    , m_handleToEntity(0, Hasher<u64>(), EqualTo<u64>(), HandleMapAllocator(arena))
+    , m_sources(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_instances(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
+    , m_handleToEntity(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {}
 
 
@@ -265,7 +264,7 @@ bool SkinnedGeometryRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID enti
     if(!geometry)
         return false;
 
-    SkinnedGeometryRuntimeMeshInstance instance;
+    SkinnedGeometryRuntimeMeshInstance instance(m_arena);
     instance.entity = entity;
     instance.handle = allocateHandle();
     if(!instance.handle.valid()){
@@ -338,7 +337,7 @@ bool SkinnedGeometryRuntimeMeshCache::ensureSourceLoaded(const Core::Assets::Ass
 }
 
 bool SkinnedGeometryRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedGeometryRuntimeMeshInstance& instance){
-    if(!__hidden_skinned_geometry_runtime_mesh_cache::ValidateRuntimeMeshUploadPayload(instance))
+    if(!__hidden_skinned_geometry_runtime_mesh_cache::ValidateRuntimeMeshUploadPayload(m_arena, instance))
         return false;
 
     usize restVertexBytes = 0;

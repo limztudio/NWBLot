@@ -104,8 +104,9 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
 }
 
+template<typename JointMatrixVector>
 [[nodiscard]] inline bool ResolveSkinningJointMatrix(
-    const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices,
+    const JointMatrixVector& inverseBindMatrices,
     const u32 jointIndex,
     const SkinnedGeometryJointMatrix& poseJoint,
     SIMDMatrix& outMatrix){

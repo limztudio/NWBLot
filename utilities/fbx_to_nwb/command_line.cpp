@@ -6,6 +6,8 @@
 
 #include <CLI.hpp>
 
+#include <string>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,7 +52,7 @@ bool PromptString(const AString& label, const AString& defaultValue, AString& ou
     NWB_COUT << ": ";
 
     AString line;
-    if(!ReadTextLine(NWB_CIN, line)){
+    if(!std::getline(NWB_CIN, line)){
         outValue = defaultValue;
         return !outValue.empty();
     }
@@ -66,7 +68,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
         NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         AString line;
-        if(!ReadTextLine(NWB_CIN, line)){
+        if(!std::getline(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -95,7 +97,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
         NWB_COUT << label << " [" << defaultValue << "]: ";
 
         AString line;
-        if(!ReadTextLine(NWB_CIN, line)){
+        if(!std::getline(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -242,24 +244,32 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::App app{ "fbx_to_nwb" };
     app.set_help_flag("-h,--help", "Show help");
 
+    std::string inputPath(options.inputPath.data(), options.inputPath.size());
+    std::string outputPathText(options.outputPath.data(), options.outputPath.size());
+    std::string geometryClass(options.geometryClass.data(), options.geometryClass.size());
+    std::string meshSelector(options.meshSelector.data(), options.meshSelector.size());
+    std::string indexType(options.indexType.data(), options.indexType.size());
+    std::string defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
+
     bool local = false;
     bool ignoreColors = false;
     bool noDeduplicate = false;
 
-    CLI::Option* inputOption = app.add_option("input", options.inputPath, "Input FBX file path");
-    CLI::Option* outputOption = app.add_option("-o,--output", options.outputPath, "Output NWB geometry metadata path");
-    AString geometryClassDescription = "NWB geometry_class: ";
-    geometryClassDescription += GeometryClassOptionsText();
-    CLI::Option* geometryClassOption = app.add_option("--geometry-class", options.geometryClass, geometryClassDescription);
-    CLI::Option* meshOption = app.add_option("-m,--mesh", options.meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
-    CLI::Option* indexTypeOption = app.add_option("--index-type", options.indexType, "Index type: auto, u16, or u32");
+    CLI::Option* inputOption = app.add_option("input", inputPath, "Input FBX file path");
+    CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB geometry metadata path");
+    std::string geometryClassDescription = "NWB geometry_class: ";
+    const AString geometryClassOptions = GeometryClassOptionsText();
+    geometryClassDescription.append(geometryClassOptions.data(), geometryClassOptions.size());
+    CLI::Option* geometryClassOption = app.add_option("--geometry-class", geometryClass, geometryClassDescription);
+    CLI::Option* meshOption = app.add_option("-m,--mesh", meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
+    CLI::Option* indexTypeOption = app.add_option("--index-type", indexType, "Index type: auto, u16, or u32");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
     app.add_option(
         "--triangle-area-length-squared-epsilon",
         options.triangleAreaLengthSquaredEpsilon,
         "Minimum squared triangle cross-product length kept during import"
     );
-    CLI::Option* defaultColorOption = app.add_option("--default-color", options.defaultColorText, "Default RGBA color, for example 1,1,1,1");
+    CLI::Option* defaultColorOption = app.add_option("--default-color", defaultColorText, "Default RGBA color, for example 1,1,1,1");
     CLI::Option* preserveSpaceOption = app.add_flag("--preserve-space", options.preserveSpace, "Keep the FBX source axes and units");
     CLI::Option* includeHiddenOption = app.add_flag("--include-hidden", options.includeHidden, "Include hidden FBX mesh nodes");
     CLI::Option* localOption = app.add_flag("--local", local, "Do not bake node transforms into geometry");
@@ -276,6 +286,13 @@ int Run(int argc, char** argv, bool& prompted){
     catch(const CLI::ParseError& error){
         return app.exit(error, NWB_COUT, NWB_CERR);
     }
+
+    options.inputPath.assign(inputPath.data(), inputPath.size());
+    options.outputPath.assign(outputPathText.data(), outputPathText.size());
+    options.geometryClass.assign(geometryClass.data(), geometryClass.size());
+    options.meshSelector.assign(meshSelector.data(), meshSelector.size());
+    options.indexType.assign(indexType.data(), indexType.size());
+    options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
 
     options.bakeTransforms = !local;
     options.importColors = !ignoreColors;

@@ -22,7 +22,7 @@ namespace __hidden_renderer_system_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SourceVertexWordVector = Vector<u32, ContainerDetail::ArenaAllocator<u32, Core::Alloc::ScratchArena<>>>;
+using SourceVertexWordVector = Vector<u32, Core::Alloc::ScratchArena<>>;
 
 [[nodiscard]] static u32 FloatWord(const f32 value){
     return std::bit_cast<u32>(value);
@@ -42,9 +42,9 @@ using SourceVertexWordVector = Vector<u32, ContainerDetail::ArenaAllocator<u32, 
     if(wordCount > Limit<usize>::s_Max / sizeof(u32))
         return false;
 
-    const Vector<Float3U>& positions = geometry.positions();
-    const Vector<Half4U>& normals = geometry.normals();
-    const Vector<Half4U>& colors = geometry.colors();
+    const auto& positions = geometry.positions();
+    const auto& normals = geometry.normals();
+    const auto& colors = geometry.colors();
     outWords.reserve(wordCount);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const Float3U& position = positions[vertexIndex];
@@ -143,7 +143,7 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
 
     Core::Alloc::ScratchArena<> scratchArena;
     __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{
-        ContainerDetail::ArenaAllocator<u32, Core::Alloc::ScratchArena<>>(scratchArena)
+        scratchArena
     };
     usize sourceVertexBytes = 0u;
     if(!__hidden_renderer_system_geometry::BuildStaticGeometrySourceWords(geometry, sourceVertexWords, sourceVertexBytes)){
@@ -277,7 +277,7 @@ bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
         return false;
     }
 
-    Core::BindingSetDesc bindingSetDesc;
+    Core::BindingSetDesc bindingSetDesc(m_arena);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
@@ -338,7 +338,7 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
         }
     }
 
-    Core::BindingSetDesc bindingSetDesc;
+    Core::BindingSetDesc bindingSetDesc(m_arena);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));

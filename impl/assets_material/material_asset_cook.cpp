@@ -334,15 +334,16 @@ static bool ParseVariantField(
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
     const AStringView defaultValue,
-    AString& outVariant
+    ShaderCook::CookString& outVariant
 ){
-    outVariant = defaultValue;
+    auto& arena = outVariant.get_allocator().arena();
+    outVariant.assign(defaultValue.data(), defaultValue.size());
 
     const auto* variantValue = asset.findField(fieldName);
     if(!variantValue)
         return true;
 
-    AString rawVariant;
+    ShaderCook::CookString rawVariant{arena};
     if(variantValue->isList()){
         const auto& list = variantValue->asList();
         usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
@@ -379,7 +380,7 @@ static bool ParseVariantField(
 
     const AStringView rawVariantView = TrimView(rawVariant);
     if(rawVariantView.empty()){
-        outVariant = defaultValue;
+        outVariant.assign(defaultValue.data(), defaultValue.size());
         return true;
     }
     if(rawVariantView == Core::ShaderArchive::s_DefaultVariant){
@@ -387,7 +388,7 @@ static bool ParseVariantField(
         return true;
     }
 
-    AString canonicalVariant;
+    ShaderCook::CookString canonicalVariant{arena};
     if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
             , PathToString<tchar>(nwbFilePath)
@@ -574,7 +575,8 @@ bool ParseMaterialCookMetadata(
 }
 
 bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial){
-    outMaterial = Material(materialEntry.virtualPath);
+    Core::Assets::AssetArena& arena = materialEntry.shaderVariant.get_allocator().arena();
+    outMaterial = Material(arena, materialEntry.virtualPath);
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
 
     for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
@@ -724,8 +726,8 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, static_cast<u32>(material.parameters().size()));
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MaterialParameterGpuData, ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>> sortedParams{
-        ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>(scratchArena)
+    Vector<MaterialParameterGpuData, Core::Alloc::ScratchArena<>> sortedParams{
+        scratchArena
     };
     sortedParams.reserve(material.parameters().size());
     for(const MaterialParameterGpuData& parameter : material.parameters())

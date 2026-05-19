@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -54,8 +56,13 @@ enum Enum : u8{
 };
 };
 
+using VolumeArena = Alloc::GlobalArena;
+using VolumeString = AString<VolumeArena>;
+using VolumeBytes = Vector<u8, VolumeArena>;
+using VolumeBuildFileMap = HashMap<VolumeString, VolumeBytes, VolumeArena>;
+
 struct VolumeMountDesc{
-    AString volumeName;
+    CompactString volumeName;
     Path mountDirectory;
 
     u64 segmentSize = 0;
@@ -68,7 +75,7 @@ struct VolumeMountDesc{
 
 
 struct VolumeBuildConfig{
-    AString volumeName;
+    CompactString volumeName;
     u64 segmentSize = 0;
     u64 metadataSize = 0;
 };
@@ -81,7 +88,7 @@ struct VolumeBuildInfo{
 bool BuildVolume(
     const Path& outputDirectory,
     const VolumeBuildConfig& config,
-    const HashMap<AString, Vector<u8>>& files,
+    const VolumeBuildFileMap& files,
     VolumeBuildInfo& outBuildInfo
 );
 
@@ -98,8 +105,8 @@ public:
 
 private:
     Path m_directoryPath;
-    AString m_operationName;
-    AString m_label;
+    CompactString m_operationName;
+    CompactString m_label;
     bool m_active = true;
 };
 
@@ -119,11 +126,11 @@ private:
         u64 size = 0;
     };
 
-    using SegmentPathAllocator = ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>;
-    using SegmentPathVector = Vector<Path, SegmentPathAllocator>;
+    using SegmentPathAllocator = Alloc::GlobalArena;
+    using SegmentPathVector = Vector<Path, Alloc::GlobalArena>;
 
-    using FileMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, FileRecord>, Alloc::GlobalArena>;
-    using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, FileMapAllocator>;
+    using FileMapAllocator = Alloc::GlobalArena;
+    using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
 
 
 public:
@@ -138,7 +145,7 @@ public:
     [[nodiscard]] bool mounted()const;
     [[nodiscard]] bool writable()const;
 
-    [[nodiscard]] AString volumeName()const;
+    [[nodiscard]] AStringView volumeName()const;
     [[nodiscard]] Path mountDirectory()const;
 
     [[nodiscard]] u64 segmentSize()const;
@@ -153,26 +160,27 @@ public:
     bool writeFile(const Name& virtualPath, const void* data, usize bytes);
     bool writeFileDeferred(const Name& virtualPath, const void* data, usize bytes);
 
-    template<typename Alloc>
-    bool writeFile(const Name& virtualPath, const Vector<u8, Alloc>& data){
+    template<typename ByteContainer>
+    bool writeFile(const Name& virtualPath, const ByteContainer& data){
         return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
-    template<typename Alloc>
-    bool writeFileDeferred(const Name& virtualPath, const Vector<u8, Alloc>& data){
+    template<typename ByteContainer>
+    bool writeFileDeferred(const Name& virtualPath, const ByteContainer& data){
         return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
     bool flushMetadata();
     void reserveFileCapacity(usize fileCount);
 
-    bool readFile(const Name& virtualPath, Vector<u8>& outData)const;
+    template<typename ByteContainer>
+    bool readFile(const Name& virtualPath, ByteContainer& outData)const;
     bool removeFile(const Name& virtualPath);
 
     bool fileExists(const Name& virtualPath)const;
     bool fileSize(const Name& virtualPath, u64& outSize)const;
 
-    Vector<Name> listFiles()const;
+    Vector<Name, VolumeArena> listFiles()const;
     bool compact(bool shrinkSegments = true);
 
 
@@ -193,6 +201,7 @@ private:
     bool loadMetadataLocked();
     bool flushMetadataLocked();
     bool canFitMetadataForFileCountLocked(u64 fileCount)const;
+    bool readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const;
 
     bool readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     bool writeBytesLocked(u64 offset, const void* data, u64 byteCount);
@@ -210,7 +219,7 @@ private:
     bool m_mounted = false;
     bool m_writable = false;
 
-    AString m_volumeName;
+    CompactString m_volumeName;
     Path m_mountDirectory;
 
     u64 m_segmentSize = 0;
@@ -239,29 +248,31 @@ public:
     bool pushDataDeferred(const Name& virtualPath, const void* data, usize bytes);
     bool pushDataDeferred(AStringView virtualPath, const void* data, usize bytes);
 
-    template<typename Alloc>
-    bool pushData(const Name& virtualPath, const Vector<u8, Alloc>& data){
+    template<typename ByteContainer>
+    bool pushData(const Name& virtualPath, const ByteContainer& data){
         return pushData(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
-    template<typename Alloc>
-    bool pushData(const AStringView virtualPath, const Vector<u8, Alloc>& data){
+    template<typename ByteContainer>
+    bool pushData(const AStringView virtualPath, const ByteContainer& data){
         return pushData(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
-    template<typename Alloc>
-    bool pushDataDeferred(const Name& virtualPath, const Vector<u8, Alloc>& data){
+    template<typename ByteContainer>
+    bool pushDataDeferred(const Name& virtualPath, const ByteContainer& data){
         return pushDataDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
-    template<typename Alloc>
-    bool pushDataDeferred(const AStringView virtualPath, const Vector<u8, Alloc>& data){
+    template<typename ByteContainer>
+    bool pushDataDeferred(const AStringView virtualPath, const ByteContainer& data){
         return pushDataDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
     bool flush();
-    bool loadData(AStringView virtualPath, Vector<u8>& outData)const;
-    bool loadData(const Name& virtualPath, Vector<u8>& outData)const;
+    template<typename ByteContainer>
+    bool loadData(AStringView virtualPath, ByteContainer& outData)const;
+    template<typename ByteContainer>
+    bool loadData(const Name& virtualPath, ByteContainer& outData)const;
 
     [[nodiscard]] bool mounted()const{ return m_volumeFileSystem.mounted(); }
     [[nodiscard]] bool writable()const{ return m_volumeFileSystem.writable(); }
@@ -272,6 +283,82 @@ public:
 private:
     VolumeFileSystem m_volumeFileSystem;
 };
+
+
+template<typename ByteContainer>
+bool VolumeFileSystem::readFile(const Name& virtualPath, ByteContainer& outData)const{
+    ScopedLock lock(m_mutex);
+    outData.clear();
+
+    FileRecord record;
+    if(!readFileRecordLocked(virtualPath, record))
+        return false;
+
+    if(record.size > static_cast<u64>(Limit<usize>::s_Max)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readFile failed: file size {} exceeds runtime buffer limit {}")
+            , StringConvert(m_volumeName.view())
+            , record.size
+            , static_cast<u64>(Limit<usize>::s_Max)
+        );
+        return false;
+    }
+
+    outData.resize(static_cast<usize>(record.size));
+    if(record.size == 0)
+        return true;
+
+    if(readBytesLocked(record.offset, outData.data(), record.size))
+        return true;
+
+    NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readFile failed: payload read failed"), StringConvert(m_volumeName.view()));
+    return false;
+}
+
+template<typename ByteContainer>
+bool VolumeSession::loadData(const AStringView virtualPath, ByteContainer& outData)const{
+    outData.clear();
+
+    if(!m_volumeFileSystem.mounted()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: volume is not mounted"));
+        return false;
+    }
+    if(virtualPath.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is empty"));
+        return false;
+    }
+
+    const Name virtualPathName(virtualPath);
+    if(!virtualPathName){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is invalid"));
+        return false;
+    }
+
+    if(m_volumeFileSystem.readFile(virtualPathName, outData))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed to read '{}'"), StringConvert(virtualPath));
+    return false;
+}
+
+template<typename ByteContainer>
+bool VolumeSession::loadData(const Name& virtualPath, ByteContainer& outData)const{
+    outData.clear();
+
+    if(!m_volumeFileSystem.mounted()){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: volume is not mounted"));
+        return false;
+    }
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is empty"));
+        return false;
+    }
+
+    if(m_volumeFileSystem.readFile(virtualPath, outData))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed to read '{}'"), StringConvert(virtualPath.c_str()));
+    return false;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

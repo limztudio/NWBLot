@@ -23,6 +23,10 @@ NWB_CORE_BEGIN
 
 class Frame{
 private:
+    using FrameString = TString<Alloc::GlobalArena>;
+
+
+private:
     static constexpr u32 s_GraphicsPersistentArenaSize = 64 * 1024 * 1024;
     static constexpr u32 s_ReservedCoresForMainThread = 1;
 
@@ -77,8 +81,8 @@ public:
     [[nodiscard]] inline Alloc::JobSystem& projectJobSystem(){ return m_projectJobSystem; }
     [[nodiscard]] inline const Alloc::JobSystem& projectJobSystem()const{ return m_projectJobSystem; }
 
-    [[nodiscard]] inline BasicString<tchar>& appliedWindowTitle(){ return m_appliedWindowTitle; }
-    [[nodiscard]] inline const BasicString<tchar>& appliedWindowTitle()const{ return m_appliedWindowTitle; }
+    [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
+    [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
     [[nodiscard]] const tchar* syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
@@ -90,10 +94,10 @@ private:
 
 private:
     Common::FrameData m_data;
-    BasicString<tchar> m_appliedWindowTitle;
 
     Alloc::PersistentArena m_graphicsPersistentArena;
     Alloc::GlobalArena m_graphicsObjectArena;
+    FrameString m_appliedWindowTitle;
     GraphicsAllocator m_graphicsAllocator;
     Alloc::ThreadPool m_graphicsThreadPool;
     Alloc::JobSystem m_graphicsJobSystem;

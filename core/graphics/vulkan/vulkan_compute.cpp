@@ -57,7 +57,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         shaderStage.pSpecializationInfo = &specInfo;
     }
 
-    PipelineShaderStageVector shaderStages{ ContainerDetail::ArenaAllocator<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>(scratchArena) };
+    PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
     PipelineDescriptorHeapScratch descriptorHeapScratch{ scratchArena };
 

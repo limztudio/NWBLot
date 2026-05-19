@@ -45,6 +45,34 @@ private:
 };
 
 
+template<typename Arena>
+class ArenaBaseT : public ArenaBase{
+protected:
+    explicit ArenaBaseT(const char* allocationLog)
+        : ArenaBase(allocationLog)
+    {}
+    ~ArenaBaseT() = default;
+
+
+public:
+    template<typename T>
+    inline T* allocate(usize count){
+        if constexpr(requires{ Arena::s_MaxTypedAlignSize; })
+            static_assert(alignof(T) <= Arena::s_MaxTypedAlignSize, "Arena cannot allocate types with alignment greater than s_MaxTypedAlignSize.");
+
+        return AllocDetail::AllocateTyped<T>(static_cast<Arena&>(*this), count);
+    }
+
+    template<typename T>
+    inline void deallocate(void* p, usize count){
+        if constexpr(requires{ Arena::s_MaxTypedAlignSize; })
+            static_assert(alignof(T) <= Arena::s_MaxTypedAlignSize, "Arena cannot deallocate types with alignment greater than s_MaxTypedAlignSize.");
+
+        AllocDetail::DeallocateTyped<T>(static_cast<Arena&>(*this), p, count);
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

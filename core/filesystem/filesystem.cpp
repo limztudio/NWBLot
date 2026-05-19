@@ -78,8 +78,8 @@ StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
     if(m_active)
         CleanupStagedDirectoryBestEffort(
             m_directoryPath,
-            AStringView(m_operationName.data(), m_operationName.size()),
-            AStringView(m_label.data(), m_label.size())
+            m_operationName.view(),
+            m_label.view()
         );
 }
 
@@ -103,11 +103,14 @@ static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 
-static AString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
-    if(errorCode)
-        return errorCode.message();
+static CompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
+    CompactString detail;
+    if(errorCode && detail.assign(errorCode.message()))
+        return detail;
 
-    return AString(fallbackDetail.data(), fallbackDetail.size());
+    const bool assigned = detail.assign(fallbackDetail);
+    static_cast<void>(assigned);
+    return detail;
 }
 
 
@@ -190,16 +193,21 @@ static bool LessName(const Name& lhs, const Name& rhs){
     return ::LessNameHash(lhs.hash(), rhs.hash());
 }
 
-static AString LastErrnoMessage(){
+static CompactString LastErrnoMessage(){
     const i32 errorNumber = errno;
     if(errorNumber == 0)
-        return AString("none");
+        return CompactString("none");
 
     char errorText[256] = {};
     if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
-        return StringFormat("unknown ({})", errorNumber);
+        return CompactString("unknown");
 
-    return StringFormat("{} ({})", errorText, errorNumber);
+    CompactString output(errorText);
+    output += " (";
+    char numberText[32] = {};
+    output += FormatDecimal(errorNumber, numberText);
+    output += ")";
+    return output;
 }
 
 static void LogFailure(AStringView volumeName, AStringView operation, AStringView detail){
@@ -489,15 +497,16 @@ template<typename FileNameVector>
 static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames);
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
-    AString stageKey = PathToString(outputDirectory);
+    Core::Alloc::ScratchArena<> scratchArena;
+    AString<Core::Alloc::ScratchArena<>> stageKey = PathToString<char>(scratchArena, outputDirectory);
     stageKey += '|';
     stageKey += volumeName;
 
-    AString stageToken;
+    AString<Core::Alloc::ScratchArena<>> stageToken{scratchArena};
     stageToken.reserve(7u + 16u);
     stageToken += "volume_";
-    AppendHexU64(ComputeFnv64Text(stageKey), stageToken);
-    return BuildStagedDirectoryPaths(outputDirectory, stageToken);
+    AppendHexU64<char, Core::Alloc::ScratchArena<>>(ComputeFnv64Text(AStringView(stageKey)), stageToken);
+    return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
 }
 
 template<typename FileNameVector>
@@ -580,7 +589,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     };
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path currentPath = fromDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        const Path currentPath = fromDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
         const bool exists = FileExists(currentPath, errorCode);
         if(errorCode){
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}")
@@ -653,7 +662,7 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
     }
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path fileName = MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        const Path fileName = Path(MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str());
         const Path sourcePath = fromDirectory / fileName;
         const Path destinationPath = toDirectory / fileName;
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
@@ -675,7 +684,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
     ErrorCode errorCode;
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path segmentPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        const Path segmentPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
         errorCode.clear();
         if(!RemoveFile(segmentPath, errorCode)){
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}")
@@ -688,7 +697,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 
 static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Path, ContainerDetail::ArenaAllocator<Path, Core::Alloc::ScratchArena<>>> movedBackupFiles{ ContainerDetail::ArenaAllocator<Path, Core::Alloc::ScratchArena<>>(scratchArena) };
+    Vector<Path, Core::Alloc::ScratchArena<>> movedBackupFiles{scratchArena};
     if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
         return false;
 
@@ -739,7 +748,7 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
     }
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path hashedPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex);
+        const Path hashedPath = outputDirectory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
 
         const bool exists = FileExists(hashedPath, errorCode);
         if(errorCode){
@@ -779,10 +788,10 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const HashMap<AString, Vector<u8>>& files, VolumeBuildInfo& outBuildInfo){
+bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files, VolumeBuildInfo& outBuildInfo){
     outBuildInfo = {};
 
-    const __hidden_filesystem::StagedVolumePaths stagedVolumePaths = __hidden_filesystem::BuildStagedVolumePaths(outputDirectory, config.volumeName);
+    const __hidden_filesystem::StagedVolumePaths stagedVolumePaths = __hidden_filesystem::BuildStagedVolumePaths(outputDirectory, config.volumeName.view());
     if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_filesystem::s_VolumePublishLogPrefix, "stage directory"))
         return false;
     StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, __hidden_filesystem::s_VolumePublishLogPrefix);
@@ -812,7 +821,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
         !__hidden_filesystem::PromoteStagedVolume(
             stagedVolumePaths,
             outputDirectory,
-            config.volumeName,
+            config.volumeName.view(),
             static_cast<usize>(outBuildInfo.segmentCount)
         )
     ){
@@ -842,8 +851,8 @@ bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeN
 
 VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
     : m_arena(arena)
-    , m_segmentPaths(SegmentPathAllocator(m_arena))
-    , m_files(0, Hasher<Name>(), EqualTo<Name>(), FileMapAllocator(m_arena))
+    , m_segmentPaths(m_arena)
+    , m_files(0, Hasher<Name>(), EqualTo<Name>(), m_arena)
 {}
 
 VolumeFileSystem::~VolumeFileSystem(){
@@ -857,8 +866,8 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     ScopedLock lock(m_mutex);
     unmountLocked();
 
-    if(!__hidden_filesystem::ValidVolumeName(desc.volumeName)){
-        __hidden_filesystem::LogFailure(desc.volumeName, "mount", "invalid volume name");
+    if(!__hidden_filesystem::ValidVolumeName(desc.volumeName.view())){
+        __hidden_filesystem::LogFailure(desc.volumeName.view(), "mount", "invalid volume name");
         return false;
     }
 
@@ -1017,9 +1026,9 @@ bool VolumeFileSystem::writable()const{
     return m_mounted && m_writable;
 }
 
-AString VolumeFileSystem::volumeName()const{
+AStringView VolumeFileSystem::volumeName()const{
     ScopedLock lock(m_mutex);
-    return m_volumeName;
+    return m_volumeName.view();
 }
 
 Path VolumeFileSystem::mountDirectory()const{
@@ -1179,42 +1188,24 @@ void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
         m_files.reserve(fileCount);
 }
 
-bool VolumeFileSystem::readFile(const Name& virtualPath, Vector<u8>& outData)const{
-    ScopedLock lock(m_mutex);
-    outData.clear();
+bool VolumeFileSystem::readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const{
+    outRecord = {};
     if(!m_mounted){
-        __hidden_filesystem::LogFailure(m_volumeName, "readFile", "filesystem is not mounted");
+        __hidden_filesystem::LogFailure(m_volumeName.view(), "readFile", "filesystem is not mounted");
         return false;
     }
     if(!virtualPath){
-        __hidden_filesystem::LogFailure(m_volumeName, "readFile", "virtual path is invalid");
+        __hidden_filesystem::LogFailure(m_volumeName.view(), "readFile", "virtual path is invalid");
         return false;
     }
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        __hidden_filesystem::LogFailure(m_volumeName, "readFile", "file was not found");
+        __hidden_filesystem::LogFailure(m_volumeName.view(), "readFile", "file was not found");
         return false;
     }
 
-    const FileRecord& record = itr.value();
-    if(record.size > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readFile failed: file size {} exceeds runtime buffer limit {}")
-            , StringConvert(m_volumeName)
-            , record.size
-            , static_cast<u64>(Limit<usize>::s_Max)
-        );
-        return false;
-    }
-
-    outData.resize(static_cast<usize>(record.size));
-    if(record.size == 0)
-        return true;
-
-    if(readBytesLocked(record.offset, outData.data(), record.size))
-        return true;
-
-    __hidden_filesystem::LogFailure(m_volumeName, "readFile", "payload read failed");
-    return false;
+    outRecord = itr.value();
+    return true;
 }
 
 bool VolumeFileSystem::removeFile(const Name& virtualPath){
@@ -1273,10 +1264,10 @@ bool VolumeFileSystem::fileSize(const Name& virtualPath, u64& outSize)const{
     return true;
 }
 
-Vector<Name> VolumeFileSystem::listFiles()const{
+Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
     ScopedLock lock(m_mutex);
 
-    Vector<Name> output;
+    Vector<Name, VolumeArena> output{m_arena};
     output.reserve(m_files.size());
     for(const auto& [path, _] : m_files)
         output.push_back(path);
@@ -1301,8 +1292,8 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<FileLayout, ContainerDetail::ArenaAllocator<FileLayout, Core::Alloc::ScratchArena<>>> layouts{
-        ContainerDetail::ArenaAllocator<FileLayout, Core::Alloc::ScratchArena<>>(scratchArena)
+    Vector<FileLayout, Core::Alloc::ScratchArena<>> layouts{
+        scratchArena
     };
     layouts.reserve(m_files.size());
 
@@ -1391,7 +1382,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
     m_segmentPaths.clear();
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path hashedSegmentPath = m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName, segmentIndex);
+        const Path hashedSegmentPath = m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
 
         const bool exists = FileExists(hashedSegmentPath, errorCode);
         if(errorCode){
@@ -1600,17 +1591,17 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> indexData(
+    Vector<u8, Core::Alloc::ScratchArena<>> indexData(
         static_cast<usize>(header.indexBytes),
         0,
-        ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena)
+        scratchArena
     );
     if(header.indexBytes > 0 && !readBytesLocked(static_cast<u64>(sizeof(header)), indexData.data(), header.indexBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "failed to read metadata index");
         return false;
     }
 
-    FileMap loadedFiles(0, Hasher<Name>(), EqualTo<Name>(), FileMapAllocator(m_arena));
+    FileMap loadedFiles(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
     loadedFiles.reserve(static_cast<usize>(header.fileCount));
     u64 cursor = 0;
     for(u64 i = 0; i < header.fileCount; ++i){
@@ -1689,8 +1680,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MetadataIndexRecord, ContainerDetail::ArenaAllocator<MetadataIndexRecord, Core::Alloc::ScratchArena<>>> sortedRecords{
-        ContainerDetail::ArenaAllocator<MetadataIndexRecord, Core::Alloc::ScratchArena<>>(scratchArena)
+    Vector<MetadataIndexRecord, Core::Alloc::ScratchArena<>> sortedRecords{
+        scratchArena
     };
     sortedRecords.reserve(m_files.size());
     for(const auto& [path, record] : m_files)
@@ -1703,7 +1694,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         }
     );
 
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> indexBytes{ ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena) };
+    Vector<u8, Core::Alloc::ScratchArena<>> indexBytes{scratchArena};
     if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
@@ -1745,7 +1736,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> metadataBuffer{ ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena) };
+    Vector<u8, Core::Alloc::ScratchArena<>> metadataBuffer{scratchArena};
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
     ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
@@ -1869,10 +1860,10 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>> moveBuffer(
+    Vector<u8, Core::Alloc::ScratchArena<>> moveBuffer(
         static_cast<usize>(moveChunkBytes),
         0,
-        ContainerDetail::ArenaAllocator<u8, Core::Alloc::ScratchArena<>>(scratchArena)
+        scratchArena
     );
 
     if(destinationOffset < sourceOffset){
@@ -1971,7 +1962,7 @@ void VolumeFileSystem::unmountLocked(){
 }
 
 Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
-    return m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName, segmentIndex);
+    return m_mountDirectory / MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
 }
 
 
@@ -1984,7 +1975,7 @@ VolumeSession::VolumeSession(Alloc::GlobalArena& arena)
 
 
 bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig& config){
-    if(!__hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, config.volumeName))
+    if(!__hidden_filesystem::RemoveExistingVolumeSegments(outputDirectory, config.volumeName.view()))
         return false;
 
     VolumeMountDesc desc;
@@ -1998,14 +1989,15 @@ bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig&
     if(m_volumeFileSystem.mount(desc))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::create failed to mount volume '{}'"), StringConvert(config.volumeName));
+    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::create failed to mount volume '{}'"), StringConvert(config.volumeName.view()));
     return false;
 }
 
 
 bool VolumeSession::load(const AStringView volumeName, const Path& mountDirectory){
     VolumeMountDesc desc;
-    desc.volumeName.assign(volumeName);
+    if(!desc.volumeName.assign(volumeName))
+        return false;
     desc.mountDirectory = mountDirectory;
     desc.createIfMissing = false;
     desc.usage = VolumeUsage::RuntimeReadOnly;
@@ -2109,54 +2101,6 @@ bool VolumeSession::flush(){
     NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::flush failed to write metadata"));
     return false;
 }
-
-
-bool VolumeSession::loadData(const AStringView virtualPath, Vector<u8>& outData)const{
-    outData.clear();
-
-    if(!m_volumeFileSystem.mounted()){
-        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: volume is not mounted"));
-        return false;
-    }
-    if(virtualPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is empty"));
-        return false;
-    }
-
-    const Name virtualPathName(virtualPath);
-    if(!virtualPathName){
-        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is invalid"));
-        return false;
-    }
-
-    if(m_volumeFileSystem.readFile(virtualPathName, outData))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed to read '{}'"), StringConvert(virtualPath));
-    return false;
-}
-
-bool VolumeSession::loadData(const Name& virtualPath, Vector<u8>& outData)const{
-    outData.clear();
-
-    if(!m_volumeFileSystem.mounted()){
-        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: volume is not mounted"));
-        return false;
-    }
-    if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed: virtual path is empty"));
-        return false;
-    }
-
-    if(m_volumeFileSystem.readFile(virtualPath, outData))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("VolumeSession::loadData failed to read '{}'"), StringConvert(virtualPath.c_str()));
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_FILESYSTEM_END

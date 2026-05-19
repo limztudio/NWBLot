@@ -24,9 +24,16 @@ namespace __hidden_asset_auto_registration{
 
 
 struct AutoFactoryQueue{
+    AssetArena arena;
     Futex mutex;
-    Vector<AssetCodecFactory> codecFactories;
-    Vector<AssetCookerFactory> cookerFactories;
+    AssetVector<AssetCodecFactory> codecFactories;
+    AssetVector<AssetCookerFactory> cookerFactories;
+
+    AutoFactoryQueue()
+        : arena("NWB::Core::Assets::AutoFactoryQueue")
+        , codecFactories(arena)
+        , cookerFactories(arena)
+    {}
 };
 
 AutoFactoryQueue& QueryAutoFactoryQueue(){
@@ -34,8 +41,8 @@ AutoFactoryQueue& QueryAutoFactoryQueue(){
     return autoFactoryQueue;
 }
 
-template<typename FactoryT>
-bool ContainsFactory(const Vector<FactoryT>& factories, const FactoryT factory){
+template<typename FactoryVector, typename FactoryT>
+bool ContainsFactory(const FactoryVector& factories, const FactoryT factory){
     for(const FactoryT current : factories){
         if(current == factory)
             return true;
@@ -45,10 +52,10 @@ bool ContainsFactory(const Vector<FactoryT>& factories, const FactoryT factory){
 }
 
 template<typename FactoryT>
-using ScratchFactoryVector = Vector<FactoryT, ContainerDetail::ArenaAllocator<FactoryT, Alloc::ScratchArena<>>>;
+using ScratchFactoryVector = Vector<FactoryT, Alloc::ScratchArena<>>;
 
 template<typename FactoryT>
-void CopyQueuedFactories(const Vector<FactoryT>& queuedFactories, ScratchFactoryVector<FactoryT>& outFactories){
+void CopyQueuedFactories(const AssetVector<FactoryT>& queuedFactories, ScratchFactoryVector<FactoryT>& outFactories){
     AssignTriviallyCopyableVector(outFactories, queuedFactories);
 }
 
@@ -111,7 +118,7 @@ bool AssetCookerAutoRegistrar::initialize(){
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Alloc::ScratchArena<> scratchArena;
-    __hidden_asset_auto_registration::ScratchFactoryVector<AssetCodecFactory> codecFactories{ContainerDetail::ArenaAllocator<AssetCodecFactory, Alloc::ScratchArena<>>(scratchArena)};
+    __hidden_asset_auto_registration::ScratchFactoryVector<AssetCodecFactory> codecFactories{scratchArena};
     {
         auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
         ScopedLock lock(autoFactoryQueue.mutex);
@@ -127,9 +134,9 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     );
 }
 
-void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, Alloc::GlobalArena& arena){
+void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena){
     Alloc::ScratchArena<> scratchArena;
-    __hidden_asset_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{ContainerDetail::ArenaAllocator<AssetCookerFactory, Alloc::ScratchArena<>>(scratchArena)};
+    __hidden_asset_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{scratchArena};
     {
         auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
         ScopedLock lock(autoFactoryQueue.mutex);

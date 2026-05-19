@@ -16,8 +16,9 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetRegistry::AssetRegistry(Alloc::GlobalArena& arena)
-    : m_codecs(0, Hasher<Name>(), EqualTo<Name>(), CodecMapAllocator(arena))
+AssetRegistry::AssetRegistry(AssetArena& arena)
+    : m_arena(arena)
+    , m_codecs(0, Hasher<Name>(), EqualTo<Name>(), arena)
 {}
 
 
@@ -89,7 +90,7 @@ bool AssetRegistry::deserializeAssetByName(
         return false;
     }
 
-    return found.value()->deserialize(virtualPath, binary, outAsset);
+    return found.value()->deserialize(m_arena, virtualPath, binary, outAsset);
 }
 
 

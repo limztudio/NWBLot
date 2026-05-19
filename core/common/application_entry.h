@@ -49,19 +49,20 @@ template<typename EntryPoint, typename CharT>
 template<typename Run>
 [[nodiscard]] inline int InvokeWithUtf8Args(const isize argc, wchar** argv, Run&& run){
     const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
-    Vector<AString> utf8Args;
-    Vector<char*> utf8Argv;
+    Alloc::GlobalArena arena("NWB::Core::Common::ApplicationEntryArgs");
+    Vector<AString<Alloc::GlobalArena>, Alloc::GlobalArena> utf8Args{arena};
+    Vector<char*, Alloc::GlobalArena> utf8Argv{arena};
     utf8Args.reserve(argCount);
     utf8Argv.reserve(argCount + 1u);
 
     for(usize i = 0; i < argCount; ++i){
         if(argv == nullptr || argv[i] == nullptr){
-            utf8Args.emplace_back();
+            utf8Args.emplace_back(arena);
             utf8Argv.push_back(nullptr);
             continue;
         }
 
-        utf8Args.emplace_back(BasicStringDetail::WideToUtf8(WStringView(argv[i])));
+        utf8Args.emplace_back(BasicStringDetail::WideToUtf8(arena, WStringView(argv[i])));
         utf8Argv.push_back(utf8Args.back().data());
     }
 

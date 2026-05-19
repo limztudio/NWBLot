@@ -25,9 +25,12 @@ public:
 
 
 public:
-    Shader() = default;
-    explicit Shader(const Name& virtualPath)
+    explicit Shader(Core::Assets::AssetArena& arena)
+        : m_bytecode(arena)
+    {}
+    Shader(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<Shader>(virtualPath)
+        , m_bytecode(arena)
     {}
 
 

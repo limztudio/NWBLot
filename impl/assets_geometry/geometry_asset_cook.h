@@ -31,22 +31,36 @@ NWB_IMPL_BEGIN
 
 struct GeometryCookEntry{
     Name virtualPath = NAME_NONE;
-    Vector<Float3U> positions;
-    Vector<Half4U> normals;
-    Vector<Half4U> colors;
-    Vector<u32> indices;
+    Core::Assets::AssetVector<Float3U> positions;
+    Core::Assets::AssetVector<Half4U> normals;
+    Core::Assets::AssetVector<Half4U> colors;
+    Core::Assets::AssetVector<u32> indices;
     bool use32BitIndices = false;
+
+    explicit GeometryCookEntry(Core::Assets::AssetArena& arena)
+        : positions(arena)
+        , normals(arena)
+        , colors(arena)
+        , indices(arena)
+    {}
 };
 
 struct SkinnedGeometryCookEntry{
     Name virtualPath = NAME_NONE;
-    Vector<SkinnedGeometryVertex> restVertices;
-    Vector<u32> indices;
+    Core::Assets::AssetVector<SkinnedGeometryVertex> restVertices;
+    Core::Assets::AssetVector<u32> indices;
     u32 geometryClass = GeometryClass::Invalid;
-    Vector<SkinInfluence4> skin;
+    Core::Assets::AssetVector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0u;
-    Vector<SkinnedGeometryJointMatrix> inverseBindMatrices;
+    Core::Assets::AssetVector<SkinnedGeometryJointMatrix> inverseBindMatrices;
     bool use32BitIndices = true;
+
+    explicit SkinnedGeometryCookEntry(Core::Assets::AssetArena& arena)
+        : restVertices(arena)
+        , indices(arena)
+        , skin(arena)
+        , inverseBindMatrices(arena)
+    {}
 };
 
 

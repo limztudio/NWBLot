@@ -30,7 +30,7 @@ inline constexpr const char* g_ArgCmd[] = {
     "-p,--logport",
 };
 inline const Tuple<
-    AString
+    const char*
     , u16
 > g_ArgDefault = {
     "http://localhost",

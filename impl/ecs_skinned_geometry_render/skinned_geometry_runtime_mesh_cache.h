@@ -82,9 +82,9 @@ private:
         [[nodiscard]] const SkinnedGeometry* geometry()const;
     };
 
-    using SourceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, SkinnedGeometrySource>, Core::Alloc::GlobalArena>;
-    using InstanceMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Core::ECS::EntityID, SkinnedGeometryRuntimeMeshInstance>, Core::Alloc::GlobalArena>;
-    using HandleMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, Core::ECS::EntityID>, Core::Alloc::GlobalArena>;
+    using SourceMapAllocator = Core::Alloc::GlobalArena;
+    using InstanceMapAllocator = Core::Alloc::GlobalArena;
+    using HandleMapAllocator = Core::Alloc::GlobalArena;
 
 
 public:
@@ -126,12 +126,13 @@ private:
 
 
 private:
+    Core::Alloc::GlobalArena& m_arena;
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
 
-    HashMap<Name, SkinnedGeometrySource, Hasher<Name>, EqualTo<Name>, SourceMapAllocator> m_sources;
-    HashMap<Core::ECS::EntityID, SkinnedGeometryRuntimeMeshInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, InstanceMapAllocator> m_instances;
-    HashMap<u64, Core::ECS::EntityID, Hasher<u64>, EqualTo<u64>, HandleMapAllocator> m_handleToEntity;
+    HashMap<Name, SkinnedGeometrySource, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_sources;
+    HashMap<Core::ECS::EntityID, SkinnedGeometryRuntimeMeshInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instances;
+    HashMap<u64, Core::ECS::EntityID, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_handleToEntity;
     u64 m_nextHandleValue = 1u;
 };
 

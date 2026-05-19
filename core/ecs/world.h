@@ -37,15 +37,15 @@ private:
 
     using ComponentPoolPtr = GlobalUniquePtr<IComponentPool>;
     using SystemPtr = GlobalUniquePtr<ISystem>;
-    using EntityComponentHeadAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>;
-    using EntityComponentNodeAllocator = ContainerDetail::ArenaAllocator<EntityComponentNode, Alloc::GlobalArena>;
-    using PoolMapAllocator = ContainerDetail::ArenaAllocator<Pair<const ComponentTypeId, ComponentPoolPtr>, Alloc::GlobalArena>;
+    using EntityComponentHeadAllocator = Alloc::GlobalArena;
+    using EntityComponentNodeAllocator = Alloc::GlobalArena;
+    using PoolMapAllocator = Alloc::GlobalArena;
     using PoolMap = HashMap<
         ComponentTypeId,
         ComponentPoolPtr,
         Hasher<ComponentTypeId>,
         EqualTo<ComponentTypeId>,
-        PoolMapAllocator
+        Alloc::GlobalArena
     >;
 
     struct SystemEntry{
@@ -53,7 +53,7 @@ private:
         SystemPtr system;
     };
 
-    using SystemVectorAllocator = ContainerDetail::ArenaAllocator<SystemEntry, Alloc::GlobalArena>;
+    using SystemVectorAllocator = Alloc::GlobalArena;
 
     static constexpr u32 s_InvalidEntityComponentNode = Limit<u32>::s_Max;
 
@@ -256,11 +256,11 @@ private:
     Alloc::GlobalArena& m_arena;
 
     EntityManager m_entityManager;
-    Vector<u32, EntityComponentHeadAllocator> m_entityComponentHeads;
-    Vector<EntityComponentNode, EntityComponentNodeAllocator> m_entityComponentNodes;
+    Vector<u32, Alloc::GlobalArena> m_entityComponentHeads;
+    Vector<EntityComponentNode, Alloc::GlobalArena> m_entityComponentNodes;
     u32 m_freeEntityComponentNode;
     PoolMap m_pools;
-    Vector<SystemEntry, SystemVectorAllocator> m_systems;
+    Vector<SystemEntry, Alloc::GlobalArena> m_systems;
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;
 };

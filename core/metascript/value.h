@@ -40,10 +40,10 @@ public:
 
 
 public:
-    explicit Value(Alloc::GlobalArena& arena);
-    Value(i64 val, Alloc::GlobalArena& arena);
-    Value(f64 val, Alloc::GlobalArena& arena);
-    Value(MStringView val, Alloc::GlobalArena& arena);
+    explicit Value(MetaArena& arena);
+    Value(i64 val, MetaArena& arena);
+    Value(f64 val, MetaArena& arena);
+    Value(MStringView val, MetaArena& arena);
     ~Value();
     Value(const Value& other);
     Value(Value&& other)noexcept;
@@ -61,7 +61,7 @@ public:
 
 
 public:
-    [[nodiscard]] Alloc::GlobalArena& arena()const{ return m_arena; }
+    [[nodiscard]] MetaArena& arena()const{ return m_arena; }
     [[nodiscard]] ValueType::Enum type()const{ return m_type; }
     [[nodiscard]] bool isNull()const{ return m_type == ValueType::Null; }
     [[nodiscard]] bool isInteger()const{ return m_type == ValueType::Integer; }
@@ -91,7 +91,7 @@ public:
 
     void append(Value&& val);
 
-    [[nodiscard]] AString copyString()const;
+    [[nodiscard]] MString copyString()const;
 
     template<typename Container>
     [[nodiscard]] bool copyStringList(Container& outList)const{
@@ -107,8 +107,28 @@ public:
             requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c, const MChar* data, usize size){ c.emplace_back(data, size); }
         ;
+        constexpr bool canAppendArenaString =
+            requires(Container& c, usize n){ c.reserve(n); }
+            && requires(Container& c){ c.get_allocator().arena(); }
+            && requires(
+                Container& c,
+                const MChar* data,
+                usize size,
+                typename Container::value_type::allocator_type allocator
+            ){
+                c.emplace_back(data, size, allocator);
+            }
+        ;
         const usize listOffset = outList.size();
-        if constexpr(canAppendString){
+        if constexpr(canAppendArenaString){
+            auto& arena = outList.get_allocator().arena();
+            outList.reserve(listOffset + list.size());
+            for(const auto& elem : list){
+                const MStringView text = elem.asString();
+                outList.emplace_back(text.data(), text.size(), arena);
+            }
+        }
+        else if constexpr(canAppendString){
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
                 const MStringView text = elem.asString();
@@ -143,7 +163,7 @@ private:
 
 
 private:
-    Alloc::GlobalArena& m_arena;
+    MetaArena& m_arena;
     ValueType::Enum m_type = ValueType::Null;
 
     union{

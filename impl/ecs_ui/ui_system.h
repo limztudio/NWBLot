@@ -84,8 +84,8 @@ private:
         u32 height = 0;
     };
     using UiTextureResourcePtr = Core::GlobalUniquePtr<UiTextureResource>;
-    using UiTextureResourceVector = Vector<UiTextureResourcePtr, ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::GlobalArena>>;
-    using UiTextureUploadVector = Vector<u8, ContainerDetail::ArenaAllocator<u8, Core::Alloc::GlobalArena>>;
+    using UiTextureResourceVector = Vector<UiTextureResourcePtr, Core::Alloc::GlobalArena>;
+    using UiTextureUploadVector = Vector<u8, Core::Alloc::GlobalArena>;
 
     struct UiPushConstants{
         Float4 scaleTranslate = Float4(0.0f, 0.0f, 0.0f, 0.0f);

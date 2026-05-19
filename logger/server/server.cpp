@@ -85,7 +85,7 @@ struct ConnectionInfo{
 static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
 
 static void EnqueueServerMessage(Server& server, const tchar* message, const Type::Enum type){
-    server.enqueue(StringFormat(NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
+    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
 }
 
 [[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection){
@@ -218,9 +218,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         return MHD_YES;
     }
 
-    MessageType message;
+    MessageType message = MakeMessageType(thisPtr->arena());
     const tchar* error = nullptr;
-    if(ParseMessagePayload(info->buffer, info->size, message, error))
+    if(ParseMessagePayload(thisPtr->arena(), info->buffer, info->size, message, error))
         thisPtr->enqueue(Move(message));
     else{
         __hidden_logger_server::EnqueueServerMessage(
@@ -235,7 +235,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
 
 Server::Server()
-    : m_daemon(nullptr)
+    : UpdateBaseType("NWB::Log::Server")
+    , m_daemon(nullptr)
+    , m_processedMsgFile(BaseType::arena())
 {}
 Server::~Server(){
     if(m_daemon){
@@ -262,10 +264,10 @@ bool Server::internalInit(u16 port, BasicStringView<tchar> logFileNameBase){
     return m_daemon != nullptr;
 }
 bool Server::internalUpdate(){
-    MessageType msg;
+    MessageType msg = MakeMessageType(BaseType::arena());
     while(tryDequeue(msg)){
         const auto type = Get<1>(msg);
-        const TString formattedMessage = FormatMessageForProcessing(msg);
+        const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
 
         Frame::print(formattedMessage, type);
         m_processedMsgFile.writeLine(formattedMessage);

@@ -24,6 +24,8 @@ using TestContext = NWB::Tests::TestContext;
 using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeTriangleIndices;
 using TangentFrameRebuildVertex = NWB::Core::Geometry::TangentFrameRebuildVertex;
+template<typename T>
+using Vector = NWB::Tests::TestVector<T>;
 
 
 #define NWB_GEOMETRY_TEST_CHECK NWB_TEST_CHECK

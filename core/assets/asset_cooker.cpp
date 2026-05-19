@@ -25,12 +25,12 @@ namespace __hidden_asset_cooker{
 
 
 template<typename CookerMap>
-static AString DescribeAvailableCookers(const CookerMap& cookers){
+static AssetString DescribeAvailableCookers(AssetArena& arena, const CookerMap& cookers){
     if(cookers.empty())
-        return "(none)";
+        return AssetString("(none)", arena);
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<CompactString, ContainerDetail::ArenaAllocator<CompactString, Alloc::ScratchArena<>>> types{ContainerDetail::ArenaAllocator<CompactString, Alloc::ScratchArena<>>(scratchArena)};
+    Vector<CompactString, Alloc::ScratchArena<>> types{scratchArena};
     types.reserve(cookers.size());
     for(const auto& [_, cooker] : cookers)
         types.push_back(cooker->assetTypeText());
@@ -54,7 +54,7 @@ static AString DescribeAvailableCookers(const CookerMap& cookers){
     if(outputSize >= 2u)
         outputSize -= 2u;
 
-    AString output;
+    AssetString output{arena};
     output.reserve(outputSize);
     for(usize i = 0; i < types.size(); ++i){
         if(i > 0)
@@ -75,8 +75,9 @@ static AString DescribeAvailableCookers(const CookerMap& cookers){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetCookerRegistry::AssetCookerRegistry(Alloc::GlobalArena& arena)
-    : m_assetCookers(0, Hasher<Name>(), EqualTo<Name>(), CookerMapAllocator(arena))
+AssetCookerRegistry::AssetCookerRegistry(AssetArena& arena)
+    : m_arena(arena)
+    , m_assetCookers(0, Hasher<Name>(), EqualTo<Name>(), arena)
 {}
 
 
@@ -127,7 +128,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
         }
 
         NWB_LOGGER_ERROR(NWB_TEXT("Missing --asset-type. Available types: {}")
-            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
+            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_arena, m_assetCookers))
         );
         return false;
     }
@@ -136,7 +137,7 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
     if(found == m_assetCookers.end()){
         NWB_LOGGER_ERROR(NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}")
             , StringConvert(options.assetType.c_str())
-            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_assetCookers))
+            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_arena, m_assetCookers))
         );
         return false;
     }

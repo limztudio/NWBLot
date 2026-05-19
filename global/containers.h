@@ -90,7 +90,7 @@ namespace ContainerDetail{
 template<typename T, typename First, typename Second, typename Third>
 struct HashSetSelector{
 private:
-    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
 
     using Resource = Conditional_T<s_FirstIsResource, First, Third>;
     using Hash = Conditional_T<s_FirstIsResource, Second, First>;
@@ -113,12 +113,12 @@ public:
 template<typename T, typename V, typename First, typename Second, typename Third>
 struct HashMapSelector{
 private:
-    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
 
     using Resource = Conditional_T<s_FirstIsResource, First, Third>;
     using Hash = Conditional_T<s_FirstIsResource, Second, First>;
     using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
-    using Value = typename tsl::robin_map<T, V, Hash, Equal>::value_type;
+    using Value = Pair<T, V>;
     using Allocator = ArenaAllocatorFor_T<Value, Resource>;
 
 public:
@@ -128,7 +128,7 @@ public:
 template<typename T, typename V, typename First>
 struct HashMapSelector<T, V, First, void, void>{
 private:
-    using Value = typename tsl::robin_map<T, V, Hasher<T>, EqualTo<T>>::value_type;
+    using Value = Pair<T, V>;
     using Allocator = ArenaAllocatorFor_T<Value, First>;
 
 public:
@@ -138,7 +138,7 @@ public:
 template<typename T, typename First, typename Second, typename Third>
 struct ParallelHashSetSelector{
 private:
-    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
 
     using Resource = Conditional_T<s_FirstIsResource, First, Third>;
     using Hash = Conditional_T<s_FirstIsResource, Second, First>;
@@ -161,7 +161,7 @@ public:
 template<typename T, typename V, typename First, typename Second, typename Third>
 struct ParallelHashMapSelector{
 private:
-    static constexpr bool s_FirstIsResource = ContainerResourceLike<First>;
+    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
 
     using Resource = Conditional_T<s_FirstIsResource, First, Third>;
     using Hash = Conditional_T<s_FirstIsResource, Second, First>;

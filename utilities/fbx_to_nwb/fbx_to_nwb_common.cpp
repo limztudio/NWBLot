@@ -191,7 +191,7 @@ bool IsFiniteVertex(const GeometryVertex& vertex){
 
 Path PathFromUtf8(const AString& value){
 #if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
-    return Path(StringConvert(value));
+    return Path(StringConvert(UtilityDetail::Arena(), AStringView(value.data(), value.size())));
 #else
     return Path(value);
 #endif

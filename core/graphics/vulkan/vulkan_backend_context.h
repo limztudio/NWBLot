@@ -43,7 +43,8 @@ namespace DeviceExtensionFeature{
 
 class BackendContext final : public IGraphicsBackend{
 private:
-    using DeviceExtensionMap = HashMap<AString, DeviceExtensionFeature::Enum, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::GlobalArena>>;
+    using ExtensionStringSet = HashSet<GraphicsString, Hasher<GraphicsString>, EqualTo<GraphicsString>, GraphicsArena>;
+    using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, Hasher<GraphicsString>, EqualTo<GraphicsString>, GraphicsArena>;
 
     struct ExtEntry{
         const char* name;
@@ -51,14 +52,14 @@ private:
     };
 
     struct VulkanExtensionSet{
-        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>> instance;
-        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>> layers;
+        ExtensionStringSet instance;
+        ExtensionStringSet layers;
         DeviceExtensionMap device;
 
         explicit VulkanExtensionSet(Alloc::GlobalArena& arena)
-            : instance(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>(arena))
-            , layers(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::GlobalArena>(arena))
-            , device(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::GlobalArena>(arena))
+            : instance(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), arena)
+            , layers(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), arena)
+            , device(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), arena)
         {}
     };
 
@@ -66,7 +67,7 @@ private:
         VkImage image;
         TextureHandle rhiHandle;
     };
-    using SemaphoreVector = Vector<VkSemaphore, ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>>;
+    using SemaphoreVector = GraphicsVector<VkSemaphore>;
 
 
 private:
@@ -122,17 +123,20 @@ public:
     [[nodiscard]] virtual IDevice* getDevice()const override{ return m_rhiDevice.get(); }
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
     [[nodiscard]] virtual const tchar* getRendererString()const override{ return m_rendererString.c_str(); }
-    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters)override;
+    virtual bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)override;
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(const char* extensionName)const{
-        return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
+        const GraphicsString lookup(extensionName, m_arena);
+        return m_enabledExtensions.instance.find(lookup) != m_enabledExtensions.instance.end();
     }
     [[nodiscard]] bool isDeviceExtensionEnabled(const char* extensionName)const{
-        return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
+        const GraphicsString lookup(extensionName, m_arena);
+        return m_enabledExtensions.device.find(lookup) != m_enabledExtensions.device.end();
     }
     [[nodiscard]] bool isLayerEnabled(const char* layerName)const{
-        return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
+        const GraphicsString lookup(layerName, m_arena);
+        return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
     }
 
     virtual ITexture* getCurrentBackBuffer()override;
@@ -177,7 +181,7 @@ private:
 
     DeviceExtensionMap m_rayTracingExtensions;
 
-    TString m_rendererString;
+    GraphicsTString m_rendererString;
 
     VkInstance m_vulkanInstance = VK_NULL_HANDLE;
     VkDebugReportCallbackEXT m_debugReportCallback = VK_NULL_HANDLE;
@@ -200,7 +204,7 @@ private:
     VkSwapchainKHR m_swapChain = VK_NULL_HANDLE;
     bool m_swapChainMutableFormatSupported = false;
 
-    Vector<SwapChainImage, ContainerDetail::ArenaAllocator<SwapChainImage, Alloc::GlobalArena>> m_swapChainImages;
+    GraphicsVector<SwapChainImage> m_swapChainImages;
     u32 m_swapChainIndex = static_cast<u32>(-1);
 
     DeviceHandle m_rhiDevice;
@@ -209,8 +213,8 @@ private:
     SemaphoreVector m_presentSemaphores;
     u32 m_acquireSemaphoreIndex = 0;
 
-    ::Queue<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>> m_framesInFlight;
-    Vector<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>> m_queryPool;
+    ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
+    Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
     bool m_bufferDeviceAddressSupported = false;

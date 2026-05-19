@@ -38,9 +38,18 @@ public:
 
 
 public:
-    Geometry() = default;
-    explicit Geometry(const Name& virtualPath)
+    explicit Geometry(Core::Assets::AssetArena& arena)
+        : m_positions(arena)
+        , m_normals(arena)
+        , m_colors(arena)
+        , m_indices(arena)
+    {}
+    Geometry(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<Geometry>(virtualPath)
+        , m_positions(arena)
+        , m_normals(arena)
+        , m_colors(arena)
+        , m_indices(arena)
     {}
 
 
@@ -49,26 +58,30 @@ public:
     [[nodiscard]] bool validatePayload()const;
 
 public:
-    void setStreams(Vector<Float3U>&& positions, Vector<Half4U>&& normals, Vector<Half4U>&& colors){
+    void setStreams(
+        Core::Assets::AssetVector<Float3U>&& positions,
+        Core::Assets::AssetVector<Half4U>&& normals,
+        Core::Assets::AssetVector<Half4U>&& colors
+    ){
         m_positions = Move(positions);
         m_normals = Move(normals);
         m_colors = Move(colors);
     }
-    void setIndices(Vector<u32>&& indices){ m_indices = Move(indices); }
+    void setIndices(Core::Assets::AssetVector<u32>&& indices){ m_indices = Move(indices); }
 
-    [[nodiscard]] const Vector<Float3U>& positions()const{ return m_positions; }
-    [[nodiscard]] const Vector<Half4U>& normals()const{ return m_normals; }
-    [[nodiscard]] const Vector<Half4U>& colors()const{ return m_colors; }
-    [[nodiscard]] const Vector<u32>& indices()const{ return m_indices; }
+    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positions()const{ return m_positions; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normals()const{ return m_normals; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colors()const{ return m_colors; }
+    [[nodiscard]] const Core::Assets::AssetVector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] usize vertexCount()const{ return m_positions.size(); }
     [[nodiscard]] u32 geometryClass()const{ return GeometryClass::Static; }
 
 
 private:
-    Vector<Float3U> m_positions;
-    Vector<Half4U> m_normals;
-    Vector<Half4U> m_colors;
-    Vector<u32> m_indices;
+    Core::Assets::AssetVector<Float3U> m_positions;
+    Core::Assets::AssetVector<Half4U> m_normals;
+    Core::Assets::AssetVector<Half4U> m_colors;
+    Core::Assets::AssetVector<u32> m_indices;
 };
 
 

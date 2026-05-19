@@ -45,8 +45,10 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const TString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    using BaseType::enqueue;
+    virtual LogArena& arena()override{ return BaseType::arena(); }
+    virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
 
 
 protected:
@@ -75,7 +77,7 @@ protected:
 
 private:
     void* m_curl;
-    Vector<u8> m_pendingPayload;
+    Vector<u8, LogArena> m_pendingPayload;
     bool m_hasPendingPayload;
 
 private:
@@ -105,8 +107,10 @@ public:
 
 
 public:
-    virtual void enqueue(TString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const TString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    using BaseType::enqueue;
+    virtual LogArena& arena()override{ return BaseType::arena(); }
+    virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
 
 
 protected:

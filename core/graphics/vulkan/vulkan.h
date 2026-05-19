@@ -70,13 +70,14 @@ struct DeviceDesc{
     bool aftermathEnabled = false;
     bool logBufferLifetime = false;
 
-    AString vulkanLibraryName;
+    GraphicsString vulkanLibraryName;
     Path pipelineCacheDirectory;
 
 
     explicit DeviceDesc(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
         : allocator(allocatorRef)
         , threadPool(threadPoolRef)
+        , vulkanLibraryName(allocatorRef.getObjectArena())
     {}
 };
 

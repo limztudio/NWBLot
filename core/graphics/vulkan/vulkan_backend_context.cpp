@@ -53,10 +53,23 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ScratchCharAllocator = Alloc::ScratchArena<>;
+using ScratchString = AString<Alloc::ScratchArena<>>;
+using ScratchStringStream = AStringStream<Alloc::ScratchArena<>>;
+using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena<>>;
+using ScratchStringVector = Vector<ScratchString, Alloc::ScratchArena<>>;
+
+static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena<>& arena){
+    return ScratchStringStream(std::ios_base::out, arena);
+}
+
+static ScratchString MakeScratchString(Alloc::ScratchArena<>& arena, const AStringView text){
+    return ScratchString(text, arena);
+}
+
 template<typename Set>
-static Vector<const char*, ContainerDetail::ArenaAllocator<const char*, Alloc::ScratchArena<>>> StringSetToVector(const Set& set, Alloc::ScratchArena<>& arena){
-    ContainerDetail::ArenaAllocator<const char*, Alloc::ScratchArena<>> alloc(arena);
-    Vector<const char*, ContainerDetail::ArenaAllocator<const char*, Alloc::ScratchArena<>>> ret(alloc);
+static Vector<const char*, Alloc::ScratchArena<>> StringSetToVector(const Set& set, Alloc::ScratchArena<>& arena){
+    Vector<const char*, Alloc::ScratchArena<>> ret(arena);
     ret.reserve(set.size());
     for(const auto& s : set)
         ret.push_back(s.c_str());
@@ -64,9 +77,8 @@ static Vector<const char*, ContainerDetail::ArenaAllocator<const char*, Alloc::S
 }
 
 template<typename Map>
-static Vector<const char*, ContainerDetail::ArenaAllocator<const char*, Alloc::ScratchArena<>>> StringMapKeysToVector(const Map& map, Alloc::ScratchArena<>& arena){
-    ContainerDetail::ArenaAllocator<const char*, Alloc::ScratchArena<>> alloc(arena);
-    Vector<const char*, ContainerDetail::ArenaAllocator<const char*, Alloc::ScratchArena<>>> ret(alloc);
+static Vector<const char*, Alloc::ScratchArena<>> StringMapKeysToVector(const Map& map, Alloc::ScratchArena<>& arena){
+    Vector<const char*, Alloc::ScratchArena<>> ret(arena);
     ret.reserve(map.size());
     for(const auto& [key, val] : map){
         static_cast<void>(val);
@@ -168,8 +180,8 @@ static const char* BoolToString(bool value){
     return value ? "yes" : "no";
 }
 
-static AString VulkanVersionToString(u32 version){
-    AStringStream ss;
+static ScratchString VulkanVersionToString(Alloc::ScratchArena<>& arena, u32 version){
+    auto ss = MakeScratchStringStream(arena);
     ss << VK_API_VERSION_MAJOR(version)
        << "."
        << VK_API_VERSION_MINOR(version)
@@ -356,12 +368,13 @@ BackendContext::BackendContext(
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
-    , m_rayTracingExtensions(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<Pair<const AString, DeviceExtensionFeature::Enum>, Alloc::GlobalArena>(m_arena))
-    , m_swapChainImages(ContainerDetail::ArenaAllocator<SwapChainImage, Alloc::GlobalArena>(m_arena))
-    , m_acquireSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(m_arena))
-    , m_presentSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(m_arena))
-    , m_framesInFlight(Deque<EventQueryHandle, ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>>(ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>(m_arena)))
-    , m_queryPool(ContainerDetail::ArenaAllocator<EventQueryHandle, Alloc::GlobalArena>(m_arena))
+    , m_rayTracingExtensions(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), m_arena)
+    , m_rendererString(m_arena)
+    , m_swapChainImages(m_arena)
+    , m_acquireSemaphores(m_arena)
+    , m_presentSemaphores(m_arena)
+    , m_framesInFlight(Deque<EventQueryHandle, Alloc::GlobalArena>(m_arena))
+    , m_queryPool(m_arena)
 {
     initDefaultExtensions();
 }
@@ -481,17 +494,17 @@ void BackendContext::initDefaultExtensions(){
     m_rayTracingExtensions.clear();
 
     for(const auto* name : s_EnabledInstanceExts)
-        m_enabledExtensions.instance.insert(name);
+        m_enabledExtensions.instance.emplace(name, m_arena);
     for(const auto& e : s_EnabledDeviceExts)
-        m_enabledExtensions.device.emplace(e.name, e.feature);
+        m_enabledExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
     for(const auto* name : s_OptionalInstanceExts)
-        m_optionalExtensions.instance.insert(name);
+        m_optionalExtensions.instance.emplace(name, m_arena);
     for(const auto& e : s_OptionalDeviceExts)
-        m_optionalExtensions.device.emplace(e.name, e.feature);
+        m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
     for(const auto& e : s_RayTracingExts)
-        m_rayTracingExtensions.emplace(e.name, e.feature);
+        m_rayTracingExtensions.emplace(GraphicsString(e.name, m_arena), e.feature);
 }
 
 bool BackendContext::createVulkanInstance(){
@@ -507,23 +520,23 @@ bool BackendContext::createVulkanInstance(){
 
 #ifdef NWB_PLATFORM_WINDOWS
     if(!m_deviceParams.headlessDevice){
-        m_enabledExtensions.instance.insert(VK_KHR_SURFACE_EXTENSION_NAME);
-        m_enabledExtensions.instance.insert(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+        m_enabledExtensions.instance.emplace(VK_KHR_SURFACE_EXTENSION_NAME, m_arena);
+        m_enabledExtensions.instance.emplace(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, m_arena);
     }
 #elif defined(NWB_PLATFORM_LINUX)
     if(!m_deviceParams.headlessDevice){
-        m_enabledExtensions.instance.insert(VK_KHR_SURFACE_EXTENSION_NAME);
+        m_enabledExtensions.instance.emplace(VK_KHR_SURFACE_EXTENSION_NAME, m_arena);
 
         Common::LinuxFrame frame;
         frame.frameParam() = m_platformFrameParam;
 
         switch(frame.backend()){
         case Common::LinuxFrameBackend::Enum::X11:
-            m_enabledExtensions.instance.insert(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+            m_enabledExtensions.instance.emplace(VK_KHR_XLIB_SURFACE_EXTENSION_NAME, m_arena);
             break;
 #if defined(NWB_WITH_WAYLAND)
         case Common::LinuxFrameBackend::Enum::Wayland:
-            m_enabledExtensions.instance.insert(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+            m_enabledExtensions.instance.emplace(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME, m_arena);
             break;
 #endif
         case Common::LinuxFrameBackend::Enum::None:
@@ -554,7 +567,7 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extension count. {}"), ResultToString(res));
         return false;
     }
-    Vector<VkExtensionProperties, ContainerDetail::ArenaAllocator<VkExtensionProperties, Alloc::ScratchArena<>>> availableExtensions(extensionCount, ContainerDetail::ArenaAllocator<VkExtensionProperties, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkExtensionProperties, Alloc::ScratchArena<>> availableExtensions(extensionCount, scratchArena);
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extensions. {}"), ResultToString(res));
@@ -562,7 +575,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& ext : availableExtensions){
-        AString name = ext.extensionName;
+        GraphicsString name(ext.extensionName, m_arena);
         const bool enableOptionalExtension =
             m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end()
         ;
@@ -572,7 +585,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(!requiredExtensions.empty()){
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Cannot create a Vulkan instance because the following required extension(s) are not supported:";
         for(const auto& ext : requiredExtensions)
             ss << "\n  - " << ext;
@@ -581,7 +594,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     {
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan: Enabled instance extensions:";
         for(const auto& ext : m_enabledExtensions.instance)
             ss << "\n    " << ext;
@@ -596,7 +609,7 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layer count. {}"), ResultToString(res));
         return false;
     }
-    Vector<VkLayerProperties, ContainerDetail::ArenaAllocator<VkLayerProperties, Alloc::ScratchArena<>>> availableLayers(layerCount, ContainerDetail::ArenaAllocator<VkLayerProperties, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkLayerProperties, Alloc::ScratchArena<>> availableLayers(layerCount, scratchArena);
     res = vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layers. {}"), ResultToString(res));
@@ -604,7 +617,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& layer : availableLayers){
-        AString name = layer.layerName;
+        GraphicsString name(layer.layerName, m_arena);
         const bool enableOptionalLayer = m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end();
         requiredLayers.erase(name);
         if(enableOptionalLayer)
@@ -612,7 +625,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(!requiredLayers.empty()){
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Cannot create a Vulkan instance because the following required layer(s) are not supported:";
         for(const auto& ext : requiredLayers)
             ss << "\n  - " << ext;
@@ -621,7 +634,7 @@ bool BackendContext::createVulkanInstance(){
     }
 
     {
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan: Enabled layers:";
         for(const auto& layer : m_enabledExtensions.layers)
             ss << "\n    " << layer;
@@ -662,9 +675,9 @@ bool BackendContext::createVulkanInstance(){
     }
 
     if(m_deviceParams.enableDebugRuntime){
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan GPU debug: instance setup"
-           << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(applicationInfo.apiVersion)
+           << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(scratchArena, applicationInfo.apiVersion)
            << "\n    validation layer enabled: " << VulkanDetail::BoolToString(isLayerEnabled("VK_LAYER_KHRONOS_validation"))
            << "\n    debug report extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
            << "\n    debug utils extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
@@ -733,7 +746,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<VkQueueFamilyProperties, ContainerDetail::ArenaAllocator<VkQueueFamilyProperties, Alloc::ScratchArena<>>> props(queueFamilyCount, ContainerDetail::ArenaAllocator<VkQueueFamilyProperties, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkQueueFamilyProperties, Alloc::ScratchArena<>> props(queueFamilyCount, scratchArena);
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
     m_graphicsQueueFamily = -1;
@@ -834,7 +847,7 @@ bool BackendContext::pickPhysicalDevice(){
 
     Alloc::ScratchArena<> scratchArena(32768);
 
-    Vector<VkPhysicalDevice, ContainerDetail::ArenaAllocator<VkPhysicalDevice, Alloc::ScratchArena<>>> devices(deviceCount, ContainerDetail::ArenaAllocator<VkPhysicalDevice, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkPhysicalDevice, Alloc::ScratchArena<>> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
@@ -853,7 +866,7 @@ bool BackendContext::pickPhysicalDevice(){
         lastDevice = adapterIndex;
     }
 
-    AStringStream errorStream;
+    auto errorStream = VulkanDetail::MakeScratchStringStream(scratchArena);
     errorStream << "Cannot find a Vulkan device that supports all the required extensions and properties.";
 
     struct DeviceSelection{
@@ -897,24 +910,24 @@ bool BackendContext::pickPhysicalDevice(){
         if(!m_deviceParams.headlessDevice)
             sawWindowedGpuCandidate = true;
 
-        HashSet<AString, Hasher<AString>, EqualTo<AString>, ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>> requiredExtensions(0, Hasher<AString>(), EqualTo<AString>(), ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>(scratchArena));
+        VulkanDetail::ScratchStringSet requiredExtensions(0, Hasher<VulkanDetail::ScratchString>(), EqualTo<VulkanDetail::ScratchString>(), scratchArena);
         requiredExtensions.reserve(m_enabledExtensions.device.size());
         for(const auto& [name, _] : m_enabledExtensions.device)
-            requiredExtensions.insert(name);
+            requiredExtensions.insert(VulkanDetail::MakeScratchString(scratchArena, AStringView(name)));
         uint32_t extCount = 0;
         res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, nullptr);
         if(res != VK_SUCCESS){
             errorStream << "\n  - failed to enumerate device extension count";
             continue;
         }
-        Vector<VkExtensionProperties, ContainerDetail::ArenaAllocator<VkExtensionProperties, Alloc::ScratchArena<>>> deviceExtensions(extCount, ContainerDetail::ArenaAllocator<VkExtensionProperties, Alloc::ScratchArena<>>(scratchArena));
+        Vector<VkExtensionProperties, Alloc::ScratchArena<>> deviceExtensions(extCount, scratchArena);
         res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         if(res != VK_SUCCESS){
             errorStream << "\n  - failed to enumerate device extensions";
             continue;
         }
         for(const auto& ext : deviceExtensions)
-            requiredExtensions.erase(AString(ext.extensionName));
+            requiredExtensions.erase(VulkanDetail::MakeScratchString(scratchArena, ext.extensionName));
 
         bool deviceIsGood = true;
 
@@ -965,7 +978,7 @@ bool BackendContext::pickPhysicalDevice(){
                     errorStream << "\n  - failed to query surface format count";
                     continue;
                 }
-                Vector<VkSurfaceFormatKHR, ContainerDetail::ArenaAllocator<VkSurfaceFormatKHR, Alloc::ScratchArena<>>> surfaceFmts(fmtCount, ContainerDetail::ArenaAllocator<VkSurfaceFormatKHR, Alloc::ScratchArena<>>(scratchArena));
+                Vector<VkSurfaceFormatKHR, Alloc::ScratchArena<>> surfaceFmts(fmtCount, scratchArena);
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface formats";
@@ -1053,7 +1066,7 @@ bool BackendContext::createVulkanDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
         return false;
     }
-    Vector<VkExtensionProperties, ContainerDetail::ArenaAllocator<VkExtensionProperties, Alloc::ScratchArena<>>> deviceExtensions(extCount, ContainerDetail::ArenaAllocator<VkExtensionProperties, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkExtensionProperties, Alloc::ScratchArena<>> deviceExtensions(extCount, scratchArena);
     res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
@@ -1061,7 +1074,7 @@ bool BackendContext::createVulkanDevice(){
     }
 
     for(const auto& ext : deviceExtensions){
-        AString name = ext.extensionName;
+        GraphicsString name(ext.extensionName, m_arena);
         bool enableExtension = false;
         DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
 
@@ -1095,7 +1108,7 @@ bool BackendContext::createVulkanDevice(){
     {
         const char* deviceName = physicalDeviceProperties.deviceName;
         const usize len = NWB_STRNLEN(deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
-        m_rendererString = StringConvert(AStringView(deviceName, len));
+        m_rendererString = StringConvert(m_arena, AStringView(deviceName, len));
     }
 #else
     m_rendererString = physicalDeviceProperties.deviceName;
@@ -1150,7 +1163,7 @@ bool BackendContext::createVulkanDevice(){
     physicalDeviceFeatures2.pNext = pNext;
     vkGetPhysicalDeviceFeatures2(m_vulkanPhysicalDevice, &physicalDeviceFeatures2);
 
-    Vector<AString, ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>> unsupportedFeatureExtensions{ ContainerDetail::ArenaAllocator<AString, Alloc::ScratchArena<>>(scratchArena) };
+    GraphicsVector<GraphicsString> unsupportedFeatureExtensions{ m_arena };
     unsupportedFeatureExtensions.reserve(m_enabledExtensions.device.size());
     for(const auto& [name, feature] : m_enabledExtensions.device){
         if(feature == DeviceExtensionFeature::None)
@@ -1166,7 +1179,7 @@ bool BackendContext::createVulkanDevice(){
     }
 
     {
-        const AString samplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
+        const GraphicsString samplerFilterMinmaxExtensionName(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME, m_arena);
         const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(samplerFilterMinmaxExtensionName);
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
             NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(samplerFilterMinmaxExtensionName));
@@ -1175,7 +1188,7 @@ bool BackendContext::createVulkanDevice(){
     }
 
     {
-        const AString meshShaderExtensionName = VK_EXT_MESH_SHADER_EXTENSION_NAME;
+        const GraphicsString meshShaderExtensionName(VK_EXT_MESH_SHADER_EXTENSION_NAME, m_arena);
         const auto meshShaderIt = m_enabledExtensions.device.find(meshShaderExtensionName);
         if(
             meshShaderIt != m_enabledExtensions.device.end()
@@ -1194,7 +1207,7 @@ bool BackendContext::createVulkanDevice(){
     const bool dynamicRenderingEnabled = apiSupportsVulkan13 || isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
 
     {
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan: Enabled device extensions:";
         for(const auto& [name, _] : m_enabledExtensions.device)
             ss << "\n    " << name;
@@ -1256,7 +1269,7 @@ bool BackendContext::createVulkanDevice(){
         && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
     ;
 
-    HashSet<i32, Hasher<i32>, EqualTo<i32>, ContainerDetail::ArenaAllocator<i32, Alloc::ScratchArena<>>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), ContainerDetail::ArenaAllocator<i32, Alloc::ScratchArena<>>(scratchArena));
+    HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena<>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
     uniqueQueueFamilies.reserve(4u);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
@@ -1268,7 +1281,7 @@ bool BackendContext::createVulkanDevice(){
         uniqueQueueFamilies.insert(m_transferQueueFamily);
 
     f32 priority = 1.f;
-    Vector<VkDeviceQueueCreateInfo, ContainerDetail::ArenaAllocator<VkDeviceQueueCreateInfo, Alloc::ScratchArena<>>> queueDesc(uniqueQueueFamilies.size(), ContainerDetail::ArenaAllocator<VkDeviceQueueCreateInfo, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkDeviceQueueCreateInfo, Alloc::ScratchArena<>> queueDesc(uniqueQueueFamilies.size(), scratchArena);
     usize queueIndex = 0u;
     for(i32 queueFamily : uniqueQueueFamilies){
         VkDeviceQueueCreateInfo queueInfo = {};
@@ -1374,12 +1387,12 @@ bool BackendContext::createVulkanDevice(){
     if(m_deviceParams.enableDebugRuntime){
         const u64 deviceLocalMemoryMiB = VulkanDetail::BytesToMiB(VulkanDetail::GetDeviceLocalMemoryBytes(m_vulkanPhysicalDevice));
 
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan GPU debug: selected device"
            << "\n    name: " << physicalDeviceProperties.deviceName
            << "\n    type: " << VulkanDetail::PhysicalDeviceTypeToString(physicalDeviceProperties.deviceType)
            << "\n    vendor/device id: 0x" << StreamHex << physicalDeviceProperties.vendorID << "/0x" << physicalDeviceProperties.deviceID << StreamDec
-           << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(physicalDeviceProperties.apiVersion)
+           << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(scratchArena, physicalDeviceProperties.apiVersion)
            << "\n    driver version: " << physicalDeviceProperties.driverVersion
            << "\n    device-local memory: " << deviceLocalMemoryMiB << " MiB"
            << "\n    queue families: graphics=" << m_graphicsQueueFamily
@@ -1553,7 +1566,7 @@ bool BackendContext::createVulkanSwapChain(){
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<VkPresentModeKHR, ContainerDetail::ArenaAllocator<VkPresentModeKHR, Alloc::ScratchArena<>>> presentModes(presentModeCount, ContainerDetail::ArenaAllocator<VkPresentModeKHR, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkPresentModeKHR, Alloc::ScratchArena<>> presentModes(presentModeCount, scratchArena);
     res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, presentModes.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present modes. {}"), ResultToString(res));
@@ -1681,7 +1694,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    Vector<VkImage, ContainerDetail::ArenaAllocator<VkImage, Alloc::ScratchArena<>>> images(imageCount, ContainerDetail::ArenaAllocator<VkImage, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkImage, Alloc::ScratchArena<>> images(imageCount, scratchArena);
     res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
@@ -1720,7 +1733,7 @@ bool BackendContext::createVulkanSwapChain(){
     m_swapChainIndex = 0;
 
     if(m_deviceParams.enableDebugRuntime){
-        AStringStream ss;
+        auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
         ss << "Vulkan GPU debug: swap chain"
            << "\n    extent: " << extent.width << "x" << extent.height
            << "\n    format: " << VulkanDetail::SwapChainFormatToString(m_swapChainFormat.format)
@@ -1749,8 +1762,8 @@ bool BackendContext::createInstance(){
     initDefaultExtensions();
 
     if(m_deviceParams.enableDebugRuntime){
-        m_enabledExtensions.instance.insert(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-        m_enabledExtensions.layers.insert("VK_LAYER_KHRONOS_validation");
+        m_enabledExtensions.instance.emplace(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, m_arena);
+        m_enabledExtensions.layers.emplace("VK_LAYER_KHRONOS_validation", m_arena);
     }
 
     return createVulkanInstance();
@@ -1766,7 +1779,7 @@ bool BackendContext::createDevice(){
         m_maxFramesInFlight = 1;
     }
 
-    auto resolveDeviceExtensionFeature = [this](const AString& name)->DeviceExtensionFeature::Enum{
+    auto resolveDeviceExtensionFeature = [this](const GraphicsString& name)->DeviceExtensionFeature::Enum{
         const auto optionalIt = m_optionalExtensions.device.find(name);
         if(optionalIt != m_optionalExtensions.device.end() && optionalIt.value() != DeviceExtensionFeature::None)
             return optionalIt.value();
@@ -1778,7 +1791,7 @@ bool BackendContext::createDevice(){
         return DeviceExtensionFeature::None;
     };
 
-    auto registerDeviceExtension = [](DeviceExtensionMap& extensions, const AString& name, const DeviceExtensionFeature::Enum feature){
+    auto registerDeviceExtension = [](DeviceExtensionMap& extensions, const GraphicsString& name, const DeviceExtensionFeature::Enum feature){
         auto [it, inserted] = extensions.emplace(name, feature);
         if(!inserted && it.value() == DeviceExtensionFeature::None && feature != DeviceExtensionFeature::None)
             it.value() = feature;
@@ -1789,11 +1802,11 @@ bool BackendContext::createDevice(){
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
     if(m_deviceParams.enableAftermath)
-        m_optionalExtensions.device.emplace(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, DeviceExtensionFeature::None);
+        m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice)
-        m_enabledExtensions.device.emplace(VK_KHR_SWAPCHAIN_EXTENSION_NAME, DeviceExtensionFeature::None);
+        m_enabledExtensions.device.emplace(GraphicsString(VK_KHR_SWAPCHAIN_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
     if(!m_deviceParams.headlessDevice){
         if(!createWindowSurface())
             return false;
@@ -2057,7 +2070,7 @@ bool BackendContext::present(){
 // Adapter enumeration
 
 
-bool BackendContext::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
+bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
     VkResult res = VK_SUCCESS;
 
     if(!m_vulkanInstance){
@@ -2079,7 +2092,7 @@ bool BackendContext::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 
     Alloc::ScratchArena<> scratchArena;
 
-    Vector<VkPhysicalDevice, ContainerDetail::ArenaAllocator<VkPhysicalDevice, Alloc::ScratchArena<>>> devices(deviceCount, ContainerDetail::ArenaAllocator<VkPhysicalDevice, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkPhysicalDevice, Alloc::ScratchArena<>> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
@@ -2087,7 +2100,9 @@ bool BackendContext::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
     }
 
     outAdapters.clear();
-    outAdapters.resize(deviceCount);
+    outAdapters.reserve(deviceCount);
+    for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)
+        outAdapters.emplace_back(m_arena);
 
     auto fillAdapterInfo = [&](usize i){
         auto* physicalDevice = devices[i];
@@ -2100,7 +2115,7 @@ bool BackendContext::enumerateAdapters(Vector<AdapterInfo>& outAdapters){
 
         const auto& properties = properties2.properties;
 
-        AdapterInfo adapterInfo;
+        AdapterInfo adapterInfo(m_arena);
         adapterInfo.name = properties.deviceName;
         adapterInfo.vendorID = properties.vendorID;
         adapterInfo.deviceID = properties.deviceID;

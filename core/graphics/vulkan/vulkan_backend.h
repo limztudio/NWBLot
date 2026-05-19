@@ -27,9 +27,9 @@ class Buffer;
 class Heap;
 class Texture;
 class StagingTexture;
-using PipelineRenderingFormatVector = Vector<VkFormat, ContainerDetail::ArenaAllocator<VkFormat, Alloc::ScratchArena<>>>;
-using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, ContainerDetail::ArenaAllocator<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena<>>>;
-using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, ContainerDetail::ArenaAllocator<VkSparseImageMemoryRequirements, Alloc::ScratchArena<>>>;
+using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchArena<>>;
+using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena<>>;
+using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, Alloc::ScratchArena<>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +95,7 @@ struct StagingTextureMipLayout{
     u32 bufferRowLength = 0;
     u32 bufferImageHeight = 0;
 };
-using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, ContainerDetail::ArenaAllocator<StagingTextureMipLayout, Alloc::GlobalArena>>;
+using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::GlobalArena>;
 
 struct GraphicsPipelineFixedState{
     VkPipelineViewportStateCreateInfo viewportState = {};
@@ -108,8 +108,8 @@ struct GraphicsPipelineFixedState{
     PipelineRenderingFormatVector colorFormats;
 
     explicit GraphicsPipelineFixedState(Alloc::ScratchArena<>& scratchArena)
-        : blendAttachments(ContainerDetail::ArenaAllocator<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena<>>(scratchArena))
-        , colorFormats(ContainerDetail::ArenaAllocator<VkFormat, Alloc::ScratchArena<>>(scratchArena))
+        : blendAttachments(scratchArena)
+        , colorFormats(scratchArena)
     {}
 };
 
@@ -521,9 +521,9 @@ private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, ContainerDetail::ArenaAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::GlobalArena>> m_referencedResources;
-    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, ContainerDetail::ArenaAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::GlobalArena>> m_referencedStagingBuffers;
-    Vector<VkAccelerationStructureKHR, ContainerDetail::ArenaAllocator<VkAccelerationStructureKHR, Alloc::GlobalArena>> m_referencedAccelStructHandles;
+    Vector<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::GlobalArena> m_referencedResources;
+    Vector<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::GlobalArena> m_referencedStagingBuffers;
+    Vector<VkAccelerationStructureKHR, Alloc::GlobalArena> m_referencedAccelStructHandles;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -577,17 +577,17 @@ private:
     u32 m_queueFamilyIndex;
 
     Futex m_mutex;
-    Vector<VkSemaphore, ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>> m_waitSemaphores;
-    Vector<u64, ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>> m_waitSemaphoreValues;
-    Vector<VkSemaphore, ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>> m_signalSemaphores;
-    Vector<u64, ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>> m_signalSemaphoreValues;
+    Vector<VkSemaphore, Alloc::GlobalArena> m_waitSemaphores;
+    Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
+    Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
+    Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
 
     u64 m_lastRecordingID = 0;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
 
-    List<TrackedCommandBufferPtr, ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::GlobalArena>> m_commandBuffersInFlight;
-    List<TrackedCommandBufferPtr, ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::GlobalArena>> m_commandBuffersPool;
+    List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersInFlight;
+    List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersPool;
 };
 
 
@@ -694,7 +694,7 @@ private:
         {}
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
-    using BufferChunkList = List<BufferChunkPtr, ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::GlobalArena>>;
+    using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
     using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, const void* context);
 
 
@@ -792,8 +792,8 @@ private:
     bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
 
-    Vector<u64, ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>> m_versionTracking;
-    Vector<BufferViewEntry, ContainerDetail::ArenaAllocator<BufferViewEntry, Alloc::GlobalArena>> m_bufferViews;
+    Vector<u64, Alloc::GlobalArena> m_versionTracking;
+    Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
     Futex m_bufferViewsMutex;
     VolatileBufferState m_volatileState;
 
@@ -879,7 +879,7 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     VkImageCreateInfo m_imageInfo{};
 
-    HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, ContainerDetail::ArenaAllocator<Pair<const TextureViewKey, VkImageView>, Alloc::GlobalArena>> m_views;
+    HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::GlobalArena> m_views;
 
     bool m_managed = true; // if true, owns the VkImage or VMA allocation
     bool m_keepInitialStateKnown = false;
@@ -984,11 +984,11 @@ private:
     ShaderDesc m_desc;
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>> m_bytecode;
-    AString m_entryPointName;
+    Vector<u8, Alloc::GlobalArena> m_bytecode;
+    GraphicsString m_entryPointName;
 
-    Vector<VkSpecializationMapEntry, ContainerDetail::ArenaAllocator<VkSpecializationMapEntry, Alloc::GlobalArena>> m_specializationEntries;
-    Vector<u32, ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>> m_specializationData;
+    Vector<VkSpecializationMapEntry, Alloc::GlobalArena> m_specializationEntries;
+    Vector<u32, Alloc::GlobalArena> m_specializationData;
 
     const VulkanContext& m_context;
 };
@@ -999,7 +999,15 @@ private:
 
 
 struct ShaderLibraryKey{
-    AString entryName;
+    explicit ShaderLibraryKey(GraphicsArena& arena)
+        : entryName(arena)
+    {}
+    ShaderLibraryKey(GraphicsArena& arena, const AStringView inEntryName, const ShaderType::Mask inShaderType)
+        : entryName(inEntryName, arena)
+        , shaderType(inShaderType)
+    {}
+
+    GraphicsString entryName;
     ShaderType::Mask shaderType = ShaderType::None;
 };
 
@@ -1012,7 +1020,7 @@ inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)
 
 struct ShaderLibraryKeyHasher{
     usize operator()(const ShaderLibraryKey& value)const noexcept{
-        usize seed = Hasher<AString>{}(value.entryName);
+        usize seed = Hasher<GraphicsString>{}(value.entryName);
         CoreDetail::HashCombine(seed, static_cast<u32>(value.shaderType));
         return seed;
     }
@@ -1034,8 +1042,8 @@ public:
 
 
 private:
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>> m_bytecode;
-    HashMap<ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, ContainerDetail::ArenaAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>, Alloc::GlobalArena>> m_shaders;
+    Vector<u8, Alloc::GlobalArena> m_bytecode;
+    HashMap<ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, GraphicsArena> m_shaders;
 
     const VulkanContext& m_context;
 };
@@ -1066,9 +1074,9 @@ public:
 
 
 private:
-    Vector<VertexAttributeDesc, ContainerDetail::ArenaAllocator<VertexAttributeDesc, Alloc::GlobalArena>> m_attributes;
-    Vector<VkVertexInputBindingDescription, ContainerDetail::ArenaAllocator<VkVertexInputBindingDescription, Alloc::GlobalArena>> m_bindings;
-    Vector<VkVertexInputAttributeDescription, ContainerDetail::ArenaAllocator<VkVertexInputAttributeDescription, Alloc::GlobalArena>> m_vkAttributes;
+    Vector<VertexAttributeDesc, Alloc::GlobalArena> m_attributes;
+    Vector<VkVertexInputBindingDescription, Alloc::GlobalArena> m_bindings;
+    Vector<VkVertexInputAttributeDescription, Alloc::GlobalArena> m_vkAttributes;
 
     const VulkanContext& m_context;
 };
@@ -1100,7 +1108,7 @@ private:
     VkFramebuffer m_framebuffer = VK_NULL_HANDLE;
     VkRenderPass m_renderPass = VK_NULL_HANDLE;
 
-    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, ContainerDetail::ArenaAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::GlobalArena>> m_resources;
+    Vector<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::GlobalArena> m_resources;
 
     const VulkanContext& m_context;
 };
@@ -1141,18 +1149,18 @@ struct DescriptorHeapPushRange{
     u32 pushOffsetBytes = 0;
     u32 pushWordCount = 0;
 };
-using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, ContainerDetail::ArenaAllocator<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>>;
-using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, ContainerDetail::ArenaAllocator<VkSpecializationInfo, Alloc::ScratchArena<>>>;
+using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>;
+using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena<>>;
 
 struct PipelineDescriptorHeapScratch{
-    Vector<VkDescriptorSetAndBindingMappingEXT, ContainerDetail::ArenaAllocator<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>>> mappings;
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, ContainerDetail::ArenaAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>>> stageMappings;
+    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>> mappings;
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>> stageMappings;
     VkPipelineCreateFlags2CreateInfo flags2{};
 
 
     explicit PipelineDescriptorHeapScratch(Alloc::ScratchArena<>& scratchArena)
-        : mappings(ContainerDetail::ArenaAllocator<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>>(scratchArena))
-        , stageMappings(ContainerDetail::ArenaAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>>(scratchArena))
+        : mappings(scratchArena)
+        , stageMappings(scratchArena)
     {}
 
     const void* pNext(const void* next = nullptr){
@@ -1206,11 +1214,11 @@ private:
         u32 writableOffsetBytes = 0;
         VkBindHeapInfoEXT bindInfo{};
         Futex mutex;
-        Vector<FreeRange, ContainerDetail::ArenaAllocator<FreeRange, Alloc::GlobalArena>> freeRanges;
+        Vector<FreeRange, Alloc::GlobalArena> freeRanges;
 
 
         explicit HeapStorage(Alloc::GlobalArena& arena)
-            : freeRanges(ContainerDetail::ArenaAllocator<FreeRange, Alloc::GlobalArena>(arena))
+            : freeRanges(arena)
         {}
     };
 
@@ -1223,8 +1231,8 @@ public:
         FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
         u32& outPushDataSize,
         VkPipelineCreateFlags2CreateInfo& outFlags2,
-        Vector<VkDescriptorSetAndBindingMappingEXT, ContainerDetail::ArenaAllocator<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>>>& outMappings,
-        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, ContainerDetail::ArenaAllocator<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>>>& outStageMappings
+        Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>>& outMappings,
+        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>>& outStageMappings
     );
     static bool tryEnablePipeline(
         const VulkanContext& context,
@@ -1381,7 +1389,7 @@ private:
     RayTracingPipelineDesc m_desc;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>> m_shaderGroupHandles;
+    Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
 
     const VulkanContext& m_context;
     Device& m_device;
@@ -1474,7 +1482,7 @@ public:
     [[nodiscard]] const BindingLayoutDesc& getBindingLayoutDesc()const{ return m_desc; }
     [[nodiscard]] bool isBindlessLayout()const{ return m_isBindless; }
     [[nodiscard]] bool isDescriptorHeapCompatible()const{ return m_descriptorHeapCompatible; }
-    [[nodiscard]] const Vector<DescriptorHeapBindingMeta, ContainerDetail::ArenaAllocator<DescriptorHeapBindingMeta, Alloc::GlobalArena>>& getDescriptorHeapBindings()const{ return m_descriptorHeapBindings; }
+    [[nodiscard]] const Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena>& getDescriptorHeapBindings()const{ return m_descriptorHeapBindings; }
 
 
 private:
@@ -1482,11 +1490,11 @@ private:
     BindlessLayoutDesc m_bindlessDesc;
     bool m_isBindless = false;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    Vector<VkDescriptorSetLayout, ContainerDetail::ArenaAllocator<VkDescriptorSetLayout, Alloc::GlobalArena>> m_descriptorSetLayouts;
+    Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
     bool m_descriptorHeapCompatible = false;
     u32 m_pushConstantByteSize = 0;
-    Vector<DescriptorHeapBindingMeta, ContainerDetail::ArenaAllocator<DescriptorHeapBindingMeta, Alloc::GlobalArena>> m_descriptorHeapBindings;
-    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, ContainerDetail::ArenaAllocator<Pair<const u32, usize>, Alloc::GlobalArena>> m_descriptorHeapBindingLookup;
+    Vector<DescriptorHeapBindingMeta, Alloc::GlobalArena> m_descriptorHeapBindings;
+    HashMap<u32, usize, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorHeapBindingLookup;
 
     const VulkanContext& m_context;
 };
@@ -1516,8 +1524,8 @@ public:
 
 private:
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
-    Vector<VkDescriptorSet, ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::GlobalArena>> m_descriptorSets;
-    Vector<BindingSetItem, ContainerDetail::ArenaAllocator<BindingSetItem, Alloc::GlobalArena>> m_writtenItems;
+    Vector<VkDescriptorSet, Alloc::GlobalArena> m_descriptorSets;
+    Vector<BindingSetItem, Alloc::GlobalArena> m_writtenItems;
     VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
     u32 m_capacity = 0;
 
@@ -1548,9 +1556,9 @@ private:
     BindingSetDesc m_desc;
     RefCountPtr<BindingLayout, ArenaRefDeleter<BindingLayout>> m_layout;
     RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>> m_descriptorTable;
-    Vector<VkDescriptorSet, ContainerDetail::ArenaAllocator<VkDescriptorSet, Alloc::GlobalArena>> m_descriptorSets;
-    Vector<u32, ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>> m_descriptorHeapPushIndices;
-    Vector<DescriptorHeapAllocation, ContainerDetail::ArenaAllocator<DescriptorHeapAllocation, Alloc::GlobalArena>> m_descriptorHeapAllocations;
+    Vector<VkDescriptorSet, Alloc::GlobalArena> m_descriptorSets;
+    Vector<u32, Alloc::GlobalArena> m_descriptorHeapPushIndices;
+    Vector<DescriptorHeapAllocation, Alloc::GlobalArena> m_descriptorHeapAllocations;
 
     const VulkanContext& m_context;
 };
@@ -1674,8 +1682,8 @@ public:
     void beginTrackingTexture(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(IBuffer* buffer, ResourceStates::Mask state);
     void appendKeepInitialStateBarriers(
-        Vector<VkImageMemoryBarrier2, ContainerDetail::ArenaAllocator<VkImageMemoryBarrier2, Alloc::GlobalArena>>& imageBarriers,
-        Vector<VkBufferMemoryBarrier2, ContainerDetail::ArenaAllocator<VkBufferMemoryBarrier2, Alloc::GlobalArena>>& bufferBarriers
+        Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
+        Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
     );
 
     [[nodiscard]] bool isUavBarrierEnabledForTexture(ITexture* texture)const;
@@ -1701,12 +1709,12 @@ private:
     RayTracingState m_rayTracingState;
 
 private:
-    HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, ContainerDetail::ArenaAllocator<Pair<const ITexture*, ResourceStates::Mask>, Alloc::GlobalArena>> m_permanentTextureStates;
-    HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, ContainerDetail::ArenaAllocator<Pair<const IBuffer*, ResourceStates::Mask>, Alloc::GlobalArena>> m_permanentBufferStates;
-    HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, ContainerDetail::ArenaAllocator<Pair<const TextureSubresourceStateKey, ResourceStates::Mask>, Alloc::GlobalArena>> m_textureStates;
-    HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, ContainerDetail::ArenaAllocator<Pair<const IBuffer*, ResourceStates::Mask>, Alloc::GlobalArena>> m_bufferStates;
-    HashMap<ITexture*, bool, Hasher<ITexture*>, EqualTo<ITexture*>, ContainerDetail::ArenaAllocator<Pair<const ITexture*, bool>, Alloc::GlobalArena>> m_textureUavBarriers;
-    HashMap<IBuffer*, bool, Hasher<IBuffer*>, EqualTo<IBuffer*>, ContainerDetail::ArenaAllocator<Pair<const IBuffer*, bool>, Alloc::GlobalArena>> m_bufferUavBarriers;
+    HashMap<ITexture*, ResourceStates::Mask, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::GlobalArena> m_permanentTextureStates;
+    HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::GlobalArena> m_permanentBufferStates;
+    HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
+    HashMap<IBuffer*, ResourceStates::Mask, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::GlobalArena> m_bufferStates;
+    HashMap<ITexture*, bool, Hasher<ITexture*>, EqualTo<ITexture*>, Alloc::GlobalArena> m_textureUavBarriers;
+    HashMap<IBuffer*, bool, Hasher<IBuffer*>, EqualTo<IBuffer*>, Alloc::GlobalArena> m_bufferUavBarriers;
 
     const VulkanContext& m_context;
 };
@@ -1889,10 +1897,10 @@ private:
     const VulkanContext& m_context;
     AftermathMarkerTracker m_aftermathMarkerTracker;
 
-    Vector<VkImageMemoryBarrier2, ContainerDetail::ArenaAllocator<VkImageMemoryBarrier2, Alloc::GlobalArena>> m_pendingImageBarriers;
-    Vector<VkBufferMemoryBarrier2, ContainerDetail::ArenaAllocator<VkBufferMemoryBarrier2, Alloc::GlobalArena>> m_pendingBufferBarriers;
+    Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
+    Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
 
-    Vector<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>, ContainerDetail::ArenaAllocator<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>, Alloc::GlobalArena>> m_pendingCompactions;
+    Vector<RefCountPtr<AccelStruct, ArenaRefDeleter<AccelStruct>>, Alloc::GlobalArena> m_pendingCompactions;
 };
 
 
@@ -2026,7 +2034,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool loadPipelineCacheData(Vector<u8>& outData);
+    [[nodiscard]] bool loadPipelineCacheData(GraphicsBytes& outData);
     void savePipelineCacheData();
     [[nodiscard]] bool createPipelineLayoutForBindingLayouts(
         const BindingLayoutVector& bindingLayouts,
@@ -2087,7 +2095,7 @@ private:
     VulkanAllocator m_allocator;
     DescriptorHeapManager m_descriptorHeapManager;
     Path m_pipelineCacheDirectory;
-    AString m_pipelineCacheVolumeName;
+    GraphicsString m_pipelineCacheVolumeName;
     GlobalUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
     GlobalUniquePtr<UploadManager> m_uploadManager;

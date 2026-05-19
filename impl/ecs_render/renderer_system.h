@@ -85,8 +85,8 @@ static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
-    using MaterialParameterVectorAllocator = ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::GlobalArena>;
-    using MaterialParameterVector = Vector<MaterialParameterGpuData, MaterialParameterVectorAllocator>;
+    using MaterialParameterVectorAllocator = Core::Alloc::GlobalArena;
+    using MaterialParameterVector = Vector<MaterialParameterGpuData, Core::Alloc::GlobalArena>;
 
 
 private:
@@ -130,7 +130,7 @@ private:
 
     struct MaterialSurfaceInfo{
         Name materialName = NAME_NONE;
-        AString shaderVariant;
+        Core::GraphicsString shaderVariant;
         Core::Assets::AssetRef<Shader> pixelShader;
         Core::Assets::AssetRef<Shader> meshShader;
         MaterialParameterVector parameters;
@@ -139,7 +139,8 @@ private:
         bool valid = false;
 
         explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
-            : parameters(MaterialParameterVectorAllocator(arena))
+            : shaderVariant(arena)
+            , parameters(arena)
         {}
     };
 
@@ -162,14 +163,14 @@ private:
 
 
 private:
-    using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>>;
-    using InstanceGpuDataVector = Vector<InstanceGpuData, ContainerDetail::ArenaAllocator<InstanceGpuData, Core::Alloc::ScratchArena<>>>;
-    using MaterialParameterGpuDataVector = Vector<MaterialParameterGpuData, ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>>;
+    using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>;
+    using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena<>>;
+    using MaterialParameterGpuDataVector = Vector<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>;
 
-    using GeometryResourcesMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, GeometryResources>, Core::Alloc::GlobalArena>;
-    using MaterialSurfaceInfoMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, MaterialSurfaceInfo>, Core::Alloc::GlobalArena>;
-    using MaterialPipelineMapAllocator = ContainerDetail::ArenaAllocator<Pair<const MaterialPipelineKey, MaterialPipelineResources>, Core::Alloc::GlobalArena>;
-    using LoggedMaterialPathMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, RenderPath::Enum>, Core::Alloc::GlobalArena>;
+    using GeometryResourcesMapAllocator = Core::Alloc::GlobalArena;
+    using MaterialSurfaceInfoMapAllocator = Core::Alloc::GlobalArena;
+    using MaterialPipelineMapAllocator = Core::Alloc::GlobalArena;
+    using LoggedMaterialPathMapAllocator = Core::Alloc::GlobalArena;
 public:
     struct AvboitFrameTargets{
         u32 fullWidth = 0;
@@ -425,13 +426,13 @@ private:
     ShaderPathResolveCallback m_shaderPathResolver;
 
 private:
-    HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>, GeometryResourcesMapAllocator> m_geometryMeshes;
+    HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_geometryMeshes;
 
 
 private:
-    HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, MaterialSurfaceInfoMapAllocator> m_materialSurfaceInfos;
-    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, MaterialPipelineMapAllocator> m_materialPipelines;
-    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, LoggedMaterialPathMapAllocator> m_loggedMaterialPaths;
+    HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_materialSurfaceInfos;
+    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_materialPipelines;
+    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;
 
 private:
     Core::BindingLayoutHandle m_meshBindingLayout;

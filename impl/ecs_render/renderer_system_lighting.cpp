@@ -33,7 +33,7 @@ bool RendererSystem::createDeferredLightingResources(){
     }
 
     if(!m_deferredLightingBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));

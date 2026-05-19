@@ -25,8 +25,12 @@ public:
 
 public:
     struct Record{
+        explicit Record(GraphicsArena& arena)
+            : variantName(arena)
+        {}
+
         Name shaderName = NAME_NONE;
-        AString variantName;
+        GraphicsString variantName;
         Name stage = NAME_NONE;
         u64 sourceChecksum = 0;
         u64 bytecodeChecksum = 0;
@@ -37,9 +41,9 @@ public:
 public:
     [[nodiscard]] static const Name& IndexVirtualPathName();
     [[nodiscard]] static Name buildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
-    static bool serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary);
-    static bool deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords);
-    static bool findVirtualPath(const Vector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath);
+    static bool serializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary);
+    static bool deserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords);
+    static bool findVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath);
 };
 
 

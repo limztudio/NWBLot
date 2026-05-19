@@ -15,8 +15,8 @@ NWB_ECS_BEGIN
 
 
 EntityManager::EntityManager(Alloc::GlobalArena& arena)
-    : m_generations(GenerationAllocator(arena))
-    , m_freeIndices(FreeIndexAllocator(arena))
+    : m_generations(arena)
+    , m_freeIndices(arena)
     , m_aliveCount(0)
 {}
 

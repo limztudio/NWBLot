@@ -21,8 +21,12 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MessageType = Tuple<Timer, Type::Enum, TString>;
-using MessageQueue = ParallelQueue<MessageType>;
+using MessageType = Tuple<Timer, Type::Enum, LogString>;
+using MessageQueue = ParallelQueue<MessageType, LogArena>;
+
+[[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
+    return MakeTuple(Timer{}, Type::Info, LogString(arena));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,9 +74,9 @@ using MessageQueue = ParallelQueue<MessageType>;
     return false;
 }
 
-[[nodiscard]] inline TString FormatMessageForProcessing(const MessageType& msg){
+[[nodiscard]] inline LogString FormatMessageForProcessing(LogArena& arena, const MessageType& msg){
     const auto& [time, type, str] = msg;
-    return StringFormat(NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
+    return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
 namespace MessagePayloadDetail{
@@ -130,12 +134,13 @@ template<typename PayloadContainer>
 }
 
 [[nodiscard]] inline bool ParseMessagePayload(
+    LogArena& arena,
     const void* contents,
     const usize totalSize,
     MessageType& outMessage,
     const tchar*& outError
 ){
-    outMessage = MessageType{};
+    outMessage = MakeMessageType(arena);
     outError = nullptr;
 
     if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
@@ -175,7 +180,7 @@ template<typename PayloadContainer>
         return false;
     }
 
-    outMessage = MakeTuple(Move(time), type, TString(msgText, msgCharCount - 1u));
+    outMessage = MakeTuple(Move(time), type, LogString(msgText, msgCharCount - 1u, arena));
     return true;
 }
 
@@ -186,7 +191,9 @@ public:
 
 
 public:
-    ProcessedMessageFile() = default;
+    explicit ProcessedMessageFile(LogArena& arena)
+        : m_arena(arena)
+    {}
     ~ProcessedMessageFile(){ close(); }
 
 
@@ -204,7 +211,8 @@ public:
         if(!GetExecutableDirectory(executableDirectory))
             return false;
 
-        const TString fileName = StringFormat(
+        const LogString fileName = StringFormat(
+            m_arena,
             NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
             fileNameBase,
             localTime.tm_year + 1900,
@@ -224,7 +232,7 @@ public:
         if(!GetExecutableName(executableName))
             return false;
 
-        const TString executableNameString = PathToString<tchar>(executableName);
+        const LogString executableNameString = PathToString<tchar>(m_arena, executableName);
         return open(executableNameString);
     }
 
@@ -244,6 +252,7 @@ public:
 
 
 private:
+    LogArena& m_arena;
     StreamType m_stream;
     Path m_filePath;
 };
@@ -259,8 +268,10 @@ protected:
 
 
 public:
-    Base()
-        : m_exit(false)
+    explicit Base(const char* allocationLog)
+        : m_arena(allocationLog)
+        , m_msgQueue(m_arena)
+        , m_exit(false)
     {}
     virtual ~Base(){
         stopWorker();
@@ -289,11 +300,14 @@ protected:
 
 
 public:
+    inline LogArena& arena(){ return m_arena; }
+
+public:
     template<typename... ARGS>
     inline bool init(ARGS&&... args){
         if(!static_cast<T*>(this)->s_GlobalInit){
             if(!static_cast<T*>(this)->globalInit()){
-                static_cast<T*>(this)->T::enqueue(StringFormat(NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
+                static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
                 return false;
             }
             static_cast<T*>(this)->s_GlobalInit = true;
@@ -309,11 +323,22 @@ public:
     }
 
 public:
-    inline void enqueue(TString&& str, Type::Enum type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(str))); }
-    inline void enqueue(const TString& str, Type::Enum type = Type::Info){ return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, str)); }
+    inline void enqueue(LogString&& str, Type::Enum type = Type::Info){
+        LogString message(Move(str), m_arena);
+        return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+    }
+    inline void enqueue(const LogString& str, Type::Enum type = Type::Info){
+        LogString message(str, m_arena);
+        return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+    }
+    inline void enqueue(BasicStringView<tchar> str, Type::Enum type = Type::Info){
+        LogString message(str, m_arena);
+        return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
+    }
 
 
 protected:
+    LogArena m_arena;
     MessageQueue m_msgQueue;
 
 protected:
@@ -346,8 +371,9 @@ private:
 
 
 public:
-    BaseUpdateOrdinary()
-        : m_lastTime(TimerNow())
+    explicit BaseUpdateOrdinary(const char* allocationLog)
+        : Base<T, NAME>(allocationLog)
+        , m_lastTime(TimerNow())
     {}
 
 
@@ -390,8 +416,9 @@ private:
 
 
 public:
-    BaseUpdateIfQueued()
-        : m_semaphore(0)
+    explicit BaseUpdateIfQueued(const char* allocationLog)
+        : Base<T, NAME>(allocationLog)
+        , m_semaphore(0)
     {}
 
 

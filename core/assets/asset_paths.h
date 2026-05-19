@@ -38,7 +38,8 @@ namespace AssetPathsDetail{
 [[nodiscard]] inline bool ResolveAssetRootVirtualRootText(const Path& assetRoot, AStringView& outVirtualRootText){
     outVirtualRootText = {};
 
-    AString assetRootName = PathToString(assetRoot.filename());
+    Alloc::ScratchArena<> scratchArena;
+    AString<Alloc::ScratchArena<>> assetRootName = PathToString(scratchArena, assetRoot.filename());
     CanonicalizeTextInPlace(assetRootName);
     if(assetRootName != s_AssetsDirectoryName){
         NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset root must point to an 'assets' directory: '{}'")
@@ -47,7 +48,7 @@ namespace AssetPathsDetail{
         return false;
     }
 
-    AString parentDirectoryName = PathToString(assetRoot.parent_path().filename());
+    AString<Alloc::ScratchArena<>> parentDirectoryName = PathToString(scratchArena, assetRoot.parent_path().filename());
     CanonicalizeTextInPlace(parentDirectoryName);
     outVirtualRootText = parentDirectoryName == s_ImplDirectoryName
         ? s_EngineVirtualRoot
@@ -56,16 +57,18 @@ namespace AssetPathsDetail{
     return true;
 }
 
-[[nodiscard]] inline bool BuildRelativeAssetPathText(const Path& relativePath, AString& outRelativePath){
+template<typename StringT>
+[[nodiscard]] inline bool BuildRelativeAssetPathText(const Path& relativePath, StringT& outRelativePath){
     outRelativePath.clear();
+    auto& arena = outRelativePath.get_allocator().arena();
 
     bool hasComponent = false;
     for(const Path& component : relativePath){
-        AString componentText = PathToString(component);
+        auto componentText = PathToString(arena, component);
         CanonicalizeTextInPlace(componentText);
         if(componentText.empty() || componentText == ".")
             continue;
-        if(componentText == ".." || componentText.find('/') != AString::npos)
+        if(componentText == ".." || AStringView(componentText).find('/') != AStringView::npos)
             return false;
 
         if(hasComponent)
@@ -85,10 +88,18 @@ namespace AssetPathsDetail{
     if(componentIt == virtualPathPath.end())
         return false;
 
-    return outVirtualRoot.assign(PathToString(*componentIt)) && !outVirtualRoot.empty();
+    Alloc::ScratchArena<> scratchArena;
+    const AString<Alloc::ScratchArena<>> componentText = PathToString(scratchArena, *componentIt);
+    return outVirtualRoot.assign(AStringView(componentText)) && !outVirtualRoot.empty();
 }
 
-[[nodiscard]] inline bool BuildDerivedAssetVirtualPathText(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, AString& outVirtualPath){
+template<typename StringT>
+[[nodiscard]] inline bool BuildDerivedAssetVirtualPathText(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& sourceOrMetaPath,
+    StringT& outVirtualPath
+){
     outVirtualPath.clear();
 
     const Path relativePath = sourceOrMetaPath.lexically_relative(assetRoot);
@@ -103,7 +114,7 @@ namespace AssetPathsDetail{
     Path logicalPath = relativePath;
     logicalPath.replace_extension();
 
-    AString relativePathText;
+    StringT relativePathText{outVirtualPath.get_allocator()};
     if(!BuildRelativeAssetPathText(logicalPath, relativePathText)){
         NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset '{}' is not under asset root '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
@@ -156,7 +167,8 @@ namespace AssetPathsDetail{
     return true;
 }
 
-[[nodiscard]] inline bool BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, AString& outVirtualPath){
+template<typename StringT>
+[[nodiscard]] inline bool BuildDerivedAssetVirtualPath(const Path& assetRoot, const AStringView virtualRoot, const Path& sourceOrMetaPath, StringT& outVirtualPath){
     return AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, outVirtualPath);
 }
 
@@ -168,7 +180,8 @@ namespace AssetPathsDetail{
 ){
     outVirtualPath = NAME_NONE;
 
-    AString virtualPathText;
+    Alloc::ScratchArena<> scratchArena;
+    AString<Alloc::ScratchArena<>> virtualPathText{scratchArena};
     if(!AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, virtualPathText))
         return false;
 
@@ -211,8 +224,12 @@ template<typename AssetRootVector>
         return false;
 
     CompactString requestedVirtualRoot;
-    if(!requestedVirtualRoot.assign(PathToString(*componentIt)) || requestedVirtualRoot.empty())
-        return false;
+    {
+        Alloc::ScratchArena<> scratchArena;
+        const AString<Alloc::ScratchArena<>> componentText = PathToString(scratchArena, *componentIt);
+        if(!requestedVirtualRoot.assign(AStringView(componentText)) || requestedVirtualRoot.empty())
+            return false;
+    }
 
     for(const Path& assetRoot : assetRoots){
         CompactString assetVirtualRoot;
@@ -224,9 +241,10 @@ template<typename AssetRootVector>
         outResolvedPath = assetRoot;
         ++componentIt;
         for(; componentIt != virtualPathPath.end(); ++componentIt){
-            AString componentText = PathToString(*componentIt);
+            Alloc::ScratchArena<> scratchArena;
+            AString<Alloc::ScratchArena<>> componentText = PathToString(scratchArena, *componentIt);
             CanonicalizeTextInPlace(componentText);
-            if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString::npos){
+            if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena<>>::npos){
                 NWB_LOGGER_ERROR(NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators")
                     , StringConvert(virtualPath)
                 );
@@ -243,8 +261,10 @@ template<typename AssetRootVector>
     return false;
 }
 
-[[nodiscard]] inline bool ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, AString& outSourcePath){
+template<typename StringT>
+[[nodiscard]] inline bool ResolvePairedSourcePathFromMetadata(const Path& nwbFilePath, StringT& outSourcePath){
     outSourcePath.clear();
+    auto& arena = outSourcePath.get_allocator().arena();
 
     const Path parentDirectory = nwbFilePath.parent_path();
     if(parentDirectory.empty()){
@@ -254,7 +274,7 @@ template<typename AssetRootVector>
         return false;
     }
 
-    AString nwbStem = PathToString(nwbFilePath.stem());
+    auto nwbStem = PathToString(arena, nwbFilePath.stem());
     CanonicalizeTextInPlace(nwbStem);
     if(nwbStem.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty")
@@ -293,11 +313,11 @@ template<typename AssetRootVector>
             continue;
 
         const Path& candidatePath = dirEntry.path();
-        AString candidateExtension = PathToString(candidatePath.extension());
+        auto candidateExtension = PathToString(arena, candidatePath.extension());
         CanonicalizeTextInPlace(candidateExtension);
         if(candidateExtension == s_NwbExtension)
             continue;
-        AString candidateStem = PathToString(candidatePath.stem());
+        auto candidateStem = PathToString(arena, candidatePath.stem());
         CanonicalizeTextInPlace(candidateStem);
         if(candidateStem != nwbStem)
             continue;
@@ -326,7 +346,8 @@ template<typename AssetRootVector>
         return false;
     }
 
-    outSourcePath = PathToString(matchedSourcePath);
+    const auto matchedSourcePathText = PathToString(arena, matchedSourcePath);
+    outSourcePath.assign(matchedSourcePathText.data(), matchedSourcePathText.size());
     return true;
 }
 

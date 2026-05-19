@@ -85,6 +85,21 @@ inline constexpr u32 s_MaxFramesInFlight = 2;
 inline constexpr f32 s_DepthClearValue = 1.0f;
 inline constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
 
+using GraphicsArena = Alloc::GlobalArena;
+using GraphicsString = AString<GraphicsArena>;
+using GraphicsTString = TString<GraphicsArena>;
+using GraphicsCharAllocator = GraphicsArena;
+using GraphicsTCharAllocator = GraphicsArena;
+template<typename T>
+using GraphicsVector = Vector<T, GraphicsArena>;
+using GraphicsBytes = GraphicsVector<u8>;
+template<typename T>
+using GraphicsSet = Set<T, GraphicsArena>;
+template<typename T>
+using GraphicsDeque = Deque<T, GraphicsArena>;
+template<typename T, typename V>
+using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
+
 #define NWB_DEFINE_GRAPHICS_MASK_OPERATORS(MaskType) \
     constexpr MaskType operator|(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); } \
     constexpr MaskType operator&(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) & static_cast<u32>(rhs)); } \
@@ -1064,7 +1079,7 @@ struct CustomSemantic{
 struct ShaderDesc{
     ShaderType::Mask shaderType = ShaderType::None;
     Name debugName;
-    AString entryName = "main";
+    GraphicsString entryName;
 
     i32 hlslExtensionsUAV = -1;
 
@@ -1074,6 +1089,10 @@ struct ShaderDesc{
 
     FastGeometryShaderFlags::Mask fastGSFlags = FastGeometryShaderFlags::None;
     u32* pCoordinateSwizzling = nullptr;
+
+    explicit ShaderDesc(GraphicsArena& arena)
+        : entryName("main", arena)
+    {}
 
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
     constexpr ShaderDesc& setDebugName(const Name& value){ debugName = value; return *this; }
@@ -1642,7 +1661,7 @@ struct RayTracingOpacityMicromapDesc{
     // OMM flags. Applies to all OMMs in array.
     RayTracingOpacityMicromapBuildFlags::Mask flags = RayTracingOpacityMicromapBuildFlags::None;
     // OMM counts for each subdivision level and format combination in the inputs.
-    Vector<RayTracingOpacityMicromapUsageCount> counts;
+    GraphicsVector<RayTracingOpacityMicromapUsageCount> counts;
 
     // Base pointer for raw OMM input data.
     // Individual OMMs must be 1B aligned, though natural alignment is recommended.
@@ -1654,10 +1673,14 @@ struct RayTracingOpacityMicromapDesc{
     IBuffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
 
+    explicit RayTracingOpacityMicromapDesc(GraphicsArena& arena)
+        : counts(arena)
+    {}
+
     constexpr RayTracingOpacityMicromapDesc& setDebugName(const Name& value){ debugName = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
-    constexpr RayTracingOpacityMicromapDesc& setCounts(const Vector<RayTracingOpacityMicromapUsageCount>& value){ counts = value; return *this; }
+    RayTracingOpacityMicromapDesc& setCounts(const GraphicsVector<RayTracingOpacityMicromapUsageCount>& value){ counts = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setInputBuffer(IBuffer* value){ inputBuffer = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setInputBufferOffset(u64 value){ inputBufferOffset = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setPerOmmDescs(IBuffer* value){ perOmmDescs = value; return *this; }
@@ -1942,15 +1965,19 @@ namespace RayTracingAccelStructBuildFlags{
 
 struct RayTracingAccelStructDesc{
     usize topLevelMaxInstances = 0; // only applies when isTopLevel = true
-    Vector<RayTracingGeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
+    GraphicsVector<RayTracingGeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
     RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None;
     Name debugName;
     bool trackLiveness = true;
     bool isTopLevel = false;
     bool isVirtual = false;
 
+    explicit RayTracingAccelStructDesc(GraphicsArena& arena)
+        : bottomLevelGeometries(arena)
+    {}
+
     constexpr RayTracingAccelStructDesc& setTopLevelMaxInstances(usize value){ topLevelMaxInstances = value; isTopLevel = true; return *this; }
-    constexpr RayTracingAccelStructDesc& addBottomLevelGeometry(const RayTracingGeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
+    RayTracingAccelStructDesc& addBottomLevelGeometry(const RayTracingGeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
     constexpr RayTracingAccelStructDesc& setBuildFlags(RayTracingAccelStructBuildFlags::Mask value){ buildFlags = value; return *this; }
     constexpr RayTracingAccelStructDesc& setDebugName(const Name& value){ debugName = value; return *this; }
     constexpr RayTracingAccelStructDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
@@ -2223,15 +2250,19 @@ struct BindingLayoutDesc{
     //   an error.
     bool registerSpaceIsDescriptorSet = false;
 
-    Vector<BindingLayoutItem> bindings;
+    GraphicsVector<BindingLayoutItem> bindings;
     VulkanBindingOffsets bindingOffsets;
+
+    explicit BindingLayoutDesc(GraphicsArena& arena)
+        : bindings(arena)
+    {}
 
     constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
     constexpr BindingLayoutDesc& setRegisterSpace(u32 value){ registerSpace = value; return *this; }
     constexpr BindingLayoutDesc& setRegisterSpaceIsDescriptorSet(bool value){ registerSpaceIsDescriptorSet = value; return *this; }
     // Shortcut for .setRegisterSpace(value).setRegisterSpaceIsDescriptorSet(true)
     constexpr BindingLayoutDesc& setRegisterSpaceAndDescriptorSet(u32 value){ registerSpace = value; registerSpaceIsDescriptorSet = true; return *this; }
-    constexpr BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
+    BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
     constexpr BindingLayoutDesc& setBindingOffsets(const VulkanBindingOffsets& value){ bindingOffsets = value; return *this; }
 };
 
@@ -2437,14 +2468,18 @@ inline bool operator!=(const BindingSetItem& lhs, const BindingSetItem& rhs){ re
 static_assert(sizeof(BindingSetItem) == 40, "sizeof(BindingSetItem) is supposed to be 40 bytes");
 
 struct BindingSetDesc{
-    Vector<BindingSetItem> bindings;
+    GraphicsVector<BindingSetItem> bindings;
 
     // Enables automatic liveness tracking of this binding set by nvrhi command lists.
     // By setting trackLiveness to false, you take the responsibility of not releasing it
     // until all rendering commands using the binding set are finished.
     bool trackLiveness = true;
 
-    constexpr BindingSetDesc& addItem(const BindingSetItem& value){ bindings.push_back(value); return *this; }
+    explicit BindingSetDesc(GraphicsArena& arena)
+        : bindings(arena)
+    {}
+
+    BindingSetDesc& addItem(const BindingSetItem& value){ bindings.push_back(value); return *this; }
     constexpr BindingSetDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
 };
 inline bool operator==(const BindingSetDesc& lhs, const BindingSetDesc& rhs){
@@ -2836,7 +2871,11 @@ struct MeshletState{
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
-    AString exportName;
+    GraphicsString exportName;
+
+    explicit RayTracingPipelineShaderDesc(GraphicsArena& arena)
+        : exportName(arena)
+    {}
 
     RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value){ shader = value; return *this; }
     RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
@@ -2848,8 +2887,12 @@ struct RayTracingPipelineHitGroupDesc{
     ShaderHandle anyHitShader;
     ShaderHandle intersectionShader;
     BindingLayoutHandle bindingLayout;
-    AString exportName;
+    GraphicsString exportName;
     bool isProceduralPrimitive = false;
+
+    explicit RayTracingPipelineHitGroupDesc(GraphicsArena& arena)
+        : exportName(arena)
+    {}
 
     RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
     RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
@@ -2860,8 +2903,8 @@ struct RayTracingPipelineHitGroupDesc{
 };
 
 struct RayTracingPipelineDesc{
-    Vector<RayTracingPipelineShaderDesc> shaders;
-    Vector<RayTracingPipelineHitGroupDesc> hitGroups;
+    GraphicsVector<RayTracingPipelineShaderDesc> shaders;
+    GraphicsVector<RayTracingPipelineHitGroupDesc> hitGroups;
     BindingLayoutVector globalBindingLayouts;
     u32 maxPayloadSize = 0;
     u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
@@ -2871,8 +2914,13 @@ struct RayTracingPipelineDesc{
     bool allowSpheres = false;
     bool allowLinearSweptSpheres = false;
 
-    constexpr RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
-    constexpr RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
+    explicit RayTracingPipelineDesc(GraphicsArena& arena)
+        : shaders(arena)
+        , hitGroups(arena)
+    {}
+
+    RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
+    RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
     RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value){ globalBindingLayouts.push_back(value); return *this; }
     constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value){ maxPayloadSize = value; return *this; }
     constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value){ maxAttributeSize = value; return *this; }
@@ -2980,7 +3028,7 @@ struct CooperativeVectorMatMulFormatCombo{
 
 struct CooperativeVectorDeviceFeatures{
     // Format combinations supported by the device for matrix multiplication with Cooperative Vectors.
-    Vector<CooperativeVectorMatMulFormatCombo> matMulFormats;
+    GraphicsVector<CooperativeVectorMatMulFormatCombo> matMulFormats;
 
     // - DX12: True if FLOAT16 is supported as accumulation format for both outer product accumulation
     //         and vector accumulation.
@@ -2991,6 +3039,10 @@ struct CooperativeVectorDeviceFeatures{
     //         and vector accumulation.
     // - Vulkan: True if cooperativeVectorTrainingFloat32Accumulation is supported.
     bool trainingFloat32 = false;
+
+    explicit CooperativeVectorDeviceFeatures(GraphicsArena& arena)
+        : matMulFormats(arena)
+    {}
 };
 
 struct CooperativeVectorMatrixLayoutDesc{
@@ -3574,7 +3626,7 @@ typedef RefCountPtr<ICommandList, ArenaRefDeleter<ICommandList>> CommandListHand
 // Aftermath
 
 
-typedef Pair<bool, TString> ResolvedMarker;
+typedef Pair<bool, GraphicsTString> ResolvedMarker;
 typedef Pair<const void*, usize> BinaryBlob;
 typedef Function<u64(BinaryBlob, GraphicsAPI::Enum)> ShaderHashGeneratorFunction;
 typedef Function<BinaryBlob(u64, ShaderHashGeneratorFunction)> ShaderBinaryLookupCallback;
@@ -3586,22 +3638,23 @@ typedef Function<BinaryBlob(u64, ShaderHashGeneratorFunction)> ShaderBinaryLooku
 // There should be one AftermathMarkerTracker per graphics API-level command list.
 class AftermathMarkerTracker{
 public:
-    AftermathMarkerTracker();
+    explicit AftermathMarkerTracker(GraphicsArena& arena);
 
 
 public:
     usize pushEvent(const char* name);
     void popEvent(){ m_eventStack = m_eventStack.parent_path(); }
-    Pair<bool, AString> getEventString(usize hash);
+    Pair<bool, GraphicsString> getEventString(usize hash);
 
 
 private:
     // Using a filesystem path to track the event stack since that automatically inserts "/" separators
+    GraphicsArena& m_arena;
     Path m_eventStack;
 
     Array<usize, s_MaxAftermathEventStrings> m_eventHashes;
     usize m_oldestHashIndex;
-    HashMap<usize, AString> m_eventStrings;
+    GraphicsHashMap<usize, GraphicsString> m_eventStrings;
 };
 
 // AftermathCrashDumpHelper tracks all IDevice-level constructs needed when generating a crash dump.
@@ -3610,7 +3663,7 @@ private:
 // All command lists will register their AftermathMarkerTrackers with the AftermathCrashDumpHelper.
 class AftermathCrashDumpHelper{
 public:
-    AftermathCrashDumpHelper();
+    explicit AftermathCrashDumpHelper(GraphicsArena& arena);
 
 
 public:
@@ -3619,16 +3672,17 @@ public:
     void registerShaderBinaryLookupCallback(void* client, ShaderBinaryLookupCallback lookupCallback);
     void unRegisterShaderBinaryLookupCallback(void* client);
 
-    Pair<bool, AString> resolveMarker(usize markerHash);
+    Pair<bool, GraphicsString> resolveMarker(usize markerHash);
     BinaryBlob findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator);
 
 
 private:
-    Set<AftermathMarkerTracker*> m_markerTrackers;
+    GraphicsArena& m_arena;
+    GraphicsSet<AftermathMarkerTracker*> m_markerTrackers;
     // Command lists deleted on CPU could still be executing (and crashing) on GPU,
     // so keep a small number of recently destroyed marker trackers
-    Deque<AftermathMarkerTracker> m_destroyedMarkerTrackers;
-    HashMap<void*, ShaderBinaryLookupCallback> m_shaderBinaryLookupCallbacks;
+    GraphicsDeque<AftermathMarkerTracker> m_destroyedMarkerTrackers;
+    GraphicsHashMap<void*, ShaderBinaryLookupCallback> m_shaderBinaryLookupCallbacks;
 };
 
 
@@ -3755,7 +3809,7 @@ struct AdapterInfo{
     typedef Array<u8, 16> UUID;
     typedef Array<u8, 8> LUID;
 
-    AString name;
+    GraphicsString name;
     u32 vendorID = 0;
     u32 deviceID = 0;
     u64 dedicatedVideoMemory = 0;
@@ -3764,6 +3818,10 @@ struct AdapterInfo{
     bool hasUUID = false;
     LUID luid = {};
     bool hasLUID = false;
+
+    explicit AdapterInfo(GraphicsArena& arena)
+        : name(arena)
+    {}
 };
 
 
@@ -3779,11 +3837,19 @@ struct InstanceParameters{
     bool logBufferLifetime = false;
     bool enablePerMonitorDPI = false;
 
-    AString vulkanLibraryName;
-    Vector<AString> requiredVulkanInstanceExtensions;
-    Vector<AString> requiredVulkanLayers;
-    Vector<AString> optionalVulkanInstanceExtensions;
-    Vector<AString> optionalVulkanLayers;
+    GraphicsString vulkanLibraryName;
+    GraphicsVector<GraphicsString> requiredVulkanInstanceExtensions;
+    GraphicsVector<GraphicsString> requiredVulkanLayers;
+    GraphicsVector<GraphicsString> optionalVulkanInstanceExtensions;
+    GraphicsVector<GraphicsString> optionalVulkanLayers;
+
+    explicit InstanceParameters(GraphicsArena& arena)
+        : vulkanLibraryName(arena)
+        , requiredVulkanInstanceExtensions(arena)
+        , requiredVulkanLayers(arena)
+        , optionalVulkanInstanceExtensions(arena)
+        , optionalVulkanLayers(arena)
+    {}
 };
 
 struct DeviceCreationParameters : public InstanceParameters{
@@ -3807,11 +3873,18 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 
-    Vector<AString> requiredVulkanDeviceExtensions;
-    Vector<AString> optionalVulkanDeviceExtensions;
-    Vector<usize> ignoredVulkanValidationMessageLocations;
+    GraphicsVector<GraphicsString> requiredVulkanDeviceExtensions;
+    GraphicsVector<GraphicsString> optionalVulkanDeviceExtensions;
+    GraphicsVector<usize> ignoredVulkanValidationMessageLocations;
 
     Path pipelineCacheDirectory;
+
+    explicit DeviceCreationParameters(GraphicsArena& arena)
+        : InstanceParameters(arena)
+        , requiredVulkanDeviceExtensions(arena)
+        , optionalVulkanDeviceExtensions(arena)
+        , ignoredVulkanValidationMessageLocations(arena)
+    {}
 };
 
 struct SwapChainRuntimeState{
@@ -3844,7 +3917,7 @@ struct ShaderCompilerRequest{
     AStringView variantName;
     const ShaderMacroDefinition* defines = nullptr;
     u32 defineCount = 0;
-    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>>& includeDirectories;
+    const GraphicsVector<Path>& includeDirectories;
     const Path& sourcePath;
 };
 
@@ -3857,7 +3930,7 @@ public:
 
 
 public:
-    virtual bool compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode) = 0;
+    virtual bool compileVariant(const ShaderCompilerRequest& request, GraphicsVector<u8>& outBytecode) = 0;
 
 
 protected:

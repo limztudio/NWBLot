@@ -18,10 +18,17 @@ NWB_ASSETS_BEGIN
 
 
 struct AssetCookOptions{
-    AString repoRoot;
-    Vector<AString> assetRoots;
-    AString outputDirectory;
-    AString cacheDirectory;
+    explicit AssetCookOptions(AssetArena& arena)
+        : repoRoot(arena)
+        , assetRoots(arena)
+        , outputDirectory(arena)
+        , cacheDirectory(arena)
+    {}
+
+    AssetString repoRoot;
+    AssetVector<AssetString> assetRoots;
+    AssetString outputDirectory;
+    AssetString cacheDirectory;
     CompactString configuration;
     CompactString assetType;
 };
@@ -32,7 +39,7 @@ struct AssetCookOptions{
 
 class IAssetCooker{
 public:
-    IAssetCooker(Alloc::GlobalArena& arena, const CompactString& assetTypeText)
+    IAssetCooker(AssetArena& arena, const CompactString& assetTypeText)
         : m_arena(arena)
         , m_assetTypeText(assetTypeText)
         , m_assetType(assetTypeText.empty() ? NAME_NONE : Name(assetTypeText.view()))
@@ -48,7 +55,7 @@ public:
 
 
 protected:
-    Alloc::GlobalArena& m_arena;
+    AssetArena& m_arena;
 
 
 private:
@@ -62,12 +69,12 @@ private:
 
 class AssetCookerRegistry final{
 private:
-    using CookerMapAllocator = ContainerDetail::ArenaAllocator<Pair<const Name, UniquePtr<IAssetCooker>>, Alloc::GlobalArena>;
-    using CookerMap = HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>, CookerMapAllocator>;
+    using CookerMapAllocator = Alloc::GlobalArena;
+    using CookerMap = HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
 
 
 public:
-    explicit AssetCookerRegistry(Alloc::GlobalArena& arena);
+    explicit AssetCookerRegistry(AssetArena& arena);
 
     bool registerCooker(UniquePtr<IAssetCooker>&& cooker);
 
@@ -75,6 +82,7 @@ public:
 
 
 private:
+    AssetArena& m_arena;
     CookerMap m_assetCookers;
 };
 

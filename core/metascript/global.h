@@ -26,11 +26,13 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using MetaArena = Alloc::GlobalArena;
+
 template<typename T>
-using MAllocator = ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>;
+using MAllocator = MetaArena;
 
 using MChar = char;
-using MString = BasicString<MChar, MAllocator<MChar>>;
+using MString = AString<MetaArena>;
 using MStringView = BasicStringView<MChar>;
 
 struct MStringHash{
@@ -53,10 +55,10 @@ struct MStringEqual{
 };
 
 template<typename T>
-using MVector = Vector<T, MAllocator<T>>;
+using MVector = Vector<T, MetaArena>;
 
 template<typename V>
-using MStringMap = HashMap<MString, V, MStringHash, MStringEqual, MAllocator<Pair<MString, V>>>;
+using MStringMap = HashMap<MString, V, MStringHash, MStringEqual, MetaArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

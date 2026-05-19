@@ -60,7 +60,7 @@ using namespace MetascriptDetail;
 
 class Parser{
 public:
-    Parser(MStringView source, Alloc::GlobalArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
+    Parser(MStringView source, MetaArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
         : m_lexer(source)
         , m_arena(arena)
         , m_scratchArena(4096)
@@ -97,8 +97,8 @@ public:
 
 
 private:
-    using ScratchPath = Vector<MStringView, ContainerDetail::ArenaAllocator<MStringView, Alloc::ScratchArena<>>>;
-    using ScratchString = BasicString<MChar, ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>>;
+    using ScratchPath = Vector<MStringView, Alloc::ScratchArena<>>;
+    using ScratchString = BasicString<MChar, Alloc::ScratchArena<>>;
 
 
     bool parseDeclaration(MString& outAssetType, MString& outAssetVariable){
@@ -119,7 +119,7 @@ private:
         if(!expect(TokenType::Semicolon, "expected ';' after declaration"))
             return false;
 
-        MString key(outAssetVariable.data(), outAssetVariable.size(), MAllocator<MChar>(m_arena));
+        MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
         m_variables.emplace(Move(key), Value(m_arena));
         return true;
     }
@@ -140,7 +140,7 @@ private:
             return false;
         }
 
-        ScratchPath path{ContainerDetail::ArenaAllocator<MStringView, Alloc::ScratchArena<>>(m_scratchArena)};
+        ScratchPath path{m_scratchArena};
         path.reserve(4);
         path.push_back(firstName);
 
@@ -314,7 +314,7 @@ private:
             const auto name = m_current.text;
             advance();
 
-            ScratchPath path{ContainerDetail::ArenaAllocator<MStringView, Alloc::ScratchArena<>>(m_scratchArena)};
+            ScratchPath path{m_scratchArena};
             path.reserve(4);
             path.push_back(name);
 
@@ -513,7 +513,7 @@ private:
                 return nullptr;
             }
 
-            MString rootKey(rootName.data(), rootName.size(), MAllocator<MChar>(m_arena));
+            MString rootKey(rootName.data(), rootName.size(), m_arena);
             auto result = m_variables.emplace(Move(rootKey), Value(m_arena));
             rootIt = result.first;
         }
@@ -691,12 +691,12 @@ private:
     }
 
     void error(u32 line, u32 column, MStringView message){
-        m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), MAllocator<MChar>(m_arena))});
+        m_errors.push_back(ParseError{line, column, MString(message.data(), message.size(), m_arena)});
     }
 
     void errorExpected(MStringView expected){
         const auto desc = tokenDescription();
-        ScratchString msg{ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>(m_scratchArena)};
+        ScratchString msg{m_scratchArena};
         if(
             expected.size() <= Limit<usize>::s_Max - 8u
             && desc.size() <= Limit<usize>::s_Max - expected.size() - 8u
@@ -708,51 +708,51 @@ private:
         error(m_current.line, m_current.column, MStringView(msg.data(), msg.size()));
     }
 
-    [[nodiscard]] AString tokenDescription()const{
+    [[nodiscard]] ScratchString tokenDescription(){
         switch(m_current.type){
         case TokenType::Identifier:{
-            AString d = "identifier '";
+            ScratchString d("identifier '", m_scratchArena);
             d.append(m_current.text.data(), m_current.text.size());
             d.push_back('\'');
             return d;
         }
         case TokenType::IntegerLiteral:
         case TokenType::DoubleLiteral:{
-            AString d = "number '";
+            ScratchString d("number '", m_scratchArena);
             d.append(m_current.text.data(), m_current.text.size());
             d.push_back('\'');
             return d;
         }
-        case TokenType::StringLiteral: return AString("string literal");
-        case TokenType::Plus: return AString("'+'");
-        case TokenType::Minus: return AString("'-'");
-        case TokenType::Star: return AString("'*'");
-        case TokenType::Slash: return AString("'/'");
-        case TokenType::PlusEqual: return AString("'+='");
-        case TokenType::MinusEqual: return AString("'-='");
-        case TokenType::StarEqual: return AString("'*='");
-        case TokenType::SlashEqual: return AString("'/='");
-        case TokenType::Equal: return AString("'='");
-        case TokenType::Semicolon: return AString("';'");
-        case TokenType::Dot: return AString("'.'");
-        case TokenType::Comma: return AString("','");
-        case TokenType::Colon: return AString("':'");
-        case TokenType::LeftBracket: return AString("'['");
-        case TokenType::RightBracket: return AString("']'");
-        case TokenType::LeftBrace: return AString("'{'");
-        case TokenType::RightBrace: return AString("'}'");
-        case TokenType::LeftParen: return AString("'('");
-        case TokenType::RightParen: return AString("')'");
-        case TokenType::EndOfFile: return AString("end of file");
-        case TokenType::Error: return AString("error");
-        default: return AString("unknown token");
+        case TokenType::StringLiteral: return ScratchString("string literal", m_scratchArena);
+        case TokenType::Plus: return ScratchString("'+'", m_scratchArena);
+        case TokenType::Minus: return ScratchString("'-'", m_scratchArena);
+        case TokenType::Star: return ScratchString("'*'", m_scratchArena);
+        case TokenType::Slash: return ScratchString("'/'", m_scratchArena);
+        case TokenType::PlusEqual: return ScratchString("'+='", m_scratchArena);
+        case TokenType::MinusEqual: return ScratchString("'-='", m_scratchArena);
+        case TokenType::StarEqual: return ScratchString("'*='", m_scratchArena);
+        case TokenType::SlashEqual: return ScratchString("'/='", m_scratchArena);
+        case TokenType::Equal: return ScratchString("'='", m_scratchArena);
+        case TokenType::Semicolon: return ScratchString("';'", m_scratchArena);
+        case TokenType::Dot: return ScratchString("'.'", m_scratchArena);
+        case TokenType::Comma: return ScratchString("','", m_scratchArena);
+        case TokenType::Colon: return ScratchString("':'", m_scratchArena);
+        case TokenType::LeftBracket: return ScratchString("'['", m_scratchArena);
+        case TokenType::RightBracket: return ScratchString("']'", m_scratchArena);
+        case TokenType::LeftBrace: return ScratchString("'{'", m_scratchArena);
+        case TokenType::RightBrace: return ScratchString("'}'", m_scratchArena);
+        case TokenType::LeftParen: return ScratchString("'('", m_scratchArena);
+        case TokenType::RightParen: return ScratchString("')'", m_scratchArena);
+        case TokenType::EndOfFile: return ScratchString("end of file", m_scratchArena);
+        case TokenType::Error: return ScratchString("error", m_scratchArena);
+        default: return ScratchString("unknown token", m_scratchArena);
         }
     }
 
 
 private:
     Lexer m_lexer;
-    Alloc::GlobalArena& m_arena;
+    MetaArena& m_arena;
     Alloc::ScratchArena<> m_scratchArena;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
@@ -772,12 +772,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Document::Document(Alloc::GlobalArena& arena)
+Document::Document(MetaArena& arena)
     : m_arena(arena)
-    , m_assetType(MAllocator<MChar>(arena))
-    , m_assetVariable(MAllocator<MChar>(arena))
-    , m_variables(0, MStringHash(), MStringEqual(), MAllocator<Pair<MString, Value>>(arena))
-    , m_errors(MAllocator<ParseError>(arena))
+    , m_assetType(arena)
+    , m_assetVariable(arena)
+    , m_variables(0, MStringHash(), MStringEqual(), arena)
+    , m_errors(arena)
 {}
 
 
@@ -801,20 +801,20 @@ bool Document::parse(IMetaReader& reader){
         constexpr usize chunkSize = 4096;
 
         Alloc::ScratchArena<> scratchArena(chunkSize);
-        BasicString<MChar, ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>> buffer{ContainerDetail::ArenaAllocator<MChar, Alloc::ScratchArena<>>(scratchArena)};
+        BasicString<MChar, Alloc::ScratchArena<>> buffer{scratchArena};
         buffer.reserve(chunkSize);
         MChar chunk[chunkSize];
 
         for(;;){
             const isize bytesRead = reader.read(chunk, chunkSize);
             if(bytesRead < 0){
-                m_errors.push_back(ParseError{0, 0, MString("read error", MAllocator<MChar>(m_arena))});
+                m_errors.push_back(ParseError{0, 0, MString("read error", m_arena)});
                 return false;
             }
             if(bytesRead == 0)
                 break;
             if(static_cast<usize>(bytesRead) > chunkSize){
-                m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", MAllocator<MChar>(m_arena))});
+                m_errors.push_back(ParseError{0, 0, MString("reader returned more bytes than requested", m_arena)});
                 return false;
             }
             buffer.append(chunk, static_cast<usize>(bytesRead));
@@ -823,7 +823,7 @@ bool Document::parse(IMetaReader& reader){
         return parse(MStringView(buffer.data(), buffer.size()));
     }
     catch(const GeneralException& e){
-        m_errors.push_back(ParseError{0, 0, MString(e.what(), MAllocator<MChar>(m_arena))});
+        m_errors.push_back(ParseError{0, 0, MString(e.what(), m_arena)});
         return false;
     }
 }

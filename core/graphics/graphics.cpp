@@ -22,8 +22,8 @@ namespace __hidden_graphics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using UploadBytesAllocator = ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>;
-using UploadBytes = Vector<u8, UploadBytesAllocator>;
+using UploadBytesAllocator = Alloc::GlobalArena;
+using UploadBytes = Vector<u8, Alloc::GlobalArena>;
 
 
 static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc, usize& outRequiredBytes){
@@ -169,7 +169,7 @@ struct BufferSetupJobData{
 
     BufferSetupJobData(Alloc::GlobalArena& arena, const Graphics::BufferSetupDesc& desc, BufferHandle& output)
         : setupDesc(desc)
-        , uploadBytes(UploadBytesAllocator(arena))
+        , uploadBytes(arena)
         , outBuffer(output)
     {}
 };
@@ -182,7 +182,7 @@ struct TextureSetupJobData{
 
     TextureSetupJobData(Alloc::GlobalArena& arena, const Graphics::TextureSetupDesc& desc, TextureHandle& output)
         : setupDesc(desc)
-        , uploadBytes(UploadBytesAllocator(arena))
+        , uploadBytes(arena)
         , outTexture(output)
     {}
 };
@@ -196,15 +196,15 @@ struct MeshSetupJobData{
 
     MeshSetupJobData(Alloc::GlobalArena& arena, const Graphics::MeshSetupDesc& desc, Graphics::MeshResource& output)
         : setupDesc(desc)
-        , vertexBytes(UploadBytesAllocator(arena))
-        , indexBytes(UploadBytesAllocator(arena))
+        , vertexBytes(arena)
+        , indexBytes(arena)
         , outMesh(output)
     {}
 };
 
 
 static UploadBytes CopyBytes(Alloc::GlobalArena& arena, const void* data, usize dataSize){
-    UploadBytes bytes{UploadBytesAllocator(arena)};
+    UploadBytes bytes{arena};
     if(!data || dataSize == 0)
         return bytes;
 
@@ -320,9 +320,11 @@ Graphics::Graphics(
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
+    , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool, backendFactory))
-    , m_renderPasses(RenderPassListAllocator(m_allocator.getObjectArena()))
-    , m_swapChainFramebuffers(SwapChainFramebufferVectorAllocator(m_allocator.getObjectArena()))
+    , m_renderPasses(m_allocator.getObjectArena())
+    , m_swapChainFramebuffers(m_allocator.getObjectArena())
+    , m_windowTitle(m_allocator.getObjectArena())
 {
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 }

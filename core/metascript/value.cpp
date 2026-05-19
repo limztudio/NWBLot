@@ -36,29 +36,29 @@ inline void ReserveGrowingCapacity(Container& container, const usize requiredCap
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Value::Value(Alloc::GlobalArena& arena)
+Value::Value(MetaArena& arena)
     : m_arena(arena)
 {}
 
-Value::Value(i64 val, Alloc::GlobalArena& arena)
+Value::Value(i64 val, MetaArena& arena)
     : m_arena(arena)
     , m_type(ValueType::Integer)
 {
     m_data.m_integer = val;
 }
 
-Value::Value(f64 val, Alloc::GlobalArena& arena)
+Value::Value(f64 val, MetaArena& arena)
     : m_arena(arena)
     , m_type(ValueType::Double)
 {
     m_data.m_double = val;
 }
 
-Value::Value(MStringView val, Alloc::GlobalArena& arena)
+Value::Value(MStringView val, MetaArena& arena)
     : m_arena(arena)
     , m_type(ValueType::String)
 {
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), MAllocator<MChar>(m_arena));
+    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
 Value::~Value(){
@@ -117,7 +117,7 @@ Value Value::operator+(const Value& rhs)const{
             return Value(m_arena);
         }
 
-        StringType result{MAllocator<MChar>(m_arena)};
+        StringType result{m_arena};
         result.reserve(lsv.size() + rsv.size());
         result.append(lsv.data(), lsv.size());
         result.append(rsv.data(), rsv.size());
@@ -350,11 +350,11 @@ MStringView Value::asString()const{
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
-AString Value::copyString()const{
+MString Value::copyString()const{
     if(!isString())
-        return {};
+        return MString(m_arena);
     const MStringView sv = asString();
-    return AString(sv.data(), sv.size());
+    return MString(sv.data(), sv.size(), m_arena);
 }
 
 const Value::ListType& Value::asList()const{
@@ -393,7 +393,7 @@ void Value::setDouble(f64 val){
 void Value::setString(MStringView val){
     destroy();
     m_type = ValueType::String;
-    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), MAllocator<MChar>(m_arena));
+    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
 void Value::makeList(){
@@ -436,7 +436,7 @@ Value& Value::field(MStringView name){
     if(it != m_data.m_map->end())
         return it.value();
 
-    StringType key(name.data(), name.size(), MAllocator<MChar>(m_arena));
+    StringType key(name.data(), name.size(), m_arena);
     auto result = m_data.m_map->emplace(Move(key), Value(m_arena));
     return result.first.value();
 }
@@ -528,7 +528,7 @@ void Value::copyFrom(const Value& other){
         m_data.m_double = other.m_data.m_double;
         break;
     case ValueType::String:
-        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), MAllocator<MChar>(m_arena));
+        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), m_arena);
         break;
     case ValueType::List:{
         m_data.m_list = allocList();
@@ -540,7 +540,7 @@ void Value::copyFrom(const Value& other){
         m_data.m_map = allocMap();
         m_data.m_map->reserve(other.m_data.m_map->size());
         for(const auto& [k, v] : *other.m_data.m_map){
-            auto result = m_data.m_map->emplace(StringType(k, MAllocator<MChar>(m_arena)), Value(m_arena));
+            auto result = m_data.m_map->emplace(StringType(k, m_arena), Value(m_arena));
             result.first.value().copyFrom(v);
         }
         break;
@@ -579,15 +579,15 @@ void Value::appendListCopies(const ListType& values, const usize count){
 }
 
 Value::StringType Value::makeArenaString(MStringView sv)const{
-    return StringType(sv.data(), sv.size(), MAllocator<MChar>(m_arena));
+    return StringType(sv.data(), sv.size(), m_arena);
 }
 
 Value::ListType* Value::allocList()const{
-    return NewArenaObject<ListType>(m_arena, MAllocator<Value>(m_arena));
+    return NewArenaObject<ListType>(m_arena, m_arena);
 }
 
 Value::MapType* Value::allocMap()const{
-    return NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), MAllocator<Pair<StringType, Value>>(m_arena));
+    return NewArenaObject<MapType>(m_arena, 0, MStringHash(), MStringEqual(), m_arena);
 }
 
 void Value::freeList(ListType* p){

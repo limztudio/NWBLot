@@ -18,10 +18,19 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GlobalArena : public ArenaBase{
+class GlobalArena : public ArenaBaseT<GlobalArena>{
+public:
+    using Base = ArenaBaseT<GlobalArena>;
+
+
+public:
+    using Base::allocate;
+    using Base::deallocate;
+
+
 public:
     explicit GlobalArena(const char* allocationLog = "NWB::Core::Alloc::GlobalArena")
-        : ArenaBase(allocationLog)
+        : Base(allocationLog)
     {}
     ~GlobalArena() = default;
 
@@ -32,10 +41,6 @@ public:
 
         return (align <= 1) ? CoreAlloc(size, log()) : CoreAllocAligned(size, align, log());
     }
-    template<typename T>
-    inline T* allocate(usize count){
-        return AllocDetail::AllocateTyped<T>(*this, count);
-    }
 
     inline void deallocate(void* p, usize align, usize size){
         static_cast<void>(size);
@@ -45,11 +50,6 @@ public:
         else
             CoreFreeAligned(p, log());
     }
-    template<typename T>
-    inline void deallocate(void* p, usize count){
-        AllocDetail::DeallocateTyped<T>(*this, p, count);
-    }
-
 };
 
 

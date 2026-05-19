@@ -40,7 +40,7 @@ NWB_IMPL_BEGIN
 
 class GeometrySystem final : public Core::ECS::ISystem, public IRuntimeGeometryRegistry{
 private:
-    using RuntimeGeometryProviderAllocator = ContainerDetail::ArenaAllocator<IRuntimeGeometryProvider*, Core::Alloc::GlobalArena>;
+    using RuntimeGeometryProviderAllocator = Core::Alloc::GlobalArena;
 
 
 public:
@@ -65,7 +65,7 @@ public:
 
 private:
     Core::ECS::World& m_world;
-    Vector<IRuntimeGeometryProvider*, RuntimeGeometryProviderAllocator> m_runtimeGeometryProviders;
+    Vector<IRuntimeGeometryProvider*, Core::Alloc::GlobalArena> m_runtimeGeometryProviders;
 };
 
 

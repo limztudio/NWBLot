@@ -81,7 +81,7 @@ void mergeSystemAccess(StageAccessContainer& stageAccesses, const SystemAccessCo
 
 
 ISystem::ISystem(Alloc::GlobalArena& arena)
-    : m_access(AccessAllocator(arena))
+    : m_access(arena)
 {}
 
 
@@ -105,8 +105,8 @@ void ISystem::registerAccess(ComponentTypeId typeId, AccessMode::Enum mode){
 
 SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)
     : m_arena(arena)
-    , m_stages(StageAllocator(arena))
-    , m_allSystems(SystemAllocator(arena))
+    , m_stages(arena)
+    , m_allSystems(arena)
     , m_dirty(false)
 {}
 
@@ -151,7 +151,7 @@ void SystemScheduler::rebuild(){
     }
 
     if(systemCount == 1u){
-        Stage stage{SystemAllocator(m_arena)};
+        Stage stage{m_arena};
         stage.push_back(m_allSystems[0]);
         m_stages.push_back(Move(stage));
         m_dirty = false;
@@ -164,12 +164,10 @@ void SystemScheduler::rebuild(){
     //  - One does not write a component that the other reads
 
     Alloc::ScratchArena<> scratchArena(4096);
-    using ScratchComponentAccessAllocator = ContainerDetail::ArenaAllocator<ComponentAccess, Alloc::ScratchArena<>>;
-    using ScratchSystemAllocator = ContainerDetail::ArenaAllocator<ISystem*, Alloc::ScratchArena<>>;
 
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>> assignedSystems(
+    Vector<u8, Alloc::ScratchArena<>> assignedSystems(
         systemCount, 0,
-        ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>(scratchArena)
+        scratchArena
     );
 
     usize componentAccessReserve = 0;
@@ -181,10 +179,10 @@ void SystemScheduler::rebuild(){
         componentAccessReserve += sys->m_access.size();
     }
 
-    Vector<ComponentAccess, ScratchComponentAccessAllocator> stageAccesses{ScratchComponentAccessAllocator(scratchArena)};
+    Vector<ComponentAccess, Alloc::ScratchArena<>> stageAccesses{scratchArena};
     stageAccesses.reserve(componentAccessReserve);
 
-    Vector<ISystem*, ScratchSystemAllocator> stageSystems{ScratchSystemAllocator(scratchArena)};
+    Vector<ISystem*, Alloc::ScratchArena<>> stageSystems{scratchArena};
     stageSystems.reserve(systemCount);
 
     usize numAssigned = 0;
@@ -209,7 +207,7 @@ void SystemScheduler::rebuild(){
             ++numAssigned;
         }
 
-        Stage stage{SystemAllocator(m_arena)};
+        Stage stage{m_arena};
         AssignTriviallyCopyableVector(stage, stageSystems);
         m_stages.push_back(Move(stage));
     }

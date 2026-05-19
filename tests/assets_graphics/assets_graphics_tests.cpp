@@ -33,6 +33,9 @@ using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeTriangleIndices;
+using AString = NWB::Tests::TestAString;
+template<typename T, typename AllocatorT = NWB::Tests::TestDetail::Allocator<T>>
+using Vector = std::vector<T, AllocatorT>;
 
 
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
@@ -40,6 +43,23 @@ using NWB::Tests::MakeTriangleIndices;
 
 struct AssetsGraphicsTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
+
+template<typename T>
+static NWB::Core::Assets::AssetVector<T> MakeAssetVector(TestArena& testArena){
+    return NWB::Core::Assets::AssetVector<T>(testArena.arena);
+}
+
+template<typename SourceVector>
+static auto MakeAssetVectorFrom(TestArena& testArena, const SourceVector& source){
+    using ValueType = typename SourceVector::value_type;
+    auto output = MakeAssetVector<ValueType>(testArena);
+    output.insert(output.end(), source.begin(), source.end());
+    return output;
+}
+
+static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
+    return NWB::Core::Assets::AssetBytes(testArena.arena);
+}
 
 #define NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 R"(asset.index_type = "u16";
 
@@ -481,11 +501,11 @@ static bool CookSingleGraphicsMeta(
     if(!WriteTextFile(metaPath, metaText))
         return false;
 
-    NWB::Core::Assets::AssetCookOptions options;
+    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
     options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(assetRoot));
-    options.outputDirectory = PathToString(outOutputDirectory);
-    options.cacheDirectory = PathToString(outRoot / "cache");
+    options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
+    options.outputDirectory = PathToString(testArena.arena, outOutputDirectory);
+    options.cacheDirectory = PathToString(testArena.arena, outRoot / "cache");
     if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
@@ -554,7 +574,7 @@ static bool LoadCookedAsset(
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
 
-    NWB::Core::Assets::AssetBytes binary;
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool loadedBinary = volumeSession.loadData(assetName, binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
@@ -562,7 +582,7 @@ static bool LoadCookedAsset(
         return false;
 
     AssetCodecT codec;
-    const bool deserialized = codec.deserialize(assetName, binary, outLoadedAsset);
+    const bool deserialized = codec.deserialize(testArena.arena, assetName, binary, outLoadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
     return deserialized && static_cast<bool>(outLoadedAsset);
@@ -737,8 +757,8 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, created);
         if(created){
             NWB::Core::Alloc::ScratchArena<> scratchArena;
-            Vector<u8, ContainerDetail::ArenaAllocator<u8, NWB::Core::Alloc::ScratchArena<>>> payload{
-                ContainerDetail::ArenaAllocator<u8, NWB::Core::Alloc::ScratchArena<>>(scratchArena)
+            ::Vector<u8, NWB::Core::Alloc::ScratchArena<>> payload{
+                scratchArena
             };
             payload.reserve(4u);
             payload.push_back(1u);
@@ -755,7 +775,7 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
                 const bool flushed = volumeSession.flush();
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, flushed);
                 if(flushed){
-                    NWB::Core::Assets::AssetBytes readback;
+                    NWB::Core::Assets::AssetBytes readback = MakeAssetBytes(testArena);
                     const bool loaded = volumeSession.loadData(virtualPath, readback);
                     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loaded);
                     if(loaded){
@@ -824,21 +844,21 @@ static usize SkinnedGeometryHeaderCountOffset(const usize countIndex){
 
 #endif
 
-static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(){
-    NWB::Impl::SkinnedGeometry geometry(Name("tests/characters/proxy_skinned_geometry"));
+static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(TestArena& testArena){
+    NWB::Impl::SkinnedGeometry geometry(testArena.arena, Name("tests/characters/proxy_skinned_geometry"));
 
-    Vector<NWB::Impl::SkinnedGeometryVertex> vertices;
+    auto vertices = MakeAssetVector<NWB::Impl::SkinnedGeometryVertex>(testArena);
     vertices.push_back(MakeRestVertex(-0.5f, -0.5f, 0.f, 0.f));
     vertices.push_back(MakeRestVertex(0.5f, -0.5f, 1.f, 0.f));
     vertices.push_back(MakeRestVertex(0.5f, 0.5f, 1.f, 1.f));
     vertices.push_back(MakeRestVertex(-0.5f, 0.5f, 0.f, 1.f));
 
-    Vector<u32> indices = MakeQuadTriangleIndices();
+    auto indices = MakeAssetVectorFrom(testArena, MakeQuadTriangleIndices());
 
-    Vector<NWB::Impl::SkinInfluence4> skin;
+    auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
     skin.assign(vertices.size(), MakeRootSkin());
 
-    Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices;
+    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkinnedGeometryJointMatrix>(testArena);
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
 
     geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
@@ -850,17 +870,17 @@ static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(){
     return geometry;
 }
 
-static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(){
-    NWB::Impl::SkinnedGeometry geometry(Name("tests/characters/minimal_skinned_geometry"));
+static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(TestArena& testArena){
+    NWB::Impl::SkinnedGeometry geometry(testArena.arena, Name("tests/characters/minimal_skinned_geometry"));
 
-    Vector<NWB::Impl::SkinnedGeometryVertex> vertices;
+    auto vertices = MakeAssetVector<NWB::Impl::SkinnedGeometryVertex>(testArena);
     vertices.push_back(MakeRestVertex(-0.5f, -0.5f, 0.f, 0.f));
     vertices.push_back(MakeRestVertex(0.5f, -0.5f, 1.f, 0.f));
     vertices.push_back(MakeRestVertex(0.f, 0.5f, 0.5f, 1.f));
 
-    Vector<u32> indices = MakeTriangleIndices();
+    auto indices = MakeAssetVectorFrom(testArena, MakeTriangleIndices());
 
-    Vector<NWB::Impl::SkinInfluence4> skin;
+    auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
     skin.assign(vertices.size(), MakeRootSkin());
 
     geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
@@ -871,23 +891,23 @@ static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(){
     return geometry;
 }
 
-static NWB::Impl::Geometry BuildMinimalGeometry(){
-    NWB::Impl::Geometry geometry(Name("tests/meshes/minimal_geometry"));
+static NWB::Impl::Geometry BuildMinimalGeometry(TestArena& testArena){
+    NWB::Impl::Geometry geometry(testArena.arena, Name("tests/meshes/minimal_geometry"));
 
-    Vector<Float3U> positions;
+    auto positions = MakeAssetVector<Float3U>(testArena);
     positions.push_back(Float3U(-0.5f, -0.5f, 0.f));
     positions.push_back(Float3U(0.5f, -0.5f, 0.f));
     positions.push_back(Float3U(0.f, 0.5f, 0.f));
 
-    Vector<Half4U> normals;
+    auto normals = MakeAssetVector<Half4U>(testArena);
     normals.assign(positions.size(), NWB::Impl::MakeGeometryNormalStreamValue(Float3U(0.f, 0.f, 1.f)));
 
-    Vector<Half4U> colors;
+    auto colors = MakeAssetVector<Half4U>(testArena);
     colors.push_back(NWB::Impl::MakeGeometryColorStreamValue(Float4U(1.f, 0.f, 0.f, 1.f)));
     colors.push_back(NWB::Impl::MakeGeometryColorStreamValue(Float4U(0.f, 1.f, 0.f, 1.f)));
     colors.push_back(NWB::Impl::MakeGeometryColorStreamValue(Float4U(0.f, 0.f, 1.f, 1.f)));
 
-    Vector<u32> indices = MakeTriangleIndices();
+    auto indices = MakeAssetVectorFrom(testArena, MakeTriangleIndices());
 
     geometry.setStreams(Move(positions), Move(normals), Move(colors));
     geometry.setIndices(Move(indices));
@@ -897,16 +917,17 @@ static NWB::Impl::Geometry BuildMinimalGeometry(){
 template<typename AssetT, typename CodecT>
 static const AssetT& CheckCodecRoundTrip(
     TestContext& context,
+    TestArena& testArena,
     const AssetT& asset,
     const CodecT& codec,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, asset.validatePayload());
 
-    NWB::Core::Assets::AssetBytes binary;
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(asset, binary));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.deserialize(asset.virtualPath(), binary, outLoadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.deserialize(testArena.arena, asset.virtualPath(), binary, outLoadedAsset));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, outLoadedAsset->assetType() == AssetT::AssetTypeName());
     return static_cast<const AssetT&>(*outLoadedAsset);
@@ -915,11 +936,12 @@ static const AssetT& CheckCodecRoundTrip(
 template<typename CodecT>
 static void CheckCodecRejectsBinary(
     TestContext& context,
+    TestArena& testArena,
     const CodecT& codec,
     const Name& virtualPath,
     const NWB::Core::Assets::AssetBytes& binary){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(virtualPath, binary, loadedAsset));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !codec.deserialize(testArena.arena, virtualPath, binary, loadedAsset));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
 }
 
@@ -945,20 +967,21 @@ static void CheckCodecRejectsUnsupportedBinaryVersion(
     const u32 unsupportedVersion
 ){
 #if defined(NWB_FINAL)
+    TestArena testArena;
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    auto asset = buildAsset();
+    auto asset = buildAsset(testArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, asset.validatePayload());
 
     CodecT codec;
-    NWB::Core::Assets::AssetBytes binary;
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(asset, binary));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(binary, sizeof(u32), unsupportedVersion));
 
-    CheckCodecRejectsBinary(context, codec, asset.virtualPath(), binary);
+    CheckCodecRejectsBinary(context, testArena, codec, asset.virtualPath(), binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
-    const TString expectedError = StringFormat(NWB_TEXT("unsupported version {}"), unsupportedVersion);
+    const auto expectedError = StringFormat(logger.arena(), NWB_TEXT("unsupported version {}"), unsupportedVersion);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(expectedError.c_str()));
 #else
     static_cast<void>(context);
@@ -968,11 +991,12 @@ static void CheckCodecRejectsUnsupportedBinaryVersion(
 }
 
 static void TestGeometryCodecRoundTrip(TestContext& context){
-    NWB::Impl::Geometry geometry = BuildMinimalGeometry();
+    TestArena testArena;
+    NWB::Impl::Geometry geometry = BuildMinimalGeometry(testArena);
 
     NWB::Impl::GeometryAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::Geometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
+    const NWB::Impl::Geometry& loadedGeometry = CheckCodecRoundTrip(context, testArena, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertexCount() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.positions()[1].x == 0.5f);
@@ -990,21 +1014,23 @@ static void TestGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& contex
 }
 
 static void TestSkinnedGeometryCodecRoundTrip(TestContext& context){
-    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
+    TestArena testArena;
+    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry(testArena);
 
     NWB::Impl::SkinnedGeometryAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
+    const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, testArena, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.virtualPath() == geometry.virtualPath());
     CheckSkinnedSkinnedGeometryPayload(context, loadedGeometry, 1u, 1u, 0u);
 }
 
 static void TestMinimalSkinnedGeometryCodecRoundTrip(TestContext& context){
-    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry();
+    TestArena testArena;
+    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry(testArena);
 
     NWB::Impl::SkinnedGeometryAssetCodec codec;
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, geometry, codec, loadedAsset);
+    const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, testArena, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
@@ -1022,19 +1048,20 @@ static void TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(TestContext&
 
 static void TestSkinnedGeometryCodecRejectsMalformedCounts(TestContext& context){
 #if defined(NWB_FINAL)
+    TestArena testArena;
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry();
+    NWB::Impl::SkinnedGeometry geometry = BuildMinimalSkinnedGeometry(testArena);
     NWB::Impl::SkinnedGeometryAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary;
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
     const usize skeletonJointCountOffset = SkinnedGeometryHeaderCountOffset(3u);
     const u64 invalidJointCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, skeletonJointCountOffset, invalidJointCount));
 
-    CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), binary);
+    CheckCodecRejectsBinary(context, testArena, codec, geometry.virtualPath(), binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("payload counts exceed u32 limits")));
 #else
@@ -1044,12 +1071,13 @@ static void TestSkinnedGeometryCodecRejectsMalformedCounts(TestContext& context)
 
 static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext& context){
 #if defined(NWB_FINAL)
+    TestArena testArena;
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
+    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry(testArena);
     NWB::Impl::SkinnedGeometryAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary;
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(geometry, binary));
 
     {
@@ -1060,7 +1088,7 @@ static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext&
             static_cast<u64>(geometry.restVertices().size() - 1u)
         ));
 
-        CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), malformed);
+        CheckCodecRejectsBinary(context, testArena, codec, geometry.virtualPath(), malformed);
     }
 
     {
@@ -1071,7 +1099,7 @@ static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext&
             static_cast<u64>(geometry.restVertices().size() - 1u)
         ));
 
-        CheckCodecRejectsBinary(context, codec, geometry.virtualPath(), malformed);
+        CheckCodecRejectsBinary(context, testArena, codec, geometry.virtualPath(), malformed);
     }
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 2u);
@@ -1304,7 +1332,8 @@ static void TestSkinnedGeometryCookerValidationFailures(TestContext& context){
 
 template<typename MutateFnT>
 static void CheckInvalidSkinnedGeometry(TestContext& context, MutateFnT mutate){
-    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry();
+    TestArena testArena;
+    NWB::Impl::SkinnedGeometry geometry = BuildValidSkinnedGeometry(testArena);
     mutate(geometry);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !geometry.validatePayload());
 }
@@ -1315,49 +1344,49 @@ static void TestSkinnedGeometryValidationFailures(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         NWB::Impl::StoreSkinnedGeometryVertexNormal(vertices[0], Float3U(0.f, 0.f, 0.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(1.f, 0.f, 0.f, 0.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(0.f, 0.f, 1.f, 1.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(1.f, 0.f, 0.f, 2.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         NWB::Impl::StoreSkinnedGeometryVertexNormal(vertices[0], Float3U(0.f, 0.f, 2.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         NWB::Impl::StoreSkinnedGeometryVertexTangent(vertices[0], Float4U(0.70710677f, 0.f, 0.70710677f, 1.f));
         geometry.setRestVertices(Move(vertices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
+        auto skin = geometry.skin();
         skin[0].weight[0] = 0.5f;
         geometry.setSkin(Move(skin));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
+        auto skin = geometry.skin();
         skin.pop_back();
         geometry.setSkin(Move(skin));
     });
@@ -1367,43 +1396,43 @@ static void TestSkinnedGeometryValidationFailures(TestContext& context){
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
+        auto inverseBindMatrices = geometry.inverseBindMatrices();
         inverseBindMatrices.push_back(MakeJointMatrix(0.0f, 0.0f, 0.0f));
         geometry.setInverseBindMatrices(Move(inverseBindMatrices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryJointMatrix> inverseBindMatrices = geometry.inverseBindMatrices();
+        auto inverseBindMatrices = geometry.inverseBindMatrices();
         inverseBindMatrices[0u].rows[3].w = 0.0f;
         geometry.setInverseBindMatrices(Move(inverseBindMatrices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinInfluence4> skin = geometry.skin();
+        auto skin = geometry.skin();
         skin[0].joint[0] = 1u;
         geometry.setSkin(Move(skin));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<u32> indices = geometry.indices();
+        auto indices = geometry.indices();
         indices.pop_back();
         geometry.setIndices(Move(indices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<u32> indices = geometry.indices();
+        auto indices = geometry.indices();
         indices[2] = 99u;
         geometry.setIndices(Move(indices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<u32> indices = geometry.indices();
+        auto indices = geometry.indices();
         indices[2] = indices[1];
         geometry.setIndices(Move(indices));
     });
 
     CheckInvalidSkinnedGeometry(context, [](NWB::Impl::SkinnedGeometry& geometry){
-        Vector<NWB::Impl::SkinnedGeometryVertex> vertices = geometry.restVertices();
+        auto vertices = geometry.restVertices();
         vertices[2].position = Float3U(0.0f, -0.5f, 0.0f);
         geometry.setRestVertices(Move(vertices));
     });

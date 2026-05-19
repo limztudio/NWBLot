@@ -18,9 +18,9 @@ NWB_VULKAN_BEGIN
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 queueFamilyIndex)
     : RefCounter<IResource>(context.threadPool)
-    , m_referencedResources(ContainerDetail::ArenaAllocator<RefCountPtr<IResource, ArenaRefDeleter<IResource>>, Alloc::GlobalArena>(context.objectArena))
-    , m_referencedStagingBuffers(ContainerDetail::ArenaAllocator<RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>>, Alloc::GlobalArena>(context.objectArena))
-    , m_referencedAccelStructHandles(ContainerDetail::ArenaAllocator<VkAccelerationStructureKHR, Alloc::GlobalArena>(context.objectArena))
+    , m_referencedResources(context.objectArena)
+    , m_referencedStagingBuffers(context.objectArena)
+    , m_referencedAccelStructHandles(context.objectArena)
     , m_context(context)
 {
     // Use TRANSIENT flag to hint that command buffers are short-lived
@@ -83,15 +83,15 @@ Queue::Queue(const VulkanContext& context, CommandQueue::Enum queueID, VkQueue q
     , m_queue(queue)
     , m_queueID(queueID)
     , m_queueFamilyIndex(queueFamilyIndex)
-    , m_waitSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(context.objectArena))
-    , m_waitSemaphoreValues(ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>(context.objectArena))
-    , m_signalSemaphores(ContainerDetail::ArenaAllocator<VkSemaphore, Alloc::GlobalArena>(context.objectArena))
-    , m_signalSemaphoreValues(ContainerDetail::ArenaAllocator<u64, Alloc::GlobalArena>(context.objectArena))
+    , m_waitSemaphores(context.objectArena)
+    , m_waitSemaphoreValues(context.objectArena)
+    , m_signalSemaphores(context.objectArena)
+    , m_signalSemaphoreValues(context.objectArena)
     , m_lastRecordingID(0)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
-    , m_commandBuffersInFlight(ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::GlobalArena>(context.objectArena))
-    , m_commandBuffersPool(ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::GlobalArena>(context.objectArena))
+    , m_commandBuffersInFlight(context.objectArena)
+    , m_commandBuffersPool(context.objectArena)
 {
     auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
@@ -229,8 +229,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         }
     }
 
-    Vector<TrackedCommandBufferPtr, ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::ScratchArena<>>> trackedBuffers{ ContainerDetail::ArenaAllocator<TrackedCommandBufferPtr, Alloc::ScratchArena<>>(scratchArena) };
-    Vector<VkCommandBufferSubmitInfo, ContainerDetail::ArenaAllocator<VkCommandBufferSubmitInfo, Alloc::ScratchArena<>>> cmdBufInfos{ ContainerDetail::ArenaAllocator<VkCommandBufferSubmitInfo, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<TrackedCommandBufferPtr, Alloc::ScratchArena<>> trackedBuffers{scratchArena};
+    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchArena<>> cmdBufInfos{scratchArena};
 
     if(hasCommands){
         trackedBuffers.reserve(numCmd);
@@ -269,7 +269,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-    Vector<VkSemaphoreSubmitInfo, ContainerDetail::ArenaAllocator<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>>> waitInfos{ ContainerDetail::ArenaAllocator<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>> waitInfos{scratchArena};
     waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
@@ -279,7 +279,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         waitInfos.push_back(waitInfo);
     }
 
-    Vector<VkSemaphoreSubmitInfo, ContainerDetail::ArenaAllocator<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>>> signalInfos{ ContainerDetail::ArenaAllocator<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>> signalInfos{scratchArena};
     signalInfos.reserve(1u + m_signalSemaphores.size());
     signalInfos.push_back(timelineSignal);
 
@@ -465,8 +465,8 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
 
     Alloc::ScratchArena<> scratchArena(8192);
 
-    Vector<VkSparseImageMemoryBind, ContainerDetail::ArenaAllocator<VkSparseImageMemoryBind, Alloc::ScratchArena<>>> sparseImageMemoryBinds{ ContainerDetail::ArenaAllocator<VkSparseImageMemoryBind, Alloc::ScratchArena<>>(scratchArena) };
-    Vector<VkSparseMemoryBind, ContainerDetail::ArenaAllocator<VkSparseMemoryBind, Alloc::ScratchArena<>>> sparseMemoryBinds{ ContainerDetail::ArenaAllocator<VkSparseMemoryBind, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<VkSparseImageMemoryBind, Alloc::ScratchArena<>> sparseImageMemoryBinds{scratchArena};
+    Vector<VkSparseMemoryBind, Alloc::ScratchArena<>> sparseMemoryBinds{scratchArena};
 
     const VkImageCreateInfo& imageInfo = texture->m_imageInfo;
     const VkImageAspectFlags textureAspectFlags = texture->m_aspectMask;
@@ -486,7 +486,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
         &formatPropCount, nullptr
     );
 
-    Vector<VkSparseImageFormatProperties, ContainerDetail::ArenaAllocator<VkSparseImageFormatProperties, Alloc::ScratchArena<>>> formatProps(formatPropCount, ContainerDetail::ArenaAllocator<VkSparseImageFormatProperties, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkSparseImageFormatProperties, Alloc::ScratchArena<>> formatProps(formatPropCount, scratchArena);
     if(formatPropCount > 0)
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,
@@ -501,7 +501,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
         tileDepth = formatProps[0].imageGranularity.depth;
     }
 
-    SparseImageMemoryRequirementsVector sparseReqs{ ContainerDetail::ArenaAllocator<VkSparseImageMemoryRequirements, Alloc::ScratchArena<>>(scratchArena) };
+    SparseImageMemoryRequirementsVector sparseReqs{ scratchArena };
     VulkanDetail::GetImageSparseMemoryRequirements(m_context.device, texture->m_image, sparseReqs);
 
     if(!sparseReqs.empty()){
@@ -515,7 +515,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
         usize opaqueBase = 0;
         usize imageBase = 0;
     };
-    Vector<MappingBindCounts, ContainerDetail::ArenaAllocator<MappingBindCounts, Alloc::ScratchArena<>>> mappingCounts(mappingCount, ContainerDetail::ArenaAllocator<MappingBindCounts, Alloc::ScratchArena<>>(scratchArena));
+    Vector<MappingBindCounts, Alloc::ScratchArena<>> mappingCounts(mappingCount, scratchArena);
 
     auto countMappingBinds = [&](usize i){
         MappingBindCounts& counts = mappingCounts[i];

@@ -21,7 +21,16 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class PersistentArena : public ArenaBase{
+class PersistentArena : public ArenaBaseT<PersistentArena>{
+public:
+    using Base = ArenaBaseT<PersistentArena>;
+
+
+public:
+    using Base::allocate;
+    using Base::deallocate;
+
+
 public:
     inline static usize StructureAlignedSize(usize byte){
         const usize overhead = AddSize(static_cast<usize>(tlsf_size()), 8);
@@ -31,7 +40,7 @@ public:
 
 public:
     PersistentArena(usize maxSize, const char* allocationLog = "NWB::Core::Alloc::PersistentArena")
-        : ArenaBase(allocationLog)
+        : Base(allocationLog)
         , m_bucket(CoreAlloc(maxSize, allocationLog))
         , m_maxSize(maxSize)
         , m_handle(tlsf_create_with_pool(m_bucket, m_maxSize))
@@ -58,19 +67,11 @@ public:
         static_cast<void>(align);
         return tlsf_realloc(m_handle, p, size);
     }
-    template<typename T>
-    inline T* allocate(usize count){
-        return AllocDetail::AllocateTyped<T>(*this, count);
-    }
 
     inline void deallocate(void* p, usize align, usize size){
         static_cast<void>(align);
         static_cast<void>(size);
         tlsf_free(m_handle, p);
-    }
-    template<typename T>
-    inline void deallocate(void* p, usize count){
-        AllocDetail::DeallocateTyped<T>(*this, p, count);
     }
 
 

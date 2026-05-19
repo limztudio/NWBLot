@@ -43,10 +43,10 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 
     MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
-    createdInfo.shaderVariant = material.shaderVariant().empty()
-        ? AString(Core::ShaderArchive::s_DefaultVariant)
-        : material.shaderVariant()
-    ;
+    if(material.shaderVariant().empty())
+        createdInfo.shaderVariant.assign(Core::ShaderArchive::s_DefaultVariant);
+    else
+        createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
     createdInfo.valid = true;
 
     (void)material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);

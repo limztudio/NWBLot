@@ -76,9 +76,9 @@ class ComponentPool final : public IComponentPool{
 
 
 public:
-    using SparseAllocator = ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>;
-    using EntityIdAllocator = ContainerDetail::ArenaAllocator<EntityID, Alloc::GlobalArena>;
-    using ComponentAllocator = ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>;
+    using SparseAllocator = Alloc::GlobalArena;
+    using EntityIdAllocator = Alloc::GlobalArena;
+    using ComponentAllocator = Alloc::GlobalArena;
 
 
 private:
@@ -109,9 +109,9 @@ private:
 
 public:
     explicit ComponentPool(Alloc::GlobalArena& arena)
-        : m_sparse(SparseAllocator(arena))
-        , m_dense(EntityIdAllocator(arena))
-        , m_components(ComponentAllocator(arena))
+        : m_sparse(arena)
+        , m_dense(arena)
+        , m_components(arena)
     {}
 
 
@@ -190,9 +190,9 @@ public:
     inline virtual usize size()const override{ return m_dense.size(); }
 
 private:
-    Vector<u32, SparseAllocator> m_sparse;
-    Vector<EntityID, EntityIdAllocator> m_dense;
-    Vector<T, ComponentAllocator> m_components;
+    Vector<u32, Alloc::GlobalArena> m_sparse;
+    Vector<EntityID, Alloc::GlobalArena> m_dense;
+    Vector<T, Alloc::GlobalArena> m_components;
 };
 
 

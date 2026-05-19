@@ -70,6 +70,7 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
 
 template<typename BuildItemsFunc>
 static bool CreateBindingLayout(
+    Core::GraphicsArena& arena,
     Core::IDevice& device,
     Core::BindingLayoutHandle& layout,
     const Core::ShaderType::Mask visibility,
@@ -79,7 +80,7 @@ static bool CreateBindingLayout(
     if(layout)
         return true;
 
-    Core::BindingLayoutDesc bindingLayoutDesc;
+    Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(visibility);
     buildItems(bindingLayoutDesc);
 
@@ -216,6 +217,7 @@ bool RendererSystem::createAvboitResources(){
         return false;
 
     if(!__hidden_renderer_avboit::CreateBindingLayout(
+        m_arena,
         *device,
         m_avboitEmptyBindingLayout,
         Core::ShaderType::Pixel,
@@ -225,6 +227,7 @@ bool RendererSystem::createAvboitResources(){
         return false;
 
     if(!__hidden_renderer_avboit::CreateBindingLayout(
+        m_arena,
         *device,
         m_avboitOccupancyBindingLayout,
         Core::ShaderType::Pixel,
@@ -239,6 +242,7 @@ bool RendererSystem::createAvboitResources(){
         return false;
 
     if(!__hidden_renderer_avboit::CreateBindingLayout(
+        m_arena,
         *device,
         m_avboitDepthWarpBindingLayout,
         Core::ShaderType::Compute,
@@ -253,6 +257,7 @@ bool RendererSystem::createAvboitResources(){
         return false;
 
     if(!__hidden_renderer_avboit::CreateBindingLayout(
+        m_arena,
         *device,
         m_avboitExtinctionBindingLayout,
         Core::ShaderType::Pixel,
@@ -270,6 +275,7 @@ bool RendererSystem::createAvboitResources(){
         return false;
 
     if(!__hidden_renderer_avboit::CreateBindingLayout(
+        m_arena,
         *device,
         m_avboitIntegrateBindingLayout,
         Core::ShaderType::Compute,
@@ -285,6 +291,7 @@ bool RendererSystem::createAvboitResources(){
         return false;
 
     if(!__hidden_renderer_avboit::CreateBindingLayout(
+        m_arena,
         *device,
         m_avboitAccumulateBindingLayout,
         Core::ShaderType::Pixel,
@@ -592,7 +599,7 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    Core::BindingSetDesc occupancyBindingSetDesc;
+    Core::BindingSetDesc occupancyBindingSetDesc(m_arena);
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
         createdTargets.depth.get(),
@@ -608,7 +615,7 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    Core::BindingSetDesc depthWarpBindingSetDesc;
+    Core::BindingSetDesc depthWarpBindingSetDesc(m_arena);
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.coverageBuffer.get()));
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.depthWarpBuffer.get()));
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.controlBuffer.get()));
@@ -618,7 +625,7 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    Core::BindingSetDesc extinctionBindingSetDesc;
+    Core::BindingSetDesc extinctionBindingSetDesc(m_arena);
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
         createdTargets.depth.get(),
@@ -637,7 +644,7 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    Core::BindingSetDesc integrateBindingSetDesc;
+    Core::BindingSetDesc integrateBindingSetDesc(m_arena);
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.extinctionBuffer.get()));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         1,
@@ -654,7 +661,7 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    Core::BindingSetDesc accumulateBindingSetDesc;
+    Core::BindingSetDesc accumulateBindingSetDesc(m_arena);
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.depthWarpBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         1,

@@ -7,6 +7,8 @@
 
 #include "skinned_geometry_types.h"
 
+#include <core/assets/asset.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,11 +78,11 @@ struct RuntimePayloadFailureInfo{
 };
 
 struct RuntimePayloadArrays{
-    const Vector<SkinnedGeometryVertex>& restVertices;
-    const Vector<u32>& indices;
+    const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices;
+    const Core::Assets::AssetVector<u32>& indices;
     u32 skeletonJointCount;
-    const Vector<SkinInfluence4>& skin;
-    const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices;
+    const Core::Assets::AssetVector<SkinInfluence4>& skin;
+    const Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& inverseBindMatrices;
 };
 
 
@@ -208,7 +210,7 @@ struct RuntimePayloadArrays{
 }
 
 [[nodiscard]] inline bool ValidInverseBindMatrices(
-    const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices,
+    const Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& inverseBindMatrices,
     const u32 skeletonJointCount){
     if(inverseBindMatrices.empty())
         return true;
@@ -222,7 +224,7 @@ struct RuntimePayloadArrays{
     return true;
 }
 
-[[nodiscard]] inline bool ValidTriangleArea(const Vector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
+[[nodiscard]] inline bool ValidTriangleArea(const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
     const SIMDVector aPosition = LoadSkinnedGeometryVertexPosition(restVertices[a]);
     const SIMDVector ab = VectorSubtract(LoadSkinnedGeometryVertexPosition(restVertices[b]), aPosition);
     const SIMDVector ac = VectorSubtract(LoadSkinnedGeometryVertexPosition(restVertices[c]), aPosition);
@@ -230,7 +232,7 @@ struct RuntimePayloadArrays{
     return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
 }
 
-[[nodiscard]] inline bool ValidTriangle(const Vector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
+[[nodiscard]] inline bool ValidTriangle(const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
     if(a >= restVertices.size() || b >= restVertices.size() || c >= restVertices.size())
         return false;
     if(a == b || a == c || b == c)
@@ -240,11 +242,11 @@ struct RuntimePayloadArrays{
 }
 
 [[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(const RuntimePayloadArrays& payload){
-    const Vector<SkinnedGeometryVertex>& restVertices = payload.restVertices;
-    const Vector<u32>& indices = payload.indices;
+    const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices = payload.restVertices;
+    const Core::Assets::AssetVector<u32>& indices = payload.indices;
     const u32 skeletonJointCount = payload.skeletonJointCount;
-    const Vector<SkinInfluence4>& skin = payload.skin;
-    const Vector<SkinnedGeometryJointMatrix>& inverseBindMatrices = payload.inverseBindMatrices;
+    const Core::Assets::AssetVector<SkinInfluence4>& skin = payload.skin;
+    const Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& inverseBindMatrices = payload.inverseBindMatrices;
 
     if(restVertices.empty() || indices.empty())
         return MakeRuntimePayloadFailure(RuntimePayloadFailure::IncompleteRestIndexPayload);

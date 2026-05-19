@@ -96,7 +96,7 @@ public:
 
 public:
     ArenaAllocator() = delete;
-    constexpr explicit ArenaAllocator(ArenaT& arena)noexcept
+    constexpr ArenaAllocator(ArenaT& arena)noexcept
         : m_arena(arena)
     {}
     constexpr ArenaAllocator(const ArenaAllocator&)noexcept = default;
@@ -119,7 +119,7 @@ public:
         m_arena.deallocate(buffer, static_cast<size_type>(alignof(value_type)), bytes);
     }
 
-    [[nodiscard]] constexpr NWB_ALLOCATOR_PREFIX pointer allocate(const size_type count) NWB_ALLOCATOR_SUFFIX{
+    [[nodiscard]] constexpr pointer allocate(const size_type count){
         const size_type bytes = AdaptorDetail::SizeOf<value_type>(count);
         if(bytes == 0u)
             return nullptr;
@@ -184,7 +184,7 @@ public:
 
 public:
     ArenaCacheAlignedAllocator() = delete;
-    constexpr explicit ArenaCacheAlignedAllocator(ArenaT& arena)noexcept
+    constexpr ArenaCacheAlignedAllocator(ArenaT& arena)noexcept
         : m_arena(arena)
     {}
     constexpr ArenaCacheAlignedAllocator(const ArenaCacheAlignedAllocator&)noexcept = default;
@@ -211,7 +211,7 @@ public:
         m_arena.deallocate(buffer, alignment(), bytes);
     }
 
-    [[nodiscard]] constexpr NWB_ALLOCATOR_PREFIX pointer allocate(const size_type count) NWB_ALLOCATOR_SUFFIX{
+    [[nodiscard]] constexpr pointer allocate(const size_type count){
         const size_type bytes = AdaptorDetail::SizeOf<value_type>(count);
         if(bytes == 0u)
             return nullptr;
@@ -248,49 +248,16 @@ inline bool operator!=(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const A
 
 
 template<typename T>
-concept ContainerAllocatorLike = requires(T& allocator, typename T::size_type count, typename T::pointer pointer){
-    typename T::value_type;
-    typename T::size_type;
-    typename T::pointer;
-
-    allocator.allocate(count);
-    allocator.deallocate(pointer, count);
-};
-
-template<typename T>
 concept ArenaResourceLike = requires(T& arena, void* pointer, usize align, usize size){
     arena.allocate(align, size);
     arena.deallocate(pointer, align, size);
 };
 
-template<typename T>
-concept ContainerResourceLike = ContainerAllocatorLike<T> || ArenaResourceLike<T>;
+template<typename T, typename ArenaT>
+using ArenaAllocatorFor_T = ArenaAllocator<T, ArenaT>;
 
-template<typename T, typename ResourceT, bool resourceIsAllocator = ContainerAllocatorLike<ResourceT>>
-struct ArenaAllocatorFor{
-    using Type = ArenaAllocator<T, ResourceT>;
-};
-
-template<typename T, typename AllocatorT>
-struct ArenaAllocatorFor<T, AllocatorT, true>{
-    using Type = AllocatorT;
-};
-
-template<typename T, typename ResourceT>
-using ArenaAllocatorFor_T = typename ArenaAllocatorFor<T, ResourceT>::Type;
-
-template<typename T, typename ResourceT, bool resourceIsAllocator = ContainerAllocatorLike<ResourceT>>
-struct ArenaCacheAlignedAllocatorFor{
-    using Type = ArenaCacheAlignedAllocator<T, ResourceT>;
-};
-
-template<typename T, typename AllocatorT>
-struct ArenaCacheAlignedAllocatorFor<T, AllocatorT, true>{
-    using Type = AllocatorT;
-};
-
-template<typename T, typename ResourceT>
-using ArenaCacheAlignedAllocatorFor_T = typename ArenaCacheAlignedAllocatorFor<T, ResourceT>::Type;
+template<typename T, typename ArenaT>
+using ArenaCacheAlignedAllocatorFor_T = ArenaCacheAlignedAllocator<T, ArenaT>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

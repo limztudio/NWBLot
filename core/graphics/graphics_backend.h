@@ -33,7 +33,7 @@ public:
     [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const = 0;
     [[nodiscard]] virtual const tchar* getRendererString()const = 0;
 
-    virtual bool enumerateAdapters(Vector<AdapterInfo>& outAdapters) = 0;
+    virtual bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters) = 0;
 
     [[nodiscard]] virtual ITexture* getCurrentBackBuffer() = 0;
     [[nodiscard]] virtual ITexture* getBackBuffer(u32 index) = 0;

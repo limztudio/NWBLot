@@ -201,8 +201,10 @@ template<typename Container>
     return true;
 }
 
-template<typename Container>
-[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, AString& outText){
+template<typename Container, typename StringT>
+[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, StringT& outText)
+    requires requires(StringT& text, const char* data, usize size){ text.assign(data, size); }
+{
     usize cursor = inOutOffset;
     AStringView parsedText;
     if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, parsedText))

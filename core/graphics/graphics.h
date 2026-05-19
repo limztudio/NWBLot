@@ -23,8 +23,8 @@ class Graphics{
 private:
     using BackendOwner = GlobalUniquePtr<IGraphicsBackend>;
     using BackendPtr = NotNullUniquePtr<IGraphicsBackend, BackendOwner::deleter_type>;
-    using RenderPassListAllocator = ContainerDetail::ArenaAllocator<IRenderPass*, Alloc::GlobalArena>;
-    using SwapChainFramebufferVectorAllocator = ContainerDetail::ArenaAllocator<FramebufferHandle, Alloc::GlobalArena>;
+    using RenderPassListAllocator = Alloc::GlobalArena;
+    using SwapChainFramebufferVectorAllocator = Alloc::GlobalArena;
 
 
 public:
@@ -114,7 +114,7 @@ public:
 
 public:
     [[nodiscard]] IDevice* getDevice()const noexcept{ return m_backend->getDevice(); }
-    [[nodiscard]] bool enumerateAdapters(Vector<AdapterInfo>& outAdapters){ return m_backend->enumerateAdapters(outAdapters); }
+    [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){ return m_backend->enumerateAdapters(outAdapters); }
 
     void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
@@ -188,7 +188,7 @@ private:
     bool m_windowVisible = false;
     bool m_windowIsInFocus = true;
 
-    List<IRenderPass*, RenderPassListAllocator> m_renderPasses;
+    List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
     Timer m_previousFrameTimestamp = {};
     f32 m_dpiScaleFactorX = 1.f;
     f32 m_dpiScaleFactorY = 1.f;
@@ -204,9 +204,9 @@ private:
 
     u32 m_frameIndex = 0;
 
-    Vector<FramebufferHandle, SwapChainFramebufferVectorAllocator> m_swapChainFramebuffers;
+    Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
 
-    BasicString<tchar> m_windowTitle;
+    GraphicsTString m_windowTitle;
     PointerScaleChangedCallback m_pointerScaleChangedCallback = nullptr;
     void* m_pointerScaleChangedUserData = nullptr;
 };

@@ -75,9 +75,19 @@ template<typename CharT>
 [[nodiscard]] inline u64 ComputeFnv64Text(const BasicStringView<CharT> text){
     return ComputeFnv64Bytes(text.data(), text.size() * sizeof(CharT));
 }
-template<typename CharT>
-[[nodiscard]] inline u64 ComputeFnv64Text(const BasicString<CharT>& text){
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline u64 ComputeFnv64Text(const BasicString<CharT, ArenaT>& text){
     return ComputeFnv64Text(BasicStringView<CharT>(text));
+}
+template<typename StringT>
+    requires requires(const StringT& text){
+        typename StringT::value_type;
+        text.data();
+        text.size();
+    }
+[[nodiscard]] inline u64 ComputeFnv64Text(const StringT& text){
+    using CharT = typename StringT::value_type;
+    return ComputeFnv64Text(BasicStringView<CharT>(text.data(), text.size()));
 }
 
 
@@ -117,8 +127,32 @@ template<typename CharT>
 }
 
 
-template<typename CharT>
-inline void AppendHexU64(const u64 value, BasicString<CharT>& outText){
+template<typename CharT, typename ArenaT>
+inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText){
+    static constexpr CharT s_HexDigits[16] = {
+        static_cast<CharT>('0'), static_cast<CharT>('1'), static_cast<CharT>('2'), static_cast<CharT>('3'),
+        static_cast<CharT>('4'), static_cast<CharT>('5'), static_cast<CharT>('6'), static_cast<CharT>('7'),
+        static_cast<CharT>('8'), static_cast<CharT>('9'), static_cast<CharT>('a'), static_cast<CharT>('b'),
+        static_cast<CharT>('c'), static_cast<CharT>('d'), static_cast<CharT>('e'), static_cast<CharT>('f')
+    };
+    if(outText.size() > outText.max_size() - 16u)
+        return;
+
+    for(u32 nibbleIndex = 0; nibbleIndex < 16u; ++nibbleIndex){
+        const u32 shift = (15 - nibbleIndex) * 4;
+        const usize nibble = static_cast<usize>((value >> shift) & 0xF);
+        outText.push_back(s_HexDigits[nibble]);
+    }
+}
+template<typename StringT>
+    requires requires(StringT& text){
+        typename StringT::value_type;
+        text.size();
+        text.max_size();
+        text.push_back(typename StringT::value_type{});
+    }
+inline void AppendHexU64(const u64 value, StringT& outText){
+    using CharT = typename StringT::value_type;
     static constexpr CharT s_HexDigits[16] = {
         static_cast<CharT>('0'), static_cast<CharT>('1'), static_cast<CharT>('2'), static_cast<CharT>('3'),
         static_cast<CharT>('4'), static_cast<CharT>('5'), static_cast<CharT>('6'), static_cast<CharT>('7'),
@@ -136,19 +170,22 @@ inline void AppendHexU64(const u64 value, BasicString<CharT>& outText){
 }
 
 
-[[nodiscard]] inline AString FormatHex64A(const u64 value){
-    AString result;
+template<typename ArenaT>
+[[nodiscard]] inline AString<ArenaT> FormatHex64A(ArenaT& arena, const u64 value){
+    AString<ArenaT> result{arena};
     result.reserve(16);
     AppendHexU64(value, result);
     return result;
 }
-[[nodiscard]] inline WString FormatHex64W(const u64 value){
-    WString result;
+template<typename ArenaT>
+[[nodiscard]] inline WString<ArenaT> FormatHex64W(ArenaT& arena, const u64 value){
+    WString<ArenaT> result{arena};
     result.reserve(16);
     AppendHexU64(value, result);
     return result;
 }
-[[nodiscard]] inline auto FormatHex64(const u64 value){ return FormatHex64A(value); }
+template<typename ArenaT>
+[[nodiscard]] inline auto FormatHex64(ArenaT& arena, const u64 value){ return FormatHex64A(arena, value); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

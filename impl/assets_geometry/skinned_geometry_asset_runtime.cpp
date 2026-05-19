@@ -9,6 +9,7 @@
 #include "geometry_binary_payload.h"
 
 #include <core/assets/asset_auto_registration.h>
+#include <core/alloc/scratch.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 
@@ -44,7 +45,8 @@ Core::Assets::AssetCodecAutoRegistrar s_SkinnedGeometryAssetCodecAutoRegistrar(&
 
 
 bool SkinnedGeometry::validatePayload()const{
-    const TString geometryPathText = Core::Assets::AssetVirtualPathText(*this);
+    Core::Alloc::ScratchArena<> scratchArena;
+    const TString<Core::Alloc::ScratchArena<>> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(!GeometryClassUsesSkinnedGeometryRuntime(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")

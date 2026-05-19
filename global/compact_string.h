@@ -47,7 +47,8 @@ public:
         NWB_ASSERT_MSG(assigned, NWB_TEXT("CompactString initialization exceeded capacity"));
         static_cast<void>(assigned);
     }
-    explicit CompactString(const AString& text)
+    template<typename ArenaT>
+    explicit CompactString(const AString<ArenaT>& text)
         : m_storage{}
         , m_size(0)
     {
@@ -87,7 +88,8 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool assign(const AString& text){
+    template<typename ArenaT>
+    [[nodiscard]] bool assign(const AString<ArenaT>& text){
         return assign(AStringView(text));
     }
 
@@ -119,7 +121,8 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool append(const AString& text){
+    template<typename ArenaT>
+    [[nodiscard]] bool append(const AString<ArenaT>& text){
         return append(AStringView(text));
     }
 
@@ -168,6 +171,10 @@ public:
         return AStringView(m_storage, m_size);
     }
 
+    [[nodiscard]] operator AStringView()const{
+        return view();
+    }
+
     [[nodiscard]] const char* c_str()const{
         return m_storage;
     }
@@ -211,7 +218,8 @@ public:
         return *this;
     }
 
-    CompactString& operator+=(const AString& text){
+    template<typename ArenaT>
+    CompactString& operator+=(const AString<ArenaT>& text){
         const bool appended = append(text);
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
         static_cast<void>(appended);
@@ -268,7 +276,8 @@ static_assert(sizeof(CompactString) == CompactString::s_StorageBytes, "CompactSt
     lhs += rhs;
     return lhs;
 }
-[[nodiscard]] inline CompactString operator+(CompactString lhs, const AString& rhs){
+template<typename ArenaT>
+[[nodiscard]] inline CompactString operator+(CompactString lhs, const AString<ArenaT>& rhs){
     lhs += rhs;
     return lhs;
 }

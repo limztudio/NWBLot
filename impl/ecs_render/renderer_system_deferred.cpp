@@ -219,7 +219,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
     ))
         return false;
 
-    Core::BindingSetDesc lightingBindingSetDesc;
+    Core::BindingSetDesc lightingBindingSetDesc(m_arena);
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
         createdTargets.albedo.get(),
@@ -256,7 +256,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         return false;
     }
 
-    Core::BindingSetDesc bindingSetDesc;
+    Core::BindingSetDesc bindingSetDesc(m_arena);
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
         createdTargets.opaqueColor.get(),
@@ -310,7 +310,7 @@ bool RendererSystem::createDeferredCompositeResources(){
     Core::IDevice* device = m_graphics.getDevice();
 
     if(!m_deferredCompositeBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));

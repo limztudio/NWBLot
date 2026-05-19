@@ -62,12 +62,12 @@ private:
         Name virtualPath = NAME_NONE;
     };
 
-    using RequestMapAllocator = ContainerDetail::ArenaAllocator<Pair<const u64, RequestRecord>, Alloc::GlobalArena>;
-    using RequestMap = HashMap<u64, RequestRecord, Hasher<u64>, EqualTo<u64>, RequestMapAllocator>;
+    using RequestMapAllocator = Alloc::GlobalArena;
+    using RequestMap = HashMap<u64, RequestRecord, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena>;
 
 
 public:
-    explicit AssetManager(Alloc::GlobalArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
+    explicit AssetManager(AssetArena& arena, const AssetRegistry& registry, const IAssetBinarySource& binarySource);
 
 
 public:
@@ -97,6 +97,7 @@ private:
     IAssetAsyncExecutor* m_asyncExecutor = nullptr;
 
     mutable Futex m_mutex;
+    AssetArena& m_arena;
     RequestMap m_requests;
     Atomic<u64> m_nextRequestId{ 1 };
 };

@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <core/alloc/general.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,18 +19,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline AString BuildRuntimeResourceSuffix(const u64 ownerId, const u32 editRevision, const AStringView label){
+[[nodiscard]] inline AString<Core::Alloc::GlobalArena> BuildRuntimeResourceSuffix(Core::Alloc::GlobalArena& arena, const u64 ownerId, const u32 editRevision, const AStringView label){
+    AString<Core::Alloc::GlobalArena> suffix{arena};
     if(label.empty())
-        return AString();
+        return suffix;
 
     char ownerBuffer[32] = {};
     char revisionBuffer[32] = {};
     const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
     const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
     if(ownerText.empty() || revisionText.empty())
-        return AString();
+        return suffix;
 
-    AString suffix;
     suffix.reserve(9u + ownerText.size() + 10u + revisionText.size() + 1u + label.size());
     suffix += ":runtime_";
     suffix.append(ownerText.data(), ownerText.size());

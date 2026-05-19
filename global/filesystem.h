@@ -207,7 +207,8 @@ struct StagedDirectoryPaths{
     return EnsureDirectories(path, outError);
 }
 
-[[nodiscard]] inline StagedDirectoryPaths BuildStagedDirectoryPaths(const Path& outputDirectory, const AStringView stageToken){
+template<typename ArenaT>
+[[nodiscard]] inline StagedDirectoryPaths BuildStagedDirectoryPaths(ArenaT& arena, const Path& outputDirectory, const AStringView stageToken){
     const Path stageBaseDirectory = outputDirectory.parent_path().empty()
         ? outputDirectory
         : outputDirectory.parent_path()
@@ -215,14 +216,14 @@ struct StagedDirectoryPaths{
 
     StagedDirectoryPaths output;
 
-    AString stageDirectoryName;
+    AString<ArenaT> stageDirectoryName{arena};
     stageDirectoryName.reserve(stageToken.size() + 7u);
     stageDirectoryName += '.';
     stageDirectoryName += stageToken;
     stageDirectoryName += "_stage";
     output.stageDirectory = stageBaseDirectory / stageDirectoryName;
 
-    AString backupDirectoryName;
+    AString<ArenaT> backupDirectoryName{arena};
     backupDirectoryName.reserve(stageToken.size() + 8u);
     backupDirectoryName += '.';
     backupDirectoryName += stageToken;
@@ -303,7 +304,10 @@ template<typename Container>
 };
 
 
-[[nodiscard]] inline bool ReadTextFile(const Path& path, AString& outText){
+template<typename StringT>
+[[nodiscard]] inline bool ReadTextFile(const Path& path, StringT& outText)
+    requires requires(StringT& text, usize size){ text.resize(size); text.data(); text.clear(); }
+{
     ErrorCode errorCode;
     return GlobalFilesystemDetail::ReadWholeBinaryFile(path, outText, errorCode);
 }

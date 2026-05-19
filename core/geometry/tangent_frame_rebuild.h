@@ -51,10 +51,10 @@ static_assert(IsTriviallyCopyable_V<TangentFrameRebuildResult>, "TangentFrameReb
     TangentFrameRebuildResult* outResult = nullptr
 );
 
-template<typename VertexAllocator, typename IndexAllocator>
+template<typename VertexVectorT, typename IndexVectorT>
 [[nodiscard]] bool RebuildTangentFrames(
-    Vector<TangentFrameRebuildVertex, VertexAllocator>& vertices,
-    const Vector<u32, IndexAllocator>& indices,
+    VertexVectorT& vertices,
+    const IndexVectorT& indices,
     TangentFrameRebuildResult* outResult = nullptr){
     return RebuildTangentFrames(vertices.data(), vertices.size(), indices.data(), indices.size(), outResult);
 }

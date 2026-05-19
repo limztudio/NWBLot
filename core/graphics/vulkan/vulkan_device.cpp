@@ -47,11 +47,11 @@ static u64 ComputePipelineCacheIdentityHash(const VkPhysicalDeviceProperties& pr
     return hash;
 }
 
-static AString MakePipelineCacheVolumeName(const VkPhysicalDeviceProperties& properties){
-    AString volumeName;
+static GraphicsString MakePipelineCacheVolumeName(GraphicsArena& arena, const VkPhysicalDeviceProperties& properties){
+    GraphicsString volumeName{arena};
     volumeName.reserve(14u + 16u);
     volumeName += "runtime_cache_";
-    AppendHexU64(ComputePipelineCacheIdentityHash(properties), volumeName);
+    AppendHexU64<char, GraphicsArena>(ComputePipelineCacheIdentityHash(properties), volumeName);
     return volumeName;
 }
 
@@ -63,7 +63,7 @@ static bool RuntimeCacheVolumeExists(const Path& directory, const AStringView vo
     if(!IsDirectory(directory, errorCode) || errorCode)
         return false;
 
-    const Path segmentPath = directory / Filesystem::MakeVolumeSegmentFileName(volumeName, 0);
+    const Path segmentPath = directory / Filesystem::MakeVolumeSegmentFileName(volumeName, 0).c_str();
     errorCode.clear();
     return FileExists(segmentPath, errorCode) && !errorCode;
 }
@@ -76,7 +76,8 @@ static bool MountPipelineCacheVolume(
     Filesystem::VolumeFileSystem& outVolume
 ){
     Filesystem::VolumeMountDesc mountDesc;
-    mountDesc.volumeName.assign(volumeName);
+    if(!mountDesc.volumeName.assign(volumeName))
+        return false;
     mountDesc.mountDirectory = directory;
     mountDesc.createIfMissing = createIfMissing;
     mountDesc.usage = usage;
@@ -229,10 +230,12 @@ static void VulkanSystemFree(void* pUserData, void* pMemory){
 Device::Device(const DeviceDesc& desc)
     : RefCounter<IDevice>(desc.threadPool)
     , m_aftermathEnabled(desc.aftermathEnabled)
+    , m_aftermathCrashDumpHelper(desc.allocator.getObjectArena())
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
     , m_allocator(m_context)
     , m_descriptorHeapManager(m_context, m_allocator)
     , m_pipelineCacheDirectory(desc.pipelineCacheDirectory)
+    , m_pipelineCacheVolumeName(m_context.objectArena)
 {
     VkResult res = VK_SUCCESS;
 
@@ -251,7 +254,7 @@ Device::Device(const DeviceDesc& desc)
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
-    m_pipelineCacheVolumeName = VulkanDetail::MakePipelineCacheVolumeName(m_context.physicalDeviceProperties);
+    m_pipelineCacheVolumeName = VulkanDetail::MakePipelineCacheVolumeName(m_context.objectArena, m_context.physicalDeviceProperties);
 
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
@@ -473,7 +476,7 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
-    Vector<u8> pipelineCacheInitialData;
+    GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
     static_cast<void>(loadPipelineCacheData(pipelineCacheInitialData));
 
     auto cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
@@ -560,7 +563,7 @@ Device::~Device(){
     }
 }
 
-bool Device::loadPipelineCacheData(Vector<u8>& outData){
+bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     outData.clear();
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
         return false;
@@ -610,7 +613,7 @@ void Device::savePipelineCacheData(){
         return;
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<u8, ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>> cacheData{ ContainerDetail::ArenaAllocator<u8, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<u8, Alloc::ScratchArena<>> cacheData{scratchArena};
     if(!VulkanDetail::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
         return;
     if(cacheData.empty())
@@ -688,7 +691,7 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
     }
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<TrackedCommandBuffer*, ContainerDetail::ArenaAllocator<TrackedCommandBuffer*, Alloc::ScratchArena<>>> submittedOwners{ ContainerDetail::ArenaAllocator<TrackedCommandBuffer*, Alloc::ScratchArena<>>(scratchArena) };
+    Vector<TrackedCommandBuffer*, Alloc::ScratchArena<>> submittedOwners{scratchArena};
     if(pCommandLists && numCommandLists > 0){
         submittedOwners.reserve(numCommandLists);
         for(usize i = 0; i < numCommandLists; ++i){
@@ -921,7 +924,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     VkResult res = VK_SUCCESS;
 
-    CooperativeVectorDeviceFeatures output;
+    CooperativeVectorDeviceFeatures output(m_context.objectArena);
 
     if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return output;
@@ -932,7 +935,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
         return output;
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<VkCooperativeVectorPropertiesNV, ContainerDetail::ArenaAllocator<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena<>>> properties(propertyCount, ContainerDetail::ArenaAllocator<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena<>>(scratchArena));
+    Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena<>> properties(propertyCount, scratchArena);
     for(u32 i = 0; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
         properties[i].pNext = nullptr;

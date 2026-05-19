@@ -36,7 +36,7 @@ class MessageBus : NoCopy{
 private:
     class IMessageChannel;
     using MessageChannelPtr = GlobalUniquePtr<IMessageChannel>;
-    using ChannelVectorAllocator = ContainerDetail::ArenaAllocator<MessageChannelPtr, Alloc::GlobalArena>;
+    using ChannelVectorAllocator = Alloc::GlobalArena;
     using ChannelLock = SharedMutex::scoped_lock;
 
 
@@ -93,13 +93,13 @@ private:
             Optional<T> m_value;
         };
 
-        using PendingAllocator = ContainerDetail::ArenaCacheAlignedAllocator<PendingMessage, Alloc::GlobalArena>;
+        using PendingAllocator = Alloc::GlobalArena;
 
 
     public:
         explicit MessageChannel(Alloc::GlobalArena& arena)
-            : m_pending(PendingAllocator(arena))
-            , m_readBuffer(ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>(arena))
+            : m_pending(arena)
+            , m_readBuffer(arena)
         {}
 
     public:
@@ -149,11 +149,11 @@ private:
 
 
     private:
-        ParallelQueue<PendingMessage, PendingAllocator> m_pending;
-        Vector<T, ContainerDetail::ArenaAllocator<T, Alloc::GlobalArena>> m_readBuffer;
+        ParallelQueue<PendingMessage, Alloc::GlobalArena> m_pending;
+        Vector<T, Alloc::GlobalArena> m_readBuffer;
     };
 
-    using ChannelVector = Vector<MessageChannelPtr, ChannelVectorAllocator>;
+    using ChannelVector = Vector<MessageChannelPtr, Alloc::GlobalArena>;
 
 
 private:
@@ -169,7 +169,7 @@ private:
 public:
     explicit MessageBus(Alloc::GlobalArena& arena)
         : m_arena(arena)
-        , m_channels(ChannelVectorAllocator(arena))
+        , m_channels(arena)
     {}
     ~MessageBus() = default;
 

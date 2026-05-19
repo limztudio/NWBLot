@@ -470,21 +470,22 @@ void ICommandList::setResourceStatesForFramebuffer(IFramebuffer& framebuffer){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const AString s_NotFoundMarkerString = "ERROR: could not resolve marker";
+static constexpr AStringView s_NotFoundMarkerString = "ERROR: could not resolve marker";
 static constexpr usize s_NumDestroyedMarkerTrackers = 2;
 
 
-AftermathMarkerTracker::AftermathMarkerTracker()
-    : m_eventStack()
+AftermathMarkerTracker::AftermathMarkerTracker(GraphicsArena& arena)
+    : m_arena(arena)
+    , m_eventStack()
     , m_eventHashes()
     , m_oldestHashIndex(0)
-    , m_eventStrings()
+    , m_eventStrings(0, Hasher<usize>(), EqualTo<usize>(), arena)
 {}
 
 usize AftermathMarkerTracker::pushEvent(const char* name){
     m_eventStack.append(name);
-    auto eventString = m_eventStack.generic_string<char>();
-    usize hash = Hasher<decltype(eventString)>{}(eventString);
+    GraphicsString eventString(m_eventStack.generic_string<char>(), m_arena);
+    usize hash = Hasher<GraphicsString>{}(eventString);
 
     if(m_eventStrings.try_emplace(hash, Move(eventString)).second){
         const usize oldHash = m_eventHashes[m_oldestHashIndex];
@@ -497,19 +498,20 @@ usize AftermathMarkerTracker::pushEvent(const char* name){
     return hash;
 }
 
-Pair<bool, AString> AftermathMarkerTracker::getEventString(usize hash){
+Pair<bool, GraphicsString> AftermathMarkerTracker::getEventString(usize hash){
     auto found = m_eventStrings.find(hash);
     if(found != m_eventStrings.end())
         return MakePair(true, found.value());
 
-    return MakePair(false, s_NotFoundMarkerString);
+    return MakePair(false, GraphicsString(s_NotFoundMarkerString, m_arena));
 }
 
 
-AftermathCrashDumpHelper::AftermathCrashDumpHelper()
-    : m_markerTrackers()
-    , m_destroyedMarkerTrackers()
-    , m_shaderBinaryLookupCallbacks()
+AftermathCrashDumpHelper::AftermathCrashDumpHelper(GraphicsArena& arena)
+    : m_arena(arena)
+    , m_markerTrackers(arena)
+    , m_destroyedMarkerTrackers(arena)
+    , m_shaderBinaryLookupCallbacks(0, Hasher<void*>(), EqualTo<void*>(), arena)
 {}
 
 void AftermathCrashDumpHelper::registerAftermathMarkerTracker(AftermathMarkerTracker& tracker){
@@ -532,7 +534,7 @@ void AftermathCrashDumpHelper::unRegisterShaderBinaryLookupCallback(void* client
     m_shaderBinaryLookupCallbacks.erase(client);
 }
 
-Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
+Pair<bool, GraphicsString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
     // Search in active marker trackers
     for(auto* markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);
@@ -549,7 +551,7 @@ Pair<bool, AString> AftermathCrashDumpHelper::resolveMarker(usize markerHash){
         }
     }
 
-    return MakePair(false, s_NotFoundMarkerString);
+    return MakePair(false, GraphicsString(s_NotFoundMarkerString, m_arena));
 }
 
 Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator){

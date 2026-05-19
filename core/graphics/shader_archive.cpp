@@ -183,7 +183,7 @@ Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringVi
     return Name(derivedHash);
 }
 
-bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& outBinary){
+bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary){
     outBinary.clear();
 
     if(records.size() > Limit<u32>::s_Max){
@@ -192,7 +192,7 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     }
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<const Record*, ContainerDetail::ArenaAllocator<const Record*, Alloc::ScratchArena<>>> sortedRecords{ContainerDetail::ArenaAllocator<const Record*, Alloc::ScratchArena<>>(scratchArena)};
+    Vector<const Record*, Alloc::ScratchArena<>> sortedRecords{scratchArena};
     sortedRecords.reserve(records.size());
     for(const Record& record : records)
         sortedRecords.push_back(&record);
@@ -269,7 +269,7 @@ bool ShaderArchive::serializeIndex(const Vector<Record>& records, Vector<u8>& ou
     return true;
 }
 
-bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& outRecords){
+bool ShaderArchive::deserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords){
     outRecords.clear();
 
     usize cursor = 0;
@@ -293,7 +293,7 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
         return false;
     }
 
-    Vector<Record> parsedRecords;
+    GraphicsVector<Record> parsedRecords(outRecords.get_allocator());
     parsedRecords.reserve(header.recordCount);
     const Record* previousRecord = nullptr;
     for(u32 i = 0; i < header.recordCount; ++i){
@@ -303,7 +303,7 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
             return false;
         }
 
-        Record record;
+        Record record(outRecords.get_allocator().arena());
         record.shaderName = Name(recordHeader.shaderName);
         record.stage = Name(recordHeader.stage);
         record.virtualPathHash = recordHeader.virtualPathHash;
@@ -345,7 +345,7 @@ bool ShaderArchive::deserializeIndex(const Vector<u8>& binary, Vector<Record>& o
     return true;
 }
 
-bool ShaderArchive::findVirtualPath(const Vector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
+bool ShaderArchive::findVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
     outVirtualPath = NAME_NONE;
 
     if(!shaderName || !stageName)

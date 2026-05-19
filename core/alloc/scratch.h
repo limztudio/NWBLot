@@ -19,14 +19,22 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaxAlignSize = 512;
+inline constexpr usize s_MaxAlignSize = 256;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<usize maxAlignSize = s_MaxAlignSize>
-class ScratchArena : public ArenaBase{
+class ScratchArena : public ArenaBaseT<ScratchArena<maxAlignSize>>{
+private:
+    using Base = ArenaBaseT<ScratchArena<maxAlignSize>>;
+
+
+public:
+    static constexpr usize s_MaxTypedAlignSize = maxAlignSize;
+
+
 private:
     class Chunk{
         friend class ScratchArena;
@@ -52,13 +60,24 @@ private:
             m_remaining -= size;
             return ret;
         }
-        inline bool deallocate(usize size){
-            const bool isValidRequest = m_remaining <= m_size && size <= (m_size - m_remaining);
+        inline bool deallocate(void* p, usize size){
+            const usize available = reinterpret_cast<usize>(m_available);
+            const usize allocationBegin = reinterpret_cast<usize>(p);
+            const bool canComputeEnd = allocationBegin <= Limit<usize>::s_Max - size;
+            if(!canComputeEnd)
+                return false;
+
+            const usize allocationEnd = allocationBegin + size;
+            if(allocationEnd != available)
+                return false;
+
+            const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
+            const bool isValidRequest = allocationBegin >= bufferBegin && allocationEnd <= available && size <= (m_size - m_remaining);
             NWB_ASSERT(isValidRequest);
             if(!isValidRequest)
                 return false;
 
-            m_available = reinterpret_cast<u8*>(m_available) - static_cast<isize>(size);
+            m_available = reinterpret_cast<void*>(allocationBegin);
             m_remaining += size;
             return true;
         }
@@ -85,8 +104,13 @@ private:
 
 
 public:
+    using Base::allocate;
+    using Base::deallocate;
+
+
+public:
     explicit ScratchArena(usize initSize = 1024, const char* allocationLog = "NWB::Core::Alloc::ScratchArena")
-        : ArenaBase(allocationLog)
+        : Base(allocationLog)
     {
         for(usize i = 0; i < LengthOf(m_bucket); ++i){
             auto& bucket = m_bucket[i];
@@ -125,31 +149,14 @@ public:
             bucket.size = (size > (static_cast<usize>(-1) >> 1)) ? size : (size << 1);
 
         if(!bucket.head){
-            bucket.head = new Chunk(align, bucket.size, log());
+            bucket.head = new Chunk(align, bucket.size, Base::log());
             bucket.last = bucket.head;
         }
         else if(size > bucket.last->m_remaining){
-            bucket.last->add(new Chunk(align, bucket.size, log()));
+            bucket.last->add(new Chunk(align, bucket.size, Base::log()));
             bucket.last = bucket.last->m_next;
         }
         return bucket.last->allocate(size);
-    }
-    template<typename T>
-    inline T* allocate(usize count){
-        static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
-        static_assert(alignof(T) <= maxAlignSize, "ScratchArena cannot allocate types with alignment greater than maxAlignSize.");
-        const usize bytes = SizeOf<sizeof(T)>(count);
-
-        T* output = nullptr;
-        if(bytes){
-            if(IsConstantEvaluated())
-                output = reinterpret_cast<T*>(allocate(1, bytes));
-            else{
-                constexpr usize alignSize = alignof(T);
-                output = reinterpret_cast<T*>(allocate(alignSize, bytes));
-            }
-        }
-        return output;
     }
 
     inline void deallocate(void* p, usize align, usize size){
@@ -171,22 +178,7 @@ public:
             return;
 
         size = Alignment(align, size);
-        bucket.last->deallocate(size);
-    }
-    template<typename T>
-    inline void deallocate(void* p, usize count){
-        static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
-        static_assert(alignof(T) <= maxAlignSize, "ScratchArena cannot deallocate types with alignment greater than maxAlignSize.");
-        const usize bytes = SizeOf<sizeof(T)>(count);
-
-        if(bytes){
-            if(IsConstantEvaluated())
-                deallocate(p, 1, bytes);
-            else{
-                constexpr usize alignSize = alignof(T);
-                deallocate(p, alignSize, bytes);
-            }
-        }
+        bucket.last->deallocate(p, size);
     }
 
 

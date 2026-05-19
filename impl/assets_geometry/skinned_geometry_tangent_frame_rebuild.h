@@ -26,10 +26,10 @@ namespace SkinnedGeometryTangentFrameRebuild{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename RebuildAllocator>
+template<typename VertexVectorT, typename RebuildVectorT>
 inline void BuildInput(
-    const Vector<SkinnedGeometryVertex>& vertices,
-    Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& outRebuildVertices){
+    const VertexVectorT& vertices,
+    RebuildVectorT& outRebuildVertices){
     outRebuildVertices.clear();
     outRebuildVertices.reserve(vertices.size());
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
@@ -51,10 +51,10 @@ inline void BuildInput(
     }
 }
 
-template<typename RebuildAllocator>
+template<typename VertexVectorT, typename RebuildVectorT>
 [[nodiscard]] inline bool ValidOutput(
-    const Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
+    const VertexVectorT& vertices,
+    const RebuildVectorT& rebuildVertices){
     if(rebuildVertices.size() != vertices.size())
         return false;
 
@@ -68,10 +68,10 @@ template<typename RebuildAllocator>
     return true;
 }
 
-template<typename RebuildAllocator>
+template<typename VertexVectorT, typename RebuildVectorT>
 inline void ApplyOutput(
-    Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<Core::Geometry::TangentFrameRebuildVertex, RebuildAllocator>& rebuildVertices){
+    VertexVectorT& vertices,
+    const RebuildVectorT& rebuildVertices){
     for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
         SkinnedGeometryVertex& vertex = vertices[vertexIndex];
         StoreSkinnedGeometryVertexNormal(vertex, Float3U(rebuildVertices[vertexIndex].normal.raw));
@@ -79,14 +79,14 @@ inline void ApplyOutput(
     }
 }
 
+template<typename VertexVectorT, typename IndexVectorT>
 [[nodiscard]] inline bool Rebuild(
-    Vector<SkinnedGeometryVertex>& vertices,
-    const Vector<u32>& indices,
+    VertexVectorT& vertices,
+    const IndexVectorT& indices,
     Core::Geometry::TangentFrameRebuildResult* outResult = nullptr){
     Core::Alloc::ScratchArena<> scratchArena;
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    using RebuildAllocator = ContainerDetail::ArenaAllocator<RebuildVertex, Core::Alloc::ScratchArena<>>;
-    Vector<RebuildVertex, RebuildAllocator> rebuildVertices{ RebuildAllocator(scratchArena) };
+    Vector<RebuildVertex, Core::Alloc::ScratchArena<>> rebuildVertices{ scratchArena };
     BuildInput(vertices, rebuildVertices);
 
     if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, outResult))

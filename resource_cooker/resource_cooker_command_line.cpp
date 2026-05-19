@@ -6,6 +6,9 @@
 
 #include <CLI.hpp>
 
+#include <string>
+#include <vector>
+
 #include <core/common/command_line.h>
 
 
@@ -19,43 +22,58 @@ namespace __hidden_resource_cooker_command_line{
 
 
 struct ParsedCookOptions{
-    AString repoRoot;
-    Vector<AString> assetRoots;
-    AString outputDirectory;
-    AString cacheDirectory;
-    AString configuration;
-    AString assetType;
+    std::string repoRoot;
+    std::vector<std::string> assetRoots;
+    std::string outputDirectory;
+    std::string cacheDirectory;
+    std::string configuration;
+    std::string assetType;
 };
 
-static bool AssignCompactString(const AStringView source, const char* label, CompactString& outValue, AString& outError){
+static bool AssignCompactString(
+    const AStringView source,
+    const char* label,
+    CompactString& outValue,
+    NWB::Core::Assets::AssetString& outError
+){
     if(outValue.assign(source))
         return true;
 
-    outError = StringFormat("{} exceeds CompactString capacity ({})", label, CompactString::s_MaxLength);
+    outError = StringFormat(outError.get_allocator().arena(), "{} exceeds CompactString capacity ({})", label, CompactString::s_MaxLength);
     return false;
 }
 
-static bool AssignString(AString& source, AString& outValue, AString& outError){
-    if(HasEmbeddedNull(source)){
+static bool AssignString(
+    const std::string& source,
+    NWB::Core::Assets::AssetString& outValue,
+    NWB::Core::Assets::AssetString& outError
+){
+    if(HasEmbeddedNull(AStringView(source.data(), source.size()))){
         outError = "path-like command line values must not contain embedded nulls";
         outValue.clear();
         return false;
     }
 
-    outValue = Move(source);
+    outValue.assign(source.data(), source.size());
     return true;
 }
 
-static bool AssignStrings(Vector<AString>& source, Vector<AString>& outValues, AString& outError){
+static bool AssignStrings(
+    const std::vector<std::string>& source,
+    NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outValues,
+    NWB::Core::Assets::AssetString& outError
+){
     outValues.clear();
-    for(const AString& value : source){
-        if(HasEmbeddedNull(value)){
+    outValues.reserve(source.size());
+    NWB::Core::Assets::AssetArena& arena = outValues.get_allocator().arena();
+    for(const std::string& value : source){
+        if(HasEmbeddedNull(AStringView(value.data(), value.size()))){
             outError = "path-like command line values must not contain embedded nulls";
             outValues.clear();
             return false;
         }
+        outValues.emplace_back(value.data(), value.size(), arena);
     }
-    outValues = Move(source);
     return true;
 }
 
@@ -88,8 +106,21 @@ static void ConfigureCommandLineOptions(CLI::App& outApp, __hidden_resource_cook
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookOptions& outOptions, AString& outError){
-    outOptions = {};
+CommandLineParseResult::Enum ParseCommandLine(
+    const int argc,
+    char** argv,
+    NWB::Core::Assets::AssetArena& arena,
+    CookOptions& outOptions,
+    NWB::Core::Assets::AssetString& outError
+){
+    (void)arena;
+
+    outOptions.repoRoot.clear();
+    outOptions.assetRoots.clear();
+    outOptions.outputDirectory.clear();
+    outOptions.cacheDirectory.clear();
+    outOptions.configuration.clear();
+    outOptions.assetType.clear();
     outError.clear();
 
     if(NWB::Core::Common::ArgHasValidArgv(argc, argv)){
@@ -126,16 +157,27 @@ CommandLineParseResult::Enum ParseCommandLine(const int argc, char** argv, CookO
         return CommandLineParseResult::Error;
     if(!__hidden_resource_cooker_command_line::AssignString(parsedOptions.cacheDirectory, outOptions.cacheDirectory, outError))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker_command_line::AssignCompactString(parsedOptions.configuration, "--configuration", outOptions.configuration, outError))
+    if(!__hidden_resource_cooker_command_line::AssignCompactString(
+        AStringView(parsedOptions.configuration.data(), parsedOptions.configuration.size()),
+        "--configuration",
+        outOptions.configuration,
+        outError
+    ))
         return CommandLineParseResult::Error;
-    if(!__hidden_resource_cooker_command_line::AssignCompactString(parsedOptions.assetType, "--asset-type", outOptions.assetType, outError))
+    if(!__hidden_resource_cooker_command_line::AssignCompactString(
+        AStringView(parsedOptions.assetType.data(), parsedOptions.assetType.size()),
+        "--asset-type",
+        outOptions.assetType,
+        outError
+    ))
         return CommandLineParseResult::Error;
 
     return CommandLineParseResult::Success;
 }
 
 
-void PrintUsage(){
+void PrintUsage(NWB::Core::Assets::AssetArena& arena){
+    (void)arena;
     __hidden_resource_cooker_command_line::ParsedCookOptions options;
     CLI::App app{ "resource_cooker" };
     app.set_help_flag("-h,--help", "Show help");

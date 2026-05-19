@@ -32,8 +32,14 @@ namespace CommandLineParseResult{
 
 int ResourceCookerMain(int argc, char** argv);
 
-CommandLineParseResult::Enum ParseCommandLine(int argc, char** argv, CookOptions& outOptions, AString& outError);
-void PrintUsage();
+CommandLineParseResult::Enum ParseCommandLine(
+    int argc,
+    char** argv,
+    NWB::Core::Assets::AssetArena& arena,
+    CookOptions& outOptions,
+    NWB::Core::Assets::AssetString& outError
+);
+void PrintUsage(NWB::Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -105,14 +105,20 @@ static bool TryMapCompilerToSourceLanguage(const AStringView compiler, shaderc_s
 class ShaderFileIncluder final : public shaderc::CompileOptions::IncluderInterface{
 private:
     struct IncludePayload{
-        AString sourceName;
-        AString content;
+        GraphicsString sourceName;
+        GraphicsString content;
+
+        explicit IncludePayload(GraphicsArena& arena)
+            : sourceName(arena)
+            , content(arena)
+        {}
     };
 
 
 public:
-    explicit ShaderFileIncluder(const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>>& includeDirectories)
-        : m_includeDirectories(includeDirectories)
+    ShaderFileIncluder(GraphicsArena& arena, const GraphicsVector<Path>& includeDirectories)
+        : m_arena(arena)
+        , m_includeDirectories(includeDirectories)
     {}
 
 
@@ -121,7 +127,7 @@ public:
 
         const Path requestingDirectory = Path(requestingSource).parent_path();
         Path resolvedPath;
-        AString lookupError;
+        GraphicsString lookupError{m_arena};
 
         if(type == shaderc_include_type_relative){
             const Path localCandidate = (requestingDirectory / Path(requestedSource)).lexically_normal();
@@ -129,7 +135,7 @@ public:
             if(IsRegularFile(localCandidate, errorCode))
                 resolvedPath = localCandidate;
             else if(errorCode && !IsMissingPathError(errorCode))
-                lookupError = StringFormat("Failed to query include candidate '{}' : {}", PathToString(localCandidate), errorCode.message());
+                lookupError = StringFormat(m_arena, "Failed to query include candidate '{}' : {}", PathToString(localCandidate), errorCode.message());
         }
 
         if(resolvedPath.empty() && lookupError.empty()){
@@ -141,14 +147,14 @@ public:
                     break;
                 }
                 if(errorCode && !IsMissingPathError(errorCode)){
-                    lookupError = StringFormat("Failed to query include candidate '{}' : {}", PathToString(candidate), errorCode.message());
+                    lookupError = StringFormat(m_arena, "Failed to query include candidate '{}' : {}", PathToString(candidate), errorCode.message());
                     break;
                 }
             }
         }
 
         auto result = MakeUnique<shaderc_include_result>();
-        auto payload = MakeUnique<IncludePayload>();
+        auto payload = MakeUnique<IncludePayload>(m_arena);
 
         const auto releaseResult = [&]() -> shaderc_include_result*{
             result->user_data = payload.get();
@@ -156,7 +162,7 @@ public:
             return result.release();
         };
 
-        const auto makeErrorResult = [&](AString message) -> shaderc_include_result*{
+        const auto makeErrorResult = [&](GraphicsString message) -> shaderc_include_result*{
             payload->content = Move(message);
             result->source_name = "";
             result->source_name_length = 0;
@@ -169,14 +175,14 @@ public:
             return makeErrorResult(Move(lookupError));
 
         if(resolvedPath.empty())
-            return makeErrorResult(StringFormat("Include '{}' not found", requestedSource));
+            return makeErrorResult(StringFormat(m_arena, "Include '{}' not found", requestedSource));
 
-        AString fileContent;
+        GraphicsString fileContent{m_arena};
         if(!ReadTextFile(resolvedPath, fileContent))
-            return makeErrorResult(StringFormat("Failed to read include '{}'", PathToString(resolvedPath)));
+            return makeErrorResult(StringFormat(m_arena, "Failed to read include '{}'", PathToString(resolvedPath)));
         StripUtf8Bom(fileContent);
 
-        payload->sourceName = PathToString(resolvedPath);
+        payload->sourceName = PathToString(m_arena, resolvedPath);
         payload->content = Move(fileContent);
         result->source_name = payload->sourceName.c_str();
         result->source_name_length = payload->sourceName.size();
@@ -195,7 +201,8 @@ public:
 
 
 private:
-    const Vector<Path, ContainerDetail::ArenaAllocator<Path, Alloc::GlobalArena>>& m_includeDirectories;
+    GraphicsArena& m_arena;
+    const GraphicsVector<Path>& m_includeDirectories;
 };
 
 
@@ -213,7 +220,7 @@ VulkanShaderCompiler::VulkanShaderCompiler(Alloc::GlobalArena& memoryArena)
 {}
 
 
-bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, Vector<u8>& outBytecode){
+bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, GraphicsBytes& outBytecode){
     outBytecode.clear();
 
     if(request.sourcePath.empty()){
@@ -226,7 +233,7 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         return false;
     }
 
-    AString sourceText;
+    GraphicsString sourceText{m_memoryArena};
     if(!ReadTextFile(request.sourcePath, sourceText)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to read shader source '{}'"), PathToString<tchar>(request.sourcePath));
         return false;
@@ -258,11 +265,11 @@ bool VulkanShaderCompiler::compileVariant(const ShaderCompilerRequest& request, 
         );
     }
 
-    options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader_compiler::ShaderFileIncluder>(request.includeDirectories));
+    options.SetIncluder(MakeStdUnique<__hidden_vulkan_shader_compiler::ShaderFileIncluder>(m_memoryArena, request.includeDirectories));
 
     shaderc::Compiler compiler;
-    const AString inputFileName = PathToString(request.sourcePath);
-    const AString entryPoint(request.entryPoint);
+    const GraphicsString inputFileName = PathToString(m_memoryArena, request.sourcePath);
+    const GraphicsString entryPoint(request.entryPoint, m_memoryArena);
     const shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(
         sourceText.c_str(),
         sourceText.size(),

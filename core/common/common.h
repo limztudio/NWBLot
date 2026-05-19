@@ -93,7 +93,9 @@ private:
 
 private:
     Initializer()
-        : m_cursor(m_items.before_begin())
+        : m_arena("NWB::Core::Common::Initializer")
+        , m_items(m_arena)
+        , m_cursor(m_items.before_begin())
     {}
 
 
@@ -160,7 +162,8 @@ private:
 
 
 private:
-    ForwardList<InitializerItem> m_items;
+    Alloc::GlobalArena m_arena;
+    ForwardList<InitializerItem, Alloc::GlobalArena> m_items;
     decltype(m_items)::iterator m_cursor;
     usize m_initializedItemCount = 0;
     usize m_activeCount = 0;
@@ -288,13 +291,13 @@ template<typename T>
     ;
 }
 
-template<typename T>
+template<typename T, typename ArenaT>
 [[nodiscard]] inline bool TryParseCommandLineAssignmentAt(
     const BasicStringView<T> input,
     const usize begin,
     usize& outNext,
-    BasicString<T>& outKey,
-    BasicString<T>& outValue
+    BasicString<T, ArenaT>& outKey,
+    BasicString<T, ArenaT>& outValue
 ){
     usize cursor = begin;
     if(cursor >= input.size() || !CommandLineIsWordChar(input[cursor]))
@@ -359,12 +362,20 @@ template<typename T>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-inline HashMap<BasicString<T>, BasicString<T>> parseCommandLine(BasicStringView<T> input){
-    HashMap<BasicString<T>, BasicString<T>> output;
+template<typename T, typename ArenaT>
+inline HashMap<BasicString<T, ArenaT>, BasicString<T, ArenaT>, ArenaT> parseCommandLine(ArenaT& arena, BasicStringView<T> input){
+    using String = BasicString<T, ArenaT>;
+    using CommandLineMap = HashMap<String, String, ArenaT>;
+
+    CommandLineMap output(
+        0,
+        Hasher<String>(),
+        EqualTo<String>(),
+        arena
+    );
     usize cursor = 0;
-    BasicString<T> key;
-    BasicString<T> value;
+    String key{arena};
+    String value{arena};
     while(cursor < input.size()){
         if(!CommonDetail::CommandLineIsWordChar(input[cursor])){
             ++cursor;

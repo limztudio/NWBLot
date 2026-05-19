@@ -17,7 +17,7 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetBytes = Vector<u8>;
+using AssetBytes = AssetVector<u8>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,11 +57,12 @@ private:
     Name m_virtualPath = NAME_NONE;
 };
 
-[[nodiscard]] inline TString AssetVirtualPathText(const IAsset& asset){
+template<typename ArenaT>
+[[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
     return
         asset.virtualPath()
-            ? StringConvert(asset.virtualPath().c_str())
-            : TString(NWB_TEXT("<unnamed>"))
+            ? StringConvert(arena, asset.virtualPath().c_str())
+            : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena)
     ;
 }
 
@@ -93,7 +94,7 @@ public:
     [[nodiscard]] const Name& assetType()const{ return m_assetType; }
 
 public:
-    virtual bool deserialize(const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const = 0;
+    virtual bool deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const = 0;
 
 #if defined(NWB_COOK)
 public:
@@ -114,8 +115,8 @@ protected:
 
 
 public:
-    virtual bool deserialize(const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const final override{
-        auto asset = MakeUnique<AssetT>(virtualPath);
+    virtual bool deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const final override{
+        auto asset = MakeUnique<AssetT>(arena, virtualPath);
         if(!asset->loadBinary(binary))
             return false;
 

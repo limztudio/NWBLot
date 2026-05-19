@@ -127,13 +127,14 @@ SkinnedGeometrySystem::SkinnedGeometrySystem(
     ShaderPathResolveCallback shaderPathResolver)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
+    , m_arena(arena)
     , m_world(world)
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_runtimeGeometryRegistry(runtimeGeometryRegistry)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_runtimeMeshCache(Core::MakeGlobalUnique<SkinnedGeometryRuntimeMeshCache>(arena, arena, graphics, assetManager))
-    , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), RuntimeResourceMapAllocator(arena))
+    , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {
     writeAccess<SkinnedGeometryComponent>();
     readAccess<RendererComponent>();
@@ -313,7 +314,7 @@ bool SkinnedGeometrySystem::ensurePipeline(){
     Core::IDevice* device = m_graphics.getDevice();
 
     if(!m_bindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc;
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
@@ -368,16 +369,16 @@ bool SkinnedGeometrySystem::dispatchRuntimeMesh(
     const SkinnedGeometrySkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<SkinnedGeometrySkinInfluenceGpu, ContainerDetail::ArenaAllocator<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>>> skinInfluences{
-        ContainerDetail::ArenaAllocator<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>>(scratchArena)
+    Vector<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>> skinInfluences{
+        scratchArena
     };
-    Vector<SkinnedGeometryJointMatrix, ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>> jointMatrices{
-        ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>(scratchArena)
+    Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>> jointMatrices{
+        scratchArena
     };
     u32 resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkinnedGeometrySkinningMode::LinearBlend;
     if(SkinnedGeometryRuntime::HasSkeletonPose(skeletonPose)){
-        Vector<SkinnedGeometryJointMatrix, ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>> poseJoints{
-            ContainerDetail::ArenaAllocator<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>>(scratchArena)
+        Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>> poseJoints{
+            scratchArena
         };
         if(!SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, resolvedSkinningMode)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometrySystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
@@ -597,7 +598,7 @@ bool SkinnedGeometrySystem::ensureRuntimeResources(
         return false;
     }
 
-    Core::BindingSetDesc bindingSetDesc;
+    Core::BindingSetDesc bindingSetDesc(m_arena);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, instance.restVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, instance.skinnedVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, rebuilt.skinBuffer.get()));

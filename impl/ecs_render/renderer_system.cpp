@@ -50,10 +50,10 @@ RendererSystem::RendererSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_geometryMeshes(0, Hasher<Name>(), EqualTo<Name>(), GeometryResourcesMapAllocator(arena))
-    , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), MaterialSurfaceInfoMapAllocator(arena))
-    , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), MaterialPipelineMapAllocator(arena))
-    , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), LoggedMaterialPathMapAllocator(arena))
+    , m_geometryMeshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
+    , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
 {
     readAccess<NWB::Impl::ActiveCameraComponent>();
     readAccess<NWB::Impl::TransformComponent>();
@@ -143,10 +143,10 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena<> scratchArena;
-    MaterialPassDrawItemVector opaqueMeshDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
-    MaterialPassDrawItemVector opaqueComputeDrawItems{ContainerDetail::ArenaAllocator<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>(scratchArena)};
-    InstanceGpuDataVector instanceData{ContainerDetail::ArenaAllocator<InstanceGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
-    MaterialParameterGpuDataVector materialParameters{ContainerDetail::ArenaAllocator<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>(scratchArena)};
+    MaterialPassDrawItemVector opaqueMeshDrawItems{scratchArena};
+    MaterialPassDrawItemVector opaqueComputeDrawItems{scratchArena};
+    InstanceGpuDataVector instanceData{scratchArena};
+    MaterialParameterGpuDataVector materialParameters{scratchArena};
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());

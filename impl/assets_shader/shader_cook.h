@@ -34,27 +34,29 @@ class ShaderCook{
 public:
     using CookArena = Core::Alloc::GlobalArena;
     template<typename T>
-    using CookAllocator = ContainerDetail::ArenaAllocator<T, Core::Alloc::GlobalArena>;
+    using CookAllocator = Core::Alloc::GlobalArena;
+    using CookString = AString<CookArena>;
+    using CookBytes = Vector<u8, CookArena>;
 
 public:
     template<typename T>
-    using CookVector = Vector<T, CookAllocator<T>>;
+    using CookVector = Vector<T, CookArena>;
 
     template<typename T, typename V>
-    using CookMap = HashMap<T, V, Hasher<T>, EqualTo<T>, CookAllocator<Pair<const T, V>>>;
+    using CookMap = HashMap<T, V, Hasher<T>, EqualTo<T>, CookArena>;
 
     template<typename T>
-    using CookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, CookAllocator<T>>;
+    using CookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, CookArena>;
 
-    using DefineCombo = CookMap<AString, AString>;
+    using DefineCombo = CookMap<CookString, CookString>;
 
     struct DefineEntry{
-        CookVector<AString> values;
+        CookVector<CookString> values;
 
         explicit DefineEntry(CookArena& memoryArena)
-            : values(CookAllocator<AString>(memoryArena))
+            : values(memoryArena)
         {}
-        explicit DefineEntry(CookVector<AString>&& inValues)
+        explicit DefineEntry(CookVector<CookString>&& inValues)
             : values(Move(inValues))
         {}
     };
@@ -62,41 +64,51 @@ public:
 
 public:
     struct IncludeEntry{
-        AString source;
-        AString defaultVariant;
-        CookMap<AString, DefineEntry> defineValues;
+        CookString source;
+        CookString defaultVariant;
+        CookMap<CookString, DefineEntry> defineValues;
 
         explicit IncludeEntry(CookArena& memoryArena)
-            : defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena))
+            : source(memoryArena)
+            , defaultVariant(memoryArena)
+            , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
         {}
     };
 
     struct ShaderEntry{
-        AString name;
+        CookString name;
         CompactString compiler = CompactString("glslang");
         CompactString stage;
         CompactString archiveStage;
         CompactString targetProfile;
-        AString entryPoint = "main";
-        AString source;
-        AString defaultVariant;
+        CookString entryPoint;
+        CookString source;
+        CookString defaultVariant;
 
-        CookVector<AString> includeRoots;
-        CookMap<AString, DefineEntry> defineValues;
-        CookMap<AString, AString> implicitDefines;
+        CookVector<CookString> includeRoots;
+        CookMap<CookString, DefineEntry> defineValues;
+        CookMap<CookString, CookString> implicitDefines;
 
         explicit ShaderEntry(CookArena& memoryArena)
-            : includeRoots(CookAllocator<AString>(memoryArena))
-            , defineValues(CookAllocator<Pair<const AString, DefineEntry>>(memoryArena))
-            , implicitDefines(CookAllocator<Pair<const AString, AString>>(memoryArena))
+            : name(memoryArena)
+            , entryPoint("main", memoryArena)
+            , source(memoryArena)
+            , defaultVariant(memoryArena)
+            , includeRoots(memoryArena)
+            , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
+            , implicitDefines(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
         {}
     };
 
 
 private:
     struct SortedDependencyItem{
-        AString canonicalPath;
+        CookString canonicalPath;
         Path path;
+
+        explicit SortedDependencyItem(CookArena& arena)
+            : canonicalPath(arena)
+        {}
     };
 
 
@@ -105,7 +117,7 @@ public:
 
 
 public:
-    inline bool compileVariant(const Core::ShaderCompilerRequest& request, Vector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
+    inline bool compileVariant(const Core::ShaderCompilerRequest& request, Core::GraphicsBytes& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
 public:
     bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
@@ -114,16 +126,16 @@ public:
     bool parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, IncludeEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry);
 
-    bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<AString, DefineEntry>& defineValues);
+    bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<CookString, DefineEntry>& defineValues);
 
-    void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<AString, IncludeEntry>& includeMetadata);
+    void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata);
 
     bool gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies);
 
-    bool expandDefineCombinations(const CookMap<AString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
+    bool expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations);
 
-    AString buildVariantName(const DefineCombo& combo);
-    bool canonicalizeVariantSignature(AStringView variantSignature, AString& outCanonical);
+    CookString buildVariantName(const DefineCombo& combo);
+    bool canonicalizeVariantSignature(AStringView variantSignature, CookString& outCanonical);
 
     bool computeDependencyChecksum(const CookVector<Path>& dependencies, u64& outChecksum);
     bool computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, u64 dependencyChecksum, u64& outChecksum);
@@ -138,13 +150,13 @@ private:
     template<typename MapT>
     using ScratchDefineEntryVector = Vector<
         DefineEntryPtr<MapT>,
-        ContainerDetail::ArenaAllocator<DefineEntryPtr<MapT>, Core::Alloc::ScratchArena<>>
+        Core::Alloc::ScratchArena<>
     >;
 
     template<typename MapT>
     ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena<>& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
-        ScratchDefineEntryVector<MapT> entries{ContainerDetail::ArenaAllocator<EntryPtr, Core::Alloc::ScratchArena<>>(scratchArena)};
+        ScratchDefineEntryVector<MapT> entries{scratchArena};
         entries.reserve(map.size());
         for(const auto& [name, value] : map)
             entries.push_back(EntryPtr{ &name, &value });

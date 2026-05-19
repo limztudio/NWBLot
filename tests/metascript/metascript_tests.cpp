@@ -20,6 +20,7 @@ using TestContext = NWB::Tests::TestContext;
 using Document = NWB::Core::Metascript::Document;
 using Value = NWB::Core::Metascript::Value;
 using MStringView = NWB::Core::Metascript::MStringView;
+using AString = NWB::Tests::TestAString;
 
 
 #define NWB_METASCRIPT_TEST_CHECK NWB_TEST_CHECK

@@ -31,7 +31,7 @@ using SubmittedOwnerLookup = HashSet<
     TrackedCommandBuffer*,
     Hasher<TrackedCommandBuffer*>,
     EqualTo<TrackedCommandBuffer*>,
-    ContainerDetail::ArenaAllocator<TrackedCommandBuffer*, Alloc::ScratchArena<>>
+    Alloc::ScratchArena<>
 >;
 
 struct SubmittedOwnerLookupContext{
@@ -71,11 +71,13 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
-    , m_chunkPool(ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::GlobalArena>(m_device.m_context.objectArena))
-{
-    for(auto& chunks : m_activeChunks)
-        chunks = BufferChunkList(ContainerDetail::ArenaAllocator<BufferChunkPtr, Alloc::GlobalArena>(m_device.m_context.objectArena));
-}
+    , m_chunkPool(m_device.m_context.objectArena)
+    , m_activeChunks{
+        BufferChunkList(m_device.m_context.objectArena),
+        BufferChunkList(m_device.m_context.objectArena),
+        BufferChunkList(m_device.m_context.objectArena)
+    }
+{}
 UploadManager::~UploadManager(){
     m_chunkPool.clear();
     for(auto& chunks : m_activeChunks)
@@ -237,7 +239,7 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
             0,
             Hasher<TrackedCommandBuffer*>(),
             EqualTo<TrackedCommandBuffer*>(),
-            ContainerDetail::ArenaAllocator<TrackedCommandBuffer*, Alloc::ScratchArena<>>(scratchArena)
+            scratchArena
         );
         submittedOwnerLookup.reserve(submittedOwnerCount);
         for(usize i = 0u; i < submittedOwnerCount; ++i){

@@ -37,15 +37,19 @@ namespace __hidden_ecs_graphics_tests{
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeTriangleIndices;
+using AString = NWB::Tests::TestAString;
+template<typename T>
+using Vector = NWB::Tests::TestVector<T>;
 
 
 #define NWB_ECS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
 
 
 static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& context){
+    NWB::Tests::TestArena<> arena;
     const Name sourceName("project/meshes/skinned_geometry_source");
-    const AString suffix = NWB::Impl::BuildRuntimeResourceSuffix(42u, 17u, "skinned_geometry_ranges");
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, suffix == AStringView(":runtime_42_revision_17_skinned_geometry_ranges"));
+    const auto suffix = NWB::Impl::BuildRuntimeResourceSuffix(arena.arena, 42u, 17u, "skinned_geometry_ranges");
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AStringView(suffix.data(), suffix.size()) == AStringView(":runtime_42_revision_17_skinned_geometry_ranges"));
 
     const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "skinned_geometry_ranges");
     const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_skinned_geometry_ranges"));
@@ -217,7 +221,7 @@ static void AssignSingleJointSkin(NWB::Impl::SkinnedGeometryRuntimeMeshInstance&
 }
 
 static NWB::Impl::SkinnedGeometryRuntimeMeshInstance MakeTriangleInstance(){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance;
+    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance(NWB::Tests::TestDetail::Arena());
     instance.entity = NWB::Core::ECS::EntityID(1u, 0u);
     instance.handle.value = 42u;
     instance.editRevision = 7u;
@@ -225,7 +229,8 @@ static NWB::Impl::SkinnedGeometryRuntimeMeshInstance MakeTriangleInstance(){
     instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f));
     instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 0.5f));
     instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 1.0f));
-    instance.indices = MakeTriangleIndices();
+    const auto triangleIndices = MakeTriangleIndices();
+    instance.indices.insert(instance.indices.end(), triangleIndices.begin(), triangleIndices.end());
     return instance;
 }
 static NWB::Impl::SkinnedGeometryJointMatrix MakeIdentityJointMatrix(){
@@ -275,7 +280,7 @@ static void TestJointRotationQuaternionBuildsColumnVectorRotations(TestContext& 
 static NWB::Impl::SkinnedGeometrySkeletonPoseComponent MakeTwoJointSkeletonPose(
     const NWB::Impl::SkinnedGeometryJointMatrix& rootJoint,
     const NWB::Impl::SkinnedGeometryJointMatrix& childJoint){
-    NWB::Impl::SkinnedGeometrySkeletonPoseComponent pose;
+    NWB::Impl::SkinnedGeometrySkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
     pose.parentJoints.push_back(NWB::Impl::s_SkinnedGeometrySkeletonRootParent);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(rootJoint);
@@ -328,7 +333,7 @@ static void TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(TestContex
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;
 
-    NWB::Impl::SkinnedGeometryJointPaletteComponent joints;
+    NWB::Impl::SkinnedGeometryJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
     joints.joints.push_back(MakeIdentityJointMatrix());
 
     Vector<NWB::Impl::SkinnedGeometrySkinInfluenceGpu> skinInfluences;

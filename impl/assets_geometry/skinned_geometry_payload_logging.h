@@ -28,7 +28,7 @@ namespace SkinnedGeometryValidation{
 inline void LogRestVertexPayloadFailure(
     const tchar* contextText,
     const tchar* subjectText,
-    const TString& sourceText,
+    const TStringView sourceText,
     const RuntimePayloadFailureInfo& failure){
     switch(failure.restVertexFailure){
     case RestVertexPayloadFailure::NonFiniteData:
@@ -69,7 +69,7 @@ inline void LogRestVertexPayloadFailure(
 inline void LogRuntimePayloadFailure(
     const tchar* contextText,
     const tchar* subjectText,
-    const TString& sourceText,
+    const TStringView sourceText,
     const RuntimePayloadFailureInfo& failure){
     switch(failure.reason){
     case RuntimePayloadFailure::IncompleteRestIndexPayload:

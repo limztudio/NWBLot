@@ -224,6 +224,7 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
 }
 
 static Core::ShaderHandle CreateShaderFromAsset(
+    Core::GraphicsArena& arena,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     UiSystem::ShaderPathResolveCallback& shaderPathResolver,
@@ -262,7 +263,7 @@ static Core::ShaderHandle CreateShaderFromAsset(
     }
 
     const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
-    const Vector<u8>& shaderBinary = shaderAsset.bytecode();
+    const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
     if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: shader asset '{}' has invalid bytecode")
             , StringConvert(shaderVirtualPath.c_str())
@@ -270,7 +271,7 @@ static Core::ShaderHandle CreateShaderFromAsset(
         return nullptr;
     }
 
-    Core::ShaderDesc shaderDesc;
+    Core::ShaderDesc shaderDesc(arena);
     shaderDesc.setShaderType(shaderType).setDebugName(debugName);
     Core::ShaderHandle shader = graphics.getDevice()->createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
     if(!shader){
@@ -307,8 +308,8 @@ UiSystem::UiSystem(
     , m_input(input)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_textures(ContainerDetail::ArenaAllocator<UiTextureResourcePtr, Core::Alloc::GlobalArena>(arena))
-    , m_textureUploadScratch(ContainerDetail::ArenaAllocator<u8, Core::Alloc::GlobalArena>(arena))
+    , m_textures(arena)
+    , m_textureUploadScratch(arena)
 {
     readAccess<UiComponent>();
 
@@ -530,7 +531,7 @@ bool UiSystem::ensureRenderResources(Core::IFramebuffer* framebuffer){
     if(!m_bindingLayout){
         static_assert(sizeof(UiPushConstants) <= Core::s_MaxPushConstantSize, "Ui push constants must fit the portable push constant budget");
 
-        Core::BindingLayoutDesc bindingLayoutDesc;
+        Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::AllGraphics);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
@@ -584,6 +585,7 @@ bool UiSystem::ensureRenderResources(Core::IFramebuffer* framebuffer){
 bool UiSystem::ensureShadersLoaded(){
     if(!m_vertexShader){
         m_vertexShader = __hidden_ecs_ui::CreateShaderFromAsset(
+            m_arena,
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
@@ -597,6 +599,7 @@ bool UiSystem::ensureShadersLoaded(){
 
     if(!m_pixelShader){
         m_pixelShader = __hidden_ecs_ui::CreateShaderFromAsset(
+            m_arena,
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
@@ -775,7 +778,7 @@ bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTexture
             return false;
         }
 
-        Core::BindingSetDesc bindingSetDesc;
+        Core::BindingSetDesc bindingSetDesc(m_arena);
         bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
             0,
             createdResource->texture.get(),

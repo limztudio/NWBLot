@@ -127,14 +127,14 @@ bool RebuildTangentFrames(
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<TangentFrameAccumulator, ContainerDetail::ArenaAllocator<TangentFrameAccumulator, Core::Alloc::ScratchArena<>>> accumulators(
+    Vector<TangentFrameAccumulator, Core::Alloc::ScratchArena<>> accumulators(
         vertexCount,
         TangentFrameAccumulator{
             VectorZero(),
             VectorZero(),
             VectorZero(),
         },
-        ContainerDetail::ArenaAllocator<TangentFrameAccumulator, Core::Alloc::ScratchArena<>>(scratchArena)
+        scratchArena
     );
 
     TangentFrameRebuildResult result;

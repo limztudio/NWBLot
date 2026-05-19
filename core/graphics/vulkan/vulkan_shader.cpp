@@ -116,7 +116,7 @@ inline EntryPointLookupResult::Enum ResolveEntryPointName(
     const usize wordCount,
     const AStringView entryName,
     const ShaderType::Mask shaderType,
-    AString& outEntryPointName
+    GraphicsString& outEntryPointName
 ){
     outEntryPointName.clear();
 
@@ -176,7 +176,7 @@ inline bool ResolveShaderEntryPoint(
     const AStringView entryName,
     const ShaderType::Mask shaderType,
     const char* errorContext,
-    AString& outEntryPointName
+    GraphicsString& outEntryPointName
 ){
     const EntryPointLookupResult::Enum lookupResult = ResolveEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
     switch(lookupResult){
@@ -231,9 +231,11 @@ Sampler::~Sampler(){
 
 Shader::Shader(const VulkanContext& context)
     : RefCounter<IShader>(context.threadPool)
-    , m_bytecode(ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>(context.objectArena))
-    , m_specializationEntries(ContainerDetail::ArenaAllocator<VkSpecializationMapEntry, Alloc::GlobalArena>(context.objectArena))
-    , m_specializationData(ContainerDetail::ArenaAllocator<u32, Alloc::GlobalArena>(context.objectArena))
+    , m_desc(context.objectArena)
+    , m_bytecode(context.objectArena)
+    , m_entryPointName(context.objectArena)
+    , m_specializationEntries(context.objectArena)
+    , m_specializationData(context.objectArena)
     , m_context(context)
 {}
 Shader::~Shader(){
@@ -258,8 +260,8 @@ VkSpecializationInfo Shader::makeSpecializationInfo()const{
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
     : RefCounter<IShaderLibrary>(context.threadPool)
-    , m_bytecode(ContainerDetail::ArenaAllocator<u8, Alloc::GlobalArena>(context.objectArena))
-    , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), ContainerDetail::ArenaAllocator<Pair<const ShaderLibraryKey, RefCountPtr<Shader, ArenaRefDeleter<Shader>>>, Alloc::GlobalArena>(context.objectArena))
+    , m_bytecode(context.objectArena)
+    , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), context.objectArena)
     , m_context(context)
 {}
 ShaderLibrary::~ShaderLibrary(){}
@@ -270,8 +272,8 @@ void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
 }
 
 ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::Mask shaderType){
-    const AString requestedEntryName(entryName);
-    ShaderLibraryKey key{ requestedEntryName, shaderType };
+    const GraphicsString requestedEntryName(entryName, m_context.objectArena);
+    ShaderLibraryKey key(m_context.objectArena, requestedEntryName, shaderType);
 
     auto it = m_shaders.find(key);
     if(it != m_shaders.end())
@@ -443,9 +445,9 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 InputLayout::InputLayout(const VulkanContext& context)
     : RefCounter<IInputLayout>(context.threadPool)
-    , m_attributes(ContainerDetail::ArenaAllocator<VertexAttributeDesc, Alloc::GlobalArena>(context.objectArena))
-    , m_bindings(ContainerDetail::ArenaAllocator<VkVertexInputBindingDescription, Alloc::GlobalArena>(context.objectArena))
-    , m_vkAttributes(ContainerDetail::ArenaAllocator<VkVertexInputAttributeDescription, Alloc::GlobalArena>(context.objectArena))
+    , m_attributes(context.objectArena)
+    , m_bindings(context.objectArena)
+    , m_vkAttributes(context.objectArena)
     , m_context(context)
 {}
 
@@ -475,11 +477,11 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     };
 
     Alloc::ScratchArena<> scratchArena;
-    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, ContainerDetail::ArenaAllocator<Pair<const u32, VertexBindingBuildInfo>, Alloc::ScratchArena<>>> bindingInfos(
+    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchArena<>> bindingInfos(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),
-        ContainerDetail::ArenaAllocator<Pair<const u32, VertexBindingBuildInfo>, Alloc::ScratchArena<>>(scratchArena)
+        scratchArena
     );
     bindingInfos.reserve(attributeCount);
 
@@ -625,7 +627,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 Framebuffer::Framebuffer(const VulkanContext& context)
     : RefCounter<IFramebuffer>(context.threadPool)
-    , m_resources(ContainerDetail::ArenaAllocator<RefCountPtr<ITexture, ArenaRefDeleter<ITexture>>, Alloc::GlobalArena>(context.objectArena))
+    , m_resources(context.objectArena)
     , m_context(context)
 {}
 Framebuffer::~Framebuffer(){

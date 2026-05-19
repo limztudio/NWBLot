@@ -48,10 +48,14 @@ public:
 
 
 // in windows, the frame is a singleton
+using MessageItem = Pair<LogString, Log::Type::Enum>;
+using MessageDeque = Deque<MessageItem, LogArena>;
+
 static Frame* s_Frame = nullptr;
 static HFONT s_Font = nullptr;
 static HWND s_ListHwnd = nullptr;
-static Deque<Pair<BasicString<tchar>, Log::Type::Enum>> s_Messages;
+static LogArena s_MessageArena("NWB::Log::FrameDetail::Messages");
+static MessageDeque s_Messages{s_MessageArena};
 
 static Futex s_ListMutex;
 
@@ -236,7 +240,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     if(combinedSize > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
                         return 0;
 
-                    BasicString<tchar> combined;
+                    LogString combined{s_MessageArena};
                     combined.reserve(combinedSize);
                     for(const auto& msg : s_Messages){
                         combined += msg.first();
@@ -376,7 +380,7 @@ bool Frame::mainLoop(){
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     ScopedLock lock(FrameDetail::s_ListMutex);
 
-    FrameDetail::s_Messages.emplace_back(BasicString<tchar>(str), type);
+    FrameDetail::s_Messages.emplace_back(LogString(str, FrameDetail::s_MessageArena), type);
     SendMessage(FrameDetail::s_ListHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(FrameDetail::s_Messages.back().first().c_str()));
 
     auto numItem = SendMessage(FrameDetail::s_ListHwnd, LB_GETCOUNT, 0, 0);

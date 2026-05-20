@@ -28,9 +28,6 @@ NWB_METASCRIPT_BEGIN
 
 using MetaArena = Alloc::GlobalArena;
 
-template<typename T>
-using MAllocator = MetaArena;
-
 using MChar = char;
 using MString = AString<MetaArena>;
 using MStringView = BasicStringView<MChar>;

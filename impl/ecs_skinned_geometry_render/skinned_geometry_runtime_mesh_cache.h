@@ -82,10 +82,6 @@ private:
         [[nodiscard]] const SkinnedGeometry* geometry()const;
     };
 
-    using SourceMapAllocator = Core::Alloc::GlobalArena;
-    using InstanceMapAllocator = Core::Alloc::GlobalArena;
-    using HandleMapAllocator = Core::Alloc::GlobalArena;
-
 
 public:
     SkinnedGeometryRuntimeMeshCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager);

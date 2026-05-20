@@ -75,12 +75,6 @@ class ComponentPool final : public IComponentPool{
     friend struct ECSDetail::ViewTupleAccess;
 
 
-public:
-    using SparseAllocator = Alloc::GlobalArena;
-    using EntityIdAllocator = Alloc::GlobalArena;
-    using ComponentAllocator = Alloc::GlobalArena;
-
-
 private:
     [[nodiscard]] inline bool findDenseIndex(EntityID entityId, u32& outDenseIndex)const{
         const u32 index = entityId.index();

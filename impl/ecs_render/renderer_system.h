@@ -85,7 +85,6 @@ static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
-    using MaterialParameterVectorAllocator = Core::Alloc::GlobalArena;
     using MaterialParameterVector = Vector<MaterialParameterGpuData, Core::Alloc::GlobalArena>;
 
 
@@ -167,10 +166,6 @@ private:
     using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena<>>;
     using MaterialParameterGpuDataVector = Vector<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>;
 
-    using GeometryResourcesMapAllocator = Core::Alloc::GlobalArena;
-    using MaterialSurfaceInfoMapAllocator = Core::Alloc::GlobalArena;
-    using MaterialPipelineMapAllocator = Core::Alloc::GlobalArena;
-    using LoggedMaterialPathMapAllocator = Core::Alloc::GlobalArena;
 public:
     struct AvboitFrameTargets{
         u32 fullWidth = 0;

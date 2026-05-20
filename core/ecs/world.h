@@ -37,9 +37,6 @@ private:
 
     using ComponentPoolPtr = GlobalUniquePtr<IComponentPool>;
     using SystemPtr = GlobalUniquePtr<ISystem>;
-    using EntityComponentHeadAllocator = Alloc::GlobalArena;
-    using EntityComponentNodeAllocator = Alloc::GlobalArena;
-    using PoolMapAllocator = Alloc::GlobalArena;
     using PoolMap = HashMap<
         ComponentTypeId,
         ComponentPoolPtr,
@@ -52,8 +49,6 @@ private:
         SystemTypeId typeId;
         SystemPtr system;
     };
-
-    using SystemVectorAllocator = Alloc::GlobalArena;
 
     static constexpr u32 s_InvalidEntityComponentNode = Limit<u32>::s_Max;
 

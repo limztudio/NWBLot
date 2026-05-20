@@ -69,7 +69,6 @@ private:
 
 class AssetCookerRegistry final{
 private:
-    using CookerMapAllocator = Alloc::GlobalArena;
     using CookerMap = HashMap<Name, UniquePtr<IAssetCooker>, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
 
 

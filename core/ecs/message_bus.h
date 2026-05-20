@@ -36,7 +36,6 @@ class MessageBus : NoCopy{
 private:
     class IMessageChannel;
     using MessageChannelPtr = GlobalUniquePtr<IMessageChannel>;
-    using ChannelVectorAllocator = Alloc::GlobalArena;
     using ChannelLock = SharedMutex::scoped_lock;
 
 
@@ -92,9 +91,6 @@ private:
         private:
             Optional<T> m_value;
         };
-
-        using PendingAllocator = Alloc::GlobalArena;
-
 
     public:
         explicit MessageChannel(Alloc::GlobalArena& arena)

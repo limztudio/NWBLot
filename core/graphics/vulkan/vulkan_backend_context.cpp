@@ -53,11 +53,9 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchCharAllocator = Alloc::ScratchArena<>;
 using ScratchString = AString<Alloc::ScratchArena<>>;
 using ScratchStringStream = AStringStream<Alloc::ScratchArena<>>;
 using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena<>>;
-using ScratchStringVector = Vector<ScratchString, Alloc::ScratchArena<>>;
 
 static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena<>& arena){
     return ScratchStringStream(std::ios_base::out, arena);

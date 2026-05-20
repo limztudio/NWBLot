@@ -33,10 +33,7 @@ NWB_IMPL_BEGIN
 class ShaderCook{
 public:
     using CookArena = Core::Alloc::GlobalArena;
-    template<typename T>
-    using CookAllocator = Core::Alloc::GlobalArena;
     using CookString = AString<CookArena>;
-    using CookBytes = Vector<u8, CookArena>;
 
 public:
     template<typename T>

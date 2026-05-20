@@ -52,8 +52,6 @@ template<typename T>
 using ScratchVector = Vector<T, Alloc::ScratchArena<>>;
 template<typename T>
 using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena<>>;
-template<typename T, typename V>
-using ScratchHashMap = HashMap<T, V, Hasher<T>, EqualTo<T>, Alloc::ScratchArena<>>;
 
 static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";

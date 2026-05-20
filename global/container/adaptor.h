@@ -95,9 +95,11 @@ public:
 
 
 public:
-    ArenaAllocator() = delete;
+    constexpr ArenaAllocator()noexcept
+        : m_arena(nullptr)
+    {}
     constexpr ArenaAllocator(ArenaT& arena)noexcept
-        : m_arena(arena)
+        : m_arena(&arena)
     {}
     constexpr ArenaAllocator(const ArenaAllocator&)noexcept = default;
     template<typename U>
@@ -115,8 +117,12 @@ public:
         if(buffer == nullptr)
             return;
 
+        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot deallocate without an arena"));
+        if(m_arena == nullptr)
+            return;
+
         const size_type bytes = sizeof(value_type) * count;
-        m_arena.deallocate(buffer, static_cast<size_type>(alignof(value_type)), bytes);
+        m_arena->deallocate(buffer, static_cast<size_type>(alignof(value_type)), bytes);
     }
 
     [[nodiscard]] constexpr pointer allocate(const size_type count){
@@ -124,7 +130,11 @@ public:
         if(bytes == 0u)
             return nullptr;
 
-        pointer const output = static_cast<pointer>(m_arena.allocate(static_cast<size_type>(alignof(value_type)), bytes));
+        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot allocate without an arena"));
+        if(m_arena == nullptr)
+            throw std::bad_alloc{};
+
+        pointer const output = static_cast<pointer>(m_arena->allocate(static_cast<size_type>(alignof(value_type)), bytes));
         NWB_ASSERT(output != nullptr);
         if(output == nullptr)
             throw std::bad_alloc{};
@@ -135,21 +145,76 @@ public:
     [[nodiscard]] constexpr AllocationResult<pointer> allocate_at_least(const size_type count){ return { allocate(count), count }; }
 #endif
 
-    [[nodiscard]] ArenaT& arena()const noexcept{ return m_arena; }
+    [[nodiscard]] ArenaT& arena()const noexcept{
+        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator has no arena"));
+        return *m_arena;
+    }
+    [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
 
 
 private:
-    ArenaT& m_arena;
+    ArenaT* m_arena;
 };
 
 
 template<typename T, typename U, typename ArenaT>
 inline bool operator==(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{
-    return &lhs.arena() == &rhs.arena();
+    return lhs.arenaPtr() == rhs.arenaPtr();
 }
 
 template<typename T, typename U, typename ArenaT>
 inline bool operator!=(const ArenaAllocator<T, ArenaT>& lhs, const ArenaAllocator<U, ArenaT>& rhs)noexcept{ return !(lhs == rhs); }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
+class DefaultArenaAllocator : public ArenaAllocator<T, ArenaT>{
+    template<typename U, typename A, A& (*Provider)()>
+    friend class DefaultArenaAllocator;
+
+
+public:
+    using _From_primary = DefaultArenaAllocator<T, ArenaT, DefaultArena>;
+    using Base = ArenaAllocator<T, ArenaT>;
+    using value_type = typename Base::value_type;
+    using size_type = typename Base::size_type;
+    using pointer = typename Base::pointer;
+
+
+public:
+    template<typename U>
+    struct rebind{
+        using other = DefaultArenaAllocator<U, ArenaT, DefaultArena>;
+    };
+
+
+public:
+    DefaultArenaAllocator()noexcept
+        : Base(DefaultArena())
+    {}
+    constexpr DefaultArenaAllocator(ArenaT& arena)noexcept
+        : Base(arena)
+    {}
+    constexpr DefaultArenaAllocator(const DefaultArenaAllocator&)noexcept = default;
+    template<typename U>
+    constexpr DefaultArenaAllocator(const DefaultArenaAllocator<U, ArenaT, DefaultArena>& other)noexcept
+        : Base(static_cast<const ArenaAllocator<U, ArenaT>&>(other))
+    {}
+
+    constexpr ~DefaultArenaAllocator() = default;
+    constexpr DefaultArenaAllocator& operator=(const DefaultArenaAllocator&)noexcept{ return *this; }
+};
+
+
+template<typename T, typename U, typename ArenaT, ArenaT& (*DefaultArena)()>
+inline bool operator==(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{
+    return lhs.arenaPtr() == rhs.arenaPtr();
+}
+
+template<typename T, typename U, typename ArenaT, ArenaT& (*DefaultArena)()>
+inline bool operator!=(const DefaultArenaAllocator<T, ArenaT, DefaultArena>& lhs, const DefaultArenaAllocator<U, ArenaT, DefaultArena>& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -183,9 +248,11 @@ public:
 
 
 public:
-    ArenaCacheAlignedAllocator() = delete;
+    constexpr ArenaCacheAlignedAllocator()noexcept
+        : m_arena(nullptr)
+    {}
     constexpr ArenaCacheAlignedAllocator(ArenaT& arena)noexcept
-        : m_arena(arena)
+        : m_arena(&arena)
     {}
     constexpr ArenaCacheAlignedAllocator(const ArenaCacheAlignedAllocator&)noexcept = default;
     template<typename U>
@@ -207,8 +274,12 @@ public:
         if(buffer == nullptr)
             return;
 
+        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot deallocate without an arena"));
+        if(m_arena == nullptr)
+            return;
+
         const size_type bytes = sizeof(value_type) * count;
-        m_arena.deallocate(buffer, alignment(), bytes);
+        m_arena->deallocate(buffer, alignment(), bytes);
     }
 
     [[nodiscard]] constexpr pointer allocate(const size_type count){
@@ -216,7 +287,11 @@ public:
         if(bytes == 0u)
             return nullptr;
 
-        pointer const output = static_cast<pointer>(m_arena.allocate(alignment(), bytes));
+        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
+        if(m_arena == nullptr)
+            throw std::bad_alloc{};
+
+        pointer const output = static_cast<pointer>(m_arena->allocate(alignment(), bytes));
         NWB_ASSERT(output != nullptr);
         if(output == nullptr)
             throw std::bad_alloc{};
@@ -227,17 +302,21 @@ public:
     [[nodiscard]] constexpr AllocationResult<pointer> allocate_at_least(const size_type count){ return { allocate(count), count }; }
 #endif
 
-    [[nodiscard]] ArenaT& arena()const noexcept{ return m_arena; }
+    [[nodiscard]] ArenaT& arena()const noexcept{
+        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator has no arena"));
+        return *m_arena;
+    }
+    [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
 
 
 private:
-    ArenaT& m_arena;
+    ArenaT* m_arena;
 };
 
 
 template<typename T, typename U, typename ArenaT>
 inline bool operator==(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const ArenaCacheAlignedAllocator<U, ArenaT>& rhs)noexcept{
-    return &lhs.arena() == &rhs.arena();
+    return lhs.arenaPtr() == rhs.arenaPtr();
 }
 
 template<typename T, typename U, typename ArenaT>
@@ -255,6 +334,9 @@ concept ArenaResourceLike = requires(T& arena, void* pointer, usize align, usize
 
 template<typename T, typename ArenaT>
 using ArenaAllocatorFor_T = ArenaAllocator<T, ArenaT>;
+
+template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultArenaAllocatorFor_T = DefaultArenaAllocator<T, ArenaT, DefaultArena>;
 
 template<typename T, typename ArenaT>
 using ArenaCacheAlignedAllocatorFor_T = ArenaCacheAlignedAllocator<T, ArenaT>;

@@ -27,7 +27,6 @@ namespace Tests{
 
 class CapturingLogger final : public Core::Common::ILogger{
     using LogArena = Core::Common::LogArena;
-    using LogCharAllocator = Core::Common::LogCharAllocator;
     using LogString = Core::Common::LogString;
 
 

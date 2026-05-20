@@ -34,8 +34,6 @@ using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeTriangleIndices;
 using AString = NWB::Tests::TestAString;
-template<typename T, typename AllocatorT = NWB::Tests::TestDetail::Allocator<T>>
-using Vector = std::vector<T, AllocatorT>;
 
 
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK

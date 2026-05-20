@@ -126,10 +126,8 @@ private:
         u64 size = 0;
     };
 
-    using SegmentPathAllocator = Alloc::GlobalArena;
     using SegmentPathVector = Vector<Path, Alloc::GlobalArena>;
 
-    using FileMapAllocator = Alloc::GlobalArena;
     using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
 
 

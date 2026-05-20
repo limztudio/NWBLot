@@ -78,10 +78,6 @@ inline constexpr EntityID ENTITY_ID_INVALID = EntityID{};
 class EntityManager{
     friend class World;
 
-private:
-    using GenerationAllocator = Alloc::GlobalArena;
-    using FreeIndexAllocator = Alloc::GlobalArena;
-
 
 public:
     explicit EntityManager(Alloc::GlobalArena& arena);

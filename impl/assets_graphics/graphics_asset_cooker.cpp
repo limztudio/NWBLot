@@ -50,12 +50,10 @@ static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
 using CookString = ShaderCook::CookString;
-using CookBytes = ShaderCook::CookBytes;
 template<typename T>
 using CookVector = ShaderCook::CookVector<T>;
 using ScratchArena = Core::Alloc::ScratchArena<>;
 using ScratchString = AString<ScratchArena>;
-using ScratchCharAllocator = ScratchArena;
 
 
 UniquePtr<Core::Assets::IAssetCooker> CreateGraphicsAssetCooker(Core::Alloc::GlobalArena& arena){

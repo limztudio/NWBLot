@@ -53,10 +53,6 @@ class ISystem{
     friend class SystemScheduler;
 
 
-private:
-    using AccessAllocator = Alloc::GlobalArena;
-
-
 public:
     explicit ISystem(Alloc::GlobalArena& arena);
     ISystem(const ISystem&) = delete;
@@ -91,9 +87,7 @@ private:
 
 class SystemScheduler{
 private:
-    using SystemAllocator = Alloc::GlobalArena;
     using Stage = Vector<ISystem*, Alloc::GlobalArena>;
-    using StageAllocator = Alloc::GlobalArena;
 
 
 public:

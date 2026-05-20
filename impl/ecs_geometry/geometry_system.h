@@ -39,10 +39,6 @@ NWB_IMPL_BEGIN
 
 
 class GeometrySystem final : public Core::ECS::ISystem, public IRuntimeGeometryRegistry{
-private:
-    using RuntimeGeometryProviderAllocator = Core::Alloc::GlobalArena;
-
-
 public:
     GeometrySystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world);
     virtual ~GeometrySystem()override = default;

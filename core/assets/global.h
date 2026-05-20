@@ -28,14 +28,8 @@ NWB_ASSETS_BEGIN
 using AssetArena = Alloc::GlobalArena;
 
 template<typename T>
-using AssetAllocator = AssetArena;
-using AssetCharAllocator = AssetArena;
-using AssetTCharAllocator = AssetArena;
-
-template<typename T>
 using AssetVector = Vector<T, AssetArena>;
 using AssetString = AString<AssetArena>;
-using AssetTString = TString<AssetArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

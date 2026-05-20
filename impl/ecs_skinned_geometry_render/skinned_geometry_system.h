@@ -121,8 +121,6 @@ private:
 
 
 private:
-    using RuntimeResourceMapAllocator = Core::Alloc::GlobalArena;
-
     Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::Graphics& m_graphics;

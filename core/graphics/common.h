@@ -88,8 +88,6 @@ inline constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
 using GraphicsArena = Alloc::GlobalArena;
 using GraphicsString = AString<GraphicsArena>;
 using GraphicsTString = TString<GraphicsArena>;
-using GraphicsCharAllocator = GraphicsArena;
-using GraphicsTCharAllocator = GraphicsArena;
 template<typename T>
 using GraphicsVector = Vector<T, GraphicsArena>;
 using GraphicsBytes = GraphicsVector<u8>;

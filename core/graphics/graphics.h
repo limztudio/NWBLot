@@ -23,8 +23,6 @@ class Graphics{
 private:
     using BackendOwner = GlobalUniquePtr<IGraphicsBackend>;
     using BackendPtr = NotNullUniquePtr<IGraphicsBackend, BackendOwner::deleter_type>;
-    using RenderPassListAllocator = Alloc::GlobalArena;
-    using SwapChainFramebufferVectorAllocator = Alloc::GlobalArena;
 
 
 public:

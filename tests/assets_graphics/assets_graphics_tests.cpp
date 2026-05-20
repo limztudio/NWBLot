@@ -1455,10 +1455,10 @@ static void TestGeometryClassPolicyHelpers(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassMatchesSkinPayload(GeometryClass::Skinned, true));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::Skinned, false));
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Static, false));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Static, true));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Skinned, false));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinnedGeometryPayload(GeometryClass::Skinned, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinPayload(GeometryClass::Static, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassAcceptsSkinPayload(GeometryClass::Static, true));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinPayload(GeometryClass::Skinned, false));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassAcceptsSkinPayload(GeometryClass::Skinned, true));
 }
 
 static void TestFormatBlockDimensions(TestContext& context){

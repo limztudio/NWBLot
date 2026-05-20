@@ -157,7 +157,7 @@ bool WriteNwbGeometry(
         outError = GeometryClassErrorText();
         return false;
     }
-    const bool writeSkinnedGeometry = GeometryClassUsesSkinnedGeometryRuntime(geometryClass);
+    const bool writeSkinnedGeometry = GeometryClassUsesSkinning(geometryClass);
     if(GeometryClassUsesSkinning(geometryClass)){
         if(skin.size() != vertices.size()){
             outError = "skinned geometry skin stream must match vertex count";

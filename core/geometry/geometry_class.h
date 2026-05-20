@@ -73,12 +73,8 @@ inline constexpr GeometryClassInfo s_GeometryClassInfos[] = {
     return GeometryClassUsesSkinning(geometryClass) == hasSkin;
 }
 
-[[nodiscard]] inline bool GeometryClassUsesSkinnedGeometryRuntime(const u32 geometryClass){
-    return geometryClass == GeometryClass::Skinned;
-}
-
-[[nodiscard]] inline bool GeometryClassAcceptsSkinnedGeometryPayload(const u32 geometryClass, const bool hasPayload){
-    return GeometryClassUsesSkinnedGeometryRuntime(geometryClass) || !hasPayload;
+[[nodiscard]] inline bool GeometryClassAcceptsSkinPayload(const u32 geometryClass, const bool hasPayload){
+    return GeometryClassUsesSkinning(geometryClass) || !hasPayload;
 }
 
 [[nodiscard]] inline AStringView GeometryClassText(const u32 geometryClass){

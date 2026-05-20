@@ -62,12 +62,11 @@ static void TestGeometryClassMetadata(TestContext& context){
         AStringView text;
         u32 geometryClass;
         bool usesSkinning;
-        bool usesSkinnedGeometryRuntime;
     };
 
     const Case cases[] = {
-        { "static", GeometryClass::Static, false, false },
-        { "skinned", GeometryClass::Skinned, true, true },
+        { "static", GeometryClass::Static, false },
+        { "skinned", GeometryClass::Skinned, true },
     };
 
     for(const Case& testCase : cases){
@@ -77,7 +76,6 @@ static void TestGeometryClassMetadata(TestContext& context){
         NWB_GEOMETRY_TEST_CHECK(context, ValidGeometryClass(testCase.geometryClass));
         NWB_GEOMETRY_TEST_CHECK(context, GeometryClassText(testCase.geometryClass) == testCase.text);
         NWB_GEOMETRY_TEST_CHECK(context, GeometryClassUsesSkinning(testCase.geometryClass) == testCase.usesSkinning);
-        NWB_GEOMETRY_TEST_CHECK(context, GeometryClassUsesSkinnedGeometryRuntime(testCase.geometryClass) == testCase.usesSkinnedGeometryRuntime);
     }
 
     u32 parsedClass = GeometryClass::Static;

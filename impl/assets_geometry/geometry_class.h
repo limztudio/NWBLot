@@ -19,10 +19,9 @@ NWB_IMPL_BEGIN
 
 namespace GeometryClass = Core::Geometry::GeometryClass;
 
-using Core::Geometry::GeometryClassAcceptsSkinnedGeometryPayload;
+using Core::Geometry::GeometryClassAcceptsSkinPayload;
 using Core::Geometry::GeometryClassMatchesSkinPayload;
 using Core::Geometry::GeometryClassText;
-using Core::Geometry::GeometryClassUsesSkinnedGeometryRuntime;
 using Core::Geometry::GeometryClassUsesSkinning;
 using Core::Geometry::ParseGeometryClassText;
 using Core::Geometry::ValidGeometryClass;

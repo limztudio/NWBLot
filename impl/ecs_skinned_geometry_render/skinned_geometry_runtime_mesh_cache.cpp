@@ -77,7 +77,7 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     else
         sourceText.assign(NWB_TEXT("<unnamed>"));
 
-    if(!GeometryClassUsesSkinnedGeometryRuntime(instance.geometryClass)){
+    if(!GeometryClassUsesSkinning(instance.geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' has invalid geometry class")
             , TStringView(sourceText)
         );

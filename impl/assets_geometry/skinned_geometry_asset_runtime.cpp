@@ -48,7 +48,7 @@ bool SkinnedGeometry::validatePayload()const{
     Core::Alloc::ScratchArena<> scratchArena;
     const TString<Core::Alloc::ScratchArena<>> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
-    if(!GeometryClassUsesSkinnedGeometryRuntime(m_geometryClass)){
+    if(!GeometryClassUsesSkinning(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")
             , geometryPathText
             , StringConvert(GeometryClassText(m_geometryClass))
@@ -120,7 +120,7 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     const u64 skinCount = header.skinCount;
     const u64 skeletonJointCount = header.skeletonJointCount;
     const u64 inverseBindMatrixCount = header.inverseBindMatrixCount;
-    if(!GeometryClassUsesSkinnedGeometryRuntime(geometryClass)){
+    if(!GeometryClassUsesSkinning(geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: invalid geometry class"));
         return false;
     }

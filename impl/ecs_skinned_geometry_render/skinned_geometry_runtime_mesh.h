@@ -52,7 +52,7 @@ struct SkinnedGeometryRuntimeMeshInstance{
             entity.valid()
             && handle.valid()
             && source.valid()
-            && GeometryClassUsesSkinnedGeometryRuntime(geometryClass)
+            && GeometryClassUsesSkinning(geometryClass)
             && !restVertices.empty()
             && !indices.empty()
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u

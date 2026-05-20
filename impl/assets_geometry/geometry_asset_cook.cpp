@@ -458,7 +458,7 @@ static bool ParseSkinnedGeometryClassField(
     if(!ParseGeometryClassField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, outGeometryClass))
         return false;
 
-    if(GeometryClassUsesSkinnedGeometryRuntime(outGeometryClass))
+    if(GeometryClassUsesSkinning(outGeometryClass))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class must be {}")

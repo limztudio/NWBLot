@@ -108,7 +108,6 @@ AString GeometryClassOptionsText();
 AString GeometryClassErrorText();
 bool ParseGeometryClassText(const AString& value, u32& outGeometryClass);
 bool ParseNormalizedGeometryClassText(AStringView value, u32& outGeometryClass);
-bool GeometryClassUsesSkinnedGeometryRuntime(u32 geometryClass);
 bool GeometryClassUsesSkinning(u32 geometryClass);
 bool IsNormalizedSkinnedGeometryClass(AStringView value);
 bool IsSkinnedGeometryClass(const AString& value);

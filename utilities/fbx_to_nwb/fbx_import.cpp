@@ -939,7 +939,7 @@ bool BuildGeometry(
         outError = GeometryClassErrorText();
         return false;
     }
-    const bool wantsSkinnedGeometry = GeometryClassUsesSkinnedGeometryRuntime(geometryClass);
+    const bool wantsSkinnedGeometry = GeometryClassUsesSkinning(geometryClass);
     const bool wantsSkinning = GeometryClassUsesSkinning(geometryClass);
     __hidden_fbx_import::SkinExportContext skinContext;
     for(const usize instanceIndex : selection){

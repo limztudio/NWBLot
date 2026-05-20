@@ -81,17 +81,13 @@ bool ParseGeometryClassText(const AString& value, u32& outGeometryClass){
     return ParseNormalizedGeometryClassText(normalized, outGeometryClass);
 }
 
-bool GeometryClassUsesSkinnedGeometryRuntime(const u32 geometryClass){
-    return NWB::Core::Geometry::GeometryClassUsesSkinnedGeometryRuntime(geometryClass);
-}
-
 bool GeometryClassUsesSkinning(const u32 geometryClass){
     return NWB::Core::Geometry::GeometryClassUsesSkinning(geometryClass);
 }
 
 bool IsNormalizedSkinnedGeometryClass(const AStringView value){
     u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    return ParseNormalizedGeometryClassText(value, geometryClass) && GeometryClassUsesSkinnedGeometryRuntime(geometryClass);
+    return ParseNormalizedGeometryClassText(value, geometryClass) && GeometryClassUsesSkinning(geometryClass);
 }
 
 bool IsSkinnedGeometryClass(const AString& value){

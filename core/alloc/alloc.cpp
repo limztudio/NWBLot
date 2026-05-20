@@ -4,14 +4,12 @@
 
 #include "alloc.h"
 
+#include <global/container/adaptor.h>
 #include <global/thread.h>
 
-#include <cstddef>
 #include <mutex>
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_APPLE)
-#include <unistd.h>
 #endif
 
 
@@ -25,66 +23,6 @@ NWB_ALLOC_BEGIN
 
 
 namespace __hidden_alloc{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct CacheSize{
-    usize m_size = 64;
-
-    void initialize(){
-#if defined(_WIN32)
-        DWORD bufferSize = 0;
-        GetLogicalProcessorInformation(nullptr, &bufferSize);
-
-        ScratchArena<> scratchArena(bufferSize);
-        auto* info = reinterpret_cast<SYSTEM_LOGICAL_PROCESSOR_INFORMATION*>(scratchArena.allocate<u8>(bufferSize));
-
-        if(GetLogicalProcessorInformation(info, &bufferSize)){
-            for(DWORD i = 0, e = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i < e; ++i){
-                if(info[i].Relationship != RelationCache)
-                    continue;
-
-                const auto cur = static_cast<usize>(info[i].Cache.LineSize);
-                if(m_size < cur)
-                    m_size = cur;
-            }
-        }
-#elif defined(_SC_LEVEL1_DCACHE_LINESIZE)
-        const isize lineSizes[] = {
-            static_cast<isize>(sysconf(_SC_LEVEL1_DCACHE_LINESIZE)),
-#if defined(_SC_LEVEL2_DCACHE_LINESIZE)
-            static_cast<isize>(sysconf(_SC_LEVEL2_DCACHE_LINESIZE)),
-#else
-            static_cast<isize>(-1),
-#endif
-#if defined(_SC_LEVEL3_DCACHE_LINESIZE)
-            static_cast<isize>(sysconf(_SC_LEVEL3_DCACHE_LINESIZE)),
-#else
-            static_cast<isize>(-1),
-#endif
-        };
-        for(const isize lineSize : lineSizes){
-            if(lineSize <= 0)
-                continue;
-
-            const auto cur = static_cast<usize>(lineSize);
-            if(m_size < cur)
-                m_size = cur;
-        }
-#endif
-    }
-} static s_CacheSize;
-
-static std::once_flag s_CacheSizeOnce;
-
-CacheSize& GetCacheSize(){
-    std::call_once(s_CacheSizeOnce, [](){
-        s_CacheSize.initialize();
-    });
-    return s_CacheSize;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,7 +114,7 @@ AffinityMasks& GetAffinityMasks(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize(){ return __hidden_alloc::GetCacheSize().m_size; }
+usize CachelineSize(){ return ContainerDetail::AdaptorDetail::CachelineSize(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

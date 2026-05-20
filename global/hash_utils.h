@@ -5,8 +5,9 @@
 #pragma once
 
 
-#include "text_utils.h"
 #include "compile.h"
+#include "text_utils.h"
+#include "type_borrow.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,6 +15,9 @@
 
 inline constexpr u64 FNV64_OFFSET_BASIS = 14695981039346656037ull;
 inline constexpr u64 FNV64_PRIME = 1099511628211ull;
+inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
+inline constexpr usize s_HashCombineLeftShift = 6u;
+inline constexpr usize s_HashCombineRightShift = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,6 +72,19 @@ template<typename CharT>
         static_cast<const u8*>(data),
         byteCount
     );
+}
+
+inline void HashCombineHash(usize& seed, const usize hash){
+    seed ^= hash
+        + s_HashCombineGoldenRatio
+        + (seed << s_HashCombineLeftShift)
+        + (seed >> s_HashCombineRightShift)
+    ;
+}
+
+template<typename T>
+inline void HashCombine(usize& seed, const T& value){
+    HashCombineHash(seed, Hasher<T>{}(value));
 }
 
 

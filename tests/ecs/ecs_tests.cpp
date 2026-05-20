@@ -50,6 +50,28 @@ struct TickMessage{
     u32 value = 0;
 };
 
+struct MoveOnlyMessage{
+    explicit MoveOnlyMessage(u32 v)
+        : value(v)
+    {}
+    MoveOnlyMessage(const MoveOnlyMessage&) = delete;
+    MoveOnlyMessage& operator=(const MoveOnlyMessage&) = delete;
+    MoveOnlyMessage(MoveOnlyMessage&& rhs)noexcept
+        : value(rhs.value)
+    {
+        rhs.value = 0u;
+    }
+    MoveOnlyMessage& operator=(MoveOnlyMessage&& rhs)noexcept{
+        if(this != &rhs){
+            value = rhs.value;
+            rhs.value = 0u;
+        }
+        return *this;
+    }
+
+    u32 value = 0u;
+};
+
 class CountingSystem final : public NWB::Core::ECS::ISystem{
 public:
     explicit CountingSystem(NWB::Core::Alloc::GlobalArena& arena)
@@ -201,6 +223,35 @@ static void TestMessageBus(TestContext& context){
     NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<TickMessage>() == 0);
 }
 
+static void TestMoveOnlyMessageBus(TestContext& context){
+    TestWorld testWorld;
+
+    testWorld.world.emplaceMessage<MoveOnlyMessage>(23u);
+    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 0);
+
+    testWorld.world.swapMessageBuffers();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 1);
+
+    u32 consumedCount = 0u;
+    u32 consumedValue = 0u;
+    testWorld.world.consumeMessages<MoveOnlyMessage>(
+        [&consumedCount, &consumedValue](const MoveOnlyMessage& message){
+            ++consumedCount;
+            consumedValue = message.value;
+        }
+    );
+    NWB_ECS_TEST_CHECK(context, consumedCount == 1u);
+    NWB_ECS_TEST_CHECK(context, consumedValue == 23u);
+
+    testWorld.world.clearMessages();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 0);
+
+    testWorld.world.emplaceMessage<MoveOnlyMessage>(41u);
+    testWorld.world.clearMessages();
+    testWorld.world.swapMessageBuffers();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.messageCount<MoveOnlyMessage>() == 0);
+}
+
 static void TestSystemTick(TestContext& context){
     TestWorld testWorld;
 
@@ -283,6 +334,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("ecs", [](NWB::Tests::TestContext& context){
     __hidden_ecs_tests::TestEmptyViewDoesNotAllocateComponentPools(context);
     __hidden_ecs_tests::TestComponentLifetime(context);
     __hidden_ecs_tests::TestMessageBus(context);
+    __hidden_ecs_tests::TestMoveOnlyMessageBus(context);
     __hidden_ecs_tests::TestSystemTick(context);
     __hidden_ecs_tests::TestDuplicateComponentAddIsStable(context);
     __hidden_ecs_tests::TestDuplicateSchedulerAddIsStable(context);

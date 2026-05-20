@@ -153,8 +153,8 @@ struct PositionKey{
 struct PositionKeyHasher{
     usize operator()(const PositionKey& key)const{
         usize seed = Hasher<u32>{}(key.x);
-        seed ^= Hasher<u32>{}(key.y) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
-        seed ^= Hasher<u32>{}(key.z) + 0x9e3779b9u + (seed << 6u) + (seed >> 2u);
+        HashCombine(seed, key.y);
+        HashCombine(seed, key.z);
         return seed;
     }
 };

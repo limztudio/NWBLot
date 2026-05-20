@@ -29,22 +29,9 @@ namespace CoreDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
-inline constexpr usize s_HashCombineLeftShift = 6;
-inline constexpr usize s_HashCombineRightShift = 2;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 template<typename T>
 void HashCombine(usize& seed, const T& v){
-    Hasher<T> hasher;
-    seed ^= hasher(v)
-        + s_HashCombineGoldenRatio
-        + (seed << s_HashCombineLeftShift)
-        + (seed >> s_HashCombineRightShift)
-        ;
+    ::HashCombine(seed, v);
 }
 
 

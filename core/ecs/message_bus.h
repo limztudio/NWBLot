@@ -80,6 +80,10 @@ private:
                 return *m_value;
             }
 
+            void reset(){
+                m_value.reset();
+            }
+
 
         private:
             void moveFrom(PendingMessage&& rhs){
@@ -124,22 +128,22 @@ private:
     public:
         virtual void swapBuffers()override{
             m_readBuffer.clear();
-
-            PendingMessage message;
-            bool hasMessage = m_pending.try_pop(message);
-            while(hasMessage){
-                m_readBuffer.push_back(Move(message.value()));
-                hasMessage = m_pending.try_pop(message);
-            }
+            drainPending([this](T& message){ m_readBuffer.push_back(Move(message)); });
         }
 
         virtual void clear()override{
             m_readBuffer.clear();
+            drainPending([](T& message){ static_cast<void>(message); });
+        }
 
+
+    private:
+        template<typename Func>
+        void drainPending(Func&& func){
             PendingMessage message;
-            bool hasMessage = m_pending.try_pop(message);
-            while(hasMessage){
-                hasMessage = m_pending.try_pop(message);
+            while(m_pending.try_pop(message)){
+                func(message.value());
+                message.reset();
             }
         }
 

@@ -926,7 +926,6 @@ void DescriptorHeapManager::free(const DescriptorHeapAllocation& allocation){
 
     ScopedLock lock(heap.mutex);
 
-    FreeRange released{ allocation.offsetBytes, allocation.sizeBytes };
     const auto rangeEnd = [](const FreeRange& range, u32& outEnd) -> bool{
         if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
             return false;
@@ -934,40 +933,40 @@ void DescriptorHeapManager::free(const DescriptorHeapAllocation& allocation){
         return true;
     };
 
-    bool merged = true;
-    while(merged){
-        merged = false;
-        for(usize i = 0; i < heap.freeRanges.size(); ++i){
-            FreeRange range = heap.freeRanges[i];
-            u32 releasedEnd = 0;
-            u32 currentEnd = 0;
-            if(!rangeEnd(released, releasedEnd) || !rangeEnd(range, currentEnd))
-                continue;
-
-            if(releasedEnd == range.offsetBytes){
-                if(range.sizeBytes > UINT32_MAX - released.sizeBytes)
-                    continue;
-                released.sizeBytes += range.sizeBytes;
-            }
-            else if(currentEnd == released.offsetBytes){
-                if(released.sizeBytes > UINT32_MAX - range.sizeBytes)
-                    continue;
-                released.offsetBytes = range.offsetBytes;
-                released.sizeBytes += range.sizeBytes;
-            }
-            else{
-                continue;
-            }
-
-            if(i + 1u != heap.freeRanges.size())
-                heap.freeRanges[i] = heap.freeRanges.back();
-            heap.freeRanges.pop_back();
-            merged = true;
-            break;
+    heap.freeRanges.push_back({ allocation.offsetBytes, allocation.sizeBytes });
+    Sort(
+        heap.freeRanges.begin(),
+        heap.freeRanges.end(),
+        [](const FreeRange& lhs, const FreeRange& rhs){
+            if(lhs.offsetBytes != rhs.offsetBytes)
+                return lhs.offsetBytes < rhs.offsetBytes;
+            return lhs.sizeBytes < rhs.sizeBytes;
         }
-    }
+    );
 
-    heap.freeRanges.push_back(released);
+    usize writeIndex = 0u;
+    for(usize readIndex = 0u; readIndex < heap.freeRanges.size(); ++readIndex){
+        const FreeRange range = heap.freeRanges[readIndex];
+        if(range.sizeBytes == 0)
+            continue;
+
+        if(writeIndex > 0u){
+            FreeRange& previous = heap.freeRanges[writeIndex - 1u];
+            u32 previousEnd = 0;
+            if(
+                rangeEnd(previous, previousEnd)
+                && previousEnd == range.offsetBytes
+                && range.sizeBytes <= UINT32_MAX - previous.sizeBytes
+            ){
+                previous.sizeBytes += range.sizeBytes;
+                continue;
+            }
+        }
+
+        heap.freeRanges[writeIndex] = range;
+        ++writeIndex;
+    }
+    heap.freeRanges.resize(writeIndex);
 }
 
 bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const DescriptorHeapBindingMeta& meta, const u32 dstOffsetBytes){

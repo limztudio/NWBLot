@@ -22,7 +22,21 @@ namespace __hidden_renderer_system_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SourceVertexWordVector = Vector<u32, Core::Alloc::ScratchArena<>>;
+struct StaticGeometrySourceVertexWords{
+    u32 positionX = 0u;
+    u32 positionY = 0u;
+    u32 positionZ = 0u;
+    u32 normalXy = 0u;
+    u32 normalZw = 0u;
+    u32 colorXy = 0u;
+    u32 colorZw = 0u;
+};
+static_assert(
+    sizeof(StaticGeometrySourceVertexWords) == sizeof(u32) * ECSRenderDetail::s_StaticGeometrySourceWordStride,
+    "Static geometry source word layout drifted"
+);
+
+using SourceVertexWordVector = Vector<StaticGeometrySourceVertexWords, Core::Alloc::ScratchArena<>>;
 
 [[nodiscard]] static u32 FloatWord(const f32 value){
     return std::bit_cast<u32>(value);
@@ -35,30 +49,31 @@ using SourceVertexWordVector = Vector<u32, Core::Alloc::ScratchArena<>>;
     const usize vertexCount = geometry.vertexCount();
     if(vertexCount == 0u)
         return false;
-    if(vertexCount > Limit<usize>::s_Max / ECSRenderDetail::s_StaticGeometrySourceWordStride)
+    if(vertexCount > Limit<usize>::s_Max / sizeof(StaticGeometrySourceVertexWords))
         return false;
 
-    const usize wordCount = vertexCount * ECSRenderDetail::s_StaticGeometrySourceWordStride;
-    if(wordCount > Limit<usize>::s_Max / sizeof(u32))
-        return false;
+    const usize sourceVertexBytes = vertexCount * sizeof(StaticGeometrySourceVertexWords);
 
     const auto& positions = geometry.positions();
     const auto& normals = geometry.normals();
     const auto& colors = geometry.colors();
-    outWords.reserve(wordCount);
+    outWords.reserve(vertexCount);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const Float3U& position = positions[vertexIndex];
         const Half4U& normal = normals[vertexIndex];
         const Half4U& color = colors[vertexIndex];
-        outWords.push_back(FloatWord(position.x));
-        outWords.push_back(FloatWord(position.y));
-        outWords.push_back(FloatWord(position.z));
-        outWords.push_back(normal.packed[0]);
-        outWords.push_back(normal.packed[1]);
-        outWords.push_back(color.packed[0]);
-        outWords.push_back(color.packed[1]);
+
+        StaticGeometrySourceVertexWords vertexWords;
+        vertexWords.positionX = FloatWord(position.x);
+        vertexWords.positionY = FloatWord(position.y);
+        vertexWords.positionZ = FloatWord(position.z);
+        vertexWords.normalXy = normal.packed[0];
+        vertexWords.normalZw = normal.packed[1];
+        vertexWords.colorXy = color.packed[0];
+        vertexWords.colorZw = color.packed[1];
+        outWords.push_back(vertexWords);
     }
-    outBytes = wordCount * sizeof(u32);
+    outBytes = sourceVertexBytes;
     return true;
 }
 

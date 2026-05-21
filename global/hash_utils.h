@@ -144,22 +144,47 @@ template<typename CharT>
 }
 
 
-template<typename CharT, typename ArenaT>
-inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText){
-    static constexpr CharT s_HexDigits[16] = {
-        static_cast<CharT>('0'), static_cast<CharT>('1'), static_cast<CharT>('2'), static_cast<CharT>('3'),
-        static_cast<CharT>('4'), static_cast<CharT>('5'), static_cast<CharT>('6'), static_cast<CharT>('7'),
-        static_cast<CharT>('8'), static_cast<CharT>('9'), static_cast<CharT>('a'), static_cast<CharT>('b'),
-        static_cast<CharT>('c'), static_cast<CharT>('d'), static_cast<CharT>('e'), static_cast<CharT>('f')
-    };
+namespace HashUtilsDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename CharT>
+[[nodiscard]] inline constexpr CharT HexDigit(const usize nibble){
+    return static_cast<CharT>(
+        nibble < 10u
+            ? static_cast<usize>('0') + nibble
+            : static_cast<usize>('a') + (nibble - 10u)
+    );
+}
+
+template<typename StringT>
+inline void AppendHexU64Impl(const u64 value, StringT& outText){
     if(outText.size() > outText.max_size() - 16u)
         return;
 
+    using CharT = typename StringT::value_type;
     for(u32 nibbleIndex = 0; nibbleIndex < 16u; ++nibbleIndex){
         const u32 shift = (15 - nibbleIndex) * 4;
         const usize nibble = static_cast<usize>((value >> shift) & 0xF);
-        outText.push_back(s_HexDigits[nibble]);
+        outText.push_back(HexDigit<CharT>(nibble));
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename CharT, typename ArenaT>
+inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText){
+    HashUtilsDetail::AppendHexU64Impl(value, outText);
 }
 template<typename StringT>
     requires requires(StringT& text){
@@ -169,21 +194,7 @@ template<typename StringT>
         text.push_back(typename StringT::value_type{});
     }
 inline void AppendHexU64(const u64 value, StringT& outText){
-    using CharT = typename StringT::value_type;
-    static constexpr CharT s_HexDigits[16] = {
-        static_cast<CharT>('0'), static_cast<CharT>('1'), static_cast<CharT>('2'), static_cast<CharT>('3'),
-        static_cast<CharT>('4'), static_cast<CharT>('5'), static_cast<CharT>('6'), static_cast<CharT>('7'),
-        static_cast<CharT>('8'), static_cast<CharT>('9'), static_cast<CharT>('a'), static_cast<CharT>('b'),
-        static_cast<CharT>('c'), static_cast<CharT>('d'), static_cast<CharT>('e'), static_cast<CharT>('f')
-    };
-    if(outText.size() > outText.max_size() - 16u)
-        return;
-
-    for(u32 nibbleIndex = 0; nibbleIndex < 16u; ++nibbleIndex){
-        const u32 shift = (15 - nibbleIndex) * 4;
-        const usize nibble = static_cast<usize>((value >> shift) & 0xF);
-        outText.push_back(s_HexDigits[nibble]);
-    }
+    HashUtilsDetail::AppendHexU64Impl(value, outText);
 }
 
 

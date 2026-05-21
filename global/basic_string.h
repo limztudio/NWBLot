@@ -130,72 +130,6 @@ struct StringConvertArg{
     const In& value;
 };
 
-template<typename StringT>
-inline void AppendUtf8CodePoint(StringT& out, u32 codePoint){
-    if(codePoint <= 0x7F){
-        out.push_back(static_cast<char>(codePoint));
-        return;
-    }
-
-    if(codePoint <= 0x7FF){
-        out.push_back(static_cast<char>(0xC0u | (codePoint >> 6)));
-        out.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
-        return;
-    }
-
-    if(codePoint <= 0xFFFF){
-        out.push_back(static_cast<char>(0xE0u | (codePoint >> 12)));
-        out.push_back(static_cast<char>(0x80u | ((codePoint >> 6) & 0x3Fu)));
-        out.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
-        return;
-    }
-
-    if(codePoint <= 0x10FFFF){
-        out.push_back(static_cast<char>(0xF0u | (codePoint >> 18)));
-        out.push_back(static_cast<char>(0x80u | ((codePoint >> 12) & 0x3Fu)));
-        out.push_back(static_cast<char>(0x80u | ((codePoint >> 6) & 0x3Fu)));
-        out.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
-        return;
-    }
-
-    out.push_back('?');
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline AString<ArenaT> WideToUtf8(ArenaT& arena, WStringView src){
-    AString<ArenaT> dst{arena};
-    if(src.empty())
-        return dst;
-
-    dst.reserve(src.size());
-
-    for(usize i = 0; i < src.size(); ++i){
-        u32 codePoint = static_cast<u32>(src[i]);
-
-#if WCHAR_MAX <= 0xFFFF
-        if(codePoint >= 0xD800u && codePoint <= 0xDBFFu && (i + 1) < src.size()){
-            const u32 low = static_cast<u32>(src[i + 1]);
-            if(low >= 0xDC00u && low <= 0xDFFFu){
-                codePoint = 0x10000u + (((codePoint - 0xD800u) << 10) | (low - 0xDC00u));
-                ++i;
-            }
-            else
-                codePoint = static_cast<u32>('?');
-        }
-        else if(codePoint >= 0xD800u && codePoint <= 0xDBFFu){
-            codePoint = static_cast<u32>('?');
-        }
-        else if(codePoint >= 0xDC00u && codePoint <= 0xDFFFu){
-            codePoint = static_cast<u32>('?');
-        }
-#endif
-
-        AppendUtf8CodePoint(dst, codePoint);
-    }
-
-    return dst;
-}
-
 template<typename Out>
 inline void WriteUtf8CodePoint(Out& out, u32 codePoint){
     if(codePoint <= 0x7F){
@@ -266,6 +200,18 @@ inline void WriteWStringAsUtf8(Out& out, const WStringView src){
 
         WriteUtf8CodePoint(out, codePoint);
     }
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline AString<ArenaT> WideToUtf8(ArenaT& arena, WStringView src){
+    AString<ArenaT> dst{arena};
+    if(src.empty())
+        return dst;
+
+    dst.reserve(src.size());
+    auto out = std::back_inserter(dst);
+    WriteWStringAsUtf8(out, src);
+    return dst;
 }
 
 template<typename Out>

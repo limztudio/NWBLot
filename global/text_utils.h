@@ -271,20 +271,35 @@ inline constexpr bool IsSafeCacheNameChar(CharT ch){
     return alphaNum || safePunctuation;
 }
 
-template<typename CharT, typename ArenaT, bool Canonical>
-[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheNameImpl(ArenaT& arena, const BasicStringView<CharT> text){
-    if(text.empty())
-        return BasicString<CharT, ArenaT>(arena);
-
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
-    for(CharT& ch : output){
+template<bool Canonical, typename StringT>
+inline void SanitizeSafeCacheName(StringT& text){
+    using CharT = typename StringT::value_type;
+    for(CharT& ch : text){
         if constexpr(Canonical)
             ch = Canonicalize(ch);
 
         if(!IsSafeCacheNameChar(ch))
             ch = CharT('_');
     }
+}
 
+template<typename CharT, typename ArenaT, bool Canonical>
+[[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheNameImpl(ArenaT& arena, const BasicStringView<CharT> text){
+    if(text.empty())
+        return BasicString<CharT, ArenaT>(arena);
+
+    BasicString<CharT, ArenaT> output(text.data(), text.size(), arena);
+    SanitizeSafeCacheName<Canonical>(output);
+    return output;
+}
+
+template<bool Canonical, typename StringT>
+[[nodiscard]] inline StringT BuildSafeCacheNameCopy(const StringT& text){
+    if(text.empty())
+        return StringT(text.get_allocator());
+
+    StringT output(text.data(), text.size(), text.get_allocator());
+    SanitizeSafeCacheName<Canonical>(output);
     return output;
 }
 
@@ -304,15 +319,7 @@ template<typename CharT, typename ArenaT>
 }
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildSafeCacheName(const BasicString<CharT, ArenaT>& text){
-    if(text.empty())
-        return BasicString<CharT, ArenaT>(text.get_allocator());
-
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
-    for(CharT& ch : output){
-        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
-            ch = CharT('_');
-    }
-    return output;
+    return TextUtilsDetail::BuildSafeCacheNameCopy<false>(text);
 }
 template<typename StringT>
     requires requires(const StringT& text){
@@ -323,16 +330,7 @@ template<typename StringT>
         text.get_allocator();
     }
 [[nodiscard]] inline StringT BuildSafeCacheName(const StringT& text){
-    using CharT = typename StringT::value_type;
-    if(text.empty())
-        return StringT(text.get_allocator());
-
-    StringT output(text.data(), text.size(), text.get_allocator());
-    for(CharT& ch : output){
-        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
-            ch = CharT('_');
-    }
-    return output;
+    return TextUtilsDetail::BuildSafeCacheNameCopy<false>(text);
 }
 
 
@@ -380,16 +378,7 @@ template<typename CharT, typename ArenaT>
 }
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> BuildCanonicalSafeCacheName(const BasicString<CharT, ArenaT>& text){
-    if(text.empty())
-        return BasicString<CharT, ArenaT>(text.get_allocator());
-
-    BasicString<CharT, ArenaT> output(text.data(), text.size(), text.get_allocator());
-    for(CharT& ch : output){
-        ch = Canonicalize(ch);
-        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
-            ch = CharT('_');
-    }
-    return output;
+    return TextUtilsDetail::BuildSafeCacheNameCopy<true>(text);
 }
 template<typename StringT>
     requires requires(const StringT& text){
@@ -400,17 +389,7 @@ template<typename StringT>
         text.get_allocator();
     }
 [[nodiscard]] inline StringT BuildCanonicalSafeCacheName(const StringT& text){
-    using CharT = typename StringT::value_type;
-    if(text.empty())
-        return StringT(text.get_allocator());
-
-    StringT output(text.data(), text.size(), text.get_allocator());
-    for(CharT& ch : output){
-        ch = Canonicalize(ch);
-        if(!TextUtilsDetail::IsSafeCacheNameChar(ch))
-            ch = CharT('_');
-    }
-    return output;
+    return TextUtilsDetail::BuildSafeCacheNameCopy<true>(text);
 }
 
 

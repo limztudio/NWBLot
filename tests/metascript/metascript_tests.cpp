@@ -168,6 +168,45 @@ static void TestAppendSelfMoveCopiesOriginalValue(TestContext& context){
     }
 }
 
+static void TestAppendExistingListElementMoveCopiesBeforeDestroy(TestContext& context){
+    DestinationArena arena;
+    const AString text(128u, 'e');
+
+    Value list(arena.arena);
+    list.makeList();
+    list.append(Value(ViewOf(text), arena.arena));
+
+    list.append(Move(list.asList()[0u]));
+
+    NWB_METASCRIPT_TEST_CHECK(context, list.isList());
+    NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
+    if(list.isList() && list.asList().size() == 2u){
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isNull());
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isString());
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asString() == ViewOf(text));
+    }
+}
+
+static void TestListAppendExistingElementCopiesBeforeReallocation(TestContext& context){
+    DestinationArena arena;
+    const AString text(128u, 'r');
+
+    Value list(arena.arena);
+    list.makeList();
+    list.append(Value(ViewOf(text), arena.arena));
+
+    list += list.asList()[0u];
+
+    NWB_METASCRIPT_TEST_CHECK(context, list.isList());
+    NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
+    if(list.isList() && list.asList().size() == 2u){
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isString());
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isString());
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].asString() == ViewOf(text));
+        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asString() == ViewOf(text));
+    }
+}
+
 static void TestExponentDoubleLiterals(TestContext& context){
     DestinationArena arena;
     Document document(arena.arena);
@@ -220,6 +259,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("metascript", [](NWB::Tests::TestContext& context){
     __hidden_metascript_tests::TestCrossArenaAppendCopiesIntoDestinationArena(context);
     __hidden_metascript_tests::TestListSelfAppendCopiesOriginalValues(context);
     __hidden_metascript_tests::TestAppendSelfMoveCopiesOriginalValue(context);
+    __hidden_metascript_tests::TestAppendExistingListElementMoveCopiesBeforeDestroy(context);
+    __hidden_metascript_tests::TestListAppendExistingElementCopiesBeforeReallocation(context);
     __hidden_metascript_tests::TestExponentDoubleLiterals(context);
 })
 

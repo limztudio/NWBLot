@@ -412,18 +412,12 @@ usize Value::valueIndexInList(const Value& val)const{
     NWB_ASSERT(m_type == ValueType::List);
 
     const usize listSize = m_data.m_list->size();
-    if(listSize == 0u)
-        return listSize;
-
-    const Value* const listBegin = m_data.m_list->data();
-    const Value* const listEnd = listBegin + listSize;
-    const usize valueAddress = reinterpret_cast<usize>(&val);
-    const bool valueBeforeList = valueAddress < reinterpret_cast<usize>(listBegin);
-    const bool valueAfterList = valueAddress >= reinterpret_cast<usize>(listEnd);
-    if(valueBeforeList || valueAfterList)
-        return listSize;
-
-    return static_cast<usize>(&val - listBegin);
+    const Value* const values = m_data.m_list->data();
+    for(usize i = 0u; i < listSize; ++i){
+        if(&values[i] == &val)
+            return i;
+    }
+    return listSize;
 }
 
 

@@ -158,7 +158,7 @@ bool WriteNwbGeometry(
         return false;
     }
     const bool writeSkinnedGeometry = GeometryClassUsesSkinning(geometryClass);
-    if(GeometryClassUsesSkinning(geometryClass)){
+    if(writeSkinnedGeometry){
         if(skin.size() != vertices.size()){
             outError = "skinned geometry skin stream must match vertex count";
             return false;
@@ -246,37 +246,32 @@ bool WriteNwbGeometry(
     file << "];\n";
 
     if(writeSkinnedGeometry){
-        if(GeometryClassUsesSkinning(geometryClass)){
-            file << "\nasset.skeleton_joint_count = " << skeletonJointCount << ";\n\n";
+        file << "\nasset.skeleton_joint_count = " << skeletonJointCount << ";\n\n";
 
-            file << "asset.inverse_bind_matrices = [\n";
-            for(const GeometryJointMatrix& matrix : inverseBindMatrices){
-                file << "    ";
-                __hidden_nwb_geometry_writer::WriteJointMatrix(file, matrix);
-                file << ",\n";
-            }
-            file << "];\n\n";
+        file << "asset.inverse_bind_matrices = [\n";
+        for(const GeometryJointMatrix& matrix : inverseBindMatrices){
+            file << "    ";
+            __hidden_nwb_geometry_writer::WriteJointMatrix(file, matrix);
+            file << ",\n";
+        }
+        file << "];\n\n";
 
-            file << "asset.skin = {\n";
-            file << "    \"joints0\": [\n";
-            for(const GeometrySkinInfluence& influence : skin){
-                file << "        ";
-                __hidden_nwb_geometry_writer::WriteSkinJoints(file, influence);
-                file << ",\n";
-            }
-            file << "    ],\n";
-            file << "    \"weights0\": [\n";
-            for(const GeometrySkinInfluence& influence : skin){
-                file << "        ";
-                __hidden_nwb_geometry_writer::WriteSkinWeights(file, influence);
-                file << ",\n";
-            }
-            file << "    ],\n";
-            file << "};\n\n";
+        file << "asset.skin = {\n";
+        file << "    \"joints0\": [\n";
+        for(const GeometrySkinInfluence& influence : skin){
+            file << "        ";
+            __hidden_nwb_geometry_writer::WriteSkinJoints(file, influence);
+            file << ",\n";
         }
-        else{
-            file << "\nasset.skin = {};\n";
+        file << "    ],\n";
+        file << "    \"weights0\": [\n";
+        for(const GeometrySkinInfluence& influence : skin){
+            file << "        ";
+            __hidden_nwb_geometry_writer::WriteSkinWeights(file, influence);
+            file << ",\n";
         }
+        file << "    ],\n";
+        file << "};\n\n";
     }
 
     if(!file){

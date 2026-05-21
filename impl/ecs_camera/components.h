@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_scene/components.h>
+#include <impl/global.h>
 
 #include <core/ecs/entity_id.h>
 

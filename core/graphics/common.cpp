@@ -538,17 +538,15 @@ Pair<bool, GraphicsString> AftermathCrashDumpHelper::resolveMarker(usize markerH
     // Search in active marker trackers
     for(auto* markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);
-        if(result.first()){
+        if(result.first())
             return result;
-        }
     }
 
     // Search in recently destroyed marker trackers
     for(auto& markerTracker : m_destroyedMarkerTrackers){
         auto result = markerTracker.getEventString(markerHash);
-        if(result.first()){
+        if(result.first())
             return result;
-        }
     }
 
     return MakePair(false, GraphicsString(s_NotFoundMarkerString, m_arena));
@@ -557,9 +555,8 @@ Pair<bool, GraphicsString> AftermathCrashDumpHelper::resolveMarker(usize markerH
 Pair<const void*, usize> AftermathCrashDumpHelper::findShaderBinary(u64 shaderHash, ShaderHashGeneratorFunction hashGenerator){
     for(auto& clientCallback : m_shaderBinaryLookupCallbacks){
         auto result = clientCallback.second(shaderHash, hashGenerator);
-        if(result.second() > 0){
+        if(result.second() > 0)
             return result;
-        }
     }
 
     return MakePair(static_cast<const void*>(nullptr), static_cast<usize>(0));

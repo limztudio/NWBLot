@@ -122,21 +122,18 @@ bool RendererSystem::createRendererPipeline(
     case MaterialPipelinePass::Opaque:
         break;
     case MaterialPipelinePass::AvboitOccupancy:
-        if(!createAvboitResources()){
+        if(!createAvboitResources())
             return failMaterialPipeline();
-        }
         passPixelShader = m_avboitOccupancyPixelShader;
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        if(!createAvboitResources()){
+        if(!createAvboitResources())
             return failMaterialPipeline();
-        }
         passPixelShader = m_avboitExtinctionPixelShader;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        if(!createAvboitResources()){
+        if(!createAvboitResources())
             return failMaterialPipeline();
-        }
         passPixelShader = m_avboitAccumulatePixelShader;
         break;
     default:

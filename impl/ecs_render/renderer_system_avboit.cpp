@@ -684,79 +684,61 @@ bool RendererSystem::createAvboitFrameTargets(
 }
 
 void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets){
-    if(targets.lowRasterTarget){
+    if(targets.lowRasterTarget)
         commandList.setTextureState(targets.lowRasterTarget.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.accumColor){
+    if(targets.accumColor)
         commandList.setTextureState(targets.accumColor.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.accumExtinction){
+    if(targets.accumExtinction)
         commandList.setTextureState(targets.accumExtinction.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.coverageBuffer){
+    if(targets.coverageBuffer)
         commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.depthWarpBuffer){
+    if(targets.depthWarpBuffer)
         commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.controlBuffer){
+    if(targets.controlBuffer)
         commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.extinctionBuffer){
+    if(targets.extinctionBuffer)
         commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.extinctionOverflowBuffer){
+    if(targets.extinctionOverflowBuffer)
         commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.transmittanceTexture){
+    if(targets.transmittanceTexture)
         commandList.setTextureState(targets.transmittanceTexture.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
     commandList.commitBarriers();
 
-    if(targets.lowRasterTarget){
+    if(targets.lowRasterTarget)
         commandList.clearTextureFloat(targets.lowRasterTarget.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    }
 
-    if(targets.accumColor){
+    if(targets.accumColor)
         commandList.clearTextureFloat(targets.accumColor.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    }
 
-    if(targets.accumExtinction){
+    if(targets.accumExtinction)
         commandList.clearTextureFloat(targets.accumExtinction.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    }
 
-    if(targets.coverageBuffer){
+    if(targets.coverageBuffer)
         commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
-    }
 
-    if(targets.depthWarpBuffer){
+    if(targets.depthWarpBuffer)
         commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
-    }
 
-    if(targets.controlBuffer){
+    if(targets.controlBuffer)
         commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
-    }
 
-    if(targets.extinctionBuffer){
+    if(targets.extinctionBuffer)
         commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
-    }
 
-    if(targets.extinctionOverflowBuffer){
+    if(targets.extinctionOverflowBuffer)
         commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), Limit<u32>::s_Max);
-    }
 
-    if(targets.transmittanceTexture){
+    if(targets.transmittanceTexture)
         commandList.clearTextureFloat(targets.transmittanceTexture.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
-    }
 }
 
 void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets){

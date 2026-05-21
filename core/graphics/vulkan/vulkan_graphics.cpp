@@ -122,9 +122,8 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 
     fb->m_resources.reserve(static_cast<usize>(colorAttachmentCount) + (desc.depthAttachment.texture ? 1u : 0u));
     for(u32 i = 0; i < colorAttachmentCount; ++i){
-        if(desc.colorAttachments[i].texture){
+        if(desc.colorAttachments[i].texture)
             fb->m_resources.push_back(desc.colorAttachments[i].texture);
-        }
     }
 
     if(desc.depthAttachment.texture)

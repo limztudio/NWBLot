@@ -460,9 +460,8 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
-    if(!m_allocator.initialize()){
+    if(!m_allocator.initialize())
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to initialize VMA allocator"));
-    }
 
     if(m_context.extensions.EXT_descriptor_heap){
         auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);

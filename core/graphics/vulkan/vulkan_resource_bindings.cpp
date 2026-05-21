@@ -2036,9 +2036,8 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
                 const DescriptorHeapBindingMeta& meta = layout->m_descriptorHeapBindings[metaIndex];
                 const DescriptorHeapAllocation& allocation = bindingSet->m_descriptorHeapAllocations[metaIndex];
                 const u32 descriptorOffset = allocation.offsetBytes + item.arrayElement * meta.descriptorStride;
-                if(!m_context.descriptorHeapManager->writeDescriptor(item, meta, descriptorOffset)){
+                if(!m_context.descriptorHeapManager->writeDescriptor(item, meta, descriptorOffset))
                     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to write descriptor heap entry for slot {}"), item.slot);
-                }
             }
         }
     }

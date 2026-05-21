@@ -243,19 +243,16 @@ Token Lexer::readString(){
     const usize contentStart = m_current;
 
     while(!isAtEnd() && peek() != '"'){
-        if(peek() == '\n' || peek() == '\r'){
+        if(peek() == '\n' || peek() == '\r')
             return makeErrorToken(MStringView("newline in string literal"), startLine, startColumn);
-        }
 
         if(peek() == '\\'){
             advance();
 
-            if(isAtEnd()){
+            if(isAtEnd())
                 return makeErrorToken(MStringView("unterminated string literal"), startLine, startColumn);
-            }
-            if(peek() == '\n' || peek() == '\r'){
+            if(peek() == '\n' || peek() == '\r')
                 return makeErrorToken(MStringView("newline in string literal"), startLine, startColumn);
-            }
         }
 
         advance();

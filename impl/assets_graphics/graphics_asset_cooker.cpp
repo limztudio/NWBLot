@@ -1244,21 +1244,18 @@ static bool AppendPreparedShadersToVolume(
                 stageSafeName,
                 variantName
             );
-            if(
-                !GetVariantBytecode(
-                    entry,
-                    variantName,
-                    defineCombo,
-                    preparedEntry.includeDirectories,
-                    preparedEntry.sourcePath,
-                    cachePaths,
-                    sourceChecksumHex,
-                    shaderCook,
-                    cookedBytecode
-                )
-            ){
+            if(!GetVariantBytecode(
+                entry,
+                variantName,
+                defineCombo,
+                preparedEntry.includeDirectories,
+                preparedEntry.sourcePath,
+                cachePaths,
+                sourceChecksumHex,
+                shaderCook,
+                cookedBytecode
+            ))
                 return false;
-            }
 
             const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, variantName, stageName);
             if(!virtualPath){

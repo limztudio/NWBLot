@@ -494,9 +494,8 @@ static size_t adjust_request_size(size_t size, size_t align){
         const size_t aligned = align_up(size, align);
 
         /* aligned sized must not exceed block_size_max or we'll go out of bounds on sl_bitmap */
-        if(aligned < block_size_max){
+        if(aligned < block_size_max)
             adjust = tlsf_max(aligned, block_size_min);
-        }
     }
     return adjust;
 }
@@ -595,9 +594,8 @@ static void remove_free_block(control_t* control, block_header_t* block, int fl,
             control->sl_bitmap[fl] &= ~(1U << sl);
 
             /* If the second bitmap is now empty, clear the fl bitmap. */
-            if(!control->sl_bitmap[fl]){
+            if(!control->sl_bitmap[fl])
                 control->fl_bitmap &= ~(1U << fl);
-            }
         }
     }
 }
@@ -748,9 +746,8 @@ static block_header_t* block_locate_free(control_t* control, size_t size){
         ** So, we protect against that here, since this is the only callsite of mapping_search.
         ** Note that we don't need to check sl, since it comes from a modulo operation that guarantees it's always in range.
         */
-        if(fl >= 0 && fl < FL_INDEX_COUNT){
+        if(fl >= 0 && fl < FL_INDEX_COUNT)
             block = search_suitable_block(control, &fl, &sl);
-        }
     }
 
     if(block){
@@ -782,9 +779,8 @@ static void control_construct(control_t* control){
     control->fl_bitmap = 0;
     for(i = 0; i < FL_INDEX_COUNT; ++i){
         control->sl_bitmap[i] = 0;
-        for(j = 0; j < SL_INDEX_COUNT; ++j){
+        for(j = 0; j < SL_INDEX_COUNT; ++j)
             control->blocks[i][j] = &control->block_null;
-        }
     }
 }
 
@@ -831,9 +827,8 @@ int tlsf_check(tlsf_t tlsf){
             const block_header_t* block = control->blocks[i][j];
 
             /* Check that first- and second-level lists agree. */
-            if(!fl_map){
+            if(!fl_map)
                 tlsf_insist(!sl_map && "second-level map must be null");
-            }
 
             if(!sl_map){
                 tlsf_insist(block == &control->block_null && "block list must be null");
@@ -1023,18 +1018,16 @@ int test_ffs_fls(){
     rv += (tlsf_fls_sizet(0xffffffffffffffff) == 63) ? 0 : 0x400;
 #endif
 
-    if(rv){
+    if(rv)
         tlsf_report("test_ffs_fls: %x ffs/fls tests failed.\n", rv);
-    }
     return rv;
 }
 #endif
 
 tlsf_t tlsf_create(void* mem){
 #if _DEBUG
-    if(test_ffs_fls()){
+    if(test_ffs_fls())
         return 0;
-    }
 #endif
 
     if((reinterpret_cast<tlsfptr_t>(mem) % ALIGN_SIZE) != 0){
@@ -1156,9 +1149,8 @@ void* tlsf_realloc(tlsf_t tlsf, void* ptr, size_t size){
     void* p = 0;
 
     /* Zero-size requests are treated as free. */
-    if(ptr && size == 0){
+    if(ptr && size == 0)
         tlsf_free(tlsf, ptr);
-    }
     /* Requests with NULL pointers are treated as malloc. */
     else if(!ptr){
         p = tlsf_malloc(tlsf, size);

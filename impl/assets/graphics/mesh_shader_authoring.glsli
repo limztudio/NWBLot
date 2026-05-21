@@ -60,19 +60,19 @@ layout(local_size_x = NWB_MESH_SHADER_GROUP_SIZE_X) in;
 
 // Geometry vertices are uploaded as tightly packed 32-bit words, with float words and half2 words decoded manually.
 layout(std430, binding = 0) readonly buffer NwbMeshSourceVerticesBuffer{
-    uint nwbMeshSourceVertexWords[];
+    uint g_NwbMeshSourceVertexWords[];
 };
 
 layout(std430, binding = 1) readonly buffer NwbMeshSourceIndicesBuffer{
-    uint nwbMeshSourceIndices[];
+    uint g_NwbMeshSourceIndices[];
 };
 
 layout(std430, binding = 3) readonly buffer NwbMeshInstancesBuffer{
-    NwbMeshInstanceData nwbMeshInstances[];
+    NwbMeshInstanceData g_NwbMeshInstances[];
 };
 
 layout(std430, binding = 5) readonly buffer NwbMaterialParametersBuffer{
-    NwbMaterialParameterData nwbMaterialParameters[];
+    NwbMaterialParameterData g_NwbMaterialParameters[];
 };
 
 layout(push_constant) uniform NwbMeshPushConstants{
@@ -85,7 +85,7 @@ layout(push_constant) uniform NwbMeshPushConstants{
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 layout(std430, binding = 2) buffer NwbMeshGeneratedVerticesBuffer{
-    NwbMeshGeneratedVertex nwbMeshGeneratedVertices[];
+    NwbMeshGeneratedVertex g_NwbMeshGeneratedVertices[];
 };
 #else
 layout(triangles) out;
@@ -174,7 +174,7 @@ uint nwbMeshTriangleIndex(){
 
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
     const uint indexBase = triangleIndex * 3u;
-    const uint sourceVertexIndex = nwbMeshSourceIndices[indexBase + corner];
+    const uint sourceVertexIndex = g_NwbMeshSourceIndices[indexBase + corner];
     const bool skinnedGeometryLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_SKINNED_GEOMETRY_RUNTIME;
     const uint wordStride = skinnedGeometryLayout
         ? NWB_MESH_SKINNED_GEOMETRY_VERTEX_WORD_STRIDE
@@ -184,40 +184,40 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint
 
     NwbMeshSourceVertex sourceVertex;
     sourceVertex.position = vec3(
-        uintBitsToFloat(nwbMeshSourceVertexWords[wordBase + 0u]),
-        uintBitsToFloat(nwbMeshSourceVertexWords[wordBase + 1u]),
-        uintBitsToFloat(nwbMeshSourceVertexWords[wordBase + 2u])
+        uintBitsToFloat(g_NwbMeshSourceVertexWords[wordBase + 0u]),
+        uintBitsToFloat(g_NwbMeshSourceVertexWords[wordBase + 1u]),
+        uintBitsToFloat(g_NwbMeshSourceVertexWords[wordBase + 2u])
     );
     if(skinnedGeometryLayout){
         const vec4 normal = vec4(
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 3u]),
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 4u])
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 3u]),
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 4u])
         );
         sourceVertex.normal = normal.xyz;
         sourceVertex.tangent = vec4(
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 5u]),
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 6u])
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 5u]),
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 6u])
         );
         sourceVertex.uv0 = vec2(
-            uintBitsToFloat(nwbMeshSourceVertexWords[wordBase + 7u]),
-            uintBitsToFloat(nwbMeshSourceVertexWords[wordBase + 8u])
+            uintBitsToFloat(g_NwbMeshSourceVertexWords[wordBase + 7u]),
+            uintBitsToFloat(g_NwbMeshSourceVertexWords[wordBase + 8u])
         );
         sourceVertex.color = vec4(
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 9u]),
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 10u])
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 9u]),
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 10u])
         );
     }
     else{
         const vec4 normal = vec4(
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 3u]),
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 4u])
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 3u]),
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 4u])
         );
         sourceVertex.normal = normal.xyz;
         sourceVertex.tangent = vec4(1.0, 0.0, 0.0, 1.0);
         sourceVertex.uv0 = vec2(0.0);
         sourceVertex.color = vec4(
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 5u]),
-            unpackHalf2x16(nwbMeshSourceVertexWords[wordBase + 6u])
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 5u]),
+            unpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 6u])
         );
     }
     return sourceVertex;
@@ -229,7 +229,7 @@ vec3 nwbMeshRotateVectorByQuaternion(vec3 value, vec4 rotation){
 }
 
 NwbMeshInstanceData nwbMeshLoadInstance(){
-    return nwbMeshInstances[nwbMeshInstanceIndex()];
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }
 
 uint nwbMaterialParameterOffset(const NwbMeshInstanceData instance){
@@ -252,7 +252,7 @@ bool nwbMaterialFindParameter(
     const uint offset = nwbMaterialParameterOffset(instance);
     const uint count = nwbMaterialParameterCount(instance);
     for(uint i = 0u; i < count; ++i){
-        const NwbMaterialParameterData parameter = nwbMaterialParameters[offset + i];
+        const NwbMaterialParameterData parameter = g_NwbMaterialParameters[offset + i];
         if(parameter.meta.z == valueType && nwbMaterialParameterKeyMatches(parameter, key)){
             outParameter = parameter;
             return true;
@@ -418,12 +418,12 @@ void main(){
     if(nwbMeshTriangleCulled(generatedVertices)){
         const NwbMeshGeneratedVertex culledVertex = nwbMeshCulledVertex();
         for(uint corner = 0u; corner < 3u; ++corner)
-            nwbMeshGeneratedVertices[triangleIndex * 3u + corner] = culledVertex;
+            g_NwbMeshGeneratedVertices[triangleIndex * 3u + corner] = culledVertex;
         return;
     }
 
     for(uint corner = 0u; corner < 3u; ++corner)
-        nwbMeshGeneratedVertices[triangleIndex * 3u + corner] = generatedVertices[corner];
+        g_NwbMeshGeneratedVertices[triangleIndex * 3u + corner] = generatedVertices[corner];
 #else
     for(uint corner = 0u; corner < 3u; ++corner){
         const uint outputVertex = vertexBase + corner;

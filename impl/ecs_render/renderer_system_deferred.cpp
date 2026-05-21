@@ -372,43 +372,34 @@ bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* present
 }
 
 void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
-    if(targets.albedo){
+    if(targets.albedo)
         commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.normal){
+    if(targets.normal)
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.worldPosition){
+    if(targets.worldPosition)
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.opaqueColor){
+    if(targets.opaqueColor)
         commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
-    if(targets.depth){
+    if(targets.depth)
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    }
 
     commandList.commitBarriers();
 
-    if(targets.albedo){
+    if(targets.albedo)
         commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
-    }
 
-    if(targets.normal){
+    if(targets.normal)
         commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
-    }
 
-    if(targets.worldPosition){
+    if(targets.worldPosition)
         commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
-    }
 
-    if(targets.opaqueColor){
+    if(targets.opaqueColor)
         commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
-    }
 
     if(targets.depth){
         commandList.clearDepthStencilTexture(

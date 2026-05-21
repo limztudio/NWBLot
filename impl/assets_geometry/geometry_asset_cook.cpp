@@ -953,9 +953,8 @@ static bool ParseInverseBindMatrices(
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
             alignas(16) f32 column[4] = {};
             const ScratchString columnLabel = MakeIndexedLabel(labelArena, label, columnIndex);
-            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedGeometryMetaKind, columnLabel, column)){
+            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedGeometryMetaKind, columnLabel, column))
                 return false;
-            }
             matrix.rows[columnIndex] = Float4(column[0u], column[1u], column[2u], column[3u]);
         }
 

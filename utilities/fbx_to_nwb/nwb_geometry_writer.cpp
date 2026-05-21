@@ -240,9 +240,8 @@ bool WriteNwbGeometry(
     file << "];\n\n";
 
     file << "asset.indices = [\n";
-    for(usize i = 0u; i < indices.size(); i += 3u){
+    for(usize i = 0u; i < indices.size(); i += 3u)
         file << "    [" << indices[i + 0u] << ", " << indices[i + 1u] << ", " << indices[i + 2u] << "],\n";
-    }
     file << "];\n";
 
     if(writeSkinnedGeometry){

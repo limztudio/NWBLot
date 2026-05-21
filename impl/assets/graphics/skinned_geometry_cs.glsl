@@ -23,19 +23,19 @@ struct NwbSkinnedGeometryJointMatrix{
 };
 
 layout(std430, binding = 0) readonly buffer NwbSkinnedGeometryRestVerticesBuffer{
-    uint nwbSkinnedGeometryRestVertexWords[];
+    uint g_NwbSkinnedGeometryRestVertexWords[];
 };
 
 layout(std430, binding = 1) buffer NwbSkinnedGeometrySkinnedVerticesBuffer{
-    uint nwbSkinnedGeometrySkinnedVertexWords[];
+    uint g_NwbSkinnedGeometrySkinnedVertexWords[];
 };
 
 layout(std430, binding = 4) readonly buffer NwbSkinnedGeometrySkinInfluencesBuffer{
-    NwbSkinnedGeometrySkinInfluence nwbSkinnedGeometrySkinInfluences[];
+    NwbSkinnedGeometrySkinInfluence g_NwbSkinnedGeometrySkinInfluences[];
 };
 
 layout(std430, binding = 5) readonly buffer NwbSkinnedGeometryJointPaletteBuffer{
-    NwbSkinnedGeometryJointMatrix nwbSkinnedGeometryJointPalette[];
+    NwbSkinnedGeometryJointMatrix g_NwbSkinnedGeometryJointPalette[];
 };
 
 layout(push_constant) uniform NwbSkinnedGeometryPushConstants{
@@ -85,37 +85,37 @@ bool nwbSkinnedGeometryFiniteVec4(const vec4 value){
 
 void nwbSkinnedGeometryCopyRestPayload(const uint restBase, const uint skinnedBase, const uint restWordStride){
     for(uint i = 0u; i < restWordStride; ++i)
-        nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + i] = nwbSkinnedGeometryRestVertexWords[restBase + i];
+        g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + i] = g_NwbSkinnedGeometryRestVertexWords[restBase + i];
 }
 
 vec3 nwbSkinnedGeometryLoadRestPosition(const uint restBase){
     return vec3(
-        uintBitsToFloat(nwbSkinnedGeometryRestVertexWords[restBase + 0u]),
-        uintBitsToFloat(nwbSkinnedGeometryRestVertexWords[restBase + 1u]),
-        uintBitsToFloat(nwbSkinnedGeometryRestVertexWords[restBase + 2u])
+        uintBitsToFloat(g_NwbSkinnedGeometryRestVertexWords[restBase + 0u]),
+        uintBitsToFloat(g_NwbSkinnedGeometryRestVertexWords[restBase + 1u]),
+        uintBitsToFloat(g_NwbSkinnedGeometryRestVertexWords[restBase + 2u])
     );
 }
 
 vec4 nwbSkinnedGeometryLoadRestHalf4(const uint restBase){
     return vec4(
-        unpackHalf2x16(nwbSkinnedGeometryRestVertexWords[restBase + 0u]),
-        unpackHalf2x16(nwbSkinnedGeometryRestVertexWords[restBase + 1u])
+        unpackHalf2x16(g_NwbSkinnedGeometryRestVertexWords[restBase + 0u]),
+        unpackHalf2x16(g_NwbSkinnedGeometryRestVertexWords[restBase + 1u])
     );
 }
 
 void nwbSkinnedGeometryStoreSkinnedPosition(const uint skinnedBase, const vec3 position){
-    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = floatBitsToUint(position.x);
-    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = floatBitsToUint(position.y);
-    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 2u] = floatBitsToUint(position.z);
+    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = floatBitsToUint(position.x);
+    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = floatBitsToUint(position.y);
+    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 2u] = floatBitsToUint(position.z);
 }
 
 void nwbSkinnedGeometryStoreSkinnedHalf4(const uint skinnedBase, const vec4 value){
-    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = packHalf2x16(value.xy);
-    nwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = packHalf2x16(value.zw);
+    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = packHalf2x16(value.xy);
+    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = packHalf2x16(value.zw);
 }
 
 mat4 nwbSkinnedGeometryLoadJointMatrix(const uint jointId){
-    const NwbSkinnedGeometryJointMatrix jointMatrix = nwbSkinnedGeometryJointPalette[jointId];
+    const NwbSkinnedGeometryJointMatrix jointMatrix = g_NwbSkinnedGeometryJointPalette[jointId];
     return mat4(
         jointMatrix.column0,
         jointMatrix.column1,
@@ -246,7 +246,7 @@ bool nwbSkinnedGeometryApplyLinearSkin(const uint vertexId, inout vec3 position,
     if(nwbSkinnedGeometrySkinCount() != nwbSkinnedGeometryVertexCount() || jointCount == 0u)
         return true;
 
-    const NwbSkinnedGeometrySkinInfluence skin = nwbSkinnedGeometrySkinInfluences[vertexId];
+    const NwbSkinnedGeometrySkinInfluence skin = g_NwbSkinnedGeometrySkinInfluences[vertexId];
     vec3 skinnedPosition = vec3(0.0);
     vec3 skinnedNormal = vec3(0.0);
     vec3 skinnedTangent = vec3(0.0);
@@ -284,7 +284,7 @@ bool nwbSkinnedGeometryApplyDualQuaternionSkin(const uint vertexId, inout vec3 p
     if(nwbSkinnedGeometrySkinCount() != nwbSkinnedGeometryVertexCount() || jointCount == 0u)
         return true;
 
-    const NwbSkinnedGeometrySkinInfluence skin = nwbSkinnedGeometrySkinInfluences[vertexId];
+    const NwbSkinnedGeometrySkinInfluence skin = g_NwbSkinnedGeometrySkinInfluences[vertexId];
     vec4 blendedReal = vec4(0.0);
     vec4 blendedDual = vec4(0.0);
     vec4 referenceReal = vec4(0.0);
@@ -297,7 +297,7 @@ bool nwbSkinnedGeometryApplyDualQuaternionSkin(const uint vertexId, inout vec3 p
         if(abs(weight) <= 0.000001 || jointId >= jointCount)
             continue;
 
-        const NwbSkinnedGeometryJointMatrix jointPayload = nwbSkinnedGeometryJointPalette[jointId];
+        const NwbSkinnedGeometryJointMatrix jointPayload = g_NwbSkinnedGeometryJointPalette[jointId];
         vec4 real = jointPayload.column0;
         vec4 dual = jointPayload.column1;
         if(!nwbSkinnedGeometryFiniteVec4(real) || !nwbSkinnedGeometryFiniteVec4(dual))

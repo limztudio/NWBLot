@@ -391,9 +391,8 @@ void CommandList::setAccelStructState(IRayTracingAccelStruct* accelStructResourc
         return;
 
     auto* as = checked_cast<AccelStruct*>(accelStructResource);
-    if(as->m_buffer){
+    if(as->m_buffer)
         setBufferState(as->m_buffer.get(), stateBits);
-    }
 }
 
 void CommandList::setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits){

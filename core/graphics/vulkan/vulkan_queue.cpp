@@ -322,9 +322,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         return m_lastSubmittedID;
     }
 
-    for(auto& tracked : trackedBuffers){
+    for(auto& tracked : trackedBuffers)
         m_commandBuffersInFlight.push_back(Move(tracked));
-    }
     if(outSubmitted)
         *outSubmitted = true;
 

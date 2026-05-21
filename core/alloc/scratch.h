@@ -41,19 +41,25 @@ private:
 
 
     public:
-        inline Chunk(usize align, usize size, const char* log)
-            : m_size(Alignment(align, size))
-            , m_arenaLog(log)
-            , m_remaining(m_size)
-            , m_next(nullptr)
-            , m_buffer(CoreAllocAligned(m_size, align, m_arenaLog.get()))
-            , m_available(m_buffer)
-        {}
-        ~Chunk(){
-            CoreFreeAligned(m_buffer, m_arenaLog.get());
+        static inline void destroy(Chunk* chunk, const char* log){
+            CoreFreeAligned(chunk->m_buffer, log);
+            delete chunk;
         }
 
 
+    public:
+        inline Chunk(usize align, usize size, const char* log)
+            : m_size(Alignment(align, size))
+            , m_remaining(m_size)
+            , m_next(nullptr)
+            , m_buffer(CoreAllocAligned(m_size, align, log))
+            , m_available(m_buffer)
+        {}
+    private:
+        ~Chunk() = default;
+
+
+    public:
         inline void* allocate(usize size){
             auto* ret = m_available;
             m_available = reinterpret_cast<u8*>(m_available) + static_cast<isize>(size);
@@ -89,7 +95,6 @@ private:
 
     private:
         const usize m_size;
-        NotNull<const char*> m_arenaLog;
         usize m_remaining;
         Chunk* m_next;
 
@@ -120,10 +125,11 @@ public:
         }
     }
     ~ScratchArena(){
+        const char* allocationLog = Base::log();
         for(auto& bucket : m_bucket){
             for(auto* cur = bucket.head; cur;){
                 auto* next = cur->m_next;
-                delete cur;
+                Chunk::destroy(cur, allocationLog);
                 cur = next;
             }
         }

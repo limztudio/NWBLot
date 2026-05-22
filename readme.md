@@ -21,7 +21,7 @@
   - Ninja must be available, or discoverable through `NWB_NINJA` / `NWB_NINJA_ROOT`.
   - Clang/LLVM must be available, or discoverable through `NWB_LLVM_ROOT` / `LLVM_ROOT`.
   - `VULKAN_SDK` must be set.
-  - the current Windows build expects `volk.lib`, `shaderc_combined.lib`, and `shaderc_combinedd.lib` from the Vulkan SDK.
+  - `slangc` must be available on `PATH`, discoverable through `VULKAN_SDK`, or provided with `NWB_SLANGC_EXECUTABLE`.
   - the Windows toolchain now builds with `clang`/`clang++`, `lld-link`, and Ninja. It still targets the Windows/MSVC ABI, so the Windows SDK and the Microsoft C++ runtime/standard library remain part of the environment.
 
 - Linux status
@@ -29,4 +29,5 @@
   - engine-only configure preset: `linux-clang-engine-x64`
   - testbed configure preset: `linux-clang-testbed-x64`
   - Linux uses the same CMake + Ninja + Clang flow and `dbg` / `opt` / `fin` build configurations as Windows.
-  - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are available when their dependencies are found.
+  - `slangc` is required when `NWB_BUILD_RESOURCE_COOKER` is enabled.
+  - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.

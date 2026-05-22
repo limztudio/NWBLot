@@ -2,34 +2,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#version 460
+#ifndef NWB_AVBOIT_CONSTANTS_SLANGI
+#define NWB_AVBOIT_CONSTANTS_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(push_constant) uniform NwbImguiPushConstants{
-    vec4 scaleTranslate;
-} g_NwbImguiPushConstants;
-
-layout(location = 0) in vec2 inPosition;
-layout(location = 1) in vec2 inUv;
-layout(location = 2) in vec4 inColor;
-
-layout(location = 0) out vec2 outUv;
-layout(location = 1) out vec4 outColor;
+static const uint NWB_AVBOIT_WARP_INVALID = 0xffffffffu;
+static const uint NWB_AVBOIT_OVERFLOW_INVALID = 0xffffffffu;
+static const uint NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD = 4u;
+static const uint NWB_AVBOIT_EXTINCTION_BYTE_MASK = 0xffu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void main(){
-    const vec4 scaleTranslate = g_NwbImguiPushConstants.scaleTranslate;
-
-    outUv = inUv;
-    outColor = inColor;
-    gl_Position = vec4(inPosition * scaleTranslate.xy + scaleTranslate.zw, 0.0, 1.0);
-}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

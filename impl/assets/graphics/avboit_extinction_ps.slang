@@ -2,36 +2,30 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#version 460
-
-#include "avboit_common.glsli"
+#include "avboit_common.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(set = 1, binding = 0) uniform texture2D g_OpaqueDepth;
-layout(set = 1, binding = 1) uniform sampler g_PointSampler;
-layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitDepthWarpBuffer{
-    uint g_DepthWarp[];
-};
-layout(std430, set = 1, binding = 3) readonly buffer NwbAvboitControlBuffer{
-    uint g_Control[];
-};
-layout(std430, set = 1, binding = 4) buffer NwbAvboitExtinctionBuffer{
-    uint g_Extinction[];
-};
-layout(std430, set = 1, binding = 5) buffer NwbAvboitExtinctionOverflowDepthBuffer{
-    uint g_ExtinctionOverflowDepth[];
+[[vk::binding(0, 1)]] Texture2D<float4> g_OpaqueDepth;
+[[vk::binding(1, 1)]] SamplerState g_PointSampler;
+[[vk::binding(2, 1)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(3, 1)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+[[vk::binding(4, 1)]] RWStructuredBuffer<uint, Std430DataLayout> g_Extinction;
+[[vk::binding(5, 1)]] RWStructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
+
+struct NwbAvboitExtinctionPixelInput{
+    [[vk::location(0)]] float4 color : COLOR0;
 };
 
-layout(location = 0) in mediump vec4 inColor;
+static float4 inColor;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbAvboitSplatExtinction(uvec2 lowPixel, uint virtualSlice, float extinction){
+void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinction){
     if(extinction <= 0.0)
         return;
 
@@ -46,33 +40,36 @@ void nwbAvboitSplatExtinction(uvec2 lowPixel, uint virtualSlice, float extinctio
         return;
 
     const uint byteShift = nwbAvboitExtinctionByteShift(physicalSlice);
-    const uint previousWord = atomicAdd(g_Extinction[wordIndex], packedExtinction << byteShift);
+    uint previousWord;
+    InterlockedAdd(g_Extinction[wordIndex], packedExtinction << byteShift, previousWord);
     const uint previousByte = (previousWord >> byteShift) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
     const bool byteOverflow = previousByte + packedExtinction > NWB_AVBOIT_EXTINCTION_BYTE_MASK;
     const float previousExtinction = float(previousByte) / nwbAvboitExtinctionFixedScale();
     const bool rawOverflow = previousExtinction + extinction > nwbAvboitExtinctionSaturation();
     if(byteOverflow || rawOverflow)
-        atomicMin(g_ExtinctionOverflowDepth[nwbAvboitLowPixelIndex(lowPixel)], physicalSlice);
+        InterlockedMin(g_ExtinctionOverflowDepth[nwbAvboitLowPixelIndex(lowPixel)], physicalSlice);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void main(){
+void main(NwbAvboitExtinctionPixelInput input, float4 fragCoord : SV_Position){
+    inColor = input.color;
+
     float alpha;
     uint virtualSlice;
-    if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, alpha, virtualSlice))
+    if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, fragCoord, alpha, virtualSlice))
         discard;
 
-    const uvec2 lowPixel = nwbAvboitLowPixelFromLowFragCoord(gl_FragCoord.xy);
+    const uint2 lowPixel = nwbAvboitLowPixelFromLowFragCoord(fragCoord.xy);
     const float extinction = nwbAvboitExtinctionFromAlpha(alpha);
 
     uint virtualSlice0;
     uint virtualSlice1;
     float sliceWeight0;
     float sliceWeight1;
-    nwbAvboitLinearVirtualSlicesFromDepth(gl_FragCoord.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
+    nwbAvboitLinearVirtualSlicesFromDepth(fragCoord.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
 
     if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
         nwbAvboitSplatExtinction(lowPixel, virtualSlice0, extinction * sliceWeight0);

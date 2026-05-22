@@ -1,0 +1,57 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_MESH_PIXEL_IO_SLANGI
+#define NWB_MESH_PIXEL_IO_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbMeshPixelInput{
+    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(1)]] float3 normal : NORMAL0;
+    [[vk::location(2)]] float4 tangent : TANGENT0;
+    [[vk::location(3)]] float2 uv0 : TEXCOORD0;
+    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
+};
+
+struct NwbMeshColorOutput{
+    [[vk::location(0)]] float4 color : SV_Target0;
+};
+
+static float4 inColor;
+static float3 inNormal;
+static float4 inTangent;
+static float2 inUv0;
+static float3 inWorldPosition;
+static float4 outColor;
+
+void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
+    inColor = input.color;
+    inNormal = input.normal;
+    inTangent = input.tangent;
+    inUv0 = input.uv0;
+    inWorldPosition = input.worldPosition;
+}
+
+NwbMeshColorOutput nwbBuildMeshColorOutput(){
+    NwbMeshColorOutput output;
+    output.color = outColor;
+    return output;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

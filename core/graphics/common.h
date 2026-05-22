@@ -3882,60 +3882,6 @@ struct SwapChainRuntimeState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_COOK)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct ShaderMacroDefinition{
-    AStringView name;
-    AStringView value;
-};
-
-struct ShaderCompilerRequest{
-    AStringView shaderName;
-    AStringView compiler;
-    AStringView stage;
-    AStringView targetProfile;
-    AStringView entryPoint;
-    AStringView variantName;
-    const ShaderMacroDefinition* defines = nullptr;
-    u32 defineCount = 0;
-    const GraphicsVector<Path>& includeDirectories;
-    const Path& sourcePath;
-};
-
-class IShaderCompiler : NoCopy{
-public:
-    IShaderCompiler(Alloc::GlobalArena& memoryArena)
-        : m_memoryArena(memoryArena)
-    {}
-    virtual ~IShaderCompiler() = default;
-
-
-public:
-    virtual bool compileVariant(const ShaderCompilerRequest& request, GraphicsVector<u8>& outBytecode) = 0;
-
-
-protected:
-    Alloc::GlobalArena& m_memoryArena;
-};
-
-using ShaderCompilerFactory = GlobalUniquePtr<IShaderCompiler> (*)(Alloc::GlobalArena& memoryArena);
-
-[[nodiscard]] GlobalUniquePtr<IShaderCompiler> CreateDefaultShaderCompiler(Alloc::GlobalArena& memoryArena);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_CORE_END
 
 #undef NWB_DEFINE_GRAPHICS_MASK_OPERATORS

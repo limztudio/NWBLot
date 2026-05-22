@@ -10,6 +10,8 @@
 
 #include "shader_cook.h"
 
+#include <cstdlib>
+
 #include <core/assets/asset_paths.h>
 #include <core/metascript/parser.h>
 
@@ -20,6 +22,14 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_SLANGC_EXECUTABLE
+#error "NWB_SLANGC_EXECUTABLE must be defined by the build configuration"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +47,7 @@ namespace __hidden_shader_cook{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// asset type keywords
+// common cook aliases and asset type keywords
 
 
 using CookString = ShaderCook::CookString;
@@ -55,6 +65,224 @@ using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena<>>;
 
 static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
+static constexpr AStringView s_SlangSourceExtension = ".slang";
+static constexpr AStringView s_SlangIncludeExtension = ".slangi";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Slang source compiler
+
+
+static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outStage){
+    struct StageMapping{
+        AStringView name;
+        AStringView slangStage;
+    };
+
+    static constexpr StageMapping s_StageMappings[] = {
+        { "vs", "vertex" },
+        { "ps", "fragment" },
+        { "cs", "compute" },
+        { "mesh", "mesh" }
+    };
+
+    for(const StageMapping& mapping : s_StageMappings){
+        if(stage == mapping.name){
+            outStage = mapping.slangStage;
+            return true;
+        }
+    }
+
+    outStage = {};
+    return false;
+}
+
+static void AppendShellQuoted(CookString& inOutCommand, const AStringView value){
+#if defined(_WIN32)
+    inOutCommand += '"';
+    for(const char ch : value){
+        if(ch == '"' || ch == '\\')
+            inOutCommand += '\\';
+        inOutCommand += ch;
+    }
+    inOutCommand += '"';
+#else
+    inOutCommand += '\'';
+    for(const char ch : value){
+        if(ch == '\'')
+            inOutCommand += "'\\''";
+        else
+            inOutCommand += ch;
+    }
+    inOutCommand += '\'';
+#endif
+}
+
+static void AppendCommandArgument(CookString& inOutCommand, const AStringView value){
+    inOutCommand += ' ';
+    AppendShellQuoted(inOutCommand, value);
+}
+
+static void AppendCommandPathArgument(ShaderCook::CookArena& arena, CookString& inOutCommand, const Path& path){
+    const CookString pathText = PathToString(arena, path);
+    AppendCommandArgument(inOutCommand, pathText);
+}
+
+static bool ReadDiagnostics(const Path& diagnosticsPath, CookString& outDiagnostics){
+    outDiagnostics.clear();
+
+    ErrorCode errorCode;
+    if(!FileExists(diagnosticsPath, errorCode) || errorCode)
+        return false;
+
+    return ReadTextFile(diagnosticsPath, outDiagnostics);
+}
+
+static void RemoveFileBestEffort(const Path& path){
+    ErrorCode errorCode;
+    if(FileExists(path, errorCode) && !errorCode)
+        static_cast<void>(RemoveFile(path, errorCode));
+}
+
+class SlangShaderCompiler final : public ShaderCook::IShaderCompiler{
+public:
+    explicit SlangShaderCompiler(ShaderCook::CookArena& memoryArena)
+        : ShaderCook::IShaderCompiler(memoryArena)
+    {}
+
+
+public:
+    virtual bool compileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode)override{
+        outBytecode.clear();
+
+        if(request.sourcePath.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : source path is empty"), StringConvert(request.shaderName));
+            return false;
+        }
+
+        if(request.outputPath.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : output path is empty"), StringConvert(request.shaderName));
+            return false;
+        }
+
+        if(request.entryPoint.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : entry point is empty"), StringConvert(request.shaderName));
+            return false;
+        }
+
+        if(request.targetProfile.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : target profile is empty"), StringConvert(request.shaderName));
+            return false;
+        }
+
+        AStringView slangStage;
+        if(!TryMapStageToSlangStage(request.stage, slangStage)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
+            return false;
+        }
+
+        Path diagnosticsPath = request.outputPath;
+        diagnosticsPath += ".diag";
+        RemoveFileBestEffort(request.outputPath);
+        RemoveFileBestEffort(diagnosticsPath);
+
+        CookString command{m_memoryArena};
+        AppendShellQuoted(command, AStringView(NWB_SLANGC_EXECUTABLE));
+        AppendCommandPathArgument(m_memoryArena, command, request.sourcePath);
+        command += " -target spirv";
+        command += " -emit-spirv-directly";
+        command += " -profile";
+        AppendCommandArgument(command, request.targetProfile);
+        command += " -entry";
+        AppendCommandArgument(command, request.entryPoint);
+        command += " -stage";
+        AppendCommandArgument(command, slangStage);
+
+        for(const Path& includeDirectory : request.includeDirectories){
+            command += " -I";
+            AppendCommandPathArgument(m_memoryArena, command, includeDirectory);
+        }
+
+        for(u32 i = 0; i < request.defineCount; ++i){
+            const ShaderCook::ShaderMacroDefinition& define = request.defines[i];
+            CookString defineArgument("-D", m_memoryArena);
+            defineArgument += define.name;
+            if(!define.value.empty()){
+                defineArgument += '=';
+                defineArgument += define.value;
+            }
+            AppendCommandArgument(command, defineArgument);
+        }
+
+        command += " -o";
+        AppendCommandPathArgument(m_memoryArena, command, request.outputPath);
+        command += " >";
+        AppendCommandPathArgument(m_memoryArena, command, diagnosticsPath);
+        command += " 2>&1";
+
+        const int exitCode = std::system(command.c_str());
+        if(exitCode != 0){
+            CookString diagnostics{m_memoryArena};
+            if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}")
+                    , StringConvert(request.shaderName)
+                    , StringConvert(request.variantName)
+                    , StringConvert(diagnostics)
+                );
+            }
+            else{
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') with exit code {}")
+                    , StringConvert(request.shaderName)
+                    , StringConvert(request.variantName)
+                    , exitCode
+                );
+            }
+            return false;
+        }
+
+        ErrorCode errorCode;
+        if(!ReadBinaryFile(request.outputPath, outBytecode, errorCode)){
+            if(errorCode){
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}")
+                    , StringConvert(request.shaderName)
+                    , StringConvert(request.variantName)
+                    , PathToString<tchar>(request.outputPath)
+                    , StringConvert(errorCode.message())
+                );
+            }
+            else{
+                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'")
+                    , StringConvert(request.shaderName)
+                    , StringConvert(request.variantName)
+                    , PathToString<tchar>(request.outputPath)
+                );
+            }
+            return false;
+        }
+
+        if(outBytecode.empty() || (outBytecode.size() & 3u) != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid size {}")
+                , StringConvert(request.shaderName)
+                , StringConvert(request.variantName)
+                , outBytecode.size()
+            );
+            outBytecode.clear();
+            return false;
+        }
+
+        RemoveFileBestEffort(diagnosticsPath);
+        return true;
+    }
+};
+
+static Core::GlobalUniquePtr<ShaderCook::IShaderCompiler> CreateDefaultShaderCompiler(ShaderCook::CookArena& memoryArena){
+    return Core::MakeGlobalUnique<SlangShaderCompiler>(memoryArena, memoryArena);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// metadata helpers
+
 
 static CompactString CanonicalAssetType(const Metascript::Document& doc){
     const auto assetType = doc.assetType();
@@ -173,7 +401,7 @@ static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirec
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// HLSL dependency collection
+// Slang dependency collection
 
 
 template <typename VisitedSet, typename ScratchArena>
@@ -409,6 +637,27 @@ static const Metascript::Value* FindAssetMapValue(const Path& nwbFilePath, const
     return asset;
 }
 
+static bool ValidatePairedSourceExtension(
+    const Path& nwbFilePath,
+    const CookString& sourcePath,
+    const AStringView expectedExtension,
+    const AStringView metaKind
+){
+    Alloc::ScratchArena<> scratchArena;
+    ScratchString extension = PathToString(scratchArena, Path(sourcePath).extension());
+    CanonicalizeTextInPlace(extension);
+    if(AStringView(extension) == expectedExtension)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': paired source '{}' must use '{}' extension")
+        , StringConvert(metaKind)
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(sourcePath)
+        , StringConvert(expectedExtension)
+    );
+    return false;
+}
+
 static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value& asset, CookString& outDefaultVariant){
     outDefaultVariant.clear();
 
@@ -572,10 +821,10 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShaderCook::ShaderCook(CookArena& memoryArena, Core::ShaderCompilerFactory compilerFactory)
+ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory)
     : m_memoryArena(memoryArena)
 {
-    const Core::ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : &Core::CreateDefaultShaderCompiler;
+    const ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : &__hidden_shader_cook::CreateDefaultShaderCompiler;
     m_compiler = createCompiler(m_memoryArena);
 }
 
@@ -605,10 +854,10 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
+    if(!__hidden_shader_cook::ValidatePairedSourceExtension(nwbFilePath, outEntry.source, __hidden_shader_cook::s_SlangSourceExtension, "Shader"))
+        return false;
 
     if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
-        return false;
-    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "compiler", outEntry.compiler))
         return false;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
@@ -646,6 +895,10 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': stage is required"), PathToString<tchar>(nwbFilePath));
         return false;
     }
+    if(outEntry.targetProfile.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': target_profile is required"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
 
     const CookString contextLabel = PathToString(m_memoryArena, nwbFilePath);
     if(!validateDefaultVariant(contextLabel, outEntry.defaultVariant, outEntry.defineValues))
@@ -674,12 +927,16 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
+    if(!__hidden_shader_cook::ValidatePairedSourceExtension(nwbFilePath, outEntry.source, __hidden_shader_cook::s_SlangIncludeExtension, "Include"))
+        return false;
 
     const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Include");
     if(!assetValue)
         return false;
     const Metascript::Value& asset = *assetValue;
 
+    if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Include"))
+        return false;
     if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
         return false;
     if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
@@ -992,7 +1249,7 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
 }
 
 bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, u64& outChecksum){
-    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v2";
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';
 
     outChecksum = FNV64_OFFSET_BASIS;
@@ -1004,7 +1261,6 @@ bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVi
 
     appendChecksumLine(s_ChecksumVersionTag);
     appendChecksumLine(AStringView(entry.name));
-    appendChecksumLine(entry.compiler.view());
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
     appendChecksumLine(entry.targetProfile.view());

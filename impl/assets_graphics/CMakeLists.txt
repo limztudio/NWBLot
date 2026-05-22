@@ -5,7 +5,7 @@ target_link_libraries(nwb_assets_graphics INTERFACE
     nwb_assets_shader
 )
 
-if(TARGET nwb_graphics_cook)
+if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_graphics_cook)
     target_sources(nwb_assets_graphics_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/graphics_asset_cooker.cpp"
@@ -17,7 +17,6 @@ if(TARGET nwb_graphics_cook)
         nwb_assets_material_cook
         nwb_assets_shader_cook
         nwb_graphics
-        nwb_graphics_cook
         nwb_metascript
         nwb_filesystem
     )

@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_MESH_GBUFFER_IO_SLANGI
+#define NWB_MESH_GBUFFER_IO_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbMeshPixelInput{
+    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(1)]] float3 normal : NORMAL0;
+    [[vk::location(2)]] float4 tangent : TANGENT0;
+    [[vk::location(3)]] float2 uv0 : TEXCOORD0;
+    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
+};
+
+struct NwbMeshGBufferOutput{
+    [[vk::location(0)]] float4 baseColor : SV_Target0;
+    [[vk::location(1)]] float4 normal : SV_Target1;
+    [[vk::location(2)]] float4 worldPosition : SV_Target2;
+};
+
+static float4 inColor;
+static float3 inNormal;
+static float4 inTangent;
+static float2 inUv0;
+static float3 inWorldPosition;
+static float4 outGBufferBaseColor;
+static float4 outGBufferNormal;
+static float4 outGBufferWorldPosition;
+
+void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
+    inColor = input.color;
+    inNormal = input.normal;
+    inTangent = input.tangent;
+    inUv0 = input.uv0;
+    inWorldPosition = input.worldPosition;
+}
+
+NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
+    NwbMeshGBufferOutput output;
+    output.baseColor = outGBufferBaseColor;
+    output.normal = outGBufferNormal;
+    output.worldPosition = outGBufferWorldPosition;
+    return output;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbGBufferEncodeNormal(float3 normal){
+    const float lengthSquared = dot(normal, normal);
+    const float3 normalVector = lengthSquared > 0.000001
+        ? normal * rsqrt(lengthSquared)
+        : float3(0.0, 0.0, 1.0)
+    ;
+    return normalVector * 0.5 + 0.5;
+}
+
+void nwbWriteMeshGBuffer(float3 baseColor, float3 normal, float3 worldPosition){
+    outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), 1.0);
+    outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), 1.0);
+    outGBufferWorldPosition = float4(worldPosition, 1.0);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

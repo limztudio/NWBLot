@@ -55,7 +55,7 @@ static bool NearlyEqual4(SIMDVector value, const f32 x, const f32 y, const f32 z
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void TestVector2CrossMatchesGlslOrder(TestContext& context){
+static void TestVector2CrossOrientation(TestContext& context){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -68,7 +68,7 @@ static void TestVector2CrossMatchesGlslOrder(TestContext& context){
     NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetY(yx), -1.0f));
 }
 
-static void TestVector3CrossMatchesGlslOrder(TestContext& context){
+static void TestVector3CrossOrientation(TestContext& context){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector zAxis = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
@@ -100,7 +100,7 @@ static void TestVector4CrossBasisOrientation(TestContext& context){
     NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(result), 1.0f));
 }
 
-static void TestGlslNamedScalarFunctions(TestContext& context){
+static void TestVectorNamedScalarFunctions(TestContext& context){
     const SIMDVector modResult = VectorMod(
         VectorSet(5.5f, -5.5f, 5.5f, -5.5f),
         VectorSet(2.0f, 2.0f, -2.0f, -2.0f)
@@ -169,7 +169,7 @@ static void TestGlslNamedScalarFunctions(TestContext& context){
     NWB_MATH_TEST_CHECK(context, !SignBit(VectorGetY(signedZeroTanH)));
 }
 
-static void TestGlslRefractCriticalAngle(TestContext& context){
+static void TestRefractCriticalAngle(TestContext& context){
     const SIMDVector normal = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     const SIMDVector criticalIncident = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector totalInternalIncident = VectorSet(0.866025404f, -0.5f, 0.0f, 0.0f);
@@ -253,12 +253,12 @@ static void TestHalfFloatBufferConversion(TestContext& context){
 
 
 NWB_DEFINE_TEST_ENTRY_POINT("math", [](NWB::Tests::TestContext& context){
-    __hidden_math_tests::TestVector2CrossMatchesGlslOrder(context);
-    __hidden_math_tests::TestVector3CrossMatchesGlslOrder(context);
+    __hidden_math_tests::TestVector2CrossOrientation(context);
+    __hidden_math_tests::TestVector3CrossOrientation(context);
     __hidden_math_tests::TestVector3RotateQuarterTurn(context);
     __hidden_math_tests::TestVector4CrossBasisOrientation(context);
-    __hidden_math_tests::TestGlslNamedScalarFunctions(context);
-    __hidden_math_tests::TestGlslRefractCriticalAngle(context);
+    __hidden_math_tests::TestVectorNamedScalarFunctions(context);
+    __hidden_math_tests::TestRefractCriticalAngle(context);
     __hidden_math_tests::TestHalfFloatScalarConversion(context);
     __hidden_math_tests::TestHalfFloatBufferConversion(context);
 })

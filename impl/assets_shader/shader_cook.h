@@ -17,7 +17,6 @@
 #include "../global.h"
 
 #include <core/alloc/scratch.h>
-#include <core/graphics/common.h>
 #include <core/metascript/parser.h>
 
 
@@ -44,6 +43,42 @@ public:
 
     template<typename T>
     using CookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, CookArena>;
+
+    struct ShaderMacroDefinition{
+        AStringView name;
+        AStringView value;
+    };
+
+    struct ShaderCompilerRequest{
+        AStringView shaderName;
+        AStringView stage;
+        AStringView targetProfile;
+        AStringView entryPoint;
+        AStringView variantName;
+        const ShaderMacroDefinition* defines = nullptr;
+        u32 defineCount = 0;
+        const CookVector<Path>& includeDirectories;
+        const Path& sourcePath;
+        const Path& outputPath;
+    };
+
+    class IShaderCompiler : NoCopy{
+    public:
+        IShaderCompiler(CookArena& memoryArena)
+            : m_memoryArena(memoryArena)
+        {}
+        virtual ~IShaderCompiler() = default;
+
+
+    public:
+        virtual bool compileVariant(const ShaderCompilerRequest& request, CookVector<u8>& outBytecode) = 0;
+
+
+    protected:
+        CookArena& m_memoryArena;
+    };
+
+    using ShaderCompilerFactory = Core::GlobalUniquePtr<IShaderCompiler> (*)(CookArena& memoryArena);
 
     using DefineCombo = CookMap<CookString, CookString>;
 
@@ -74,7 +109,6 @@ public:
 
     struct ShaderEntry{
         CookString name;
-        CompactString compiler = CompactString("glslang");
         CompactString stage;
         CompactString archiveStage;
         CompactString targetProfile;
@@ -110,11 +144,11 @@ private:
 
 
 public:
-    ShaderCook(CookArena& memoryArena, Core::ShaderCompilerFactory compilerFactory = nullptr);
+    ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory = nullptr);
 
 
 public:
-    inline bool compileVariant(const Core::ShaderCompilerRequest& request, Core::GraphicsBytes& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
+    inline bool compileVariant(const ShaderCompilerRequest& request, CookVector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
 public:
     bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
@@ -166,7 +200,7 @@ private:
     CookArena& m_memoryArena;
 
 private:
-    Core::GlobalUniquePtr<Core::IShaderCompiler> m_compiler;
+    Core::GlobalUniquePtr<IShaderCompiler> m_compiler;
 };
 
 

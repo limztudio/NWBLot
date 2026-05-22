@@ -1,0 +1,79 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_BXDF_LIGHTING_SLANGI
+#define NWB_BXDF_LIGHTING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "bxdf.slangi"
+#include "scene_shading_buffer.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbProjectDirectionalLightVector(){
+    return nwbSafeNormalize(g_NwbSceneDirectionalLightDirection.xyz, float3(0.0, 0.0, -1.0));
+}
+
+float3 nwbProjectDirectionalLightRadiance(){
+    const float3 lightColor = clamp(g_NwbSceneDirectionalLightColorIntensity.xyz, float3(0.0), float3(1.5));
+    const float lightIntensity = min(max(g_NwbSceneDirectionalLightColorIntensity.w, 0.0), 2.0);
+    return lightColor * lightIntensity;
+}
+
+float3 nwbProjectApplyDirectionalShading(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition){
+    const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
+    const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
+    const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
+    const float3 bitangentVector = nwbSafeNormalize(
+        cross(normalVector, tangentVector) * tangentSign,
+        cross(normalVector, nwbFrameFallbackTangent(normalVector))
+    );
+
+    const float3 lightVector = nwbProjectDirectionalLightVector();
+    const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, lightVector);
+    const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
+    const float3 lightRadiance = nwbProjectDirectionalLightRadiance();
+
+    const float ndotlRaw = dot(normalVector, lightVector);
+    const float ndotl = max(ndotlRaw, 0.0);
+    const float ndotv = max(dot(normalVector, viewVector), 0.0);
+    const float skyAmount = normalVector.z * 0.5 + 0.5;
+    const float rim = pow(1.0 - ndotv, 3.0);
+    const float keyDiffuse = ndotl * ndotl;
+    const float shadowCue = 1.0 - smoothstep(-0.1, 0.55, ndotlRaw);
+    const float specular = pow(max(dot(normalVector, halfVector), 0.0), 64.0);
+    const float tangentLobe = pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0);
+    const float bitangentLobe = pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0);
+    const float backLight = max(dot(-normalVector, lightVector), 0.0);
+
+    const float3 hemiAmbient = lerp(float3(0.008, 0.012, 0.02), float3(0.045, 0.055, 0.075), skyAmount);
+    const float3 diffuse = baseColor * (hemiAmbient + lightRadiance * (0.02 + 0.98 * keyDiffuse));
+    const float3 specularTint = lerp(float3(0.78), float3(1.0, 0.9, 0.68), 0.65);
+    const float3 specularColor = lightRadiance * specularTint * specular * (0.05 + 0.95 * ndotl);
+    const float3 rimColor = lerp(float3(0.12, 0.26, 0.52), lightRadiance, 0.25) * rim * (0.04 + 0.96 * ndotl);
+    const float3 frameCue = 0.12 * (
+        float3(1.0, 0.35, 0.2) * tangentLobe
+        + float3(0.2, 0.7, 1.0) * bitangentLobe
+    );
+    const float3 backLightCue = float3(0.012, 0.02, 0.04) * backLight;
+    const float3 shadowColorCue = baseColor * float3(0.025, 0.04, 0.08) * shadowCue;
+    const float3 litColor = diffuse + specularColor + rimColor + frameCue + backLightCue + shadowColorCue;
+
+    return litColor / (litColor + float3(0.65));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

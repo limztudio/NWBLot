@@ -2,30 +2,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#version 460
-
-#include "bxdf.glsli"
-#include "mesh_gbuffer_io.glsli"
+#include "bxdf.slangi"
+#include "mesh_gbuffer_io.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-vec3 nwbProjectUvDebug(const vec2 uv0){
-    const vec2 wrappedUv = fract(uv0);
-    const vec2 checkerCell = floor(wrappedUv * 8.0);
-    const float checker = mod(checkerCell.x + checkerCell.y, 2.0);
-    const vec3 uvColor = vec3(wrappedUv, 1.0 - wrappedUv.x);
-    return mix(uvColor * 0.55, uvColor, checker);
+float3 nwbProjectUvDebug(const float2 uv0){
+    const float2 wrappedUv = frac(uv0);
+    const float2 checkerCell = floor(wrappedUv * 8.0);
+    const float checker = fmod(checkerCell.x + checkerCell.y, 2.0);
+    const float3 uvColor = float3(wrappedUv, 1.0 - wrappedUv.x);
+    return lerp(uvColor * 0.55, uvColor, checker);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void main(){
-    const mediump vec3 baseColor = clamp(nwbProjectUvDebug(inUv0) * inColor.rgb, vec3(0.0), vec3(1.0));
+NwbMeshGBufferOutput main(NwbMeshPixelInput input){
+    nwbLoadMeshPixelInput(input);
+
+    const float3 baseColor = clamp(nwbProjectUvDebug(inUv0) * inColor.rgb, float3(0.0), float3(1.0));
     nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
+
+    return nwbBuildMeshGBufferOutput();
 }
 
 

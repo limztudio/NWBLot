@@ -1,6 +1,5 @@
 shader asset;
 
-asset.compiler = "glslang";
 asset.stage = "ps";
-asset.target_profile = "ps";
+asset.target_profile = "spirv_1_5";
 asset.entry_point = "main";

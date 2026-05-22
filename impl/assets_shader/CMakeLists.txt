@@ -15,7 +15,7 @@ target_link_libraries(nwb_assets_shader_loader INTERFACE
     nwb_graphics
 )
 
-if(TARGET nwb_graphics_cook)
+if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_shader_cook)
     target_sources(nwb_assets_shader_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/shader_asset_runtime.cpp"
@@ -25,7 +25,9 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/shader_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_cook.h"
     )
-    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_graphics nwb_metascript)
-    target_link_libraries(nwb_assets_shader_cook PRIVATE nwb_graphics_cook)
-    target_compile_definitions(nwb_assets_shader_cook PRIVATE NWB_COOK=1)
+    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_metascript)
+    target_compile_definitions(nwb_assets_shader_cook PRIVATE
+        NWB_COOK=1
+        NWB_SLANGC_EXECUTABLE="${NWB_SLANGC_EXECUTABLE}"
+    )
 endif()

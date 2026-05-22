@@ -1,0 +1,122 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_SHADER_MATH_SLANGI
+#define NWB_SHADER_MATH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbPackHalf2x16(float2 value){
+    return (f32tof16(value.x) & 0xffffu) | ((f32tof16(value.y) & 0xffffu) << 16u);
+}
+
+float2 nwbUnpackHalf2x16(uint value){
+    return float2(f16tof32(value & 0xffffu), f16tof32((value >> 16u) & 0xffffu));
+}
+
+bool nwbFiniteFloat(const float value){
+    return !isnan(value) && !isinf(value);
+}
+
+bool nwbFiniteFloat3(const float3 value){
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
+bool nwbFiniteFloat4(const float4 value){
+    return !any(isnan(value)) && !any(isinf(value));
+}
+
+float3 nwbSafeNormalizeMinLengthSquared(const float3 value, const float3 fallback, const float minLengthSquared){
+    const float lengthSquared = dot(value, value);
+    return nwbFiniteFloat3(value) && nwbFiniteFloat(lengthSquared) && lengthSquared > minLengthSquared
+        ? value * rsqrt(lengthSquared)
+        : fallback
+    ;
+}
+
+float3 nwbSafeNormalize(const float3 value, const float3 fallback){
+    return nwbSafeNormalizeMinLengthSquared(value, fallback, 0.000001);
+}
+
+float3 nwbSafeFrameNormalize(const float3 value, const float3 fallback){
+    return nwbSafeNormalizeMinLengthSquared(value, fallback, 0.00000001);
+}
+
+bool nwbValidFrameDirection(const float3 value){
+    return nwbFiniteFloat3(value) && dot(value, value) > 0.00000001;
+}
+
+float3 nwbProjectOntoPlane(const float3 value, const float3 normal){
+    return value - normal * dot(value, normal);
+}
+
+float3 nwbFrameFallbackTangent(const float3 normal){
+    const float3 axis = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
+    return nwbSafeFrameNormalize(cross(axis, normal), float3(1.0, 0.0, 0.0));
+}
+
+float3 nwbFrameOrthonormalTangent(const float3 tangent, const float3 normal){
+    return nwbSafeNormalize(nwbProjectOntoPlane(tangent, normal), nwbFrameFallbackTangent(normal));
+}
+
+float nwbTangentHandedness(const float handedness, const float fallbackHandedness){
+    if(abs(handedness) > 0.000001)
+        return handedness < 0.0 ? -1.0 : 1.0;
+    return fallbackHandedness < 0.0 ? -1.0 : 1.0;
+}
+
+float3 nwbResolveFrameTangent(const float3 normal, const float3 tangent, const float3 fallbackTangent){
+    const float3 safeFallbackTangent = nwbFrameFallbackTangent(normal);
+
+    float3 projectedTangent = nwbFiniteFloat3(tangent)
+        ? nwbProjectOntoPlane(tangent, normal)
+        : safeFallbackTangent
+    ;
+    if(!nwbValidFrameDirection(projectedTangent)){
+        projectedTangent = nwbFiniteFloat3(fallbackTangent)
+            ? nwbProjectOntoPlane(fallbackTangent, normal)
+            : safeFallbackTangent
+        ;
+    }
+    if(!nwbValidFrameDirection(projectedTangent))
+        return safeFallbackTangent;
+
+    return nwbSafeFrameNormalize(projectedTangent, safeFallbackTangent);
+}
+
+void nwbOrthonormalizeFrame(
+    inout float3 normal,
+    inout float4 tangent,
+    const float3 fallbackNormal,
+    const float4 fallbackTangent
+){
+    normal = nwbSafeFrameNormalize(normal, nwbSafeFrameNormalize(fallbackNormal, float3(0.0, 0.0, 1.0)));
+    tangent.xyz = nwbResolveFrameTangent(normal, tangent.xyz, fallbackTangent.xyz);
+    tangent.w = nwbTangentHandedness(tangent.w, fallbackTangent.w);
+}
+
+float4 nwbQuaternionMultiply(const float4 lhs, const float4 rhs){
+    return float4(
+        (lhs.w * rhs.x) + (lhs.x * rhs.w) + (lhs.y * rhs.z) - (lhs.z * rhs.y),
+        (lhs.w * rhs.y) - (lhs.x * rhs.z) + (lhs.y * rhs.w) + (lhs.z * rhs.x),
+        (lhs.w * rhs.z) + (lhs.x * rhs.y) - (lhs.y * rhs.x) + (lhs.z * rhs.w),
+        (lhs.w * rhs.w) - dot(lhs.xyz, rhs.xyz)
+    );
+}
+
+float3 nwbRotateVectorByQuaternion(const float3 value, const float4 rotation){
+    const float3 twiceCross = 2.0 * cross(rotation.xyz, value);
+    return value + rotation.w * twiceCross + cross(rotation.xyz, twiceCross);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

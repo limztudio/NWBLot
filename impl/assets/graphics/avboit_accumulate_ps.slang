@@ -2,41 +2,40 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#version 460
-
 #define NWB_SCENE_SHADING_SET 1
 #define NWB_SCENE_SHADING_BINDING 4
-#include "avboit_common.glsli"
-#include <bxdf_lighting.glsli>
+#include "avboit_common.slangi"
+#include <bxdf_lighting.slangi>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(set = 1, binding = 1) uniform texture3D g_Transmittance;
-layout(set = 1, binding = 3) uniform sampler g_LinearSampler;
-layout(std430, set = 1, binding = 0) readonly buffer NwbAvboitDepthWarpBuffer{
-    uint g_DepthWarp[];
-};
-layout(std430, set = 1, binding = 2) readonly buffer NwbAvboitControlBuffer{
-    uint g_Control[];
+[[vk::binding(1, 1)]] Texture3D<float4> g_Transmittance;
+[[vk::binding(3, 1)]] SamplerState g_LinearSampler;
+[[vk::binding(0, 1)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(2, 1)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+
+struct NwbAvboitAccumulatePixelInput{
+    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(1)]] float3 normal : NORMAL0;
+    [[vk::location(2)]] float4 tangent : TANGENT0;
+    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
 };
 
-layout(location = 0) in mediump vec4 inColor;
-layout(location = 1) in mediump vec3 inNormal;
-layout(location = 2) in vec4 inTangent;
-layout(location = 4) in vec3 inWorldPosition;
-layout(location = 0) out vec4 outAccumColor;
-layout(location = 1) out vec4 outAccumExtinction;
+struct NwbAvboitAccumulatePixelOutput{
+    [[vk::location(0)]] float4 accumColor : SV_Target0;
+    [[vk::location(1)]] float4 accumExtinction : SV_Target1;
+};
+
+static float4 inColor;
+static float3 inNormal;
+static float4 inTangent;
+static float3 inWorldPosition;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-vec2 nwbAvboitTransmittanceUvFromFragCoord(vec2 fragCoord){
-    const vec2 fullSize = max(vec2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), vec2(1.0));
-    return clamp(fragCoord / fullSize, vec2(0.0), vec2(1.0));
-}
 
 uint nwbAvboitActivePhysicalSliceCount(){
     return clamp(g_Control[0], 1u, nwbAvboitPhysicalSliceCount());
@@ -54,10 +53,10 @@ float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
     const uint virtualSlice1 = min(virtualSlice0 + 1u, virtualSliceCount - 1u);
     const float physicalSlice0 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice0);
     const float physicalSlice1 = nwbAvboitWarpedPhysicalSliceFromVirtualSlice(virtualSlice1);
-    return mix(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
+    return lerp(physicalSlice0, physicalSlice1, sampleSlice - sliceBase);
 }
 
-float nwbAvboitLinearBiasedTransmittance(vec2 fragCoord, float depth){
+float nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
     const float sampleSlice = clamp(
@@ -67,9 +66,9 @@ float nwbAvboitLinearBiasedTransmittance(vec2 fragCoord, float depth){
     );
     const float physicalSlice = nwbAvboitPhysicalSliceFromVirtualSampleSlice(sampleSlice);
     const float physicalSliceUv = (physicalSlice + 0.5) / max(float(nwbAvboitPhysicalSliceCount()), 1.0);
-    return texture(
-        sampler3D(g_Transmittance, g_LinearSampler),
-        vec3(nwbAvboitTransmittanceUvFromFragCoord(fragCoord), clamp(physicalSliceUv, 0.0, 1.0))
+    return g_Transmittance.Sample(
+        g_LinearSampler,
+        float3(nwbAvboitFullUvFromFragCoord(fragCoord), clamp(physicalSliceUv, 0.0, 1.0))
     ).r;
 }
 
@@ -77,23 +76,30 @@ float nwbAvboitLinearBiasedTransmittance(vec2 fragCoord, float depth){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void main(){
+NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 fragCoord : SV_Position){
+    inColor = input.color;
+    inNormal = input.normal;
+    inTangent = input.tangent;
+    inWorldPosition = input.worldPosition;
+
     const float alpha = nwbAvboitMaterialAlpha();
     if(alpha <= 0.0)
         discard;
 
-    const float transmittance = nwbAvboitLinearBiasedTransmittance(gl_FragCoord.xy, gl_FragCoord.z);
+    const float transmittance = nwbAvboitLinearBiasedTransmittance(fragCoord.xy, fragCoord.z);
     const float weightedAlpha = alpha * transmittance;
 
-    const mediump vec3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), vec3(0.0), vec3(1.0));
-    const mediump vec3 shadedColor = clamp(
+    const float3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), float3(0.0), float3(1.0));
+    const float3 shadedColor = clamp(
         nwbProjectApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition),
-        vec3(0.0),
-        vec3(1.0)
+        float3(0.0),
+        float3(1.0)
     );
 
-    outAccumColor = vec4(shadedColor * weightedAlpha, weightedAlpha);
-    outAccumExtinction = vec4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
+    NwbAvboitAccumulatePixelOutput output;
+    output.accumColor = float4(shadedColor * weightedAlpha, weightedAlpha);
+    output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
+    return output;
 }
 
 

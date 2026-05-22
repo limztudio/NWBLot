@@ -2,36 +2,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#version 460
-
-#include "avboit_compute_common.glsli"
+#include "avboit_compute_common.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(local_size_x = 64) in;
-
-layout(std430, binding = 0) readonly buffer NwbAvboitExtinctionBuffer{
-    uint g_Extinction[];
-};
-
-layout(r16f, binding = 1) writeonly uniform image3D g_Transmittance;
-
-layout(std430, binding = 2) readonly buffer NwbAvboitControlBuffer{
-    uint g_Control[];
-};
-
-layout(std430, binding = 3) readonly buffer NwbAvboitExtinctionOverflowDepthBuffer{
-    uint g_ExtinctionOverflowDepth[];
-};
+[[vk::binding(0, 0)]] StructuredBuffer<uint, Std430DataLayout> g_Extinction;
+[[vk::binding(1, 0), vk::image_format("r16f")]] RWTexture3D<float> g_Transmittance;
+[[vk::binding(2, 0)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+[[vk::binding(3, 0)]] StructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void main(){
-    const uint lowPixelIndex = gl_GlobalInvocationID.x;
+void nwbAvboitIntegrateMain(uint lowPixelIndex){
     const uint lowWidth = nwbAvboitLowWidth();
     const uint lowHeight = nwbAvboitLowHeight();
     const uint lowPixelCount = lowWidth * lowHeight;
@@ -40,7 +26,7 @@ void main(){
 
     const uint physicalSliceCount = nwbAvboitPhysicalSliceCount();
     const uint activePhysicalSlices = clamp(g_Control[0], 1u, physicalSliceCount);
-    const uvec2 lowPixel = uvec2(lowPixelIndex % lowWidth, lowPixelIndex / lowWidth);
+    const uint2 lowPixel = uint2(lowPixelIndex % lowWidth, lowPixelIndex / lowWidth);
     const uint overflowSlice = g_ExtinctionOverflowDepth[lowPixelIndex];
     const float saturatedExtinction = 16.0;
     float accumulatedExtinction = 0.0;
@@ -49,11 +35,7 @@ void main(){
 
     for(uint physicalSlice = 0u; physicalSlice < physicalSliceCount; ++physicalSlice){
         const float transmittance = exp(-min(accumulatedExtinction, saturatedExtinction));
-        imageStore(
-            g_Transmittance,
-            ivec3(int(lowPixel.x), int(lowPixel.y), int(physicalSlice)),
-            vec4(transmittance, 0.0, 0.0, 0.0)
-        );
+        g_Transmittance[uint3(lowPixel.x, lowPixel.y, physicalSlice)] = transmittance;
 
         if(physicalSlice >= activePhysicalSlices || accumulatedExtinction >= saturatedExtinction)
             continue;
@@ -76,6 +58,15 @@ void main(){
             saturatedExtinction
         );
     }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(64, 1, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    nwbAvboitIntegrateMain(dispatchThreadID.x);
 }
 
 

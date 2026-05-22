@@ -7,7 +7,7 @@ target_sources(nwb_assets_material PRIVATE
 )
 target_link_libraries(nwb_assets_material PUBLIC nwb_assets nwb_graphics)
 
-if(TARGET nwb_graphics_cook)
+if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_material_cook)
     target_sources(nwb_assets_material_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_runtime.cpp"
@@ -17,6 +17,6 @@ if(TARGET nwb_graphics_cook)
         "${CMAKE_CURRENT_LIST_DIR}/material_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_shader_stage_names.h"
     )
-    target_link_libraries(nwb_assets_material_cook PUBLIC nwb_assets nwb_assets_shader_cook)
+    target_link_libraries(nwb_assets_material_cook PUBLIC nwb_assets nwb_assets_shader_cook nwb_graphics)
     target_compile_definitions(nwb_assets_material_cook PRIVATE NWB_COOK=1)
 endif()

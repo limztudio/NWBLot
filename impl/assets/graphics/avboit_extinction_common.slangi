@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_AVBOIT_EXTINCTION_COMMON_GLSLI
-#define NWB_AVBOIT_EXTINCTION_COMMON_GLSLI
+#ifndef NWB_AVBOIT_EXTINCTION_COMMON_SLANGI
+#define NWB_AVBOIT_EXTINCTION_COMMON_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "avboit_constants.glsli"
+#include "avboit_constants.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,7 +20,7 @@ uint nwbAvboitPhysicalExtinctionWordCount(){
     return roundedSliceCount / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
 }
 
-uint nwbAvboitExtinctionWordIndex(uvec2 lowPixel, uint physicalSlice){
+uint nwbAvboitExtinctionWordIndex(uint2 lowPixel, uint physicalSlice){
     const uint physicalWord = physicalSlice / NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
     return (physicalWord * nwbAvboitLowHeight() + lowPixel.y) * nwbAvboitLowWidth() + lowPixel.x;
 }

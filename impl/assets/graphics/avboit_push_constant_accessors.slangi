@@ -2,15 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_AVBOIT_PUSH_CONSTANT_ACCESSORS_GLSLI
-#define NWB_AVBOIT_PUSH_CONSTANT_ACCESSORS_GLSLI
+#ifndef NWB_AVBOIT_PUSH_CONSTANT_ACCESSORS_SLANGI
+#define NWB_AVBOIT_PUSH_CONSTANT_ACCESSORS_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_AVBOIT_PUSH_CONSTANTS
-#error "NWB_AVBOIT_PUSH_CONSTANTS must name an AVBOIT push-constant block before including avboit_push_constant_accessors.glsli"
+#error "NWB_AVBOIT_PUSH_CONSTANTS must name an AVBOIT push-constant block before including avboit_push_constant_accessors.slangi"
 #endif
 
 

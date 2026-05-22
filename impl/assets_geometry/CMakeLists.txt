@@ -13,7 +13,7 @@ target_sources(nwb_assets_geometry PRIVATE
 )
 target_link_libraries(nwb_assets_geometry PUBLIC nwb_assets nwb_geometry nwb_skinned_geometry_types)
 
-if(TARGET nwb_graphics_cook)
+if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_geometry_cook)
     target_sources(nwb_assets_geometry_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/skinned_geometry_asset_runtime.cpp"

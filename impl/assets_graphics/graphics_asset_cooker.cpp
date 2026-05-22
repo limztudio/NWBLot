@@ -76,7 +76,7 @@ static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEnt
         return false;
     if(!outEntry.stage.assign("cs"))
         return false;
-    if(!outEntry.targetProfile.assign("cs"))
+    if(!outEntry.targetProfile.assign(sourceEntry.targetProfile))
         return false;
 
     auto& arena = outEntry.name.get_allocator().arena();
@@ -781,7 +781,7 @@ static bool GetVariantBytecode(
     for(const auto& [defineName, value] : entry.implicitDefines)
         mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
 
-    Vector<Core::ShaderMacroDefinition, ScratchArena> compileDefines{
+    Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{
         scratchArena
     };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
@@ -792,22 +792,10 @@ static bool GetVariantBytecode(
     }
     compileDefines.reserve(mergedDefines.size());
     for(const auto& [defineName, value] : mergedDefines)
-        compileDefines.push_back(Core::ShaderMacroDefinition{ defineName, value });
-
-    const Core::ShaderCompilerRequest compileRequest = {
-        entry.name,
-        entry.compiler.view(),
-        entry.stage.view(),
-        entry.targetProfile.view(),
-        entry.entryPoint,
-        variantName,
-        compileDefines.data(),
-        static_cast<u32>(compileDefines.size()),
-        includeDirectories,
-        sourcePath
-    };
-    if(!shaderCook.compileVariant(compileRequest, outBytecode))
-        return false;
+        compileDefines.push_back(ShaderCook::ShaderMacroDefinition{ defineName, value });
+    Sort(compileDefines.begin(), compileDefines.end(), [](const ShaderCook::ShaderMacroDefinition& lhs, const ShaderCook::ShaderMacroDefinition& rhs){
+        return lhs.name < rhs.name;
+    });
 
     errorCode.clear();
     if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
@@ -818,13 +806,20 @@ static bool GetVariantBytecode(
         return false;
     }
 
-    if(!WriteBinaryFile(cachePaths.bytecodePath, outBytecode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write shader bytecode cache '{}' for entry '{}'")
-            , PathToString<tchar>(cachePaths.bytecodePath)
-            , StringConvert(entry.name)
-        );
+    const ShaderCook::ShaderCompilerRequest compileRequest = {
+        entry.name,
+        entry.stage.view(),
+        entry.targetProfile.view(),
+        entry.entryPoint,
+        variantName,
+        compileDefines.data(),
+        static_cast<u32>(compileDefines.size()),
+        includeDirectories,
+        sourcePath,
+        cachePaths.bytecodePath
+    };
+    if(!shaderCook.compileVariant(compileRequest, outBytecode))
         return false;
-    }
 
     if(!WriteTextFile(cachePaths.sourceChecksumPath, sourceChecksumHex)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write cook source checksum '{}'")

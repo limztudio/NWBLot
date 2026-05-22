@@ -2,8 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_SCENE_SHADING_BUFFER_GLSLI
-#define NWB_SCENE_SHADING_BUFFER_GLSLI
+#ifndef NWB_SCENE_SHADING_BUFFER_SLANGI
+#define NWB_SCENE_SHADING_BUFFER_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,11 +25,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(std140, set = NWB_SCENE_SHADING_SET, binding = NWB_SCENE_SHADING_BINDING) uniform NwbSceneShadingBuffer{
-    vec4 g_NwbSceneDirectionalLightDirection;
-    vec4 g_NwbSceneDirectionalLightColorIntensity;
-    vec4 g_NwbSceneCameraPosition;
+struct NwbSceneShadingBuffer{
+    float4 g_NwbSceneDirectionalLightDirection;
+    float4 g_NwbSceneDirectionalLightColorIntensity;
+    float4 g_NwbSceneCameraPosition;
 };
+
+[[vk::binding(NWB_SCENE_SHADING_BINDING, NWB_SCENE_SHADING_SET)]]
+ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbSceneShadingBuffer;
+
+#define g_NwbSceneDirectionalLightDirection g_NwbSceneShadingBuffer.g_NwbSceneDirectionalLightDirection
+#define g_NwbSceneDirectionalLightColorIntensity g_NwbSceneShadingBuffer.g_NwbSceneDirectionalLightColorIntensity
+#define g_NwbSceneCameraPosition g_NwbSceneShadingBuffer.g_NwbSceneCameraPosition
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

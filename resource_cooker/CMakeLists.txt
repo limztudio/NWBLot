@@ -14,7 +14,6 @@ target_link_libraries(nwb_resource_cooker PRIVATE
     nwb::tbb
     nwb_metascript
     nwb_graphics
-    nwb_graphics_cook
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics_cook>"
     nwb::cli11_headers
 )

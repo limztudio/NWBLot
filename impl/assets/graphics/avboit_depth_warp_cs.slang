@@ -2,27 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#version 460
-
-#include "avboit_compute_common.glsli"
+#include "avboit_compute_common.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-layout(local_size_x = 1) in;
-
-layout(std430, binding = 0) readonly buffer NwbAvboitCoverageBuffer{
-    uint g_CoverageWords[];
-};
-
-layout(std430, binding = 1) buffer NwbAvboitDepthWarpBuffer{
-    uint g_DepthWarp[];
-};
-
-layout(std430, binding = 2) buffer NwbAvboitControlBuffer{
-    uint g_Control[];
-};
+[[vk::binding(0, 0)]] StructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
+[[vk::binding(1, 0)]] RWStructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(2, 0)]] RWStructuredBuffer<uint, Std430DataLayout> g_Control;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +44,7 @@ uint nwbAvboitCountOccupiedBins(uint compressionShift){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void main(){
+void nwbAvboitDepthWarpMain(){
     uint compressionShift = 0u;
     uint occupiedCount = nwbAvboitCountOccupiedBins(compressionShift);
     while(occupiedCount > nwbAvboitPhysicalSliceCount() && ((1u << compressionShift) < nwbAvboitVirtualSliceCount())){
@@ -104,6 +92,15 @@ void main(){
     g_Control[5] = nwbAvboitLowHeight();
     g_Control[6] = nwbAvboitFullWidth();
     g_Control[7] = nwbAvboitFullHeight();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(1, 1, 1)]
+void main(){
+    nwbAvboitDepthWarpMain();
 }
 
 

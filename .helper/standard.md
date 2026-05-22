@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).
-Updated: 2026-05-04
+Updated: 2026-05-22
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -260,7 +260,7 @@ Updated: 2026-05-04
 - Do not force case-sensitive external API text into `Name` or `CompactString`.
   - Keep `Name` for canonical identity/lookups.
   - Keep exact text separately at the boundary when the API requires original spelling/case, such as Vulkan/SPIR-V shader entry-point names, shader define names, and shader variant signatures.
-- For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `compiler`, `stage`, and `target_profile`), prefer `CompactString` over heap-backed `AString`.
+- For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `stage` and `target_profile`), prefer `CompactString` over heap-backed `AString`.
 - Debug/profiling marker labels are also plain external text.
   - Model command-list markers as text views/strings, not `Name`, so GPU markers and crash-dump labels keep their original spelling.
 - For simple generated geometry assets, keep the shape description/payload in `.nwb` metadata.
@@ -416,6 +416,7 @@ Updated: 2026-05-04
 
 ## 15. Shader Source Style
 - Applies to `.slang` and `.slangi` files under `impl/assets/graphics/` and `Testbed/assets/shaders/`.
+- Project shader authoring is Slang-only; do not add alternate shader-language source standards, compatibility include trees, compiler paths, or per-asset compiler selectors.
 - Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files.
 - After the shader banner separator, keep exactly two blank lines before the first shader directive, define, include, or include guard (`#define`, `#include`, `#ifndef`, etc.). Do not collapse this gap.
 - Stage entry files (`.slang`) put feature defines first when needed, then includes, declarations/resources, helpers, and the entry point, separated by file-scope long separators.

@@ -161,12 +161,6 @@ asset.skin = {
         NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32 \
     )
 
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS, \
-        NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
-    )
-
 #define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
@@ -567,7 +561,7 @@ asset.skin = {
 )";
 
 static constexpr AStringView s_SkinnedOnlySkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 #if defined(NWB_FINAL)
@@ -636,7 +630,6 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_U16_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX
@@ -691,6 +684,47 @@ static Path AssetsGraphicsTestRepoRoot(){
     return Path(__FILE__).parent_path().parent_path().parent_path().lexically_normal();
 }
 
+static Path AssetsGraphicsTestCaseRoot(const AStringView caseName){
+    return Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
+}
+
+static bool PrepareAssetsGraphicsCaseRoot(const AStringView caseName, Path& outRoot){
+    outRoot = AssetsGraphicsTestCaseRoot(caseName);
+    return PrepareCleanDirectory(outRoot);
+}
+
+static bool PrepareAssetsGraphicsCookCase(
+    const AStringView caseName,
+    Path& outRoot,
+    Path& outOutputDirectory
+){
+    if(!PrepareAssetsGraphicsCaseRoot(caseName, outRoot))
+        return false;
+
+    outOutputDirectory = outRoot / "cooked";
+    return true;
+}
+
+static bool CookPreparedGraphicsAssetRoots(
+    TestArena& testArena,
+    const Path& root,
+    const Path& outputDirectory,
+    const InitializerList<Path> assetRoots
+){
+    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
+    options.repoRoot = ".";
+    options.assetRoots.reserve(assetRoots.size());
+    for(const Path& assetRoot : assetRoots)
+        options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
+    options.outputDirectory = PathToString(testArena.arena, outputDirectory);
+    options.cacheDirectory = PathToString(testArena.arena, root / "cache");
+    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
+        return false;
+
+    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
+    return cooker.cook(options);
+}
+
 static bool CookSingleGraphicsMeta(
     const AStringView metaText,
     const AStringView caseName,
@@ -700,10 +734,7 @@ static bool CookSingleGraphicsMeta(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
-    outOutputDirectory = outRoot / "cooked";
-
-    if(!PrepareCleanDirectory(outRoot))
+    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path assetRoot = outRoot / "assets";
@@ -711,16 +742,7 @@ static bool CookSingleGraphicsMeta(
     if(!WriteTextFile(metaPath, metaText))
         return false;
 
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
-    options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
-    options.outputDirectory = PathToString(testArena.arena, outOutputDirectory);
-    options.cacheDirectory = PathToString(testArena.arena, outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
-        return false;
-
-    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
-    return cooker.cook(options);
+    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
 }
 
 struct MinimalAssetCookInfo{
@@ -776,10 +798,7 @@ static bool CookMinimalGeometryWithMaterialBind(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
-    outOutputDirectory = outRoot / "cooked";
-
-    if(!PrepareCleanDirectory(outRoot))
+    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path assetRoot = outRoot / "assets";
@@ -788,16 +807,7 @@ static bool CookMinimalGeometryWithMaterialBind(
     if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
         return false;
 
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
-    options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
-    options.outputDirectory = PathToString(testArena.arena, outOutputDirectory);
-    options.cacheDirectory = PathToString(testArena.arena, outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
-        return false;
-
-    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
-    return cooker.cook(options);
+    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
 }
 
 static bool ParseMaterialBindFromText(
@@ -807,9 +817,7 @@ static bool ParseMaterialBindFromText(
     NWB::Impl::ShaderCook::MaterialBindEntry& outEntry,
     Path& outRoot
 ){
-    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
-
-    if(!PrepareCleanDirectory(outRoot))
+    if(!PrepareAssetsGraphicsCaseRoot(caseName, outRoot))
         return false;
 
     const Path bindPath = outRoot / "assets" / "material_interfaces" / "test_surface.bind";
@@ -827,10 +835,7 @@ static bool CookDuplicateGeneratedMaterialBindIncludePath(
     Path& outRoot,
     Path& outOutputDirectory
 ){
-    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
-    outOutputDirectory = outRoot / "cooked";
-
-    if(!PrepareCleanDirectory(outRoot))
+    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
         return false;
 
     const Path firstAssetRoot = outRoot / "first" / "assets";
@@ -842,88 +847,16 @@ static bool CookDuplicateGeneratedMaterialBindIncludePath(
     if(!WriteTextFile(secondAssetRoot / "material_interfaces" / "test_surface.bind", s_MinimalMaterialBindSource))
         return false;
 
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
-    options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(testArena.arena, firstAssetRoot));
-    options.assetRoots.push_back(PathToString(testArena.arena, secondAssetRoot));
-    options.outputDirectory = PathToString(testArena.arena, outOutputDirectory);
-    options.cacheDirectory = PathToString(testArena.arena, outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
-        return false;
-
-    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
-    return cooker.cook(options);
+    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { firstAssetRoot, secondAssetRoot });
 }
 #endif
 
-static bool CookMaterialBindShaderProbe(
-    const AStringView bindText,
-    const AStringView caseName,
+static bool WriteMaterialBindMeshShaderProbe(
     TestArena& testArena,
-    Path& outRoot,
-    Path& outOutputDirectory
+    const Path& assetRoot,
+    const char* metaFilename,
+    const char* sourceFilename
 ){
-    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
-    outOutputDirectory = outRoot / "cooked";
-
-    if(!PrepareCleanDirectory(outRoot))
-        return false;
-
-    const Path assetRoot = outRoot / "assets";
-    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
-        return false;
-
-    const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics";
-    const NWB::Impl::ShaderCook::CookString engineGraphicsIncludeRootText = PathToString(testArena.arena, engineGraphicsIncludeRoot);
-    NWB::Impl::ShaderCook::CookString shaderProbeMeta(testArena.arena);
-    shaderProbeMeta +=
-        "shader asset;\n\n"
-        "asset.stage = \"mesh\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
-        "asset.entry_point = \"main\";\n"
-        "asset.include_roots = [\""
-    ;
-    shaderProbeMeta += engineGraphicsIncludeRootText;
-    shaderProbeMeta += "\"];\n";
-
-    if(!WriteTextFile(
-        assetRoot / "shaders" / "bind_probe.nwb",
-        AStringView(shaderProbeMeta.data(), shaderProbeMeta.size())
-    ))
-        return false;
-    if(!WriteTextFile(assetRoot / "shaders" / "bind_probe.slang", s_MaterialBindShaderProbeSource))
-        return false;
-
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
-    options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
-    options.outputDirectory = PathToString(testArena.arena, outOutputDirectory);
-    options.cacheDirectory = PathToString(testArena.arena, outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
-        return false;
-
-    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
-    return cooker.cook(options);
-}
-
-static bool CookMaterialBindMaterialIntegration(
-    const AStringView bindText,
-    const AStringView materialText,
-    const AStringView caseName,
-    TestArena& testArena,
-    Path& outRoot,
-    Path& outOutputDirectory
-){
-    outRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
-    outOutputDirectory = outRoot / "cooked";
-
-    if(!PrepareCleanDirectory(outRoot))
-        return false;
-
-    const Path assetRoot = outRoot / "assets";
-    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
-        return false;
-
     const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics";
     const NWB::Impl::ShaderCook::CookString engineGraphicsIncludeRootText = PathToString(testArena.arena, engineGraphicsIncludeRoot);
     NWB::Impl::ShaderCook::CookString meshShaderMeta(testArena.arena);
@@ -938,11 +871,47 @@ static bool CookMaterialBindMaterialIntegration(
     meshShaderMeta += "\"];\n";
 
     if(!WriteTextFile(
-        assetRoot / "shaders" / "material_mesh.nwb",
+        assetRoot / "shaders" / metaFilename,
         AStringView(meshShaderMeta.data(), meshShaderMeta.size())
     ))
         return false;
-    if(!WriteTextFile(assetRoot / "shaders" / "material_mesh.slang", s_MaterialBindShaderProbeSource))
+    return WriteTextFile(assetRoot / "shaders" / sourceFilename, s_MaterialBindShaderProbeSource);
+}
+
+static bool CookMaterialBindShaderProbe(
+    const AStringView bindText,
+    const AStringView caseName,
+    TestArena& testArena,
+    Path& outRoot,
+    Path& outOutputDirectory
+){
+    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+        return false;
+
+    const Path assetRoot = outRoot / "assets";
+    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
+        return false;
+    if(!WriteMaterialBindMeshShaderProbe(testArena, assetRoot, "bind_probe.nwb", "bind_probe.slang"))
+        return false;
+
+    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
+}
+
+static bool CookMaterialBindMaterialIntegration(
+    const AStringView bindText,
+    const AStringView materialText,
+    const AStringView caseName,
+    TestArena& testArena,
+    Path& outRoot,
+    Path& outOutputDirectory
+){
+    if(!PrepareAssetsGraphicsCookCase(caseName, outRoot, outOutputDirectory))
+        return false;
+
+    const Path assetRoot = outRoot / "assets";
+    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
+        return false;
+    if(!WriteMaterialBindMeshShaderProbe(testArena, assetRoot, "material_mesh.nwb", "material_mesh.slang"))
         return false;
     if(!WriteTextFile(
         assetRoot / "shaders" / "material_ps.nwb",
@@ -957,16 +926,7 @@ static bool CookMaterialBindMaterialIntegration(
     if(!WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText))
         return false;
 
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
-    options.repoRoot = ".";
-    options.assetRoots.push_back(PathToString(testArena.arena, assetRoot));
-    options.outputDirectory = PathToString(testArena.arena, outOutputDirectory);
-    options.cacheDirectory = PathToString(testArena.arena, outRoot / "cache");
-    if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
-        return false;
-
-    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
-    return cooker.cook(options);
+    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
 }
 
 template<typename AssetCodecT>
@@ -975,14 +935,17 @@ static bool LoadCookedAsset(
     TestArena& testArena,
     const Path& outputDirectory,
     const Name assetName,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
+    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
+    const usize expectedVolumeFileCount = 2u
+){
     NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
     const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
     if(!loadedVolume)
         return false;
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == 2u);
+    if(expectedVolumeFileCount != 0u)
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, volumeSession.fileCount() == expectedVolumeFileCount);
 
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     const bool loadedBinary = volumeSession.loadData(assetName, binary);
@@ -1033,24 +996,14 @@ static bool LoadCookedMaterial(
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
-    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
-    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
-    if(!loadedVolume)
-        return false;
-
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    const bool loadedBinary = volumeSession.loadData(assetName, binary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedBinary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
-    if(!loadedBinary || binary.empty())
-        return false;
-
-    NWB::Impl::MaterialAssetCodec codec;
-    const bool deserialized = codec.deserialize(testArena.arena, assetName, binary, outLoadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(outLoadedAsset));
-    return deserialized && static_cast<bool>(outLoadedAsset);
+    return LoadCookedAsset<NWB::Impl::MaterialAssetCodec>(
+        context,
+        testArena,
+        outputDirectory,
+        assetName,
+        outLoadedAsset,
+        0u
+    );
 }
 
 using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
@@ -1179,7 +1132,7 @@ static void CookAndCheckMinimalTypedAsset(
 
 static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
     TestArena testArena;
-    const Path root = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / "volume_scratch_bytes";
+    const Path root = AssetsGraphicsTestCaseRoot("volume_scratch_bytes");
     const bool prepared = PrepareCleanDirectory(root);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, prepared);
 
@@ -1557,7 +1510,7 @@ static bool ParseMaterialEntryFromMetaText(
         return false;
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    const Path assetRoot = Path("__build_obj") / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / "material_meta" / "assets";
+    const Path assetRoot = AssetsGraphicsTestCaseRoot("material_meta") / "assets";
     const Path nwbFilePath = assetRoot / "materials" / "test_material.nwb";
     return NWB::Impl::ParseMaterialCookMetadata(shaderCook, assetRoot, "project", nwbFilePath, doc, outEntry);
 }

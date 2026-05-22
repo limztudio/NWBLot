@@ -4,6 +4,8 @@
 
 #include "fbx_to_nwb.h"
 
+#include <global/unique_ptr.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -771,34 +773,35 @@ bool DeduplicateFlatGeometry(
     UtilityVector<u32>& outIndices,
     AString& outError
 ){
-    outIndices.resize(inOutFlatVertices.size());
+    const usize flatVertexCount = inOutFlatVertices.size();
+    outIndices.clear();
+    UniquePtr<u32[]> generatedIndices = MakeUnique<u32[]>(flatVertexCount);
 
     ufbx_vertex_stream stream = {};
     stream.data = inOutFlatVertices.data();
-    stream.vertex_count = inOutFlatVertices.size();
+    stream.vertex_count = flatVertexCount;
     stream.vertex_size = sizeof(FlatGeometryVertex);
 
     ufbx_error error = {};
     const usize uniqueVertexCount = static_cast<usize>(ufbx_generate_indices(
         &stream,
         1u,
-        outIndices.data(),
-        outIndices.size(),
+        generatedIndices.get(),
+        flatVertexCount,
         nullptr,
         &error
     ));
     if(error.type != UFBX_ERROR_NONE){
-        outIndices.clear();
         outError = "ufbx failed to generate an index buffer: " + FormatUfbxError(error);
         return false;
     }
-    if(uniqueVertexCount > inOutFlatVertices.size()){
-        outIndices.clear();
+    if(uniqueVertexCount > flatVertexCount){
         outError = "ufbx generated more unique vertices than source vertices";
         return false;
     }
 
     inOutFlatVertices.resize(uniqueVertexCount);
+    outIndices.assign(generatedIndices.get(), generatedIndices.get() + flatVertexCount);
     return true;
 }
 

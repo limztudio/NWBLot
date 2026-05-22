@@ -1147,9 +1147,7 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, created);
         if(created){
             NWB::Core::Alloc::ScratchArena<> scratchArena;
-            ::Vector<u8, NWB::Core::Alloc::ScratchArena<>> payload{
-                scratchArena
-            };
+            ::Vector<u8, NWB::Core::Alloc::ScratchArena<>> payload{ scratchArena };
             payload.reserve(4u);
             payload.push_back(1u);
             payload.push_back(2u);

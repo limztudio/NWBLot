@@ -157,9 +157,7 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
     }
 
     Core::Alloc::ScratchArena<> scratchArena;
-    __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{
-        scratchArena
-    };
+    __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{ scratchArena };
     usize sourceVertexBytes = 0u;
     if(!__hidden_renderer_system_geometry::BuildStaticGeometrySourceWords(geometry, sourceVertexWords, sourceVertexBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' source vertex stream size overflows"), StringConvert(geometryPath.c_str()));

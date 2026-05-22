@@ -225,9 +225,7 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
             NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
 
-            NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{
-                frame.projectObjectArena()
-            };
+            NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
             if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
                 NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
                     , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)

@@ -829,9 +829,7 @@ static bool GetVariantBytecode(
     for(const auto& [defineName, value] : entry.implicitDefines)
         mergedDefines.insert_or_assign(AStringView(defineName), AStringView(value));
 
-    Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{
-        scratchArena
-    };
+    Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation")
             , StringConvert(entry.name)
@@ -1342,9 +1340,7 @@ static bool AppendPreparedShadersToVolume(
     Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords
 ){
     Core::GraphicsBytes cookedBytecode{cookArena};
-    ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{
-        cookArena
-    };
+    ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
     outShaderIndexRecords.clear();
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
@@ -1634,15 +1630,11 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
 
     // discover cook input files from asset roots
-    __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{
-        m_arena
-    };
+    __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{ m_arena };
     if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
         return false;
 
-    __hidden_graphics_asset_cooker::DiscoveredBindFileVector bindFiles{
-        m_arena
-    };
+    __hidden_graphics_asset_cooker::DiscoveredBindFileVector bindFiles{ m_arena };
     if(!__hidden_graphics_asset_cooker::DiscoverBindFiles(resolvedPaths.assetRoots, bindFiles))
         return false;
 
@@ -1696,9 +1688,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     if(!__hidden_graphics_asset_cooker::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
         return false;
 
-    Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{
-        m_arena
-    };
+    Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{ m_arena };
     usize shaderIndexRecordCount = 0u;
     if(!__hidden_graphics_asset_cooker::ReserveShaderIndexRecords(preparedPlan.preparedEntries, shaderIndexRecords, shaderIndexRecordCount))
         return false;

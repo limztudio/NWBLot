@@ -237,9 +237,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
             if(!createRuntimeGeometryResources(resolvedGeometry.runtimeGeometry, geometry))
                 continue;
         }
-        else if(!createGeometryResources(resolvedGeometry.geometry, geometry)){
+        else if(!createGeometryResources(resolvedGeometry.geometry, geometry))
             continue;
-        }
 
         if(geometry)
             appendDrawForGeometry(entity, renderer.material, *geometry);

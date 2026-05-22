@@ -369,17 +369,11 @@ bool SkinnedGeometrySystem::dispatchRuntimeMesh(
     const SkinnedGeometrySkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>> skinInfluences{
-        scratchArena
-    };
-    Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>> jointMatrices{
-        scratchArena
-    };
+    Vector<SkinnedGeometrySkinInfluenceGpu, Core::Alloc::ScratchArena<>> skinInfluences{ scratchArena };
+    Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>> jointMatrices{ scratchArena };
     u32 resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkinnedGeometrySkinningMode::LinearBlend;
     if(SkinnedGeometryRuntime::HasSkeletonPose(skeletonPose)){
-        Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>> poseJoints{
-            scratchArena
-        };
+        Vector<SkinnedGeometryJointMatrix, Core::Alloc::ScratchArena<>> poseJoints{ scratchArena };
         if(!SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, resolvedSkinningMode)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometrySystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;

@@ -1292,9 +1292,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<FileLayout, Core::Alloc::ScratchArena<>> layouts{
-        scratchArena
-    };
+    Vector<FileLayout, Core::Alloc::ScratchArena<>> layouts{ scratchArena };
     layouts.reserve(m_files.size());
 
     for(const auto& [path, record] : m_files){
@@ -1680,9 +1678,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     };
 
     Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MetadataIndexRecord, Core::Alloc::ScratchArena<>> sortedRecords{
-        scratchArena
-    };
+    Vector<MetadataIndexRecord, Core::Alloc::ScratchArena<>> sortedRecords{ scratchArena };
     sortedRecords.reserve(m_files.size());
     for(const auto& [path, record] : m_files)
         sortedRecords.push_back(MetadataIndexRecord{ path, record });

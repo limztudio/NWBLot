@@ -142,6 +142,7 @@ static_assert(IsTriviallyCopyable_V<FlatGeometryVertex>);
 struct SkinExportContext{
     UtilityVector<ufbx_node*> joints;
     UtilityVector<GeometryJointMatrix> inverseBindMatrices;
+    HashMap<ufbx_node*, u16> jointLookup;
 };
 
 struct PositionKey{
@@ -493,16 +494,20 @@ bool FindOrAddJoint(
     }
 
     const GeometryJointMatrix convertedMatrix = ToGeometryJointMatrix(inverseBind);
-    for(usize jointIndex = 0u; jointIndex < context.joints.size(); ++jointIndex){
-        if(context.joints[jointIndex] != cluster->bone_node)
-            continue;
+    auto foundJoint = context.jointLookup.find(cluster->bone_node);
+    if(foundJoint != context.jointLookup.end()){
+        const usize jointIndex = static_cast<usize>(foundJoint.value());
+        if(jointIndex >= context.inverseBindMatrices.size()){
+            outError = "internal skeleton joint lookup is out of range";
+            return false;
+        }
         if(!NearlyEqualJointMatrix(context.inverseBindMatrices[jointIndex], convertedMatrix)){
             outError = "selected meshes bind skeleton joint \"" + NodeDisplayName(cluster->bone_node)
                 + "\" with different inverse bind matrices";
             return false;
         }
 
-        outJoint = static_cast<u16>(jointIndex);
+        outJoint = foundJoint.value();
         return true;
     }
 
@@ -514,6 +519,7 @@ bool FindOrAddJoint(
     outJoint = static_cast<u16>(context.joints.size());
     context.joints.push_back(cluster->bone_node);
     context.inverseBindMatrices.push_back(convertedMatrix);
+    context.jointLookup.emplace(cluster->bone_node, outJoint);
     return true;
 }
 
@@ -546,6 +552,7 @@ bool BuildClusterJointMap(
     const usize reservedJointCount = context.joints.size() + skin->clusters.count;
     context.joints.reserve(reservedJointCount);
     context.inverseBindMatrices.reserve(reservedJointCount);
+    context.jointLookup.reserve(reservedJointCount);
     outClusterJoints.reserve(skin->clusters.count);
     for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
         ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];

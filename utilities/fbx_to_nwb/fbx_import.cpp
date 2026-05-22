@@ -746,6 +746,89 @@ bool EstimateSelectedTriangleCorners(
     return true;
 }
 
+bool ValidateFlatGeometry(const UtilityVector<FlatGeometryVertex>& flatVertices, AString& outError){
+    if(flatVertices.empty()){
+        outError = "selected meshes produced no triangles";
+        return false;
+    }
+    if(flatVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
+        outError = "geometry has more than u32-addressable vertices";
+        return false;
+    }
+
+    return true;
+}
+
+bool DeduplicateFlatGeometry(
+    UtilityVector<FlatGeometryVertex>& inOutFlatVertices,
+    UtilityVector<u32>& outIndices,
+    AString& outError
+){
+    outIndices.resize(inOutFlatVertices.size());
+
+    ufbx_vertex_stream stream = {};
+    stream.data = inOutFlatVertices.data();
+    stream.vertex_count = inOutFlatVertices.size();
+    stream.vertex_size = sizeof(FlatGeometryVertex);
+
+    ufbx_error error = {};
+    const usize uniqueVertexCount = static_cast<usize>(ufbx_generate_indices(
+        &stream,
+        1u,
+        outIndices.data(),
+        outIndices.size(),
+        nullptr,
+        &error
+    ));
+    if(error.type != UFBX_ERROR_NONE){
+        outIndices.clear();
+        outError = "ufbx failed to generate an index buffer: " + FormatUfbxError(error);
+        return false;
+    }
+    if(uniqueVertexCount > inOutFlatVertices.size()){
+        outIndices.clear();
+        outError = "ufbx generated more unique vertices than source vertices";
+        return false;
+    }
+
+    inOutFlatVertices.resize(uniqueVertexCount);
+    return true;
+}
+
+bool ExpandFlatGeometryIndices(
+    const UtilityVector<FlatGeometryVertex>& flatVertices,
+    UtilityVector<u32>& outIndices,
+    AString& outError
+){
+    if(flatVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
+        outError = "geometry has more than u32-addressable vertices";
+        return false;
+    }
+
+    outIndices.clear();
+    outIndices.reserve(flatVertices.size());
+    for(usize index = 0u; index < flatVertices.size(); ++index)
+        outIndices.push_back(static_cast<u32>(index));
+    return true;
+}
+
+void ExportFlatGeometry(
+    const UtilityVector<FlatGeometryVertex>& flatVertices,
+    const bool wantsSkinning,
+    UtilityVector<GeometryVertex>& outVertices,
+    UtilityVector<GeometrySkinInfluence>& outSkin
+){
+    outVertices.reserve(flatVertices.size());
+    if(wantsSkinning)
+        outSkin.reserve(flatVertices.size());
+
+    for(const FlatGeometryVertex& flatVertex : flatVertices){
+        outVertices.push_back(flatVertex.vertex);
+        if(wantsSkinning)
+            outSkin.push_back(flatVertex.skin);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -963,57 +1046,19 @@ bool BuildGeometry(
         }
     }
 
-    if(flatVertices.empty()){
-        outError = "selected meshes produced no triangles";
+    if(!__hidden_fbx_import::ValidateFlatGeometry(flatVertices, outError))
         return false;
-    }
-    if(flatVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        outError = "geometry has more than u32-addressable vertices";
-        return false;
-    }
 
     if(options.deduplicate){
-        outIndices.resize(flatVertices.size());
-        ufbx_vertex_stream stream = {};
-        stream.data = flatVertices.data();
-        stream.vertex_count = flatVertices.size();
-        stream.vertex_size = sizeof(__hidden_fbx_import::FlatGeometryVertex);
-
-        ufbx_error error = {};
-        const usize uniqueVertexCount = static_cast<usize>(ufbx_generate_indices(
-            &stream,
-            1u,
-            outIndices.data(),
-            outIndices.size(),
-            nullptr,
-            &error
-        ));
-        if(error.type != UFBX_ERROR_NONE){
-            outError = "ufbx failed to generate an index buffer: " + __hidden_fbx_import::FormatUfbxError(error);
+        if(!__hidden_fbx_import::DeduplicateFlatGeometry(flatVertices, outIndices, outError))
             return false;
-        }
-        if(uniqueVertexCount > static_cast<usize>(Limit<u32>::s_Max)){
-            outError = "deduplicated geometry has more than u32-addressable vertices";
-            return false;
-        }
-
-        flatVertices.resize(uniqueVertexCount);
     }
     else{
-        outIndices.clear();
-        outIndices.reserve(flatVertices.size());
-        for(usize index = 0u; index < flatVertices.size(); ++index)
-            outIndices.push_back(static_cast<u32>(index));
+        if(!__hidden_fbx_import::ExpandFlatGeometryIndices(flatVertices, outIndices, outError))
+            return false;
     }
 
-    outVertices.reserve(flatVertices.size());
-    if(wantsSkinning)
-        outSkin.reserve(flatVertices.size());
-    for(const __hidden_fbx_import::FlatGeometryVertex& flatVertex : flatVertices){
-        outVertices.push_back(flatVertex.vertex);
-        if(wantsSkinning)
-            outSkin.push_back(flatVertex.skin);
-    }
+    __hidden_fbx_import::ExportFlatGeometry(flatVertices, wantsSkinning, outVertices, outSkin);
     if(wantsSkinning){
         if(skinContext.joints.empty()){
             outError = "skinned geometry did not produce any skeleton joints";

@@ -36,6 +36,7 @@ struct MaterialCookEntry{
     using ParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
 
     Name virtualPath = NAME_NONE;
+    Name materialInterface = NAME_NONE;
     ShaderCook::CookString shaderVariant;
     StageShaderMap stageShaders;
     ParameterMap parameters;
@@ -48,6 +49,7 @@ struct MaterialCookEntry{
 
     void reset(){
         virtualPath = NAME_NONE;
+        materialInterface = NAME_NONE;
         shaderVariant = Core::ShaderArchive::s_DefaultVariant;
         stageShaders.clear();
         parameters.clear();
@@ -65,6 +67,10 @@ struct MaterialCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MaterialCookEntry& outEntry
+);
+[[nodiscard]] bool ValidateMaterialCookInterfaces(
+    const ShaderCook::CookVector<ShaderCook::MaterialBindEntry>& materialBindEntries,
+    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);
 

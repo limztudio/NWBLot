@@ -216,6 +216,111 @@ float4 nwbMaterialFindFloat4(const NwbMeshInstanceData instance, const uint2 key
     return result;
 }
 
+float3 nwbMaterialFindFloat3(const NwbMeshInstanceData instance, const uint2 key, const float3 fallbackValue){
+    const float4 value = nwbMaterialFindFloat4(instance, key, float4(fallbackValue.x, fallbackValue.y, fallbackValue.z, 0.0));
+    return value.xyz;
+}
+
+float2 nwbMaterialFindFloat2(const NwbMeshInstanceData instance, const uint2 key, const float2 fallbackValue){
+    const float4 value = nwbMaterialFindFloat4(instance, key, float4(fallbackValue.x, fallbackValue.y, 0.0, 0.0));
+    return value.xy;
+}
+
+float nwbMaterialFindFloat(const NwbMeshInstanceData instance, const uint2 key, const float fallbackValue){
+    const float4 value = nwbMaterialFindFloat4(instance, key, float4(fallbackValue, 0.0, 0.0, 0.0));
+    return value.x;
+}
+
+int4 nwbMaterialFindInt4(const NwbMeshInstanceData instance, const uint2 key, const int4 fallbackValue){
+    NwbMaterialParameterData parameter;
+    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_INT, parameter))
+        return fallbackValue;
+
+    const int4 value = asint(parameter.data);
+    const uint componentCount = min(parameter.meta.w, 4u);
+    int4 result = fallbackValue;
+    for(uint i = 0u; i < componentCount; ++i)
+        result[i] = value[i];
+
+    return result;
+}
+
+int3 nwbMaterialFindInt3(const NwbMeshInstanceData instance, const uint2 key, const int3 fallbackValue){
+    const int4 value = nwbMaterialFindInt4(instance, key, int4(fallbackValue.x, fallbackValue.y, fallbackValue.z, 0));
+    return value.xyz;
+}
+
+int2 nwbMaterialFindInt2(const NwbMeshInstanceData instance, const uint2 key, const int2 fallbackValue){
+    const int4 value = nwbMaterialFindInt4(instance, key, int4(fallbackValue.x, fallbackValue.y, 0, 0));
+    return value.xy;
+}
+
+int nwbMaterialFindInt(const NwbMeshInstanceData instance, const uint2 key, const int fallbackValue){
+    const int4 value = nwbMaterialFindInt4(instance, key, int4(fallbackValue, 0, 0, 0));
+    return value.x;
+}
+
+uint4 nwbMaterialFindUInt4(const NwbMeshInstanceData instance, const uint2 key, const uint4 fallbackValue){
+    NwbMaterialParameterData parameter;
+    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_UINT, parameter))
+        return fallbackValue;
+
+    const uint componentCount = min(parameter.meta.w, 4u);
+    uint4 result = fallbackValue;
+    for(uint i = 0u; i < componentCount; ++i)
+        result[i] = parameter.data[i];
+
+    return result;
+}
+
+uint3 nwbMaterialFindUInt3(const NwbMeshInstanceData instance, const uint2 key, const uint3 fallbackValue){
+    const uint4 value = nwbMaterialFindUInt4(instance, key, uint4(fallbackValue.x, fallbackValue.y, fallbackValue.z, 0u));
+    return value.xyz;
+}
+
+uint2 nwbMaterialFindUInt2(const NwbMeshInstanceData instance, const uint2 key, const uint2 fallbackValue){
+    const uint4 value = nwbMaterialFindUInt4(instance, key, uint4(fallbackValue.x, fallbackValue.y, 0u, 0u));
+    return value.xy;
+}
+
+uint nwbMaterialFindUInt(const NwbMeshInstanceData instance, const uint2 key, const uint fallbackValue){
+    const uint4 value = nwbMaterialFindUInt4(instance, key, uint4(fallbackValue, 0u, 0u, 0u));
+    return value.x;
+}
+
+bool4 nwbMaterialFindBool4(const NwbMeshInstanceData instance, const uint2 key, const bool4 fallbackValue){
+    NwbMaterialParameterData parameter;
+    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_BOOL, parameter))
+        return fallbackValue;
+
+    bool4 result = fallbackValue;
+    if(parameter.meta.w > 0u)
+        result.x = parameter.data.x != 0u;
+    if(parameter.meta.w > 1u)
+        result.y = parameter.data.y != 0u;
+    if(parameter.meta.w > 2u)
+        result.z = parameter.data.z != 0u;
+    if(parameter.meta.w > 3u)
+        result.w = parameter.data.w != 0u;
+
+    return result;
+}
+
+bool3 nwbMaterialFindBool3(const NwbMeshInstanceData instance, const uint2 key, const bool3 fallbackValue){
+    const bool4 value = nwbMaterialFindBool4(instance, key, bool4(fallbackValue.x, fallbackValue.y, fallbackValue.z, false));
+    return bool3(value.x, value.y, value.z);
+}
+
+bool2 nwbMaterialFindBool2(const NwbMeshInstanceData instance, const uint2 key, const bool2 fallbackValue){
+    const bool4 value = nwbMaterialFindBool4(instance, key, bool4(fallbackValue.x, fallbackValue.y, false, false));
+    return value.xy;
+}
+
+bool nwbMaterialFindBool(const NwbMeshInstanceData instance, const uint2 key, const bool fallbackValue){
+    const bool4 value = nwbMaterialFindBool4(instance, key, bool4(fallbackValue, false, false, false));
+    return value.x;
+}
+
 float3 nwbMeshTransformPosition(float3 localPosition, const NwbMeshInstanceData instance){
     return nwbRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
 }

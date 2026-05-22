@@ -43,6 +43,46 @@ using DestinationArena = NWB::Tests::TestArena<DestinationArenaTag>;
     return MStringView(text.data(), text.size());
 }
 
+template<usize N>
+[[nodiscard]] static MStringView LiteralView(const char (&text)[N]){
+    return MStringView(text, N > 0u ? N - 1u : 0u);
+}
+
+[[nodiscard]] static const Value* FindField(const Value& value, MStringView name){
+    if(!value.isMap())
+        return nullptr;
+    return value.findField(name);
+}
+
+static void CheckStringValue(TestContext& context, const Value* value, MStringView expected){
+    NWB_METASCRIPT_TEST_CHECK(context, value != nullptr);
+    if(!value)
+        return;
+
+    NWB_METASCRIPT_TEST_CHECK(context, value->isString());
+    if(value->isString())
+        NWB_METASCRIPT_TEST_CHECK(context, value->asString() == expected);
+}
+
+static void CheckStringField(TestContext& context, const Value& value, MStringView fieldName, MStringView expected){
+    CheckStringValue(context, FindField(value, fieldName), expected);
+}
+
+static void CheckParseFailsWithMessage(TestContext& context, const AString& source, MStringView expectedMessage){
+    DestinationArena arena;
+    Document document(arena.arena);
+
+    const bool parsed = document.parse(ViewOf(source));
+    NWB_METASCRIPT_TEST_CHECK(context, !parsed);
+    NWB_METASCRIPT_TEST_CHECK(context, document.hasErrors());
+    if(document.errors().empty())
+        return;
+
+    const auto& error = document.errors()[0u];
+    const MStringView message(error.message.data(), error.message.size());
+    NWB_METASCRIPT_TEST_CHECK(context, message == expectedMessage);
+}
+
 static void CheckSingleStringListValue(TestContext& context, const Value& value, const AString& text){
     NWB_METASCRIPT_TEST_CHECK(context, value.isList());
     NWB_METASCRIPT_TEST_CHECK(context, value.isList() && value.asList().size() == 1u);
@@ -236,6 +276,131 @@ static void TestExponentDoubleLiterals(TestContext& context){
     NWB_METASCRIPT_TEST_CHECK(context, Abs(list[3u].asDouble() - 200.0) < 0.0000000001);
 }
 
+static void TestBindStyleStructDeclarations(TestContext& context){
+    DestinationArena arena;
+    Document document(arena.arena);
+    const AString source =
+        "material_bind asset;\n"
+        "\n"
+        "[material_constant]\n"
+        "struct NwbProjectBxdfSurfaceMaterial{\n"
+        "    [default(\"float4(1.0, 1.0, 1.0, 1.0)\")]\n"
+        "    float4 base_color;\n"
+        "\n"
+        "    [default(\"float(0.5)\")]\n"
+        "    float roughness;\n"
+        "};\n"
+        "\n"
+        "[material_mutable]\n"
+        "struct NwbProjectBxdfRuntimeMaterial{\n"
+        "    [default(\"float(1.0)\")]\n"
+        "    float fade_alpha;\n"
+        "};\n"
+        "\n"
+        "NwbProjectBxdfSurfaceMaterial surface;\n"
+        "NwbProjectBxdfRuntimeMaterial runtime;\n"
+    ;
+
+    const bool parsed = document.parse(ViewOf(source));
+    NWB_METASCRIPT_TEST_CHECK(context, parsed);
+    if(!parsed)
+        return;
+
+    NWB_METASCRIPT_TEST_CHECK(context, document.assetType() == LiteralView("material_bind"));
+    NWB_METASCRIPT_TEST_CHECK(context, document.assetVariable() == LiteralView("asset"));
+
+    const Value& asset = document.asset();
+    const Value* structs = FindField(asset, LiteralView("structs"));
+    NWB_METASCRIPT_TEST_CHECK(context, structs != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, structs && structs->isMap());
+    if(!structs || !structs->isMap())
+        return;
+
+    const Value* surfaceStruct = structs->findField(LiteralView("NwbProjectBxdfSurfaceMaterial"));
+    const Value* runtimeStruct = structs->findField(LiteralView("NwbProjectBxdfRuntimeMaterial"));
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceStruct != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, runtimeStruct != nullptr);
+    if(!surfaceStruct || !runtimeStruct)
+        return;
+
+    const Value* surfaceAttributes = FindField(*surfaceStruct, LiteralView("attributes"));
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes && surfaceAttributes->isList());
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u);
+    if(surfaceAttributes && surfaceAttributes->isList() && surfaceAttributes->asList().size() == 1u)
+        CheckStringField(context, surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
+
+    const Value* surfaceFields = FindField(*surfaceStruct, LiteralView("fields"));
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceFields != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceFields && surfaceFields->isList());
+    NWB_METASCRIPT_TEST_CHECK(context, surfaceFields && surfaceFields->isList() && surfaceFields->asList().size() == 2u);
+    if(!surfaceFields || !surfaceFields->isList() || surfaceFields->asList().size() != 2u)
+        return;
+
+    const Value& baseColorField = surfaceFields->asList()[0u];
+    CheckStringField(context, baseColorField, LiteralView("type"), LiteralView("float4"));
+    CheckStringField(context, baseColorField, LiteralView("name"), LiteralView("base_color"));
+
+    const Value* baseColorAttributes = FindField(baseColorField, LiteralView("attributes"));
+    NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes && baseColorAttributes->isList());
+    NWB_METASCRIPT_TEST_CHECK(context, baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u);
+    if(baseColorAttributes && baseColorAttributes->isList() && baseColorAttributes->asList().size() == 1u){
+        const Value& defaultAttribute = baseColorAttributes->asList()[0u];
+        CheckStringField(context, defaultAttribute, LiteralView("name"), LiteralView("default"));
+
+        const Value* arguments = FindField(defaultAttribute, LiteralView("arguments"));
+        NWB_METASCRIPT_TEST_CHECK(context, arguments != nullptr);
+        NWB_METASCRIPT_TEST_CHECK(context, arguments && arguments->isList());
+        NWB_METASCRIPT_TEST_CHECK(context, arguments && arguments->isList() && arguments->asList().size() == 1u);
+        if(arguments && arguments->isList() && arguments->asList().size() == 1u)
+            CheckStringValue(context, &arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
+    }
+
+    const Value* instances = FindField(asset, LiteralView("instances"));
+    NWB_METASCRIPT_TEST_CHECK(context, instances != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, instances && instances->isList());
+    NWB_METASCRIPT_TEST_CHECK(context, instances && instances->isList() && instances->asList().size() == 2u);
+    if(!instances || !instances->isList() || instances->asList().size() != 2u)
+        return;
+
+    CheckStringField(context, instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
+    CheckStringField(context, instances->asList()[0u], LiteralView("name"), LiteralView("surface"));
+    CheckStringField(context, instances->asList()[1u], LiteralView("type"), LiteralView("NwbProjectBxdfRuntimeMaterial"));
+    CheckStringField(context, instances->asList()[1u], LiteralView("name"), LiteralView("runtime"));
+}
+
+static void TestBindStyleStructDuplicateRejections(TestContext& context){
+    const AString duplicateFieldSource =
+        "material_bind asset;\n"
+        "struct NwbDup{\n"
+        "    float value;\n"
+        "    float value;\n"
+        "};\n"
+    ;
+    CheckParseFailsWithMessage(context, duplicateFieldSource, LiteralView("duplicate struct field declaration"));
+
+    const AString duplicateInstanceSource =
+        "material_bind asset;\n"
+        "struct NwbDup{\n"
+        "    float value;\n"
+        "};\n"
+        "NwbDup runtime;\n"
+        "NwbDup runtime;\n"
+    ;
+    CheckParseFailsWithMessage(context, duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
+
+    const AString existingInstanceSource =
+        "material_bind asset;\n"
+        "asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n"
+        "struct NwbDup{\n"
+        "    float value;\n"
+        "};\n"
+        "NwbDup runtime;\n"
+    ;
+    CheckParseFailsWithMessage(context, existingInstanceSource, LiteralView("duplicate struct instance declaration"));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -262,6 +427,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("metascript", [](NWB::Tests::TestContext& context){
     __hidden_metascript_tests::TestAppendExistingListElementMoveCopiesBeforeDestroy(context);
     __hidden_metascript_tests::TestListAppendExistingElementCopiesBeforeReallocation(context);
     __hidden_metascript_tests::TestExponentDoubleLiterals(context);
+    __hidden_metascript_tests::TestBindStyleStructDeclarations(context);
+    __hidden_metascript_tests::TestBindStyleStructDuplicateRejections(context);
 })
 
 

@@ -16,6 +16,7 @@
 #include <core/metascript/parser.h>
 
 #include <core/common/log.h>
+#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,8 +66,10 @@ using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena<>>;
 
 static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
+static constexpr AStringView s_AssetTypeMaterialBind = "material_bind";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
+static constexpr AStringView s_MaterialBindExtension = ".bind";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -589,21 +592,22 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// .nwb metadata parsing helpers
+// metascript metadata parsing helpers
 
 
-static bool ParseNwbDocument(const Path& nwbFilePath, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
+static bool ParseMetascriptDocument(const Path& sourceFilePath, const AStringView sourceKind, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
     CookString metaText{arena};
-    if(!ReadTextFile(nwbFilePath, metaText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read meta '{}'"), PathToString<tchar>(nwbFilePath));
+    if(!ReadTextFile(sourceFilePath, metaText)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read {} '{}'"), StringConvert(sourceKind), PathToString<tchar>(sourceFilePath));
         return false;
     }
     StripUtf8Bom(metaText);
 
     if(!outDoc.parse(AStringView(metaText))){
         for(const Metascript::ParseError& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}' parse error at {}:{}: {}")
-                , PathToString<tchar>(nwbFilePath)
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}")
+                , StringConvert(sourceKind)
+                , PathToString<tchar>(sourceFilePath)
                 , err.line
                 , err.column
                 , StringConvert(AStringView(err.message.data(), err.message.size()))
@@ -612,6 +616,14 @@ static bool ParseNwbDocument(const Path& nwbFilePath, ShaderCook::CookArena& are
         return false;
     }
     return true;
+}
+
+static bool ParseNwbDocument(const Path& nwbFilePath, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
+    return ParseMetascriptDocument(nwbFilePath, "Meta", arena, outDoc);
+}
+
+static bool ParseMaterialBindDocument(const Path& bindFilePath, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
+    return ParseMetascriptDocument(bindFilePath, "Bind", arena, outDoc);
 }
 
 static const Metascript::Value* FindAssetMapValue(const Path& nwbFilePath, const Metascript::Document& doc, const AStringView metaKind){
@@ -813,6 +825,856 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// material bind parsing helpers
+
+
+static bool IsMaterialBindIdentifier(const AStringView text){
+    if(text.empty())
+        return false;
+
+    const auto isAlpha = [](const char ch){
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+    };
+    const auto isDigit = [](const char ch){
+        return ch >= '0' && ch <= '9';
+    };
+    const auto isIdentifierChar = [&](const char ch){
+        return isAlpha(ch) || isDigit(ch) || ch == '_';
+    };
+
+    if(!isAlpha(text[0]) && text[0] != '_')
+        return false;
+
+    for(usize i = 1u; i < text.size(); ++i){
+        if(!isIdentifierChar(text[i]))
+            return false;
+    }
+    return true;
+}
+
+struct MaterialBindFieldTypeInfo{
+    AStringView lookupFunctionName;
+};
+
+static bool TryParseMaterialBindFieldType(
+    const AStringView typeName,
+    MaterialBindFieldTypeInfo& outInfo
+){
+    outInfo = {};
+    u32 componentCount = 0u;
+
+    const auto matchesScalarOrVector = [typeName, &componentCount](const AStringView scalarName){
+        if(typeName == scalarName){
+            componentCount = 1u;
+            return true;
+        }
+        if(typeName.size() != scalarName.size() + 1u)
+            return false;
+        if(typeName.substr(0u, scalarName.size()) != scalarName)
+            return false;
+
+        const char suffix = typeName[scalarName.size()];
+        if(suffix < '2' || suffix > '4')
+            return false;
+
+        componentCount = static_cast<u32>(suffix - '0');
+        return true;
+    };
+
+    static constexpr AStringView s_FloatLookupNames[] = {
+        "nwbMaterialFindFloat",
+        "nwbMaterialFindFloat2",
+        "nwbMaterialFindFloat3",
+        "nwbMaterialFindFloat4"
+    };
+    static constexpr AStringView s_IntLookupNames[] = {
+        "nwbMaterialFindInt",
+        "nwbMaterialFindInt2",
+        "nwbMaterialFindInt3",
+        "nwbMaterialFindInt4"
+    };
+    static constexpr AStringView s_UIntLookupNames[] = {
+        "nwbMaterialFindUInt",
+        "nwbMaterialFindUInt2",
+        "nwbMaterialFindUInt3",
+        "nwbMaterialFindUInt4"
+    };
+    static constexpr AStringView s_BoolLookupNames[] = {
+        "nwbMaterialFindBool",
+        "nwbMaterialFindBool2",
+        "nwbMaterialFindBool3",
+        "nwbMaterialFindBool4"
+    };
+
+    const auto matchWithLookupNames = [&](const AStringView scalarName, const AStringView* lookupNames){
+        if(!matchesScalarOrVector(scalarName))
+            return false;
+        outInfo.lookupFunctionName = lookupNames[componentCount - 1u];
+        return true;
+    };
+
+    return
+        matchWithLookupNames("float", s_FloatLookupNames)
+        || matchWithLookupNames("int", s_IntLookupNames)
+        || matchWithLookupNames("uint", s_UIntLookupNames)
+        || matchWithLookupNames("bool", s_BoolLookupNames)
+    ;
+}
+
+static bool IsMaterialBindBlockClassAttribute(const AStringView attributeName){
+    return attributeName == "material_constant" || attributeName == "material_mutable";
+}
+
+static bool ParseMaterialBindStringField(
+    const Path& bindFilePath,
+    const Metascript::Value& map,
+    const AStringView fieldName,
+    const AStringView contextLabel,
+    CookString& outValue
+){
+    outValue.clear();
+
+    const Metascript::Value* value = map.findField(fieldName);
+    if(!value || !value->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} field '{}' must be a string")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(contextLabel)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const Metascript::MStringView text = value->asString();
+    outValue.assign(text.data(), text.size());
+    return true;
+}
+
+static bool ParseMaterialBindAttributeList(
+    const Path& bindFilePath,
+    const Metascript::Value* attributesValue,
+    const AStringView contextLabel,
+    ShaderCook::CookArena& arena,
+    ShaderCook::CookVector<ShaderCook::MaterialBindAttribute>& outAttributes
+){
+    outAttributes.clear();
+    if(!attributesValue)
+        return true;
+
+    if(!attributesValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attributes must be a list")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(contextLabel)
+        );
+        return false;
+    }
+
+    const auto& attributeList = attributesValue->asList();
+    outAttributes.reserve(attributeList.size());
+    for(const Metascript::Value& attributeValue : attributeList){
+        if(!attributeValue.isMap()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attribute entries must be maps")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(contextLabel)
+            );
+            return false;
+        }
+
+        ShaderCook::MaterialBindAttribute attribute(arena);
+        if(!ParseMaterialBindStringField(bindFilePath, attributeValue, "name", contextLabel, attribute.name))
+            return false;
+        if(!IsMaterialBindIdentifier(attribute.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(attribute.name)
+                , StringConvert(contextLabel)
+            );
+            return false;
+        }
+
+        const Metascript::Value* argumentsValue = attributeValue.findField("arguments");
+        if(argumentsValue){
+            if(!argumentsValue->isList()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be a list")
+                    , PathToString<tchar>(bindFilePath)
+                    , StringConvert(attribute.name)
+                );
+                return false;
+            }
+
+            const auto& argumentList = argumentsValue->asList();
+            attribute.arguments.reserve(argumentList.size());
+            for(const Metascript::Value& argumentValue : argumentList){
+                if(!argumentValue.isString()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': attribute '{}' arguments must be strings")
+                        , PathToString<tchar>(bindFilePath)
+                        , StringConvert(attribute.name)
+                    );
+                    return false;
+                }
+
+                const Metascript::MStringView argumentText = argumentValue.asString();
+                attribute.arguments.emplace_back(argumentText.data(), argumentText.size(), arena);
+            }
+        }
+
+        outAttributes.push_back(Move(attribute));
+    }
+
+    return true;
+}
+
+static bool ValidateMaterialBindStructAttributes(
+    const Path& bindFilePath,
+    const ShaderCook::MaterialBindStruct& bindStruct
+){
+    bool foundBlockClass = false;
+
+    for(const ShaderCook::MaterialBindAttribute& attribute : bindStruct.attributes){
+        if(!IsMaterialBindBlockClassAttribute(attribute.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(bindStruct.name)
+                , StringConvert(attribute.name)
+            );
+            return false;
+        }
+        if(!attribute.arguments.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' block class attribute '{}' must not have arguments")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(bindStruct.name)
+                , StringConvert(attribute.name)
+            );
+            return false;
+        }
+        if(foundBlockClass){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' declares more than one block class attribute")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(bindStruct.name)
+            );
+            return false;
+        }
+
+        foundBlockClass = true;
+    }
+
+    if(foundBlockClass)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare a material block class attribute")
+        , PathToString<tchar>(bindFilePath)
+        , StringConvert(bindStruct.name)
+    );
+    return false;
+}
+
+static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const ShaderCook::MaterialBindStruct& bindStruct, const ShaderCook::MaterialBindField& field){
+    bool foundDefault = false;
+
+    for(const ShaderCook::MaterialBindAttribute& attribute : field.attributes){
+        if(attribute.name != "default"){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(bindStruct.name)
+                , StringConvert(field.name)
+                , StringConvert(attribute.name)
+            );
+            return false;
+        }
+        if(foundDefault){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares default more than once")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(bindStruct.name)
+                , StringConvert(field.name)
+            );
+            return false;
+        }
+        if(attribute.arguments.size() != 1u || attribute.arguments[0].empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' default attribute requires one non-empty string argument")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(bindStruct.name)
+                , StringConvert(field.name)
+            );
+            return false;
+        }
+
+        foundDefault = true;
+    }
+
+    if(foundDefault)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a default attribute")
+        , PathToString<tchar>(bindFilePath)
+        , StringConvert(bindStruct.name)
+        , StringConvert(field.name)
+    );
+    return false;
+}
+
+static bool ParseMaterialBindField(
+    const Path& bindFilePath,
+    const Metascript::Value& fieldValue,
+    const ShaderCook::MaterialBindStruct& bindStruct,
+    ShaderCook::CookArena& arena,
+    ShaderCook::MaterialBindField& outField
+){
+    if(!fieldValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+        );
+        return false;
+    }
+
+    if(!ParseMaterialBindStringField(bindFilePath, fieldValue, "type", bindStruct.name, outField.type))
+        return false;
+    if(!ParseMaterialBindStringField(bindFilePath, fieldValue, "name", bindStruct.name, outField.name))
+        return false;
+    MaterialBindFieldTypeInfo fieldType;
+    if(!IsMaterialBindIdentifier(outField.type) || !TryParseMaterialBindFieldType(outField.type, fieldType)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(outField.name)
+            , StringConvert(outField.type)
+        );
+        return false;
+    }
+    if(!IsMaterialBindIdentifier(outField.name)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has invalid name")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(outField.name)
+        );
+        return false;
+    }
+    if(!ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField("attributes"), outField.name, arena, outField.attributes))
+        return false;
+    if(!ValidateMaterialBindFieldAttributes(bindFilePath, bindStruct, outField))
+        return false;
+
+    return true;
+}
+
+static bool ParseMaterialBindStruct(
+    const Path& bindFilePath,
+    const Metascript::MStringView structName,
+    const Metascript::Value& structValue,
+    ShaderCook::CookArena& arena,
+    ShaderCook::MaterialBindStruct& outStruct
+){
+    if(!structValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(AStringView(structName.data(), structName.size()))
+        );
+        return false;
+    }
+
+    outStruct.name.assign(structName.data(), structName.size());
+    if(!IsMaterialBindIdentifier(outStruct.name)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(outStruct.name)
+        );
+        return false;
+    }
+    if(!ParseMaterialBindAttributeList(bindFilePath, structValue.findField("attributes"), outStruct.name, arena, outStruct.attributes))
+        return false;
+    if(!ValidateMaterialBindStructAttributes(bindFilePath, outStruct))
+        return false;
+
+    const Metascript::Value* fieldsValue = structValue.findField("fields");
+    if(!fieldsValue || !fieldsValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(outStruct.name)
+        );
+        return false;
+    }
+    if(fieldsValue->asList().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare at least one field")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(outStruct.name)
+        );
+        return false;
+    }
+
+    outStruct.fields.reserve(fieldsValue->asList().size());
+    for(const Metascript::Value& fieldValue : fieldsValue->asList()){
+        ShaderCook::MaterialBindField field(arena);
+        if(!ParseMaterialBindField(bindFilePath, fieldValue, outStruct, arena, field))
+            return false;
+
+        if(outStruct.findField(AStringView(field.name))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate field '{}.{}'")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(outStruct.name)
+                , StringConvert(field.name)
+            );
+            return false;
+        }
+
+        outStruct.fields.push_back(Move(field));
+    }
+
+    return true;
+}
+
+static bool ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookVector<ShaderCook::MaterialBindStruct>& outStructs){
+    outStructs.clear();
+
+    const Metascript::Value* structsValue = asset.findField("structs");
+    if(!structsValue || !structsValue->isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must be a map"), PathToString<tchar>(bindFilePath));
+        return false;
+    }
+
+    const auto& structsMap = structsValue->asMap();
+    if(structsMap.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must not be empty"), PathToString<tchar>(bindFilePath));
+        return false;
+    }
+
+    outStructs.reserve(structsMap.size());
+    for(const auto& [structName, structValue] : structsMap){
+        ShaderCook::MaterialBindStruct bindStruct(arena);
+        if(!ParseMaterialBindStruct(bindFilePath, Metascript::MStringView(structName.data(), structName.size()), structValue, arena, bindStruct))
+            return false;
+        outStructs.push_back(Move(bindStruct));
+    }
+
+    Sort(outStructs.begin(), outStructs.end(), [](const ShaderCook::MaterialBindStruct& lhs, const ShaderCook::MaterialBindStruct& rhs){
+        return lhs.name < rhs.name;
+    });
+    return true;
+}
+
+static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::MaterialBindEntry& outEntry){
+    outEntry.instances.clear();
+
+    const Metascript::Value* instancesValue = asset.findField("instances");
+    if(!instancesValue || !instancesValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances must be a list"), PathToString<tchar>(bindFilePath));
+        return false;
+    }
+    if(instancesValue->asList().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances must not be empty"), PathToString<tchar>(bindFilePath));
+        return false;
+    }
+
+    outEntry.instances.reserve(instancesValue->asList().size());
+    for(const Metascript::Value& instanceValue : instancesValue->asList()){
+        if(!instanceValue.isMap()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.instances entries must be maps"), PathToString<tchar>(bindFilePath));
+            return false;
+        }
+
+        ShaderCook::MaterialBindInstance instance(arena);
+        if(!ParseMaterialBindStringField(bindFilePath, instanceValue, "type", "instance", instance.type))
+            return false;
+        if(!ParseMaterialBindStringField(bindFilePath, instanceValue, "name", "instance", instance.name))
+            return false;
+        if(!IsMaterialBindIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(instance.name)
+                , StringConvert(instance.type)
+            );
+            return false;
+        }
+        if(!IsMaterialBindIdentifier(instance.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid instance name '{}'")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(instance.name)
+            );
+            return false;
+        }
+        if(outEntry.findInstance(AStringView(instance.name))){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate instance name '{}'")
+                , PathToString<tchar>(bindFilePath)
+                , StringConvert(instance.name)
+            );
+            return false;
+        }
+
+        outEntry.instances.push_back(Move(instance));
+    }
+
+    return true;
+}
+
+static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, ShaderCook::CookArena& arena, ShaderCook::MaterialBindEntry& outEntry){
+    outEntry.reset();
+
+    if(CanonicalAssetType(doc).view() != s_AssetTypeMaterialBind){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset type must be '{}'")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(s_AssetTypeMaterialBind)
+        );
+        return false;
+    }
+
+    outEntry.source = PathToString(arena, bindFilePath);
+    if(!ValidatePairedSourceExtension(bindFilePath, outEntry.source, s_MaterialBindExtension, "Material bind"))
+        return false;
+
+    const Metascript::Value* assetValue = FindAssetMapValue(bindFilePath, doc, "Material bind");
+    if(!assetValue)
+        return false;
+
+    if(!ParseMaterialBindStructs(bindFilePath, *assetValue, arena, outEntry.structs))
+        return false;
+    if(!ParseMaterialBindInstances(bindFilePath, *assetValue, arena, outEntry))
+        return false;
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// material bind generated Slang include helpers
+
+
+static char ToGeneratedAsciiUpper(const char ch){
+    return (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
+}
+
+static bool IsGeneratedAlphaNumeric(const char ch){
+    return
+        (ch >= 'A' && ch <= 'Z')
+        || (ch >= 'a' && ch <= 'z')
+        || (ch >= '0' && ch <= '9')
+    ;
+}
+
+static void AppendGeneratedUpperIdentifier(const AStringView text, CookString& inOutText){
+    const usize beginSize = inOutText.size();
+    for(const char ch : text)
+        inOutText += IsGeneratedAlphaNumeric(ch) ? ToGeneratedAsciiUpper(ch) : '_';
+    if(inOutText.size() == beginSize)
+        inOutText += "VALUE";
+}
+
+static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& inOutText){
+    const usize beginSize = inOutText.size();
+    bool upperNext = true;
+    for(const char ch : text){
+        if(ch == '_'){
+            upperNext = true;
+            continue;
+        }
+
+        if(upperNext)
+            inOutText += ToGeneratedAsciiUpper(ch);
+        else
+            inOutText += ch;
+        upperNext = false;
+    }
+    if(inOutText.size() == beginSize)
+        inOutText += "Value";
+}
+
+static void AppendHexU32Slang(const u32 value, CookString& inOutText){
+    static constexpr char s_HexDigits[] = "0123456789abcdef";
+    inOutText += "0x";
+    for(u32 nibbleIndex = 0u; nibbleIndex < 8u; ++nibbleIndex){
+        const u32 shift = (7u - nibbleIndex) * 4u;
+        inOutText += s_HexDigits[(value >> shift) & 0xfu];
+    }
+    inOutText += 'u';
+}
+
+static CookString BuildMaterialBindIncludeVirtualPath(ShaderCook::CookArena& arena, const ShaderCook::MaterialBindEntry& entry){
+    CookString includePath(entry.virtualPath, arena);
+    includePath += s_MaterialBindExtension;
+    return includePath;
+}
+
+static CookString BuildMaterialBindIncludeGuard(ShaderCook::CookArena& arena, const AStringView includePath){
+    CookString guard("NWB_GENERATED_MATERIAL_BIND_", arena);
+    AppendGeneratedUpperIdentifier(AStringView(includePath), guard);
+    return guard;
+}
+
+static CookString BuildMaterialBindFieldSymbol(
+    ShaderCook::CookArena& arena,
+    const ShaderCook::MaterialBindInstance& instance,
+    const ShaderCook::MaterialBindField& field,
+    const AStringView suffix
+){
+    CookString symbol("NWB_MATERIAL_BIND_", arena);
+    AppendGeneratedUpperIdentifier(AStringView(instance.name), symbol);
+    symbol += '_';
+    AppendGeneratedUpperIdentifier(AStringView(field.name), symbol);
+    symbol += suffix;
+    return symbol;
+}
+
+static CookString BuildMaterialBindFieldAccessorName(
+    ShaderCook::CookArena& arena,
+    const ShaderCook::MaterialBindInstance& instance,
+    const ShaderCook::MaterialBindField& field
+){
+    CookString functionName("nwbMaterialBindLoad", arena);
+    AppendGeneratedPascalIdentifier(AStringView(instance.name), functionName);
+    AppendGeneratedPascalIdentifier(AStringView(field.name), functionName);
+    return functionName;
+}
+
+static CookString BuildMaterialBindBlockAccessorName(ShaderCook::CookArena& arena, const ShaderCook::MaterialBindInstance& instance){
+    CookString functionName("nwbMaterialBindLoad", arena);
+    AppendGeneratedPascalIdentifier(AStringView(instance.name), functionName);
+    return functionName;
+}
+
+static bool RegisterGeneratedMaterialBindSymbol(
+    const AStringView includePath,
+    const AStringView symbol,
+    ScratchHashSet<ScratchString>& inOutSymbols,
+    Alloc::ScratchArena<>& scratchArena
+){
+    ScratchString scratchSymbol(symbol, scratchArena);
+    if(inOutSymbols.insert(Move(scratchSymbol)).second)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': generated symbol '{}' is ambiguous")
+        , StringConvert(includePath)
+        , StringConvert(symbol)
+    );
+    return false;
+}
+
+static AStringView MaterialBindFieldDefaultAttribute(const ShaderCook::MaterialBindField& field){
+    const ShaderCook::MaterialBindAttribute* attribute = field.findAttribute("default");
+    return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0]) : AStringView();
+}
+
+static bool AppendMaterialBindFieldConstants(
+    ShaderCook::CookArena& arena,
+    const AStringView includePath,
+    const ShaderCook::MaterialBindStruct& bindStruct,
+    const ShaderCook::MaterialBindInstance& instance,
+    const ShaderCook::MaterialBindField& field,
+    const CookString& keySymbol,
+    const CookString& defaultSymbol,
+    CookString& inOutSource
+){
+    const AStringView defaultAttribute = MaterialBindFieldDefaultAttribute(field);
+    if(defaultAttribute.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' must declare a default attribute")
+            , StringConvert(includePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(field.name)
+        );
+        return false;
+    }
+
+    CookString keyText(instance.name, arena);
+    keyText += '.';
+    keyText += field.name;
+    const u64 keyHash = UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, AStringView(keyText));
+
+    inOutSource += "static const uint2 ";
+    inOutSource += keySymbol;
+    inOutSource += " = uint2(";
+    AppendHexU32Slang(static_cast<u32>(keyHash & 0xffffffffull), inOutSource);
+    inOutSource += ", ";
+    AppendHexU32Slang(static_cast<u32>(keyHash >> 32u), inOutSource);
+    inOutSource += ");\n";
+
+    inOutSource += "static const ";
+    inOutSource += field.type;
+    inOutSource += ' ';
+    inOutSource += defaultSymbol;
+    inOutSource += " = ";
+    inOutSource += defaultAttribute;
+    inOutSource += ";\n";
+    return true;
+}
+
+static void AppendMaterialBindFieldAccessor(
+    const ShaderCook::MaterialBindField& field,
+    const CookString& keySymbol,
+    const CookString& defaultSymbol,
+    const CookString& functionName,
+    const AStringView lookupFunctionName,
+    CookString& inOutSource
+){
+    inOutSource += field.type;
+    inOutSource += ' ';
+    inOutSource += functionName;
+    inOutSource += "(const NwbMeshInstanceData instance){\n";
+    inOutSource += "    return ";
+    inOutSource += lookupFunctionName;
+    inOutSource += "(instance, ";
+    inOutSource += keySymbol;
+    inOutSource += ", ";
+    inOutSource += defaultSymbol;
+    inOutSource += ");\n";
+    inOutSource += "}\n\n";
+    inOutSource += field.type;
+    inOutSource += ' ';
+    inOutSource += functionName;
+    inOutSource += "(){\n";
+    inOutSource += "    return ";
+    inOutSource += functionName;
+    inOutSource += "(nwbMeshLoadInstance());\n";
+    inOutSource += "}\n";
+}
+
+static bool AppendMaterialBindGeneratedInstance(
+    ShaderCook::CookArena& arena,
+    const AStringView includePath,
+    const ShaderCook::MaterialBindInstance& instance,
+    const ShaderCook::MaterialBindStruct& bindStruct,
+    ScratchHashSet<ScratchString>& inOutSymbols,
+    Alloc::ScratchArena<>& scratchArena,
+    CookString& inOutSource
+){
+    inOutSource += "\n";
+    inOutSource += "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n\n\n";
+
+    for(const ShaderCook::MaterialBindField& field : bindStruct.fields){
+        MaterialBindFieldTypeInfo fieldType;
+        if(!TryParseMaterialBindFieldType(field.type, fieldType)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported type '{}'")
+                , StringConvert(includePath)
+                , StringConvert(bindStruct.name)
+                , StringConvert(field.name)
+                , StringConvert(field.type)
+            );
+            return false;
+        }
+
+        const CookString keySymbol = BuildMaterialBindFieldSymbol(arena, instance, field, "_KEY");
+        const CookString defaultSymbol = BuildMaterialBindFieldSymbol(arena, instance, field, "_DEFAULT");
+        const CookString functionName = BuildMaterialBindFieldAccessorName(arena, instance, field);
+        if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(keySymbol), inOutSymbols, scratchArena))
+            return false;
+        if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(defaultSymbol), inOutSymbols, scratchArena))
+            return false;
+        if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(functionName), inOutSymbols, scratchArena))
+            return false;
+
+        if(!AppendMaterialBindFieldConstants(arena, includePath, bindStruct, instance, field, keySymbol, defaultSymbol, inOutSource))
+            return false;
+        inOutSource += '\n';
+        AppendMaterialBindFieldAccessor(field, keySymbol, defaultSymbol, functionName, fieldType.lookupFunctionName, inOutSource);
+        inOutSource += '\n';
+    }
+
+    const CookString blockFunctionName = BuildMaterialBindBlockAccessorName(arena, instance);
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(blockFunctionName), inOutSymbols, scratchArena))
+        return false;
+
+    inOutSource += bindStruct.name;
+    inOutSource += ' ';
+    inOutSource += blockFunctionName;
+    inOutSource += "(const NwbMeshInstanceData instance){\n";
+    inOutSource += "    ";
+    inOutSource += bindStruct.name;
+    inOutSource += " value;\n";
+    for(const ShaderCook::MaterialBindField& field : bindStruct.fields){
+        const CookString functionName = BuildMaterialBindFieldAccessorName(arena, instance, field);
+        inOutSource += "    value.";
+        inOutSource += field.name;
+        inOutSource += " = ";
+        inOutSource += functionName;
+        inOutSource += "(instance);\n";
+    }
+    inOutSource += "    return value;\n";
+    inOutSource += "}\n\n";
+    inOutSource += bindStruct.name;
+    inOutSource += ' ';
+    inOutSource += blockFunctionName;
+    inOutSource += "(){\n";
+    inOutSource += "    return ";
+    inOutSource += blockFunctionName;
+    inOutSource += "(nwbMeshLoadInstance());\n";
+    inOutSource += "}\n";
+
+    return true;
+}
+
+static bool BuildMaterialBindIncludeSource(ShaderCook::CookArena& arena, const ShaderCook::MaterialBindEntry& entry, CookString& outSource){
+    outSource.clear();
+    if(entry.virtualPath.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), StringConvert(entry.source));
+        return false;
+    }
+
+    const CookString includePath = BuildMaterialBindIncludeVirtualPath(arena, entry);
+    const CookString includeGuard = BuildMaterialBindIncludeGuard(arena, AStringView(includePath));
+
+    Alloc::ScratchArena<> scratchArena;
+    ScratchHashSet<ScratchString> generatedSymbols{
+        0,
+        Hasher<ScratchString>(),
+        EqualTo<ScratchString>(),
+        scratchArena
+    };
+
+    outSource += "// generated by NWBLot graphics asset cook\n";
+    outSource += "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n\n\n";
+    outSource += "#ifndef ";
+    outSource += includeGuard;
+    outSource += "\n#define ";
+    outSource += includeGuard;
+    outSource += "\n\n\n";
+    outSource += "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n\n\n";
+
+    for(const ShaderCook::MaterialBindStruct& bindStruct : entry.structs){
+        if(!RegisterGeneratedMaterialBindSymbol(AStringView(includePath), AStringView(bindStruct.name), generatedSymbols, scratchArena))
+            return false;
+
+        outSource += "struct ";
+        outSource += bindStruct.name;
+        outSource += "{\n";
+        for(const ShaderCook::MaterialBindField& field : bindStruct.fields){
+            outSource += "    ";
+            outSource += field.type;
+            outSource += ' ';
+            outSource += field.name;
+            outSource += ";\n";
+        }
+        outSource += "};\n\n";
+    }
+
+    for(const ShaderCook::MaterialBindInstance& instance : entry.instances){
+        const ShaderCook::MaterialBindStruct* bindStruct = entry.findStruct(AStringView(instance.type));
+        if(!bindStruct){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' references unknown struct type '{}'")
+                , StringConvert(includePath)
+                , StringConvert(instance.name)
+                , StringConvert(instance.type)
+            );
+            return false;
+        }
+
+        if(!AppendMaterialBindGeneratedInstance(arena, AStringView(includePath), instance, *bindStruct, generatedSymbols, scratchArena, outSource))
+            return false;
+    }
+
+    outSource += "\n";
+    outSource += "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n\n\n";
+    outSource += "#endif\n\n\n";
+    outSource += "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\n";
+    return true;
+}
+
+static bool SplitMaterialBindParameterName(const AStringView parameterName, AStringView& outInstanceName, AStringView& outFieldName){
+    const usize separatorIndex = parameterName.find('.');
+    if(separatorIndex == AStringView::npos || separatorIndex == 0u || separatorIndex + 1u >= parameterName.size())
+        return false;
+
+    outInstanceName = parameterName.substr(0u, separatorIndex);
+    outFieldName = parameterName.substr(separatorIndex + 1u);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -832,8 +1694,72 @@ ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFac
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+const ShaderCook::MaterialBindStruct* ShaderCook::MaterialBindEntry::findStruct(const AStringView typeName)const{
+    for(const ShaderCook::MaterialBindStruct& bindStruct : structs){
+        if(AStringView(bindStruct.name) == typeName)
+            return &bindStruct;
+    }
+    return nullptr;
+}
+
+const ShaderCook::MaterialBindAttribute* ShaderCook::MaterialBindField::findAttribute(const AStringView attributeName)const{
+    for(const ShaderCook::MaterialBindAttribute& attribute : attributes){
+        if(AStringView(attribute.name) == attributeName)
+            return &attribute;
+    }
+    return nullptr;
+}
+
+const ShaderCook::MaterialBindField* ShaderCook::MaterialBindStruct::findField(const AStringView fieldName)const{
+    for(const ShaderCook::MaterialBindField& field : fields){
+        if(AStringView(field.name) == fieldName)
+            return &field;
+    }
+    return nullptr;
+}
+
+const ShaderCook::MaterialBindInstance* ShaderCook::MaterialBindEntry::findInstance(const AStringView instanceName)const{
+    for(const ShaderCook::MaterialBindInstance& instance : instances){
+        if(AStringView(instance.name) == instanceName)
+            return &instance;
+    }
+    return nullptr;
+}
+
+bool ShaderCook::MaterialBindEntry::declaresParameter(const AStringView parameterName)const{
+    AStringView instanceName;
+    AStringView fieldName;
+    if(!__hidden_shader_cook::SplitMaterialBindParameterName(parameterName, instanceName, fieldName))
+        return false;
+
+    const ShaderCook::MaterialBindInstance* instance = findInstance(instanceName);
+    if(!instance)
+        return false;
+
+    const ShaderCook::MaterialBindStruct* bindStruct = findStruct(AStringView(instance->type));
+    return bindStruct && bindStruct->findField(fieldName) != nullptr;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
     return __hidden_shader_cook::ParseNwbDocument(nwbFilePath, m_memoryArena, outDoc);
+}
+
+bool ShaderCook::parseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry){
+    outEntry.reset();
+
+    Metascript::Document doc(m_memoryArena);
+    if(!__hidden_shader_cook::ParseMaterialBindDocument(bindFilePath, m_memoryArena, doc))
+        return false;
+
+    return __hidden_shader_cook::ParseMaterialBindSource(bindFilePath, doc, m_memoryArena, outEntry);
+}
+
+bool ShaderCook::buildMaterialBindIncludeSource(const MaterialBindEntry& entry, CookString& outSource){
+    return __hidden_shader_cook::BuildMaterialBindIncludeSource(m_memoryArena, entry, outSource);
 }
 
 bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<CookString, DefineEntry>& defineValues){

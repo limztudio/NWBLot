@@ -46,6 +46,8 @@ namespace __hidden_graphics_asset_cooker{
 
 static constexpr AStringView s_VolumeName = "graphics";
 static constexpr AStringView s_CookerLogPrefix = "GraphicsAssetCooker";
+static constexpr AStringView s_MaterialBindExtension = ".bind";
+static constexpr AStringView s_MaterialBindIncludeCacheDirectoryName = "material_bind_includes";
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
@@ -54,6 +56,7 @@ template<typename T>
 using CookVector = ShaderCook::CookVector<T>;
 using ScratchArena = Core::Alloc::ScratchArena<>;
 using ScratchString = AString<ScratchArena>;
+using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
 
 
 UniquePtr<Core::Assets::IAssetCooker> CreateGraphicsAssetCooker(Core::Alloc::GlobalArena& arena){
@@ -164,13 +167,16 @@ using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
 using PreparedShaderVector = Vector<PreparedShaderEntry, ShaderCook::CookArena>;
 using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
 using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
+using DiscoveredBindFileVector = CookVector<DiscoveredNwbFile>;
 using GeometryCookEntryVector = CookVector<GeometryCookEntry>;
 using SkinnedGeometryCookEntryVector = CookVector<SkinnedGeometryCookEntry>;
 using MaterialCookEntryVector = CookVector<MaterialCookEntry>;
+using MaterialBindEntryVector = CookVector<ShaderCook::MaterialBindEntry>;
 
 struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
     ShaderEntryVector shaderEntries;
+    MaterialBindEntryVector materialBindEntries;
     GeometryCookEntryVector geometryEntries;
     SkinnedGeometryCookEntryVector skinnedGeometryEntries;
     MaterialCookEntryVector materialEntries;
@@ -178,6 +184,7 @@ struct ParsedAssetMetadata{
     explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
         : includeMetadata(arena)
         , shaderEntries(arena)
+        , materialBindEntries(arena)
         , geometryEntries(arena)
         , skinnedGeometryEntries(arena)
         , materialEntries(arena)
@@ -330,18 +337,22 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
 }
 
 
-static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
-    ShaderCook::CookArena& cookArena = outNwbFiles.get_allocator().arena();
+static bool DiscoverFilesWithExtension(
+    const ShaderCook::CookVector<Path>& assetRoots,
+    const AStringView expectedExtension,
+    DiscoveredNwbFileVector& outFiles
+){
+    ShaderCook::CookArena& cookArena = outFiles.get_allocator().arena();
     ScratchArena scratchArena;
     ErrorCode errorCode;
-    HashSet<u64, Hasher<u64>, EqualTo<u64>, ScratchArena> seenNwbPathHashes(
+    HashSet<u64, Hasher<u64>, EqualTo<u64>, ScratchArena> seenPathHashes(
         0,
         Hasher<u64>(),
         EqualTo<u64>(),
         scratchArena
     );
 
-    outNwbFiles.clear();
+    outFiles.clear();
 
     for(const Path& assetRoot : assetRoots){
         CompactString virtualRoot;
@@ -389,21 +400,21 @@ static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, Dis
             const Path& filePath = dirEntry.path();
             ScratchString extension = PathToString(scratchArena, filePath.extension());
             CanonicalizeTextInPlace(extension);
-            if(extension != Core::Assets::s_NwbExtension)
+            if(extension != expectedExtension)
                 continue;
 
             ScratchString normalizedPath = PathToString(scratchArena, filePath.lexically_normal());
             CanonicalizeTextInPlace(normalizedPath);
-            if(!seenNwbPathHashes.insert(ComputeFnv64Text(normalizedPath)).second)
+            if(!seenPathHashes.insert(ComputeFnv64Text(normalizedPath)).second)
                 continue;
 
-            outNwbFiles.emplace_back(cookArena, assetRoot, filePath, normalizedPath, virtualRoot);
+            outFiles.emplace_back(cookArena, assetRoot, filePath, normalizedPath, virtualRoot);
         }
     }
 
     Sort(
-        outNwbFiles.begin(),
-        outNwbFiles.end(),
+        outFiles.begin(),
+        outFiles.end(),
         [](const DiscoveredNwbFile& lhs, const DiscoveredNwbFile& rhs){
             return lhs.normalizedPathText < rhs.normalizedPathText;
         }
@@ -412,11 +423,59 @@ static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, Dis
     return true;
 }
 
+static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
+    return DiscoverFilesWithExtension(assetRoots, Core::Assets::s_NwbExtension, outNwbFiles);
+}
+
+static bool DiscoverBindFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredBindFileVector& outBindFiles){
+    return DiscoverFilesWithExtension(assetRoots, s_MaterialBindExtension, outBindFiles);
+}
+
+static bool AppendIncludeDirectory(
+    const Path& includeDirectory,
+    const ShaderCook::ShaderEntry& entry,
+    IncludeDirectoryScratchSet& seenIncludeDirectories,
+    ShaderCook::CookVector<Path>& outIncludeDirectories,
+    ScratchArena& scratchArena
+){
+    ErrorCode errorCode;
+    const bool isDirectory = IsDirectory(includeDirectory, errorCode);
+    if(errorCode){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query include root '{}' for entry '{}': {}")
+            , PathToString<tchar>(includeDirectory)
+            , StringConvert(entry.name)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    if(!isDirectory){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: include root is not a directory for entry '{}': '{}'")
+            , StringConvert(entry.name)
+            , PathToString<tchar>(includeDirectory)
+        );
+        return false;
+    }
+
+    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexically_normal());
+    CanonicalizeTextInPlace(normalizedIncludeDirectory);
+    if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
+        return true;
+
+    outIncludeDirectories.push_back(includeDirectory);
+    return true;
+}
+
 template<typename AssetRootVector>
-static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector& assetRoots, const ShaderCook::ShaderEntry& entry, ShaderCook::CookVector<Path>& outIncludeDirectories){
+static bool BuildIncludeDirectories(
+    const Path& repoRoot,
+    const AssetRootVector& assetRoots,
+    const Path& materialBindIncludeRoot,
+    const ShaderCook::ShaderEntry& entry,
+    ShaderCook::CookVector<Path>& outIncludeDirectories
+){
     ScratchArena scratchArena;
     ErrorCode errorCode;
-    HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena> seenIncludeDirectories(
+    IncludeDirectoryScratchSet seenIncludeDirectories(
         0,
         Hasher<ScratchString>(),
         EqualTo<ScratchString>(),
@@ -424,8 +483,19 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
     );
 
     outIncludeDirectories.clear();
-    outIncludeDirectories.reserve(entry.includeRoots.size());
-    seenIncludeDirectories.reserve(entry.includeRoots.size());
+    const usize implicitIncludeRootCount = materialBindIncludeRoot.empty() ? 0u : 1u;
+    if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRootCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: include root count overflow for entry '{}'"), StringConvert(entry.name));
+        return false;
+    }
+
+    outIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRootCount);
+    seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRootCount);
+
+    if(!materialBindIncludeRoot.empty()){
+        if(!AppendIncludeDirectory(materialBindIncludeRoot, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
+            return false;
+    }
 
     for(const CookString& includeRoot : entry.includeRoots){
         Path includeDirectory;
@@ -457,30 +527,8 @@ static bool BuildIncludeDirectories(const Path& repoRoot, const AssetRootVector&
             }
         }
 
-        errorCode.clear();
-        const bool isDirectory = IsDirectory(includeDirectory, errorCode);
-        if(errorCode){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query include root '{}' for entry '{}': {}")
-                , PathToString<tchar>(includeDirectory)
-                , StringConvert(entry.name)
-                , StringConvert(errorCode.message())
-            );
+        if(!AppendIncludeDirectory(includeDirectory, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
             return false;
-        }
-        if(!isDirectory){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: include root is not a directory for entry '{}': '{}'")
-                , StringConvert(entry.name)
-                , PathToString<tchar>(includeDirectory)
-            );
-            return false;
-        }
-
-        ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexically_normal());
-        CanonicalizeTextInPlace(normalizedIncludeDirectory);
-        if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
-            continue;
-
-        outIncludeDirectories.push_back(Move(includeDirectory));
     }
 
     return true;
@@ -890,10 +938,12 @@ static bool ParseAssetMetadata(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
     const DiscoveredNwbFileVector& nwbFiles,
+    const DiscoveredBindFileVector& bindFiles,
     ParsedAssetMetadata& outMetadata
 ){
     outMetadata.includeMetadata.reserve(nwbFiles.size());
     outMetadata.shaderEntries.reserve(nwbFiles.size());
+    outMetadata.materialBindEntries.reserve(bindFiles.size());
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.geometryEntries.reserve(nwbFiles.size());
     outMetadata.skinnedGeometryEntries.reserve(nwbFiles.size());
@@ -1037,6 +1087,25 @@ static bool ParseAssetMetadata(
         return false;
     }
 
+    for(const DiscoveredNwbFile& discoveredBindFile : bindFiles){
+        ShaderCook::MaterialBindEntry bindEntry(cookArena);
+        if(!shaderCook.parseMaterialBindSource(discoveredBindFile.filePath, bindEntry))
+            return false;
+
+        if(
+            !Core::Assets::BuildDerivedAssetVirtualPath(
+                discoveredBindFile.assetRoot,
+                discoveredBindFile.virtualRoot.view(),
+                discoveredBindFile.filePath,
+                bindEntry.virtualPath
+            )
+        ){
+            return false;
+        }
+
+        outMetadata.materialBindEntries.push_back(Move(bindEntry));
+    }
+
     if(outMetadata.shaderEntries.empty()){
         if(!outMetadata.materialEntries.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: material assets require at least one shader entry"));
@@ -1054,10 +1123,90 @@ static bool ParseAssetMetadata(
     return true;
 }
 
+static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
+    ScratchArena scratchArena;
+    ScratchString configurationName(configurationSafeName, scratchArena);
+    ScratchString includeDirectoryName(s_MaterialBindIncludeCacheDirectoryName, scratchArena);
+    return cacheDirectory / configurationName.c_str() / includeDirectoryName.c_str();
+}
+
+static bool PrepareMaterialBindIncludeRoot(const Path& includeRoot){
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to clear generated material bind include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    errorCode.clear();
+    if(!EnsureDirectories(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create generated material bind include directory '{}': {}")
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    return true;
+}
+
+static bool EmitMaterialBindIncludes(
+    ShaderCook::CookArena& cookArena,
+    ShaderCook& shaderCook,
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    const MaterialBindEntryVector& materialBindEntries,
+    Path& outIncludeRoot
+){
+    outIncludeRoot.clear();
+    if(materialBindEntries.empty())
+        return true;
+
+    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
+    if(!PrepareMaterialBindIncludeRoot(outIncludeRoot))
+        return false;
+
+    ShaderCook::CookHashSet<CookString> seenIncludePaths{cookArena};
+    seenIncludePaths.reserve(materialBindEntries.size());
+
+    for(const ShaderCook::MaterialBindEntry& bindEntry : materialBindEntries){
+        CookString includePath(bindEntry.virtualPath, cookArena);
+        includePath += s_MaterialBindExtension;
+        if(!seenIncludePaths.insert(includePath).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate material bind include path '{}'"), StringConvert(includePath));
+            return false;
+        }
+
+        ShaderCook::CookString generatedSource{cookArena};
+        if(!shaderCook.buildMaterialBindIncludeSource(bindEntry, generatedSource))
+            return false;
+
+        const Path outputPath = outIncludeRoot / Path(includePath.c_str());
+        ErrorCode errorCode;
+        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create generated material bind include parent '{}': {}")
+                , PathToString<tchar>(outputPath.parent_path())
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+
+        if(!WriteTextFile(outputPath, AStringView(generatedSource))){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to write generated material bind include '{}'"), PathToString<tchar>(outputPath));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static bool PrepareShaderEntriesForCook(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
     const ResolvedCookPaths& resolvedPaths,
+    const Path& materialBindIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     PreparedShaderPlan& outPreparedPlan
@@ -1130,7 +1279,7 @@ static bool PrepareShaderEntriesForCook(
             return false;
         }
 
-        if(!BuildIncludeDirectories(resolvedPaths.repoRoot, resolvedPaths.assetRoots, preparedEntry.entry, preparedEntry.includeDirectories))
+        if(!BuildIncludeDirectories(resolvedPaths.repoRoot, resolvedPaths.assetRoots, materialBindIncludeRoot, preparedEntry.entry, preparedEntry.includeDirectories))
             return false;
         if(!shaderCook.gatherShaderDependencies(preparedEntry.sourcePath, preparedEntry.includeDirectories, preparedEntry.dependencies))
             return false;
@@ -1484,20 +1633,42 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths))
         return false;
 
-    // discover .nwb files from asset roots
+    // discover cook input files from asset roots
     __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{
         m_arena
     };
     if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
         return false;
 
+    __hidden_graphics_asset_cooker::DiscoveredBindFileVector bindFiles{
+        m_arena
+    };
+    if(!__hidden_graphics_asset_cooker::DiscoverBindFiles(resolvedPaths.assetRoots, bindFiles))
+        return false;
+
     __hidden_graphics_asset_cooker::ParsedAssetMetadata parsedMetadata(m_arena);
-    if(!__hidden_graphics_asset_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, parsedMetadata))
+    if(!__hidden_graphics_asset_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, bindFiles, parsedMetadata))
+        return false;
+    if(!ValidateMaterialCookInterfaces(parsedMetadata.materialBindEntries, parsedMetadata.materialEntries))
         return false;
 
     __hidden_graphics_asset_cooker::CookString configurationSafeName = BuildCanonicalSafeCacheName(m_arena, environment.configuration.view());
     if(configurationSafeName.empty())
         configurationSafeName = "default";
+
+    Path materialBindIncludeRoot;
+    if(
+        !__hidden_graphics_asset_cooker::EmitMaterialBindIncludes(
+            m_arena,
+            shaderCook,
+            resolvedPaths.cacheDirectory,
+            configurationSafeName,
+            parsedMetadata.materialBindEntries,
+            materialBindIncludeRoot
+        )
+    ){
+        return false;
+    }
 
     __hidden_graphics_asset_cooker::PreparedShaderPlan preparedPlan(m_arena);
     if(
@@ -1505,6 +1676,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             m_arena,
             shaderCook,
             resolvedPaths,
+            materialBindIncludeRoot,
             parsedMetadata.includeMetadata,
             parsedMetadata.shaderEntries,
             preparedPlan

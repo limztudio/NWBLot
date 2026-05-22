@@ -467,6 +467,7 @@ static bool ParseMaterialStageShaders(
 static bool ParseMaterialParameters(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
+    const bool requiresBlockScopedParameters,
     MaterialCookEntry::ParameterMap& outParameters
 ){
     outParameters.clear();
@@ -480,8 +481,10 @@ static bool ParseMaterialParameters(
     }
     outParameters.reserve(parametersValue->asMap().size());
 
-    for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
-        const AStringView paramKeyText(paramKey.data(), paramKey.size());
+    auto appendParameter = [&](
+        const AStringView paramKeyText,
+        const Core::Metascript::Value& paramValue
+    ) -> bool{
         if(!paramValue.isString()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a string")
                 , PathToString<tchar>(nwbFilePath)
@@ -509,6 +512,155 @@ static bool ParseMaterialParameters(
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate parameter '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(key.c_str())
+            );
+            return false;
+        }
+
+        return true;
+    };
+
+    for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
+        const AStringView paramKeyText(paramKey.data(), paramKey.size());
+        if(paramValue.isString()){
+            if(requiresBlockScopedParameters){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface parameter '{}' must be declared inside a block map")
+                    , PathToString<tchar>(nwbFilePath)
+                    , StringConvert(paramKeyText)
+                );
+                return false;
+            }
+            if(!appendParameter(paramKeyText, paramValue))
+                return false;
+            continue;
+        }
+
+        if(!paramValue.isMap()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a string or block map")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(paramKeyText)
+            );
+            return false;
+        }
+        if(paramKeyText.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter block names must not be empty"), PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+
+        for(const auto& [blockParamKey, blockParamValue] : paramValue.asMap()){
+            const AStringView blockParamKeyText(blockParamKey.data(), blockParamKey.size());
+            if(blockParamKeyText.empty()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter names in block '{}' must not be empty")
+                    , PathToString<tchar>(nwbFilePath)
+                    , StringConvert(paramKeyText)
+                );
+                return false;
+            }
+
+            CompactString flattenedKey;
+            if(!flattenedKey.assign(paramKeyText) || !flattenedKey.pushBack('.') || !flattenedKey.append(blockParamKeyText)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}.{}' exceeds CompactString capacity")
+                    , PathToString<tchar>(nwbFilePath)
+                    , StringConvert(paramKeyText)
+                    , StringConvert(blockParamKeyText)
+                );
+                return false;
+            }
+
+            if(!appendParameter(flattenedKey.view(), blockParamValue))
+                return false;
+        }
+    }
+
+    return true;
+}
+
+static bool ParseMaterialInterface(
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    Name& outMaterialInterface
+){
+    outMaterialInterface = NAME_NONE;
+
+    const auto* interfaceValue = asset.findField("interface");
+    if(!interfaceValue)
+        return true;
+    if(!interfaceValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must be a string"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    const Core::Metascript::MStringView interfaceText = interfaceValue->asString();
+    const AStringView interfacePath(interfaceText.data(), interfaceText.size());
+    if(TrimView(interfacePath).empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must not be empty"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    outMaterialInterface = Name(interfacePath);
+    if(!outMaterialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface '{}' is invalid")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(interfacePath)
+        );
+        return false;
+    }
+
+    return true;
+}
+
+using MaterialBindInterfaceLookup = HashMap<
+    Name,
+    const ShaderCook::MaterialBindEntry*,
+    Hasher<Name>,
+    EqualTo<Name>,
+    Core::Alloc::ScratchArena<>
+>;
+
+static void BuildMaterialBindInterfaceLookup(
+    const ShaderCook::CookVector<ShaderCook::MaterialBindEntry>& materialBindEntries,
+    MaterialBindInterfaceLookup& outLookup
+){
+    outLookup.reserve(materialBindEntries.size());
+    for(const ShaderCook::MaterialBindEntry& bindEntry : materialBindEntries)
+        outLookup.emplace(Name(bindEntry.virtualPath.c_str()), &bindEntry);
+}
+
+static bool ValidateMaterialCookInterfaces(
+    const ShaderCook::CookVector<ShaderCook::MaterialBindEntry>& materialBindEntries,
+    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries
+){
+    Core::Alloc::ScratchArena<> scratchArena;
+    MaterialBindInterfaceLookup materialBindLookup(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        scratchArena
+    );
+    BuildMaterialBindInterfaceLookup(materialBindEntries, materialBindLookup);
+
+    for(const MaterialCookEntry& materialEntry : materialEntries){
+        if(!materialEntry.materialInterface)
+            continue;
+
+        const auto bindEntryIt = materialBindLookup.find(materialEntry.materialInterface);
+        if(bindEntryIt == materialBindLookup.end()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'")
+                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(materialEntry.materialInterface.c_str())
+            );
+            return false;
+        }
+        const ShaderCook::MaterialBindEntry* bindEntry = bindEntryIt.value();
+
+        for(const auto& [parameterName, parameterValue] : materialEntry.parameters){
+            static_cast<void>(parameterValue);
+            if(bindEntry->declaresParameter(parameterName.view()))
+                continue;
+
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' parameter '{}' is not declared by interface '{}'")
+                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(parameterName.c_str())
+                , StringConvert(materialEntry.materialInterface.c_str())
             );
             return false;
         }
@@ -545,9 +697,11 @@ static bool ParseMaterialMeta(
 
     if(!ParseVariantField(shaderCook, nwbFilePath, asset, "shader_variant", Core::ShaderArchive::s_DefaultVariant, outEntry.shaderVariant))
         return false;
+    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface))
+        return false;
     if(!ParseMaterialStageShaders(nwbFilePath, asset, outEntry.stageShaders))
         return false;
-    if(!ParseMaterialParameters(nwbFilePath, asset, outEntry.parameters))
+    if(!ParseMaterialParameters(nwbFilePath, asset, static_cast<bool>(outEntry.materialInterface), outEntry.parameters))
         return false;
 
     return true;
@@ -572,6 +726,13 @@ bool ParseMaterialCookMetadata(
     MaterialCookEntry& outEntry
 ){
     return __hidden_material_asset::ParseMaterialMeta(shaderCook, assetRoot, virtualRoot, nwbFilePath, doc, outEntry);
+}
+
+bool ValidateMaterialCookInterfaces(
+    const ShaderCook::CookVector<ShaderCook::MaterialBindEntry>& materialBindEntries,
+    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries
+){
+    return __hidden_material_asset::ValidateMaterialCookInterfaces(materialBindEntries, materialEntries);
 }
 
 bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial){

@@ -54,6 +54,11 @@ using namespace MetascriptDetail;
     return lhs > Limit<usize>::s_Max - rhs;
 }
 
+template<usize N>
+[[nodiscard]] constexpr MStringView LiteralView(const char (&text)[N]){
+    return MStringView(text, N > 0u ? N - 1u : 0u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,6 +69,7 @@ public:
         : m_lexer(source)
         , m_arena(arena)
         , m_scratchArena(4096)
+        , m_declaredStructs(m_scratchArena)
         , m_errors(errors)
         , m_variables(variables)
     {
@@ -98,6 +104,7 @@ public:
 
 private:
     using ScratchPath = Vector<MStringView, Alloc::ScratchArena<>>;
+    using ScratchNameList = Vector<MStringView, Alloc::ScratchArena<>>;
     using ScratchString = BasicString<MChar, Alloc::ScratchArena<>>;
 
 
@@ -125,6 +132,10 @@ private:
     }
 
     bool parseStatement(){
+        Value attributes = parseAttributeList();
+        if(!m_errors.empty())
+            return false;
+
         if(m_current.type != TokenType::Identifier){
             errorExpected("expected identifier at start of statement");
             return false;
@@ -135,7 +146,18 @@ private:
         const u32 firstColumn = m_current.column;
         advance();
 
+        if(firstName == LiteralView("struct") && m_current.type == TokenType::Identifier)
+            return parseStructDeclaration(Move(attributes), firstLine, firstColumn);
+
+        if(!attributes.asList().empty()){
+            error(firstLine, firstColumn, "attributes are only supported on struct declarations");
+            return false;
+        }
+
         if(m_current.type == TokenType::Identifier){
+            if(isDeclaredStruct(firstName))
+                return parseStructInstanceDeclaration(firstName);
+
             error(firstLine, firstColumn, "re-declaration is not allowed; only one asset declaration permitted");
             return false;
         }
@@ -204,6 +226,177 @@ private:
         }
 
         return true;
+    }
+
+    Value parseAttributeList(){
+        Value attributes(m_arena);
+        attributes.makeList();
+
+        while(m_current.type == TokenType::LeftBracket){
+            Value attribute = parseAttribute();
+            if(!m_errors.empty())
+                return Value(m_arena);
+            attributes.append(Move(attribute));
+        }
+
+        return attributes;
+    }
+
+    Value parseAttribute(){
+        if(!expect(TokenType::LeftBracket, "expected '[' before attribute"))
+            return Value(m_arena);
+
+        if(m_current.type != TokenType::Identifier){
+            errorExpected("expected attribute name");
+            return Value(m_arena);
+        }
+
+        const MStringView attributeName = m_current.text;
+        advance();
+
+        Value attribute(m_arena);
+        attribute.makeMap();
+        attribute.field(LiteralView("name")).setString(attributeName);
+
+        Value& arguments = attribute.field(LiteralView("arguments"));
+        arguments.makeList();
+
+        if(m_current.type == TokenType::LeftParen){
+            advance();
+            if(m_current.type != TokenType::RightParen){
+                for(;;){
+                    Value argument = parseAttributeArgument();
+                    if(!m_errors.empty())
+                        return Value(m_arena);
+                    arguments.append(Move(argument));
+
+                    if(m_current.type == TokenType::RightParen)
+                        break;
+                    if(!expect(TokenType::Comma, "expected ',' or ')' in attribute arguments"))
+                        return Value(m_arena);
+                }
+            }
+
+            if(!expect(TokenType::RightParen, "expected ')' after attribute arguments"))
+                return Value(m_arena);
+        }
+
+        if(!expect(TokenType::RightBracket, "expected ']' after attribute"))
+            return Value(m_arena);
+
+        return attribute;
+    }
+
+    Value parseAttributeArgument(){
+        if(m_current.type == TokenType::StringLiteral){
+            const MStringView text = m_current.text;
+            advance();
+            return Value(text, m_arena);
+        }
+
+        errorExpected("expected string attribute argument");
+        return Value(m_arena);
+    }
+
+    bool parseStructDeclaration(Value&& attributes, const u32 structLine, const u32 structColumn){
+        const MStringView structName = m_current.text;
+        advance();
+
+        if(isDeclaredStruct(structName)){
+            error(structLine, structColumn, "duplicate struct declaration");
+            return false;
+        }
+
+        if(!expect(TokenType::LeftBrace, "expected '{' after struct name"))
+            return false;
+
+        Value fields(m_arena);
+        fields.makeList();
+
+        ScratchNameList fieldNames{m_scratchArena};
+        fieldNames.reserve(8);
+
+        while(m_current.type != TokenType::RightBrace){
+            if(m_current.type == TokenType::EndOfFile){
+                errorExpected("expected field declaration or '}' in struct");
+                return false;
+            }
+
+            Value fieldAttributes = parseAttributeList();
+            if(!m_errors.empty())
+                return false;
+
+            if(m_current.type == TokenType::RightBrace){
+                if(!fieldAttributes.asList().empty()){
+                    errorExpected("expected field declaration after attributes");
+                    return false;
+                }
+                break;
+            }
+
+            Value field = parseStructField(Move(fieldAttributes), fieldNames);
+            if(!m_errors.empty())
+                return false;
+            fields.append(Move(field));
+        }
+
+        if(!expect(TokenType::RightBrace, "expected '}' after struct fields"))
+            return false;
+        if(!expect(TokenType::Semicolon, "expected ';' after struct declaration"))
+            return false;
+
+        if(!addBindStruct(structName, Move(attributes), Move(fields), structLine, structColumn))
+            return false;
+
+        m_declaredStructs.push_back(structName);
+        return true;
+    }
+
+    Value parseStructField(Value&& attributes, ScratchNameList& fieldNames){
+        if(m_current.type != TokenType::Identifier){
+            errorExpected("expected field type");
+            return Value(m_arena);
+        }
+        const MStringView typeName = m_current.text;
+        advance();
+
+        if(m_current.type != TokenType::Identifier){
+            errorExpected("expected field name after type");
+            return Value(m_arena);
+        }
+        const MStringView fieldName = m_current.text;
+        const u32 fieldLine = m_current.line;
+        const u32 fieldColumn = m_current.column;
+        advance();
+
+        if(isNameInList(fieldNames, fieldName)){
+            error(fieldLine, fieldColumn, "duplicate struct field declaration");
+            return Value(m_arena);
+        }
+
+        if(!expect(TokenType::Semicolon, "expected ';' after field declaration"))
+            return Value(m_arena);
+
+        fieldNames.push_back(fieldName);
+
+        Value field(m_arena);
+        field.makeMap();
+        field.field(LiteralView("type")).setString(typeName);
+        field.field(LiteralView("name")).setString(fieldName);
+        field.field(LiteralView("attributes")) = Move(attributes);
+        return field;
+    }
+
+    bool parseStructInstanceDeclaration(MStringView typeName){
+        const MStringView instanceName = m_current.text;
+        const u32 instanceLine = m_current.line;
+        const u32 instanceColumn = m_current.column;
+        advance();
+
+        if(!expect(TokenType::Semicolon, "expected ';' after instance declaration"))
+            return false;
+
+        return addBindInstance(typeName, instanceName, instanceLine, instanceColumn);
     }
 
 
@@ -563,6 +756,107 @@ private:
         return *current;
     }
 
+    [[nodiscard]] bool isNameInList(const ScratchNameList& names, MStringView name)const{
+        for(const MStringView currentName : names){
+            if(currentName == name)
+                return true;
+        }
+        return false;
+    }
+
+    [[nodiscard]] bool isDeclaredStruct(MStringView name)const{
+        return isNameInList(m_declaredStructs, name);
+    }
+
+    [[nodiscard]] Value* declaredAssetRoot(const u32 line, const u32 column){
+        auto rootIt = m_variables.find(m_declaredAssetVariable);
+        if(rootIt == m_variables.end()){
+            error(line, column, "missing declared asset variable");
+            return nullptr;
+        }
+        return &rootIt.value();
+    }
+
+    bool ensureMapValue(Value& value, const u32 line, const u32 column, MStringView message){
+        if(value.isNull())
+            value.makeMap();
+        else if(!value.isMap()){
+            error(line, column, message);
+            return false;
+        }
+        return true;
+    }
+
+    bool ensureListValue(Value& value, const u32 line, const u32 column, MStringView message){
+        if(value.isNull())
+            value.makeList();
+        else if(!value.isList()){
+            error(line, column, message);
+            return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool containsBindInstanceName(const Value& instances, MStringView instanceName)const{
+        NWB_ASSERT(instances.isList());
+
+        for(const Value& instance : instances.asList()){
+            if(!instance.isMap())
+                continue;
+
+            const Value* name = instance.findField(LiteralView("name"));
+            if(name && name->isString() && name->asString() == instanceName)
+                return true;
+        }
+
+        return false;
+    }
+
+    bool addBindStruct(MStringView structName, Value&& attributes, Value&& fields, const u32 line, const u32 column){
+        Value* assetRoot = declaredAssetRoot(line, column);
+        if(!assetRoot)
+            return false;
+        if(!ensureMapValue(*assetRoot, line, column, "bind declarations require asset root to be a map"))
+            return false;
+
+        Value& structs = assetRoot->field(LiteralView("structs"));
+        if(!ensureMapValue(structs, line, column, "asset.structs must be a map"))
+            return false;
+        if(structs.findField(structName)){
+            error(line, column, "duplicate struct declaration");
+            return false;
+        }
+
+        Value& outStruct = structs.field(structName);
+        outStruct.makeMap();
+        outStruct.field(LiteralView("attributes")) = Move(attributes);
+        outStruct.field(LiteralView("fields")) = Move(fields);
+        return true;
+    }
+
+    bool addBindInstance(MStringView typeName, MStringView instanceName, const u32 line, const u32 column){
+        Value* assetRoot = declaredAssetRoot(line, column);
+        if(!assetRoot)
+            return false;
+        if(!ensureMapValue(*assetRoot, line, column, "bind declarations require asset root to be a map"))
+            return false;
+
+        Value& instances = assetRoot->field(LiteralView("instances"));
+        if(!ensureListValue(instances, line, column, "asset.instances must be a list"))
+            return false;
+        if(containsBindInstanceName(instances, instanceName)){
+            error(line, column, "duplicate struct instance declaration");
+            return false;
+        }
+
+        Value instance(m_arena);
+        instance.makeMap();
+        instance.field(LiteralView("type")).setString(typeName);
+        instance.field(LiteralView("name")).setString(instanceName);
+        instances.append(Move(instance));
+        return true;
+    }
+
     [[nodiscard]] bool isZero(const Value& value)const{
         if(value.isInteger())
             return value.asInteger() == 0;
@@ -754,6 +1048,7 @@ private:
     Lexer m_lexer;
     MetaArena& m_arena;
     Alloc::ScratchArena<> m_scratchArena;
+    ScratchNameList m_declaredStructs;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
     MStringView m_declaredAssetVariable;

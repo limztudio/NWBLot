@@ -59,21 +59,21 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    const AStringView resolvedVariantName = variantName.empty()
-        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : variantName
-    ;
+    if(variantName.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader variant is empty"), ownerName);
+        return false;
+    }
     if(!shaderPathResolver){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: shader path resolver is null"), ownerName);
         return false;
     }
 
     Name shaderVirtualPath = NAME_NONE;
-    if(!shaderPathResolver(shaderName, resolvedVariantName, stageName, shaderVirtualPath)){
+    if(!shaderPathResolver(shaderName, variantName, stageName, shaderVirtualPath)){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
             , ownerName
             , StringConvert(shaderName.c_str())
-            , StringConvert(resolvedVariantName)
+            , StringConvert(variantName)
             , StringConvert(stageName.c_str())
         );
         return false;
@@ -82,7 +82,7 @@ template<typename ShaderPathResolver>
         NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'")
             , ownerName
             , StringConvert(shaderName.c_str())
-            , StringConvert(resolvedVariantName)
+            , StringConvert(variantName)
             , StringConvert(stageName.c_str())
         );
         return false;

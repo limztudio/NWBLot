@@ -88,14 +88,6 @@ bool ValidateRecord(const ShaderArchive::Record& record){
 }
 
 
-AStringView NormalizeVariantName(const AStringView variantName){
-    return
-        variantName.empty()
-            ? AStringView(ShaderArchive::s_DefaultVariant)
-            : variantName
-    ;
-}
-
 u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
     NWB_ASSERT_MSG(lane < NameDetail::s_HashLaneCount, NWB_TEXT("ShaderArchive: invalid hash lane"));
 
@@ -161,10 +153,8 @@ const Name& ShaderArchive::IndexVirtualPathName(){
 }
 
 Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringView variantName, const Name& stageName){
-    if(!shaderName || !stageName)
+    if(!shaderName || variantName.empty() || !stageName)
         return NAME_NONE;
-
-    const AStringView canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
 
     NameHash derivedHash = {};
     static constexpr char s_VirtualPathPrefix[] = "nwb/shader/archive/path";
@@ -175,7 +165,7 @@ Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringVi
             sizeof(s_VirtualPathPrefix) - 1
         );
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
-        laneHash = UpdateFnv64TextExact(laneHash, canonicalVariantName);
+        laneHash = UpdateFnv64TextExact(laneHash, variantName);
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, stageName.hash(), lane);
         derivedHash.qwords[lane] = laneHash;
     }
@@ -348,20 +338,10 @@ bool ShaderArchive::deserializeIndex(const GraphicsBytes& binary, GraphicsVector
 bool ShaderArchive::findVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
     outVirtualPath = NAME_NONE;
 
-    if(!shaderName || !stageName)
+    if(!shaderName || variantName.empty() || !stageName)
         return false;
 
-    const AStringView canonicalVariantName = __hidden_shader_archive::NormalizeVariantName(variantName);
-
-    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, canonicalVariantName, stageName)){
-        outVirtualPath = Name(record->virtualPathHash);
-        return true;
-    }
-
-    if(canonicalVariantName == AStringView(s_DefaultVariant))
-        return false;
-
-    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, s_DefaultVariant, stageName)){
+    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, variantName, stageName)){
         outVirtualPath = Name(record->virtualPathHash);
         return true;
     }

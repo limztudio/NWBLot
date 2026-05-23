@@ -141,8 +141,6 @@ static bool IsMaterialBindIdentifier(const AStringView text){
 
 static bool ParseMaterialParameterTypeTextImpl(
     const AStringView typeText,
-    const bool allowVectorAliases,
-    const bool allowOneComponentSuffix,
     MaterialParameterValueType::Enum& outType,
     u32& outComponentCount
 ){
@@ -151,7 +149,6 @@ static bool ParseMaterialParameterTypeTextImpl(
 
     const auto tryMatch = [&](
         const AStringView baseName,
-        const AStringView vectorName,
         const MaterialParameterValueType::Enum type
     ) -> bool{
         if(typeText == baseName){
@@ -167,7 +164,7 @@ static bool ParseMaterialParameterTypeTextImpl(
                 return false;
 
             const char suffix = typeText[prefix.size()];
-            if(suffix < (allowOneComponentSuffix ? '1' : '2') || suffix > '4')
+            if(suffix < '2' || suffix > '4')
                 return false;
 
             outType = type;
@@ -175,18 +172,14 @@ static bool ParseMaterialParameterTypeTextImpl(
             return true;
         };
 
-        if(parseSuffix(baseName))
-            return true;
-        if(allowVectorAliases && !vectorName.empty())
-            return parseSuffix(vectorName);
-        return false;
+        return parseSuffix(baseName);
     };
 
     return
-        tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
-        || tryMatch(AStringView("int"), AStringView("ivec"), MaterialParameterValueType::Int)
-        || tryMatch(AStringView("uint"), AStringView("uvec"), MaterialParameterValueType::UInt)
-        || tryMatch(AStringView("bool"), AStringView("bvec"), MaterialParameterValueType::Bool)
+        tryMatch(AStringView("float"), MaterialParameterValueType::Float)
+        || tryMatch(AStringView("int"), MaterialParameterValueType::Int)
+        || tryMatch(AStringView("uint"), MaterialParameterValueType::UInt)
+        || tryMatch(AStringView("bool"), MaterialParameterValueType::Bool)
     ;
 }
 
@@ -197,8 +190,6 @@ static bool ParseMaterialBindFieldType(
 ){
     return ParseMaterialParameterTypeTextImpl(
         typeText,
-        false,
-        false,
         outType,
         outComponentCount
     );
@@ -655,8 +646,6 @@ static bool ParseMaterialParameterTypeText(
 ){
     return ParseMaterialParameterTypeTextImpl(
         typeText,
-        true,
-        true,
         outType,
         outComponentCount
     );
@@ -785,28 +774,22 @@ static bool BuildMaterialParameterGpuData(
     if(!key || !value)
         return false;
 
-    MaterialParameterValueType::Enum valueType = MaterialParameterValueType::Float;
+    MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;
     u32 componentCount = 0u;
     const AStringView valueText = TrimView(value.view());
-    AStringView argsText = valueText;
+    AStringView argsText;
     AStringView typeText;
-    if(SplitMaterialParameterCall(valueText, typeText, argsText)){
-        if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
-            return false;
-    }
-    else if(ParseMaterialBoolToken(valueText, outParameter.data.x)){
-        valueType = MaterialParameterValueType::Bool;
-        componentCount = 1u;
-    }
+    if(!SplitMaterialParameterCall(valueText, typeText, argsText))
+        return false;
+    if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
+        return false;
 
     AStringView tokens[4];
     u32 tokenCount = 0u;
     if(!SplitMaterialParameterTokens(argsText, tokens, tokenCount))
         return false;
-    if(componentCount != 0u && tokenCount != componentCount)
+    if(tokenCount != componentCount)
         return false;
-    if(componentCount == 0u)
-        componentCount = tokenCount;
 
     for(u32 i = 0; i < tokenCount; ++i){
         if(!ParseMaterialParameterToken(tokens[i], valueType, outParameter.data.raw[i]))

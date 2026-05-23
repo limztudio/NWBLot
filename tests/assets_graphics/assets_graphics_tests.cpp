@@ -461,6 +461,42 @@ asset.parameters = {
 };
 
 )NWB_META";
+
+static constexpr AStringView s_UntypedMaterialParameterMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "0.25, 0.5, 0.75, 1.0",
+    },
+};
+
+)NWB_META";
+
+static constexpr AStringView s_VectorAliasMaterialParameterMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "vec4(0.25, 0.5, 0.75, 1.0)",
+    },
+};
+
+)NWB_META";
 #endif
 
 #if defined(NWB_FINAL)
@@ -506,6 +542,16 @@ static constexpr AStringView s_InstanceOverrideMaterialBindSource = R"NWB_BIND(a
 struct NwbTestSurfaceMaterial{
     [default("float(0.5)")]
     float roughness;
+};
+
+NwbTestSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_Float1DefaultMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbTestSurfaceMaterial{
+    [default("float1(1.0)")]
+    float base_color;
 };
 
 NwbTestSurfaceMaterial surface;
@@ -1242,6 +1288,51 @@ static bool FindShaderArchiveSourceChecksum(
     }
 
     return false;
+}
+
+static void TestShaderArchiveVariantLookupIsExact(TestContext& context){
+    TestArena testArena;
+    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
+    NWB::Core::ShaderArchive::Record defaultRecord(testArena.arena);
+    defaultRecord.shaderName = Name("project/shaders/test_shader");
+    defaultRecord.variantName.assign(NWB::Core::ShaderArchive::s_DefaultVariant);
+    defaultRecord.stage = Name("ps");
+    defaultRecord.virtualPathHash = Name("shader/test_shader/default/ps").hash();
+    records.push_back(Move(defaultRecord));
+
+    Name virtualPath = NAME_NONE;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::ShaderArchive::findVirtualPath(
+        records,
+        Name("project/shaders/test_shader"),
+        NWB::Core::ShaderArchive::s_DefaultVariant,
+        Name("ps"),
+        virtualPath
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, virtualPath == Name(records[0].virtualPathHash));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::ShaderArchive::buildVirtualPathName(
+        Name("project/shaders/test_shader"),
+        "",
+        Name("ps")
+    ) == NAME_NONE);
+
+    virtualPath = NAME_NONE;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !NWB::Core::ShaderArchive::findVirtualPath(
+        records,
+        Name("project/shaders/test_shader"),
+        "NWB_FEATURE=1",
+        Name("ps"),
+        virtualPath
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, virtualPath == NAME_NONE);
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !NWB::Core::ShaderArchive::findVirtualPath(
+        records,
+        Name("project/shaders/test_shader"),
+        "",
+        Name("ps"),
+        virtualPath
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, virtualPath == NAME_NONE);
 }
 
 using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
@@ -2521,6 +2612,26 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         "material_bind_instance_override",
         NWB_TEXT("unsupported asset field 'instance_override'")
     );
+
+    Path float1DefaultRoot;
+    NWB::Impl::MaterialBindEntry float1DefaultEntry(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ParseMaterialBindFromText(
+        s_Float1DefaultMaterialBindSource,
+        "material_bind_float1_default",
+        float1DefaultEntry,
+        float1DefaultRoot
+    ));
+    float1DefaultEntry.virtualPath = "project/material_interfaces/test_surface";
+    NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::BuildMaterialBindIncludeSource(
+        testArena.arena,
+        float1DefaultEntry,
+        generatedSource
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
+
+    ErrorCode removeErrorCode;
+    static_cast<void>(RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
 #endif
 }
 
@@ -2656,6 +2767,40 @@ static void TestMaterialBindCookIntegration(TestContext& context){
 
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(flatRoot, errorCode));
+
+    Path untypedParameterRoot;
+    Path untypedParameterOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
+        s_MinimalMaterialBindSource,
+        s_UntypedMaterialParameterMeta,
+        "material_bind_untyped_material_parameter",
+        testArena,
+        untypedParameterRoot,
+        untypedParameterOutputDirectory
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "has invalid value '0.25, 0.5, 0.75, 1.0'"
+    )));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(untypedParameterRoot, errorCode));
+
+    Path vectorAliasParameterRoot;
+    Path vectorAliasParameterOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
+        s_MinimalMaterialBindSource,
+        s_VectorAliasMaterialParameterMeta,
+        "material_bind_vector_alias_material_parameter",
+        testArena,
+        vectorAliasParameterRoot,
+        vectorAliasParameterOutputDirectory
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "has invalid value 'vec4(0.25, 0.5, 0.75, 1.0)'"
+    )));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(vectorAliasParameterRoot, errorCode));
 
     Path unsupportedFieldRoot;
     Path unsupportedFieldOutputDirectory;
@@ -3387,6 +3532,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
+    __hidden_assets_graphics_tests::TestShaderArchiveVariantLookupIsExact(context);
     __hidden_assets_graphics_tests::TestMaterialMetadataInterfaceAndBlockParameters(context);
     __hidden_assets_graphics_tests::TestMaterialCodecTypedLayoutBoundary(context);
     __hidden_assets_graphics_tests::TestMaterialBindSchemaValidation(context);

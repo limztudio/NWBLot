@@ -8,6 +8,7 @@
 #include "skinned_geometry_types.h"
 
 #include <core/assets/asset.h>
+#include <core/geometry/geometry_class.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +62,7 @@ public:
 
 
 private:
-    u32 m_geometryClass = GeometryClass::Invalid;
+    u32 m_geometryClass = Core::Geometry::GeometryClass::Invalid;
     Core::Assets::AssetVector<SkinnedGeometryVertex> m_restVertices;
     Core::Assets::AssetVector<u32> m_indices;
     Core::Assets::AssetVector<SkinInfluence4> m_skin;

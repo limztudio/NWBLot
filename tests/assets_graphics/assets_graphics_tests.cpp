@@ -13,6 +13,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/common.h>
+#include <core/geometry/geometry_class.h>
 #include <core/filesystem/filesystem.h>
 #include <core/graphics/common.h>
 #include <core/graphics/shader_archive.h>
@@ -1453,7 +1454,7 @@ static void CheckMinimalSkinnedGeometryDefaults(
     ;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Core::Geometry::GeometryClass::Skinned);
     const Float4U color0 = LoadHalf4U(loadedGeometry.restVertices()[0].color0);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.x == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.w == 1.f);
@@ -1667,7 +1668,7 @@ static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(TestArena& testArena
     auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkinnedGeometryJointMatrix>(testArena);
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
 
-    geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
+    geometry.setGeometryClass(NWB::Core::Geometry::GeometryClass::Skinned);
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
@@ -1689,7 +1690,7 @@ static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(TestArena& testAre
     auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
     skin.assign(vertices.size(), MakeRootSkin());
 
-    geometry.setGeometryClass(NWB::Impl::GeometryClass::Skinned);
+    geometry.setGeometryClass(NWB::Core::Geometry::GeometryClass::Skinned);
     geometry.setRestVertices(Move(vertices));
     geometry.setIndices(Move(indices));
     geometry.setSkin(Move(skin));
@@ -1757,7 +1758,7 @@ static void CheckSkinnedSkinnedGeometryPayload(
     const u32 expectedSkeletonJointCount,
     const u32 expectedInverseBindMatrixCount,
     const u32 expectedInverseBindMatrixIndex){
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Core::Geometry::GeometryClass::Skinned);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 6u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 4u);
@@ -1839,7 +1840,7 @@ static void TestMinimalSkinnedGeometryCodecRoundTrip(TestContext& context){
     const NWB::Impl::SkinnedGeometry& loadedGeometry = CheckCodecRoundTrip(context, testArena, geometry, codec, loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.restVertices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Core::Geometry::GeometryClass::Skinned);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
 }
@@ -3091,7 +3092,7 @@ static void TestGeometryCookerTypedStreams(TestContext& context){
         "minimal_geometry",
         MinimalAssetKind::Geometry,
         [&](const NWB::Impl::Geometry& loadedGeometry){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Static);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Core::Geometry::GeometryClass::Static);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.vertexCount() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.positions()[0].x == -0.5f);
@@ -3348,7 +3349,7 @@ static void TestSkinnedGeometryCookerSkinnedClass(TestContext& context){
         "skinned_only",
         MinimalAssetKind::SkinnedGeometry,
         [&](const NWB::Impl::SkinnedGeometry& loadedGeometry){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Impl::GeometryClass::Skinned);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Core::Geometry::GeometryClass::Skinned);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
         }
@@ -3514,7 +3515,7 @@ static void TestSkinnedGeometryValidationFailures(TestContext& context){
 }
 
 static void TestGeometryClassPolicyHelpers(TestContext& context){
-    using namespace NWB::Impl;
+    using namespace NWB::Core::Geometry;
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, GeometryClassMatchesSkinPayload(GeometryClass::Static, false));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !GeometryClassMatchesSkinPayload(GeometryClass::Static, true));

@@ -77,17 +77,17 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     else
         sourceText.assign(NWB_TEXT("<unnamed>"));
 
-    if(!GeometryClassUsesSkinning(instance.geometryClass)){
+    if(!Core::Geometry::GeometryClassUsesSkinning(instance.geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' has invalid geometry class")
             , TStringView(sourceText)
         );
         return false;
     }
     const bool hasSkin = !instance.skin.empty();
-    if(!GeometryClassMatchesSkinPayload(instance.geometryClass, hasSkin)){
+    if(!Core::Geometry::GeometryClassMatchesSkinPayload(instance.geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' class '{}' does not match skin payload")
             , TStringView(sourceText)
-            , StringConvert(GeometryClassText(instance.geometryClass))
+            , StringConvert(Core::Geometry::GeometryClassText(instance.geometryClass))
         );
         return false;
     }

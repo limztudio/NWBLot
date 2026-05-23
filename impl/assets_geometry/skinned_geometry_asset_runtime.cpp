@@ -48,19 +48,19 @@ bool SkinnedGeometry::validatePayload()const{
     Core::Alloc::ScratchArena<> scratchArena;
     const TString<Core::Alloc::ScratchArena<>> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
-    if(!GeometryClassUsesSkinning(m_geometryClass)){
+    if(!Core::Geometry::GeometryClassUsesSkinning(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")
             , geometryPathText
-            , StringConvert(GeometryClassText(m_geometryClass))
+            , StringConvert(Core::Geometry::GeometryClassText(m_geometryClass))
         );
         return false;
     }
 
     const bool hasSkin = !m_skin.empty();
-    if(!GeometryClassMatchesSkinPayload(m_geometryClass, hasSkin)){
+    if(!Core::Geometry::GeometryClassMatchesSkinPayload(m_geometryClass, hasSkin)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' class '{}' does not match skin payload")
             , geometryPathText
-            , StringConvert(GeometryClassText(m_geometryClass))
+            , StringConvert(Core::Geometry::GeometryClassText(m_geometryClass))
         );
         return false;
     }
@@ -96,7 +96,7 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
 
     m_restVertices.clear();
     m_indices.clear();
-    m_geometryClass = GeometryClass::Invalid;
+    m_geometryClass = Core::Geometry::GeometryClass::Invalid;
     m_skin.clear();
     m_skeletonJointCount = 0u;
     m_inverseBindMatrices.clear();
@@ -120,7 +120,7 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     const u64 skinCount = header.skinCount;
     const u64 skeletonJointCount = header.skeletonJointCount;
     const u64 inverseBindMatrixCount = header.inverseBindMatrixCount;
-    if(!GeometryClassUsesSkinning(geometryClass)){
+    if(!Core::Geometry::GeometryClassUsesSkinning(geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: invalid geometry class"));
         return false;
     }
@@ -158,7 +158,7 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count"));
         return false;
     }
-    if(!GeometryClassMatchesSkinPayload(geometryClass, skinCount != 0u)){
+    if(!Core::Geometry::GeometryClassMatchesSkinPayload(geometryClass, skinCount != 0u)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: geometry class does not match skin payload"));
         return false;
     }

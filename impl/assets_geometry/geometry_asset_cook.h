@@ -17,6 +17,7 @@
 #include "skinned_geometry_asset.h"
 #include "geometry_asset.h"
 
+#include <core/geometry/geometry_class.h>
 #include <core/metascript/parser.h>
 
 
@@ -49,7 +50,7 @@ struct SkinnedGeometryCookEntry{
     Name virtualPath = NAME_NONE;
     Core::Assets::AssetVector<SkinnedGeometryVertex> restVertices;
     Core::Assets::AssetVector<u32> indices;
-    u32 geometryClass = GeometryClass::Invalid;
+    u32 geometryClass = Core::Geometry::GeometryClass::Invalid;
     Core::Assets::AssetVector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0u;
     Core::Assets::AssetVector<SkinnedGeometryJointMatrix> inverseBindMatrices;

@@ -6,7 +6,6 @@
 
 
 #include "../global.h"
-#include "geometry_class.h"
 
 #include <impl/skinned_geometry/skinned_geometry_joint_types.h>
 

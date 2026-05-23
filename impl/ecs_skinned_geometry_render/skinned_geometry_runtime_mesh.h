@@ -6,6 +6,7 @@
 
 
 #include <core/graphics/common.h>
+#include <core/geometry/geometry_class.h>
 #include <impl/assets_geometry/skinned_geometry_types.h>
 #include <impl/ecs_skinned_geometry/components.h>
 
@@ -28,7 +29,7 @@ struct SkinnedGeometryRuntimeMeshInstance{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle handle;
     Core::Assets::AssetRef<SkinnedGeometry> source;
-    u32 geometryClass = GeometryClass::Skinned;
+    u32 geometryClass = Core::Geometry::GeometryClass::Skinned;
     VertexVector restVertices;
     IndexVector indices;
     u32 skeletonJointCount = 0;
@@ -52,7 +53,7 @@ struct SkinnedGeometryRuntimeMeshInstance{
             entity.valid()
             && handle.valid()
             && source.valid()
-            && GeometryClassUsesSkinning(geometryClass)
+            && Core::Geometry::GeometryClassUsesSkinning(geometryClass)
             && !restVertices.empty()
             && !indices.empty()
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u

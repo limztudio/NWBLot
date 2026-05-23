@@ -7,6 +7,7 @@
 
 #include "skinned_geometry_types.h"
 
+#include <core/geometry/geometry_class.h>
 #include <global/binary.h>
 
 
@@ -33,7 +34,7 @@ inline constexpr u32 s_SkinnedGeometrySkeletonJointLimit = static_cast<u32>(Limi
 struct SkinnedGeometryHeaderBinary{
     u32 magic = s_SkinnedGeometryMagic;
     u32 version = s_SkinnedGeometryVersion;
-    u32 geometryClass = GeometryClass::Invalid;
+    u32 geometryClass = Core::Geometry::GeometryClass::Invalid;
     u64 restVertexCount = 0;
     u64 indexCount = 0;
     u64 skinCount = 0;

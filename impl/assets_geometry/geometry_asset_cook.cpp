@@ -423,25 +423,25 @@ static bool ParseGeometryClassField(
 
     const Core::Metascript::MStringView text = geometryClass->asString();
     const AStringView classText(text.data(), text.size());
-    if(ParseGeometryClassText(classText, outGeometryClass))
+    if(Core::Geometry::ParseGeometryClassText(classText, outGeometryClass))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported geometry_class '{}', expected {} or {}")
         , metaKind
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(classText)
-        , StringConvert(GeometryClassText(GeometryClass::Static))
-        , StringConvert(GeometryClassText(GeometryClass::Skinned))
+        , StringConvert(Core::Geometry::GeometryClassText(Core::Geometry::GeometryClass::Static))
+        , StringConvert(Core::Geometry::GeometryClassText(Core::Geometry::GeometryClass::Skinned))
     );
     return false;
 }
 
 static bool ParseStaticGeometryClassField(const Path& nwbFilePath, const Core::Metascript::Value& asset){
-    u32 geometryClass = GeometryClass::Invalid;
+    u32 geometryClass = Core::Geometry::GeometryClass::Invalid;
     if(!ParseGeometryClassField(nwbFilePath, asset, s_GeometryMetaKind, geometryClass))
         return false;
 
-    if(geometryClass == GeometryClass::Static)
+    if(geometryClass == Core::Geometry::GeometryClass::Static)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': geometry_class must be 'static' for geometry assets")
@@ -458,12 +458,12 @@ static bool ParseSkinnedGeometryClassField(
     if(!ParseGeometryClassField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, outGeometryClass))
         return false;
 
-    if(GeometryClassUsesSkinning(outGeometryClass))
+    if(Core::Geometry::GeometryClassUsesSkinning(outGeometryClass))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class must be {}")
         , PathToString<tchar>(nwbFilePath)
-        , StringConvert(GeometryClassText(GeometryClass::Skinned))
+        , StringConvert(Core::Geometry::GeometryClassText(Core::Geometry::GeometryClass::Skinned))
     );
     return false;
 }
@@ -1069,10 +1069,10 @@ static bool ParseSkinnedGeometryMeta(
         return false;
     if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
         return false;
-    if(!GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
+    if(!Core::Geometry::GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class '{}' does not match skin payload")
             , PathToString<tchar>(discoveredFile.filePath)
-            , StringConvert(GeometryClassText(outEntry.geometryClass))
+            , StringConvert(Core::Geometry::GeometryClassText(outEntry.geometryClass))
         );
         return false;
     }

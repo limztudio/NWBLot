@@ -6,9 +6,9 @@
 
 
 #include "../global.h"
-#include "geometry_class.h"
 
 #include <core/assets/asset.h>
+#include <core/geometry/geometry_class.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,7 +74,7 @@ public:
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colors()const{ return m_colors; }
     [[nodiscard]] const Core::Assets::AssetVector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] usize vertexCount()const{ return m_positions.size(); }
-    [[nodiscard]] u32 geometryClass()const{ return GeometryClass::Static; }
+    [[nodiscard]] u32 geometryClass()const{ return Core::Geometry::GeometryClass::Static; }
 
 
 private:

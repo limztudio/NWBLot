@@ -14,6 +14,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "material_asset.h"
+
 #include <impl/assets_shader/shader_cook.h>
 
 
@@ -145,7 +147,82 @@ struct MaterialBindEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using MaterialBindParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
+
+struct MaterialBindTypedLayoutBlockLookupEntry{
+    u32 blockIndex = 0u;
+    u32 byteBegin = 0u;
+};
+
+struct MaterialBindTypedLayoutParameterLookupEntry{
+    u32 fieldIndex = 0u;
+    u32 byteOffset = 0u;
+};
+
+using MaterialBindTypedLayoutBlockLookup = ShaderCook::CookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
+using MaterialBindTypedLayoutParameterLookup = ShaderCook::CookMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
+
+struct MaterialBindTypedLayout{
+    const MaterialBindEntry* bindEntry = nullptr;
+    u64 layoutHash = 0u;
+    Material::TypedLayoutBlockVector typedLayoutBlocks;
+    Material::TypedLayoutFieldVector typedLayoutFields;
+    Material::TypedBlockByteVector typedBlockBytes;
+    MaterialBindTypedLayoutBlockLookup blockLookup;
+    MaterialBindTypedLayoutParameterLookup parameterLookup;
+
+    explicit MaterialBindTypedLayout(ShaderCook::CookArena& memoryArena)
+        : typedLayoutBlocks(memoryArena)
+        , typedLayoutFields(memoryArena)
+        , typedBlockBytes(memoryArena)
+        , blockLookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
+        , parameterLookup(0, Hasher<CompactString>(), EqualTo<CompactString>(), memoryArena)
+    {}
+
+    void reset();
+};
+
+struct MaterialBindTypedLayoutCache{
+    ShaderCook::CookVector<MaterialBindTypedLayout> entries;
+    ShaderCook::CookMap<Name, usize> lookup;
+
+    explicit MaterialBindTypedLayoutCache(ShaderCook::CookArena& memoryArena)
+        : entries(memoryArena)
+        , lookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
+    {}
+
+    void reserve(usize count);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry);
+[[nodiscard]] bool BuildMaterialBindTypedLayout(
+    const MaterialBindEntry& bindEntry,
+    const Name& contextName,
+    MaterialBindTypedLayout& outLayout
+);
+[[nodiscard]] bool FindOrBuildMaterialBindTypedLayout(
+    const Name& materialInterface,
+    const MaterialBindEntry& bindEntry,
+    MaterialBindTypedLayoutCache& inOutCache,
+    const MaterialBindTypedLayout*& outLayout
+);
+void CopyMaterialBindTypedLayoutDefaults(
+    const MaterialBindTypedLayout& layout,
+    u64& outLayoutHash,
+    Material::TypedLayoutBlockVector& outBlocks,
+    Material::TypedLayoutFieldVector& outFields,
+    Material::TypedBlockByteVector& outBlockBytes
+);
+[[nodiscard]] bool ApplyMaterialBindTypedLayoutParameters(
+    const MaterialBindTypedLayout& layout,
+    const Name& materialName,
+    const MaterialBindParameterMap& parameters,
+    Material::TypedBlockByteVector& inOutBlockBytes
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -33,7 +33,7 @@ NWB_IMPL_BEGIN
 
 struct MaterialCookEntry{
     using StageShaderMap = ShaderCook::CookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
-    using ParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
+    using ParameterMap = MaterialBindParameterMap;
 
     Name virtualPath = NAME_NONE;
     Name materialInterface = NAME_NONE;

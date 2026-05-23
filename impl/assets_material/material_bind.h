@@ -15,8 +15,7 @@
 
 
 #include "material_asset.h"
-
-#include <impl/assets_shader/shader_cook.h>
+#include "material_cook_types.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,21 +64,21 @@ inline AStringView TypedBindingImplicitDefineValueText(){
 
 
 struct MaterialBindAttribute{
-    ShaderCook::CookString name;
-    ShaderCook::CookVector<ShaderCook::CookString> arguments;
+    MaterialCookString name;
+    MaterialCookVector<MaterialCookString> arguments;
 
-    explicit MaterialBindAttribute(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindAttribute(MaterialCookArena& memoryArena)
         : name(memoryArena)
         , arguments(memoryArena)
     {}
 };
 
 struct MaterialBindField{
-    ShaderCook::CookString type;
-    ShaderCook::CookString name;
-    ShaderCook::CookVector<MaterialBindAttribute> attributes;
+    MaterialCookString type;
+    MaterialCookString name;
+    MaterialCookVector<MaterialBindAttribute> attributes;
 
-    explicit MaterialBindField(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindField(MaterialCookArena& memoryArena)
         : type(memoryArena)
         , name(memoryArena)
         , attributes(memoryArena)
@@ -90,11 +89,11 @@ struct MaterialBindField{
 };
 
 struct MaterialBindStruct{
-    ShaderCook::CookString name;
-    ShaderCook::CookVector<MaterialBindAttribute> attributes;
-    ShaderCook::CookVector<MaterialBindField> fields;
+    MaterialCookString name;
+    MaterialCookVector<MaterialBindAttribute> attributes;
+    MaterialCookVector<MaterialBindField> fields;
 
-    explicit MaterialBindStruct(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindStruct(MaterialCookArena& memoryArena)
         : name(memoryArena)
         , attributes(memoryArena)
         , fields(memoryArena)
@@ -105,22 +104,22 @@ struct MaterialBindStruct{
 };
 
 struct MaterialBindInstance{
-    ShaderCook::CookString type;
-    ShaderCook::CookString name;
+    MaterialCookString type;
+    MaterialCookString name;
 
-    explicit MaterialBindInstance(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindInstance(MaterialCookArena& memoryArena)
         : type(memoryArena)
         , name(memoryArena)
     {}
 };
 
 struct MaterialBindEntry{
-    ShaderCook::CookString source;
-    ShaderCook::CookString virtualPath;
-    ShaderCook::CookVector<MaterialBindStruct> structs;
-    ShaderCook::CookVector<MaterialBindInstance> instances;
+    MaterialCookString source;
+    MaterialCookString virtualPath;
+    MaterialCookVector<MaterialBindStruct> structs;
+    MaterialCookVector<MaterialBindInstance> instances;
 
-    explicit MaterialBindEntry(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindEntry(MaterialCookArena& memoryArena)
         : source(memoryArena)
         , virtualPath(memoryArena)
         , structs(memoryArena)
@@ -142,7 +141,7 @@ struct MaterialBindEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MaterialBindParameterMap = ShaderCook::CookMap<CompactString, CompactString>;
+using MaterialBindParameterMap = MaterialCookMap<CompactString, CompactString>;
 
 struct MaterialBindTypedLayoutBlockLookupEntry{
     u32 blockIndex = 0u;
@@ -154,8 +153,8 @@ struct MaterialBindTypedLayoutParameterLookupEntry{
     u32 byteOffset = 0u;
 };
 
-using MaterialBindTypedLayoutBlockLookup = ShaderCook::CookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
-using MaterialBindTypedLayoutParameterLookup = ShaderCook::CookMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
+using MaterialBindTypedLayoutBlockLookup = MaterialCookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
+using MaterialBindTypedLayoutParameterLookup = MaterialCookMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
 
 struct MaterialBindTypedLayout{
     const MaterialBindEntry* bindEntry = nullptr;
@@ -166,7 +165,7 @@ struct MaterialBindTypedLayout{
     MaterialBindTypedLayoutBlockLookup blockLookup;
     MaterialBindTypedLayoutParameterLookup parameterLookup;
 
-    explicit MaterialBindTypedLayout(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindTypedLayout(MaterialCookArena& memoryArena)
         : typedLayoutBlocks(memoryArena)
         , typedLayoutFields(memoryArena)
         , typedBlockBytes(memoryArena)
@@ -178,10 +177,10 @@ struct MaterialBindTypedLayout{
 };
 
 struct MaterialBindTypedLayoutCache{
-    ShaderCook::CookVector<MaterialBindTypedLayout> entries;
-    ShaderCook::CookMap<Name, usize> lookup;
+    MaterialCookVector<MaterialBindTypedLayout> entries;
+    MaterialCookMap<Name, usize> lookup;
 
-    explicit MaterialBindTypedLayoutCache(ShaderCook::CookArena& memoryArena)
+    explicit MaterialBindTypedLayoutCache(MaterialCookArena& memoryArena)
         : entries(memoryArena)
         , lookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
     {}

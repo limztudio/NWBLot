@@ -41,7 +41,7 @@ namespace __hidden_material_bind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookString = ShaderCook::CookString;
+using CookString = MaterialCookString;
 using ScratchArena = Core::Alloc::ScratchArena<>;
 template<typename T>
 using ScratchVector = Vector<T, ScratchArena>;
@@ -53,7 +53,7 @@ static constexpr AStringView s_AssetVariableMaterialBind = "asset";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindDocument(const Path& bindFilePath, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
+static bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc){
     CookString bindText{arena};
     if(!ReadTextFile(bindFilePath, bindText)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to read Bind '{}'"), PathToString<tchar>(bindFilePath));
@@ -216,8 +216,8 @@ static bool ParseMaterialBindAttributeList(
     const Path& bindFilePath,
     const Metascript::Value* attributesValue,
     const AStringView contextLabel,
-    ShaderCook::CookArena& arena,
-    ShaderCook::CookVector<MaterialBindAttribute>& outAttributes
+    MaterialCookArena& arena,
+    MaterialCookVector<MaterialBindAttribute>& outAttributes
 ){
     outAttributes.clear();
     if(!attributesValue)
@@ -378,7 +378,7 @@ static bool ParseMaterialBindField(
     const Path& bindFilePath,
     const Metascript::Value& fieldValue,
     const MaterialBindStruct& bindStruct,
-    ShaderCook::CookArena& arena,
+    MaterialCookArena& arena,
     MaterialBindField& outField
 ){
     if(!fieldValue.isMap()){
@@ -426,7 +426,7 @@ static bool ParseMaterialBindStruct(
     const Path& bindFilePath,
     const Metascript::MStringView structName,
     const Metascript::Value& structValue,
-    ShaderCook::CookArena& arena,
+    MaterialCookArena& arena,
     MaterialBindStruct& outStruct
 ){
     if(!structValue.isMap()){
@@ -487,7 +487,7 @@ static bool ParseMaterialBindStruct(
     return true;
 }
 
-static bool ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookVector<MaterialBindStruct>& outStructs){
+static bool ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena, MaterialCookVector<MaterialBindStruct>& outStructs){
     outStructs.clear();
 
     const Metascript::Value* structsValue = asset.findField("structs");
@@ -516,7 +516,7 @@ static bool ParseMaterialBindStructs(const Path& bindFilePath, const Metascript:
     return true;
 }
 
-static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, MaterialBindEntry& outEntry){
+static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena, MaterialBindEntry& outEntry){
     outEntry.instances.clear();
 
     const Metascript::Value* instancesValue = asset.findField("instances");
@@ -570,7 +570,7 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
     return true;
 }
 
-static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, ShaderCook::CookArena& arena, MaterialBindEntry& outEntry){
+static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, MaterialBindEntry& outEntry){
     outEntry.reset();
 
     outEntry.source = PathToString(arena, bindFilePath);
@@ -1440,7 +1440,7 @@ u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
 bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry){
     outEntry.reset();
 
-    ShaderCook::CookArena& arena = outEntry.source.get_allocator().arena();
+    MaterialCookArena& arena = outEntry.source.get_allocator().arena();
     Metascript::Document doc(arena);
     if(!__hidden_material_bind::ParseMaterialBindDocument(bindFilePath, arena, doc))
         return false;

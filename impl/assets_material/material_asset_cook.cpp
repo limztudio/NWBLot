@@ -570,6 +570,28 @@ using MaterialTypedLayoutParameterLookup = HashMap<
     ScratchArena
 >;
 
+struct MaterialTypedLayoutCacheEntry{
+    const MaterialBindEntry* bindEntry = nullptr;
+    u64 typedLayoutHash = 0u;
+    Material::TypedLayoutBlockVector typedLayoutBlocks;
+    Material::TypedLayoutFieldVector typedLayoutFields;
+    Material::TypedBlockByteVector typedBlockBytes;
+
+    explicit MaterialTypedLayoutCacheEntry(ShaderCook::CookArena& arena)
+        : typedLayoutBlocks(arena)
+        , typedLayoutFields(arena)
+        , typedBlockBytes(arena)
+    {}
+};
+
+using MaterialTypedLayoutCacheLookup = HashMap<
+    Name,
+    usize,
+    Hasher<Name>,
+    EqualTo<Name>,
+    ScratchArena
+>;
+
 static bool BuildMaterialTypedLayoutBlockLookup(
     const Material::TypedLayoutBlockVector& blocks,
     const AStringView contextLabel,
@@ -1391,20 +1413,29 @@ static bool BuildMaterialTypedLayoutDefaults(
     return true;
 }
 
-static bool BuildMaterialTypedLayout(
-    const MaterialBindEntry& bindEntry,
+static void CopyMaterialTypedLayoutCache(
+    const MaterialTypedLayoutCacheEntry& layoutCache,
     MaterialCookEntry& outMaterialEntry
 ){
-    if(!BuildMaterialTypedLayoutDefaults(
-        bindEntry,
-        outMaterialEntry.virtualPath,
-        outMaterialEntry.typedLayoutBlocks,
-        outMaterialEntry.typedLayoutFields,
-        outMaterialEntry.typedBlockBytes,
-        outMaterialEntry.typedLayoutHash
-    ))
-        return false;
+    outMaterialEntry.typedLayoutHash = layoutCache.typedLayoutHash;
+    outMaterialEntry.typedLayoutBlocks.assign(layoutCache.typedLayoutBlocks.begin(), layoutCache.typedLayoutBlocks.end());
+    outMaterialEntry.typedLayoutFields.assign(layoutCache.typedLayoutFields.begin(), layoutCache.typedLayoutFields.end());
+    outMaterialEntry.typedBlockBytes.assign(layoutCache.typedBlockBytes.begin(), layoutCache.typedBlockBytes.end());
+}
 
+static bool BuildMaterialTypedLayout(
+    const MaterialTypedLayoutCacheEntry& layoutCache,
+    MaterialCookEntry& outMaterialEntry
+){
+    if(!layoutCache.bindEntry){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has no material bind layout cache")
+            , StringConvert(outMaterialEntry.virtualPath.c_str())
+        );
+        return false;
+    }
+
+    const MaterialBindEntry& bindEntry = *layoutCache.bindEntry;
+    CopyMaterialTypedLayoutCache(layoutCache, outMaterialEntry);
     if(outMaterialEntry.parameters.empty())
         return true;
 
@@ -1416,7 +1447,7 @@ static bool BuildMaterialTypedLayout(
         scratchArena
     );
     if(!BuildMaterialTypedLayoutBlockLookup(
-        outMaterialEntry.typedLayoutBlocks,
+        layoutCache.typedLayoutBlocks,
         AStringView(outMaterialEntry.virtualPath.c_str()),
         blockLookup
     ))
@@ -1430,7 +1461,7 @@ static bool BuildMaterialTypedLayout(
     );
     if(!BuildMaterialTypedLayoutParameterLookup(
         bindEntry,
-        outMaterialEntry.typedLayoutFields,
+        layoutCache.typedLayoutFields,
         blockLookup,
         AStringView(outMaterialEntry.virtualPath.c_str()),
         parameterLookup
@@ -1442,6 +1473,54 @@ static bool BuildMaterialTypedLayout(
             return false;
     }
 
+    return true;
+}
+
+static bool FindOrBuildMaterialTypedLayoutCache(
+    const Name& materialInterface,
+    const MaterialBindEntry& bindEntry,
+    ShaderCook::CookVector<MaterialTypedLayoutCacheEntry>& inOutCacheEntries,
+    MaterialTypedLayoutCacheLookup& inOutCacheLookup,
+    const MaterialTypedLayoutCacheEntry*& outCacheEntry
+){
+    outCacheEntry = nullptr;
+
+    const auto cacheIt = inOutCacheLookup.find(materialInterface);
+    if(cacheIt != inOutCacheLookup.end()){
+        const usize cacheIndex = cacheIt.value();
+        if(cacheIndex >= inOutCacheEntries.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: typed layout cache index is out of range for material interface '{}'")
+                , StringConvert(materialInterface.c_str())
+            );
+            return false;
+        }
+
+        outCacheEntry = &inOutCacheEntries[cacheIndex];
+        return true;
+    }
+
+    const usize cacheIndex = inOutCacheEntries.size();
+    inOutCacheEntries.emplace_back(inOutCacheEntries.get_allocator().arena());
+    MaterialTypedLayoutCacheEntry& cacheEntry = inOutCacheEntries.back();
+    cacheEntry.bindEntry = &bindEntry;
+    if(!BuildMaterialTypedLayoutDefaults(
+        bindEntry,
+        materialInterface,
+        cacheEntry.typedLayoutBlocks,
+        cacheEntry.typedLayoutFields,
+        cacheEntry.typedBlockBytes,
+        cacheEntry.typedLayoutHash
+    ))
+        return false;
+
+    if(!inOutCacheLookup.emplace(materialInterface, cacheIndex).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: duplicate typed layout cache for material interface '{}'")
+            , StringConvert(materialInterface.c_str())
+        );
+        return false;
+    }
+
+    outCacheEntry = &cacheEntry;
     return true;
 }
 
@@ -2255,6 +2334,18 @@ static bool ValidateMaterialCookInterfaces(
     );
     BuildMaterialBindInterfaceLookup(materialBindEntries, materialBindLookup);
 
+    const usize cacheReserveCount = Min(materialBindEntries.size(), materialEntries.size());
+    ShaderCook::CookVector<MaterialTypedLayoutCacheEntry> layoutCacheEntries(materialEntries.get_allocator().arena());
+    layoutCacheEntries.reserve(cacheReserveCount);
+
+    MaterialTypedLayoutCacheLookup layoutCacheLookup(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        scratchArena
+    );
+    layoutCacheLookup.reserve(cacheReserveCount);
+
     for(MaterialCookEntry& materialEntry : materialEntries){
         materialEntry.typedLayoutHash = 0u;
         materialEntry.typedLayoutBlocks.clear();
@@ -2278,7 +2369,24 @@ static bool ValidateMaterialCookInterfaces(
         }
         const MaterialBindEntry* bindEntry = bindEntryIt.value();
 
-        if(!BuildMaterialTypedLayout(*bindEntry, materialEntry))
+        const MaterialTypedLayoutCacheEntry* layoutCache = nullptr;
+        if(!FindOrBuildMaterialTypedLayoutCache(
+            materialEntry.materialInterface,
+            *bindEntry,
+            layoutCacheEntries,
+            layoutCacheLookup,
+            layoutCache
+        ))
+            return false;
+        if(!layoutCache){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'")
+                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(materialEntry.materialInterface.c_str())
+            );
+            return false;
+        }
+
+        if(!BuildMaterialTypedLayout(*layoutCache, materialEntry))
             return false;
     }
 

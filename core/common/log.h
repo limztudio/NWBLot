@@ -64,19 +64,6 @@ extern ILogger* g_logger;
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...){}
 
-inline void EnqueueLogMessage(const LogType::Enum type, LogString&& message){
-    NWB_FATAL_ASSERT(LoggerDetail::g_logger != nullptr);
-    LoggerDetail::g_logger->enqueue(Move(message), type);
-}
-
-template<typename... ARGS>
-inline void EnqueueFormattedLogMessage(const LogType::Enum type, ARGS&&... args){
-    NWB_FATAL_ASSERT(LoggerDetail::g_logger != nullptr);
-    auto& logger = *LoggerDetail::g_logger;
-    logger.enqueue(StringFormat(logger.arena(), Forward<ARGS>(args)...), type);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

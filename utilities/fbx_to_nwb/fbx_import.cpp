@@ -28,12 +28,6 @@ AString FromUfbxString(const ufbx_string value){
     return AString(value.data, value.length);
 }
 
-char ToLowerAscii(const char value){
-    if(value >= 'A' && value <= 'Z')
-        return static_cast<char>(value - 'A' + 'a');
-    return value;
-}
-
 AStringView UfbxStringView(const ufbx_string value){
     if(!value.data || value.length == 0u)
         return {};
@@ -46,7 +40,7 @@ bool NormalizedAsciiEqual(const ufbx_string value, const AStringView normalized)
         return false;
 
     for(usize i = 0u; i < normalized.size(); ++i){
-        if(ToLowerAscii(text[i]) != normalized[i])
+        if(ToAsciiLower(text[i]) != normalized[i])
             return false;
     }
     return true;
@@ -63,7 +57,7 @@ bool NormalizedAsciiContains(const ufbx_string value, const AStringView normaliz
     for(usize begin = 0u; begin <= lastBegin; ++begin){
         bool matched = true;
         for(usize i = 0u; i < normalized.size(); ++i){
-            if(ToLowerAscii(text[begin + i]) != normalized[i]){
+            if(ToAsciiLower(text[begin + i]) != normalized[i]){
                 matched = false;
                 break;
             }

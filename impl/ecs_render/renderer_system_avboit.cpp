@@ -20,7 +20,6 @@ namespace __hidden_renderer_avboit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 static constexpr u32 s_AvboitDownsample = 4u;
 static constexpr u32 s_AvboitVirtualSlices = 128u;
 static constexpr u32 s_AvboitPhysicalSlices = 64u;
@@ -474,7 +473,7 @@ bool RendererSystem::createAvboitFrameTargets(
     }
 
     Core::FramebufferDesc lowFramebufferDesc;
-    lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), __hidden_renderer_avboit::s_FramebufferSubresources);
+    lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources);
     avboitTargets.lowFramebuffer = device->createFramebuffer(lowFramebufferDesc);
     if(!avboitTargets.lowFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
@@ -483,12 +482,12 @@ bool RendererSystem::createAvboitFrameTargets(
 
     Core::FramebufferDesc accumulationFramebufferDesc;
     accumulationFramebufferDesc
-        .addColorAttachment(avboitTargets.accumColor.get(), __hidden_renderer_avboit::s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.accumExtinction.get(), __hidden_renderer_avboit::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources)
         .setDepthAttachment(
             Core::FramebufferAttachment()
                 .setTexture(createdTargets.depth.get())
-                .setSubresources(__hidden_renderer_avboit::s_FramebufferSubresources)
+                .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
                 .setReadOnly(true)
         )
     ;
@@ -605,7 +604,7 @@ bool RendererSystem::createAvboitFrameTargets(
         0,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        __hidden_renderer_avboit::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
@@ -631,7 +630,7 @@ bool RendererSystem::createAvboitFrameTargets(
         0,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        __hidden_renderer_avboit::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, m_deferredSampler.get()));
@@ -651,7 +650,7 @@ bool RendererSystem::createAvboitFrameTargets(
         1,
         avboitTargets.transmittanceTexture.get(),
         avboitTargets.transmittanceFormat,
-        __hidden_renderer_avboit::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
@@ -668,7 +667,7 @@ bool RendererSystem::createAvboitFrameTargets(
         1,
         avboitTargets.transmittanceTexture.get(),
         avboitTargets.transmittanceFormat,
-        __hidden_renderer_avboit::s_FramebufferSubresources,
+        ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
@@ -686,13 +685,13 @@ bool RendererSystem::createAvboitFrameTargets(
 
 void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets){
     if(targets.lowRasterTarget)
-        commandList.setTextureState(targets.lowRasterTarget.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     if(targets.accumColor)
-        commandList.setTextureState(targets.accumColor.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     if(targets.accumExtinction)
-        commandList.setTextureState(targets.accumExtinction.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     if(targets.coverageBuffer)
         commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::CopyDest);
@@ -710,18 +709,18 @@ void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitF
         commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::CopyDest);
 
     if(targets.transmittanceTexture)
-        commandList.setTextureState(targets.transmittanceTexture.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     commandList.commitBarriers();
 
     if(targets.lowRasterTarget)
-        commandList.clearTextureFloat(targets.lowRasterTarget.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(targets.accumColor)
-        commandList.clearTextureFloat(targets.accumColor.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(targets.accumExtinction)
-        commandList.clearTextureFloat(targets.accumExtinction.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(targets.coverageBuffer)
         commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
@@ -739,7 +738,7 @@ void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitF
         commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), Limit<u32>::s_Max);
 
     if(targets.transmittanceTexture)
-        commandList.clearTextureFloat(targets.transmittanceTexture.get(), __hidden_renderer_avboit::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
+        commandList.clearTextureFloat(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
 void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets){

@@ -607,18 +607,6 @@ static void BuildMaterialBindInterfaceLookup(
 // material bind generated Slang include helpers
 
 
-static char ToGeneratedAsciiUpper(const char ch){
-    return (ch >= 'a' && ch <= 'z') ? static_cast<char>(ch - ('a' - 'A')) : ch;
-}
-
-static bool IsGeneratedAlphaNumeric(const char ch){
-    return
-        (ch >= 'A' && ch <= 'Z')
-        || (ch >= 'a' && ch <= 'z')
-        || (ch >= '0' && ch <= '9')
-    ;
-}
-
 static void AppendMaterialBindGeneratedSeparator(CookString& inOutSource, const u32 newlineCount){
     static constexpr AStringView s_SeparatorChunk = "////////////////";
     for(u32 i = 0u; i < 8u; ++i)
@@ -630,7 +618,7 @@ static void AppendMaterialBindGeneratedSeparator(CookString& inOutSource, const 
 static void AppendGeneratedUpperIdentifier(const AStringView text, CookString& inOutText){
     const usize beginSize = inOutText.size();
     for(const char ch : text)
-        inOutText += IsGeneratedAlphaNumeric(ch) ? ToGeneratedAsciiUpper(ch) : '_';
+        inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
     if(inOutText.size() == beginSize)
         inOutText += "VALUE";
 }
@@ -645,7 +633,7 @@ static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& 
         }
 
         if(upperNext)
-            inOutText += ToGeneratedAsciiUpper(ch);
+            inOutText += ToAsciiUpper(ch);
         else
             inOutText += ch;
         upperNext = false;
@@ -665,19 +653,8 @@ static void AppendHexU32Slang(const u32 value, CookString& inOutText){
 }
 
 static void AppendU32Decimal(const u32 value, CookString& inOutText){
-    char digits[10u];
-    u32 digitCount = 0u;
-    u32 remaining = value;
-    do{
-        digits[digitCount] = static_cast<char>('0' + (remaining % 10u));
-        remaining /= 10u;
-        ++digitCount;
-    } while(remaining != 0u);
-
-    while(digitCount > 0u){
-        --digitCount;
-        inOutText += digits[digitCount];
-    }
+    char digits[16u];
+    inOutText += FormatDecimal(static_cast<usize>(value), digits);
 }
 
 static void AppendU32Slang(const u32 value, CookString& inOutText){
@@ -699,10 +676,25 @@ static CookString BuildMaterialBindIncludeGuard(ShaderCook::CookArena& arena, co
     return guard;
 }
 
-static CookString BuildMaterialBindGlobalSymbol(ShaderCook::CookArena& arena, const AStringView suffix){
+static CookString BuildMaterialBindGeneratedSymbol(
+    ShaderCook::CookArena& arena,
+    const InitializerList<AStringView> nameSegments,
+    const AStringView suffix
+){
     CookString symbol("NWB_MATERIAL_BIND_", arena);
+    bool firstSegment = true;
+    for(const AStringView nameSegment : nameSegments){
+        if(!firstSegment)
+            symbol += '_';
+        AppendGeneratedUpperIdentifier(nameSegment, symbol);
+        firstSegment = false;
+    }
     symbol += suffix;
     return symbol;
+}
+
+static CookString BuildMaterialBindGlobalSymbol(ShaderCook::CookArena& arena, const AStringView suffix){
+    return BuildMaterialBindGeneratedSymbol(arena, {}, suffix);
 }
 
 static CookString BuildMaterialBindBlockSymbol(
@@ -710,10 +702,7 @@ static CookString BuildMaterialBindBlockSymbol(
     const AStringView blockName,
     const AStringView suffix
 ){
-    CookString symbol("NWB_MATERIAL_BIND_", arena);
-    AppendGeneratedUpperIdentifier(blockName, symbol);
-    symbol += suffix;
-    return symbol;
+    return BuildMaterialBindGeneratedSymbol(arena, { blockName }, suffix);
 }
 
 static CookString BuildMaterialBindFieldSymbol(
@@ -722,12 +711,21 @@ static CookString BuildMaterialBindFieldSymbol(
     const MaterialBindField& field,
     const AStringView suffix
 ){
-    CookString symbol("NWB_MATERIAL_BIND_", arena);
-    AppendGeneratedUpperIdentifier(AStringView(instance.name), symbol);
-    symbol += '_';
-    AppendGeneratedUpperIdentifier(AStringView(field.name), symbol);
-    symbol += suffix;
-    return symbol;
+    return BuildMaterialBindGeneratedSymbol(
+        arena,
+        { AStringView(instance.name), AStringView(field.name) },
+        suffix
+    );
+}
+
+static CookString BuildMaterialBindAccessorName(
+    ShaderCook::CookArena& arena,
+    const InitializerList<AStringView> nameSegments
+){
+    CookString functionName("nwbMaterialBindLoad", arena);
+    for(const AStringView nameSegment : nameSegments)
+        AppendGeneratedPascalIdentifier(nameSegment, functionName);
+    return functionName;
 }
 
 static CookString BuildMaterialBindFieldAccessorName(
@@ -735,16 +733,11 @@ static CookString BuildMaterialBindFieldAccessorName(
     const MaterialBindInstance& instance,
     const MaterialBindField& field
 ){
-    CookString functionName("nwbMaterialBindLoad", arena);
-    AppendGeneratedPascalIdentifier(AStringView(instance.name), functionName);
-    AppendGeneratedPascalIdentifier(AStringView(field.name), functionName);
-    return functionName;
+    return BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
 }
 
 static CookString BuildMaterialBindBlockAccessorName(ShaderCook::CookArena& arena, const MaterialBindInstance& instance){
-    CookString functionName("nwbMaterialBindLoad", arena);
-    AppendGeneratedPascalIdentifier(AStringView(instance.name), functionName);
-    return functionName;
+    return BuildMaterialBindAccessorName(arena, { AStringView(instance.name) });
 }
 
 static bool RegisterGeneratedMaterialBindSymbol(
@@ -803,6 +796,29 @@ static AStringView MaterialBindFieldLookupFunctionName(const MaterialLayoutField
     }
 }
 
+static bool AppendMaterialBindConstantPrefix(
+    const AStringView includePath,
+    const CookString& symbol,
+    const AStringView type,
+    ScratchHashSet<ScratchString>& inOutSymbols,
+    ScratchArena& scratchArena,
+    CookString& inOutSource
+){
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(symbol), inOutSymbols, scratchArena))
+        return false;
+
+    inOutSource += "static const ";
+    inOutSource += type;
+    inOutSource += ' ';
+    inOutSource += symbol;
+    inOutSource += " = ";
+    return true;
+}
+
+static void AppendMaterialBindConstantSuffix(CookString& inOutSource){
+    inOutSource += ";\n";
+}
+
 static bool AppendMaterialBindU32Constant(
     const AStringView includePath,
     const CookString& symbol,
@@ -811,14 +827,11 @@ static bool AppendMaterialBindU32Constant(
     ScratchArena& scratchArena,
     CookString& inOutSource
 ){
-    if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(symbol), inOutSymbols, scratchArena))
+    if(!AppendMaterialBindConstantPrefix(includePath, symbol, "uint", inOutSymbols, scratchArena, inOutSource))
         return false;
 
-    inOutSource += "static const uint ";
-    inOutSource += symbol;
-    inOutSource += " = ";
     AppendU32Slang(value, inOutSource);
-    inOutSource += ";\n";
+    AppendMaterialBindConstantSuffix(inOutSource);
     return true;
 }
 
@@ -830,14 +843,11 @@ static bool AppendMaterialBindU64Constant(
     ScratchArena& scratchArena,
     CookString& inOutSource
 ){
-    if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(symbol), inOutSymbols, scratchArena))
+    if(!AppendMaterialBindConstantPrefix(includePath, symbol, "uint2", inOutSymbols, scratchArena, inOutSource))
         return false;
 
-    inOutSource += "static const uint2 ";
-    inOutSource += symbol;
-    inOutSource += " = ";
     AppendU64AsUint2Slang(value, inOutSource);
-    inOutSource += ";\n";
+    AppendMaterialBindConstantSuffix(inOutSource);
     return true;
 }
 
@@ -984,6 +994,8 @@ static bool AppendMaterialBindFieldConstants(
     const MaterialBindField& field,
     const CookString& keySymbol,
     const CookString& defaultSymbol,
+    ScratchHashSet<ScratchString>& inOutSymbols,
+    ScratchArena& scratchArena,
     CookString& inOutSource
 ){
     const AStringView defaultAttribute = field.defaultArgument();
@@ -1007,19 +1019,28 @@ static bool AppendMaterialBindFieldConstants(
     }
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
 
-    inOutSource += "static const uint2 ";
-    inOutSource += keySymbol;
-    inOutSource += " = ";
-    AppendU64AsUint2Slang(keyHash, inOutSource);
-    inOutSource += ";\n";
+    if(!AppendMaterialBindU64Constant(
+        includePath,
+        keySymbol,
+        keyHash,
+        inOutSymbols,
+        scratchArena,
+        inOutSource
+    ))
+        return false;
 
-    inOutSource += "static const ";
-    inOutSource += field.type;
-    inOutSource += ' ';
-    inOutSource += defaultSymbol;
-    inOutSource += " = ";
+    if(!AppendMaterialBindConstantPrefix(
+        includePath,
+        defaultSymbol,
+        AStringView(field.type),
+        inOutSymbols,
+        scratchArena,
+        inOutSource
+    ))
+        return false;
+
     inOutSource += defaultAttribute;
-    inOutSource += ";\n";
+    AppendMaterialBindConstantSuffix(inOutSource);
     return true;
 }
 
@@ -1128,27 +1149,6 @@ static bool AppendMaterialBindGeneratedInstance(
         const CookString functionName = BuildMaterialBindFieldAccessorName(arena, instance, field);
         if(!RegisterGeneratedMaterialBindSymbol(
             includePath,
-            AStringView(keySymbol),
-            inOutSymbols,
-            scratchArena
-        ))
-            return false;
-        if(!RegisterGeneratedMaterialBindSymbol(
-            includePath,
-            AStringView(defaultSymbol),
-            inOutSymbols,
-            scratchArena
-        ))
-            return false;
-        if(!RegisterGeneratedMaterialBindSymbol(
-            includePath,
-            AStringView(byteOffsetSymbol),
-            inOutSymbols,
-            scratchArena
-        ))
-            return false;
-        if(!RegisterGeneratedMaterialBindSymbol(
-            includePath,
             AStringView(functionName),
             inOutSymbols,
             scratchArena
@@ -1162,15 +1162,21 @@ static bool AppendMaterialBindGeneratedInstance(
             field,
             keySymbol,
             defaultSymbol,
+            inOutSymbols,
+            scratchArena,
             inOutSource
         ))
             return false;
         const u32 fieldByteOffset = layoutBlockEntry.byteBegin + layoutField.offset;
-        inOutSource += "static const uint ";
-        inOutSource += byteOffsetSymbol;
-        inOutSource += " = ";
-        AppendU32Slang(fieldByteOffset, inOutSource);
-        inOutSource += ";\n";
+        if(!AppendMaterialBindU32Constant(
+            includePath,
+            byteOffsetSymbol,
+            fieldByteOffset,
+            inOutSymbols,
+            scratchArena,
+            inOutSource
+        ))
+            return false;
         inOutSource += '\n';
         AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, loadFunctionName, inOutSource);
         inOutSource += '\n';

@@ -224,6 +224,24 @@ inline constexpr CharT ToAsciiLower(CharT c){
 }
 
 template<typename CharT>
+inline constexpr CharT ToAsciiUpper(CharT c){
+    return
+        (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z'))
+            ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A')))
+            : c
+    ;
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool IsAsciiAlphaNumeric(CharT ch){
+    return
+        (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
+        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z'))
+        || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'))
+    ;
+}
+
+template<typename CharT>
 inline constexpr CharT Canonicalize(CharT c){
     if(c == static_cast<CharT>('\\'))
         return static_cast<CharT>('/');

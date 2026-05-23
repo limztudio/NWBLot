@@ -363,6 +363,57 @@ template<typename MetadataValue>
     return false;
 }
 
+[[nodiscard]] inline bool IsListedMetadataAssetField(
+    const AStringView fieldName,
+    const InitializerList<AStringView> allowedFields
+){
+    for(const AStringView allowedField : allowedFields){
+        if(fieldName == allowedField)
+            return true;
+    }
+    return false;
+}
+
+template<typename MetadataValue, typename IsAllowedField>
+[[nodiscard]] inline bool ValidateMetadataAssetFields(
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView diagnosticPrefix,
+    IsAllowedField&& isAllowedField
+){
+    for(const auto& field : asset.asMap()){
+        const auto& fieldName = field.first;
+        const AStringView fieldNameText(fieldName.data(), fieldName.size());
+        if(isAllowedField(fieldNameText))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unsupported asset field '{}'")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldNameText)
+        );
+        return false;
+    }
+    return true;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline bool ValidateMetadataAssetFields(
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView diagnosticPrefix,
+    const InitializerList<AStringView> allowedFields
+){
+    return ValidateMetadataAssetFields(
+        nwbFilePath,
+        asset,
+        diagnosticPrefix,
+        [allowedFields](const AStringView fieldName){
+            return IsListedMetadataAssetField(fieldName, allowedFields);
+        }
+    );
+}
+
 template<typename MetadataValue>
 [[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(
     const Path& assetRoot,

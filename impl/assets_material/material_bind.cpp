@@ -12,6 +12,7 @@
 #include "material_binary_payload.h"
 
 #include <core/alloc/scratch.h>
+#include <core/assets/asset_paths.h>
 #include <core/metascript/parser.h>
 
 #include <core/common/log.h>
@@ -569,26 +570,6 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
     return true;
 }
 
-static bool IsMaterialBindAssetField(const AStringView fieldName){
-    return fieldName == "structs" || fieldName == "instances";
-}
-
-static bool ValidateMaterialBindAssetFields(const Path& bindFilePath, const Metascript::Value& asset){
-    for(const auto& field : asset.asMap()){
-        const auto& fieldName = field.first;
-        const AStringView fieldNameText(fieldName.data(), fieldName.size());
-        if(IsMaterialBindAssetField(fieldNameText))
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': unsupported asset field '{}'")
-            , PathToString<tchar>(bindFilePath)
-            , StringConvert(fieldNameText)
-        );
-        return false;
-    }
-    return true;
-}
-
 static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, ShaderCook::CookArena& arena, MaterialBindEntry& outEntry){
     outEntry.reset();
 
@@ -599,7 +580,7 @@ static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::
     const Metascript::Value* assetValue = FindAssetMapValue(bindFilePath, doc);
     if(!assetValue)
         return false;
-    if(!ValidateMaterialBindAssetFields(bindFilePath, *assetValue))
+    if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, *assetValue, "Material bind", { "structs", "instances" }))
         return false;
 
     if(!ParseMaterialBindStructs(bindFilePath, *assetValue, arena, outEntry.structs))

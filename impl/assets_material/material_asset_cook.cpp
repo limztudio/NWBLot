@@ -216,38 +216,6 @@ static constexpr AStringView s_Parameters = "parameters";
 static constexpr AStringView s_Alpha = "alpha";
 static constexpr AStringView s_Transparent = "transparent";
 
-static constexpr AStringView s_All[] = {
-    s_Interface,
-    s_Shaders,
-    s_ShaderVariant,
-    s_Parameters,
-    s_Alpha,
-    s_Transparent
-};
-
-}
-
-static bool ValidateMaterialAssetFields(const Path& nwbFilePath, const Core::Metascript::Value& asset){
-    for(const auto& field : asset.asMap()){
-        const auto& fieldName = field.first;
-        const AStringView fieldNameText(fieldName.data(), fieldName.size());
-        bool isSupportedField = false;
-        for(const AStringView materialAssetField : MaterialAssetFields::s_All){
-            if(fieldNameText == materialAssetField){
-                isSupportedField = true;
-                break;
-            }
-        }
-        if(isSupportedField)
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': unsupported asset field '{}'")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldNameText)
-        );
-        return false;
-    }
-    return true;
 }
 
 static bool ParseVariantField(
@@ -1525,7 +1493,19 @@ static bool ParseMaterialMeta(
         outEntry.virtualPath
     ))
         return false;
-    if(!ValidateMaterialAssetFields(nwbFilePath, asset))
+    if(!Core::Assets::ValidateMetadataAssetFields(
+        nwbFilePath,
+        asset,
+        "Material meta",
+        {
+            MaterialAssetFields::s_Interface,
+            MaterialAssetFields::s_Shaders,
+            MaterialAssetFields::s_ShaderVariant,
+            MaterialAssetFields::s_Parameters,
+            MaterialAssetFields::s_Alpha,
+            MaterialAssetFields::s_Transparent
+        }
+    ))
         return false;
 
     if(!ParseVariantField(shaderCook, nwbFilePath, asset, MaterialAssetFields::s_ShaderVariant, outEntry.shaderVariant))

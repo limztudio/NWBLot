@@ -32,8 +32,6 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 
 
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    VkResult res = VK_SUCCESS;
-
     if(!m_context.extensions.KHR_dynamic_rendering){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create meshlet pipelines."));
         return nullptr;
@@ -47,6 +45,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
     auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;
+    pso->m_framebufferInfo = fbinfo;
 
     PipelineShaderStageVector shaderStages{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
@@ -95,40 +94,29 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         VK_DYNAMIC_STATE_SCISSOR,
     };
     VulkanDetail::GraphicsPipelineFixedState fixedState{ scratchArena };
-    if(
-        !VulkanDetail::BuildGraphicsPipelineFixedState(
-            fbinfo,
-            desc.renderState,
-            VulkanDetail::PipelineStencilFaceMode::DepthOnly,
-            dynamicStates,
-            static_cast<u32>(LengthOf(dynamicStates)),
-            NWB_TEXT("meshlet pipeline"),
-            fixedState
-        )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
+    if(!buildGraphicsPipelineFixedStateOrDestroy(
+        fbinfo,
+        desc.renderState,
+        VulkanDetail::PipelineStencilFaceMode::DepthOnly,
+        dynamicStates,
+        static_cast<u32>(LengthOf(dynamicStates)),
+        NWB_TEXT("meshlet pipeline"),
+        pso,
+        fixedState
+    ))
         return nullptr;
-    }
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
-    if(pso->m_usesDescriptorHeap)
-        pipelineInfo.pNext = descriptorHeapScratch.pNext(&fixedState.renderingInfo);
-    else
-        pipelineInfo.pNext = &fixedState.renderingInfo;
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, descriptorHeapScratch, *pso, &fixedState.renderingInfo);
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = nullptr; // Mesh shaders don't use vertex input
     pipelineInfo.pInputAssemblyState = nullptr; // Mesh shaders don't use input assembly
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
-    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create meshlet pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pso);
+    if(!createPipelineOrDestroy(NWB_TEXT("meshlet pipeline"), pso, pipelineInfo))
         return nullptr;
-    }
 
     return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }

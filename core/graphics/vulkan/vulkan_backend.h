@@ -7,6 +7,8 @@
 
 #include "vulkan.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1196,6 +1198,26 @@ inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectTyp
     return Object(nullptr);
 }
 
+inline void AttachPipelineBindingState(
+    VkComputePipelineCreateInfo& pipelineInfo,
+    PipelineDescriptorHeapScratch& descriptorHeapScratch,
+    const PipelineBindingState& bindingState,
+    const void* next = nullptr
+){
+    pipelineInfo.pNext = bindingState.m_usesDescriptorHeap ? descriptorHeapScratch.pNext(next) : next;
+    pipelineInfo.layout = bindingState.m_usesDescriptorHeap ? VK_NULL_HANDLE : bindingState.m_pipelineLayout;
+}
+
+inline void AttachPipelineBindingState(
+    VkGraphicsPipelineCreateInfo& pipelineInfo,
+    PipelineDescriptorHeapScratch& descriptorHeapScratch,
+    const PipelineBindingState& bindingState,
+    const void* next = nullptr
+){
+    pipelineInfo.pNext = bindingState.m_usesDescriptorHeap ? descriptorHeapScratch.pNext(next) : next;
+    pipelineInfo.layout = bindingState.m_usesDescriptorHeap ? VK_NULL_HANDLE : bindingState.m_pipelineLayout;
+}
+
 };
 
 class DescriptorHeapManager final : NoCopy{
@@ -2072,6 +2094,59 @@ private:
         if(configurePipelineBindings(bindingLayouts, operationName, shaderStages, descriptorHeapScratch, *pipeline, scratchArena))
             return true;
 
+        DestroyArenaObject(m_context.objectArena, pipeline);
+        return false;
+    }
+    template<typename PipelineT>
+    [[nodiscard]] bool buildGraphicsPipelineFixedStateOrDestroy(
+        const FramebufferInfo& fbinfo,
+        const RenderState& renderState,
+        const VulkanDetail::PipelineStencilFaceMode::Enum stencilFaceMode,
+        const VkDynamicState* dynamicStates,
+        const u32 dynamicStateCount,
+        const tchar* operationName,
+        PipelineT* pipeline,
+        VulkanDetail::GraphicsPipelineFixedState& outState
+    )const{
+        if(VulkanDetail::BuildGraphicsPipelineFixedState(
+            fbinfo,
+            renderState,
+            stencilFaceMode,
+            dynamicStates,
+            dynamicStateCount,
+            operationName,
+            outState
+        ))
+            return true;
+
+        DestroyArenaObject(m_context.objectArena, pipeline);
+        return false;
+    }
+    template<typename PipelineT>
+    [[nodiscard]] bool createPipelineOrDestroy(
+        const tchar* operationName,
+        PipelineT* pipeline,
+        const VkComputePipelineCreateInfo& pipelineInfo
+    )const{
+        const VkResult res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
+        if(res == VK_SUCCESS)
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
+        DestroyArenaObject(m_context.objectArena, pipeline);
+        return false;
+    }
+    template<typename PipelineT>
+    [[nodiscard]] bool createPipelineOrDestroy(
+        const tchar* operationName,
+        PipelineT* pipeline,
+        const VkGraphicsPipelineCreateInfo& pipelineInfo
+    )const{
+        const VkResult res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
+        if(res == VK_SUCCESS)
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pipeline);
         return false;
     }

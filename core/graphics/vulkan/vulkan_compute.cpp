@@ -72,17 +72,11 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkComputePipelineCreateInfo>(VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO);
-    if(pso->m_usesDescriptorHeap)
-        pipelineInfo.pNext = descriptorHeapScratch.pNext();
     pipelineInfo.stage = shaderStages[0];
-    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, descriptorHeapScratch, *pso);
 
-    const VkResult res = vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create compute pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pso);
+    if(!createPipelineOrDestroy(NWB_TEXT("compute pipeline"), pso, pipelineInfo))
         return nullptr;
-    }
 
     return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }

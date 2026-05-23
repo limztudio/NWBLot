@@ -2,6 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "mesh_raster_fields.slangi"
+
+
 struct NwbMeshEmulationVertexInput{
     [[vk::location(0)]] float4 position : POSITION0;
     [[vk::location(1)]] float3 normal : NORMAL0;
@@ -13,11 +16,7 @@ struct NwbMeshEmulationVertexInput{
 
 struct NwbMeshEmulationVertexOutput{
     float4 position : SV_Position;
-    [[vk::location(0)]] float4 color : COLOR0;
-    [[vk::location(1)]] float3 normal : NORMAL0;
-    [[vk::location(2)]] float4 tangent : TANGENT0;
-    [[vk::location(3)]] float2 uv0 : TEXCOORD0;
-    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
+    NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
 
 

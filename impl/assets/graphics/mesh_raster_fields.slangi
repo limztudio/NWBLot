@@ -2,32 +2,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_MESH_PIXEL_INPUT_SLANGI
-#define NWB_MESH_PIXEL_INPUT_SLANGI
-
-#include "mesh_raster_fields.slangi"
+#ifndef NWB_MESH_RASTER_FIELDS_SLANGI
+#define NWB_MESH_RASTER_FIELDS_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbMeshPixelInput{
-    NWB_MESH_RASTER_PAYLOAD_FIELDS
-};
-
-static float4 inColor;
-static float3 inNormal;
-static float4 inTangent;
-static float2 inUv0;
-static float3 inWorldPosition;
-
-void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
-    inColor = input.color;
-    inNormal = input.normal;
-    inTangent = input.tangent;
-    inUv0 = input.uv0;
-    inWorldPosition = input.worldPosition;
-}
+#define NWB_MESH_RASTER_PAYLOAD_FIELDS \
+    [[vk::location(0)]] float4 color : COLOR0; \
+    [[vk::location(1)]] float3 normal : NORMAL0; \
+    [[vk::location(2)]] float4 tangent : TANGENT0; \
+    [[vk::location(3)]] float2 uv0 : TEXCOORD0; \
+    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,4 +24,3 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -134,8 +134,6 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 
 
 GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    VkResult res = VK_SUCCESS;
-
     if(!m_context.extensions.KHR_dynamic_rendering){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
         return nullptr;
@@ -262,42 +260,31 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
     VulkanDetail::GraphicsPipelineFixedState fixedState{ scratchArena };
-    if(
-        !VulkanDetail::BuildGraphicsPipelineFixedState(
-            fbinfo,
-            desc.renderState,
-            VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
-            dynamicStates,
-            static_cast<u32>(LengthOf(dynamicStates)),
-            NWB_TEXT("graphics pipeline"),
-            fixedState
-        )
-    ){
-        DestroyArenaObject(m_context.objectArena, pso);
+    if(!buildGraphicsPipelineFixedStateOrDestroy(
+        fbinfo,
+        desc.renderState,
+        VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
+        dynamicStates,
+        static_cast<u32>(LengthOf(dynamicStates)),
+        NWB_TEXT("graphics pipeline"),
+        pso,
+        fixedState
+    ))
         return nullptr;
-    }
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
-    if(pso->m_usesDescriptorHeap)
-        pipelineInfo.pNext = descriptorHeapScratch.pNext(m_context.extensions.KHR_dynamic_rendering ? &fixedState.renderingInfo : nullptr);
-    else if(m_context.extensions.KHR_dynamic_rendering)
-        pipelineInfo.pNext = &fixedState.renderingInfo;
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, descriptorHeapScratch, *pso, &fixedState.renderingInfo);
     pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pTessellationState = (desc.patchControlPoints > 0) ? &tessellationState : nullptr;
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
-    pipelineInfo.layout = pso->m_usesDescriptorHeap ? VK_NULL_HANDLE : pso->m_pipelineLayout;
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    res = vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pso->m_pipeline);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: {}"), ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pso);
+    if(!createPipelineOrDestroy(NWB_TEXT("graphics pipeline"), pso, pipelineInfo))
         return nullptr;
-    }
 
     return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }

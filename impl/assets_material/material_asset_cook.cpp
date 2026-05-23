@@ -207,22 +207,38 @@ static bool IsSupportedRendererMaterialShaderStage(const Core::ShaderType::Enum 
     return IsMaterialPixelShaderStage(shaderType) || IsMaterialMeshShaderStage(shaderType);
 }
 
-static bool IsMaterialAssetField(const AStringView fieldName){
-    return
-        fieldName == "interface"
-        || fieldName == "shaders"
-        || fieldName == "shader_variant"
-        || fieldName == "parameters"
-        || fieldName == "alpha"
-        || fieldName == "transparent"
-    ;
+namespace MaterialAssetFields{
+
+static constexpr AStringView s_Interface = "interface";
+static constexpr AStringView s_Shaders = "shaders";
+static constexpr AStringView s_ShaderVariant = "shader_variant";
+static constexpr AStringView s_Parameters = "parameters";
+static constexpr AStringView s_Alpha = "alpha";
+static constexpr AStringView s_Transparent = "transparent";
+
+static constexpr AStringView s_All[] = {
+    s_Interface,
+    s_Shaders,
+    s_ShaderVariant,
+    s_Parameters,
+    s_Alpha,
+    s_Transparent
+};
+
 }
 
 static bool ValidateMaterialAssetFields(const Path& nwbFilePath, const Core::Metascript::Value& asset){
     for(const auto& field : asset.asMap()){
         const auto& fieldName = field.first;
         const AStringView fieldNameText(fieldName.data(), fieldName.size());
-        if(IsMaterialAssetField(fieldNameText))
+        bool isSupportedField = false;
+        for(const AStringView materialAssetField : MaterialAssetFields::s_All){
+            if(fieldNameText == materialAssetField){
+                isSupportedField = true;
+                break;
+            }
+        }
+        if(isSupportedField)
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': unsupported asset field '{}'")
@@ -322,7 +338,7 @@ static bool ParseMaterialStageShaders(
 ){
     outStageShaders.clear();
 
-    const auto* shadersValue = asset.findField("shaders");
+    const auto* shadersValue = asset.findField(MaterialAssetFields::s_Shaders);
     if(!shadersValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders is required"), PathToString<tchar>(nwbFilePath));
         return false;
@@ -384,7 +400,7 @@ static bool ParseMaterialParameters(
 ){
     outParameters.clear();
 
-    const auto* parametersValue = asset.findField("parameters");
+    const auto* parametersValue = asset.findField(MaterialAssetFields::s_Parameters);
     if(!parametersValue)
         return true;
     if(!parametersValue->isMap()){
@@ -488,7 +504,7 @@ static bool ParseMaterialInterface(
 ){
     outMaterialInterface = NAME_NONE;
 
-    const auto* interfaceValue = asset.findField("interface");
+    const auto* interfaceValue = asset.findField(MaterialAssetFields::s_Interface);
     if(!interfaceValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface is required"), PathToString<tchar>(nwbFilePath));
         return false;
@@ -524,7 +540,7 @@ static bool ParseMaterialAlphaProperty(
 ){
     outAlpha = 1.f;
 
-    const auto* alphaValue = asset.findField("alpha");
+    const auto* alphaValue = asset.findField(MaterialAssetFields::s_Alpha);
     if(!alphaValue)
         return true;
 
@@ -554,7 +570,7 @@ static bool ParseMaterialTransparentProperty(
 ){
     outTransparent = false;
 
-    const auto* transparentValue = asset.findField("transparent");
+    const auto* transparentValue = asset.findField(MaterialAssetFields::s_Transparent);
     if(!transparentValue)
         return true;
     if(!transparentValue->isInteger()){
@@ -1512,7 +1528,7 @@ static bool ParseMaterialMeta(
     if(!ValidateMaterialAssetFields(nwbFilePath, asset))
         return false;
 
-    if(!ParseVariantField(shaderCook, nwbFilePath, asset, "shader_variant", outEntry.shaderVariant))
+    if(!ParseVariantField(shaderCook, nwbFilePath, asset, MaterialAssetFields::s_ShaderVariant, outEntry.shaderVariant))
         return false;
     if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface))
         return false;

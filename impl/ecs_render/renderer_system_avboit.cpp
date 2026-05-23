@@ -34,6 +34,7 @@ static constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit
 static constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit_extinction_ps");
 static constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit_integrate_cs");
 static constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit_accumulate_ps");
+static constexpr AStringView s_AvboitAccumulateBxdfVariant = "NWB_PROJECT_BXDF=0;NWB_PROJECT_TINT=0";
 
 
 static bool CreateLinearClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
@@ -351,7 +352,7 @@ bool RendererSystem::createAvboitResources(){
     if(!loadShader(
         m_avboitAccumulatePixelShader,
         __hidden_renderer_avboit::s_AvboitAccumulatePixelShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        __hidden_renderer_avboit::s_AvboitAccumulateBxdfVariant,
         Core::ShaderType::Pixel,
         "ECSRender_AvboitAccumulatePS"
     ))

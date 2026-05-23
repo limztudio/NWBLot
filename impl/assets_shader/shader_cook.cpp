@@ -479,22 +479,22 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
 
 template <typename DefineMap, typename ScratchArena>
-static bool ValidateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const DefineMap& defineValues, ScratchArena& scratchArena){
-    if(defaultVariant.empty())
+static bool ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const DefineMap& defineValues, ScratchArena& scratchArena){
+    if(variantSignature.empty())
         return true;
 
-    if(defaultVariant == "default"){
+    if(variantSignature == "default"){
         if(defineValues.empty())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant 'default' is only valid when no defines are specified"), StringConvert(contextLabel));
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant 'default' is only valid when no defines are specified"), StringConvert(contextLabel));
         return false;
     }
 
     if(defineValues.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' requires defines to be specified")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' requires defines to be specified")
             , StringConvert(contextLabel)
-            , StringConvert(defaultVariant)
+            , StringConvert(variantSignature)
         );
         return false;
     }
@@ -504,22 +504,22 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AStringView segment){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' has invalid assignment '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid assignment '{}'")
             , StringConvert(contextLabel)
-            , StringConvert(defaultVariant)
+            , StringConvert(variantSignature)
             , StringConvert(segment)
         );
     };
-    while(begin < defaultVariant.size()){
-        usize segmentEnd = defaultVariant.find(';', begin);
+    while(begin < variantSignature.size()){
+        usize segmentEnd = variantSignature.find(';', begin);
         if(segmentEnd == AStringView::npos)
-            segmentEnd = defaultVariant.size();
+            segmentEnd = variantSignature.size();
 
-        const AStringView segment = TrimView(defaultVariant.substr(begin, segmentEnd - begin));
+        const AStringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
         if(segment.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' has invalid empty segment")
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has invalid empty segment")
                 , StringConvert(contextLabel)
-                , StringConvert(defaultVariant)
+                , StringConvert(variantSignature)
             );
             return false;
         }
@@ -540,9 +540,9 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         CookString lookupDefineName(defineName, defineValues.get_allocator().arena());
         const auto defineIt = defineValues.find(lookupDefineName);
         if(defineIt == defineValues.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' references unknown define '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' references unknown define '{}'")
                 , StringConvert(contextLabel)
-                , StringConvert(defaultVariant)
+                , StringConvert(variantSignature)
                 , StringConvert(defineName)
             );
             return false;
@@ -556,9 +556,9 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
             }
         }
         if(!valueFound){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' has unsupported value '{}' for define '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'")
                 , StringConvert(contextLabel)
-                , StringConvert(defaultVariant)
+                , StringConvert(variantSignature)
                 , StringConvert(defineValue)
                 , StringConvert(defineName)
             );
@@ -566,9 +566,9 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
         }
 
         if(!seenDefines.insert(Move(defineName)).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' assigns define '{}' more than once")
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once")
                 , StringConvert(contextLabel)
-                , StringConvert(defaultVariant)
+                , StringConvert(variantSignature)
                 , StringConvert(defineName)
             );
             return false;
@@ -578,9 +578,9 @@ static bool ValidateDefaultVariant(const AStringView contextLabel, const AString
     }
 
     if(seenDefines.size() != defineValues.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default variant '{}' must assign all defines")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' must assign all defines")
             , StringConvert(contextLabel)
-            , StringConvert(defaultVariant)
+            , StringConvert(variantSignature)
         );
         return false;
     }
@@ -664,43 +664,6 @@ static bool ValidatePairedSourceExtension(
     return false;
 }
 
-static bool ParseDefaultVariant(const Path& nwbFilePath, const Metascript::Value& asset, CookString& outDefaultVariant){
-    outDefaultVariant.clear();
-
-    const auto* defaultVariantVal = asset.findField("default_variant");
-    if(!defaultVariantVal)
-        return true;
-
-    if(defaultVariantVal->isList()){
-        const auto& list = defaultVariantVal->asList();
-        usize defaultVariantSize = list.empty() ? 0u : list.size() - 1u;
-        for(usize i = 0; i < list.size(); ++i){
-            if(!list[i].isString()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant list elements must be strings"), PathToString<tchar>(nwbFilePath));
-                return false;
-            }
-            defaultVariantSize += list[i].asString().size();
-        }
-
-        outDefaultVariant.reserve(defaultVariantSize);
-        for(usize i = 0; i < list.size(); ++i){
-            if(i > 0)
-                outDefaultVariant += ';';
-            const Metascript::MStringView variantText = list[i].asString();
-            outDefaultVariant.append(variantText.data(), variantText.size());
-        }
-    }
-    else if(defaultVariantVal->isString()){
-        const Metascript::MStringView variantText = defaultVariantVal->asString();
-        outDefaultVariant.assign(variantText.data(), variantText.size());
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': default_variant must be a string or list of strings"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    return true;
-}
-
 static bool FindOptionalStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
@@ -726,8 +689,7 @@ static bool ParseStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
     const AStringView fieldName,
-    CookString& outValue,
-    const bool canonicalize
+    CookString& outValue
 ){
     const Metascript::Value* fieldValue = nullptr;
     if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
@@ -738,8 +700,6 @@ static bool ParseStringField(
     const Metascript::MStringView text = fieldValue->asString();
     const AStringView textView(text.data(), text.size());
     outValue.assign(textView.data(), textView.size());
-    if(canonicalize)
-        CanonicalizeTextInPlace(outValue);
     return true;
 }
 
@@ -764,6 +724,42 @@ static bool ParseCompactStringField(
         return false;
     }
 
+    return true;
+}
+
+static bool IsShaderAssetField(const AStringView fieldName){
+    return
+        fieldName == "stage"
+        || fieldName == "target_profile"
+        || fieldName == "entry_point"
+        || fieldName == "include_roots"
+        || fieldName == "defines"
+    ;
+}
+
+static bool IsIncludeAssetField(const AStringView fieldName){
+    return fieldName == "defines";
+}
+
+static bool ValidateAssetFields(
+    const Path& nwbFilePath,
+    const Metascript::Value& asset,
+    const AStringView metaKind,
+    bool (*isKnownField)(AStringView)
+){
+    for(const auto& field : asset.asMap()){
+        const auto& fieldName = field.first;
+        const AStringView fieldNameText(fieldName.data(), fieldName.size());
+        if(isKnownField(fieldNameText))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported asset field '{}'")
+            , StringConvert(metaKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldNameText)
+        );
+        return false;
+    }
     return true;
 }
 
@@ -844,9 +840,9 @@ bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& ou
 }
 
 
-bool ShaderCook::validateDefaultVariant(const AStringView contextLabel, const AStringView defaultVariant, const CookMap<CookString, DefineEntry>& defineValues){
+bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues){
     Alloc::ScratchArena<> validationArena;
-    return __hidden_shader_cook::ValidateDefaultVariant(contextLabel, defaultVariant, defineValues, validationArena);
+    return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, validationArena);
 }
 
 bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, ShaderEntry& outEntry){
@@ -867,20 +863,19 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
 
     if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
         return false;
+    if(!__hidden_shader_cook::ValidateAssetFields(nwbFilePath, asset, "Shader", __hidden_shader_cook::IsShaderAssetField))
+        return false;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
     outEntry.archiveStage = outEntry.stage;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
         return false;
-    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint, false))
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint))
         return false;
     if(outEntry.entryPoint.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
-
-    if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
-        return false;
 
     if(const auto* includeRootsVal = asset.findField("include_roots")){
         if(!includeRootsVal->copyStringList(outEntry.includeRoots)){
@@ -905,14 +900,6 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
     }
     if(outEntry.targetProfile.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': target_profile is required"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    const CookString contextLabel = PathToString(m_memoryArena, nwbFilePath);
-    if(!validateDefaultVariant(contextLabel, outEntry.defaultVariant, outEntry.defineValues))
-        return false;
-    if(!canonicalizeVariantSignature(outEntry.defaultVariant, outEntry.defaultVariant)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': failed to canonicalize default_variant"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -945,18 +932,10 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
 
     if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Include"))
         return false;
-    if(!__hidden_shader_cook::ParseDefaultVariant(nwbFilePath, asset, outEntry.defaultVariant))
+    if(!__hidden_shader_cook::ValidateAssetFields(nwbFilePath, asset, "Include", __hidden_shader_cook::IsIncludeAssetField))
         return false;
     if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
         return false;
-
-    const CookString contextLabel = PathToString(m_memoryArena, nwbFilePath);
-    if(!validateDefaultVariant(contextLabel, outEntry.defaultVariant, outEntry.defineValues))
-        return false;
-    if(!canonicalizeVariantSignature(outEntry.defaultVariant, outEntry.defaultVariant)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Include meta '{}': failed to canonicalize default_variant"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
 
     return true;
 }
@@ -988,22 +967,6 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
                 defineIt.value().values.assign(defineEntry.values.begin(), defineEntry.values.end());
         }
 
-        if(!includeEntry.defaultVariant.empty()){
-            if(inOutEntry.defaultVariant.empty())
-                inOutEntry.defaultVariant = includeEntry.defaultVariant;
-            else{
-                const usize includeVariantSize = includeEntry.defaultVariant.size();
-                const usize currentVariantSize = inOutEntry.defaultVariant.size();
-
-                CookString mergedDefaultVariant{m_memoryArena};
-                if(includeVariantSize < Limit<usize>::s_Max && includeVariantSize + 1u <= Limit<usize>::s_Max - currentVariantSize)
-                    mergedDefaultVariant.reserve(includeVariantSize + 1u + currentVariantSize);
-                mergedDefaultVariant += includeEntry.defaultVariant;
-                mergedDefaultVariant += ';';
-                mergedDefaultVariant += inOutEntry.defaultVariant;
-                inOutEntry.defaultVariant = Move(mergedDefaultVariant);
-            }
-        }
     }
 }
 

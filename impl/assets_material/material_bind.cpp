@@ -139,7 +139,7 @@ static bool IsMaterialBindIdentifier(const AStringView text){
     return true;
 }
 
-static bool ParseMaterialParameterTypeTextImpl(
+static bool ParseMaterialParameterTypeText(
     const AStringView typeText,
     MaterialParameterValueType::Enum& outType,
     u32& outComponentCount
@@ -181,18 +181,6 @@ static bool ParseMaterialParameterTypeTextImpl(
         || tryMatch(AStringView("uint"), MaterialParameterValueType::UInt)
         || tryMatch(AStringView("bool"), MaterialParameterValueType::Bool)
     ;
-}
-
-static bool ParseMaterialBindFieldType(
-    const AStringView typeText,
-    MaterialParameterValueType::Enum& outType,
-    u32& outComponentCount
-){
-    return ParseMaterialParameterTypeTextImpl(
-        typeText,
-        outType,
-        outComponentCount
-    );
 }
 
 static bool IsMaterialBindBlockClassAttribute(const AStringView attributeName){
@@ -407,7 +395,7 @@ static bool ParseMaterialBindField(
     MaterialParameterValueType::Enum fieldType = MaterialParameterValueType::None;
     u32 fieldComponentCount = 0u;
     if(!IsMaterialBindIdentifier(outField.type)
-        || !ParseMaterialBindFieldType(AStringView(outField.type), fieldType, fieldComponentCount)
+        || !ParseMaterialParameterTypeText(AStringView(outField.type), fieldType, fieldComponentCount)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
             , PathToString<tchar>(bindFilePath)
@@ -586,9 +574,8 @@ static bool IsMaterialBindAssetField(const AStringView fieldName){
 }
 
 static bool ValidateMaterialBindAssetFields(const Path& bindFilePath, const Metascript::Value& asset){
-    for(const auto& [fieldName, fieldValue] : asset.asMap()){
-        static_cast<void>(fieldValue);
-
+    for(const auto& field : asset.asMap()){
+        const auto& fieldName = field.first;
         const AStringView fieldNameText(fieldName.data(), fieldName.size());
         if(IsMaterialBindAssetField(fieldNameText))
             continue;
@@ -638,18 +625,6 @@ static_assert(
 );
 static_assert(alignof(MaterialParameterGpuData) >= alignof(UInt4), "MaterialParameterGpuData must stay SIMD-aligned");
 static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParameterGpuData must stay cheap to copy");
-
-static bool ParseMaterialParameterTypeText(
-    const AStringView typeText,
-    MaterialParameterValueType::Enum& outType,
-    u32& outComponentCount
-){
-    return ParseMaterialParameterTypeTextImpl(
-        typeText,
-        outType,
-        outComponentCount
-    );
-}
 
 static bool SplitMaterialParameterCall(const AStringView text, AStringView& outType, AStringView& outArgs){
     const AStringView trimmed = TrimView(text);
@@ -796,7 +771,7 @@ static bool BuildMaterialParameterGpuData(
             return false;
     }
 
-    const u64 keyHash = UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, key.view());
+    const u64 keyHash = ComputeMaterialBindParameterKeyHash(key.view());
     outParameter.meta.x = static_cast<u32>(keyHash & 0xffffffffull);
     outParameter.meta.y = static_cast<u32>(keyHash >> 32u);
     outParameter.meta.z = static_cast<u32>(valueType);
@@ -812,7 +787,7 @@ static bool ParseMaterialLayoutFieldType(
 
     MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;
     u32 componentCount = 0u;
-    if(!ParseMaterialBindFieldType(typeText, valueType, componentCount))
+    if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
         return false;
 
     outFieldType = MaterialLayoutFieldTypeFromParameterType(valueType, componentCount);
@@ -840,15 +815,6 @@ static bool ParseMaterialBindBlockClass(
     return false;
 }
 
-static bool BuildMaterialTypedLayoutFieldKey(
-    const AStringView blockName,
-    const AStringView fieldName,
-    CompactString& outKey
-){
-    outKey.clear();
-    return outKey.assign(blockName) && outKey.pushBack('.') && outKey.append(fieldName);
-}
-
 static UInt4U ToMaterialTypedLayoutDefaultValue(const MaterialParameterGpuData& parameter){
     UInt4U result = {};
     for(u32 i = 0u; i < 4u; ++i)
@@ -866,7 +832,7 @@ static bool BuildMaterialTypedLayoutDefaultValue(
     outDefaultValue = {};
 
     CompactString key;
-    if(!BuildMaterialTypedLayoutFieldKey(AStringView(instance.name), AStringView(bindField.name), key)){
+    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), key)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds CompactString capacity")
             , StringConvert(instance.name)
             , StringConvert(bindField.name)
@@ -1080,7 +1046,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
             }
 
             CompactString parameterName;
-            if(!BuildMaterialTypedLayoutFieldKey(AStringView(instance.name), AStringView(bindField.name), parameterName)){
+            if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), parameterName)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds CompactString capacity")
                     , StringConvert(instance.name)
                     , StringConvert(bindField.name)
@@ -1476,6 +1442,19 @@ void MaterialBindTypedLayoutCache::reserve(const usize count){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+bool BuildMaterialBindParameterKey(
+    const AStringView instanceName,
+    const AStringView fieldName,
+    CompactString& outKey
+){
+    outKey.clear();
+    return outKey.assign(instanceName) && outKey.pushBack('.') && outKey.append(fieldName);
+}
+
+u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
+    return UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, parameterKey);
+}
 
 bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry){
     outEntry.reset();

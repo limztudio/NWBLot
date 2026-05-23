@@ -5,6 +5,7 @@
 #define NWB_SCENE_SHADING_SET 1
 #define NWB_SCENE_SHADING_BINDING 4
 #include "avboit_common.slangi"
+#include <bxdf.slangi>
 #include <bxdf_lighting.slangi>
 
 

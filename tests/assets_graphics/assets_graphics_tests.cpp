@@ -1335,6 +1335,41 @@ static void TestShaderArchiveVariantLookupIsExact(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, virtualPath == NAME_NONE);
 }
 
+static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCaseRoot("shader_default_variant_alias", root));
+
+    const Path assetRoot = root / "assets";
+    const Path includeMetaPath = assetRoot / "shaders" / "default_variant_include.nwb";
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(
+        includeMetaPath,
+        "include asset;\n\n"
+        "asset.default_variant = \"NWB_FEATURE=0\";\n"
+        "asset.defines = {\n"
+        "    \"NWB_FEATURE\": [\"0\", \"1\"],\n"
+        "};\n"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(assetRoot / "shaders" / "default_variant_include.slangi", ""));
+
+    NWB::Impl::ShaderCook shaderCook(testArena.arena);
+    NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !shaderCook.parseIncludeMeta(includeMetaPath, includeEntry));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "unsupported asset field 'default_variant'"
+    )));
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+#else
+    static_cast<void>(context);
+#endif
+}
+
 using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
 using LoadCookedAssetFn = bool(*)(TestContext&, TestArena&, const Path&, UniquePtr<NWB::Core::Assets::IAsset>&);
 
@@ -3533,6 +3568,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
     __hidden_assets_graphics_tests::TestShaderArchiveVariantLookupIsExact(context);
+    __hidden_assets_graphics_tests::TestShaderMetadataRejectsDefaultVariantAlias(context);
     __hidden_assets_graphics_tests::TestMaterialMetadataInterfaceAndBlockParameters(context);
     __hidden_assets_graphics_tests::TestMaterialCodecTypedLayoutBoundary(context);
     __hidden_assets_graphics_tests::TestMaterialBindSchemaValidation(context);

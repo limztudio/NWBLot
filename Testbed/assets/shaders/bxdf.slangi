@@ -16,11 +16,11 @@
 
 
 #ifndef NWB_PROJECT_BXDF
-#define NWB_PROJECT_BXDF 0
+#error "NWB_PROJECT_BXDF must be defined by shader metadata"
 #endif
 
 #ifndef NWB_PROJECT_TINT
-#define NWB_PROJECT_TINT 0
+#error "NWB_PROJECT_TINT must be defined by shader metadata"
 #endif
 
 float3 nwbProjectApplyBxdf(float3 color){

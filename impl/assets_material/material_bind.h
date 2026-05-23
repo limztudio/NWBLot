@@ -194,6 +194,12 @@ struct MaterialBindTypedLayoutCache{
 
 
 [[nodiscard]] bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry);
+[[nodiscard]] bool BuildMaterialBindParameterKey(
+    AStringView instanceName,
+    AStringView fieldName,
+    CompactString& outKey
+);
+[[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey);
 [[nodiscard]] bool BuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,

@@ -219,9 +219,8 @@ static bool IsMaterialAssetField(const AStringView fieldName){
 }
 
 static bool ValidateMaterialAssetFields(const Path& nwbFilePath, const Core::Metascript::Value& asset){
-    for(const auto& [fieldName, fieldValue] : asset.asMap()){
-        static_cast<void>(fieldValue);
-
+    for(const auto& field : asset.asMap()){
+        const auto& fieldName = field.first;
         const AStringView fieldNameText(fieldName.data(), fieldName.size());
         if(IsMaterialAssetField(fieldNameText))
             continue;
@@ -979,7 +978,6 @@ static bool AppendMaterialBindLayoutConstants(
 }
 
 static bool AppendMaterialBindFieldConstants(
-    ShaderCook::CookArena& arena,
     const AStringView includePath,
     const MaterialBindStruct& bindStruct,
     const MaterialBindInstance& instance,
@@ -998,18 +996,22 @@ static bool AppendMaterialBindFieldConstants(
         return false;
     }
 
-    CookString keyText(instance.name, arena);
-    keyText += '.';
-    keyText += field.name;
-    const u64 keyHash = UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, AStringView(keyText));
+    CompactString keyText;
+    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' exceeds CompactString capacity")
+            , StringConvert(includePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(field.name)
+        );
+        return false;
+    }
+    const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
 
     inOutSource += "static const uint2 ";
     inOutSource += keySymbol;
-    inOutSource += " = uint2(";
-    AppendHexU32Slang(static_cast<u32>(keyHash & 0xffffffffull), inOutSource);
-    inOutSource += ", ";
-    AppendHexU32Slang(static_cast<u32>(keyHash >> 32u), inOutSource);
-    inOutSource += ");\n";
+    inOutSource += " = ";
+    AppendU64AsUint2Slang(keyHash, inOutSource);
+    inOutSource += ";\n";
 
     inOutSource += "static const ";
     inOutSource += field.type;
@@ -1154,7 +1156,6 @@ static bool AppendMaterialBindGeneratedInstance(
             return false;
 
         if(!AppendMaterialBindFieldConstants(
-            arena,
             includePath,
             bindStruct,
             instance,

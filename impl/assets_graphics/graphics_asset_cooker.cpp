@@ -125,22 +125,6 @@ static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEnt
 }
 
 
-static CookString NormalizeVariantName(ShaderCook::CookArena& arena, const ShaderCook::ShaderEntry& entry, const AStringView generatedVariantName){
-    const AStringView normalizedGeneratedVariantName = generatedVariantName.empty()
-        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : generatedVariantName
-    ;
-
-    if(entry.defaultVariant.empty())
-        return CookString(normalizedGeneratedVariantName, arena);
-
-    if(normalizedGeneratedVariantName == AStringView(entry.defaultVariant))
-        return CookString(Core::ShaderArchive::s_DefaultVariant, arena);
-
-    return CookString(normalizedGeneratedVariantName, arena);
-}
-
-
 struct ResolvedCookPaths{
     Path repoRoot;
     ShaderCook::CookVector<Path> assetRoots;
@@ -638,16 +622,12 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
     return true;
 }
 
-static bool NormalizeMaterialVariant(
+static bool ValidateMaterialVariant(
     ShaderCook& shaderCook,
     const MaterialCookEntry& materialEntry,
     const PreparedShaderEntry& preparedShaderEntry,
-    const Name& stageName,
-    CookString& outNormalizedVariant
+    const Name& stageName
 ){
-    ShaderCook::CookArena& arena = outNormalizedVariant.get_allocator().arena();
-    outNormalizedVariant.clear();
-
     if(materialEntry.shaderVariant.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has empty shader_variant")
             , StringConvert(materialEntry.virtualPath.c_str())
@@ -656,42 +636,15 @@ static bool NormalizeMaterialVariant(
     }
     const AStringView requestedVariant(materialEntry.shaderVariant.data(), materialEntry.shaderVariant.size());
 
-    if(requestedVariant == Core::ShaderArchive::s_DefaultVariant){
-        if(!preparedShaderEntry.entry.defineValues.empty() && preparedShaderEntry.entry.defaultVariant.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' requests variant '{}' for shader '{}' stage '{}', but that shader has no default variant alias")
-                , StringConvert(materialEntry.virtualPath.c_str())
-                , StringConvert(requestedVariant)
-                , StringConvert(preparedShaderEntry.entry.name)
-                , StringConvert(stageName.c_str())
-            );
-            return false;
-        }
-
-        outNormalizedVariant.assign(Core::ShaderArchive::s_DefaultVariant);
-        return true;
-    }
-
+    ShaderCook::CookArena& arena = materialEntry.shaderVariant.get_allocator().arena();
     const CookString contextLabel = StringFormat(arena, "{} [{}]", materialEntry.virtualPath.c_str(), stageName.c_str());
-    if(!shaderCook.validateDefaultVariant(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues))
-        return false;
-
-    CookString canonicalVariant{arena};
-    if(!shaderCook.canonicalizeVariantSignature(requestedVariant, canonicalVariant)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has invalid shader_variant '{}'")
-            , StringConvert(materialEntry.virtualPath.c_str())
-            , StringConvert(requestedVariant)
-        );
-        return false;
-    }
-
-    outNormalizedVariant = NormalizeVariantName(arena, preparedShaderEntry.entry, canonicalVariant);
-    return true;
+    return shaderCook.validateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues);
 }
 
-static bool ValidateAndNormalizeMaterials(
+static bool ValidateMaterials(
     ShaderCook& shaderCook,
     const Vector<PreparedShaderEntry, ShaderCook::CookArena>& preparedEntries,
-    MaterialCookEntryVector& inOutMaterialEntries
+    const MaterialCookEntryVector& materialEntries
 ){
     ScratchArena scratchArena;
     HashMap<
@@ -721,13 +674,12 @@ static bool ValidateAndNormalizeMaterials(
         }
     }
 
-    for(MaterialCookEntry& materialEntry : inOutMaterialEntries){
-        ShaderCook::CookArena& arena = materialEntry.shaderVariant.get_allocator().arena();
-        CookString normalizedVariant{arena};
-        bool hasNormalizedVariant = false;
+    for(const MaterialCookEntry& materialEntry : materialEntries){
+        bool hasShaderStage = false;
         bool hasMeshShader = false;
 
         for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
+            hasShaderStage = true;
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
             const PreparedShaderKey shaderLookupKey{ shaderAsset.name(), stageName };
             const auto foundShader = preparedShaderLookup.find(shaderLookupKey);
@@ -740,8 +692,7 @@ static bool ValidateAndNormalizeMaterials(
                 return false;
             }
 
-            CookString stageNormalizedVariant{arena};
-            if(!NormalizeMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName, stageNormalizedVariant))
+            if(!ValidateMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName))
                 return false;
 
             if(shaderType == Core::ShaderType::MeshStage){
@@ -768,24 +719,9 @@ static bool ValidateAndNormalizeMaterials(
                     return false;
                 }
             }
-
-            if(!hasNormalizedVariant){
-                normalizedVariant = Move(stageNormalizedVariant);
-                hasNormalizedVariant = true;
-                continue;
-            }
-
-            if(normalizedVariant != stageNormalizedVariant){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' resolves to different normalized variants across stages ('{}' vs '{}')")
-                    , StringConvert(materialEntry.virtualPath.c_str())
-                    , StringConvert(normalizedVariant)
-                    , StringConvert(stageNormalizedVariant)
-                );
-                return false;
-            }
         }
 
-        if(!hasNormalizedVariant){
+        if(!hasShaderStage){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has no shader stages")
                 , StringConvert(materialEntry.virtualPath.c_str())
             );
@@ -799,8 +735,6 @@ static bool ValidateAndNormalizeMaterials(
             );
             return false;
         }
-
-        materialEntry.shaderVariant = Move(normalizedVariant);
     }
 
     return true;
@@ -1091,7 +1025,7 @@ static bool ParseAssetMetadata(
             if(!shaderCook.parseIncludeMeta(nwbFile, doc, includeEntry))
                 return false;
 
-            if(!includeEntry.source.empty() && (!includeEntry.defineValues.empty() || !includeEntry.defaultVariant.empty())){
+            if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
                 ErrorCode errorCode;
                 const Path absSource = AbsolutePath(Path(includeEntry.source), errorCode).lexically_normal();
                 if(errorCode){
@@ -1296,14 +1230,6 @@ static bool PrepareShaderEntriesForCook(
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !EnableMaterialTypedBinding(preparedEntry.entry))
             return false;
-        if(!shaderCook.validateDefaultVariant(preparedEntry.entry.name, preparedEntry.entry.defaultVariant, preparedEntry.entry.defineValues))
-            return false;
-        if(!shaderCook.canonicalizeVariantSignature(preparedEntry.entry.defaultVariant, preparedEntry.entry.defaultVariant)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to canonicalize merged default_variant for '{}'")
-                , StringConvert(preparedEntry.entry.name)
-            );
-            return false;
-        }
         if(!shaderCook.computeDependencyChecksum(preparedEntry.dependencies, preparedEntry.dependencyChecksum))
             return false;
         if(!CountShaderVariants(preparedEntry.entry, preparedEntry.variantCount))
@@ -1386,7 +1312,6 @@ static bool AppendPreparedShadersToVolume(
 
         for(const ShaderCook::DefineCombo& defineCombo : defineCombinations){
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo);
-            const CookString variantName = NormalizeVariantName(cookArena, entry, generatedVariantName);
 
             u64 sourceChecksum = 0;
             if(!shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, sourceChecksum))
@@ -1398,11 +1323,11 @@ static bool AppendPreparedShadersToVolume(
                 configurationSafeName,
                 shaderSafeName,
                 stageSafeName,
-                variantName
+                generatedVariantName
             );
             if(!GetVariantBytecode(
                 entry,
-                variantName,
+                generatedVariantName,
                 defineCombo,
                 preparedEntry.includeDirectories,
                 preparedEntry.sourcePath,
@@ -1413,12 +1338,12 @@ static bool AppendPreparedShadersToVolume(
             ))
                 return false;
 
-            const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, variantName, stageName);
+            const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, generatedVariantName, stageName);
             if(!virtualPath){
                 NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
                     , StringConvert(entry.name)
                     , StringConvert(entry.archiveStage.c_str())
-                    , StringConvert(variantName)
+                    , StringConvert(generatedVariantName)
                 );
                 return false;
             }
@@ -1428,7 +1353,7 @@ static bool AppendPreparedShadersToVolume(
                 NWB_LOGGER_ERROR(NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')")
                     , StringConvert(virtualPath.c_str())
                     , StringConvert(entry.name)
-                    , StringConvert(variantName)
+                    , StringConvert(generatedVariantName)
                 );
                 return false;
             }
@@ -1440,7 +1365,7 @@ static bool AppendPreparedShadersToVolume(
 
             Core::ShaderArchive::Record record(cookArena);
             record.shaderName = shaderName;
-            record.variantName = variantName;
+            record.variantName = generatedVariantName;
             record.stage = stageName;
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
@@ -1694,7 +1619,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         preparedPlan.plannedFileCount
     ))
         return false;
-    if(!__hidden_graphics_asset_cooker::ValidateAndNormalizeMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
+    if(!__hidden_graphics_asset_cooker::ValidateMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
         return false;
 
     Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{ m_arena };

@@ -97,12 +97,10 @@ public:
 public:
     struct IncludeEntry{
         CookString source;
-        CookString defaultVariant;
         CookMap<CookString, DefineEntry> defineValues;
 
         explicit IncludeEntry(CookArena& memoryArena)
             : source(memoryArena)
-            , defaultVariant(memoryArena)
             , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
         {}
     };
@@ -114,7 +112,6 @@ public:
         CompactString targetProfile;
         CookString entryPoint;
         CookString source;
-        CookString defaultVariant;
 
         CookVector<CookString> includeRoots;
         CookMap<CookString, DefineEntry> defineValues;
@@ -124,7 +121,6 @@ public:
             : name(memoryArena)
             , entryPoint("main", memoryArena)
             , source(memoryArena)
-            , defaultVariant(memoryArena)
             , includeRoots(memoryArena)
             , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
             , implicitDefines(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
@@ -157,7 +153,7 @@ public:
     bool parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, IncludeEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry);
 
-    bool validateDefaultVariant(AStringView contextLabel, AStringView defaultVariant, const CookMap<CookString, DefineEntry>& defineValues);
+    bool validateVariantSignature(AStringView contextLabel, AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues);
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata);
 

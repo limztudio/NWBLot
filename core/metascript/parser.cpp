@@ -82,14 +82,28 @@ public:
         try{
             if(!parseDeclaration(outAssetType, outAssetVariable))
                 return false;
-            m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
+            return parseStatements(outAssetVariable);
+        }
+        catch(const GeneralException& e){
+            error(
+                m_current.line,
+                m_current.column,
+                MStringView(e.what(), MString::traits_type::length(e.what()))
+            );
+            return false;
+        }
+    }
 
-            while(m_current.type != TokenType::EndOfFile){
-                if(!parseStatement())
-                    return false;
-            }
-
-            return m_errors.empty();
+    bool parseWithImplicitAsset(
+        MString& outAssetType,
+        MString& outAssetVariable,
+        const MStringView assetType,
+        const MStringView assetVariable
+    ){
+        try{
+            if(!declareImplicitAsset(outAssetType, outAssetVariable, assetType, assetVariable))
+                return false;
+            return parseStatements(outAssetVariable);
         }
         catch(const GeneralException& e){
             error(
@@ -108,6 +122,17 @@ private:
     using ScratchString = BasicString<MChar, Alloc::ScratchArena<>>;
 
 
+    bool parseStatements(const MString& assetVariable){
+        m_declaredAssetVariable = MStringView(assetVariable.data(), assetVariable.size());
+
+        while(m_current.type != TokenType::EndOfFile){
+            if(!parseStatement())
+                return false;
+        }
+
+        return m_errors.empty();
+    }
+
     bool parseDeclaration(MString& outAssetType, MString& outAssetVariable){
         if(m_current.type != TokenType::Identifier){
             errorExpected("expected asset type name");
@@ -125,6 +150,25 @@ private:
 
         if(!expect(TokenType::Semicolon, "expected ';' after declaration"))
             return false;
+
+        MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
+        m_variables.emplace(Move(key), Value(m_arena));
+        return true;
+    }
+
+    bool declareImplicitAsset(
+        MString& outAssetType,
+        MString& outAssetVariable,
+        const MStringView assetType,
+        const MStringView assetVariable
+    ){
+        if(assetType.empty() || assetVariable.empty()){
+            error(1u, 1u, "implicit asset declaration requires asset type and variable");
+            return false;
+        }
+
+        outAssetType.assign(assetType.data(), assetType.size());
+        outAssetVariable.assign(assetVariable.data(), assetVariable.size());
 
         MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
         m_variables.emplace(Move(key), Value(m_arena));
@@ -1084,6 +1128,16 @@ bool Document::parse(MStringView source){
 
     __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables);
     return parser.parseInto(m_assetType, m_assetVariable);
+}
+
+bool Document::parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable){
+    m_errors.clear();
+    m_assetType.clear();
+    m_assetVariable.clear();
+    m_variables.clear();
+
+    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables);
+    return parser.parseWithImplicitAsset(m_assetType, m_assetVariable, assetType, assetVariable);
 }
 
 bool Document::parse(IMetaReader& reader){

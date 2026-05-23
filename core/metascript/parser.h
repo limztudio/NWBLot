@@ -40,6 +40,7 @@ public:
 
 public:
     [[nodiscard]] bool parse(MStringView source);
+    [[nodiscard]] bool parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable);
     [[nodiscard]] bool parse(IMetaReader& reader);
 
     [[nodiscard]] MStringView assetType()const{ return MStringView(m_assetType.data(), m_assetType.size()); }

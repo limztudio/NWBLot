@@ -1,5 +1,3 @@
-material_bind asset;
-
 [material_constant]
 struct NwbProjectBxdfSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]

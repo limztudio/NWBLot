@@ -204,9 +204,7 @@ static constexpr AStringView s_DefaultColorGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-static constexpr AStringView s_MinimalMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_MinimalMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
@@ -235,9 +233,7 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_UpdatedDefaultMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_UpdatedDefaultMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
@@ -468,9 +464,7 @@ asset.parameters = {
 #endif
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_DuplicateFieldMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_DuplicateFieldMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     float base_color;
     float base_color;
@@ -482,9 +476,7 @@ NwbTestSurfaceMaterial surface;
 #endif
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_DuplicateInstanceMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_DuplicateInstanceMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("float(0.5)")]
     float roughness;
@@ -495,9 +487,7 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
-static constexpr AStringView s_SurfaceOnlyMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_SurfaceOnlyMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
@@ -510,9 +500,7 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
-static constexpr AStringView s_InstanceOverrideMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-asset.instance_override = "unsupported";
+static constexpr AStringView s_InstanceOverrideMaterialBindSource = R"NWB_BIND(asset.instance_override = "unsupported";
 
 [material_constant]
 struct NwbTestSurfaceMaterial{
@@ -526,9 +514,7 @@ NwbTestSurfaceMaterial surface;
 #endif
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_UnknownBlockClassMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_project]
+static constexpr AStringView s_UnknownBlockClassMaterialBindSource = R"NWB_BIND([material_project]
 struct NwbTestSurfaceMaterial{
     float base_color;
 };
@@ -537,9 +523,7 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
-static constexpr AStringView s_UnsupportedFieldTypeMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_UnsupportedFieldTypeMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     half roughness;
 };
@@ -548,9 +532,7 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
-static constexpr AStringView s_InvalidDefaultMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_InvalidDefaultMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     [default("")]
     float roughness;
@@ -560,9 +542,7 @@ NwbTestSurfaceMaterial surface;
 
 )NWB_BIND";
 
-static constexpr AStringView s_MissingDefaultMaterialBindSource = R"NWB_BIND(material_bind asset;
-
-[material_constant]
+static constexpr AStringView s_MissingDefaultMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     float roughness;
 };

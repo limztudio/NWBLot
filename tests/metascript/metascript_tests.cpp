@@ -48,6 +48,10 @@ template<usize N>
     return MStringView(text, N > 0u ? N - 1u : 0u);
 }
 
+[[nodiscard]] static bool ParseImplicitMaterialBind(Document& document, const AString& source){
+    return document.parseWithImplicitAsset(ViewOf(source), LiteralView("material_bind"), LiteralView("asset"));
+}
+
 [[nodiscard]] static const Value* FindField(const Value& value, MStringView name){
     if(!value.isMap())
         return nullptr;
@@ -68,11 +72,11 @@ static void CheckStringField(TestContext& context, const Value& value, MStringVi
     CheckStringValue(context, FindField(value, fieldName), expected);
 }
 
-static void CheckParseFailsWithMessage(TestContext& context, const AString& source, MStringView expectedMessage){
+static void CheckImplicitMaterialBindParseFailsWithMessage(TestContext& context, const AString& source, MStringView expectedMessage){
     DestinationArena arena;
     Document document(arena.arena);
 
-    const bool parsed = document.parse(ViewOf(source));
+    const bool parsed = ParseImplicitMaterialBind(document, source);
     NWB_METASCRIPT_TEST_CHECK(context, !parsed);
     NWB_METASCRIPT_TEST_CHECK(context, document.hasErrors());
     if(document.errors().empty())
@@ -280,8 +284,6 @@ static void TestBindStyleStructDeclarations(TestContext& context){
     DestinationArena arena;
     Document document(arena.arena);
     const AString source =
-        "material_bind asset;\n"
-        "\n"
         "[material_constant]\n"
         "struct NwbProjectBxdfSurfaceMaterial{\n"
         "    [default(\"float4(1.0, 1.0, 1.0, 1.0)\")]\n"
@@ -301,7 +303,7 @@ static void TestBindStyleStructDeclarations(TestContext& context){
         "NwbProjectBxdfRuntimeMaterial runtime;\n"
     ;
 
-    const bool parsed = document.parse(ViewOf(source));
+    const bool parsed = ParseImplicitMaterialBind(document, source);
     NWB_METASCRIPT_TEST_CHECK(context, parsed);
     if(!parsed)
         return;
@@ -372,33 +374,30 @@ static void TestBindStyleStructDeclarations(TestContext& context){
 
 static void TestBindStyleStructDuplicateRejections(TestContext& context){
     const AString duplicateFieldSource =
-        "material_bind asset;\n"
         "struct NwbDup{\n"
         "    float value;\n"
         "    float value;\n"
         "};\n"
     ;
-    CheckParseFailsWithMessage(context, duplicateFieldSource, LiteralView("duplicate struct field declaration"));
+    CheckImplicitMaterialBindParseFailsWithMessage(context, duplicateFieldSource, LiteralView("duplicate struct field declaration"));
 
     const AString duplicateInstanceSource =
-        "material_bind asset;\n"
         "struct NwbDup{\n"
         "    float value;\n"
         "};\n"
         "NwbDup runtime;\n"
         "NwbDup runtime;\n"
     ;
-    CheckParseFailsWithMessage(context, duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
+    CheckImplicitMaterialBindParseFailsWithMessage(context, duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
 
     const AString existingInstanceSource =
-        "material_bind asset;\n"
         "asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n"
         "struct NwbDup{\n"
         "    float value;\n"
         "};\n"
         "NwbDup runtime;\n"
     ;
-    CheckParseFailsWithMessage(context, existingInstanceSource, LiteralView("duplicate struct instance declaration"));
+    CheckImplicitMaterialBindParseFailsWithMessage(context, existingInstanceSource, LiteralView("duplicate struct instance declaration"));
 }
 
 

@@ -40,15 +40,11 @@ namespace __hidden_material_bind{
 using CookString = ShaderCook::CookString;
 
 static constexpr AStringView s_AssetTypeMaterialBind = "material_bind";
+static constexpr AStringView s_AssetVariableMaterialBind = "asset";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static CompactString CanonicalAssetType(const Metascript::Document& doc){
-    const auto assetType = doc.assetType();
-    return CompactString(AStringView(assetType.data(), assetType.size()));
-}
 
 static bool ParseMaterialBindDocument(const Path& bindFilePath, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
     CookString bindText{arena};
@@ -58,7 +54,7 @@ static bool ParseMaterialBindDocument(const Path& bindFilePath, ShaderCook::Cook
     }
     StripUtf8Bom(bindText);
 
-    if(!outDoc.parse(AStringView(bindText))){
+    if(!outDoc.parseWithImplicitAsset(AStringView(bindText), s_AssetTypeMaterialBind, s_AssetVariableMaterialBind)){
         for(const Metascript::ParseError& err : outDoc.errors()){
             NWB_LOGGER_ERROR(NWB_TEXT("Bind '{}' parse error at {}:{}: {}")
                 , PathToString<tchar>(bindFilePath)
@@ -566,14 +562,6 @@ static bool ValidateMaterialBindAssetFields(const Path& bindFilePath, const Meta
 
 static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, ShaderCook::CookArena& arena, MaterialBindEntry& outEntry){
     outEntry.reset();
-
-    if(CanonicalAssetType(doc).view() != s_AssetTypeMaterialBind){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset type must be '{}'")
-            , PathToString<tchar>(bindFilePath)
-            , StringConvert(s_AssetTypeMaterialBind)
-        );
-        return false;
-    }
 
     outEntry.source = PathToString(arena, bindFilePath);
     if(!ValidatePairedSourceExtension(bindFilePath, outEntry.source))

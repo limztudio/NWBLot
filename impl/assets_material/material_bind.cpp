@@ -883,6 +883,54 @@ static bool AppendMaterialTypedLayoutFieldBytes(
     return true;
 }
 
+static bool ReserveMaterialBindTypedLayoutVectors(
+    const MaterialBindEntry& bindEntry,
+    const Name& contextName,
+    const ScratchVector<const MaterialBindInstance*>& sortedInstances,
+    MaterialBindTypedLayout& outLayout
+){
+    usize fieldReserveCount = 0u;
+    usize byteReserveCount = 0u;
+    for(const MaterialBindInstance* instance : sortedInstances){
+        const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance->type));
+        if(!bindStruct)
+            continue;
+
+        if(fieldReserveCount > Limit<usize>::s_Max - bindStruct->fields.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' exceeds supported field count for '{}'")
+                , StringConvert(bindEntry.virtualPath)
+                , StringConvert(contextName.c_str())
+            );
+            return false;
+        }
+        fieldReserveCount += bindStruct->fields.size();
+
+        for(const MaterialBindField& bindField : bindStruct->fields){
+            usize fieldByteReserve = sizeof(UInt4U);
+            MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
+            if(ParseMaterialLayoutFieldType(AStringView(bindField.type), fieldType)){
+                const u32 fieldByteSize = MaterialLayoutFieldByteSize(fieldType);
+                if(fieldByteSize != 0u)
+                    fieldByteReserve = fieldByteSize;
+            }
+
+            if(byteReserveCount > Limit<usize>::s_Max - fieldByteReserve){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' exceeds supported byte count for '{}'")
+                    , StringConvert(bindEntry.virtualPath)
+                    , StringConvert(contextName.c_str())
+                );
+                return false;
+            }
+            byteReserveCount += fieldByteReserve;
+        }
+    }
+
+    outLayout.typedLayoutBlocks.reserve(sortedInstances.size());
+    outLayout.typedLayoutFields.reserve(fieldReserveCount);
+    outLayout.typedBlockBytes.reserve(byteReserveCount);
+    return true;
+}
+
 static bool BuildSortedMaterialBindInstances(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
@@ -1163,8 +1211,9 @@ static bool BuildMaterialBindTypedLayoutImpl(
     ScratchVector<const MaterialBindInstance*> sortedInstances{ scratchArena };
     if(!BuildSortedMaterialBindInstances(bindEntry, contextName, sortedInstances))
         return false;
+    if(!ReserveMaterialBindTypedLayoutVectors(bindEntry, contextName, sortedInstances, outLayout))
+        return false;
 
-    outLayout.typedLayoutBlocks.reserve(sortedInstances.size());
     for(const MaterialBindInstance* instance : sortedInstances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance->type));
         if(!bindStruct){
@@ -1215,7 +1264,6 @@ static bool BuildMaterialBindTypedLayoutImpl(
             return false;
         }
 
-        outLayout.typedLayoutFields.reserve(outLayout.typedLayoutFields.size() + bindStruct->fields.size());
         for(const MaterialBindField& bindField : bindStruct->fields){
             MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
             if(!ParseMaterialLayoutFieldType(AStringView(bindField.type), fieldType)){

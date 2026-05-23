@@ -136,11 +136,6 @@ struct MaterialBindEntry{
 
     [[nodiscard]] const MaterialBindStruct* findStruct(AStringView typeName)const;
     [[nodiscard]] const MaterialBindInstance* findInstance(AStringView instanceName)const;
-    [[nodiscard]] const MaterialBindField* findParameter(
-        AStringView parameterName,
-        const MaterialBindInstance** outInstance = nullptr,
-        const MaterialBindStruct** outStruct = nullptr
-    )const;
 };
 
 

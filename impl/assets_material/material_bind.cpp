@@ -139,28 +139,69 @@ static bool IsMaterialBindIdentifier(const AStringView text){
     return true;
 }
 
-static bool IsSupportedMaterialBindFieldType(const AStringView typeName){
-    const auto matchesScalarOrVector = [typeName](const AStringView scalarName){
-        if(typeName == scalarName)
+static bool ParseMaterialParameterTypeTextImpl(
+    const AStringView typeText,
+    const bool allowVectorAliases,
+    const bool allowOneComponentSuffix,
+    MaterialParameterValueType::Enum& outType,
+    u32& outComponentCount
+){
+    outType = MaterialParameterValueType::None;
+    outComponentCount = 0u;
+
+    const auto tryMatch = [&](
+        const AStringView baseName,
+        const AStringView vectorName,
+        const MaterialParameterValueType::Enum type
+    ) -> bool{
+        if(typeText == baseName){
+            outType = type;
+            outComponentCount = 1u;
             return true;
-        if(typeName.size() != scalarName.size() + 1u)
-            return false;
-        if(typeName.substr(0u, scalarName.size()) != scalarName)
-            return false;
+        }
 
-        const char suffix = typeName[scalarName.size()];
-        if(suffix < '2' || suffix > '4')
-            return false;
+        const auto parseSuffix = [&](const AStringView prefix) -> bool{
+            if(typeText.size() != prefix.size() + 1u)
+                return false;
+            if(typeText.substr(0u, prefix.size()) != prefix)
+                return false;
 
-        return true;
+            const char suffix = typeText[prefix.size()];
+            if(suffix < (allowOneComponentSuffix ? '1' : '2') || suffix > '4')
+                return false;
+
+            outType = type;
+            outComponentCount = static_cast<u32>(suffix - '0');
+            return true;
+        };
+
+        if(parseSuffix(baseName))
+            return true;
+        if(allowVectorAliases && !vectorName.empty())
+            return parseSuffix(vectorName);
+        return false;
     };
 
     return
-        matchesScalarOrVector("float")
-        || matchesScalarOrVector("int")
-        || matchesScalarOrVector("uint")
-        || matchesScalarOrVector("bool")
+        tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
+        || tryMatch(AStringView("int"), AStringView("ivec"), MaterialParameterValueType::Int)
+        || tryMatch(AStringView("uint"), AStringView("uvec"), MaterialParameterValueType::UInt)
+        || tryMatch(AStringView("bool"), AStringView("bvec"), MaterialParameterValueType::Bool)
     ;
+}
+
+static bool ParseMaterialBindFieldType(
+    const AStringView typeText,
+    MaterialParameterValueType::Enum& outType,
+    u32& outComponentCount
+){
+    return ParseMaterialParameterTypeTextImpl(
+        typeText,
+        false,
+        false,
+        outType,
+        outComponentCount
+    );
 }
 
 static bool IsMaterialBindBlockClassAttribute(const AStringView attributeName){
@@ -372,7 +413,11 @@ static bool ParseMaterialBindField(
         return false;
     if(!ParseMaterialBindStringField(bindFilePath, fieldValue, "name", bindStruct.name, outField.name))
         return false;
-    if(!IsMaterialBindIdentifier(outField.type) || !IsSupportedMaterialBindFieldType(outField.type)){
+    MaterialParameterValueType::Enum fieldType = MaterialParameterValueType::None;
+    u32 fieldComponentCount = 0u;
+    if(!IsMaterialBindIdentifier(outField.type)
+        || !ParseMaterialBindFieldType(AStringView(outField.type), fieldType, fieldComponentCount)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
@@ -589,21 +634,6 @@ static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// material bind lookup helpers
-
-
-static bool SplitMaterialBindParameterName(const AStringView parameterName, AStringView& outInstanceName, AStringView& outFieldName){
-    const usize separatorIndex = parameterName.find('.');
-    if(separatorIndex == AStringView::npos || separatorIndex == 0u || separatorIndex + 1u >= parameterName.size())
-        return false;
-
-    outInstanceName = parameterName.substr(0u, separatorIndex);
-    outFieldName = parameterName.substr(separatorIndex + 1u);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // material bind typed layout helpers
 
 
@@ -623,46 +653,13 @@ static bool ParseMaterialParameterTypeText(
     MaterialParameterValueType::Enum& outType,
     u32& outComponentCount
 ){
-    outType = MaterialParameterValueType::None;
-    outComponentCount = 0u;
-
-    auto tryMatch = [&](
-        const AStringView baseName,
-        const AStringView vectorName,
-        const MaterialParameterValueType::Enum type
-    ) -> bool{
-        if(typeText == baseName){
-            outType = type;
-            outComponentCount = 1u;
-            return true;
-        }
-
-        const auto parseSuffix = [&](const AStringView prefix) -> bool{
-            if(typeText.size() != prefix.size() + 1u)
-                return false;
-            for(usize i = 0; i < prefix.size(); ++i){
-                if(typeText[i] != prefix[i])
-                    return false;
-            }
-
-            const char suffix = typeText[prefix.size()];
-            if(suffix < '1' || suffix > '4')
-                return false;
-
-            outType = type;
-            outComponentCount = static_cast<u32>(suffix - '0');
-            return true;
-        };
-
-        return parseSuffix(baseName) || (!vectorName.empty() && parseSuffix(vectorName));
-    };
-
-    return
-        tryMatch(AStringView("float"), AStringView("vec"), MaterialParameterValueType::Float)
-        || tryMatch(AStringView("int"), AStringView("ivec"), MaterialParameterValueType::Int)
-        || tryMatch(AStringView("uint"), AStringView("uvec"), MaterialParameterValueType::UInt)
-        || tryMatch(AStringView("bool"), AStringView("bvec"), MaterialParameterValueType::Bool)
-    ;
+    return ParseMaterialParameterTypeTextImpl(
+        typeText,
+        true,
+        true,
+        outType,
+        outComponentCount
+    );
 }
 
 static bool SplitMaterialParameterCall(const AStringView text, AStringView& outType, AStringView& outArgs){
@@ -832,7 +829,7 @@ static bool ParseMaterialLayoutFieldType(
 
     MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;
     u32 componentCount = 0u;
-    if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
+    if(!ParseMaterialBindFieldType(typeText, valueType, componentCount))
         return false;
 
     outFieldType = MaterialLayoutFieldTypeFromParameterType(valueType, componentCount);
@@ -1474,38 +1471,6 @@ const MaterialBindInstance* MaterialBindEntry::findInstance(const AStringView in
     }
     return nullptr;
 }
-
-const MaterialBindField* MaterialBindEntry::findParameter(
-    const AStringView parameterName,
-    const MaterialBindInstance** outInstance,
-    const MaterialBindStruct** outStruct
-)const{
-    if(outInstance)
-        *outInstance = nullptr;
-    if(outStruct)
-        *outStruct = nullptr;
-
-    AStringView instanceName;
-    AStringView fieldName;
-    if(!__hidden_material_bind::SplitMaterialBindParameterName(parameterName, instanceName, fieldName))
-        return nullptr;
-
-    const MaterialBindInstance* instance = findInstance(instanceName);
-    if(!instance)
-        return nullptr;
-
-    const MaterialBindStruct* bindStruct = findStruct(AStringView(instance->type));
-    const MaterialBindField* field = bindStruct ? bindStruct->findField(fieldName) : nullptr;
-    if(!field)
-        return nullptr;
-
-    if(outInstance)
-        *outInstance = instance;
-    if(outStruct)
-        *outStruct = bindStruct;
-    return field;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

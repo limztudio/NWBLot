@@ -1,5 +1,7 @@
 material asset;
 
+asset.interface = "project/material_interfaces/bxdf";
+
 asset.shaders = {
     "ps": "project/shaders/bxdf_ps",
     "mesh": "project/shaders/bxdf_ms",
@@ -9,6 +11,7 @@ asset.shader_variant = [
     "NWB_PROJECT_TINT=1",
 ];
 asset.parameters = {
-    "albedo_texture": "project/textures/cube_albedo",
-    "base_color": "float4(1.0, 0.78, 0.18, 1.0)",
+    "surface": {
+        "base_color": "float4(1.0, 0.78, 0.18, 1.0)",
+    },
 };

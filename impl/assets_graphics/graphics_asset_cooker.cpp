@@ -46,8 +46,6 @@ namespace __hidden_graphics_asset_cooker{
 
 static constexpr AStringView s_VolumeName = "graphics";
 static constexpr AStringView s_CookerLogPrefix = "GraphicsAssetCooker";
-static constexpr AStringView s_MaterialBindExtension = ".bind";
-static constexpr AStringView s_MaterialBindIncludeCacheDirectoryName = "material_bind_includes";
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 
@@ -73,6 +71,43 @@ static bool IsMeshShaderStage(const AStringView stageName){
     return stageName == "mesh";
 }
 
+static constexpr AStringView s_EnabledImplicitDefineValue = "1";
+
+static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entry, const AStringView defineName){
+    ShaderCook::CookArena& arena = entry.name.get_allocator().arena();
+    CookString defineNameKey(defineName, arena);
+    if(entry.defineValues.find(defineNameKey) == entry.defineValues.end())
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader '{}' uses reserved implicit define '{}' as a variant define")
+        , StringConvert(entry.name)
+        , StringConvert(defineName)
+    );
+    return false;
+}
+
+static bool SetShaderImplicitDefine(
+    ShaderCook::ShaderEntry& entry,
+    const AStringView defineName,
+    const AStringView defineValue
+){
+    if(!ValidateShaderDoesNotUseImplicitDefine(entry, defineName))
+        return false;
+
+    ShaderCook::CookArena& arena = entry.name.get_allocator().arena();
+    CookString defineNameKey(defineName, arena);
+    entry.implicitDefines.insert_or_assign(Move(defineNameKey), CookString(defineValue, arena));
+    return true;
+}
+
+static bool EnableMaterialTypedBinding(ShaderCook::ShaderEntry& entry){
+    return SetShaderImplicitDefine(
+        entry,
+        MaterialBindNames::TypedBindingImplicitDefineText(),
+        MaterialBindNames::TypedBindingImplicitDefineValueText()
+    );
+}
+
 static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry, ShaderCook::ShaderEntry& outEntry){
     outEntry = sourceEntry;
     if(!outEntry.archiveStage.assign(MaterialShaderStageNames::MeshComputeArchiveStageText()))
@@ -82,12 +117,11 @@ static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEnt
     if(!outEntry.targetProfile.assign(sourceEntry.targetProfile))
         return false;
 
-    auto& arena = outEntry.name.get_allocator().arena();
-    outEntry.implicitDefines.insert_or_assign(
-        CookString(MaterialShaderStageNames::MeshComputeImplicitDefineText(), arena),
-        CookString("1", arena)
+    return SetShaderImplicitDefine(
+        outEntry,
+        MaterialShaderStageNames::MeshComputeImplicitDefineText(),
+        s_EnabledImplicitDefineValue
     );
-    return true;
 }
 
 
@@ -155,11 +189,15 @@ struct PreparedShaderEntry{
     ShaderCook::CookVector<Path> dependencies;
     u64 dependencyChecksum = 0;
     u64 variantCount = 0;
+    CookString materialTypedBindingInterfacePath;
+    Name materialTypedBindingInterface = NAME_NONE;
+    bool usesMaterialTypedBinding = false;
 
     explicit PreparedShaderEntry(ShaderCook::CookArena& arena)
         : entry(arena)
         , includeDirectories(arena)
         , dependencies(arena)
+        , materialTypedBindingInterfacePath(arena)
     {}
 };
 using IncludeMetadataMap = ShaderCook::CookMap<CookString, ShaderCook::IncludeEntry>;
@@ -171,7 +209,7 @@ using DiscoveredBindFileVector = CookVector<DiscoveredNwbFile>;
 using GeometryCookEntryVector = CookVector<GeometryCookEntry>;
 using SkinnedGeometryCookEntryVector = CookVector<SkinnedGeometryCookEntry>;
 using MaterialCookEntryVector = CookVector<MaterialCookEntry>;
-using MaterialBindEntryVector = CookVector<ShaderCook::MaterialBindEntry>;
+using MaterialBindEntryVector = CookVector<MaterialBindEntry>;
 
 struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
@@ -428,7 +466,7 @@ static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, Dis
 }
 
 static bool DiscoverBindFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredBindFileVector& outBindFiles){
-    return DiscoverFilesWithExtension(assetRoots, s_MaterialBindExtension, outBindFiles);
+    return DiscoverFilesWithExtension(assetRoots, MaterialBindNames::SourceExtensionText(), outBindFiles);
 }
 
 static bool AppendIncludeDirectory(
@@ -610,10 +648,13 @@ static bool NormalizeMaterialVariant(
     ShaderCook::CookArena& arena = outNormalizedVariant.get_allocator().arena();
     outNormalizedVariant.clear();
 
-    const AStringView requestedVariant = materialEntry.shaderVariant.empty()
-        ? Core::ShaderArchive::s_DefaultVariant
-        : AStringView(materialEntry.shaderVariant)
-    ;
+    if(materialEntry.shaderVariant.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has empty shader_variant")
+            , StringConvert(materialEntry.virtualPath.c_str())
+        );
+        return false;
+    }
+    const AStringView requestedVariant(materialEntry.shaderVariant.data(), materialEntry.shaderVariant.size());
 
     if(requestedVariant == Core::ShaderArchive::s_DefaultVariant){
         if(!preparedShaderEntry.entry.defineValues.empty() && preparedShaderEntry.entry.defaultVariant.empty()){
@@ -684,6 +725,7 @@ static bool ValidateAndNormalizeMaterials(
         ShaderCook::CookArena& arena = materialEntry.shaderVariant.get_allocator().arena();
         CookString normalizedVariant{arena};
         bool hasNormalizedVariant = false;
+        bool hasMeshShader = false;
 
         for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
@@ -702,6 +744,31 @@ static bool ValidateAndNormalizeMaterials(
             if(!NormalizeMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName, stageNormalizedVariant))
                 return false;
 
+            if(shaderType == Core::ShaderType::MeshStage){
+                hasMeshShader = true;
+                const Name shaderMaterialInterface = foundShader.value()->materialTypedBindingInterface;
+                const CookString& shaderMaterialInterfacePath = foundShader.value()->materialTypedBindingInterfacePath;
+                if(!shaderMaterialInterface){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but mesh shader '{}' "
+                        "does not include a generated material bind")
+                        , StringConvert(materialEntry.virtualPath.c_str())
+                        , StringConvert(materialEntry.materialInterface.c_str())
+                        , StringConvert(shaderAsset.name().c_str())
+                    );
+                    return false;
+                }
+                if(shaderMaterialInterface != materialEntry.materialInterface){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but mesh shader '{}' "
+                        "includes generated material bind interface '{}'")
+                        , StringConvert(materialEntry.virtualPath.c_str())
+                        , StringConvert(materialEntry.materialInterface.c_str())
+                        , StringConvert(shaderAsset.name().c_str())
+                        , StringConvert(shaderMaterialInterfacePath)
+                    );
+                    return false;
+                }
+            }
+
             if(!hasNormalizedVariant){
                 normalizedVariant = Move(stageNormalizedVariant);
                 hasNormalizedVariant = true;
@@ -718,8 +785,20 @@ static bool ValidateAndNormalizeMaterials(
             }
         }
 
-        if(!hasNormalizedVariant)
-            normalizedVariant.assign(Core::ShaderArchive::s_DefaultVariant);
+        if(!hasNormalizedVariant){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has no shader stages")
+                , StringConvert(materialEntry.virtualPath.c_str())
+            );
+            return false;
+        }
+
+        if(!hasMeshShader){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but has no mesh shader stage")
+                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(materialEntry.materialInterface.c_str())
+            );
+            return false;
+        }
 
         materialEntry.shaderVariant = Move(normalizedVariant);
     }
@@ -981,16 +1060,13 @@ static bool ParseAssetMetadata(
             if(!shaderCook.parseShaderMeta(nwbFile, doc, shaderEntry))
                 return false;
 
-            if(
-                !Core::Assets::BuildDerivedAssetVirtualPath(
-                    discoveredNwbFile.assetRoot,
-                    discoveredNwbFile.virtualRoot.view(),
-                    Path(shaderEntry.source),
-                    shaderEntry.name
-                )
-            ){
+            if(!Core::Assets::BuildDerivedAssetVirtualPath(
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                Path(shaderEntry.source),
+                shaderEntry.name
+            ))
                 return false;
-            }
 
             const PreparedShaderKey shaderIdentityKey{
                 ToName(shaderEntry.name),
@@ -1086,20 +1162,17 @@ static bool ParseAssetMetadata(
     }
 
     for(const DiscoveredNwbFile& discoveredBindFile : bindFiles){
-        ShaderCook::MaterialBindEntry bindEntry(cookArena);
-        if(!shaderCook.parseMaterialBindSource(discoveredBindFile.filePath, bindEntry))
+        MaterialBindEntry bindEntry(cookArena);
+        if(!ParseMaterialBindSource(discoveredBindFile.filePath, bindEntry))
             return false;
 
-        if(
-            !Core::Assets::BuildDerivedAssetVirtualPath(
-                discoveredBindFile.assetRoot,
-                discoveredBindFile.virtualRoot.view(),
-                discoveredBindFile.filePath,
-                bindEntry.virtualPath
-            )
-        ){
+        if(!Core::Assets::BuildDerivedAssetVirtualPath(
+            discoveredBindFile.assetRoot,
+            discoveredBindFile.virtualRoot.view(),
+            discoveredBindFile.filePath,
+            bindEntry.virtualPath
+        ))
             return false;
-        }
 
         outMetadata.materialBindEntries.push_back(Move(bindEntry));
     }
@@ -1116,85 +1189,6 @@ static bool ParseAssetMetadata(
 
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no graphics asset metadata found in asset roots"));
         return false;
-    }
-
-    return true;
-}
-
-static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
-    ScratchArena scratchArena;
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    ScratchString includeDirectoryName(s_MaterialBindIncludeCacheDirectoryName, scratchArena);
-    return cacheDirectory / configurationName.c_str() / includeDirectoryName.c_str();
-}
-
-static bool PrepareMaterialBindIncludeRoot(const Path& includeRoot){
-    ErrorCode errorCode;
-    if(!RemoveAllIfExists(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to clear generated material bind include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    errorCode.clear();
-    if(!EnsureDirectories(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create generated material bind include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
-}
-
-static bool EmitMaterialBindIncludes(
-    ShaderCook::CookArena& cookArena,
-    ShaderCook& shaderCook,
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    const MaterialBindEntryVector& materialBindEntries,
-    Path& outIncludeRoot
-){
-    outIncludeRoot.clear();
-    if(materialBindEntries.empty())
-        return true;
-
-    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
-    if(!PrepareMaterialBindIncludeRoot(outIncludeRoot))
-        return false;
-
-    ShaderCook::CookHashSet<CookString> seenIncludePaths{cookArena};
-    seenIncludePaths.reserve(materialBindEntries.size());
-
-    for(const ShaderCook::MaterialBindEntry& bindEntry : materialBindEntries){
-        CookString includePath(bindEntry.virtualPath, cookArena);
-        includePath += s_MaterialBindExtension;
-        if(!seenIncludePaths.insert(includePath).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate material bind include path '{}'"), StringConvert(includePath));
-            return false;
-        }
-
-        ShaderCook::CookString generatedSource{cookArena};
-        if(!shaderCook.buildMaterialBindIncludeSource(bindEntry, generatedSource))
-            return false;
-
-        const Path outputPath = outIncludeRoot / Path(includePath.c_str());
-        ErrorCode errorCode;
-        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create generated material bind include parent '{}': {}")
-                , PathToString<tchar>(outputPath.parent_path())
-                , StringConvert(errorCode.message())
-            );
-            return false;
-        }
-
-        if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to write generated material bind include '{}'"), PathToString<tchar>(outputPath));
-            return false;
-        }
     }
 
     return true;
@@ -1283,6 +1277,25 @@ static bool PrepareShaderEntriesForCook(
             return false;
 
         shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
+        if(!ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, MaterialBindNames::TypedBindingImplicitDefineText()))
+            return false;
+
+        CookString materialTypedBindingInterfaceText{cookArena};
+        if(!ResolveMaterialBindDependencyInterface(
+            AStringView(preparedEntry.entry.name),
+            materialBindIncludeRoot,
+            preparedEntry.dependencies,
+            materialTypedBindingInterfaceText,
+            preparedEntry.materialTypedBindingInterface
+        ))
+            return false;
+        preparedEntry.usesMaterialTypedBinding =
+            IsMeshShaderStage(preparedEntry.entry.archiveStage.view())
+            && preparedEntry.materialTypedBindingInterface
+        ;
+        preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
+        if(preparedEntry.usesMaterialTypedBinding && !EnableMaterialTypedBinding(preparedEntry.entry))
+            return false;
         if(!shaderCook.validateDefaultVariant(preparedEntry.entry.name, preparedEntry.entry.defaultVariant, preparedEntry.entry.defineValues))
             return false;
         if(!shaderCook.canonicalizeVariantSignature(preparedEntry.entry.defaultVariant, preparedEntry.entry.defaultVariant)){
@@ -1318,6 +1331,9 @@ static bool PrepareShaderEntriesForCook(
         meshComputeShadowEntry.dependencies = meshShaderEntry.dependencies;
         meshComputeShadowEntry.dependencyChecksum = meshShaderEntry.dependencyChecksum;
         meshComputeShadowEntry.variantCount = meshShaderEntry.variantCount;
+        meshComputeShadowEntry.materialTypedBindingInterfacePath = meshShaderEntry.materialTypedBindingInterfacePath;
+        meshComputeShadowEntry.materialTypedBindingInterface = meshShaderEntry.materialTypedBindingInterface;
+        meshComputeShadowEntry.usesMaterialTypedBinding = meshShaderEntry.usesMaterialTypedBinding;
 
         if(!AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
@@ -1649,33 +1665,26 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         configurationSafeName = "default";
 
     Path materialBindIncludeRoot;
-    if(
-        !__hidden_graphics_asset_cooker::EmitMaterialBindIncludes(
-            m_arena,
-            shaderCook,
-            resolvedPaths.cacheDirectory,
-            configurationSafeName,
-            parsedMetadata.materialBindEntries,
-            materialBindIncludeRoot
-        )
-    ){
+    if(!EmitMaterialBindIncludes(
+        m_arena,
+        resolvedPaths.cacheDirectory,
+        configurationSafeName,
+        parsedMetadata.materialBindEntries,
+        materialBindIncludeRoot
+    ))
         return false;
-    }
 
     __hidden_graphics_asset_cooker::PreparedShaderPlan preparedPlan(m_arena);
-    if(
-        !__hidden_graphics_asset_cooker::PrepareShaderEntriesForCook(
-            m_arena,
-            shaderCook,
-            resolvedPaths,
-            materialBindIncludeRoot,
-            parsedMetadata.includeMetadata,
-            parsedMetadata.shaderEntries,
-            preparedPlan
-        )
-    ){
+    if(!__hidden_graphics_asset_cooker::PrepareShaderEntriesForCook(
+        m_arena,
+        shaderCook,
+        resolvedPaths,
+        materialBindIncludeRoot,
+        parsedMetadata.includeMetadata,
+        parsedMetadata.shaderEntries,
+        preparedPlan
+    ))
         return false;
-    }
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
@@ -1723,21 +1732,18 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         }
 
-        if(
-            !__hidden_graphics_asset_cooker::AppendPreparedShadersToVolume(
-                m_arena,
-                shaderCook,
-                resolvedPaths.cacheDirectory,
-                configurationSafeName,
-                preparedPlan.preparedEntries,
-                volumeSession,
-                seenVirtualPathHashes,
-                shaderIndexRecordCount,
-                shaderIndexRecords
-            )
-        ){
+        if(!__hidden_graphics_asset_cooker::AppendPreparedShadersToVolume(
+            m_arena,
+            shaderCook,
+            resolvedPaths.cacheDirectory,
+            configurationSafeName,
+            preparedPlan.preparedEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            shaderIndexRecordCount,
+            shaderIndexRecords
+        ))
             return false;
-        }
 
         Core::GraphicsBytes indexBinary{m_arena};
         if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary)){

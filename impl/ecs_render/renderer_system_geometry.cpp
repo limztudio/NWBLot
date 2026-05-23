@@ -285,8 +285,8 @@ bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a mesh view buffer"));
         return false;
     }
-    if(!m_materialParameterBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a material parameter buffer"));
+    if(!m_materialTypedBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a material typed buffer"));
         return false;
     }
 
@@ -295,7 +295,7 @@ bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, m_materialParameterBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, m_materialTypedBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
@@ -320,8 +320,8 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a mesh view buffer"));
         return false;
     }
-    if(!m_materialParameterBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a material parameter buffer"));
+    if(!m_materialTypedBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a material typed buffer"));
         return false;
     }
 
@@ -357,7 +357,7 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, m_materialParameterBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, m_materialTypedBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);

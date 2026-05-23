@@ -1,0 +1,12 @@
+material_bind asset;
+
+[material_constant]
+struct NwbProjectBxdfSurfaceMaterial{
+    [default("float4(1.0, 1.0, 1.0, 1.0)")]
+    float4 base_color;
+
+    [default("float4(1.0, 1.0, 1.0, 1.0)")]
+    float4 color_tint;
+};
+
+NwbProjectBxdfSurfaceMaterial surface;

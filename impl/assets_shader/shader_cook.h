@@ -49,79 +49,6 @@ public:
         AStringView value;
     };
 
-    struct MaterialBindAttribute{
-        CookString name;
-        CookVector<CookString> arguments;
-
-        explicit MaterialBindAttribute(CookArena& memoryArena)
-            : name(memoryArena)
-            , arguments(memoryArena)
-        {}
-    };
-
-    struct MaterialBindField{
-        CookString type;
-        CookString name;
-        CookVector<MaterialBindAttribute> attributes;
-
-        explicit MaterialBindField(CookArena& memoryArena)
-            : type(memoryArena)
-            , name(memoryArena)
-            , attributes(memoryArena)
-        {}
-
-        [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const;
-    };
-
-    struct MaterialBindStruct{
-        CookString name;
-        CookVector<MaterialBindAttribute> attributes;
-        CookVector<MaterialBindField> fields;
-
-        explicit MaterialBindStruct(CookArena& memoryArena)
-            : name(memoryArena)
-            , attributes(memoryArena)
-            , fields(memoryArena)
-        {}
-
-        [[nodiscard]] const MaterialBindField* findField(AStringView fieldName)const;
-    };
-
-    struct MaterialBindInstance{
-        CookString type;
-        CookString name;
-
-        explicit MaterialBindInstance(CookArena& memoryArena)
-            : type(memoryArena)
-            , name(memoryArena)
-        {}
-    };
-
-    struct MaterialBindEntry{
-        CookString source;
-        CookString virtualPath;
-        CookVector<MaterialBindStruct> structs;
-        CookVector<MaterialBindInstance> instances;
-
-        explicit MaterialBindEntry(CookArena& memoryArena)
-            : source(memoryArena)
-            , virtualPath(memoryArena)
-            , structs(memoryArena)
-            , instances(memoryArena)
-        {}
-
-        void reset(){
-            source.clear();
-            virtualPath.clear();
-            structs.clear();
-            instances.clear();
-        }
-
-        [[nodiscard]] const MaterialBindStruct* findStruct(AStringView typeName)const;
-        [[nodiscard]] const MaterialBindInstance* findInstance(AStringView instanceName)const;
-        [[nodiscard]] bool declaresParameter(AStringView parameterName)const;
-    };
-
     struct ShaderCompilerRequest{
         AStringView shaderName;
         AStringView stage;
@@ -225,8 +152,6 @@ public:
 
 public:
     bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
-    bool parseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry);
-    bool buildMaterialBindIncludeSource(const MaterialBindEntry& entry, CookString& outSource);
     bool parseShaderMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, ShaderEntry& outEntry);
     bool parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry);
     bool parseIncludeMeta(const Path& nwbFilePath, const Core::Metascript::Document& doc, IncludeEntry& outEntry);

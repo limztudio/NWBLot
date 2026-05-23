@@ -6,6 +6,7 @@
 #include <impl/assets_geometry/geometry_asset.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 #include <impl/assets_material/material_asset_cook.h>
+#include <impl/assets_material/material_binary_payload.h>
 
 #include <tests/capturing_logger.h>
 #include <tests/test_context.h>
@@ -14,6 +15,7 @@
 #include <core/common/common.h>
 #include <core/filesystem/filesystem.h>
 #include <core/graphics/common.h>
+#include <core/graphics/shader_archive.h>
 
 #include <global/binary.h>
 #include <global/compile.h>
@@ -233,8 +235,75 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
+static constexpr AStringView s_UpdatedDefaultMaterialBindSource = R"NWB_BIND(material_bind asset;
+
+[material_constant]
+struct NwbTestSurfaceMaterial{
+    [default("float4(1.0, 1.0, 1.0, 1.0)")]
+    float4 base_color;
+
+    [default("float(0.5)")]
+    float roughness;
+
+    [default("int2(1, 2)")]
+    int2 layer_ids;
+
+    [default("uint3(7u, 8u, 9u)")]
+    uint3 feature_mask;
+
+    [default("bool4(true, false, true, false)")]
+    bool4 channel_enabled;
+};
+
+[material_mutable]
+struct NwbTestRuntimeMaterial{
+    [default("float(1.0)")]
+    float fade_alpha;
+};
+
+NwbTestSurfaceMaterial surface;
+NwbTestRuntimeMaterial runtime;
+
+)NWB_BIND";
+
 static constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
+
+NwbMeshGeneratedVertex nwbMeshBuildVertex(
+    uint triangleIndex,
+    uint corner,
+    NwbMeshSourceVertex source,
+    const NwbMeshInstanceData instance
+){
+    NwbMeshGeneratedVertex generatedVertex;
+    const uint2 materialLayoutHash = NWB_MATERIAL_BIND_LAYOUT_HASH;
+    const uint2 materialInterfaceHash0 = NWB_MATERIAL_BIND_INTERFACE_HASH_0;
+    const bool materialBindConstantsValid =
+        materialLayoutHash.x != 0u
+        && materialInterfaceHash0.x != 0u
+        && NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 60u
+        && NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_SIZE == 4u
+        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET == 4u
+        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 56u;
+    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
+    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
+    generatedVertex.padding0 = materialBindConstantsValid ? 0.0 : 1.0;
+    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
+    generatedVertex.uv0 = source.uv0;
+    generatedVertex.padding1 = float2(0.0);
+    generatedVertex.color = surface.base_color;
+    generatedVertex.worldPosition = float4(worldPosition, 1.0);
+    return generatedVertex;
+}
+
+)NWB_SLANG";
+
+#if defined(NWB_FINAL)
+static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
+#include "project/material_interfaces/other_surface.bind"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
     uint triangleIndex,
@@ -257,6 +326,32 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 }
 
 )NWB_SLANG";
+#endif
+
+#if defined(NWB_FINAL)
+static constexpr AStringView s_UnboundMaterialShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
+
+NwbMeshGeneratedVertex nwbMeshBuildVertex(
+    uint triangleIndex,
+    uint corner,
+    NwbMeshSourceVertex source,
+    const NwbMeshInstanceData instance
+){
+    NwbMeshGeneratedVertex generatedVertex;
+    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
+    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
+    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
+    generatedVertex.padding0 = 0.0;
+    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
+    generatedVertex.uv0 = source.uv0;
+    generatedVertex.padding1 = float2(0.0);
+    generatedVertex.color = source.color;
+    generatedVertex.worldPosition = float4(worldPosition, 1.0);
+    return generatedVertex;
+}
+
+)NWB_SLANG";
+#endif
 
 static constexpr AStringView s_MaterialBindPixelShaderProbeSource = R"NWB_SLANG(struct NwbMaterialBindPixelInput{
     [[vk::location(0)]] float4 color : COLOR0;
@@ -282,6 +377,7 @@ asset.shaders = {
     "mesh": "project/shaders/material_mesh",
     "ps": "project/shaders/material_ps",
 };
+asset.shader_variant = "default";
 
 asset.parameters = {
     "surface": {
@@ -296,6 +392,46 @@ asset.parameters = {
 )NWB_META";
 
 #if defined(NWB_FINAL)
+static constexpr AStringView s_MissingInterfaceMaterialMeta = R"NWB_META(material asset;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
+};
+
+)NWB_META";
+
+static constexpr AStringView s_UnsupportedMaterialFieldMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface";
+asset.compiler = "unsupported";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+)NWB_META";
+
+static constexpr AStringView s_MissingShaderVariantMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+
+)NWB_META";
+#endif
+
+#if defined(NWB_FINAL)
 static constexpr AStringView s_UnknownInterfaceParameterMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface";
@@ -304,6 +440,7 @@ asset.shaders = {
     "mesh": "project/shaders/material_mesh",
     "ps": "project/shaders/material_ps",
 };
+asset.shader_variant = "default";
 
 asset.parameters = {
     "surface": {
@@ -321,27 +458,10 @@ asset.shaders = {
     "mesh": "project/shaders/material_mesh",
     "ps": "project/shaders/material_ps",
 };
+asset.shader_variant = "default";
 
 asset.parameters = {
     "runtime.fade_alpha": "float(0.75)",
-};
-
-)NWB_META";
-#endif
-
-#if defined(NWB_FINAL)
-static constexpr AStringView s_DuplicateFlattenedMaterialParameterMeta = R"NWB_META(material asset;
-
-asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-};
-
-asset.parameters = {
-    "surface.base_color": "float4(1.0, 1.0, 1.0, 1.0)",
-    "surface": {
-        "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
-    },
 };
 
 )NWB_META";
@@ -354,6 +474,50 @@ static constexpr AStringView s_DuplicateFieldMaterialBindSource = R"NWB_BIND(mat
 struct NwbTestSurfaceMaterial{
     float base_color;
     float base_color;
+};
+
+NwbTestSurfaceMaterial surface;
+
+)NWB_BIND";
+#endif
+
+#if defined(NWB_FINAL)
+static constexpr AStringView s_DuplicateInstanceMaterialBindSource = R"NWB_BIND(material_bind asset;
+
+[material_constant]
+struct NwbTestSurfaceMaterial{
+    [default("float(0.5)")]
+    float roughness;
+};
+
+NwbTestSurfaceMaterial surface;
+NwbTestSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_SurfaceOnlyMaterialBindSource = R"NWB_BIND(material_bind asset;
+
+[material_constant]
+struct NwbTestSurfaceMaterial{
+    [default("float4(1.0, 1.0, 1.0, 1.0)")]
+    float4 base_color;
+
+    [default("float(0.5)")]
+    float roughness;
+};
+
+NwbTestSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_InstanceOverrideMaterialBindSource = R"NWB_BIND(material_bind asset;
+
+asset.instance_override = "unsupported";
+
+[material_constant]
+struct NwbTestSurfaceMaterial{
+    [default("float(0.5)")]
+    float roughness;
 };
 
 NwbTestSurfaceMaterial surface;
@@ -813,8 +977,7 @@ static bool CookMinimalGeometryWithMaterialBind(
 static bool ParseMaterialBindFromText(
     const AStringView bindText,
     const AStringView caseName,
-    TestArena& testArena,
-    NWB::Impl::ShaderCook::MaterialBindEntry& outEntry,
+    NWB::Impl::MaterialBindEntry& outEntry,
     Path& outRoot
 ){
     if(!PrepareAssetsGraphicsCaseRoot(caseName, outRoot))
@@ -824,8 +987,7 @@ static bool ParseMaterialBindFromText(
     if(!WriteTextFile(bindPath, bindText))
         return false;
 
-    NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    return shaderCook.parseMaterialBindSource(bindPath, outEntry);
+    return NWB::Impl::ParseMaterialBindSource(bindPath, outEntry);
 }
 
 #if defined(NWB_FINAL)
@@ -851,14 +1013,18 @@ static bool CookDuplicateGeneratedMaterialBindIncludePath(
 }
 #endif
 
-static bool WriteMaterialBindMeshShaderProbe(
+static bool WriteMaterialBindMeshShaderProbeSource(
     TestArena& testArena,
     const Path& assetRoot,
     const char* metaFilename,
-    const char* sourceFilename
+    const char* sourceFilename,
+    const AStringView sourceText
 ){
     const Path engineGraphicsIncludeRoot = AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics";
-    const NWB::Impl::ShaderCook::CookString engineGraphicsIncludeRootText = PathToString(testArena.arena, engineGraphicsIncludeRoot);
+    const NWB::Impl::ShaderCook::CookString engineGraphicsIncludeRootText = PathToString(
+        testArena.arena,
+        engineGraphicsIncludeRoot
+    );
     NWB::Impl::ShaderCook::CookString meshShaderMeta(testArena.arena);
     meshShaderMeta +=
         "shader asset;\n\n"
@@ -875,7 +1041,22 @@ static bool WriteMaterialBindMeshShaderProbe(
         AStringView(meshShaderMeta.data(), meshShaderMeta.size())
     ))
         return false;
-    return WriteTextFile(assetRoot / "shaders" / sourceFilename, s_MaterialBindShaderProbeSource);
+    return WriteTextFile(assetRoot / "shaders" / sourceFilename, sourceText);
+}
+
+static bool WriteMaterialBindMeshShaderProbe(
+    TestArena& testArena,
+    const Path& assetRoot,
+    const char* metaFilename,
+    const char* sourceFilename
+){
+    return WriteMaterialBindMeshShaderProbeSource(
+        testArena,
+        assetRoot,
+        metaFilename,
+        sourceFilename,
+        s_MaterialBindShaderProbeSource
+    );
 }
 
 static bool CookMaterialBindShaderProbe(
@@ -897,6 +1078,51 @@ static bool CookMaterialBindShaderProbe(
     return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
 }
 
+static bool WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+    TestArena& testArena,
+    const Path& assetRoot,
+    const AStringView bindText,
+    const AStringView materialText,
+    const AStringView meshSourceText
+){
+    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
+        return false;
+    if(!WriteMaterialBindMeshShaderProbeSource(
+        testArena,
+        assetRoot,
+        "material_mesh.nwb",
+        "material_mesh.slang",
+        meshSourceText
+    ))
+        return false;
+    if(!WriteTextFile(
+        assetRoot / "shaders" / "material_ps.nwb",
+        "shader asset;\n\n"
+        "asset.stage = \"ps\";\n"
+        "asset.target_profile = \"spirv_1_5\";\n"
+        "asset.entry_point = \"main\";\n"
+    ))
+        return false;
+    if(!WriteTextFile(assetRoot / "shaders" / "material_ps.slang", s_MaterialBindPixelShaderProbeSource))
+        return false;
+    return WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText);
+}
+
+static bool WriteMaterialBindMaterialIntegrationAssets(
+    TestArena& testArena,
+    const Path& assetRoot,
+    const AStringView bindText,
+    const AStringView materialText
+){
+    return WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+        testArena,
+        assetRoot,
+        bindText,
+        materialText,
+        s_MaterialBindShaderProbeSource
+    );
+}
+
 static bool CookMaterialBindMaterialIntegration(
     const AStringView bindText,
     const AStringView materialText,
@@ -909,21 +1135,7 @@ static bool CookMaterialBindMaterialIntegration(
         return false;
 
     const Path assetRoot = outRoot / "assets";
-    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
-        return false;
-    if(!WriteMaterialBindMeshShaderProbe(testArena, assetRoot, "material_mesh.nwb", "material_mesh.slang"))
-        return false;
-    if(!WriteTextFile(
-        assetRoot / "shaders" / "material_ps.nwb",
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
-        "asset.entry_point = \"main\";\n"
-    ))
-        return false;
-    if(!WriteTextFile(assetRoot / "shaders" / "material_ps.slang", s_MaterialBindPixelShaderProbeSource))
-        return false;
-    if(!WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText))
+    if(!WriteMaterialBindMaterialIntegrationAssets(testArena, assetRoot, bindText, materialText))
         return false;
 
     return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
@@ -1004,6 +1216,52 @@ static bool LoadCookedMaterial(
         outLoadedAsset,
         0u
     );
+}
+
+static bool LoadCookedShaderArchiveRecords(
+    TestContext& context,
+    TestArena& testArena,
+    const Path& outputDirectory,
+    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
+){
+    NWB::Core::Filesystem::VolumeSession volumeSession(testArena.arena);
+    const bool loadedVolume = volumeSession.load("graphics", outputDirectory);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedVolume);
+    if(!loadedVolume)
+        return false;
+
+    NWB::Core::GraphicsBytes indexBinary(testArena.arena);
+    const bool loadedIndex = volumeSession.loadData(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedIndex);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !indexBinary.empty());
+    if(!loadedIndex || indexBinary.empty())
+        return false;
+
+    const bool deserialized = NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, deserialized);
+    return deserialized;
+}
+
+static bool FindShaderArchiveSourceChecksum(
+    const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records,
+    const Name shaderName,
+    const Name stageName,
+    u64& outSourceChecksum
+){
+    outSourceChecksum = 0u;
+    for(const NWB::Core::ShaderArchive::Record& record : records){
+        const AStringView variantName(record.variantName.data(), record.variantName.size());
+        if(
+            record.shaderName == shaderName
+            && record.stage == stageName
+            && variantName == NWB::Core::ShaderArchive::s_DefaultVariant
+        ){
+            outSourceChecksum = record.sourceChecksum;
+            return outSourceChecksum != 0u;
+        }
+    }
+
+    return false;
 }
 
 using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
@@ -1228,6 +1486,60 @@ static bool OverwriteU64(NWB::Core::Assets::AssetBytes& binary, const usize offs
 
 static usize SkinnedGeometryHeaderCountOffset(const usize countIndex){
     return (sizeof(u32) * 3u) + (sizeof(u64) * countIndex);
+}
+
+static bool FindMaterialBinaryTypedLayoutOffsets(
+    const NWB::Core::Assets::AssetBytes& binary,
+    usize& outLayoutHashOffset,
+    usize& outBlockByteCountOffset
+){
+    outLayoutHashOffset = 0u;
+    outBlockByteCountOffset = 0u;
+
+    usize cursor = 0u;
+    u32 value32 = 0u;
+    if(!ReadPOD(binary, cursor, value32) || !ReadPOD(binary, cursor, value32))
+        return false;
+
+    u32 shaderVariantByteCount = 0u;
+    if(!ReadPOD(binary, cursor, shaderVariantByteCount))
+        return false;
+    if(cursor > binary.size() || shaderVariantByteCount > binary.size() - cursor)
+        return false;
+    cursor += shaderVariantByteCount;
+
+    if(cursor > binary.size() || sizeof(NameHash) > binary.size() - cursor)
+        return false;
+    cursor += sizeof(NameHash);
+
+    outLayoutHashOffset = cursor;
+
+    u64 layoutHash = 0u;
+    u32 blockCount = 0u;
+    u32 fieldCount = 0u;
+    if(
+        !ReadPOD(binary, cursor, layoutHash)
+        || !ReadPOD(binary, cursor, blockCount)
+        || !ReadPOD(binary, cursor, fieldCount)
+    )
+        return false;
+
+    if(
+        cursor > binary.size()
+        || blockCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes
+    )
+        return false;
+    cursor += static_cast<usize>(blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes;
+
+    if(
+        cursor > binary.size()
+        || fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes
+    )
+        return false;
+    cursor += static_cast<usize>(fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
+
+    outBlockByteCountOffset = cursor;
+    return true;
 }
 
 #endif
@@ -1513,12 +1825,64 @@ static bool ParseMaterialEntryFromMetaText(
     return NWB::Impl::ParseMaterialCookMetadata(shaderCook, assetRoot, "project", nwbFilePath, doc, outEntry);
 }
 
-static u64 MaterialParameterHash(const AStringView key){
-    return UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, key);
-}
-
 static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
+}
+
+static void AppendHexU32SlangText(const u32 value, AString& inOutText){
+    static constexpr char s_HexDigits[] = "0123456789abcdef";
+    inOutText += "0x";
+    for(u32 nibbleIndex = 0u; nibbleIndex < 8u; ++nibbleIndex){
+        const u32 shift = (7u - nibbleIndex) * 4u;
+        inOutText += s_HexDigits[(value >> shift) & 0xfu];
+    }
+    inOutText += 'u';
+}
+
+static void AppendU32DecimalText(const u32 value, AString& inOutText){
+    char digits[10u];
+    u32 digitCount = 0u;
+    u32 remaining = value;
+    do{
+        digits[digitCount] = static_cast<char>('0' + (remaining % 10u));
+        remaining /= 10u;
+        ++digitCount;
+    } while(remaining != 0u);
+
+    while(digitCount > 0u){
+        --digitCount;
+        inOutText += digits[digitCount];
+    }
+}
+
+static AString BuildGeneratedUint2ConstantText(const AStringView symbol, const u64 value){
+    AString text("static const uint2 ");
+    text.append(symbol.data(), symbol.size());
+    text += " = uint2(";
+    AppendHexU32SlangText(static_cast<u32>(value & 0xffffffffull), text);
+    text += ", ";
+    AppendHexU32SlangText(static_cast<u32>(value >> 32u), text);
+    text += ");";
+    return text;
+}
+
+static AString BuildGeneratedUintConstantText(const AStringView symbol, const u32 value){
+    AString text("static const uint ");
+    text.append(symbol.data(), symbol.size());
+    text += " = ";
+    AppendU32DecimalText(value, text);
+    text += "u;";
+    return text;
+}
+
+static bool ContainsGeneratedUint2Constant(const AStringView generatedSourceView, const AStringView symbol, const u64 value){
+    const AString expected = BuildGeneratedUint2ConstantText(symbol, value);
+    return ContainsText(generatedSourceView, AStringView(expected.data(), expected.size()));
+}
+
+static bool ContainsGeneratedUintConstant(const AStringView generatedSourceView, const AStringView symbol, const u32 value){
+    const AString expected = BuildGeneratedUintConstantText(symbol, value);
+    return ContainsText(generatedSourceView, AStringView(expected.data(), expected.size()));
 }
 
 static bool ContainsCanonicalPath(const NWB::Impl::ShaderCook::CookVector<Path>& paths, const Path& expectedPath){
@@ -1542,6 +1906,46 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
         generatedSourceView,
         "#ifndef NWB_GENERATED_MATERIAL_BIND_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE_BIND"
     ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint2 NWB_MATERIAL_BIND_INTERFACE_HASH_0 = uint2("
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint2 NWB_MATERIAL_BIND_LAYOUT_HASH = uint2("
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "#if NWB_MATERIAL_TYPED_BINDING != 1"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_BLOCK_COUNT = 2u;"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_FIELD_COUNT = 6u;"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 60u;"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_OFFSET = 0u;"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_SIZE = 4u;"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET = 4u;"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE = 56u;"
+    ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "struct NwbTestSurfaceMaterial"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
@@ -1553,19 +1957,31 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
-        "nwbMaterialFindFloat4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_KEY, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_DEFAULT)"
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET = 4u;"
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
-        "nwbMaterialFindInt2(instance, NWB_MATERIAL_BIND_SURFACE_LAYER_IDS_KEY, NWB_MATERIAL_BIND_SURFACE_LAYER_IDS_DEFAULT)"
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_BYTE_OFFSET = 0u;"
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
-        "nwbMaterialFindUInt3(instance, NWB_MATERIAL_BIND_SURFACE_FEATURE_MASK_KEY, NWB_MATERIAL_BIND_SURFACE_FEATURE_MASK_DEFAULT)"
+        "nwbMaterialLoadFloat4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET)"
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
-        "nwbMaterialFindBool4(instance, NWB_MATERIAL_BIND_SURFACE_CHANNEL_ENABLED_KEY, NWB_MATERIAL_BIND_SURFACE_CHANNEL_ENABLED_DEFAULT)"
+        "nwbMaterialLoadInt2(instance, NWB_MATERIAL_BIND_SURFACE_LAYER_IDS_BYTE_OFFSET)"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "nwbMaterialLoadUInt3(instance, NWB_MATERIAL_BIND_SURFACE_FEATURE_MASK_BYTE_OFFSET)"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        generatedSourceView,
+        "nwbMaterialLoadBool4(instance, NWB_MATERIAL_BIND_SURFACE_CHANNEL_ENABLED_BYTE_OFFSET)"
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ContainsText(
+        generatedSourceView,
+        "nwbMaterialFind"
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "float4 nwbMaterialBindLoadSurfaceBaseColor"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "NwbTestSurfaceMaterial nwbMaterialBindLoadSurface"));
@@ -1575,26 +1991,318 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
     ));
 }
 
-static const NWB::Impl::MaterialParameterGpuData* FindMaterialParameter(
+static const NWB::Impl::MaterialTypedLayoutBlock* FindMaterialTypedLayoutBlock(
     const NWB::Impl::Material& material,
-    const AStringView key
+    const AStringView blockName
 ){
-    const u64 keyHash = MaterialParameterHash(key);
-    const u32 hashLow = static_cast<u32>(keyHash & 0xffffffffull);
-    const u32 hashHigh = static_cast<u32>(keyHash >> 32u);
-
-    for(const NWB::Impl::MaterialParameterGpuData& parameter : material.parameters()){
-        if(parameter.meta.x == hashLow && parameter.meta.y == hashHigh)
-            return &parameter;
+    const Name blockNameHash(blockName);
+    for(const NWB::Impl::MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
+        if(block.blockName == blockNameHash)
+            return &block;
     }
-
     return nullptr;
 }
 
-static f32 LoadMaterialParameterFloat(const NWB::Impl::MaterialParameterGpuData& parameter, const u32 componentIndex){
+static const NWB::Impl::MaterialTypedLayoutField* FindMaterialTypedLayoutField(
+    const NWB::Impl::Material& material,
+    const NWB::Impl::MaterialTypedLayoutBlock& block,
+    const AStringView fieldName
+){
+    const Name fieldNameHash(fieldName);
+    for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+        const usize fieldIndex = static_cast<usize>(block.fieldBegin) + fieldOffset;
+        if(fieldIndex >= material.typedLayoutFields().size())
+            return nullptr;
+
+        const NWB::Impl::MaterialTypedLayoutField& field = material.typedLayoutFields()[fieldIndex];
+        if(field.fieldName == fieldNameHash)
+            return &field;
+    }
+    return nullptr;
+}
+
+static f32 LoadMaterialTypedLayoutDefaultFloat(const NWB::Impl::MaterialTypedLayoutField& field, const u32 componentIndex){
     f32 value = 0.f;
-    NWB_MEMCPY(&value, sizeof(value), &parameter.data.raw[componentIndex], sizeof(parameter.data.raw[componentIndex]));
+    NWB_MEMCPY(&value, sizeof(value), &field.defaultValue.raw[componentIndex], sizeof(field.defaultValue.raw[componentIndex]));
     return value;
+}
+
+static bool LoadMaterialTypedBlockU32(
+    const NWB::Impl::Material& material,
+    const AStringView blockName,
+    const u32 byteOffset,
+    u32& outValue
+){
+    outValue = 0u;
+
+    const Name blockNameHash(blockName);
+    usize blockByteBegin = 0u;
+    for(const NWB::Impl::MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
+        if(block.blockName == blockNameHash){
+            const usize valueOffset = blockByteBegin + byteOffset;
+            if(
+                valueOffset > material.typedBlockBytes().size()
+                || sizeof(outValue) > material.typedBlockBytes().size() - valueOffset
+            )
+                return false;
+
+            NWB_MEMCPY(&outValue, sizeof(outValue), material.typedBlockBytes().data() + valueOffset, sizeof(outValue));
+            return true;
+        }
+
+        blockByteBegin += block.byteSize;
+    }
+
+    return false;
+}
+
+static bool LoadMaterialTypedBlockFloat(
+    const NWB::Impl::Material& material,
+    const AStringView blockName,
+    const u32 byteOffset,
+    f32& outValue
+){
+    u32 rawValue = 0u;
+    if(!LoadMaterialTypedBlockU32(material, blockName, byteOffset, rawValue))
+        return false;
+
+    NWB_MEMCPY(&outValue, sizeof(outValue), &rawValue, sizeof(rawValue));
+    return true;
+}
+
+static void CheckMinimalMaterialTypedLayout(
+    TestContext& context,
+    const NWB::Impl::Material& material,
+    const u32 expectedFeatureMaskX = 4u,
+    const u32 expectedFeatureMaskY = 5u,
+    const u32 expectedFeatureMaskZ = 6u
+){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedLayoutHash() != 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedLayoutBlocks().size() == 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedLayoutFields().size() == 6u);
+
+    const NWB::Impl::MaterialTypedLayoutBlock* runtimeBlock = FindMaterialTypedLayoutBlock(material, "runtime");
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeBlock != nullptr);
+    if(runtimeBlock){
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialMutable);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeBlock->fieldCount == 1u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeBlock->byteSize == 4u);
+
+        const NWB::Impl::MaterialTypedLayoutField* fadeAlpha = FindMaterialTypedLayoutField(
+            material,
+            *runtimeBlock,
+            "fade_alpha"
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, fadeAlpha != nullptr);
+        if(fadeAlpha){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, fadeAlpha->fieldType == NWB::Impl::MaterialLayoutFieldType::Float);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, fadeAlpha->offset == 0u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*fadeAlpha, 0u) == 1.0f);
+        }
+    }
+
+    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock != nullptr);
+    if(surfaceBlock){
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->fieldCount == 5u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->byteSize == 56u);
+
+        const NWB::Impl::MaterialTypedLayoutField* baseColor = FindMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "base_color"
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColor != nullptr);
+        if(baseColor){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColor->fieldType == NWB::Impl::MaterialLayoutFieldType::Float4);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColor->offset == 0u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*baseColor, 0u) == 1.0f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*baseColor, 3u) == 1.0f);
+        }
+
+        const NWB::Impl::MaterialTypedLayoutField* roughness = FindMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "roughness"
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, roughness != nullptr);
+        if(roughness){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, roughness->fieldType == NWB::Impl::MaterialLayoutFieldType::Float);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, roughness->offset == 16u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*roughness, 0u) == 0.5f);
+        }
+
+        const NWB::Impl::MaterialTypedLayoutField* layerIds = FindMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "layer_ids"
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds != nullptr);
+        if(layerIds){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds->fieldType == NWB::Impl::MaterialLayoutFieldType::Int2);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds->offset == 20u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds->defaultValue.x == 1u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds->defaultValue.y == 2u);
+        }
+
+        const NWB::Impl::MaterialTypedLayoutField* featureMask = FindMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "feature_mask"
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask != nullptr);
+        if(featureMask){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->fieldType == NWB::Impl::MaterialLayoutFieldType::UInt3);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->offset == 28u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->defaultValue.x == expectedFeatureMaskX);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->defaultValue.y == expectedFeatureMaskY);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->defaultValue.z == expectedFeatureMaskZ);
+        }
+
+        const NWB::Impl::MaterialTypedLayoutField* channelEnabled = FindMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "channel_enabled"
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled != nullptr);
+        if(channelEnabled){
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->fieldType == NWB::Impl::MaterialLayoutFieldType::Bool4);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->offset == 40u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.x == 1u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.y == 0u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.z == 1u);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.w == 0u);
+        }
+    }
+}
+
+static void CheckMinimalMaterialTypedBlockBytes(
+    TestContext& context,
+    const NWB::Impl::Material& material,
+    const u32 expectedFeatureMaskX = 4u,
+    const u32 expectedFeatureMaskY = 5u,
+    const u32 expectedFeatureMaskZ = 6u
+){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedBlockBytes().size() == 60u);
+
+    f32 floatValue = 0.f;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockFloat(material, "runtime", 0u, floatValue)
+        && floatValue == 0.75f
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockFloat(material, "surface", 0u, floatValue)
+        && floatValue == 0.25f
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockFloat(material, "surface", 4u, floatValue)
+        && floatValue == 0.5f
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockFloat(material, "surface", 8u, floatValue)
+        && floatValue == 0.75f
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockFloat(material, "surface", 12u, floatValue)
+        && floatValue == 1.0f
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockFloat(material, "surface", 16u, floatValue)
+        && floatValue == 0.25f
+    );
+
+    u32 rawValue = 0u;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedBlockU32(material, "surface", 20u, rawValue) && rawValue == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedBlockU32(material, "surface", 24u, rawValue) && rawValue == 2u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockU32(material, "surface", 28u, rawValue)
+        && rawValue == expectedFeatureMaskX
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockU32(material, "surface", 32u, rawValue)
+        && rawValue == expectedFeatureMaskY
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
+        LoadMaterialTypedBlockU32(material, "surface", 36u, rawValue)
+        && rawValue == expectedFeatureMaskZ
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedBlockU32(material, "surface", 40u, rawValue) && rawValue == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedBlockU32(material, "surface", 44u, rawValue) && rawValue == 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedBlockU32(material, "surface", 48u, rawValue) && rawValue == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedBlockU32(material, "surface", 52u, rawValue) && rawValue == 0u);
+}
+
+static void CheckGeneratedMaterialBindBinaryConstants(
+    TestContext& context,
+    const AStringView generatedSourceView,
+    const NWB::Impl::Material& material
+){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUint2Constant(
+        generatedSourceView,
+        "NWB_MATERIAL_BIND_LAYOUT_HASH",
+        material.typedLayoutHash()
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUintConstant(
+        generatedSourceView,
+        "NWB_MATERIAL_BIND_BLOCK_COUNT",
+        static_cast<u32>(material.typedLayoutBlocks().size())
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUintConstant(
+        generatedSourceView,
+        "NWB_MATERIAL_BIND_FIELD_COUNT",
+        static_cast<u32>(material.typedLayoutFields().size())
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUintConstant(
+        generatedSourceView,
+        "NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE",
+        static_cast<u32>(material.typedBlockBytes().size())
+    ));
+
+    const NameHash& materialInterfaceHash = material.materialInterface().hash();
+    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
+        AString symbol("NWB_MATERIAL_BIND_INTERFACE_HASH_");
+        AppendU32DecimalText(lane, symbol);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUint2Constant(
+            generatedSourceView,
+            AStringView(symbol.data(), symbol.size()),
+            materialInterfaceHash.qwords[lane]
+        ));
+    }
+}
+
+static bool BuildMaterialFromBindAndMeta(
+    const AStringView bindText,
+    const AStringView materialText,
+    const AStringView caseName,
+    TestArena& testArena,
+    NWB::Impl::Material& outMaterial
+){
+    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
+    if(!ParseMaterialEntryFromMetaText(materialText, testArena, materialEntry))
+        return false;
+
+    NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
+    Path bindRoot;
+    bool built = false;
+    if(ParseMaterialBindFromText(bindText, caseName, bindEntry, bindRoot)){
+        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+
+        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
+        bindEntries.push_back(Move(bindEntry));
+        NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
+        materialEntries.push_back(Move(materialEntry));
+        built =
+            NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries)
+            && NWB::Impl::BuildMaterialAsset(materialEntries[0u], outMaterial)
+        ;
+    }
+
+    if(!bindRoot.empty()){
+        ErrorCode errorCode;
+        static_cast<void>(RemoveAllIfExists(bindRoot, errorCode));
+    }
+    return built;
 }
 
 static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context){
@@ -1611,61 +2319,124 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, materialEntry.materialInterface == Name("project/material_interfaces/test_surface"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, materialEntry.parameters.size() == 3u);
 
+    NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
+    Path bindRoot;
+    const bool parsedBind = ParseMaterialBindFromText(
+        s_MinimalMaterialBindSource,
+        "material_meta_bind_validation",
+        bindEntry,
+        bindRoot
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, parsedBind);
+    if(!parsedBind)
+        return;
+    bindEntry.virtualPath = "project/material_interfaces/test_surface";
+
+    NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
+    bindEntries.push_back(Move(bindEntry));
+    NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
+    materialEntries.push_back(Move(materialEntry));
+    const bool validated = NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, validated);
+    if(!validated)
+        return;
+
     NWB::Impl::Material material(testArena.arena);
-    const bool built = NWB::Impl::BuildMaterialAsset(materialEntry, material);
+    const bool built = NWB::Impl::BuildMaterialAsset(materialEntries[0u], material);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, built);
     if(!built)
         return;
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.alpha() == 1.0f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !material.transparent());
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.parameters().size() == 3u);
-
-    const NWB::Impl::MaterialParameterGpuData* baseColor = FindMaterialParameter(material, "surface.base_color");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColor != nullptr);
-    if(baseColor){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColor->meta.z == NWB::Impl::MaterialParameterValueType::Float);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColor->meta.w == 4u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialParameterFloat(*baseColor, 0u) == 0.25f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialParameterFloat(*baseColor, 1u) == 0.5f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialParameterFloat(*baseColor, 2u) == 0.75f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialParameterFloat(*baseColor, 3u) == 1.0f);
-    }
-
-    const NWB::Impl::MaterialParameterGpuData* roughness = FindMaterialParameter(material, "surface.roughness");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, roughness != nullptr);
-    if(roughness){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, roughness->meta.z == NWB::Impl::MaterialParameterValueType::Float);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, roughness->meta.w == 1u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialParameterFloat(*roughness, 0u) == 0.25f);
-    }
-
-    const NWB::Impl::MaterialParameterGpuData* fadeAlpha = FindMaterialParameter(material, "runtime.fade_alpha");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, fadeAlpha != nullptr);
-    if(fadeAlpha){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, fadeAlpha->meta.z == NWB::Impl::MaterialParameterValueType::Float);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, fadeAlpha->meta.w == 1u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialParameterFloat(*fadeAlpha, 0u) == 0.75f);
-    }
-
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.materialInterface() == Name("project/material_interfaces/test_surface"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
-static void TestMaterialMetadataRejectsDuplicateFlattenedParameter(TestContext& context){
-#if defined(NWB_FINAL)
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
+static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
     TestArena testArena;
-    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ParseMaterialEntryFromMetaText(
-        s_DuplicateFlattenedMaterialParameterMeta,
-        testArena,
-        materialEntry
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("duplicate parameter 'surface.base_color'")));
-#else
-    static_cast<void>(context);
+    NWB::Impl::Material material(testArena.arena);
+
+    {
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+        const bool built = BuildMaterialFromBindAndMeta(
+            s_MinimalMaterialBindSource,
+            s_BlockScopedMaterialMeta,
+            "material_codec_typed_layout_boundary",
+            testArena,
+            material
+        );
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, built);
+        if(!built)
+            return;
+
+        NWB::Impl::MaterialAssetCodec codec;
+        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(material, binary));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !binary.empty());
+
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.deserialize(
+            testArena.arena,
+            material.virtualPath(),
+            binary,
+            loadedAsset
+        ));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, static_cast<bool>(loadedAsset));
+        if(loadedAsset){
+            const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMaterial.materialInterface() == material.materialInterface());
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMaterial.typedLayoutHash() == material.typedLayoutHash());
+            CheckMinimalMaterialTypedLayout(context, loadedMaterial);
+            CheckMinimalMaterialTypedBlockBytes(context, loadedMaterial);
+        }
+
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+    }
+
+#if defined(NWB_FINAL)
+    {
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+        NWB::Impl::MaterialAssetCodec codec;
+        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(material, binary));
+
+        usize layoutHashOffset = 0u;
+        usize blockByteCountOffset = 0u;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, FindMaterialBinaryTypedLayoutOffsets(
+            binary,
+            layoutHashOffset,
+            blockByteCountOffset
+        ));
+
+        NWB::Core::Assets::AssetBytes hashMismatchBinary = binary;
+        const u64 invalidLayoutHash =
+            material.typedLayoutHash() == Limit<u64>::s_Max
+                ? material.typedLayoutHash() - 1u
+                : material.typedLayoutHash() + 1u
+        ;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
+        CheckCodecRejectsBinary(context, testArena, codec, material.virtualPath(), hashMismatchBinary);
+
+        NWB::Core::Assets::AssetBytes byteSizeMismatchBinary = binary;
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !material.typedBlockBytes().empty());
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(
+            byteSizeMismatchBinary,
+            blockByteCountOffset,
+            static_cast<u32>(material.typedBlockBytes().size() - 1u)
+        ));
+        CheckCodecRejectsBinary(context, testArena, codec, material.virtualPath(), byteSizeMismatchBinary);
+
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 2u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch")));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+            "typed block byte count does not match typed layout"
+        )));
+    }
 #endif
 }
 
@@ -1675,11 +2446,10 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
 
     TestArena testArena;
     Path root;
-    NWB::Impl::ShaderCook::MaterialBindEntry entry(testArena.arena);
+    NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         s_MinimalMaterialBindSource,
         "material_bind_schema_valid",
-        testArena,
         entry,
         root
     );
@@ -1688,18 +2458,18 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, entry.structs.size() == 2u);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, entry.instances.size() == 2u);
 
-        const NWB::Impl::ShaderCook::MaterialBindStruct* surfaceStruct = entry.findStruct("NwbTestSurfaceMaterial");
-        const NWB::Impl::ShaderCook::MaterialBindStruct* runtimeStruct = entry.findStruct("NwbTestRuntimeMaterial");
+        const NWB::Impl::MaterialBindStruct* surfaceStruct = entry.findStruct("NwbTestSurfaceMaterial");
+        const NWB::Impl::MaterialBindStruct* runtimeStruct = entry.findStruct("NwbTestRuntimeMaterial");
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceStruct != nullptr);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeStruct != nullptr);
         if(surfaceStruct){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceStruct->fields.size() == 5u);
 
-            const NWB::Impl::ShaderCook::MaterialBindField* baseColorField = surfaceStruct->findField("base_color");
+            const NWB::Impl::MaterialBindField* baseColorField = surfaceStruct->findField("base_color");
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, baseColorField != nullptr);
             if(baseColorField){
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, AStringView(baseColorField->type) == "float4");
-                const NWB::Impl::ShaderCook::MaterialBindAttribute* defaultAttribute = baseColorField->findAttribute("default");
+                const NWB::Impl::MaterialBindAttribute* defaultAttribute = baseColorField->findAttribute("default");
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, defaultAttribute != nullptr);
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, defaultAttribute && defaultAttribute->arguments.size() == 1u);
                 if(defaultAttribute && defaultAttribute->arguments.size() == 1u){
@@ -1711,8 +2481,8 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
             }
         }
 
-        const NWB::Impl::ShaderCook::MaterialBindInstance* surfaceInstance = entry.findInstance("surface");
-        const NWB::Impl::ShaderCook::MaterialBindInstance* runtimeInstance = entry.findInstance("runtime");
+        const NWB::Impl::MaterialBindInstance* surfaceInstance = entry.findInstance("surface");
+        const NWB::Impl::MaterialBindInstance* runtimeInstance = entry.findInstance("runtime");
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceInstance != nullptr);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeInstance != nullptr);
         if(surfaceInstance)
@@ -1733,8 +2503,8 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         const tchar* expectedError
     ){
         Path invalidRoot;
-        NWB::Impl::ShaderCook::MaterialBindEntry invalidEntry(testArena.arena);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ParseMaterialBindFromText(bindText, caseName, testArena, invalidEntry, invalidRoot));
+        NWB::Impl::MaterialBindEntry invalidEntry(testArena.arena);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ParseMaterialBindFromText(bindText, caseName, invalidEntry, invalidRoot));
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(expectedError));
 
         ErrorCode removeErrorCode;
@@ -1761,6 +2531,16 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         "material_bind_missing_default",
         NWB_TEXT("must declare a default attribute")
     );
+    expectParseFailure(
+        s_DuplicateInstanceMaterialBindSource,
+        "material_bind_duplicate_instance",
+        NWB_TEXT("duplicate struct instance declaration")
+    );
+    expectParseFailure(
+        s_InstanceOverrideMaterialBindSource,
+        "material_bind_instance_override",
+        NWB_TEXT("unsupported asset field 'instance_override'")
+    );
 #endif
 }
 
@@ -1770,11 +2550,10 @@ static void TestMaterialBindGeneratedSlangText(TestContext& context){
 
     TestArena testArena;
     Path root;
-    NWB::Impl::ShaderCook::MaterialBindEntry entry(testArena.arena);
+    NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         s_MinimalMaterialBindSource,
         "material_bind_generated_text",
-        testArena,
         entry,
         root
     );
@@ -1782,9 +2561,12 @@ static void TestMaterialBindGeneratedSlangText(TestContext& context){
     if(parsed){
         entry.virtualPath = "project/material_interfaces/test_surface";
 
-        NWB::Impl::ShaderCook shaderCook(testArena.arena);
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.buildMaterialBindIncludeSource(entry, generatedSource));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildMaterialBindIncludeSource(
+            testArena.arena,
+            entry,
+            generatedSource
+        ));
         CheckGeneratedMaterialBindSource(context, AStringView(generatedSource.data(), generatedSource.size()));
     }
 
@@ -1810,7 +2592,10 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         outputDirectory
     ));
 
-    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
+    const Path generatedIncludePath =
+        root / "cache" / "tests" / "material_bind_includes"
+        / "project" / "material_interfaces" / "test_surface.bind"
+    ;
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
     CheckGeneratedMaterialBindSource(context, AStringView(generatedSource.data(), generatedSource.size()));
@@ -1820,7 +2605,11 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
     includeDirectories.push_back(AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(root / "assets" / "shaders" / "material_mesh.slang", includeDirectories, dependencies));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(
+        root / "assets" / "shaders" / "material_mesh.slang",
+        includeDirectories,
+        dependencies
+    ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsCanonicalPath(dependencies, generatedIncludePath));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
@@ -1835,10 +2624,17 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.alpha() == 1.0f);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.parameters().size() == 3u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, FindMaterialParameter(material, "surface.base_color") != nullptr);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, FindMaterialParameter(material, "surface.roughness") != nullptr);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, FindMaterialParameter(material, "runtime.fade_alpha") != nullptr);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(
+            context,
+            material.materialInterface() == Name("project/material_interfaces/test_surface")
+        );
+        CheckMinimalMaterialTypedLayout(context, material);
+        CheckMinimalMaterialTypedBlockBytes(context, material);
+        CheckGeneratedMaterialBindBinaryConstants(
+            context,
+            AStringView(generatedSource.data(), generatedSource.size()),
+            material
+        );
     }
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
@@ -1857,7 +2653,9 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         invalidRoot,
         invalidOutputDirectory
     ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("parameter 'surface.missing' is not declared by interface")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "parameter 'surface.missing' is not declared by interface"
+    )));
 
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(invalidRoot, errorCode));
@@ -1872,11 +2670,258 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         flatRoot,
         flatOutputDirectory
     ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("interface parameter 'runtime.fade_alpha' must be declared inside a block map")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "interface parameter 'runtime.fade_alpha' must be declared inside a block map"
+    )));
 
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(flatRoot, errorCode));
+
+    Path unsupportedFieldRoot;
+    Path unsupportedFieldOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
+        s_MinimalMaterialBindSource,
+        s_UnsupportedMaterialFieldMeta,
+        "material_bind_unsupported_material_field",
+        testArena,
+        unsupportedFieldRoot,
+        unsupportedFieldOutputDirectory
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'compiler'")));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(unsupportedFieldRoot, errorCode));
+
+    Path missingShaderVariantRoot;
+    Path missingShaderVariantOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
+        s_MinimalMaterialBindSource,
+        s_MissingShaderVariantMaterialMeta,
+        "material_bind_missing_shader_variant",
+        testArena,
+        missingShaderVariantRoot,
+        missingShaderVariantOutputDirectory
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(missingShaderVariantRoot, errorCode));
+
+    Path incompleteBindRoot;
+    Path incompleteBindOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookMaterialBindMaterialIntegration(
+        s_SurfaceOnlyMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        "material_bind_incomplete_block_scoped",
+        testArena,
+        incompleteBindRoot,
+        incompleteBindOutputDirectory
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "typed parameter 'runtime.fade_alpha' is not declared by interface"
+    )));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(incompleteBindRoot, errorCode));
+
+    Path interfaceShaderMismatchRoot;
+    Path interfaceShaderMismatchOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
+        "material_bind_interface_without_bind_shader",
+        interfaceShaderMismatchRoot,
+        interfaceShaderMismatchOutputDirectory
+    ));
+    const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / "assets";
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+        testArena,
+        interfaceShaderMismatchAssetRoot,
+        s_MinimalMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        s_UnboundMaterialShaderProbeSource
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookPreparedGraphicsAssetRoots(
+        testArena,
+        interfaceShaderMismatchRoot,
+        interfaceShaderMismatchOutputDirectory,
+        { interfaceShaderMismatchAssetRoot }
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("does not include a generated material bind")));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(interfaceShaderMismatchRoot, errorCode));
+
+    Path interfaceIdentityMismatchRoot;
+    Path interfaceIdentityMismatchOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
+        "material_bind_interface_identity_mismatch",
+        interfaceIdentityMismatchRoot,
+        interfaceIdentityMismatchOutputDirectory
+    ));
+    const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / "assets";
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+        testArena,
+        interfaceIdentityMismatchAssetRoot,
+        s_MinimalMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        s_OtherMaterialBindShaderProbeSource
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(
+        interfaceIdentityMismatchAssetRoot / "material_interfaces" / "other_surface.bind",
+        s_MinimalMaterialBindSource
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookPreparedGraphicsAssetRoots(
+        testArena,
+        interfaceIdentityMismatchRoot,
+        interfaceIdentityMismatchOutputDirectory,
+        { interfaceIdentityMismatchAssetRoot }
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "includes generated material bind interface 'project/material_interfaces/other_surface'"
+    )));
+
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(interfaceIdentityMismatchRoot, errorCode));
+
 #endif
+}
+
+static void TestMaterialRejectsMissingInterfaceCookIntegration(TestContext& context){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    Path outputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
+        "material_missing_interface_rejection",
+        root,
+        outputDirectory
+    ));
+    const Path assetRoot = root / "assets";
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteMaterialBindMaterialIntegrationAssetsWithMeshSource(
+        testArena,
+        assetRoot,
+        s_MinimalMaterialBindSource,
+        s_MissingInterfaceMaterialMeta,
+        s_UnboundMaterialShaderProbeSource
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookPreparedGraphicsAssetRoots(
+        testArena,
+        root,
+        outputDirectory,
+        { assetRoot }
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("interface is required")));
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+#else
+    static_cast<void>(context);
+#endif
+}
+
+static void TestMaterialBindDependencyInvalidation(TestContext& context){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    Path outputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, PrepareAssetsGraphicsCookCase(
+        "material_bind_dependency_invalidation",
+        root,
+        outputDirectory
+    ));
+    const Path assetRoot = root / "assets";
+    if(!WriteMaterialBindMaterialIntegrationAssets(
+        testArena,
+        assetRoot,
+        s_MinimalMaterialBindSource,
+        s_BlockScopedMaterialMeta
+    ))
+        return;
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+
+    const Path generatedIncludePath =
+        root / "cache" / "tests" / "material_bind_includes"
+        / "project" / "material_interfaces" / "test_surface.bind"
+    ;
+    NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedMaterial(
+        context,
+        testArena,
+        outputDirectory,
+        Name("project/materials/test_material"),
+        loadedAsset
+    ));
+    if(!loadedAsset)
+        return;
+
+    const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
+    CheckMinimalMaterialTypedLayout(context, material);
+    CheckMinimalMaterialTypedBlockBytes(context, material);
+    CheckGeneratedMaterialBindBinaryConstants(context, AStringView(generatedSource.data(), generatedSource.size()), material);
+    const u64 initialLayoutHash = material.typedLayoutHash();
+
+    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedShaderArchiveRecords(context, testArena, outputDirectory, records));
+    u64 initialMeshSourceChecksum = 0u;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, FindShaderArchiveSourceChecksum(
+        records,
+        Name("project/shaders/material_mesh"),
+        Name("mesh"),
+        initialMeshSourceChecksum
+    ));
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, WriteTextFile(
+        assetRoot / "material_interfaces" / "test_surface.bind",
+        s_UpdatedDefaultMaterialBindSource
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+
+    generatedSource.clear();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
+    const AStringView updatedGeneratedSource(generatedSource.data(), generatedSource.size());
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
+        updatedGeneratedSource,
+        "static const uint3 NWB_MATERIAL_BIND_SURFACE_FEATURE_MASK_DEFAULT = uint3(7u, 8u, 9u);"
+    ));
+
+    loadedAsset.reset();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedMaterial(
+        context,
+        testArena,
+        outputDirectory,
+        Name("project/materials/test_material"),
+        loadedAsset
+    ));
+    if(loadedAsset){
+        const NWB::Impl::Material& updatedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
+        CheckMinimalMaterialTypedLayout(context, updatedMaterial, 7u, 8u, 9u);
+        CheckMinimalMaterialTypedBlockBytes(context, updatedMaterial, 7u, 8u, 9u);
+        CheckGeneratedMaterialBindBinaryConstants(context, updatedGeneratedSource, updatedMaterial);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, updatedMaterial.typedLayoutHash() != initialLayoutHash);
+    }
+
+    records.clear();
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedShaderArchiveRecords(context, testArena, outputDirectory, records));
+    u64 updatedMeshSourceChecksum = 0u;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, FindShaderArchiveSourceChecksum(
+        records,
+        Name("project/shaders/material_mesh"),
+        Name("mesh"),
+        updatedMeshSourceChecksum
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, updatedMeshSourceChecksum != initialMeshSourceChecksum);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
 }
 
 static void TestGeometryCookerTypedStreams(TestContext& context){
@@ -1926,7 +2971,10 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
         outputDirectory
     ));
 
-    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
+    const Path generatedIncludePath =
+        root / "cache" / "tests" / "material_bind_includes"
+        / "project" / "material_interfaces" / "test_surface.bind"
+    ;
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
     const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());
@@ -1941,7 +2989,11 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
     includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(shaderIncludeProbePath, includeDirectories, dependencies));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(
+        shaderIncludeProbePath,
+        includeDirectories,
+        dependencies
+    ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsCanonicalPath(dependencies, generatedIncludePath));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
@@ -1971,7 +3023,9 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
         duplicateIncludeRoot,
         duplicateIncludeOutputDirectory
     ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("duplicate material bind include path 'project/material_interfaces/test_surface.bind'")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
+        "duplicate material bind include path 'project/material_interfaces/test_surface.bind'"
+    )));
 
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(duplicateIncludeRoot, errorCode));
@@ -2354,10 +3408,12 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
     __hidden_assets_graphics_tests::TestMaterialMetadataInterfaceAndBlockParameters(context);
-    __hidden_assets_graphics_tests::TestMaterialMetadataRejectsDuplicateFlattenedParameter(context);
+    __hidden_assets_graphics_tests::TestMaterialCodecTypedLayoutBoundary(context);
     __hidden_assets_graphics_tests::TestMaterialBindSchemaValidation(context);
     __hidden_assets_graphics_tests::TestMaterialBindGeneratedSlangText(context);
     __hidden_assets_graphics_tests::TestMaterialBindCookIntegration(context);
+    __hidden_assets_graphics_tests::TestMaterialRejectsMissingInterfaceCookIntegration(context);
+    __hidden_assets_graphics_tests::TestMaterialBindDependencyInvalidation(context);
     __hidden_assets_graphics_tests::TestGeometryCookerTypedStreams(context);
     __hidden_assets_graphics_tests::TestGeometryCookerDefaultColors(context);
     __hidden_assets_graphics_tests::TestMaterialBindDiscoveryValidation(context);

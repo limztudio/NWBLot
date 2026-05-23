@@ -12,8 +12,10 @@ if(NWB_BUILD_RESOURCE_COOKER)
     target_sources(nwb_assets_material_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_cook.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/material_bind.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/material_bind.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_shader_stage_names.h"
     )

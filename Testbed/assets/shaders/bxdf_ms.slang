@@ -3,14 +3,8 @@
 
 
 #include "mesh_shader_authoring.slangi"
+#include "project/material_interfaces/bxdf.bind"
 #include "bxdf.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static const uint2 NWB_PROJECT_MATERIAL_BASE_COLOR = uint2(0x75bad3d8u, 0x5c10c7e2u);
-static const uint2 NWB_PROJECT_MATERIAL_COLOR_TINT = uint2(0x360abc2cu, 0xca7492edu);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,8 +32,8 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
     generatedVertex.uv0 = source.uv0;
     generatedVertex.padding1 = float2(0.0);
-    const float4 materialColor = nwbMaterialFindFloat4(instance, NWB_PROJECT_MATERIAL_BASE_COLOR, source.color);
-    const float4 tintedColor = materialColor * nwbMaterialFindFloat4(instance, NWB_PROJECT_MATERIAL_COLOR_TINT, float4(1.0));
+    const NwbProjectBxdfSurfaceMaterial material = nwbMaterialBindLoadSurface(instance);
+    const float4 tintedColor = material.base_color * material.color_tint;
     generatedVertex.color = float4(
         clamp(nwbProjectBxdfVertex(tintedColor.rgb), float3(0.0), float3(1.0)),
         tintedColor.a

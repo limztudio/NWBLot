@@ -98,7 +98,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSampler.reset();
     m_avboitLinearSampler.reset();
     m_instanceBuffer.reset();
-    m_materialParameterBuffer.reset();
+    m_materialTypedBuffer.reset();
     m_meshViewBuffer.reset();
     m_sceneShadingBuffer.reset();
     m_emulationViewBindingSet.reset();
@@ -119,7 +119,7 @@ void RendererSystem::invalidateResources(){
     resetDeferredFrameTargets();
 
     m_instanceBufferCapacity = 0u;
-    m_materialParameterBufferCapacity = 0u;
+    m_materialTypedBufferCapacity = 0u;
 }
 
 void RendererSystem::render(Core::IFramebuffer* framebuffer){
@@ -146,7 +146,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     MaterialPassDrawItemVector opaqueMeshDrawItems{scratchArena};
     MaterialPassDrawItemVector opaqueComputeDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
-    MaterialParameterGpuDataVector materialParameters{scratchArena};
+    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
@@ -165,7 +165,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
             opaqueMeshDrawItems,
             opaqueComputeDrawItems,
             instanceData,
-            materialParameters
+            materialTypedBytes
         );
     }
 
@@ -176,7 +176,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     const bool deferredUploadReady =
         hasDeferredDrawItems
         && uploadInstanceBuffer(*commandList, instanceData)
-        && uploadMaterialParameterBuffer(*commandList, materialParameters)
+        && uploadMaterialTypedBuffer(*commandList, materialTypedBytes)
     ;
     if(deferredUploadReady){
         const MaterialPassDrawContext opaqueDrawContext{

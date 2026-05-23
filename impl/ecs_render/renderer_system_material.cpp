@@ -43,17 +43,43 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 
     MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
-    if(material.shaderVariant().empty())
-        createdInfo.shaderVariant.assign(Core::ShaderArchive::s_DefaultVariant);
-    else
-        createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
+    if(material.shaderVariant().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+    createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
     createdInfo.valid = true;
 
     (void)material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
     (void)material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
 
-    createdInfo.parameters.reserve(material.parameters().size());
-    createdInfo.parameters.insert(createdInfo.parameters.end(), material.parameters().begin(), material.parameters().end());
+    if(!material.materialInterface()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required material interface")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+    if(material.typedLayoutHash() == 0u || material.typedBlockBytes().empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing typed material data")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+    if((material.typedBlockBytes().size() & (sizeof(u32) - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material data is not word-aligned")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
+
+    createdInfo.typedBytes.reserve(material.typedBlockBytes().size());
+    createdInfo.typedBytes.insert(
+        createdInfo.typedBytes.end(),
+        material.typedBlockBytes().begin(),
+        material.typedBlockBytes().end()
+    );
     createdInfo.alpha = material.alpha();
     createdInfo.transparent = material.transparent();
 
@@ -109,10 +135,13 @@ bool RendererSystem::createRendererPipeline(
         return false;
     };
 
-    const AStringView shaderVariant = materialInfo.shaderVariant.empty()
-        ? AStringView(Core::ShaderArchive::s_DefaultVariant)
-        : AStringView(materialInfo.shaderVariant)
-    ;
+    if(materialInfo.shaderVariant.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant")
+            , StringConvert(materialKey.c_str())
+        );
+        return false;
+    }
+    const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
 
     const bool hasPixelShader = materialInfo.pixelShader.valid();
     const bool hasMeshShader = materialInfo.meshShader.valid();

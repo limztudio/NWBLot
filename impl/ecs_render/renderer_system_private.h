@@ -89,9 +89,9 @@ using MeshViewState = MeshViewGpuData;
 using SceneShadingState = SceneShadingGpuData;
 using MeshViewBasis = NWB::Impl::SceneViewBasis;
 
-struct MaterialParameterBlock{
-    u32 offset = 0;
-    u32 count = 0;
+struct MaterialTypedByteBlock{
+    u32 byteOffset = 0;
+    u32 byteCount = 0;
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
@@ -110,7 +110,7 @@ static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuD
 
 inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh_emulation_vs");
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
-inline constexpr Name s_MaterialParameterBufferName("ecs_render/material_parameter_data");
+inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
 inline constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred_composite_vs");
@@ -231,12 +231,12 @@ inline usize NextGrowingCapacity(const usize currentCapacity, const usize requir
 
 inline InstanceGpuData BuildInstanceGpuData(
     const NWB::Impl::TransformComponent* transform,
-    const u32 materialParameterOffset,
-    const u32 materialParameterCount
+    const u32 materialTypedByteOffset,
+    const u32 materialTypedByteCount
 ){
     InstanceGpuData data;
-    data.materialParameters.x = materialParameterOffset;
-    data.materialParameters.y = materialParameterCount;
+    data.materialTypedBytes.x = materialTypedByteOffset;
+    data.materialTypedBytes.y = materialTypedByteCount;
     if(!transform)
         return data;
 

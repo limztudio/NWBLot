@@ -66,15 +66,11 @@ namespace RenderPath{
     };
 };
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
-    UInt4 materialParameters = {};
+    UInt4 materialTypedBytes = {};
 };
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData layout must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
@@ -85,7 +81,7 @@ static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
-    using MaterialParameterVector = Vector<MaterialParameterGpuData, Core::Alloc::GlobalArena>;
+    using MaterialTypedByteVector = Vector<u8, Core::Alloc::GlobalArena>;
 
 
 private:
@@ -132,14 +128,14 @@ private:
         Core::GraphicsString shaderVariant;
         Core::Assets::AssetRef<Shader> pixelShader;
         Core::Assets::AssetRef<Shader> meshShader;
-        MaterialParameterVector parameters;
+        MaterialTypedByteVector typedBytes;
         f32 alpha = 1.f;
         bool transparent = false;
         bool valid = false;
 
         explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
             : shaderVariant(arena)
-            , parameters(arena)
+            , typedBytes(arena)
         {}
     };
 
@@ -164,7 +160,7 @@ private:
 private:
     using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>;
     using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena<>>;
-    using MaterialParameterGpuDataVector = Vector<MaterialParameterGpuData, Core::Alloc::ScratchArena<>>;
+    using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena<>>;
 
 public:
     struct AvboitFrameTargets{
@@ -337,7 +333,7 @@ private:
         MaterialPassDrawItemVector& meshDrawItems,
         MaterialPassDrawItemVector& computeDrawItems,
         InstanceGpuDataVector& instanceData,
-        MaterialParameterGpuDataVector& materialParameters
+        MaterialTypedByteDataVector& materialTypedBytes
     );
     void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry);
     void setMaterialPassDrawPushConstants(
@@ -350,9 +346,12 @@ private:
 
 private:
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
-    [[nodiscard]] bool reserveMaterialParameterBufferCapacity(usize parameterCount);
+    [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);
     [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
-    [[nodiscard]] bool uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters);
+    [[nodiscard]] bool uploadMaterialTypedBuffer(
+        Core::ICommandList& commandList,
+        const MaterialTypedByteDataVector& materialTypedBytes
+    );
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
         GeometryResources*& outGeometry,
@@ -434,13 +433,13 @@ private:
     Core::BindingLayoutHandle m_computeBindingLayout;
     Core::BindingLayoutHandle m_emulationViewBindingLayout;
     Core::BufferHandle m_instanceBuffer;
-    Core::BufferHandle m_materialParameterBuffer;
+    Core::BufferHandle m_materialTypedBuffer;
     Core::BufferHandle m_meshViewBuffer;
     Core::BindingSetHandle m_emulationViewBindingSet;
     Core::ShaderHandle m_emulationVertexShader;
     Core::InputLayoutHandle m_emulationInputLayout;
     usize m_instanceBufferCapacity = 0;
-    usize m_materialParameterBufferCapacity = 0;
+    usize m_materialTypedBufferCapacity = 0;
 
 private:
     Core::BindingLayoutHandle m_deferredLightingBindingLayout;

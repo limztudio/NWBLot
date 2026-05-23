@@ -34,7 +34,7 @@ void RendererSystem::renderMaterialPass(
     MaterialPassDrawItemVector meshDrawItems{scratchArena};
     MaterialPassDrawItemVector computeDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
-    MaterialParameterGpuDataVector materialParameters{scratchArena};
+    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
@@ -48,13 +48,21 @@ void RendererSystem::renderMaterialPass(
     if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
 
-    gatherMaterialPassDrawItems(framebuffer, pass, transparent, meshDrawItems, computeDrawItems, instanceData, materialParameters);
+    gatherMaterialPassDrawItems(
+        framebuffer,
+        pass,
+        transparent,
+        meshDrawItems,
+        computeDrawItems,
+        instanceData,
+        materialTypedBytes
+    );
     if(meshDrawItems.empty() && computeDrawItems.empty())
         return;
 
     if(!uploadInstanceBuffer(commandList, instanceData))
         return;
-    if(!uploadMaterialParameterBuffer(commandList, materialParameters))
+    if(!uploadMaterialTypedBuffer(commandList, materialTypedBytes))
         return;
 
     if(passBindingSet){
@@ -74,7 +82,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     MaterialPassDrawItemVector& meshDrawItems,
     MaterialPassDrawItemVector& computeDrawItems,
     InstanceGpuDataVector& instanceData,
-    MaterialParameterGpuDataVector& materialParameters
+    MaterialTypedByteDataVector& materialTypedBytes
 ){
     if(!framebuffer)
         return;
@@ -85,59 +93,74 @@ void RendererSystem::gatherMaterialPassDrawItems(
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
-    materialParameters.reserve(rendererCapacity);
+    const usize materialTypedByteReserve = rendererCapacity <= Limit<usize>::s_Max / sizeof(u32)
+        ? rendererCapacity * sizeof(u32)
+        : rendererCapacity
+    ;
+    materialTypedBytes.reserve(materialTypedByteReserve);
 
-    using MaterialParameterBlockMap = HashMap<
+    using MaterialTypedByteBlockMap = HashMap<
         Name,
-        ECSRenderDetail::MaterialParameterBlock,
+        ECSRenderDetail::MaterialTypedByteBlock,
         Hasher<Name>,
         EqualTo<Name>,
         Core::Alloc::ScratchArena<>
     >;
-    MaterialParameterBlockMap materialParameterBlocks(
+    MaterialTypedByteBlockMap materialTypedByteBlocks(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),
-        materialParameters.get_allocator().arena()
+        materialTypedBytes.get_allocator().arena()
     );
-    materialParameterBlocks.reserve(rendererCapacity);
+    materialTypedByteBlocks.reserve(rendererCapacity);
 
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
-    auto appendMaterialParameterBlock = [&](
+    auto appendMaterialTypedByteBlock = [&](
         const MaterialSurfaceInfo& materialInfo,
-        ECSRenderDetail::MaterialParameterBlock& outBlock
+        ECSRenderDetail::MaterialTypedByteBlock& outBlock
     ) -> bool{
-        const auto foundBlock = materialParameterBlocks.find(materialInfo.materialName);
-        if(foundBlock != materialParameterBlocks.end()){
+        const auto foundBlock = materialTypedByteBlocks.find(materialInfo.materialName);
+        if(foundBlock != materialTypedByteBlocks.end()){
             outBlock = foundBlock.value();
             return true;
         }
 
-        if(materialParameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter offset exceeds u32 limits"));
+        if(materialInfo.typedBytes.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing typed material data")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
             return false;
         }
-        if(materialInfo.parameters.size() > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter count exceeds u32 limits"));
+        if(materialTypedBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset exceeds u32 limits"));
             return false;
         }
-        if(materialInfo.parameters.size() > static_cast<usize>(Limit<u32>::s_Max) - materialParameters.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material parameter count exceeds u32 limits"));
+        if(materialInfo.typedBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
+            return false;
+        }
+        const usize remainingTypedByteCapacity = static_cast<usize>(Limit<u32>::s_Max) - materialTypedBytes.size();
+        if(materialInfo.typedBytes.size() > remainingTypedByteCapacity){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
+            return false;
+        }
+        if(((materialTypedBytes.size() | materialInfo.typedBytes.size()) & (sizeof(u32) - 1u)) != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed bytes must be word-aligned"));
             return false;
         }
 
-        outBlock.offset = static_cast<u32>(materialParameters.size());
-        outBlock.count = static_cast<u32>(materialInfo.parameters.size());
-        const usize requiredParameterCapacity = materialParameters.size() + materialInfo.parameters.size();
-        if(requiredParameterCapacity > materialParameters.capacity())
-            materialParameters.reserve(ECSRenderDetail::NextGrowingCapacity(
-                materialParameters.capacity(),
-                requiredParameterCapacity
+        outBlock.byteOffset = static_cast<u32>(materialTypedBytes.size());
+        outBlock.byteCount = static_cast<u32>(materialInfo.typedBytes.size());
+        const usize requiredTypedByteCapacity = materialTypedBytes.size() + materialInfo.typedBytes.size();
+        if(requiredTypedByteCapacity > materialTypedBytes.capacity())
+            materialTypedBytes.reserve(ECSRenderDetail::NextGrowingCapacity(
+                materialTypedBytes.capacity(),
+                requiredTypedByteCapacity
             ));
-        AppendTriviallyCopyableVector(materialParameters, materialInfo.parameters);
+        AppendTriviallyCopyableVector(materialTypedBytes, materialInfo.typedBytes);
 
-        materialParameterBlocks.emplace(materialInfo.materialName, outBlock);
+        materialTypedByteBlocks.emplace(materialInfo.materialName, outBlock);
         return true;
     };
 
@@ -176,15 +199,15 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 return Limit<u32>::s_Max;
             }
 
-            ECSRenderDetail::MaterialParameterBlock parameterBlock;
-            if(!appendMaterialParameterBlock(*materialInfo, parameterBlock))
+            ECSRenderDetail::MaterialTypedByteBlock typedByteBlock;
+            if(!appendMaterialTypedByteBlock(*materialInfo, typedByteBlock))
                 return Limit<u32>::s_Max;
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(
                 transform,
-                parameterBlock.offset,
-                parameterBlock.count
+                typedByteBlock.byteOffset,
+                typedByteBlock.byteCount
             ));
             return instanceIndex;
         };
@@ -255,7 +278,7 @@ bool RendererSystem::createMeshShaderResources(){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -277,7 +300,7 @@ bool RendererSystem::createComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
@@ -388,36 +411,35 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     return true;
 }
 
-bool RendererSystem::reserveMaterialParameterBufferCapacity(const usize parameterCount){
-    const usize requiredCount = Max<usize>(parameterCount, 1u);
-    if(requiredCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer request exceeds u32 limits"));
+bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
+    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
+    if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request overflows alignment"));
         return false;
     }
-    if(m_materialParameterBuffer && m_materialParameterBufferCapacity >= requiredCount)
+    if(requiredByteCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request exceeds u32 byte-offset limits"));
+        return false;
+    }
+    if(m_materialTypedBuffer && m_materialTypedBufferCapacity >= requiredByteCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_materialParameterBufferCapacity, requiredCount);
-    if(capacity > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter buffer capacity overflows addressable memory"));
-        return false;
-    }
-
-    Core::BufferDesc materialParameterBufferDesc;
-    materialParameterBufferDesc
-        .setByteSize(static_cast<u64>(capacity * sizeof(MaterialParameterGpuData)))
-        .setStructStride(sizeof(MaterialParameterGpuData))
-        .setDebugName(ECSRenderDetail::s_MaterialParameterBufferName)
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_materialTypedBufferCapacity, requiredByteCount);
+    Core::BufferDesc materialTypedBufferDesc;
+    materialTypedBufferDesc
+        .setByteSize(static_cast<u64>(capacity))
+        .setStructStride(sizeof(u32))
+        .setDebugName(ECSRenderDetail::s_MaterialTypedBufferName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    Core::BufferHandle materialParameterBuffer = m_graphics.createBuffer(materialParameterBufferDesc);
-    if(!materialParameterBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material parameter buffer"));
+    Core::BufferHandle materialTypedBuffer = m_graphics.createBuffer(materialTypedBufferDesc);
+    if(!materialTypedBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material typed buffer"));
         return false;
     }
 
-    m_materialParameterBuffer = Move(materialParameterBuffer);
-    m_materialParameterBufferCapacity = capacity;
+    m_materialTypedBuffer = Move(materialTypedBuffer);
+    m_materialTypedBufferCapacity = capacity;
     destroyGeometryBindingSets();
     return true;
 }
@@ -474,24 +496,33 @@ bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const
     return true;
 }
 
-bool RendererSystem::uploadMaterialParameterBuffer(Core::ICommandList& commandList, const MaterialParameterGpuDataVector& materialParameters){
-    const usize uploadCount = Max<usize>(materialParameters.size(), 1u);
-    if(!reserveMaterialParameterBufferCapacity(uploadCount))
+bool RendererSystem::uploadMaterialTypedBuffer(
+    Core::ICommandList& commandList,
+    const MaterialTypedByteDataVector& materialTypedBytes
+){
+    if(materialTypedBytes.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is empty"));
         return false;
-    if(!m_materialParameterBuffer)
-        return false;
-
-    if(uploadCount > Limit<usize>::s_Max / sizeof(MaterialParameterGpuData)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material parameter data upload size overflows"));
+    }
+    if(!materialTypedBytes.empty() && (materialTypedBytes.size() & (sizeof(u32) - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
         return false;
     }
 
-    MaterialParameterGpuData fallbackParameter;
-    const MaterialParameterGpuData* data = materialParameters.empty() ? &fallbackParameter : materialParameters.data();
-    commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::CopyDest);
+    usize uploadBytes = materialTypedBytes.size();
+    if(!AlignUpChecked(uploadBytes, sizeof(u32), uploadBytes)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload size overflows alignment"));
+        return false;
+    }
+    if(!reserveMaterialTypedBufferCapacity(uploadBytes))
+        return false;
+    if(!m_materialTypedBuffer)
+        return false;
+
+    commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(m_materialParameterBuffer.get(), data, uploadCount * sizeof(MaterialParameterGpuData));
-    commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.writeBuffer(m_materialTypedBuffer.get(), materialTypedBytes.data(), uploadBytes);
+    commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     return true;
 }
@@ -517,12 +548,15 @@ bool RendererSystem::findMaterialPassDrawItemResources(
     return true;
 }
 
-void RendererSystem::setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry){
+void RendererSystem::setMaterialPassCommonBufferStates(
+    Core::ICommandList& commandList,
+    const GeometryResources& geometry
+){
     commandList.setBufferState(geometry.shaderVertexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(geometry.shaderIndexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(m_materialParameterBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
 void RendererSystem::setMaterialPassDrawPushConstants(
@@ -557,7 +591,13 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawItemVector& drawItems
 ){
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !pipelineResources.meshletPipeline || !m_instanceBuffer || !m_meshViewBuffer || !m_materialParameterBuffer)
+        if(
+            !geometry.valid()
+            || !pipelineResources.meshletPipeline
+            || !m_instanceBuffer
+            || !m_meshViewBuffer
+            || !m_materialTypedBuffer
+        )
             return;
         if(!createMeshBindingSet(geometry))
             return;
@@ -591,7 +631,14 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
-        if(!geometry.valid() || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline || !m_instanceBuffer || !m_meshViewBuffer || !m_materialParameterBuffer)
+        if(
+            !geometry.valid()
+            || !pipelineResources.computePipeline
+            || !pipelineResources.emulationPipeline
+            || !m_instanceBuffer
+            || !m_meshViewBuffer
+            || !m_materialTypedBuffer
+        )
             return;
         if(!createComputeBindingSet(geometry))
             return;

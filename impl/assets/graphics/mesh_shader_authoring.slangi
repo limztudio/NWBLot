@@ -13,6 +13,14 @@
 #define NWB_MESH_SHADER_EMULATION_COMPUTE 0
 #endif
 
+#ifndef NWB_MATERIAL_TYPED_BINDING
+#error "mesh material shaders must include a generated .bind material interface"
+#endif
+
+#if NWB_MATERIAL_TYPED_BINDING != 1
+#error "mesh material shaders require NWB_MATERIAL_TYPED_BINDING=1"
+#endif
+
 #ifndef NWB_MESH_SHADER_GROUP_SIZE_X
 #define NWB_MESH_SHADER_GROUP_SIZE_X 32
 #endif
@@ -55,19 +63,14 @@ struct NwbMeshInstanceData{
     float4 rotation;
     float4 translation;
     float4 scale;
-    uint4 materialParameters;
-};
-
-struct NwbMaterialParameterData{
-    uint4 meta;
-    uint4 data;
+    uint4 materialTypedBytes;
 };
 
 // Geometry vertices are uploaded as tightly packed 32-bit words, with float words and half2 words decoded manually.
 [[vk::binding(0, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMeshSourceVertexWords;
 [[vk::binding(1, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMeshSourceIndices;
 [[vk::binding(3, 0)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
-[[vk::binding(5, 0)]] StructuredBuffer<NwbMaterialParameterData, Std430DataLayout> g_NwbMaterialParameters;
+[[vk::binding(6, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
 
 struct NwbMeshPushConstants{
     uint4 dispatch;
@@ -92,11 +95,6 @@ ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
 static const uint NWB_MESH_SOURCE_VERTEX_WORD_STRIDE = 7u;
 static const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_SKINNED_GEOMETRY_RUNTIME = 1u;
 static const uint NWB_MESH_SKINNED_GEOMETRY_VERTEX_WORD_STRIDE = 11u;
-
-static const uint NWB_MATERIAL_PARAMETER_TYPE_FLOAT = 1u;
-static const uint NWB_MATERIAL_PARAMETER_TYPE_INT = 2u;
-static const uint NWB_MATERIAL_PARAMETER_TYPE_UINT = 3u;
-static const uint NWB_MATERIAL_PARAMETER_TYPE_BOOL = 4u;
 
 static const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
 
@@ -169,156 +167,128 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
     return g_NwbMeshInstances[nwbMeshInstanceIndex()];
 }
 
-uint nwbMaterialParameterOffset(const NwbMeshInstanceData instance){
-    return instance.materialParameters.x;
+uint nwbMaterialTypedByteOffset(const NwbMeshInstanceData instance){
+    return instance.materialTypedBytes.x;
 }
 
-uint nwbMaterialParameterCount(const NwbMeshInstanceData instance){
-    return instance.materialParameters.y;
+uint nwbMaterialTypedByteCount(const NwbMeshInstanceData instance){
+    return instance.materialTypedBytes.y;
 }
 
-bool nwbMaterialParameterKeyMatches(const NwbMaterialParameterData parameter, const uint2 key){
-    return all(parameter.meta.xy == key);
+uint nwbMaterialLoadRawUInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return g_NwbMaterialTypedWords[(nwbMaterialTypedByteOffset(instance) + byteOffset) >> 2u];
 }
 
-bool nwbMaterialFindParameter(
-    const NwbMeshInstanceData instance,
-    const uint2 key,
-    const uint valueType,
-    out NwbMaterialParameterData outParameter){
-    outParameter.meta = uint4(0u);
-    outParameter.data = uint4(0u);
-
-    const uint offset = nwbMaterialParameterOffset(instance);
-    const uint count = nwbMaterialParameterCount(instance);
-    for(uint i = 0u; i < count; ++i){
-        const NwbMaterialParameterData parameter = g_NwbMaterialParameters[offset + i];
-        if(parameter.meta.z == valueType && nwbMaterialParameterKeyMatches(parameter, key)){
-            outParameter = parameter;
-            return true;
-        }
-    }
-
-    return false;
+float nwbMaterialLoadFloat(const NwbMeshInstanceData instance, const uint byteOffset){
+    return asfloat(nwbMaterialLoadRawUInt(instance, byteOffset));
 }
 
-float4 nwbMaterialFindFloat4(const NwbMeshInstanceData instance, const uint2 key, const float4 fallbackValue){
-    NwbMaterialParameterData parameter;
-    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_FLOAT, parameter))
-        return fallbackValue;
-
-    const float4 value = asfloat(parameter.data);
-    const uint componentCount = min(parameter.meta.w, 4u);
-    float4 result = fallbackValue;
-    for(uint i = 0u; i < componentCount; ++i)
-        result[i] = value[i];
-
-    return result;
+float2 nwbMaterialLoadFloat2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return float2(
+        nwbMaterialLoadFloat(instance, byteOffset + 0u),
+        nwbMaterialLoadFloat(instance, byteOffset + 4u)
+    );
 }
 
-float3 nwbMaterialFindFloat3(const NwbMeshInstanceData instance, const uint2 key, const float3 fallbackValue){
-    const float4 value = nwbMaterialFindFloat4(instance, key, float4(fallbackValue.x, fallbackValue.y, fallbackValue.z, 0.0));
-    return value.xyz;
+float3 nwbMaterialLoadFloat3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return float3(
+        nwbMaterialLoadFloat(instance, byteOffset + 0u),
+        nwbMaterialLoadFloat(instance, byteOffset + 4u),
+        nwbMaterialLoadFloat(instance, byteOffset + 8u)
+    );
 }
 
-float2 nwbMaterialFindFloat2(const NwbMeshInstanceData instance, const uint2 key, const float2 fallbackValue){
-    const float4 value = nwbMaterialFindFloat4(instance, key, float4(fallbackValue.x, fallbackValue.y, 0.0, 0.0));
-    return value.xy;
+float4 nwbMaterialLoadFloat4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return float4(
+        nwbMaterialLoadFloat(instance, byteOffset + 0u),
+        nwbMaterialLoadFloat(instance, byteOffset + 4u),
+        nwbMaterialLoadFloat(instance, byteOffset + 8u),
+        nwbMaterialLoadFloat(instance, byteOffset + 12u)
+    );
 }
 
-float nwbMaterialFindFloat(const NwbMeshInstanceData instance, const uint2 key, const float fallbackValue){
-    const float4 value = nwbMaterialFindFloat4(instance, key, float4(fallbackValue, 0.0, 0.0, 0.0));
-    return value.x;
+int nwbMaterialLoadInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return asint(nwbMaterialLoadRawUInt(instance, byteOffset));
 }
 
-int4 nwbMaterialFindInt4(const NwbMeshInstanceData instance, const uint2 key, const int4 fallbackValue){
-    NwbMaterialParameterData parameter;
-    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_INT, parameter))
-        return fallbackValue;
-
-    const int4 value = asint(parameter.data);
-    const uint componentCount = min(parameter.meta.w, 4u);
-    int4 result = fallbackValue;
-    for(uint i = 0u; i < componentCount; ++i)
-        result[i] = value[i];
-
-    return result;
+int2 nwbMaterialLoadInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return int2(
+        nwbMaterialLoadInt(instance, byteOffset + 0u),
+        nwbMaterialLoadInt(instance, byteOffset + 4u)
+    );
 }
 
-int3 nwbMaterialFindInt3(const NwbMeshInstanceData instance, const uint2 key, const int3 fallbackValue){
-    const int4 value = nwbMaterialFindInt4(instance, key, int4(fallbackValue.x, fallbackValue.y, fallbackValue.z, 0));
-    return value.xyz;
+int3 nwbMaterialLoadInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return int3(
+        nwbMaterialLoadInt(instance, byteOffset + 0u),
+        nwbMaterialLoadInt(instance, byteOffset + 4u),
+        nwbMaterialLoadInt(instance, byteOffset + 8u)
+    );
 }
 
-int2 nwbMaterialFindInt2(const NwbMeshInstanceData instance, const uint2 key, const int2 fallbackValue){
-    const int4 value = nwbMaterialFindInt4(instance, key, int4(fallbackValue.x, fallbackValue.y, 0, 0));
-    return value.xy;
+int4 nwbMaterialLoadInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return int4(
+        nwbMaterialLoadInt(instance, byteOffset + 0u),
+        nwbMaterialLoadInt(instance, byteOffset + 4u),
+        nwbMaterialLoadInt(instance, byteOffset + 8u),
+        nwbMaterialLoadInt(instance, byteOffset + 12u)
+    );
 }
 
-int nwbMaterialFindInt(const NwbMeshInstanceData instance, const uint2 key, const int fallbackValue){
-    const int4 value = nwbMaterialFindInt4(instance, key, int4(fallbackValue, 0, 0, 0));
-    return value.x;
+uint nwbMaterialLoadUInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadRawUInt(instance, byteOffset);
 }
 
-uint4 nwbMaterialFindUInt4(const NwbMeshInstanceData instance, const uint2 key, const uint4 fallbackValue){
-    NwbMaterialParameterData parameter;
-    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_UINT, parameter))
-        return fallbackValue;
-
-    const uint componentCount = min(parameter.meta.w, 4u);
-    uint4 result = fallbackValue;
-    for(uint i = 0u; i < componentCount; ++i)
-        result[i] = parameter.data[i];
-
-    return result;
+uint2 nwbMaterialLoadUInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return uint2(
+        nwbMaterialLoadUInt(instance, byteOffset + 0u),
+        nwbMaterialLoadUInt(instance, byteOffset + 4u)
+    );
 }
 
-uint3 nwbMaterialFindUInt3(const NwbMeshInstanceData instance, const uint2 key, const uint3 fallbackValue){
-    const uint4 value = nwbMaterialFindUInt4(instance, key, uint4(fallbackValue.x, fallbackValue.y, fallbackValue.z, 0u));
-    return value.xyz;
+uint3 nwbMaterialLoadUInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return uint3(
+        nwbMaterialLoadUInt(instance, byteOffset + 0u),
+        nwbMaterialLoadUInt(instance, byteOffset + 4u),
+        nwbMaterialLoadUInt(instance, byteOffset + 8u)
+    );
 }
 
-uint2 nwbMaterialFindUInt2(const NwbMeshInstanceData instance, const uint2 key, const uint2 fallbackValue){
-    const uint4 value = nwbMaterialFindUInt4(instance, key, uint4(fallbackValue.x, fallbackValue.y, 0u, 0u));
-    return value.xy;
+uint4 nwbMaterialLoadUInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return uint4(
+        nwbMaterialLoadUInt(instance, byteOffset + 0u),
+        nwbMaterialLoadUInt(instance, byteOffset + 4u),
+        nwbMaterialLoadUInt(instance, byteOffset + 8u),
+        nwbMaterialLoadUInt(instance, byteOffset + 12u)
+    );
 }
 
-uint nwbMaterialFindUInt(const NwbMeshInstanceData instance, const uint2 key, const uint fallbackValue){
-    const uint4 value = nwbMaterialFindUInt4(instance, key, uint4(fallbackValue, 0u, 0u, 0u));
-    return value.x;
+bool nwbMaterialLoadBool(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadRawUInt(instance, byteOffset) != 0u;
 }
 
-bool4 nwbMaterialFindBool4(const NwbMeshInstanceData instance, const uint2 key, const bool4 fallbackValue){
-    NwbMaterialParameterData parameter;
-    if(!nwbMaterialFindParameter(instance, key, NWB_MATERIAL_PARAMETER_TYPE_BOOL, parameter))
-        return fallbackValue;
-
-    bool4 result = fallbackValue;
-    if(parameter.meta.w > 0u)
-        result.x = parameter.data.x != 0u;
-    if(parameter.meta.w > 1u)
-        result.y = parameter.data.y != 0u;
-    if(parameter.meta.w > 2u)
-        result.z = parameter.data.z != 0u;
-    if(parameter.meta.w > 3u)
-        result.w = parameter.data.w != 0u;
-
-    return result;
+bool2 nwbMaterialLoadBool2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return bool2(
+        nwbMaterialLoadBool(instance, byteOffset + 0u),
+        nwbMaterialLoadBool(instance, byteOffset + 4u)
+    );
 }
 
-bool3 nwbMaterialFindBool3(const NwbMeshInstanceData instance, const uint2 key, const bool3 fallbackValue){
-    const bool4 value = nwbMaterialFindBool4(instance, key, bool4(fallbackValue.x, fallbackValue.y, fallbackValue.z, false));
-    return bool3(value.x, value.y, value.z);
+bool3 nwbMaterialLoadBool3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return bool3(
+        nwbMaterialLoadBool(instance, byteOffset + 0u),
+        nwbMaterialLoadBool(instance, byteOffset + 4u),
+        nwbMaterialLoadBool(instance, byteOffset + 8u)
+    );
 }
 
-bool2 nwbMaterialFindBool2(const NwbMeshInstanceData instance, const uint2 key, const bool2 fallbackValue){
-    const bool4 value = nwbMaterialFindBool4(instance, key, bool4(fallbackValue.x, fallbackValue.y, false, false));
-    return value.xy;
-}
-
-bool nwbMaterialFindBool(const NwbMeshInstanceData instance, const uint2 key, const bool fallbackValue){
-    const bool4 value = nwbMaterialFindBool4(instance, key, bool4(fallbackValue, false, false, false));
-    return value.x;
+bool4 nwbMaterialLoadBool4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return bool4(
+        nwbMaterialLoadBool(instance, byteOffset + 0u),
+        nwbMaterialLoadBool(instance, byteOffset + 4u),
+        nwbMaterialLoadBool(instance, byteOffset + 8u),
+        nwbMaterialLoadBool(instance, byteOffset + 12u)
+    );
 }
 
 float3 nwbMeshTransformPosition(float3 localPosition, const NwbMeshInstanceData instance){

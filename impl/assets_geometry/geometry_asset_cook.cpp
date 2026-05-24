@@ -202,7 +202,8 @@ static bool ParseMetadataF32TupleWithLabel(
     const Core::Metascript::Value& value,
     const tchar* metaKind,
     const AStringView label,
-    f32 (&outValues)[ComponentCount]
+    f32 (&outValues)[ComponentCount],
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
@@ -220,8 +221,7 @@ static bool ParseMetadataF32TupleWithLabel(
         if(failure == MetadataF32ValueFailure::None)
             continue;
 
-        Core::Alloc::ScratchArena<> labelArena;
-        const ScratchString componentLabel = MakeIndexedLabel(labelArena, label, i);
+        const ScratchString componentLabel = MakeIndexedLabel(scratchArena, label, i);
         LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
         return false;
     }
@@ -234,9 +234,10 @@ static bool ParseMetadataF32Tuple(
     const Core::Metascript::Value& value,
     const tchar* metaKind,
     const AStringView label,
-    f32 (&outValues)[ComponentCount]
+    f32 (&outValues)[ComponentCount],
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues);
+    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
 }
 
 template<usize ComponentCount>
@@ -246,11 +247,11 @@ static bool ParseMetadataF32TupleListElement(
     const tchar* metaKind,
     const AStringView fieldName,
     const usize elementIndex,
-    f32 (&outValues)[ComponentCount]
+    f32 (&outValues)[ComponentCount],
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    Core::Alloc::ScratchArena<> labelArena;
-    const ScratchString label = MakeIndexedLabel(labelArena, fieldName, elementIndex);
-    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues);
+    const ScratchString label = MakeIndexedLabel(scratchArena, fieldName, elementIndex);
+    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
 }
 
 template<typename ElementT, usize ComponentCount, typename ElementVectorT>
@@ -259,7 +260,8 @@ static bool ParseMetadataFloatListField(
     const Core::Metascript::Value& asset,
     const tchar* metaKind,
     const AStringView fieldName,
-    ElementVectorT& outValues
+    ElementVectorT& outValues,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     outValues.clear();
 
@@ -271,7 +273,7 @@ static bool ParseMetadataFloatListField(
     outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
         alignas(16) f32 tuple[ComponentCount] = {};
-        if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple)){
+        if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple, scratchArena)){
             outValues.clear();
             return false;
         }
@@ -475,14 +477,14 @@ static bool FillMetadataIndexRecursive(
     const tchar* metaKind,
     const AStringView label,
     const bool use32BitIndices,
-    IndexVectorT& outIndices
+    IndexVectorT& outIndices,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0; i < list.size(); ++i){
-            Core::Alloc::ScratchArena<> labelArena;
-            const ScratchString childLabel = MakeIndexedLabel(labelArena, label, i);
-            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices))
+            const ScratchString childLabel = MakeIndexedLabel(scratchArena, label, i);
+            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, use32BitIndices, outIndices, scratchArena))
                 return false;
         }
         return true;
@@ -511,7 +513,8 @@ static bool ParseMetadataIndexField(
     const Core::Metascript::Value& asset,
     const tchar* metaKind,
     const bool use32BitIndices,
-    IndexVectorT& outIndices
+    IndexVectorT& outIndices,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     outIndices.clear();
 
@@ -529,7 +532,7 @@ static bool ParseMetadataIndexField(
     }
 
     outIndices.reserve(indexCount);
-    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices)){
+    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", use32BitIndices, outIndices, scratchArena)){
         outIndices.clear();
         return false;
     }
@@ -590,7 +593,12 @@ static bool RejectUnsupportedGeometryFields(const DiscoveredNwbFile& discoveredF
     return false;
 }
 
-static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Document& doc, GeometryCookEntry& outEntry){
+static bool ParseGeometryMeta(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Document& doc,
+    GeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     outEntry = GeometryCookEntry(outEntry.positions.get_allocator().arena());
 
     const Core::Metascript::Value& asset = doc.asset();
@@ -605,7 +613,8 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         discoveredFile.filePath,
         asset,
         "Geometry",
-        outEntry.virtualPath
+        outEntry.virtualPath,
+        scratchArena
     ))
         return false;
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
@@ -613,19 +622,18 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
     if(!ParseStaticGeometryClassField(discoveredFile.filePath, asset))
         return false;
 
-    Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<Float3U> positions{scratchArena};
     ScratchVector<Float3U> normals{scratchArena};
     ScratchVector<Float4U> colors{scratchArena};
     if(!ParseMetadataIndexType(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices))
         return false;
-    if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "positions", positions))
+    if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "positions", positions, scratchArena))
         return false;
-    if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "normals", normals))
+    if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "normals", normals, scratchArena))
         return false;
     const Core::Metascript::Value* colorsField = FindField(asset, "colors");
     if(colorsField){
-        if(!ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "colors", colors))
+        if(!ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, s_GeometryMetaKind, "colors", colors, scratchArena))
             return false;
     }
     else
@@ -641,7 +649,7 @@ static bool ParseGeometryMeta(const DiscoveredNwbFile& discoveredFile, const Cor
         outEntry.colors
     ))
         return false;
-    return ParseMetadataIndexField(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices, outEntry.indices);
+    return ParseMetadataIndexField(discoveredFile.filePath, asset, s_GeometryMetaKind, outEntry.use32BitIndices, outEntry.indices, scratchArena);
 }
 
 static bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry){
@@ -660,9 +668,10 @@ static bool ParseF32Tuple(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const AStringView label,
-    f32 (&outValues)[ComponentCount]
+    f32 (&outValues)[ComponentCount],
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return ParseMetadataF32Tuple(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValues);
+    return ParseMetadataF32Tuple(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValues, scratchArena);
 }
 
 template<usize ComponentCount>
@@ -670,7 +679,8 @@ static bool ParseU16Tuple(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const AStringView label,
-    u16 (&outValues)[ComponentCount]
+    u16 (&outValues)[ComponentCount],
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' must be a {}-component integer list")
@@ -686,14 +696,12 @@ static bool ParseU16Tuple(
         u32 parsed = 0u;
         const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], parsed);
         if(failure != MetadataU32ValueFailure::None){
-            Core::Alloc::ScratchArena<> labelArena;
-            const ScratchString componentLabel = MakeIndexedLabel(labelArena, label, i);
+            const ScratchString componentLabel = MakeIndexedLabel(scratchArena, label, i);
             LogMetadataU32ValueFailure(nwbFilePath, s_SkinnedGeometryMetaKind, componentLabel, failure);
             return false;
         }
         if(parsed > Limit<u16>::s_Max){
-            Core::Alloc::ScratchArena<> labelArena;
-            const ScratchString componentLabel = MakeIndexedLabel(labelArena, label, i);
+            const ScratchString componentLabel = MakeIndexedLabel(scratchArena, label, i);
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' contains a value that exceeds u16")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(componentLabel)
@@ -710,9 +718,17 @@ static bool ParseFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
-    ElementVectorT& outValues
+    ElementVectorT& outValues,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return ParseMetadataFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, s_SkinnedGeometryMetaKind, fieldName, outValues);
+    return ParseMetadataFloatListField<ElementT, ComponentCount>(
+        nwbFilePath,
+        asset,
+        s_SkinnedGeometryMetaKind,
+        fieldName,
+        outValues,
+        scratchArena
+    );
 }
 
 static bool IsExplicitEmptyOptionalField(const Core::Metascript::Value& value){
@@ -725,7 +741,9 @@ static bool ParseOptionalFloatListField(
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
     ElementVectorT& outValues,
-    bool& outProvided){
+    bool& outProvided,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     outValues.clear();
     outProvided = false;
 
@@ -734,7 +752,7 @@ static bool ParseOptionalFloatListField(
         return true;
 
     outProvided = true;
-    return ParseFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, fieldName, outValues);
+    return ParseFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, fieldName, outValues, scratchArena);
 }
 
 static bool ParseSkinnedGeometryIndexType(const Path& nwbFilePath, const Core::Metascript::Value& asset, bool& outUse32BitIndices){
@@ -745,9 +763,10 @@ static bool ParseSkinnedGeometryIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const bool use32BitIndices,
-    Core::Assets::AssetVector<u32>& outIndices
+    Core::Assets::AssetVector<u32>& outIndices,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return ParseMetadataIndexField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, use32BitIndices, outIndices);
+    return ParseMetadataIndexField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, use32BitIndices, outIndices, scratchArena);
 }
 
 template<typename PositionVectorT, typename NormalVectorT, typename TangentVectorT, typename UvVectorT, typename ColorVectorT>
@@ -791,12 +810,14 @@ static bool GenerateMissingSkinnedGeometryFrames(
     const bool normalsProvided,
     const bool tangentsProvided,
     Core::Assets::AssetVector<SkinnedGeometryVertex>& vertices,
-    const Core::Assets::AssetVector<u32>& indices){
+    const Core::Assets::AssetVector<u32>& indices,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     if(normalsProvided && tangentsProvided)
         return true;
 
     Core::Geometry::TangentFrameRebuildResult rebuildResult;
-    if(!SkinnedGeometryTangentFrameRebuild::Rebuild(vertices, indices, &rebuildResult)){
+    if(!SkinnedGeometryTangentFrameRebuild::Rebuild(vertices, indices, &rebuildResult, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': failed to generate missing normal/tangent frames")
             , PathToString<tchar>(nwbFilePath)
         );
@@ -849,7 +870,8 @@ static bool ParseSkinInfluences(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const usize vertexCount,
-    Core::Assets::AssetVector<SkinInfluence4>& outSkin
+    Core::Assets::AssetVector<SkinInfluence4>& outSkin,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     outSkin.clear();
 
@@ -885,13 +907,12 @@ static bool ParseSkinInfluences(
 
     outSkin.reserve(vertexCount);
     for(usize i = 0; i < vertexCount; ++i){
-        Core::Alloc::ScratchArena<> labelArena;
-        const ScratchString jointLabel = MakeIndexedLabel(labelArena, "skin.joints0", i);
-        const ScratchString weightLabel = MakeIndexedLabel(labelArena, "skin.weights0", i);
+        const ScratchString jointLabel = MakeIndexedLabel(scratchArena, "skin.joints0", i);
+        const ScratchString weightLabel = MakeIndexedLabel(scratchArena, "skin.weights0", i);
         SkinInfluence4 influence;
-        if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, influence.joint))
+        if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, influence.joint, scratchArena))
             return false;
-        if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, influence.weight))
+        if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, influence.weight, scratchArena))
             return false;
         if(!NormalizeSkinInfluenceWeights(nwbFilePath, weightLabel, influence))
             return false;
@@ -915,7 +936,9 @@ static bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const u32 skeletonJointCount,
-    Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& outMatrices){
+    Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& outMatrices,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     outMatrices.clear();
 
     const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
@@ -948,12 +971,11 @@ static bool ParseInverseBindMatrices(
 
         SkinnedGeometryJointMatrix matrix{};
         const auto& columns = matrixValue.asList();
-        Core::Alloc::ScratchArena<> labelArena;
-        const ScratchString label = MakeIndexedLabel(labelArena, "inverse_bind_matrices", matrixIndex);
+        const ScratchString label = MakeIndexedLabel(scratchArena, "inverse_bind_matrices", matrixIndex);
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
             alignas(16) f32 column[4] = {};
-            const ScratchString columnLabel = MakeIndexedLabel(labelArena, label, columnIndex);
-            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedGeometryMetaKind, columnLabel, column))
+            const ScratchString columnLabel = MakeIndexedLabel(scratchArena, label, columnIndex);
+            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedGeometryMetaKind, columnLabel, column, scratchArena))
                 return false;
             matrix.rows[columnIndex] = Float4(column[0u], column[1u], column[2u], column[3u]);
         }
@@ -983,7 +1005,8 @@ static bool RejectSkinnedGeometrySourceField(const DiscoveredNwbFile& discovered
 static bool ParseSkinnedGeometryMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
-    SkinnedGeometryCookEntry& outEntry
+    SkinnedGeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     outEntry = SkinnedGeometryCookEntry(outEntry.restVertices.get_allocator().arena());
 
@@ -1001,7 +1024,8 @@ static bool ParseSkinnedGeometryMeta(
         discoveredFile.filePath,
         asset,
         "SkinnedGeometry",
-        outEntry.virtualPath
+        outEntry.virtualPath,
+        scratchArena
     ))
         return false;
 
@@ -1010,7 +1034,6 @@ static bool ParseSkinnedGeometryMeta(
     if(!ParseSkinnedGeometryClassField(discoveredFile.filePath, asset, outEntry.geometryClass))
         return false;
 
-    Core::Alloc::ScratchArena<> scratchArena;
     ScratchVector<Float3U> positions{scratchArena};
     ScratchVector<Float3U> normals{scratchArena};
     ScratchVector<Float4U> tangents{scratchArena};
@@ -1018,7 +1041,7 @@ static bool ParseSkinnedGeometryMeta(
     ScratchVector<Float4U> colors{scratchArena};
     if(!ParseSkinnedGeometryIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
         return false;
-    if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions))
+    if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions, scratchArena))
         return false;
     bool normalsProvided = false;
     bool tangentsProvided = false;
@@ -1027,7 +1050,8 @@ static bool ParseSkinnedGeometryMeta(
         asset,
         "normals",
         normals,
-        normalsProvided
+        normalsProvided,
+        scratchArena
     ))
         return false;
     if(!ParseOptionalFloatListField<Float4U, 4u>(
@@ -1035,12 +1059,13 @@ static bool ParseSkinnedGeometryMeta(
         asset,
         "tangents",
         tangents,
-        tangentsProvided
+        tangentsProvided,
+        scratchArena
     ))
         return false;
-    if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0))
+    if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0, scratchArena))
         return false;
-    if(!ParseSkinnedGeometryIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices))
+    if(!ParseSkinnedGeometryIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices, scratchArena))
         return false;
     if(!normalsProvided)
         normals.assign(positions.size(), Float3U(0.0f, 0.0f, 1.0f));
@@ -1048,7 +1073,7 @@ static bool ParseSkinnedGeometryMeta(
         tangents.assign(positions.size(), Float4U(1.0f, 0.0f, 0.0f, 1.0f));
     const Core::Metascript::Value* colorsField = FindField(asset, "colors");
     if(colorsField && !IsExplicitEmptyOptionalField(*colorsField)){
-        if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors))
+        if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors, scratchArena))
             return false;
     }
     else
@@ -1060,14 +1085,21 @@ static bool ParseSkinnedGeometryMeta(
         normalsProvided,
         tangentsProvided,
         outEntry.restVertices,
-        outEntry.indices
+        outEntry.indices,
+        scratchArena
     ))
         return false;
-    if(!ParseSkinInfluences(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.skin))
+    if(!ParseSkinInfluences(discoveredFile.filePath, asset, outEntry.restVertices.size(), outEntry.skin, scratchArena))
         return false;
     if(!ParseSkeletonJointCount(discoveredFile.filePath, asset, outEntry.skeletonJointCount))
         return false;
-    if(!ParseInverseBindMatrices(discoveredFile.filePath, asset, outEntry.skeletonJointCount, outEntry.inverseBindMatrices))
+    if(!ParseInverseBindMatrices(
+        discoveredFile.filePath,
+        asset,
+        outEntry.skeletonJointCount,
+        outEntry.inverseBindMatrices,
+        scratchArena
+    ))
         return false;
     if(!Core::Geometry::GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class '{}' does not match skin payload")
@@ -1107,12 +1139,13 @@ bool ParseGeometryCookMetadata(
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    GeometryCookEntry& outEntry
+    GeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     __hidden_geometry_asset_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_geometry_asset_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_geometry_asset_cook::ParseGeometryMeta(discoveredFile, doc, outEntry);
+    return __hidden_geometry_asset_cook::ParseGeometryMeta(discoveredFile, doc, outEntry, scratchArena);
 }
 
 bool ParseSkinnedGeometryCookMetadata(
@@ -1120,12 +1153,13 @@ bool ParseSkinnedGeometryCookMetadata(
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SkinnedGeometryCookEntry& outEntry
+    SkinnedGeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     __hidden_geometry_asset_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_geometry_asset_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_geometry_asset_cook::ParseSkinnedGeometryMeta(discoveredFile, doc, outEntry);
+    return __hidden_geometry_asset_cook::ParseSkinnedGeometryMeta(discoveredFile, doc, outEntry, scratchArena);
 }
 
 bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry){

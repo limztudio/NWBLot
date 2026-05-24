@@ -17,6 +17,8 @@
 #include "material_asset.h"
 #include "material_cook_types.h"
 
+#include <core/alloc/scratch.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -192,7 +194,11 @@ struct MaterialBindTypedLayoutCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry);
+[[nodiscard]] bool ParseMaterialBindSource(
+    const Path& bindFilePath,
+    MaterialBindEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
+);
 [[nodiscard]] bool BuildMaterialBindParameterKey(
     AStringView instanceName,
     AStringView fieldName,
@@ -202,13 +208,15 @@ struct MaterialBindTypedLayoutCache{
 [[nodiscard]] bool BuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
-    MaterialBindTypedLayout& outLayout
+    MaterialBindTypedLayout& outLayout,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool FindOrBuildMaterialBindTypedLayout(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
-    const MaterialBindTypedLayout*& outLayout
+    const MaterialBindTypedLayout*& outLayout,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 void CopyMaterialBindTypedLayoutDefaults(
     const MaterialBindTypedLayout& layout,

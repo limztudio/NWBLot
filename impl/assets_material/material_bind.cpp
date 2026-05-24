@@ -43,6 +43,7 @@ namespace __hidden_material_bind{
 
 using CookString = MaterialCookString;
 using ScratchArena = Core::Alloc::ScratchArena<>;
+using ScratchString = AString<ScratchArena>;
 template<typename T>
 using ScratchVector = Vector<T, ScratchArena>;
 
@@ -94,9 +95,12 @@ static const Metascript::Value* FindAssetMapValue(const Path& bindFilePath, cons
     return asset;
 }
 
-static bool ValidatePairedSourceExtension(const Path& bindFilePath, const CookString& sourcePath){
-    Core::Alloc::ScratchArena<> scratchArena;
-    AString<Core::Alloc::ScratchArena<>> extension = PathToString(scratchArena, Path(sourcePath).extension());
+static bool ValidatePairedSourceExtension(
+    const Path& bindFilePath,
+    const CookString& sourcePath,
+    ScratchArena& scratchArena
+){
+    ScratchString extension = PathToString(scratchArena, Path(sourcePath).extension());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == MaterialBindNames::SourceExtensionText())
         return true;
@@ -570,11 +574,17 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
     return true;
 }
 
-static bool ParseMaterialBindSource(const Path& bindFilePath, const Metascript::Document& doc, MaterialCookArena& arena, MaterialBindEntry& outEntry){
+static bool ParseMaterialBindSource(
+    const Path& bindFilePath,
+    const Metascript::Document& doc,
+    MaterialCookArena& arena,
+    MaterialBindEntry& outEntry,
+    ScratchArena& scratchArena
+){
     outEntry.reset();
 
     outEntry.source = PathToString(arena, bindFilePath);
-    if(!ValidatePairedSourceExtension(bindFilePath, outEntry.source))
+    if(!ValidatePairedSourceExtension(bindFilePath, outEntry.source, scratchArena))
         return false;
 
     const Metascript::Value* assetValue = FindAssetMapValue(bindFilePath, doc);
@@ -1202,12 +1212,12 @@ static bool ApplyMaterialBindTypedLayoutParameterValue(
 static bool BuildMaterialBindTypedLayoutImpl(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
-    MaterialBindTypedLayout& outLayout
+    MaterialBindTypedLayout& outLayout,
+    ScratchArena& scratchArena
 ){
     outLayout.reset();
     outLayout.bindEntry = &bindEntry;
 
-    ScratchArena scratchArena;
     ScratchVector<const MaterialBindInstance*> sortedInstances{ scratchArena };
     if(!BuildSortedMaterialBindInstances(bindEntry, contextName, sortedInstances))
         return false;
@@ -1362,7 +1372,8 @@ static bool FindOrBuildMaterialBindTypedLayoutImpl(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
-    const MaterialBindTypedLayout*& outLayout
+    const MaterialBindTypedLayout*& outLayout,
+    ScratchArena& scratchArena
 ){
     outLayout = nullptr;
 
@@ -1383,7 +1394,7 @@ static bool FindOrBuildMaterialBindTypedLayoutImpl(
     const usize cacheIndex = inOutCache.entries.size();
     inOutCache.entries.emplace_back(inOutCache.entries.get_allocator().arena());
     MaterialBindTypedLayout& layout = inOutCache.entries.back();
-    if(!BuildMaterialBindTypedLayoutImpl(bindEntry, materialInterface, layout))
+    if(!BuildMaterialBindTypedLayoutImpl(bindEntry, materialInterface, layout, scratchArena))
         return false;
 
     if(!inOutCache.lookup.emplace(materialInterface, cacheIndex).second){
@@ -1485,7 +1496,11 @@ u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
     return UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, parameterKey);
 }
 
-bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEntry){
+bool ParseMaterialBindSource(
+    const Path& bindFilePath,
+    MaterialBindEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     outEntry.reset();
 
     MaterialCookArena& arena = outEntry.source.get_allocator().arena();
@@ -1493,28 +1508,31 @@ bool ParseMaterialBindSource(const Path& bindFilePath, MaterialBindEntry& outEnt
     if(!__hidden_material_bind::ParseMaterialBindDocument(bindFilePath, arena, doc))
         return false;
 
-    return __hidden_material_bind::ParseMaterialBindSource(bindFilePath, doc, arena, outEntry);
+    return __hidden_material_bind::ParseMaterialBindSource(bindFilePath, doc, arena, outEntry, scratchArena);
 }
 
 bool BuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
-    MaterialBindTypedLayout& outLayout
+    MaterialBindTypedLayout& outLayout,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return __hidden_material_bind::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, outLayout);
+    return __hidden_material_bind::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, outLayout, scratchArena);
 }
 
 bool FindOrBuildMaterialBindTypedLayout(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
-    const MaterialBindTypedLayout*& outLayout
+    const MaterialBindTypedLayout*& outLayout,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     return __hidden_material_bind::FindOrBuildMaterialBindTypedLayoutImpl(
         materialInterface,
         bindEntry,
         inOutCache,
-        outLayout
+        outLayout,
+        scratchArena
     );
 }
 

@@ -17,6 +17,7 @@
 #include "skinned_geometry_asset.h"
 #include "geometry_asset.h"
 
+#include <core/alloc/scratch.h>
 #include <core/geometry/geometry_class.h>
 #include <core/metascript/parser.h>
 
@@ -73,14 +74,16 @@ struct SkinnedGeometryCookEntry{
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    GeometryCookEntry& outEntry
+    GeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool ParseSkinnedGeometryCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SkinnedGeometryCookEntry& outEntry
+    SkinnedGeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 
 [[nodiscard]] bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry);

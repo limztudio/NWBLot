@@ -647,9 +647,9 @@ static bool ValidatePairedSourceExtension(
     const Path& nwbFilePath,
     const CookString& sourcePath,
     const AStringView expectedExtension,
-    const AStringView metaKind
+    const AStringView metaKind,
+    Alloc::ScratchArena<>& scratchArena
 ){
-    Alloc::ScratchArena<> scratchArena;
     ScratchString extension = PathToString(scratchArena, Path(sourcePath).extension());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) == expectedExtension)
@@ -804,12 +804,21 @@ bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& ou
 }
 
 
-bool ShaderCook::validateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const CookMap<CookString, DefineEntry>& defineValues){
-    Alloc::ScratchArena<> validationArena;
-    return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, validationArena);
+bool ShaderCook::validateVariantSignature(
+    const AStringView contextLabel,
+    const AStringView variantSignature,
+    const CookMap<CookString, DefineEntry>& defineValues,
+    Alloc::ScratchArena<>& scratchArena
+){
+    return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
-bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Document& doc, ShaderEntry& outEntry){
+bool ShaderCook::parseShaderMeta(
+    const Path& nwbFilePath,
+    const Metascript::Document& doc,
+    ShaderEntry& outEntry,
+    Alloc::ScratchArena<>& scratchArena
+){
     outEntry = ShaderEntry(m_memoryArena);
 
     if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeShader)
@@ -822,7 +831,13 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
-    if(!__hidden_shader_cook::ValidatePairedSourceExtension(nwbFilePath, outEntry.source, __hidden_shader_cook::s_SlangSourceExtension, "Shader"))
+    if(!__hidden_shader_cook::ValidatePairedSourceExtension(
+        nwbFilePath,
+        outEntry.source,
+        __hidden_shader_cook::s_SlangSourceExtension,
+        "Shader",
+        scratchArena
+    ))
         return false;
 
     if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
@@ -875,15 +890,20 @@ bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, const Metascript::Docu
     return true;
 }
 
-bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry){
+bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry, Alloc::ScratchArena<>& scratchArena){
     Metascript::Document doc(m_memoryArena);
     if(!parseDocument(nwbFilePath, doc))
         return false;
 
-    return parseShaderMeta(nwbFilePath, doc, outEntry);
+    return parseShaderMeta(nwbFilePath, doc, outEntry, scratchArena);
 }
 
-bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Document& doc, IncludeEntry& outEntry){
+bool ShaderCook::parseIncludeMeta(
+    const Path& nwbFilePath,
+    const Metascript::Document& doc,
+    IncludeEntry& outEntry,
+    Alloc::ScratchArena<>& scratchArena
+){
     outEntry = IncludeEntry(m_memoryArena);
 
     if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeInclude)
@@ -891,7 +911,13 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
-    if(!__hidden_shader_cook::ValidatePairedSourceExtension(nwbFilePath, outEntry.source, __hidden_shader_cook::s_SlangIncludeExtension, "Include"))
+    if(!__hidden_shader_cook::ValidatePairedSourceExtension(
+        nwbFilePath,
+        outEntry.source,
+        __hidden_shader_cook::s_SlangIncludeExtension,
+        "Include",
+        scratchArena
+    ))
         return false;
 
     const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Include");
@@ -909,12 +935,12 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, const Metascript::Doc
     return true;
 }
 
-bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry){
+bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry, Alloc::ScratchArena<>& scratchArena){
     Metascript::Document doc(m_memoryArena);
     if(!parseDocument(nwbFilePath, doc))
         return false;
 
-    return parseIncludeMeta(nwbFilePath, doc, outEntry);
+    return parseIncludeMeta(nwbFilePath, doc, outEntry, scratchArena);
 }
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata){
@@ -939,9 +965,12 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
     }
 }
 
-bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVector<Path>& includeDirectories, CookVector<Path>& outDependencies){
-    Alloc::ScratchArena<> scratchArena;
-
+bool ShaderCook::gatherShaderDependencies(
+    const Path& sourcePath,
+    const CookVector<Path>& includeDirectories,
+    CookVector<Path>& outDependencies,
+    Alloc::ScratchArena<>& scratchArena
+){
     outDependencies.clear();
 
     __hidden_shader_cook::ScratchHashSet<__hidden_shader_cook::ScratchString> visited{
@@ -953,9 +982,11 @@ bool ShaderCook::gatherShaderDependencies(const Path& sourcePath, const CookVect
     return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
 }
 
-bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>& defineValues, CookVector<DefineCombo>& outCombinations){
-    Alloc::ScratchArena<> scratchArena;
-
+bool ShaderCook::expandDefineCombinations(
+    const CookMap<CookString, DefineEntry>& defineValues,
+    CookVector<DefineCombo>& outCombinations,
+    Alloc::ScratchArena<>& scratchArena
+){
     outCombinations.clear();
     DefineCombo initialCombo{0, Hasher<CookString>(), EqualTo<CookString>(), m_memoryArena};
     initialCombo.reserve(defineValues.size());
@@ -1011,7 +1042,7 @@ bool ShaderCook::expandDefineCombinations(const CookMap<CookString, DefineEntry>
     return true;
 }
 
-ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo){
+ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Alloc::ScratchArena<>& scratchArena){
     if(combo.empty())
         return CookString("default", m_memoryArena);
 
@@ -1025,7 +1056,6 @@ ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo){
         return variantName;
     }
 
-    Alloc::ScratchArena<> scratchArena;
     const auto entries = sortedDefineEntries(combo, scratchArena);
     usize variantNameSize = entries.size() - 1u;
     for(const auto& entry : entries)
@@ -1047,7 +1077,11 @@ ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo){
     return variantName;
 }
 
-bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature, CookString& outCanonical){
+bool ShaderCook::canonicalizeVariantSignature(
+    const AStringView variantSignature,
+    CookString& outCanonical,
+    Alloc::ScratchArena<>& scratchArena
+){
     const AStringView trimmedSignatureView = TrimView(variantSignature);
     if(trimmedSignatureView.empty()){
         outCanonical.clear();
@@ -1062,8 +1096,6 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
         outCanonical.clear();
         return false;
     };
-
-    Alloc::ScratchArena<> scratchArena;
 
     using ScratchString = __hidden_shader_cook::ScratchString;
     using ScratchDefineCombo = HashMap<ScratchString, ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena<>>;
@@ -1135,11 +1167,14 @@ bool ShaderCook::canonicalizeVariantSignature(const AStringView variantSignature
     return true;
 }
 
-bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies, u64& outChecksum){
+bool ShaderCook::computeDependencyChecksum(
+    const CookVector<Path>& dependencies,
+    u64& outChecksum,
+    Alloc::ScratchArena<>& scratchArena
+){
     ErrorCode errorCode;
     static constexpr u8 s_NewlineByte = '\n';
     static constexpr u8 s_ZeroByte = 0;
-    Alloc::ScratchArena<> scratchArena;
 
     outChecksum = FNV64_OFFSET_BASIS;
 
@@ -1188,7 +1223,13 @@ bool ShaderCook::computeDependencyChecksum(const CookVector<Path>& dependencies,
     return true;
 }
 
-bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringView variantSignature, const u64 dependencyChecksum, u64& outChecksum){
+bool ShaderCook::computeSourceChecksum(
+    const ShaderEntry& entry,
+    const AStringView variantSignature,
+    const u64 dependencyChecksum,
+    u64& outChecksum,
+    Alloc::ScratchArena<>& scratchArena
+){
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';
 
@@ -1213,7 +1254,6 @@ bool ShaderCook::computeSourceChecksum(const ShaderEntry& entry, const AStringVi
         }
     }
     else{
-        Alloc::ScratchArena<> scratchArena;
         for(const auto& entryDefine : sortedDefineEntries(entry.implicitDefines, scratchArena)){
             appendChecksumLine(*entryDefine.key);
             appendChecksumLine(*entryDefine.value);

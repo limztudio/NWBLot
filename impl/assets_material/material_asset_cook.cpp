@@ -47,8 +47,11 @@ using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
-    ScratchArena scratchArena;
+static Path BuildMaterialBindIncludeRoot(
+    const Path& cacheDirectory,
+    const AStringView configurationSafeName,
+    ScratchArena& scratchArena
+){
     ScratchString configurationName(configurationSafeName, scratchArena);
     ScratchString includeDirectoryName(MaterialBindNames::GeneratedIncludeCacheDirectoryText(), scratchArena);
     return cacheDirectory / configurationName.c_str() / includeDirectoryName.c_str();
@@ -93,7 +96,8 @@ static bool PathHasDirectoryAncestor(const Path& normalizedPath, const Path& nor
 static bool TryResolveMaterialBindDependencyInterface(
     const Path& normalizedMaterialBindIncludeRoot,
     const Path& dependency,
-    CookString& outInterfacePath
+    CookString& outInterfacePath,
+    ScratchArena& scratchArena
 ){
     outInterfacePath.clear();
     if(normalizedMaterialBindIncludeRoot.empty())
@@ -112,7 +116,6 @@ static bool TryResolveMaterialBindDependencyInterface(
     if(!PathHasDirectoryAncestor(normalizedDependency, normalizedMaterialBindIncludeRoot))
         return true;
 
-    ScratchArena scratchArena;
     ScratchString extension = PathToString(scratchArena, normalizedDependency.extension());
     CanonicalizeTextInPlace(extension);
     if(extension != MaterialBindNames::SourceExtensionText())
@@ -135,7 +138,8 @@ static bool ResolveMaterialBindDependencyInterface(
     const Path& materialBindIncludeRoot,
     const ShaderCook::CookVector<Path>& dependencies,
     CookString& outInterfacePath,
-    Name& outInterfaceName
+    Name& outInterfaceName,
+    ScratchArena& scratchArena
 ){
     outInterfacePath.clear();
     outInterfaceName = NAME_NONE;
@@ -156,7 +160,12 @@ static bool ResolveMaterialBindDependencyInterface(
     ShaderCook::CookArena& arena = outInterfacePath.get_allocator().arena();
     CookString dependencyInterfacePath{arena};
     for(const Path& dependency : dependencies){
-        if(!TryResolveMaterialBindDependencyInterface(normalizedMaterialBindIncludeRoot, dependency, dependencyInterfacePath))
+        if(!TryResolveMaterialBindDependencyInterface(
+            normalizedMaterialBindIncludeRoot,
+            dependency,
+            dependencyInterfacePath,
+            scratchArena
+        ))
             return false;
         if(dependencyInterfacePath.empty())
             continue;
@@ -223,7 +232,8 @@ static bool ParseVariantField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
-    ShaderCook::CookString& outVariant
+    ShaderCook::CookString& outVariant,
+    ScratchArena& scratchArena
 ){
     auto& arena = outVariant.get_allocator().arena();
     outVariant.clear();
@@ -286,7 +296,7 @@ static bool ParseVariantField(
     }
 
     ShaderCook::CookString canonicalVariant{arena};
-    if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant)){
+    if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -1194,7 +1204,8 @@ static bool AppendMaterialBindGeneratedInstance(
 static bool BuildMaterialBindIncludeSourceImpl(
     ShaderCook::CookArena& arena,
     const MaterialBindEntry& entry,
-    CookString& outSource
+    CookString& outSource,
+    ScratchArena& scratchArena
 ){
     outSource.clear();
 
@@ -1208,11 +1219,11 @@ static bool BuildMaterialBindIncludeSourceImpl(
     if(!BuildMaterialBindTypedLayout(
         entry,
         Name(AStringView(entry.virtualPath)),
-        layout
+        layout,
+        scratchArena
     ))
         return false;
 
-    ScratchArena scratchArena;
     ScratchHashSet<ScratchString> generatedSymbols{
         0,
         Hasher<ScratchString>(),
@@ -1330,13 +1341,14 @@ static bool EmitMaterialBindIncludes(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    Path& outIncludeRoot
+    Path& outIncludeRoot,
+    ScratchArena& scratchArena
 ){
     outIncludeRoot.clear();
     if(materialBindEntries.empty())
         return true;
 
-    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
+    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
     if(!PrepareMaterialBindIncludeRoot(outIncludeRoot))
         return false;
 
@@ -1355,7 +1367,7 @@ static bool EmitMaterialBindIncludes(
         }
 
         CookString generatedSource{arena};
-        if(!BuildMaterialBindIncludeSourceImpl(arena, bindEntry, generatedSource))
+        if(!BuildMaterialBindIncludeSourceImpl(arena, bindEntry, generatedSource, scratchArena))
             return false;
 
         const Path outputPath = outIncludeRoot / Path(includePath.c_str());
@@ -1382,9 +1394,9 @@ static bool EmitMaterialBindIncludes(
 
 static bool ValidateMaterialCookInterfaces(
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    ShaderCook::CookVector<MaterialCookEntry>& materialEntries
+    ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    ScratchArena& scratchArena
 ){
-    Core::Alloc::ScratchArena<> scratchArena;
     MaterialBindInterfaceLookup materialBindLookup(
         0,
         Hasher<Name>(),
@@ -1425,7 +1437,8 @@ static bool ValidateMaterialCookInterfaces(
             materialEntry.materialInterface,
             *bindEntry,
             layoutCache,
-            layout
+            layout,
+            scratchArena
         ))
             return false;
         if(!layout){
@@ -1461,7 +1474,8 @@ static bool ParseMaterialMeta(
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MaterialCookEntry& outEntry
+    MaterialCookEntry& outEntry,
+    ScratchArena& scratchArena
 ){
     outEntry.reset();
 
@@ -1477,7 +1491,8 @@ static bool ParseMaterialMeta(
         nwbFilePath,
         asset,
         "Material",
-        outEntry.virtualPath
+        outEntry.virtualPath,
+        scratchArena
     ))
         return false;
     if(!Core::Assets::ValidateMetadataAssetFields(
@@ -1495,7 +1510,14 @@ static bool ParseMaterialMeta(
     ))
         return false;
 
-    if(!ParseVariantField(shaderCook, nwbFilePath, asset, MaterialAssetFields::s_ShaderVariant, outEntry.shaderVariant))
+    if(!ParseVariantField(
+        shaderCook,
+        nwbFilePath,
+        asset,
+        MaterialAssetFields::s_ShaderVariant,
+        outEntry.shaderVariant,
+        scratchArena
+    ))
         return false;
     if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface))
         return false;
@@ -1525,24 +1547,35 @@ bool ParseMaterialCookMetadata(
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MaterialCookEntry& outEntry
+    MaterialCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return __hidden_material_asset::ParseMaterialMeta(shaderCook, assetRoot, virtualRoot, nwbFilePath, doc, outEntry);
+    return __hidden_material_asset::ParseMaterialMeta(
+        shaderCook,
+        assetRoot,
+        virtualRoot,
+        nwbFilePath,
+        doc,
+        outEntry,
+        scratchArena
+    );
 }
 
 bool ValidateMaterialCookInterfaces(
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    ShaderCook::CookVector<MaterialCookEntry>& materialEntries
+    ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return __hidden_material_asset::ValidateMaterialCookInterfaces(materialBindEntries, materialEntries);
+    return __hidden_material_asset::ValidateMaterialCookInterfaces(materialBindEntries, materialEntries, scratchArena);
 }
 
 bool BuildMaterialBindIncludeSource(
     ShaderCook::CookArena& arena,
     const MaterialBindEntry& entry,
-    ShaderCook::CookString& outSource
+    ShaderCook::CookString& outSource,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
-    return __hidden_material_asset::BuildMaterialBindIncludeSourceImpl(arena, entry, outSource);
+    return __hidden_material_asset::BuildMaterialBindIncludeSourceImpl(arena, entry, outSource, scratchArena);
 }
 
 bool EmitMaterialBindIncludes(
@@ -1550,14 +1583,16 @@ bool EmitMaterialBindIncludes(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    Path& outIncludeRoot
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     return __hidden_material_asset::EmitMaterialBindIncludes(
         arena,
         cacheDirectory,
         configurationSafeName,
         materialBindEntries,
-        outIncludeRoot
+        outIncludeRoot,
+        scratchArena
     );
 }
 
@@ -1566,14 +1601,16 @@ bool ResolveMaterialBindDependencyInterface(
     const Path& materialBindIncludeRoot,
     const ShaderCook::CookVector<Path>& dependencies,
     ShaderCook::CookString& outInterfacePath,
-    Name& outInterfaceName
+    Name& outInterfaceName,
+    Core::Alloc::ScratchArena<>& scratchArena
 ){
     return __hidden_material_asset::ResolveMaterialBindDependencyInterface(
         shaderName,
         materialBindIncludeRoot,
         dependencies,
         outInterfacePath,
-        outInterfaceName
+        outInterfaceName,
+        scratchArena
     );
 }
 

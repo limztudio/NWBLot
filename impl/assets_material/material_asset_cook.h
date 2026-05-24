@@ -17,6 +17,8 @@
 #include "material_asset.h"
 #include "material_bind.h"
 
+#include <core/alloc/scratch.h>
+
 #include <impl/assets_shader/shader_cook.h>
 
 #include <core/metascript/parser.h>
@@ -81,30 +83,35 @@ struct MaterialCookEntry{
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MaterialCookEntry& outEntry
+    MaterialCookEntry& outEntry,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool ValidateMaterialCookInterfaces(
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    ShaderCook::CookVector<MaterialCookEntry>& materialEntries
+    ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool BuildMaterialBindIncludeSource(
     ShaderCook::CookArena& arena,
     const MaterialBindEntry& entry,
-    ShaderCook::CookString& outSource
+    ShaderCook::CookString& outSource,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool EmitMaterialBindIncludes(
     ShaderCook::CookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    Path& outIncludeRoot
+    Path& outIncludeRoot,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool ResolveMaterialBindDependencyInterface(
     AStringView shaderName,
     const Path& materialBindIncludeRoot,
     const ShaderCook::CookVector<Path>& dependencies,
     ShaderCook::CookString& outInterfacePath,
-    Name& outInterfaceName
+    Name& outInterfaceName,
+    Core::Alloc::ScratchArena<>& scratchArena
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);
 

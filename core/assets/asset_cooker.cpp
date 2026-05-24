@@ -25,11 +25,14 @@ namespace __hidden_asset_cooker{
 
 
 template<typename CookerMap>
-static AssetString DescribeAvailableCookers(AssetArena& arena, const CookerMap& cookers){
+static AssetString DescribeAvailableCookers(
+    AssetArena& arena,
+    const CookerMap& cookers,
+    Alloc::ScratchArena<>& scratchArena
+){
     if(cookers.empty())
         return AssetString("(none)", arena);
 
-    Alloc::ScratchArena<> scratchArena;
     Vector<ACompactString, Alloc::ScratchArena<>> types{scratchArena};
     types.reserve(cookers.size());
     for(const auto& [_, cooker] : cookers)
@@ -127,17 +130,19 @@ bool AssetCookerRegistry::cook(const AssetCookOptions& options)const{
             return onlyCooker.cook(resolvedOptions);
         }
 
+        Alloc::ScratchArena<> scratchArena;
         NWB_LOGGER_ERROR(NWB_TEXT("Missing --asset-type. Available types: {}")
-            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_arena, m_assetCookers))
+            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_arena, m_assetCookers, scratchArena))
         );
         return false;
     }
 
     const auto found = m_assetCookers.find(requestedType);
     if(found == m_assetCookers.end()){
+        Alloc::ScratchArena<> scratchArena;
         NWB_LOGGER_ERROR(NWB_TEXT("Unsupported --asset-type '{}'. Available types: {}")
             , StringConvert(options.assetType.c_str())
-            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_arena, m_assetCookers))
+            , StringConvert(__hidden_asset_cooker::DescribeAvailableCookers(m_arena, m_assetCookers, scratchArena))
         );
         return false;
     }

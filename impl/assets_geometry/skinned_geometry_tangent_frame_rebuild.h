@@ -83,8 +83,9 @@ template<typename VertexVectorT, typename IndexVectorT>
 [[nodiscard]] inline bool Rebuild(
     VertexVectorT& vertices,
     const IndexVectorT& indices,
-    Core::Geometry::TangentFrameRebuildResult* outResult = nullptr){
-    Core::Alloc::ScratchArena<> scratchArena;
+    Core::Geometry::TangentFrameRebuildResult* outResult,
+    Core::Alloc::ScratchArena<>& scratchArena
+){
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
     Vector<RebuildVertex, Core::Alloc::ScratchArena<>> rebuildVertices{ scratchArena };
     BuildInput(vertices, rebuildVertices);

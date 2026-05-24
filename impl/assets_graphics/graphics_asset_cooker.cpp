@@ -241,8 +241,12 @@ static bool AppendUniquePropertyAssetEntry(EntryT& entry, PathHashSetT& seenPath
 
 using StagedVolumePaths = StagedDirectoryPaths;
 
-static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName, const AStringView configurationSafeName){
-    ScratchArena scratchArena;
+static StagedVolumePaths BuildStagedVolumePaths(
+    const Path& outputDirectory,
+    const AStringView volumeName,
+    const AStringView configurationSafeName,
+    ScratchArena& scratchArena
+){
     const ScratchString volumeSafeName = BuildCanonicalSafeCacheName(scratchArena, volumeName);
     ScratchString stageToken{scratchArena};
     stageToken.reserve(volumeSafeName.size() + 1u + configurationSafeName.size() + 1u + 16u);
@@ -254,7 +258,11 @@ static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, con
     return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
 }
 
-static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, ResolvedCookPaths& outPaths){
+static bool ResolveCookPaths(
+    const GraphicsCookEnvironment& environment,
+    ResolvedCookPaths& outPaths,
+    ScratchArena& scratchArena
+){
     ErrorCode errorCode;
 
     outPaths.repoRoot.clear();
@@ -281,7 +289,6 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
     outPaths.assetRoots.reserve(environment.assetRoots.size());
     for(const Path& assetRoot : environment.assetRoots){
         Path resolvedAssetRoot;
-        ScratchArena scratchArena;
         const ScratchString assetRootText = PathToString(scratchArena, assetRoot);
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, assetRootText, resolvedAssetRoot, errorCode)){
@@ -304,7 +311,6 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
 
     errorCode.clear();
     {
-        ScratchArena scratchArena;
         const ScratchString outputDirectoryText = PathToString(scratchArena, environment.outputDirectory);
         if(!ResolveAbsolutePath(outPaths.repoRoot, outputDirectoryText, outPaths.outputDirectory, errorCode)){
             if(errorCode){
@@ -329,7 +335,6 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
     ;
     errorCode.clear();
     {
-        ScratchArena scratchArena;
         const ScratchString requestedCacheDirectoryText = PathToString(scratchArena, requestedCacheDirectory);
         if(!ResolveAbsolutePath(outPaths.repoRoot, requestedCacheDirectoryText, outPaths.cacheDirectory, errorCode)){
             if(errorCode){
@@ -362,10 +367,10 @@ static bool ResolveCookPaths(const GraphicsCookEnvironment& environment, Resolve
 static bool DiscoverFilesWithExtension(
     const ShaderCook::CookVector<Path>& assetRoots,
     const AStringView expectedExtension,
-    DiscoveredNwbFileVector& outFiles
+    DiscoveredNwbFileVector& outFiles,
+    ScratchArena& scratchArena
 ){
     ShaderCook::CookArena& cookArena = outFiles.get_allocator().arena();
-    ScratchArena scratchArena;
     ErrorCode errorCode;
     HashSet<u64, Hasher<u64>, EqualTo<u64>, ScratchArena> seenPathHashes(
         0,
@@ -378,7 +383,7 @@ static bool DiscoverFilesWithExtension(
 
     for(const Path& assetRoot : assetRoots){
         ACompactString virtualRoot;
-        if(!Core::Assets::BuildAssetRootVirtualRoot(assetRoot, virtualRoot))
+        if(!Core::Assets::BuildAssetRootVirtualRoot(assetRoot, virtualRoot, scratchArena))
             return false;
 
         errorCode.clear();
@@ -445,12 +450,20 @@ static bool DiscoverFilesWithExtension(
     return true;
 }
 
-static bool DiscoverNwbFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredNwbFileVector& outNwbFiles){
-    return DiscoverFilesWithExtension(assetRoots, Core::Assets::s_NwbExtension, outNwbFiles);
+static bool DiscoverNwbFiles(
+    const ShaderCook::CookVector<Path>& assetRoots,
+    DiscoveredNwbFileVector& outNwbFiles,
+    ScratchArena& scratchArena
+){
+    return DiscoverFilesWithExtension(assetRoots, Core::Assets::s_NwbExtension, outNwbFiles, scratchArena);
 }
 
-static bool DiscoverBindFiles(const ShaderCook::CookVector<Path>& assetRoots, DiscoveredBindFileVector& outBindFiles){
-    return DiscoverFilesWithExtension(assetRoots, MaterialBindNames::SourceExtensionText(), outBindFiles);
+static bool DiscoverBindFiles(
+    const ShaderCook::CookVector<Path>& assetRoots,
+    DiscoveredBindFileVector& outBindFiles,
+    ScratchArena& scratchArena
+){
+    return DiscoverFilesWithExtension(assetRoots, MaterialBindNames::SourceExtensionText(), outBindFiles, scratchArena);
 }
 
 static bool AppendIncludeDirectory(
@@ -493,9 +506,9 @@ static bool BuildIncludeDirectories(
     const AssetRootVector& assetRoots,
     const Path& materialBindIncludeRoot,
     const ShaderCook::ShaderEntry& entry,
-    ShaderCook::CookVector<Path>& outIncludeDirectories
+    ShaderCook::CookVector<Path>& outIncludeDirectories,
+    ScratchArena& scratchArena
 ){
-    ScratchArena scratchArena;
     ErrorCode errorCode;
     IncludeDirectoryScratchSet seenIncludeDirectories(
         0,
@@ -521,8 +534,8 @@ static bool BuildIncludeDirectories(
 
     for(const CookString& includeRoot : entry.includeRoots){
         Path includeDirectory;
-        if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory)){
-            if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot)){
+        if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory, scratchArena)){
+            if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
                 NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve virtual include root '{}' for entry '{}'")
                     , StringConvert(includeRoot)
                     , StringConvert(entry.name)
@@ -626,7 +639,8 @@ static bool ValidateMaterialVariant(
     ShaderCook& shaderCook,
     const MaterialCookEntry& materialEntry,
     const PreparedShaderEntry& preparedShaderEntry,
-    const Name& stageName
+    const Name& stageName,
+    ScratchArena& scratchArena
 ){
     if(materialEntry.shaderVariant.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has empty shader_variant")
@@ -638,15 +652,15 @@ static bool ValidateMaterialVariant(
 
     ShaderCook::CookArena& arena = materialEntry.shaderVariant.get_allocator().arena();
     const CookString contextLabel = StringFormat(arena, "{} [{}]", materialEntry.virtualPath.c_str(), stageName.c_str());
-    return shaderCook.validateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues);
+    return shaderCook.validateVariantSignature(contextLabel, requestedVariant, preparedShaderEntry.entry.defineValues, scratchArena);
 }
 
 static bool ValidateMaterials(
     ShaderCook& shaderCook,
     const Vector<PreparedShaderEntry, ShaderCook::CookArena>& preparedEntries,
-    const MaterialCookEntryVector& materialEntries
+    const MaterialCookEntryVector& materialEntries,
+    ScratchArena& scratchArena
 ){
-    ScratchArena scratchArena;
     HashMap<
         PreparedShaderKey,
         const PreparedShaderEntry*,
@@ -692,7 +706,7 @@ static bool ValidateMaterials(
                 return false;
             }
 
-            if(!ValidateMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName))
+            if(!ValidateMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName, scratchArena))
                 return false;
 
             if(shaderType == Core::ShaderType::MeshStage){
@@ -746,9 +760,9 @@ static VariantCachePaths BuildVariantCachePaths(
     const AStringView configurationSafeName,
     const AStringView shaderSafeName,
     const AStringView stageSafeName,
-    const AStringView variantName
+    const AStringView variantName,
+    ScratchArena& scratchArena
 ){
-    ScratchArena scratchArena;
     ScratchString bytecodeFileName{scratchArena};
     bytecodeFileName.reserve(shaderSafeName.size() + 2u + stageSafeName.size() + 2u + 16u + 4u);
     bytecodeFileName += shaderSafeName;
@@ -775,10 +789,10 @@ static bool GetVariantBytecode(
     const VariantCachePaths& cachePaths,
     const AStringView sourceChecksumHex,
     ShaderCook& shaderCook,
-    Core::GraphicsBytes& outBytecode
+    Core::GraphicsBytes& outBytecode,
+    ScratchArena& scratchArena
 ){
     ErrorCode errorCode;
-    ScratchArena scratchArena;
 
     outBytecode.clear();
 
@@ -950,7 +964,8 @@ static bool ParseAssetMetadata(
     ShaderCook& shaderCook,
     const DiscoveredNwbFileVector& nwbFiles,
     const DiscoveredBindFileVector& bindFiles,
-    ParsedAssetMetadata& outMetadata
+    ParsedAssetMetadata& outMetadata,
+    ScratchArena& scratchArena
 ){
     outMetadata.includeMetadata.reserve(nwbFiles.size());
     outMetadata.shaderEntries.reserve(nwbFiles.size());
@@ -970,7 +985,6 @@ static bool ParseAssetMetadata(
         EqualTo<PreparedShaderKey>(),
         cookArena
     };
-    ScratchArena scratchArena;
     HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> seenPropertyAssetPathHashes(
         0,
         Hasher<NameHash>(),
@@ -991,7 +1005,7 @@ static bool ParseAssetMetadata(
         const Name assetType = ToName(rawAssetTypeText);
         if(assetType == Shader::AssetTypeName()){
             ShaderCook::ShaderEntry shaderEntry(cookArena);
-            if(!shaderCook.parseShaderMeta(nwbFile, doc, shaderEntry))
+            if(!shaderCook.parseShaderMeta(nwbFile, doc, shaderEntry, scratchArena))
                 return false;
 
             if(!Core::Assets::BuildDerivedAssetVirtualPath(
@@ -1022,7 +1036,7 @@ static bool ParseAssetMetadata(
 
         if(assetType == IncludeAssetTypeName()){
             ShaderCook::IncludeEntry includeEntry(cookArena);
-            if(!shaderCook.parseIncludeMeta(nwbFile, doc, includeEntry))
+            if(!shaderCook.parseIncludeMeta(nwbFile, doc, includeEntry, scratchArena))
                 return false;
 
             if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
@@ -1059,7 +1073,8 @@ static bool ParseAssetMetadata(
                 discoveredNwbFile.virtualRoot.view(),
                 discoveredNwbFile.filePath,
                 doc,
-                materialEntry
+                materialEntry,
+                scratchArena
             ))
                 return false;
 
@@ -1070,7 +1085,14 @@ static bool ParseAssetMetadata(
 
         if(assetType == Geometry::AssetTypeName() && MetadataDeclaresSkinnedGeometry(doc)){
             SkinnedGeometryCookEntry geometryEntry(cookArena);
-            if(!ParseSkinnedGeometryCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, geometryEntry))
+            if(!ParseSkinnedGeometryCookMetadata(
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                discoveredNwbFile.filePath,
+                doc,
+                geometryEntry,
+                scratchArena
+            ))
                 return false;
 
             if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.skinnedGeometryEntries))
@@ -1080,7 +1102,14 @@ static bool ParseAssetMetadata(
 
         if(assetType == Geometry::AssetTypeName()){
             GeometryCookEntry geometryEntry(cookArena);
-            if(!ParseGeometryCookMetadata(discoveredNwbFile.assetRoot, discoveredNwbFile.virtualRoot.view(), discoveredNwbFile.filePath, doc, geometryEntry))
+            if(!ParseGeometryCookMetadata(
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                discoveredNwbFile.filePath,
+                doc,
+                geometryEntry,
+                scratchArena
+            ))
                 return false;
 
             if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.geometryEntries))
@@ -1097,7 +1126,7 @@ static bool ParseAssetMetadata(
 
     for(const DiscoveredNwbFile& discoveredBindFile : bindFiles){
         MaterialBindEntry bindEntry(cookArena);
-        if(!ParseMaterialBindSource(discoveredBindFile.filePath, bindEntry))
+        if(!ParseMaterialBindSource(discoveredBindFile.filePath, bindEntry, scratchArena))
             return false;
 
         if(!Core::Assets::BuildDerivedAssetVirtualPath(
@@ -1135,7 +1164,8 @@ static bool PrepareShaderEntriesForCook(
     const Path& materialBindIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
-    PreparedShaderPlan& outPreparedPlan
+    PreparedShaderPlan& outPreparedPlan,
+    ScratchArena& scratchArena
 ){
     ErrorCode errorCode;
 
@@ -1205,9 +1235,21 @@ static bool PrepareShaderEntriesForCook(
             return false;
         }
 
-        if(!BuildIncludeDirectories(resolvedPaths.repoRoot, resolvedPaths.assetRoots, materialBindIncludeRoot, preparedEntry.entry, preparedEntry.includeDirectories))
+        if(!BuildIncludeDirectories(
+            resolvedPaths.repoRoot,
+            resolvedPaths.assetRoots,
+            materialBindIncludeRoot,
+            preparedEntry.entry,
+            preparedEntry.includeDirectories,
+            scratchArena
+        ))
             return false;
-        if(!shaderCook.gatherShaderDependencies(preparedEntry.sourcePath, preparedEntry.includeDirectories, preparedEntry.dependencies))
+        if(!shaderCook.gatherShaderDependencies(
+            preparedEntry.sourcePath,
+            preparedEntry.includeDirectories,
+            preparedEntry.dependencies,
+            scratchArena
+        ))
             return false;
 
         shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
@@ -1220,7 +1262,8 @@ static bool PrepareShaderEntriesForCook(
             materialBindIncludeRoot,
             preparedEntry.dependencies,
             materialTypedBindingInterfaceText,
-            preparedEntry.materialTypedBindingInterface
+            preparedEntry.materialTypedBindingInterface,
+            scratchArena
         ))
             return false;
         preparedEntry.usesMaterialTypedBinding =
@@ -1230,7 +1273,7 @@ static bool PrepareShaderEntriesForCook(
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !EnableMaterialTypedBinding(preparedEntry.entry))
             return false;
-        if(!shaderCook.computeDependencyChecksum(preparedEntry.dependencies, preparedEntry.dependencyChecksum))
+        if(!shaderCook.computeDependencyChecksum(preparedEntry.dependencies, preparedEntry.dependencyChecksum, scratchArena))
             return false;
         if(!CountShaderVariants(preparedEntry.entry, preparedEntry.variantCount))
             return false;
@@ -1279,7 +1322,8 @@ static bool AppendPreparedShadersToVolume(
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
     const usize shaderRecordCount,
-    Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords
+    Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords,
+    ScratchArena& scratchArena
 ){
     Core::GraphicsBytes cookedBytecode{cookArena};
     ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
@@ -1301,7 +1345,7 @@ static bool AppendPreparedShadersToVolume(
         const CookString shaderSafeName = BuildSafeCacheName(entry.name);
         const CookString stageSafeName = BuildSafeCacheName(cookArena, entry.archiveStage.view());
 
-        if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations)){
+        if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations, scratchArena)){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: variant combination count exceeds runtime limits for entry '{}'")
                 , StringConvert(entry.name)
             );
@@ -1311,10 +1355,16 @@ static bool AppendPreparedShadersToVolume(
             defineCombinations.push_back(ShaderCook::DefineCombo(cookArena));
 
         for(const ShaderCook::DefineCombo& defineCombo : defineCombinations){
-            const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo);
+            const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
             u64 sourceChecksum = 0;
-            if(!shaderCook.computeSourceChecksum(entry, generatedVariantName, preparedEntry.dependencyChecksum, sourceChecksum))
+            if(!shaderCook.computeSourceChecksum(
+                entry,
+                generatedVariantName,
+                preparedEntry.dependencyChecksum,
+                sourceChecksum,
+                scratchArena
+            ))
                 return false;
             const CookString sourceChecksumHex = FormatHex64(cookArena, sourceChecksum);
 
@@ -1323,7 +1373,8 @@ static bool AppendPreparedShadersToVolume(
                 configurationSafeName,
                 shaderSafeName,
                 stageSafeName,
-                generatedVariantName
+                generatedVariantName,
+                scratchArena
             );
             if(!GetVariantBytecode(
                 entry,
@@ -1334,7 +1385,8 @@ static bool AppendPreparedShadersToVolume(
                 cachePaths,
                 sourceChecksumHex,
                 shaderCook,
-                cookedBytecode
+                cookedBytecode,
+                scratchArena
             ))
                 return false;
 
@@ -1565,24 +1617,25 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     outResult = {};
 
     ShaderCook shaderCook(m_arena);
+    Core::Alloc::ScratchArena<> scratchArena;
 
     __hidden_graphics_asset_cooker::ResolvedCookPaths resolvedPaths(m_arena);
-    if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths))
+    if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths, scratchArena))
         return false;
 
     // discover cook input files from asset roots
     __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{ m_arena };
-    if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles))
+    if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles, scratchArena))
         return false;
 
     __hidden_graphics_asset_cooker::DiscoveredBindFileVector bindFiles{ m_arena };
-    if(!__hidden_graphics_asset_cooker::DiscoverBindFiles(resolvedPaths.assetRoots, bindFiles))
+    if(!__hidden_graphics_asset_cooker::DiscoverBindFiles(resolvedPaths.assetRoots, bindFiles, scratchArena))
         return false;
 
     __hidden_graphics_asset_cooker::ParsedAssetMetadata parsedMetadata(m_arena);
-    if(!__hidden_graphics_asset_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, bindFiles, parsedMetadata))
+    if(!__hidden_graphics_asset_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, bindFiles, parsedMetadata, scratchArena))
         return false;
-    if(!ValidateMaterialCookInterfaces(parsedMetadata.materialBindEntries, parsedMetadata.materialEntries))
+    if(!ValidateMaterialCookInterfaces(parsedMetadata.materialBindEntries, parsedMetadata.materialEntries, scratchArena))
         return false;
 
     __hidden_graphics_asset_cooker::CookString configurationSafeName = BuildCanonicalSafeCacheName(m_arena, environment.configuration.view());
@@ -1595,7 +1648,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         resolvedPaths.cacheDirectory,
         configurationSafeName,
         parsedMetadata.materialBindEntries,
-        materialBindIncludeRoot
+        materialBindIncludeRoot,
+        scratchArena
     ))
         return false;
 
@@ -1607,7 +1661,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         materialBindIncludeRoot,
         parsedMetadata.includeMetadata,
         parsedMetadata.shaderEntries,
-        preparedPlan
+        preparedPlan,
+        scratchArena
     ))
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
@@ -1619,7 +1674,12 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         preparedPlan.plannedFileCount
     ))
         return false;
-    if(!__hidden_graphics_asset_cooker::ValidateMaterials(shaderCook, preparedPlan.preparedEntries, parsedMetadata.materialEntries))
+    if(!__hidden_graphics_asset_cooker::ValidateMaterials(
+        shaderCook,
+        preparedPlan.preparedEntries,
+        parsedMetadata.materialEntries,
+        scratchArena
+    ))
         return false;
 
     Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{ m_arena };
@@ -1640,7 +1700,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     const __hidden_graphics_asset_cooker::StagedVolumePaths stagedVolumePaths = __hidden_graphics_asset_cooker::BuildStagedVolumePaths(
         resolvedPaths.outputDirectory,
         volumeConfig.volumeName,
-        configurationSafeName
+        configurationSafeName,
+        scratchArena
     );
     if(!Core::Filesystem::EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_graphics_asset_cooker::s_CookerLogPrefix, "stage directory"))
         return false;
@@ -1666,7 +1727,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             volumeSession,
             seenVirtualPathHashes,
             shaderIndexRecordCount,
-            shaderIndexRecords
+            shaderIndexRecords,
+            scratchArena
         ))
             return false;
 

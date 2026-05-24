@@ -464,6 +464,7 @@ struct VulkanContext{
         bool NV_device_diagnostic_checkpoints = false;
         bool EXT_mesh_shader = false;
         bool KHR_fragment_shading_rate = false;
+        bool EXT_ray_tracing_invocation_reorder = false;
         bool NV_ray_tracing_invocation_reorder = false;
         bool NV_ray_tracing_linear_swept_spheres = false;
     } extensions;

@@ -100,6 +100,7 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceOpacityMicromapFeaturesEXT opacityMicromap = MakeVkFeatureStruct<VkPhysicalDeviceOpacityMicromapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT);
     VkPhysicalDeviceClusterAccelerationStructureFeaturesNV clusterAccelerationStructure = MakeVkFeatureStruct<VkPhysicalDeviceClusterAccelerationStructureFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_FEATURES_NV);
     VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV rayTracingInvocationReorder = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV);
+    VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT rayTracingInvocationReorderExt = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT);
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheres = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV);
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
@@ -122,6 +123,7 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
     features.clusterAccelerationStructure.clusterAccelerationStructure = VK_TRUE;
 
     features.rayTracingInvocationReorder.rayTracingInvocationReorder = VK_TRUE;
+    features.rayTracingInvocationReorderExt.rayTracingInvocationReorder = VK_TRUE;
 
     features.rayTracingLinearSweptSpheres.spheres = VK_FALSE;
     features.rayTracingLinearSweptSpheres.linearSweptSpheres = VK_FALSE;
@@ -147,6 +149,7 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     case DeviceExtensionFeature::OpacityMicromap: return &features.opacityMicromap;
     case DeviceExtensionFeature::ClusterAccelerationStructure: return &features.clusterAccelerationStructure;
     case DeviceExtensionFeature::RayTracingInvocationReorder: return &features.rayTracingInvocationReorder;
+    case DeviceExtensionFeature::RayTracingInvocationReorderExt: return &features.rayTracingInvocationReorderExt;
     case DeviceExtensionFeature::RayTracingLinearSweptSpheres: return &features.rayTracingLinearSweptSpheres;
     case DeviceExtensionFeature::MeshShader: return &features.meshShader;
     case DeviceExtensionFeature::FragmentShadingRate: return &features.fragmentShadingRate;
@@ -267,6 +270,8 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
         return SupportsRequestedValue(requested.clusterAccelerationStructure.clusterAccelerationStructure, supported.clusterAccelerationStructure.clusterAccelerationStructure);
     case DeviceExtensionFeature::RayTracingInvocationReorder:
         return SupportsRequestedValue(requested.rayTracingInvocationReorder.rayTracingInvocationReorder, supported.rayTracingInvocationReorder.rayTracingInvocationReorder);
+    case DeviceExtensionFeature::RayTracingInvocationReorderExt:
+        return SupportsRequestedValue(requested.rayTracingInvocationReorderExt.rayTracingInvocationReorder, supported.rayTracingInvocationReorderExt.rayTracingInvocationReorder);
     case DeviceExtensionFeature::RayTracingLinearSweptSpheres:
         return
             supported.rayTracingLinearSweptSpheres.spheres == VK_TRUE
@@ -496,10 +501,15 @@ void BackendContext::initDefaultExtensions(){
     for(const auto& e : s_EnabledDeviceExts)
         m_enabledExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
-    for(const auto* name : s_OptionalInstanceExts)
-        m_optionalExtensions.instance.emplace(name, m_arena);
     for(const auto& e : s_OptionalDeviceExts)
         m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
+
+    if(m_deviceParams.enableDebugRuntime){
+        for(const auto* name : s_DebugInstanceExts)
+            m_optionalExtensions.instance.emplace(name, m_arena);
+        for(const auto& e : s_DebugDeviceExts)
+            m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
+    }
 
     for(const auto& e : s_RayTracingExts)
         m_rayTracingExtensions.emplace(GraphicsString(e.name, m_arena), e.feature);
@@ -1238,11 +1248,13 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedCoreFeatures.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat")
         || !requireFeature(supportedCoreFeatures.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat")
         || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
+        || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
         || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
         || !requireFeature(supportedVulkan12Features.runtimeDescriptorArray, "runtimeDescriptorArray")
         || !requireFeature(supportedVulkan12Features.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound")
         || !requireFeature(supportedVulkan12Features.descriptorBindingVariableDescriptorCount, "descriptorBindingVariableDescriptorCount")
         || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
+        || !requireFeature(supportedVulkan12Features.shaderFloat16, "shaderFloat16")
         || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
         || !requireFeature(supportedVulkan12Features.shaderSubgroupExtendedTypes, "shaderSubgroupExtendedTypes")
         || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
@@ -1335,6 +1347,7 @@ bool BackendContext::createVulkanDevice(){
 
     VkPhysicalDeviceVulkan11Features vulkan11features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
     vulkan11features.storageBuffer16BitAccess = supportedVulkan11Features.storageBuffer16BitAccess;
+    vulkan11features.shaderDrawParameters = supportedVulkan11Features.shaderDrawParameters;
     vulkan11features.pNext = pNext;
 
     VkPhysicalDeviceVulkan12Features vulkan12features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
@@ -1343,6 +1356,7 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.descriptorBindingPartiallyBound = supportedVulkan12Features.descriptorBindingPartiallyBound;
     vulkan12features.descriptorBindingVariableDescriptorCount = supportedVulkan12Features.descriptorBindingVariableDescriptorCount;
     vulkan12features.timelineSemaphore = supportedVulkan12Features.timelineSemaphore;
+    vulkan12features.shaderFloat16 = supportedVulkan12Features.shaderFloat16;
     vulkan12features.shaderSampledImageArrayNonUniformIndexing = supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing;
     vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
@@ -1421,6 +1435,10 @@ bool BackendContext::createVulkanDevice(){
            << " meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
            << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
+           << " shaderExecutionReordering=" << VulkanDetail::BoolToString(
+                isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
+                || isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
+            )
            << " spheres=" << VulkanDetail::BoolToString(m_rayTracingSpheresSupported)
            << " linearSweptSpheres=" << VulkanDetail::BoolToString(m_rayTracingLinearSweptSpheresSupported)
            << " cooperativeVector=" << VulkanDetail::BoolToString(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE)
@@ -1799,7 +1817,7 @@ bool BackendContext::createDevice(){
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
     for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
-    if(m_deviceParams.enableAftermath)
+    if(m_deviceParams.enableDebugRuntime && m_deviceParams.enableAftermath)
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
@@ -1820,8 +1838,11 @@ bool BackendContext::createDevice(){
 
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
-    const bool aftermathCheckpointsEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
-    if(m_deviceParams.enableAftermath && !aftermathCheckpointsEnabled)
+    const bool aftermathCheckpointsEnabled =
+        m_deviceParams.enableDebugRuntime
+        && isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME)
+    ;
+    if(m_deviceParams.enableDebugRuntime && m_deviceParams.enableAftermath && !aftermathCheckpointsEnabled)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Aftermath marker checkpoints are disabled because VK_NV_device_diagnostic_checkpoints is unavailable."));
 
     DeviceDesc deviceDesc(m_allocator, m_threadPool);
@@ -1848,7 +1869,7 @@ bool BackendContext::createDevice(){
     deviceDesc.meshTaskShaderSupported = m_meshTaskShaderSupported;
     deviceDesc.rayTracingSpheresSupported = m_rayTracingSpheresSupported;
     deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
-    deviceDesc.aftermathEnabled = m_deviceParams.enableAftermath && aftermathCheckpointsEnabled;
+    deviceDesc.aftermathEnabled = m_deviceParams.enableDebugRuntime && m_deviceParams.enableAftermath && aftermathCheckpointsEnabled;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;

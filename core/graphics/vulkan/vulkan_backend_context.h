@@ -28,6 +28,7 @@ namespace DeviceExtensionFeature{
         OpacityMicromap,
         ClusterAccelerationStructure,
         RayTracingInvocationReorder,
+        RayTracingInvocationReorderExt,
         RayTracingLinearSweptSpheres,
         MeshShader,
         FragmentShadingRate,
@@ -74,7 +75,7 @@ private:
     static constexpr const char* s_EnabledInstanceExts[] = {
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
     };
-    static constexpr const char* s_OptionalInstanceExts[] = {
+    static constexpr const char* s_DebugInstanceExts[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
     };
 
@@ -83,7 +84,6 @@ private:
         { VK_KHR_MAINTENANCE1_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
     static constexpr ExtEntry s_OptionalDeviceExts[] = {
-        { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME, DeviceExtensionFeature::DescriptorHeap },
         { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -97,6 +97,9 @@ private:
         { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, DeviceExtensionFeature::MutableDescriptorType },
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
+    static constexpr ExtEntry s_DebugDeviceExts[] = {
+        { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
+    };
     static constexpr ExtEntry s_RayTracingExts[] = {
         { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::AccelerationStructure },
         { VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -104,6 +107,7 @@ private:
         { VK_KHR_RAY_QUERY_EXTENSION_NAME, DeviceExtensionFeature::RayQuery },
         { VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, DeviceExtensionFeature::RayTracingPipeline },
         { VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME, DeviceExtensionFeature::OpacityMicromap },
+        { VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME, DeviceExtensionFeature::RayTracingInvocationReorderExt },
         { VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::ClusterAccelerationStructure },
         { VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME, DeviceExtensionFeature::RayTracingInvocationReorder },
         { VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME, DeviceExtensionFeature::RayTracingLinearSweptSpheres },

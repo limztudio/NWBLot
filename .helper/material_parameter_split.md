@@ -182,8 +182,6 @@ Material interfaces can be authored as `.bind` files if the format is treated as
 The source shape should stay close to Slang so shader authors can read it naturally:
 
 ```text
-material_bind asset;
-
 [material_constant]
 struct NwbProjectBxdfSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]

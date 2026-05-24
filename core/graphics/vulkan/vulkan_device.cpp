@@ -296,6 +296,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.EXT_mesh_shader = true;
         else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_fragment_shading_rate = true;
+        else if(NWB_STRCMP(ext, VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_ray_tracing_invocation_reorder = true;
         else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
             m_context.extensions.NV_ray_tracing_invocation_reorder = true;
         else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) == 0)
@@ -781,7 +783,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::RayQuery:
         return m_context.extensions.KHR_ray_query;
     case Feature::ShaderExecutionReordering:
-        return m_context.extensions.NV_ray_tracing_invocation_reorder;
+        return m_context.extensions.EXT_ray_tracing_invocation_reorder || m_context.extensions.NV_ray_tracing_invocation_reorder;
     case Feature::Spheres:
         return
             m_context.extensions.NV_ray_tracing_linear_swept_spheres

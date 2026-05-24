@@ -282,10 +282,8 @@ template<typename Container, typename ValueContainer>
     usize cursor = inOutOffset;
     for(usize i = 0u; i < valueCount; ++i){
         ValueType value = {};
-        if(!ReadPOD(binary, cursor, value)){
-            outValues.clear();
-            return BinaryVectorPayloadFailure::SourceTruncated;
-        }
+        NWB_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
+        cursor += sizeof(ValueType);
         outValues.push_back(value);
     }
 
@@ -308,7 +306,7 @@ template<typename Container, typename ValueContainer>
     if(!BinaryDetail::CanAppendBytes(outBinary, byteCount))
         return BinaryVectorPayloadFailure::OutputOverflow;
 
-    BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, values.data(), byteCount);
+    BinaryDetail::AppendBytesUnchecked(outBinary, values.data(), byteCount);
     return BinaryVectorPayloadFailure::None;
 }
 

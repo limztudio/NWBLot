@@ -405,8 +405,8 @@ static bool ResolveIncludeFile(const AStringView includeName, const IncludeDirec
 // Slang dependency collection
 
 
-template <typename VisitedSet, typename ScratchArena>
-static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, ScratchArena& scratchArena){
+template <typename VisitedSet>
+static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, Alloc::ScratchArena& scratchArena){
     ErrorCode errorCode;
 
     Deque<Path, Alloc::ScratchArena> pending{scratchArena};
@@ -478,8 +478,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 // shader entry validation
 
 
-template <typename DefineMap, typename ScratchArena>
-static bool ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const DefineMap& defineValues, ScratchArena& scratchArena){
+template <typename DefineMap>
+static bool ValidateVariantSignature(const AStringView contextLabel, const AStringView variantSignature, const DefineMap& defineValues, Alloc::ScratchArena& scratchArena){
     if(variantSignature.empty())
         return true;
 

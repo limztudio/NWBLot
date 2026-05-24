@@ -567,15 +567,9 @@ static u64 EstimateRequiredMetadataBytes(const u64 fileCount){
     if(fileCount == 0)
         return s_DefaultMetadataSize;
 
-    u64 indexBytes = 0;
-    if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(Core::Filesystem::VolumeIndexEntryDisk)))
+    u64 totalBytes = 0;
+    if(!Core::Filesystem::ComputeVolumeMetadataRequirement(fileCount, totalBytes))
         return Limit<u64>::s_Max;
-    indexBytes = fileCount * static_cast<u64>(sizeof(Core::Filesystem::VolumeIndexEntryDisk));
-
-    u64 totalBytes = static_cast<u64>(sizeof(Core::Filesystem::VolumeHeaderDisk));
-    if(totalBytes > Limit<u64>::s_Max - indexBytes)
-        return Limit<u64>::s_Max;
-    totalBytes += indexBytes;
 
     constexpr u64 s_MetadataPaddingBytes = 4ull * 1024ull;
     if(totalBytes <= Limit<u64>::s_Max - s_MetadataPaddingBytes)

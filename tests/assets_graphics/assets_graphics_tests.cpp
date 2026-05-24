@@ -1609,7 +1609,7 @@ static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offs
 }
 
 static usize SkinnedGeometryHeaderCountOffset(const usize countIndex){
-    return (sizeof(u32) * 3u) + (sizeof(u64) * countIndex);
+    return (sizeof(u32) * 2u) + (sizeof(u64) * countIndex);
 }
 
 static bool FindMaterialBinaryTypedLayoutOffsets(
@@ -1622,7 +1622,7 @@ static bool FindMaterialBinaryTypedLayoutOffsets(
 
     usize cursor = 0u;
     u32 value32 = 0u;
-    if(!ReadPOD(binary, cursor, value32) || !ReadPOD(binary, cursor, value32))
+    if(!ReadPOD(binary, cursor, value32))
         return false;
 
     u32 shaderVariantByteCount = 0u;
@@ -1784,36 +1784,6 @@ static void CheckSkinnedSkinnedGeometryPayload(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.inverseBindMatrices()[expectedInverseBindMatrixIndex].rows[3].x == -0.25f);
 }
 
-template<typename CodecT, typename BuildAssetFnT>
-static void CheckCodecRejectsUnsupportedBinaryVersion(
-    TestContext& context,
-    BuildAssetFnT buildAsset,
-    const u32 unsupportedVersion
-){
-#if defined(NWB_FINAL)
-    TestArena testArena;
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    auto asset = buildAsset(testArena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, asset.validatePayload());
-
-    CodecT codec;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(asset, binary));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(binary, sizeof(u32), unsupportedVersion));
-
-    CheckCodecRejectsBinary(context, testArena, codec, asset.virtualPath(), binary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
-    const auto expectedError = StringFormat(logger.arena(), NWB_TEXT("unsupported version {}"), unsupportedVersion);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(expectedError.c_str()));
-#else
-    static_cast<void>(context);
-    static_cast<void>(buildAsset);
-    static_cast<void>(unsupportedVersion);
-#endif
-}
-
 static void TestGeometryCodecRoundTrip(TestContext& context){
     TestArena testArena;
     NWB::Impl::Geometry geometry = BuildMinimalGeometry(testArena);
@@ -1827,14 +1797,6 @@ static void TestGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.normals()[1]).z == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedGeometry.colors()[1]).y == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.indices()[2] == 2u);
-}
-
-static void TestGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
-    CheckCodecRejectsUnsupportedBinaryVersion<NWB::Impl::GeometryAssetCodec>(
-        context,
-        BuildMinimalGeometry,
-        0u
-    );
 }
 
 static void TestSkinnedGeometryCodecRoundTrip(TestContext& context){
@@ -1860,14 +1822,6 @@ static void TestMinimalSkinnedGeometryCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.geometryClass() == NWB::Core::Geometry::GeometryClass::Skinned);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skin().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedGeometry.skeletonJointCount() == 1u);
-}
-
-static void TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(TestContext& context){
-    CheckCodecRejectsUnsupportedBinaryVersion<NWB::Impl::SkinnedGeometryAssetCodec>(
-        context,
-        BuildMinimalSkinnedGeometry,
-        0u
-    );
 }
 
 static void TestSkinnedGeometryCodecRejectsMalformedCounts(TestContext& context){
@@ -3595,10 +3549,8 @@ static void TestFormatBlockDimensions(TestContext& context){
 NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& context){
     __hidden_assets_graphics_tests::TestVolumeSessionAcceptsScratchBytes(context);
     __hidden_assets_graphics_tests::TestGeometryCodecRoundTrip(context);
-    __hidden_assets_graphics_tests::TestGeometryCodecRejectsUnsupportedBinaryVersion(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRoundTrip(context);
     __hidden_assets_graphics_tests::TestMinimalSkinnedGeometryCodecRoundTrip(context);
-    __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsUnsupportedBinaryVersion(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
     __hidden_assets_graphics_tests::TestShaderArchiveVariantLookupIsExact(context);

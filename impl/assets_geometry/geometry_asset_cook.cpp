@@ -12,6 +12,7 @@
 
 #include "skinned_geometry_validation.h"
 #include "skinned_geometry_tangent_frame_rebuild.h"
+#include "geometry_asset_binary_payload.h"
 #include "geometry_binary_payload.h"
 
 #include <core/alloc/scratch.h>
@@ -1191,7 +1192,7 @@ bool GeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, header);
     const tchar* const serializeFailureContext = NWB_TEXT("GeometryAssetCodec::serialize");
     auto appendVector = [&](const auto& values, const tchar* label){
-        return GeometryBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
+        return GeometryAssetBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
     };
     if(!appendVector(geometry.positions(), NWB_TEXT("positions")))
         return false;

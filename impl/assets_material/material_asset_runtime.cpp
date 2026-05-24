@@ -274,16 +274,6 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    u32 version = 0;
-    if(!ReadPOD(binary, cursor, version)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing version"));
-        return false;
-    }
-    if(version != MaterialBinaryPayload::s_MaterialVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: unsupported version {}"), version);
-        return false;
-    }
-
     if(!ReadString(binary, cursor, m_shaderVariant)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shader variant"));
         return false;

@@ -103,6 +103,27 @@ static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 
+static constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
+
+struct VolumeHeaderDisk{
+    char magic[8];
+    u64 segmentSize;
+    u64 metadataBytes;
+    u64 fileCount;
+    u64 indexBytes;
+    u64 nextFreeOffset;
+};
+
+struct VolumeIndexEntryDisk{
+    NameHash hash;
+    u64 offset;
+    u64 size;
+};
+
+static_assert(sizeof(VolumeHeaderDisk) == 48, "VolumeHeaderDisk size mismatch");
+static_assert(sizeof(VolumeIndexEntryDisk) == 80, "VolumeIndexEntryDisk size mismatch");
+
+
 static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
     ACompactString detail;
     if(errorCode && detail.assign(errorCode.message()))
@@ -156,6 +177,25 @@ static bool AddNoOverflow(const u64 lhs, const u64 rhs, u64& out){
         return false;
     out = lhs + rhs;
     return true;
+}
+
+static bool ComputeVolumeIndexBytes(const u64 fileCount, u64& outIndexBytes){
+    outIndexBytes = 0;
+    if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk)))
+        return false;
+
+    outIndexBytes = fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
+    return true;
+}
+
+static bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes){
+    outMetadataBytes = 0;
+
+    u64 indexBytes = 0;
+    if(!ComputeVolumeIndexBytes(fileCount, indexBytes))
+        return false;
+
+    return AddNoOverflow(static_cast<u64>(sizeof(VolumeHeaderDisk)), indexBytes, outMetadataBytes);
 }
 
 static u64 DefaultMetadataBytes(const u64 segmentSize){
@@ -780,6 +820,13 @@ static bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes){
+    return __hidden_filesystem::ComputeVolumeMetadataRequirement(fileCount, outMetadataBytes);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files, VolumeBuildInfo& outBuildInfo){
     outBuildInfo = {};
 
@@ -909,7 +956,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             : desc.metadataSize
         ;
 
-        if(m_metadataBytes <= sizeof(VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
+        if(m_metadataBytes <= sizeof(__hidden_filesystem::VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
             __hidden_filesystem::LogFailure(
                 m_volumeName,
                 "mount",
@@ -1506,22 +1553,14 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
 }
 
 bool VolumeFileSystem::loadMetadataLocked(){
-    VolumeHeaderDisk header{};
+    __hidden_filesystem::VolumeHeaderDisk header{};
     if(!readBytesLocked(0, &header, sizeof(header))){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "failed to read metadata header");
         return false;
     }
 
-    if(NWB_MEMCMP(header.magic, s_VolumeMagic, sizeof(header.magic)) != 0){
+    if(NWB_MEMCMP(header.magic, __hidden_filesystem::s_VolumeMagic, sizeof(header.magic)) != 0){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "magic mismatch");
-        return false;
-    }
-    if(header.version != s_VolumeFormatVersion){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: format version {} is not supported (expected {})")
-            , StringConvert(m_volumeName)
-            , header.version
-            , s_VolumeFormatVersion
-        );
         return false;
     }
     if(header.segmentSize != m_segmentSize){
@@ -1565,12 +1604,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "index byte count exceeds runtime addressable range");
         return false;
     }
-    if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
+    u64 expectedIndexBytes = 0;
+    if(!__hidden_filesystem::ComputeVolumeIndexBytes(header.fileCount, expectedIndexBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "file count overflows index entry byte computation");
         return false;
     }
 
-    const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
     if(header.indexBytes != expectedIndexBytes){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}")
             , StringConvert(m_volumeName)
@@ -1595,12 +1634,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
     loadedFiles.reserve(static_cast<usize>(header.fileCount));
     u64 cursor = 0;
     for(u64 i = 0; i < header.fileCount; ++i){
-        if(header.indexBytes - cursor < sizeof(VolumeIndexEntryDisk)){
+        if(header.indexBytes - cursor < sizeof(__hidden_filesystem::VolumeIndexEntryDisk)){
             __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "truncated metadata index entry");
             return false;
         }
 
-        VolumeIndexEntryDisk entry{};
+        __hidden_filesystem::VolumeIndexEntryDisk entry{};
         NWB_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
         cursor += sizeof(entry);
 
@@ -1655,10 +1694,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    VolumeHeaderDisk header{};
-    NWB_MEMCPY(header.magic, sizeof(header.magic), s_VolumeMagic, sizeof(s_VolumeMagic));
-    header.version = s_VolumeFormatVersion;
-    header.reserved = 0;
+    __hidden_filesystem::VolumeHeaderDisk header{};
+    NWB_MEMCPY(header.magic, sizeof(header.magic), __hidden_filesystem::s_VolumeMagic, sizeof(__hidden_filesystem::s_VolumeMagic));
     header.segmentSize = m_segmentSize;
     header.metadataBytes = m_metadataBytes;
     header.fileCount = static_cast<u64>(m_files.size());
@@ -1683,11 +1720,11 @@ bool VolumeFileSystem::flushMetadataLocked(){
     );
 
     Vector<u8, Core::Alloc::ScratchArena> indexBytes{scratchArena};
-    if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
+    u64 expectedIndexBytes = 0;
+    if(!__hidden_filesystem::ComputeVolumeIndexBytes(header.fileCount, expectedIndexBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
     }
-    const u64 expectedIndexBytes = header.fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
     if(expectedIndexBytes > static_cast<u64>(Limit<usize>::s_Max)){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "metadata index exceeds runtime addressable range");
         return false;
@@ -1696,7 +1733,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
 
     for(const MetadataIndexRecord& recordInfo : sortedRecords){
         const FileRecord& record = recordInfo.file;
-        VolumeIndexEntryDisk entry{};
+        __hidden_filesystem::VolumeIndexEntryDisk entry{};
         entry.hash = recordInfo.path.hash();
         entry.offset = record.offset;
         entry.size = record.size;
@@ -1738,13 +1775,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
 }
 
 bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const{
-    if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk)))
-        return false;
-
-    const u64 indexBytes = fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
-
     u64 metadataBytes = 0;
-    if(!__hidden_filesystem::AddNoOverflow(static_cast<u64>(sizeof(VolumeHeaderDisk)), indexBytes, metadataBytes))
+    if(!__hidden_filesystem::ComputeVolumeMetadataRequirement(fileCount, metadataBytes))
         return false;
 
     return metadataBytes <= m_metadataBytes;

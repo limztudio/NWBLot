@@ -19,35 +19,6 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
-inline constexpr u32 s_VolumeFormatVersion = 1u;
-
-
-struct VolumeHeaderDisk{
-    char magic[8];
-    u32 version;
-    u32 reserved;
-    u64 segmentSize;
-    u64 metadataBytes;
-    u64 fileCount;
-    u64 indexBytes;
-    u64 nextFreeOffset;
-};
-
-struct VolumeIndexEntryDisk{
-    NameHash hash;
-    u64 offset;
-    u64 size;
-};
-
-
-static_assert(sizeof(VolumeHeaderDisk) == 56, "VolumeHeaderDisk size mismatch");
-static_assert(sizeof(VolumeIndexEntryDisk) == 80, "VolumeIndexEntryDisk size mismatch");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace VolumeUsage{
 enum Enum : u8{
     RuntimeReadOnly = 0,
@@ -85,6 +56,7 @@ struct VolumeBuildInfo{
     u64 segmentCount = 0;
 };
 
+[[nodiscard]] bool ComputeVolumeMetadataRequirement(u64 fileCount, u64& outMetadataBytes);
 bool BuildVolume(
     const Path& outputDirectory,
     const VolumeBuildConfig& config,

@@ -4,6 +4,7 @@
 
 #include "geometry_asset.h"
 
+#include "geometry_asset_binary_payload.h"
 #include "geometry_binary_payload.h"
 
 #include <global/binary.h>
@@ -132,12 +133,11 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     const tchar* const loadFailureContext = NWB_TEXT("Geometry::loadBinary");
     usize cursor = 0;
     GeometryBinaryPayload::GeometryHeaderBinary header;
-    if(!GeometryBinaryPayload::ReadHeader(
+    if(!GeometryAssetBinaryPayload::ReadHeader(
         binary,
         cursor,
         header,
         GeometryBinaryPayload::s_GeometryMagic,
-        GeometryBinaryPayload::s_GeometryVersion,
         loadFailureContext
     ))
         return false;
@@ -158,7 +158,7 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
-        return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
+        return GeometryAssetBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
     };
     if(!readVector(vertexCount, m_positions, NWB_TEXT("positions")))
         return false;
@@ -169,7 +169,7 @@ bool Geometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!readVector(indexCount, m_indices, NWB_TEXT("indices")))
         return false;
 
-    if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
+    if(!GeometryAssetBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;
 
     return validatePayload();

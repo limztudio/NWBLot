@@ -3,10 +3,10 @@
 
 
 #include "shader_asset.h"
-#include "shader_binary_payload.h"
 
 #include <core/common/log.h>
 #include <core/assets/asset_auto_registration.h>
+#include <core/graphics/spirv_binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,13 +45,13 @@ bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!ShaderBinaryPayload::IsValidBytecodeSize(binary.size())){
+    if(!Core::SpirvBinary::IsValidBytecodeSize(binary.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid bytecode size"));
         return false;
     }
     usize cursor = 0;
     u32 magic = 0;
-    if(!ReadPOD(binary, cursor, magic) || magic != ShaderBinaryPayload::s_SpvMagic){
+    if(!ReadPOD(binary, cursor, magic) || magic != Core::SpirvBinary::s_Magic){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid SPIR-V magic"));
         return false;
     }

@@ -23,12 +23,10 @@ namespace __hidden_shader_archive{
 
 
 static constexpr char s_IndexMagic[8] = { 'N', 'W', 'B', 'S', 'D', 'X', '1', '\0' };
-static constexpr u32 s_IndexVersion = 1;
 
 
 struct IndexHeaderDisk{
     char magic[8];
-    u32 version = 0;
     u32 recordCount = 0;
 };
 
@@ -228,7 +226,6 @@ bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, Graphi
 
     __hidden_shader_archive::IndexHeaderDisk header;
     NWB_MEMCPY(header.magic, sizeof(header.magic), __hidden_shader_archive::s_IndexMagic, sizeof(__hidden_shader_archive::s_IndexMagic));
-    header.version = __hidden_shader_archive::s_IndexVersion;
     header.recordCount = static_cast<u32>(sortedRecords.size());
 
     const usize headerAndRecordBytes = sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk);
@@ -272,10 +269,6 @@ bool ShaderArchive::deserializeIndex(const GraphicsBytes& binary, GraphicsVector
 
     if(NWB_MEMCMP(header.magic, __hidden_shader_archive::s_IndexMagic, sizeof(header.magic)) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: invalid magic"));
-        return false;
-    }
-    if(header.version != __hidden_shader_archive::s_IndexVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: unsupported version {}"), header.version);
         return false;
     }
     if(header.recordCount > (binary.size() - cursor) / sizeof(__hidden_shader_archive::RecordHeaderDisk)){

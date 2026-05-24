@@ -1666,10 +1666,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         return false;
     }
 
-    usize reserveBytes =
-        sizeof(u32) + // magic
-        sizeof(u32)   // version
-    ;
+    usize reserveBytes = sizeof(u32); // magic
     bool canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u64))
@@ -1698,7 +1695,6 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         outBinary.reserve(reserveBytes);
 
     AppendPOD(outBinary, MaterialBinaryPayload::s_MaterialMagic);
-    AppendPOD(outBinary, MaterialBinaryPayload::s_MaterialVersion);
     if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
         return false;

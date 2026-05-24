@@ -4,9 +4,9 @@
 
 #include "skinned_geometry_asset.h"
 
+#include "geometry_asset_binary_payload.h"
 #include "skinned_geometry_binary_payload.h"
 #include "skinned_geometry_payload_logging.h"
-#include "geometry_binary_payload.h"
 
 #include <core/assets/asset_auto_registration.h>
 #include <core/alloc/scratch.h>
@@ -104,12 +104,11 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     const tchar* const loadFailureContext = NWB_TEXT("SkinnedGeometry::loadBinary");
     usize cursor = 0;
     SkinnedGeometryBinaryPayload::SkinnedGeometryHeaderBinary header;
-    if(!GeometryBinaryPayload::ReadHeader(
+    if(!GeometryAssetBinaryPayload::ReadHeader(
         binary,
         cursor,
         header,
         SkinnedGeometryBinaryPayload::s_SkinnedGeometryMagic,
-        SkinnedGeometryBinaryPayload::s_SkinnedGeometryVersion,
         loadFailureContext
     ))
         return false;
@@ -164,7 +163,7 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
-        return GeometryBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
+        return GeometryAssetBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
     };
     if(!readVector(vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
         return false;
@@ -177,7 +176,7 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!readVector(inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
         return false;
 
-    if(!GeometryBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
+    if(!GeometryAssetBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;
 
     return validatePayload();

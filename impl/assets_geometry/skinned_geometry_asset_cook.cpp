@@ -10,8 +10,8 @@
 
 #include "skinned_geometry_asset.h"
 
+#include "geometry_asset_binary_payload.h"
 #include "skinned_geometry_binary_payload.h"
-#include "geometry_binary_payload.h"
 
 #include <global/binary.h>
 #include <core/common/log.h>
@@ -63,7 +63,7 @@ bool SkinnedGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Cor
 
     const tchar* const serializeFailureContext = NWB_TEXT("SkinnedGeometryAssetCodec::serialize");
     auto appendVector = [&](const auto& values, const tchar* label){
-        return GeometryBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
+        return GeometryAssetBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
     };
     if(!appendVector(geometry.restVertices(), NWB_TEXT("rest vertices")))
         return false;

@@ -1226,7 +1226,7 @@ bool ShaderCook::computeSourceChecksum(
     u64& outChecksum,
     Alloc::ScratchArena& scratchArena
 ){
-    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v1";
     const u8 newlineByte = '\n';
 
     outChecksum = FNV64_OFFSET_BASIS;

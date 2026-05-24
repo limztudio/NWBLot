@@ -9,9 +9,9 @@
 
 
 #include "shader_asset.h"
-#include "shader_binary_payload.h"
 
 #include <core/common/log.h>
+#include <core/graphics/spirv_binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,14 +33,14 @@ bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     }
 
     const Core::Assets::AssetBytes& bytecode = static_cast<const Shader&>(asset).bytecode();
-    if(!ShaderBinaryPayload::IsValidBytecodeSize(bytecode.size())){
+    if(!Core::SpirvBinary::IsValidBytecodeSize(bytecode.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid bytecode size"));
         return false;
     }
 
     usize cursor = 0;
     u32 magic = 0;
-    if(!ReadPOD(bytecode, cursor, magic) || magic != ShaderBinaryPayload::s_SpvMagic){
+    if(!ReadPOD(bytecode, cursor, magic) || magic != Core::SpirvBinary::s_Magic){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V magic"));
         return false;
     }

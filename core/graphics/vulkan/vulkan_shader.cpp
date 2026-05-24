@@ -5,6 +5,7 @@
 #include "vulkan_backend.h"
 
 #include <core/common/log.h>
+#include <core/graphics/spirv_binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,9 +31,7 @@ namespace EntryPointLookupResult{
     };
 };
 
-inline constexpr u32 s_SpirvMagic = 0x07230203u;
 inline constexpr u16 s_OpEntryPoint = 15u;
-inline constexpr usize s_SpirvHeaderWords = 5;
 
 struct SpirvWordBuffer{
     const u32* data = nullptr;
@@ -123,13 +122,13 @@ inline EntryPointLookupResult::Enum ResolveEntryPointName(
     if(entryName.empty() || shaderType == ShaderType::None)
         return EntryPointLookupResult::NotFound;
 
-    if(!words || wordCount < s_SpirvHeaderWords)
+    if(!words || wordCount < SpirvBinary::s_HeaderWords)
         return EntryPointLookupResult::InvalidSpirv;
 
-    if(words[0] != s_SpirvMagic)
+    if(words[0] != SpirvBinary::s_Magic)
         return EntryPointLookupResult::InvalidSpirv;
 
-    for(usize instructionIndex = s_SpirvHeaderWords; instructionIndex < wordCount; ){
+    for(usize instructionIndex = SpirvBinary::s_HeaderWords; instructionIndex < wordCount; ){
         const u32 instruction = words[instructionIndex];
         const u16 opcode = static_cast<u16>(instruction & 0xFFFFu);
         const u16 instructionWordCount = static_cast<u16>(instruction >> 16u);

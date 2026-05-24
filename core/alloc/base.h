@@ -57,16 +57,16 @@ protected:
 public:
     template<typename T>
     inline T* allocate(usize count){
-        if constexpr(requires{ Arena::s_MaxTypedAlignSize; })
-            static_assert(alignof(T) <= Arena::s_MaxTypedAlignSize, "Arena cannot allocate types with alignment greater than s_MaxTypedAlignSize.");
+        if constexpr(requires{ Arena::s_MaxAlignSize; })
+            static_assert(alignof(T) <= Arena::s_MaxAlignSize, "Arena cannot allocate types with alignment greater than s_MaxAlignSize.");
 
         return AllocDetail::AllocateTyped<T>(static_cast<Arena&>(*this), count);
     }
 
     template<typename T>
     inline void deallocate(void* p, usize count){
-        if constexpr(requires{ Arena::s_MaxTypedAlignSize; })
-            static_assert(alignof(T) <= Arena::s_MaxTypedAlignSize, "Arena cannot deallocate types with alignment greater than s_MaxTypedAlignSize.");
+        if constexpr(requires{ Arena::s_MaxAlignSize; })
+            static_assert(alignof(T) <= Arena::s_MaxAlignSize, "Arena cannot deallocate types with alignment greater than s_MaxAlignSize.");
 
         AllocDetail::DeallocateTyped<T>(static_cast<Arena&>(*this), p, count);
     }

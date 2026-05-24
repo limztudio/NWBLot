@@ -64,7 +64,6 @@ public:
     inline void* reallocate(void* p, usize align, usize size){
         size = Alignment(align, size);
 
-        static_cast<void>(align);
         return tlsf_realloc(m_handle, p, size);
     }
 
@@ -87,26 +86,6 @@ private:
 
 
 NWB_ALLOC_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T>
-using PersistentUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::PersistentArena>>;
-
-template<typename T, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args){
-    return PersistentUniquePtr<T>(new(arena.allocate<T>(1)) T(Forward<Args>(args)...), PersistentUniquePtr<T>::deleter_type(arena));
-}
-template<typename T>
-inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n){
-    typedef typename RemoveExtent<T>::type TBase;
-    return PersistentUniquePtr<T>(new(arena.allocate<TBase>(n)) TBase[n], PersistentUniquePtr<T>::deleter_type(arena, n));
-}
-template<typename T, typename... Args>
-typename EnableIf<IsBoundedArray<T>::value>::type
-MakePersistentUnique(Args&&...) = delete;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

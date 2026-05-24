@@ -9,6 +9,7 @@
 
 
 #include "material_asset_cook.h"
+#include "material_asset_metadata.h"
 #include "material_binary_payload.h"
 
 #include <core/alloc/scratch.h>
@@ -204,17 +205,6 @@ static bool ResolveMaterialBindDependencyInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MaterialAssetFields{
-
-static constexpr AStringView s_Interface = "interface";
-static constexpr AStringView s_Shaders = "shaders";
-static constexpr AStringView s_ShaderVariant = "shader_variant";
-static constexpr AStringView s_Parameters = "parameters";
-static constexpr AStringView s_Alpha = "alpha";
-static constexpr AStringView s_Transparent = "transparent";
-
-}
-
 static bool ParseVariantField(
     ShaderCook& shaderCook,
     const Path& nwbFilePath,
@@ -304,7 +294,7 @@ static bool ParseMaterialStageShaders(
 ){
     outStageShaders.clear();
 
-    const auto* shadersValue = asset.findField(MaterialAssetFields::s_Shaders);
+    const auto* shadersValue = asset.findField(MaterialAssetMetadataSchema::s_ShadersField);
     if(!shadersValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders is required"), PathToString<tchar>(nwbFilePath));
         return false;
@@ -366,7 +356,7 @@ static bool ParseMaterialParameters(
 ){
     outParameters.clear();
 
-    const auto* parametersValue = asset.findField(MaterialAssetFields::s_Parameters);
+    const auto* parametersValue = asset.findField(MaterialAssetMetadataSchema::s_ParametersField);
     if(!parametersValue)
         return true;
     if(!parametersValue->isMap()){
@@ -470,7 +460,7 @@ static bool ParseMaterialInterface(
 ){
     outMaterialInterface = NAME_NONE;
 
-    const auto* interfaceValue = asset.findField(MaterialAssetFields::s_Interface);
+    const auto* interfaceValue = asset.findField(MaterialAssetMetadataSchema::s_InterfaceField);
     if(!interfaceValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface is required"), PathToString<tchar>(nwbFilePath));
         return false;
@@ -506,7 +496,7 @@ static bool ParseMaterialAlphaProperty(
 ){
     outAlpha = 1.f;
 
-    const auto* alphaValue = asset.findField(MaterialAssetFields::s_Alpha);
+    const auto* alphaValue = asset.findField(MaterialAssetMetadataSchema::s_AlphaField);
     if(!alphaValue)
         return true;
 
@@ -536,7 +526,7 @@ static bool ParseMaterialTransparentProperty(
 ){
     outTransparent = false;
 
-    const auto* transparentValue = asset.findField(MaterialAssetFields::s_Transparent);
+    const auto* transparentValue = asset.findField(MaterialAssetMetadataSchema::s_TransparentField);
     if(!transparentValue)
         return true;
     if(!transparentValue->isInteger()){
@@ -564,7 +554,6 @@ static bool ParseMaterialRenderProperties(
     if(!ParseMaterialTransparentProperty(nwbFilePath, asset, outEntry.transparent))
         return false;
 
-    outEntry.transparent = outEntry.transparent || outEntry.alpha < 0.999f;
     return true;
 }
 
@@ -1457,14 +1446,7 @@ static bool ParseMaterialMeta(
         nwbFilePath,
         asset,
         "Material meta",
-        {
-            MaterialAssetFields::s_Interface,
-            MaterialAssetFields::s_Shaders,
-            MaterialAssetFields::s_ShaderVariant,
-            MaterialAssetFields::s_Parameters,
-            MaterialAssetFields::s_Alpha,
-            MaterialAssetFields::s_Transparent
-        }
+        MaterialAssetMetadataSchema::IsAllowedAssetField
     ))
         return false;
 
@@ -1472,7 +1454,7 @@ static bool ParseMaterialMeta(
         shaderCook,
         nwbFilePath,
         asset,
-        MaterialAssetFields::s_ShaderVariant,
+        MaterialAssetMetadataSchema::s_ShaderVariantField,
         outEntry.shaderVariant,
         scratchArena
     ))

@@ -388,6 +388,29 @@ asset.parameters = {
 
 )NWB_META";
 
+static constexpr AStringView s_AlphaOnlyMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface";
+asset.alpha = 0.5;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
+        "roughness": "float(0.25)",
+    },
+    "runtime": {
+        "fade_alpha": "float(0.75)",
+    },
+};
+
+)NWB_META";
+
 #if defined(NWB_FINAL)
 static constexpr AStringView s_MissingInterfaceMaterialMeta = R"NWB_META(material asset;
 
@@ -2431,6 +2454,19 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.alpha() == 1.0f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !material.transparent());
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.materialInterface() == Name("project/material_interfaces/test_surface"));
+
+    NWB::Impl::Material alphaOnlyMaterial(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, BuildMaterialFromBindAndMeta(
+        s_MinimalMaterialBindSource,
+        s_AlphaOnlyMaterialMeta,
+        "material_meta_alpha_only_explicit_transparent",
+        testArena,
+        alphaOnlyMaterial,
+        scratchArena
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, alphaOnlyMaterial.alpha() == 0.5f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !alphaOnlyMaterial.transparent());
+
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }
 
@@ -2455,6 +2491,8 @@ static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
         if(!built)
             return;
 
+        material.setRenderProperties(0.5f, false);
+
         NWB::Impl::MaterialAssetCodec codec;
         NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(material, binary));
@@ -2472,6 +2510,8 @@ static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMaterial.materialInterface() == material.materialInterface());
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMaterial.typedLayoutHash() == material.typedLayoutHash());
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMaterial.alpha() == 0.5f);
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedMaterial.transparent());
             CheckMinimalMaterialTypedLayout(context, loadedMaterial);
             CheckMinimalMaterialTypedBlockBytes(context, loadedMaterial);
         }

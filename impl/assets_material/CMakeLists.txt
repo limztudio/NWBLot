@@ -15,6 +15,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/material_bind.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_asset_cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/material_asset_metadata.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_bind.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_cook_types.h"

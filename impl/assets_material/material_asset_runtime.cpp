@@ -375,7 +375,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
         return false;
     }
-    m_transparent = ((materialFlags & MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u) || m_alpha < 0.999f;
+    m_transparent = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u;
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));
@@ -393,7 +393,7 @@ void Material::clearStageShaders(){
 
 void Material::setRenderProperties(const f32 alpha, const bool transparent){
     m_alpha = alpha;
-    m_transparent = transparent || alpha < 0.999f;
+    m_transparent = transparent;
 }
 
 void Material::setTypedLayout(

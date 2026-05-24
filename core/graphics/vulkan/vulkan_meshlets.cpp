@@ -41,7 +41,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
     auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;

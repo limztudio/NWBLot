@@ -45,8 +45,8 @@ Core::Assets::AssetCodecAutoRegistrar s_GeometryAssetCodecAutoRegistrar(&CreateG
 
 
 bool Geometry::validatePayload()const{
-    Core::Alloc::ScratchArena<> scratchArena;
-    const TString<Core::Alloc::ScratchArena<>> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
+    Core::Alloc::ScratchArena scratchArena;
+    const TString<Core::Alloc::ScratchArena> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(m_positions.empty() || m_normals.empty() || m_colors.empty() || m_indices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Geometry::validatePayload failed: geometry '{}' has incomplete payload")

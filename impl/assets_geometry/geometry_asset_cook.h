@@ -75,7 +75,7 @@ struct SkinnedGeometryCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     GeometryCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool ParseSkinnedGeometryCookMetadata(
     const Path& assetRoot,
@@ -83,7 +83,7 @@ struct SkinnedGeometryCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     SkinnedGeometryCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 [[nodiscard]] bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGeometry);

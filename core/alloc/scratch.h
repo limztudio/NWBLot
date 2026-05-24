@@ -19,20 +19,14 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_MaxAlignSize = 256;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<usize maxAlignSize = s_MaxAlignSize>
-class ScratchArena : public ArenaBaseT<ScratchArena<maxAlignSize>>{
+class ScratchArena : public ArenaBaseT<ScratchArena>{
 private:
-    using Base = ArenaBaseT<ScratchArena<maxAlignSize>>;
+    using Base = ArenaBaseT<ScratchArena>;
 
 
 public:
-    static constexpr usize s_MaxTypedAlignSize = maxAlignSize;
+    static constexpr usize s_MaxAlignSize = 256;
+    static constexpr usize s_MaxTypedAlignSize = s_MaxAlignSize;
 
 
 private:
@@ -139,8 +133,8 @@ public:
 public:
     inline void* allocate(usize align, usize size){
         NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
-        NWB_ASSERT_MSG(align <= maxAlignSize, NWB_TEXT("ScratchArena alignment exceeds maxAlignSize"));
-        if(align == 0 || align > maxAlignSize)
+        NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
+        if(align == 0 || align > s_MaxAlignSize)
             return nullptr;
 
         const usize bucketIndex = FloorLog2(align);
@@ -169,8 +163,8 @@ public:
         static_cast<void>(p);
 
         NWB_ASSERT_MSG(align != 0, NWB_TEXT("ScratchArena alignment must be non-zero"));
-        NWB_ASSERT_MSG(align <= maxAlignSize, NWB_TEXT("ScratchArena alignment exceeds maxAlignSize"));
-        if(align == 0 || align > maxAlignSize)
+        NWB_ASSERT_MSG(align <= s_MaxAlignSize, NWB_TEXT("ScratchArena alignment exceeds s_MaxAlignSize"));
+        if(align == 0 || align > s_MaxAlignSize)
             return;
 
         const usize bucketIndex = FloorLog2(align);
@@ -189,7 +183,7 @@ public:
 
 
 private:
-    ChunkWrapper m_bucket[FloorLog2(maxAlignSize) + 1];
+    ChunkWrapper m_bucket[FloorLog2(s_MaxAlignSize) + 1];
 };
 
 
@@ -202,30 +196,30 @@ NWB_ALLOC_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize>
-using ScratchUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::ScratchArena<maxAlignSize>>>;
+template<typename T>
+using ScratchUniquePtr = UniquePtr<T, ArenaDeleter<T, NWB::Core::Alloc::ScratchArena>>;
 template<typename T>
 using StackonlyUniquePtr = UniquePtr<T, EmptyDeleter<T>>;
 
-template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
-    return ScratchUniquePtr<T, maxAlignSize>(new(arena.template allocate<T>(1)) T(Forward<Args>(args)...), typename ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena));
+template<typename T, typename... Args>
+inline typename EnableIf<!IsArray<T>::value, ScratchUniquePtr<T>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena& arena, Args&&... args){
+    return ScratchUniquePtr<T>(new(arena.template allocate<T>(1)) T(Forward<Args>(args)...), typename ScratchUniquePtr<T>::deleter_type(arena));
 }
-template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize>
-inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T, maxAlignSize>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, usize n){
+template<typename T>
+inline typename EnableIf<IsUnboundedArray<T>::value, ScratchUniquePtr<T>>::type MakeScratchUnique(NWB::Core::Alloc::ScratchArena& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
-    return ScratchUniquePtr<T, maxAlignSize>(new(arena.template allocate<TBase>(n)) TBase[n], typename ScratchUniquePtr<T, maxAlignSize>::deleter_type(arena, n));
+    return ScratchUniquePtr<T>(new(arena.template allocate<TBase>(n)) TBase[n], typename ScratchUniquePtr<T>::deleter_type(arena, n));
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type
 MakeScratchUnique(Args&&...) = delete;
 
-template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize, typename... Args>
-inline typename EnableIf<!IsArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, Args&&... args){
+template<typename T, typename... Args>
+inline typename EnableIf<!IsArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena& arena, Args&&... args){
     return StackonlyUniquePtr<T>(new(arena.template allocate<T>(1)) T(Forward<Args>(args)...));
 }
-template<typename T, usize maxAlignSize = NWB::Core::Alloc::s_MaxAlignSize>
-inline typename EnableIf<IsUnboundedArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena<maxAlignSize>& arena, usize n){
+template<typename T>
+inline typename EnableIf<IsUnboundedArray<T>::value, StackonlyUniquePtr<T>>::type MakeStackonlyUnique(NWB::Core::Alloc::ScratchArena& arena, usize n){
     typedef typename RemoveExtent<T>::type TBase;
     return StackonlyUniquePtr<T>(new(arena.template allocate<TBase>(n)) TBase[n]);
 }

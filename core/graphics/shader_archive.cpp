@@ -181,8 +181,8 @@ bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, Graphi
         return false;
     }
 
-    Alloc::ScratchArena<> scratchArena;
-    Vector<const Record*, Alloc::ScratchArena<>> sortedRecords{scratchArena};
+    Alloc::ScratchArena scratchArena;
+    Vector<const Record*, Alloc::ScratchArena> sortedRecords{scratchArena};
     sortedRecords.reserve(records.size());
     for(const Record& record : records)
         sortedRecords.push_back(&record);

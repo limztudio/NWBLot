@@ -195,7 +195,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     if(outSubmitted)
         *outSubmitted = false;
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
     bool hasCommands = ppCmd && numCmd > 0;
     bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
@@ -229,8 +229,8 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         }
     }
 
-    Vector<TrackedCommandBufferPtr, Alloc::ScratchArena<>> trackedBuffers{scratchArena};
-    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchArena<>> cmdBufInfos{scratchArena};
+    Vector<TrackedCommandBufferPtr, Alloc::ScratchArena> trackedBuffers{scratchArena};
+    Vector<VkCommandBufferSubmitInfo, Alloc::ScratchArena> cmdBufInfos{scratchArena};
 
     if(hasCommands){
         trackedBuffers.reserve(numCmd);
@@ -269,7 +269,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     timelineSignal.value = submissionID;
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>> waitInfos{scratchArena};
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena> waitInfos{scratchArena};
     waitInfos.reserve(m_waitSemaphores.size());
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
@@ -279,7 +279,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         waitInfos.push_back(waitInfo);
     }
 
-    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena<>> signalInfos{scratchArena};
+    Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena> signalInfos{scratchArena};
     signalInfos.reserve(1u + m_signalSemaphores.size());
     signalInfos.push_back(timelineSignal);
 
@@ -462,10 +462,10 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
     const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);
 
-    Alloc::ScratchArena<> scratchArena(8192);
+    Alloc::ScratchArena scratchArena(8192);
 
-    Vector<VkSparseImageMemoryBind, Alloc::ScratchArena<>> sparseImageMemoryBinds{scratchArena};
-    Vector<VkSparseMemoryBind, Alloc::ScratchArena<>> sparseMemoryBinds{scratchArena};
+    Vector<VkSparseImageMemoryBind, Alloc::ScratchArena> sparseImageMemoryBinds{scratchArena};
+    Vector<VkSparseMemoryBind, Alloc::ScratchArena> sparseMemoryBinds{scratchArena};
 
     const VkImageCreateInfo& imageInfo = texture->m_imageInfo;
     const VkImageAspectFlags textureAspectFlags = texture->m_aspectMask;
@@ -485,7 +485,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
         &formatPropCount, nullptr
     );
 
-    Vector<VkSparseImageFormatProperties, Alloc::ScratchArena<>> formatProps(formatPropCount, scratchArena);
+    Vector<VkSparseImageFormatProperties, Alloc::ScratchArena> formatProps(formatPropCount, scratchArena);
     if(formatPropCount > 0)
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,
@@ -514,7 +514,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
         usize opaqueBase = 0;
         usize imageBase = 0;
     };
-    Vector<MappingBindCounts, Alloc::ScratchArena<>> mappingCounts(mappingCount, scratchArena);
+    Vector<MappingBindCounts, Alloc::ScratchArena> mappingCounts(mappingCount, scratchArena);
 
     auto countMappingBinds = [&](usize i){
         MappingBindCounts& counts = mappingCounts[i];

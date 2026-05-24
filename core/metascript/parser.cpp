@@ -117,9 +117,9 @@ public:
 
 
 private:
-    using ScratchPath = Vector<MStringView, Alloc::ScratchArena<>>;
-    using ScratchNameList = Vector<MStringView, Alloc::ScratchArena<>>;
-    using ScratchString = BasicString<MChar, Alloc::ScratchArena<>>;
+    using ScratchPath = Vector<MStringView, Alloc::ScratchArena>;
+    using ScratchNameList = Vector<MStringView, Alloc::ScratchArena>;
+    using ScratchString = BasicString<MChar, Alloc::ScratchArena>;
 
 
     bool parseStatements(const MString& assetVariable){
@@ -1091,7 +1091,7 @@ private:
 private:
     Lexer m_lexer;
     MetaArena& m_arena;
-    Alloc::ScratchArena<> m_scratchArena;
+    Alloc::ScratchArena m_scratchArena;
     ScratchNameList m_declaredStructs;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
@@ -1149,8 +1149,8 @@ bool Document::parse(IMetaReader& reader){
     try{
         constexpr usize chunkSize = 4096;
 
-        Alloc::ScratchArena<> scratchArena(chunkSize);
-        BasicString<MChar, Alloc::ScratchArena<>> buffer{scratchArena};
+        Alloc::ScratchArena scratchArena(chunkSize);
+        BasicString<MChar, Alloc::ScratchArena> buffer{scratchArena};
         buffer.reserve(chunkSize);
         MChar chunk[chunkSize];
 

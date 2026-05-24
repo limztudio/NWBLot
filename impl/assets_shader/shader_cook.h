@@ -152,30 +152,30 @@ public:
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
         ShaderEntry& outEntry,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
     bool parseShaderMeta(
         const Path& nwbFilePath,
         ShaderEntry& outEntry,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
     bool parseIncludeMeta(
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
         IncludeEntry& outEntry,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
     bool parseIncludeMeta(
         const Path& nwbFilePath,
         IncludeEntry& outEntry,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
 
     bool validateVariantSignature(
         AStringView contextLabel,
         AStringView variantSignature,
         const CookMap<CookString, DefineEntry>& defineValues,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
 
     void mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata);
@@ -184,36 +184,36 @@ public:
         const Path& sourcePath,
         const CookVector<Path>& includeDirectories,
         CookVector<Path>& outDependencies,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
 
     bool expandDefineCombinations(
         const CookMap<CookString, DefineEntry>& defineValues,
         CookVector<DefineCombo>& outCombinations,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
 
     CookString buildVariantName(
         const DefineCombo& combo,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
     bool canonicalizeVariantSignature(
         AStringView variantSignature,
         CookString& outCanonical,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
 
     bool computeDependencyChecksum(
         const CookVector<Path>& dependencies,
         u64& outChecksum,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
     bool computeSourceChecksum(
         const ShaderEntry& entry,
         const AStringView variantSignature,
         u64 dependencyChecksum,
         u64& outChecksum,
-        Core::Alloc::ScratchArena<>& scratchArena
+        Core::Alloc::ScratchArena& scratchArena
     );
 
 
@@ -226,11 +226,11 @@ private:
     template<typename MapT>
     using ScratchDefineEntryVector = Vector<
         DefineEntryPtr<MapT>,
-        Core::Alloc::ScratchArena<>
+        Core::Alloc::ScratchArena
     >;
 
     template<typename MapT>
-    ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena<>& scratchArena){
+    ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
         ScratchDefineEntryVector<MapT> entries{scratchArena};
         entries.reserve(map.size());

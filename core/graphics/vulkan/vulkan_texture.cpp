@@ -1002,8 +1002,8 @@ void CommandList::resolveTexture(ITexture* destResource, const TextureSubresourc
         return;
     }
 
-    Alloc::ScratchArena<> scratchArena;
-    Vector<VkImageResolve, Alloc::ScratchArena<>> regions(resolvedSrc.numMipLevels, scratchArena);
+    Alloc::ScratchArena scratchArena;
+    Vector<VkImageResolve, Alloc::ScratchArena> regions(resolvedSrc.numMipLevels, scratchArena);
 
     for(MipLevel mipOffset = 0; mipOffset < resolvedSrc.numMipLevels; ++mipOffset){
         const MipLevel srcMipLevel = resolvedSrc.baseMipLevel + mipOffset;

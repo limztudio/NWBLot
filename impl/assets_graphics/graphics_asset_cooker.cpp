@@ -52,7 +52,7 @@ static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
 using CookString = ShaderCook::CookString;
 template<typename T>
 using CookVector = ShaderCook::CookVector<T>;
-using ScratchArena = Core::Alloc::ScratchArena<>;
+using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
 
@@ -1542,7 +1542,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     outResult = {};
 
     ShaderCook shaderCook(m_arena);
-    Core::Alloc::ScratchArena<> scratchArena;
+    Core::Alloc::ScratchArena scratchArena;
 
     __hidden_graphics_asset_cooker::ResolvedCookPaths resolvedPaths(m_arena);
     if(!__hidden_graphics_asset_cooker::ResolveCookPaths(environment, resolvedPaths, scratchArena))

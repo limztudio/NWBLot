@@ -36,7 +36,7 @@ static_assert(
     "Static geometry source word layout drifted"
 );
 
-using SourceVertexWordVector = Vector<StaticGeometrySourceVertexWords, Core::Alloc::ScratchArena<>>;
+using SourceVertexWordVector = Vector<StaticGeometrySourceVertexWords, Core::Alloc::ScratchArena>;
 
 [[nodiscard]] static u32 FloatWord(const f32 value){
     return std::bit_cast<u32>(value);
@@ -156,7 +156,7 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
         return false;
     }
 
-    Core::Alloc::ScratchArena<> scratchArena;
+    Core::Alloc::ScratchArena scratchArena;
     __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{ scratchArena };
     usize sourceVertexBytes = 0u;
     if(!__hidden_renderer_system_geometry::BuildStaticGeometrySourceWords(geometry, sourceVertexWords, sourceVertexBytes)){

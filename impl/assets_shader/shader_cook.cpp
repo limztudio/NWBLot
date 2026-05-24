@@ -58,11 +58,11 @@ template<typename T, typename V>
 using CookMap = ShaderCook::CookMap<T, V>;
 template<typename T>
 using CookHashSet = ShaderCook::CookHashSet<T>;
-using ScratchString = AString<Alloc::ScratchArena<>>;
+using ScratchString = AString<Alloc::ScratchArena>;
 template<typename T>
-using ScratchVector = Vector<T, Alloc::ScratchArena<>>;
+using ScratchVector = Vector<T, Alloc::ScratchArena>;
 template<typename T>
-using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena<>>;
+using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena>;
 
 static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
@@ -409,7 +409,7 @@ template <typename VisitedSet, typename ScratchArena>
 static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, ScratchArena& scratchArena){
     ErrorCode errorCode;
 
-    Deque<Path, Alloc::ScratchArena<>> pending{scratchArena};
+    Deque<Path, Alloc::ScratchArena> pending{scratchArena};
     pending.push_back(startPath);
     ScratchString sourceText{scratchArena};
     Path includePath;
@@ -644,7 +644,7 @@ static bool ValidatePairedSourceExtension(
     const CookString& sourcePath,
     const AStringView expectedExtension,
     const AStringView metaKind,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     ScratchString extension = PathToString(scratchArena, Path(sourcePath).extension());
     CanonicalizeTextInPlace(extension);
@@ -804,7 +804,7 @@ bool ShaderCook::validateVariantSignature(
     const AStringView contextLabel,
     const AStringView variantSignature,
     const CookMap<CookString, DefineEntry>& defineValues,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
@@ -813,7 +813,7 @@ bool ShaderCook::parseShaderMeta(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
     ShaderEntry& outEntry,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     outEntry = ShaderEntry(m_memoryArena);
 
@@ -886,7 +886,7 @@ bool ShaderCook::parseShaderMeta(
     return true;
 }
 
-bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry, Alloc::ScratchArena<>& scratchArena){
+bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry, Alloc::ScratchArena& scratchArena){
     Metascript::Document doc(m_memoryArena);
     if(!parseDocument(nwbFilePath, doc))
         return false;
@@ -898,7 +898,7 @@ bool ShaderCook::parseIncludeMeta(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
     IncludeEntry& outEntry,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     outEntry = IncludeEntry(m_memoryArena);
 
@@ -931,7 +931,7 @@ bool ShaderCook::parseIncludeMeta(
     return true;
 }
 
-bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry, Alloc::ScratchArena<>& scratchArena){
+bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry, Alloc::ScratchArena& scratchArena){
     Metascript::Document doc(m_memoryArena);
     if(!parseDocument(nwbFilePath, doc))
         return false;
@@ -965,7 +965,7 @@ bool ShaderCook::gatherShaderDependencies(
     const Path& sourcePath,
     const CookVector<Path>& includeDirectories,
     CookVector<Path>& outDependencies,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     outDependencies.clear();
 
@@ -981,7 +981,7 @@ bool ShaderCook::gatherShaderDependencies(
 bool ShaderCook::expandDefineCombinations(
     const CookMap<CookString, DefineEntry>& defineValues,
     CookVector<DefineCombo>& outCombinations,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     outCombinations.clear();
     DefineCombo initialCombo{0, Hasher<CookString>(), EqualTo<CookString>(), m_memoryArena};
@@ -1038,7 +1038,7 @@ bool ShaderCook::expandDefineCombinations(
     return true;
 }
 
-ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Alloc::ScratchArena<>& scratchArena){
+ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Alloc::ScratchArena& scratchArena){
     if(combo.empty())
         return CookString("default", m_memoryArena);
 
@@ -1076,7 +1076,7 @@ ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Al
 bool ShaderCook::canonicalizeVariantSignature(
     const AStringView variantSignature,
     CookString& outCanonical,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     const AStringView trimmedSignatureView = TrimView(variantSignature);
     if(trimmedSignatureView.empty()){
@@ -1094,7 +1094,7 @@ bool ShaderCook::canonicalizeVariantSignature(
     };
 
     using ScratchString = __hidden_shader_cook::ScratchString;
-    using ScratchDefineCombo = HashMap<ScratchString, ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena<>>;
+    using ScratchDefineCombo = HashMap<ScratchString, ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena>;
     ScratchDefineCombo assignments(
         0,
         Hasher<ScratchString>(),
@@ -1166,7 +1166,7 @@ bool ShaderCook::canonicalizeVariantSignature(
 bool ShaderCook::computeDependencyChecksum(
     const CookVector<Path>& dependencies,
     u64& outChecksum,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     ErrorCode errorCode;
     static constexpr u8 s_NewlineByte = '\n';
@@ -1186,7 +1186,7 @@ bool ShaderCook::computeDependencyChecksum(
 
     Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){ return lhs.canonicalPath < rhs.canonicalPath; });
 
-    Vector<u8, Alloc::ScratchArena<>> dependencyBytes{scratchArena};
+    Vector<u8, Alloc::ScratchArena> dependencyBytes{scratchArena};
     for(const SortedDependencyItem& item : sortedDependencies){
         outChecksum = UpdateFnv64TextExact(outChecksum, AStringView(item.canonicalPath));
         outChecksum = UpdateFnv64(outChecksum, &s_NewlineByte, 1);
@@ -1224,7 +1224,7 @@ bool ShaderCook::computeSourceChecksum(
     const AStringView variantSignature,
     const u64 dependencyChecksum,
     u64& outChecksum,
-    Alloc::ScratchArena<>& scratchArena
+    Alloc::ScratchArena& scratchArena
 ){
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';

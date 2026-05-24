@@ -30,7 +30,7 @@ void RendererSystem::renderMaterialPass(
 
     commandList.endRenderPass();
 
-    Core::Alloc::ScratchArena<> scratchArena;
+    Core::Alloc::ScratchArena scratchArena;
     MaterialPassDrawItemVector meshDrawItems{scratchArena};
     MaterialPassDrawItemVector computeDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
@@ -104,7 +104,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         ECSRenderDetail::MaterialTypedByteBlock,
         Hasher<Name>,
         EqualTo<Name>,
-        Core::Alloc::ScratchArena<>
+        Core::Alloc::ScratchArena
     >;
     MaterialTypedByteBlockMap materialTypedByteBlocks(
         0,

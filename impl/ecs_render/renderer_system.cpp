@@ -142,7 +142,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
 
     clearDeferredTargets(*commandList, deferredTargets);
 
-    Core::Alloc::ScratchArena<> scratchArena;
+    Core::Alloc::ScratchArena scratchArena;
     MaterialPassDrawItemVector opaqueMeshDrawItems{scratchArena};
     MaterialPassDrawItemVector opaqueComputeDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};

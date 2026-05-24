@@ -52,7 +52,7 @@ bool ContainsFactory(const FactoryVector& factories, const FactoryT factory){
 }
 
 template<typename FactoryT>
-using ScratchFactoryVector = Vector<FactoryT, Alloc::ScratchArena<>>;
+using ScratchFactoryVector = Vector<FactoryT, Alloc::ScratchArena>;
 
 template<typename FactoryT>
 void CopyQueuedFactories(const AssetVector<FactoryT>& queuedFactories, ScratchFactoryVector<FactoryT>& outFactories){
@@ -117,7 +117,7 @@ bool AssetCookerAutoRegistrar::initialize(){
 
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
     __hidden_asset_auto_registration::ScratchFactoryVector<AssetCodecFactory> codecFactories{scratchArena};
     {
         auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();
@@ -135,7 +135,7 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
 }
 
 void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena){
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
     __hidden_asset_auto_registration::ScratchFactoryVector<AssetCookerFactory> cookerFactories{scratchArena};
     {
         auto& autoFactoryQueue = __hidden_asset_auto_registration::QueryAutoFactoryQueue();

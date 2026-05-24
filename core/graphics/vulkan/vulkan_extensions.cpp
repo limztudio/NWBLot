@@ -294,9 +294,9 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         return;
     }
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
-    Vector<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchArena<>> validDescs{scratchArena};
+    Vector<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchArena> validDescs{scratchArena};
     validDescs.reserve(numDescs);
 
     for(usize i = 0; i < numDescs; ++i){
@@ -327,8 +327,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         validDescs.push_back(&convertDesc);
     }
 
-    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena<>> vkConvertDescs(validDescs.size(), scratchArena);
-    Vector<usize, Alloc::ScratchArena<>> dstSizes(validDescs.size(), scratchArena);
+    Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena> vkConvertDescs(validDescs.size(), scratchArena);
+    Vector<usize, Alloc::ScratchArena> dstSizes(validDescs.size(), scratchArena);
 
     auto buildConvertDesc = [&](usize i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = *validDescs[i];
@@ -408,7 +408,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
     u32 tileHeight = 1;
     u32 tileDepth = 1;
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
     SparseImageMemoryRequirementsVector sparseReqs{ scratchArena };
     VulkanDetail::GetImageSparseMemoryRequirements(m_context.device, texture->m_image, sparseReqs);
@@ -446,7 +446,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         &formatPropCount, nullptr
     );
 
-    Vector<VkSparseImageFormatProperties, Alloc::ScratchArena<>> formatProps(formatPropCount, scratchArena);
+    Vector<VkSparseImageFormatProperties, Alloc::ScratchArena> formatProps(formatPropCount, scratchArena);
     if(formatPropCount > 0){
         vkGetPhysicalDeviceSparseImageFormatProperties(
             m_context.physicalDevice,

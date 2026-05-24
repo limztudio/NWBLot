@@ -1029,7 +1029,7 @@ static bool ParseMaterialBindFromText(
     const AStringView caseName,
     NWB::Impl::MaterialBindEntry& outEntry,
     Path& outRoot,
-    NWB::Core::Alloc::ScratchArena<>& scratchArena
+    NWB::Core::Alloc::ScratchArena& scratchArena
 ){
     if(!PrepareAssetsGraphicsCaseRoot(caseName, outRoot))
         return false;
@@ -1383,7 +1383,7 @@ static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !shaderCook.parseIncludeMeta(includeMetaPath, includeEntry, scratchArena));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT(
         "unsupported asset field 'default_variant'"
@@ -1536,8 +1536,8 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
         const bool created = volumeSession.create(root / "volume", config);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, created);
         if(created){
-            NWB::Core::Alloc::ScratchArena<> scratchArena;
-            ::Vector<u8, NWB::Core::Alloc::ScratchArena<>> payload{ scratchArena };
+            NWB::Core::Alloc::ScratchArena scratchArena;
+            ::Vector<u8, NWB::Core::Alloc::ScratchArena> payload{ scratchArena };
             payload.reserve(4u);
             payload.push_back(1u);
             payload.push_back(2u);
@@ -1938,7 +1938,7 @@ static bool ParseMaterialEntryFromMetaText(
     const AStringView metaText,
     TestArena& testArena,
     NWB::Impl::MaterialCookEntry& outEntry,
-    NWB::Core::Alloc::ScratchArena<>& scratchArena
+    NWB::Core::Alloc::ScratchArena& scratchArena
 ){
     NWB::Core::Metascript::Document doc(testArena.arena);
     if(!doc.parse(metaText))
@@ -2378,7 +2378,7 @@ static bool BuildMaterialFromBindAndMeta(
     const AStringView caseName,
     TestArena& testArena,
     NWB::Impl::Material& outMaterial,
-    NWB::Core::Alloc::ScratchArena<>& scratchArena
+    NWB::Core::Alloc::ScratchArena& scratchArena
 ){
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     if(!ParseMaterialEntryFromMetaText(materialText, testArena, materialEntry, scratchArena))
@@ -2412,7 +2412,7 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     const bool parsed = ParseMaterialEntryFromMetaText(s_BlockScopedMaterialMeta, testArena, materialEntry, scratchArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, parsed);
@@ -2472,7 +2472,7 @@ static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context
 
 static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     NWB::Impl::Material material(testArena.arena);
 
     {
@@ -2568,7 +2568,7 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     Path root;
     NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
@@ -2702,7 +2702,7 @@ static void TestMaterialBindGeneratedSlangText(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     Path root;
     NWB::Impl::MaterialBindEntry entry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
@@ -2761,7 +2761,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
     includeDirectories.push_back(AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(
         root / "assets" / "shaders" / "material_mesh.slang",
         includeDirectories,
@@ -3181,7 +3181,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
     NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
     includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
-    NWB::Core::Alloc::ScratchArena<> scratchArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, shaderCook.gatherShaderDependencies(
         shaderIncludeProbePath,
         includeDirectories,

@@ -158,9 +158,9 @@ private:
 
 
 private:
-    using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena<>>;
-    using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena<>>;
-    using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena<>>;
+    using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
+    using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>;
+    using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 
 public:
     struct AvboitFrameTargets{

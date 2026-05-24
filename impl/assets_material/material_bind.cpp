@@ -42,7 +42,7 @@ namespace __hidden_material_bind{
 
 
 using CookString = MaterialCookString;
-using ScratchArena = Core::Alloc::ScratchArena<>;
+using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 template<typename T>
 using ScratchVector = Vector<T, ScratchArena>;
@@ -1495,7 +1495,7 @@ u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
 bool ParseMaterialBindSource(
     const Path& bindFilePath,
     MaterialBindEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry.reset();
 
@@ -1511,7 +1511,7 @@ bool BuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
     MaterialBindTypedLayout& outLayout,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_bind::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, outLayout, scratchArena);
 }
@@ -1521,7 +1521,7 @@ bool FindOrBuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
     const MaterialBindTypedLayout*& outLayout,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_bind::FindOrBuildMaterialBindTypedLayoutImpl(
         materialInterface,

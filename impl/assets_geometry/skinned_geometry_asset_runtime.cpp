@@ -45,8 +45,8 @@ Core::Assets::AssetCodecAutoRegistrar s_SkinnedGeometryAssetCodecAutoRegistrar(&
 
 
 bool SkinnedGeometry::validatePayload()const{
-    Core::Alloc::ScratchArena<> scratchArena;
-    const TString<Core::Alloc::ScratchArena<>> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
+    Core::Alloc::ScratchArena scratchArena;
+    const TString<Core::Alloc::ScratchArena> geometryPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(!Core::Geometry::GeometryClassUsesSkinning(m_geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has invalid geometry class '{}'")

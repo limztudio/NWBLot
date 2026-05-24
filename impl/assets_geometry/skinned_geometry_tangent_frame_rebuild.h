@@ -84,10 +84,10 @@ template<typename VertexVectorT, typename IndexVectorT>
     VertexVectorT& vertices,
     const IndexVectorT& indices,
     Core::Geometry::TangentFrameRebuildResult* outResult,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using RebuildVertex = Core::Geometry::TangentFrameRebuildVertex;
-    Vector<RebuildVertex, Core::Alloc::ScratchArena<>> rebuildVertices{ scratchArena };
+    Vector<RebuildVertex, Core::Alloc::ScratchArena> rebuildVertices{ scratchArena };
     BuildInput(vertices, rebuildVertices);
 
     if(!Core::Geometry::RebuildTangentFrames(rebuildVertices, indices, outResult))

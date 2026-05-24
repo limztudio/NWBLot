@@ -70,7 +70,7 @@ inline bool ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u
 inline bool CopySpirvWords(
     const void* binary,
     const usize binarySize,
-    Alloc::ScratchArena<>& scratchArena,
+    Alloc::ScratchArena& scratchArena,
     SpirvWordBuffer& outWords
 ){
     outWords = {};
@@ -290,7 +290,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
         return nullptr;
     }
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
     __hidden_vulkan_shader::SpirvWordBuffer spirvWords;
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), scratchArena, spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload for entry '{}'"), StringConvert(requestedEntryName));
@@ -336,7 +336,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     shader->m_desc = d;
     __hidden_vulkan_shader::AssignBytecode(binary, binarySize, shader->m_bytecode);
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
     __hidden_vulkan_shader::SpirvWordBuffer spirvWords;
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), scratchArena, spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
@@ -383,7 +383,7 @@ ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const Shade
     shader->m_bytecode = base->m_bytecode;
     shader->m_entryPointName = base->m_entryPointName;
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
     __hidden_vulkan_shader::SpirvWordBuffer spirvWords;
     if(!__hidden_vulkan_shader::CopySpirvWords(shader->m_bytecode.data(), shader->m_bytecode.size(), scratchArena, spirvWords)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload for specialization"));
@@ -476,8 +476,8 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         bool isInstanced = false;
     };
 
-    Alloc::ScratchArena<> scratchArena;
-    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchArena<>> bindingInfos(
+    Alloc::ScratchArena scratchArena;
+    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchArena> bindingInfos(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),

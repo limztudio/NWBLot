@@ -99,8 +99,8 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
 
 
 void AssetManager::processPending(){
-    Alloc::ScratchArena<> scratchArena;
-    Vector<u64, Alloc::ScratchArena<>> pendingRequestIds{scratchArena};
+    Alloc::ScratchArena scratchArena;
+    Vector<u64, Alloc::ScratchArena> pendingRequestIds{scratchArena};
     {
         ScopedLock lock(m_mutex);
         pendingRequestIds.reserve(m_requests.size());

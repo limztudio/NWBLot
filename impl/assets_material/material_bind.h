@@ -197,7 +197,7 @@ struct MaterialBindTypedLayoutCache{
 [[nodiscard]] bool ParseMaterialBindSource(
     const Path& bindFilePath,
     MaterialBindEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool BuildMaterialBindParameterKey(
     AStringView instanceName,
@@ -209,14 +209,14 @@ struct MaterialBindTypedLayoutCache{
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
     MaterialBindTypedLayout& outLayout,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool FindOrBuildMaterialBindTypedLayout(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
     const MaterialBindTypedLayout*& outLayout,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 );
 void CopyMaterialBindTypedLayoutDefaults(
     const MaterialBindTypedLayout& layout,

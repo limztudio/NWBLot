@@ -126,8 +126,8 @@ bool RebuildTangentFrames(
             return false;
     }
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<TangentFrameAccumulator, Core::Alloc::ScratchArena<>> accumulators(
+    Core::Alloc::ScratchArena scratchArena;
+    Vector<TangentFrameAccumulator, Core::Alloc::ScratchArena> accumulators(
         vertexCount,
         TangentFrameAccumulator{
             VectorZero(),

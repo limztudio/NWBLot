@@ -40,7 +40,7 @@ private:
 
 private:
     using JobFunction = InplaceFunction<s_JobInlineStorageBytes>;
-    using ReadyBatch = Vector<JobHandle, ScratchArena<>>;
+    using ReadyBatch = Vector<JobHandle, ScratchArena>;
 
 
 private:
@@ -382,7 +382,7 @@ private:
     }
 
     inline JobHandle complete(JobHandle handle, bool allowInline){
-        ScratchArena<> scratchArena;
+        ScratchArena scratchArena;
         ReadyBatch readyJobs{ReadyBatch::allocator_type(scratchArena)};
         JobSignal* completionSignal = nullptr;
         JobHandle inlineContinuation;

@@ -39,7 +39,7 @@ namespace __hidden_material_asset{
 
 
 using CookString = ShaderCook::CookString;
-using ScratchArena = Core::Alloc::ScratchArena<>;
+using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 template<typename T>
 using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, ScratchArena>;
@@ -562,7 +562,7 @@ using MaterialBindInterfaceLookup = HashMap<
     const MaterialBindEntry*,
     Hasher<Name>,
     EqualTo<Name>,
-    Core::Alloc::ScratchArena<>
+    Core::Alloc::ScratchArena
 >;
 
 static void BuildMaterialBindInterfaceLookup(
@@ -1488,7 +1488,7 @@ bool ParseMaterialCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MaterialCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::ParseMaterialMeta(
         shaderCook,
@@ -1504,7 +1504,7 @@ bool ParseMaterialCookMetadata(
 bool ValidateMaterialCookInterfaces(
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
     ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::ValidateMaterialCookInterfaces(materialBindEntries, materialEntries, scratchArena);
 }
@@ -1513,7 +1513,7 @@ bool BuildMaterialBindIncludeSource(
     ShaderCook::CookArena& arena,
     const MaterialBindEntry& entry,
     ShaderCook::CookString& outSource,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::BuildMaterialBindIncludeSourceImpl(arena, entry, outSource, scratchArena);
 }
@@ -1524,7 +1524,7 @@ bool EmitMaterialBindIncludes(
     const AStringView configurationSafeName,
     const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
     Path& outIncludeRoot,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::EmitMaterialBindIncludes(
         arena,
@@ -1542,7 +1542,7 @@ bool ResolveMaterialBindDependencyInterface(
     const ShaderCook::CookVector<Path>& dependencies,
     ShaderCook::CookString& outInterfacePath,
     Name& outInterfaceName,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::ResolveMaterialBindDependencyInterface(
         shaderName,

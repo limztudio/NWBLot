@@ -38,8 +38,8 @@ namespace __hidden_geometry_asset_cook{
 
 
 template<typename T>
-using ScratchVector = Vector<T, Core::Alloc::ScratchArena<>>;
-using ScratchString = AString<Core::Alloc::ScratchArena<>>;
+using ScratchVector = Vector<T, Core::Alloc::ScratchArena>;
+using ScratchString = AString<Core::Alloc::ScratchArena>;
 
 struct DiscoveredNwbFile{
     Path assetRoot;
@@ -94,7 +94,7 @@ static const Core::Metascript::Value* FindField(const Core::Metascript::Value& m
     return map.findField(Core::Metascript::MStringView(fieldName.data(), fieldName.size()));
 }
 
-static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena<>& arena, const AStringView baseLabel, const usize index){
+static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index){
     char indexBuffer[32] = {};
     const AStringView indexText = FormatDecimal(index, indexBuffer);
     NWB_ASSERT(!indexText.empty());
@@ -203,7 +203,7 @@ static bool ParseMetadataF32TupleWithLabel(
     const tchar* metaKind,
     const AStringView label,
     f32 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
@@ -235,7 +235,7 @@ static bool ParseMetadataF32Tuple(
     const tchar* metaKind,
     const AStringView label,
     f32 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
 }
@@ -248,7 +248,7 @@ static bool ParseMetadataF32TupleListElement(
     const AStringView fieldName,
     const usize elementIndex,
     f32 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     const ScratchString label = MakeIndexedLabel(scratchArena, fieldName, elementIndex);
     return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
@@ -261,7 +261,7 @@ static bool ParseMetadataFloatListField(
     const tchar* metaKind,
     const AStringView fieldName,
     ElementVectorT& outValues,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outValues.clear();
 
@@ -478,7 +478,7 @@ static bool FillMetadataIndexRecursive(
     const AStringView label,
     const bool use32BitIndices,
     IndexVectorT& outIndices,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     if(value.isList()){
         const auto& list = value.asList();
@@ -514,7 +514,7 @@ static bool ParseMetadataIndexField(
     const tchar* metaKind,
     const bool use32BitIndices,
     IndexVectorT& outIndices,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outIndices.clear();
 
@@ -597,7 +597,7 @@ static bool ParseGeometryMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     GeometryCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = GeometryCookEntry(outEntry.positions.get_allocator().arena());
 
@@ -665,7 +665,7 @@ static bool ParseU16Tuple(
     const Core::Metascript::Value& value,
     const AStringView label,
     u16 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': '{}' must be a {}-component integer list")
@@ -705,7 +705,7 @@ static bool ParseOptionalFloatListField(
     const AStringView fieldName,
     ElementVectorT& outValues,
     bool& outProvided,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outValues.clear();
     outProvided = false;
@@ -767,7 +767,7 @@ static bool GenerateMissingSkinnedGeometryFrames(
     const bool tangentsProvided,
     Core::Assets::AssetVector<SkinnedGeometryVertex>& vertices,
     const Core::Assets::AssetVector<u32>& indices,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     if(normalsProvided && tangentsProvided)
         return true;
@@ -827,7 +827,7 @@ static bool ParseSkinInfluences(
     const Core::Metascript::Value& asset,
     const usize vertexCount,
     Core::Assets::AssetVector<SkinInfluence4>& outSkin,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outSkin.clear();
 
@@ -893,7 +893,7 @@ static bool ParseInverseBindMatrices(
     const Core::Metascript::Value& asset,
     const u32 skeletonJointCount,
     Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& outMatrices,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outMatrices.clear();
 
@@ -962,7 +962,7 @@ static bool ParseSkinnedGeometryMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     SkinnedGeometryCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = SkinnedGeometryCookEntry(outEntry.restVertices.get_allocator().arena());
 
@@ -1127,7 +1127,7 @@ bool ParseGeometryCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     GeometryCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_geometry_asset_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_geometry_asset_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
@@ -1141,7 +1141,7 @@ bool ParseSkinnedGeometryCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     SkinnedGeometryCookEntry& outEntry,
-    Core::Alloc::ScratchArena<>& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_geometry_asset_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_geometry_asset_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))

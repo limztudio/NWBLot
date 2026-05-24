@@ -139,7 +139,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    Alloc::ScratchArena<> scratchArena(s_GraphicsPipelineScratchArenaBytes);
+    Alloc::ScratchArena scratchArena(s_GraphicsPipelineScratchArenaBytes);
 
     auto* pso = NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;

@@ -33,7 +33,7 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
     auto* pso = NewArenaObject<ComputePipeline>(m_context.objectArena, m_context);
     pso->m_desc = desc;

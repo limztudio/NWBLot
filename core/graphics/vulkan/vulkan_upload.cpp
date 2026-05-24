@@ -31,7 +31,7 @@ using SubmittedOwnerLookup = HashSet<
     TrackedCommandBuffer*,
     Hasher<TrackedCommandBuffer*>,
     EqualTo<TrackedCommandBuffer*>,
-    Alloc::ScratchArena<>
+    Alloc::ScratchArena
 >;
 
 struct SubmittedOwnerLookupContext{
@@ -234,7 +234,7 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
         completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
 
     if(submittedOwnerCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
-        Alloc::ScratchArena<> scratchArena;
+        Alloc::ScratchArena scratchArena;
         VulkanDetail::SubmittedOwnerLookup submittedOwnerLookup(
             0,
             Hasher<TrackedCommandBuffer*>(),

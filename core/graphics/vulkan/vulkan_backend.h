@@ -29,9 +29,9 @@ class Buffer;
 class Heap;
 class Texture;
 class StagingTexture;
-using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchArena<>>;
-using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena<>>;
-using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, Alloc::ScratchArena<>>;
+using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchArena>;
+using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena>;
+using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +109,7 @@ struct GraphicsPipelineFixedState{
     VkPipelineRenderingCreateInfo renderingInfo = {};
     PipelineRenderingFormatVector colorFormats;
 
-    explicit GraphicsPipelineFixedState(Alloc::ScratchArena<>& scratchArena)
+    explicit GraphicsPipelineFixedState(Alloc::ScratchArena& scratchArena)
         : blendAttachments(scratchArena)
         , colorFormats(scratchArena)
     {}
@@ -1151,16 +1151,16 @@ struct DescriptorHeapPushRange{
     u32 pushOffsetBytes = 0;
     u32 pushWordCount = 0;
 };
-using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena<>>;
-using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena<>>;
+using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena>;
+using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
 struct PipelineDescriptorHeapScratch{
-    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>> mappings;
-    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>> stageMappings;
+    Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena> mappings;
+    Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena> stageMappings;
     VkPipelineCreateFlags2CreateInfo flags2{};
 
 
-    explicit PipelineDescriptorHeapScratch(Alloc::ScratchArena<>& scratchArena)
+    explicit PipelineDescriptorHeapScratch(Alloc::ScratchArena& scratchArena)
         : mappings(scratchArena)
         , stageMappings(scratchArena)
     {}
@@ -1253,8 +1253,8 @@ public:
         FixedVector<DescriptorHeapPushRange, s_MaxBindingLayouts>& outPushRanges,
         u32& outPushDataSize,
         VkPipelineCreateFlags2CreateInfo& outFlags2,
-        Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena<>>& outMappings,
-        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena<>>& outStageMappings
+        Vector<VkDescriptorSetAndBindingMappingEXT, Alloc::ScratchArena>& outMappings,
+        Vector<VkShaderDescriptorSetAndBindingMappingInfoEXT, Alloc::ScratchArena>& outStageMappings
     );
     static bool tryEnablePipeline(
         const VulkanContext& context,
@@ -2064,7 +2064,7 @@ private:
         VkPipelineLayout& outPipelineLayout,
         u32& outPushConstantByteSize,
         bool& outOwnsPipelineLayout,
-        Alloc::ScratchArena<>& scratchArena
+        Alloc::ScratchArena& scratchArena
     )const;
     [[nodiscard]] bool validateHeapMemoryBinding(
         IHeap* heap,
@@ -2080,7 +2080,7 @@ private:
         PipelineShaderStageVector& shaderStages,
         PipelineDescriptorHeapScratch& descriptorHeapScratch,
         PipelineBindingState& outBindings,
-        Alloc::ScratchArena<>& scratchArena
+        Alloc::ScratchArena& scratchArena
     )const;
     template<typename PipelineT>
     [[nodiscard]] bool configurePipelineBindingsOrDestroy(
@@ -2089,7 +2089,7 @@ private:
         PipelineShaderStageVector& shaderStages,
         PipelineDescriptorHeapScratch& descriptorHeapScratch,
         PipelineT* pipeline,
-        Alloc::ScratchArena<>& scratchArena
+        Alloc::ScratchArena& scratchArena
     )const{
         if(configurePipelineBindings(bindingLayouts, operationName, shaderStages, descriptorHeapScratch, *pipeline, scratchArena))
             return true;

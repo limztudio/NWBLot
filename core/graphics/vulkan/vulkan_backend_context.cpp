@@ -53,21 +53,21 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ScratchString = AString<Alloc::ScratchArena<>>;
-using ScratchStringStream = AStringStream<Alloc::ScratchArena<>>;
-using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena<>>;
+using ScratchString = AString<Alloc::ScratchArena>;
+using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
+using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena>;
 
-static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena<>& arena){
+static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
     return ScratchStringStream(std::ios_base::out, arena);
 }
 
-static ScratchString MakeScratchString(Alloc::ScratchArena<>& arena, const AStringView text){
+static ScratchString MakeScratchString(Alloc::ScratchArena& arena, const AStringView text){
     return ScratchString(text, arena);
 }
 
 template<typename Set>
-static Vector<const char*, Alloc::ScratchArena<>> StringSetToVector(const Set& set, Alloc::ScratchArena<>& arena){
-    Vector<const char*, Alloc::ScratchArena<>> ret(arena);
+static Vector<const char*, Alloc::ScratchArena> StringSetToVector(const Set& set, Alloc::ScratchArena& arena){
+    Vector<const char*, Alloc::ScratchArena> ret(arena);
     ret.reserve(set.size());
     for(const auto& s : set)
         ret.push_back(s.c_str());
@@ -75,8 +75,8 @@ static Vector<const char*, Alloc::ScratchArena<>> StringSetToVector(const Set& s
 }
 
 template<typename Map>
-static Vector<const char*, Alloc::ScratchArena<>> StringMapKeysToVector(const Map& map, Alloc::ScratchArena<>& arena){
-    Vector<const char*, Alloc::ScratchArena<>> ret(arena);
+static Vector<const char*, Alloc::ScratchArena> StringMapKeysToVector(const Map& map, Alloc::ScratchArena& arena){
+    Vector<const char*, Alloc::ScratchArena> ret(arena);
     ret.reserve(map.size());
     for(const auto& [key, val] : map){
         static_cast<void>(val);
@@ -178,7 +178,7 @@ static const char* BoolToString(bool value){
     return value ? "yes" : "no";
 }
 
-static ScratchString VulkanVersionToString(Alloc::ScratchArena<>& arena, u32 version){
+static ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 version){
     auto ss = MakeScratchStringStream(arena);
     ss << VK_API_VERSION_MAJOR(version)
        << "."
@@ -557,7 +557,7 @@ bool BackendContext::createVulkanInstance(){
 
     decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
 
-    Alloc::ScratchArena<> scratchArena(32768);
+    Alloc::ScratchArena scratchArena(32768);
 
     uint32_t extensionCount = 0;
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -565,7 +565,7 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extension count. {}"), ResultToString(res));
         return false;
     }
-    Vector<VkExtensionProperties, Alloc::ScratchArena<>> availableExtensions(extensionCount, scratchArena);
+    Vector<VkExtensionProperties, Alloc::ScratchArena> availableExtensions(extensionCount, scratchArena);
     res = vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, availableExtensions.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate instance extensions. {}"), ResultToString(res));
@@ -607,7 +607,7 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layer count. {}"), ResultToString(res));
         return false;
     }
-    Vector<VkLayerProperties, Alloc::ScratchArena<>> availableLayers(layerCount, scratchArena);
+    Vector<VkLayerProperties, Alloc::ScratchArena> availableLayers(layerCount, scratchArena);
     res = vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate layers. {}"), ResultToString(res));
@@ -742,9 +742,9 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
-    Vector<VkQueueFamilyProperties, Alloc::ScratchArena<>> props(queueFamilyCount, scratchArena);
+    Vector<VkQueueFamilyProperties, Alloc::ScratchArena> props(queueFamilyCount, scratchArena);
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
     m_graphicsQueueFamily = -1;
@@ -843,9 +843,9 @@ bool BackendContext::pickPhysicalDevice(){
         return false;
     }
 
-    Alloc::ScratchArena<> scratchArena(32768);
+    Alloc::ScratchArena scratchArena(32768);
 
-    Vector<VkPhysicalDevice, Alloc::ScratchArena<>> devices(deviceCount, scratchArena);
+    Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
@@ -918,7 +918,7 @@ bool BackendContext::pickPhysicalDevice(){
             errorStream << "\n  - failed to enumerate device extension count";
             continue;
         }
-        Vector<VkExtensionProperties, Alloc::ScratchArena<>> deviceExtensions(extCount, scratchArena);
+        Vector<VkExtensionProperties, Alloc::ScratchArena> deviceExtensions(extCount, scratchArena);
         res = vkEnumerateDeviceExtensionProperties(dev, nullptr, &extCount, deviceExtensions.data());
         if(res != VK_SUCCESS){
             errorStream << "\n  - failed to enumerate device extensions";
@@ -976,7 +976,7 @@ bool BackendContext::pickPhysicalDevice(){
                     errorStream << "\n  - failed to query surface format count";
                     continue;
                 }
-                Vector<VkSurfaceFormatKHR, Alloc::ScratchArena<>> surfaceFmts(fmtCount, scratchArena);
+                Vector<VkSurfaceFormatKHR, Alloc::ScratchArena> surfaceFmts(fmtCount, scratchArena);
                 res = vkGetPhysicalDeviceSurfaceFormatsKHR(dev, m_windowSurface, &fmtCount, surfaceFmts.data());
                 if(res != VK_SUCCESS){
                     errorStream << "\n  - failed to query surface formats";
@@ -1050,7 +1050,7 @@ bool BackendContext::pickPhysicalDevice(){
 bool BackendContext::createVulkanDevice(){
     VkResult res = VK_SUCCESS;
 
-    Alloc::ScratchArena<> scratchArena(32768);
+    Alloc::ScratchArena scratchArena(32768);
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
@@ -1064,7 +1064,7 @@ bool BackendContext::createVulkanDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
         return false;
     }
-    Vector<VkExtensionProperties, Alloc::ScratchArena<>> deviceExtensions(extCount, scratchArena);
+    Vector<VkExtensionProperties, Alloc::ScratchArena> deviceExtensions(extCount, scratchArena);
     res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
@@ -1267,7 +1267,7 @@ bool BackendContext::createVulkanDevice(){
         && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
     ;
 
-    HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena<>> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
+    HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
     uniqueQueueFamilies.reserve(4u);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
 
@@ -1279,7 +1279,7 @@ bool BackendContext::createVulkanDevice(){
         uniqueQueueFamilies.insert(m_transferQueueFamily);
 
     f32 priority = 1.f;
-    Vector<VkDeviceQueueCreateInfo, Alloc::ScratchArena<>> queueDesc(uniqueQueueFamilies.size(), scratchArena);
+    Vector<VkDeviceQueueCreateInfo, Alloc::ScratchArena> queueDesc(uniqueQueueFamilies.size(), scratchArena);
     usize queueIndex = 0u;
     for(i32 queueFamily : uniqueQueueFamilies){
         VkDeviceQueueCreateInfo queueInfo = {};
@@ -1562,9 +1562,9 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
-    Vector<VkPresentModeKHR, Alloc::ScratchArena<>> presentModes(presentModeCount, scratchArena);
+    Vector<VkPresentModeKHR, Alloc::ScratchArena> presentModes(presentModeCount, scratchArena);
     res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, presentModes.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present modes. {}"), ResultToString(res));
@@ -1692,7 +1692,7 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    Vector<VkImage, Alloc::ScratchArena<>> images(imageCount, scratchArena);
+    Vector<VkImage, Alloc::ScratchArena> images(imageCount, scratchArena);
     res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
@@ -1816,7 +1816,7 @@ bool BackendContext::createDevice(){
     if(!createVulkanDevice())
         return false;
 
-    Alloc::ScratchArena<> scratchArena(32768);
+    Alloc::ScratchArena scratchArena(32768);
 
     auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
     auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
@@ -2088,9 +2088,9 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
         return true;
     }
 
-    Alloc::ScratchArena<> scratchArena;
+    Alloc::ScratchArena scratchArena;
 
-    Vector<VkPhysicalDevice, Alloc::ScratchArena<>> devices(deviceCount, scratchArena);
+    Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));

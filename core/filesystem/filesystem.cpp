@@ -489,15 +489,15 @@ template<typename FileNameVector>
 static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames);
 
 static StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStringView volumeName){
-    Core::Alloc::ScratchArena<> scratchArena;
-    AString<Core::Alloc::ScratchArena<>> stageKey = PathToString<char>(scratchArena, outputDirectory);
+    Core::Alloc::ScratchArena scratchArena;
+    AString<Core::Alloc::ScratchArena> stageKey = PathToString<char>(scratchArena, outputDirectory);
     stageKey += '|';
     stageKey += volumeName;
 
-    AString<Core::Alloc::ScratchArena<>> stageToken{scratchArena};
+    AString<Core::Alloc::ScratchArena> stageToken{scratchArena};
     stageToken.reserve(7u + 16u);
     stageToken += "volume_";
-    AppendHexU64<char, Core::Alloc::ScratchArena<>>(ComputeFnv64Text(AStringView(stageKey)), stageToken);
+    AppendHexU64<char, Core::Alloc::ScratchArena>(ComputeFnv64Text(AStringView(stageKey)), stageToken);
     return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
 }
 
@@ -688,8 +688,8 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 }
 
 static bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<Path, Core::Alloc::ScratchArena<>> movedBackupFiles{scratchArena};
+    Core::Alloc::ScratchArena scratchArena;
+    Vector<Path, Core::Alloc::ScratchArena> movedBackupFiles{scratchArena};
     if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
         return false;
 
@@ -1283,8 +1283,8 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
         u64 size = 0;
     };
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<FileLayout, Core::Alloc::ScratchArena<>> layouts{ scratchArena };
+    Core::Alloc::ScratchArena scratchArena;
+    Vector<FileLayout, Core::Alloc::ScratchArena> layouts{ scratchArena };
     layouts.reserve(m_files.size());
 
     for(const auto& [path, record] : m_files){
@@ -1580,8 +1580,8 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchArena<>> indexData(
+    Core::Alloc::ScratchArena scratchArena;
+    Vector<u8, Core::Alloc::ScratchArena> indexData(
         static_cast<usize>(header.indexBytes),
         0,
         scratchArena
@@ -1669,8 +1669,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
         FileRecord file;
     };
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<MetadataIndexRecord, Core::Alloc::ScratchArena<>> sortedRecords{ scratchArena };
+    Core::Alloc::ScratchArena scratchArena;
+    Vector<MetadataIndexRecord, Core::Alloc::ScratchArena> sortedRecords{ scratchArena };
     sortedRecords.reserve(m_files.size());
     for(const auto& [path, record] : m_files)
         sortedRecords.push_back(MetadataIndexRecord{ path, record });
@@ -1682,7 +1682,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         }
     );
 
-    Vector<u8, Core::Alloc::ScratchArena<>> indexBytes{scratchArena};
+    Vector<u8, Core::Alloc::ScratchArena> indexBytes{scratchArena};
     if(header.fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk))){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
@@ -1724,7 +1724,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
-    Vector<u8, Core::Alloc::ScratchArena<>> metadataBuffer{scratchArena};
+    Vector<u8, Core::Alloc::ScratchArena> metadataBuffer{scratchArena};
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
     ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
@@ -1847,8 +1847,8 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
         return false;
     }
 
-    Core::Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Core::Alloc::ScratchArena<>> moveBuffer(
+    Core::Alloc::ScratchArena scratchArena;
+    Vector<u8, Core::Alloc::ScratchArena> moveBuffer(
         static_cast<usize>(moveChunkBytes),
         0,
         scratchArena

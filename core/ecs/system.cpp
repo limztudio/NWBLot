@@ -163,9 +163,9 @@ void SystemScheduler::rebuild(){
     //  - They do not both write the same component type
     //  - One does not write a component that the other reads
 
-    Alloc::ScratchArena<> scratchArena(4096);
+    Alloc::ScratchArena scratchArena(4096);
 
-    Vector<u8, Alloc::ScratchArena<>> assignedSystems(
+    Vector<u8, Alloc::ScratchArena> assignedSystems(
         systemCount, 0,
         scratchArena
     );
@@ -179,10 +179,10 @@ void SystemScheduler::rebuild(){
         componentAccessReserve += sys->m_access.size();
     }
 
-    Vector<ComponentAccess, Alloc::ScratchArena<>> stageAccesses{scratchArena};
+    Vector<ComponentAccess, Alloc::ScratchArena> stageAccesses{scratchArena};
     stageAccesses.reserve(componentAccessReserve);
 
-    Vector<ISystem*, Alloc::ScratchArena<>> stageSystems{scratchArena};
+    Vector<ISystem*, Alloc::ScratchArena> stageSystems{scratchArena};
     stageSystems.reserve(systemCount);
 
     usize numAssigned = 0;

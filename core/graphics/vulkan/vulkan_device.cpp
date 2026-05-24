@@ -611,8 +611,8 @@ void Device::savePipelineCacheData(){
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty() || !m_context.pipelineCache)
         return;
 
-    Alloc::ScratchArena<> scratchArena;
-    Vector<u8, Alloc::ScratchArena<>> cacheData{scratchArena};
+    Alloc::ScratchArena scratchArena;
+    Vector<u8, Alloc::ScratchArena> cacheData{scratchArena};
     if(!VulkanDetail::RetrievePipelineCacheData(m_context.device, m_context.pipelineCache, cacheData))
         return;
     if(cacheData.empty())
@@ -689,8 +689,8 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
         return 0;
     }
 
-    Alloc::ScratchArena<> scratchArena;
-    Vector<TrackedCommandBuffer*, Alloc::ScratchArena<>> submittedOwners{scratchArena};
+    Alloc::ScratchArena scratchArena;
+    Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
     if(pCommandLists && numCommandLists > 0){
         submittedOwners.reserve(numCommandLists);
         for(usize i = 0; i < numCommandLists; ++i){
@@ -933,8 +933,8 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(res != VK_SUCCESS || propertyCount == 0)
         return output;
 
-    Alloc::ScratchArena<> scratchArena;
-    Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena<>> properties(propertyCount, scratchArena);
+    Alloc::ScratchArena scratchArena;
+    Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
     for(u32 i = 0; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
         properties[i].pNext = nullptr;

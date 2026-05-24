@@ -3,7 +3,7 @@
 
 
 [material_constant]
-struct NwbBxdfSurfaceMaterial{
+struct NwbProjectBxdfSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
 
@@ -11,7 +11,7 @@ struct NwbBxdfSurfaceMaterial{
     float4 color_tint;
 };
 
-NwbBxdfSurfaceMaterial surface;
+NwbProjectBxdfSurfaceMaterial surface;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

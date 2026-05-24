@@ -1,0 +1,7 @@
+include asset;
+
+asset.defines = {
+    "NWB_BXDF_MODE": ["0", "1"],
+    "NWB_BXDF_TINT": ["0", "1"],
+};
+

@@ -33,13 +33,13 @@ struct ParsedCookOptions{
 static bool AssignCompactString(
     const AStringView source,
     const char* label,
-    CompactString& outValue,
+    ACompactString& outValue,
     NWB::Core::Assets::AssetString& outError
 ){
     if(outValue.assign(source))
         return true;
 
-    outError = StringFormat(outError.get_allocator().arena(), "{} exceeds CompactString capacity ({})", label, CompactString::s_MaxLength);
+    outError = StringFormat(outError.get_allocator().arena(), "{} exceeds ACompactString capacity ({})", label, ACompactString::s_MaxLength);
     return false;
 }
 

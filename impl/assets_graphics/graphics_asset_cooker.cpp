@@ -139,9 +139,9 @@ struct DiscoveredNwbFile{
     Path assetRoot;
     Path filePath;
     CookString normalizedPathText;
-    CompactString virtualRoot;
+    ACompactString virtualRoot;
 
-    DiscoveredNwbFile(ShaderCook::CookArena& arena, const Path& inAssetRoot, const Path& inFilePath, AStringView inNormalizedPathText, CompactString inVirtualRoot)
+    DiscoveredNwbFile(ShaderCook::CookArena& arena, const Path& inAssetRoot, const Path& inFilePath, AStringView inNormalizedPathText, ACompactString inVirtualRoot)
         : assetRoot(inAssetRoot)
         , filePath(inFilePath)
         , normalizedPathText(inNormalizedPathText, arena)
@@ -377,7 +377,7 @@ static bool DiscoverFilesWithExtension(
     outFiles.clear();
 
     for(const Path& assetRoot : assetRoots){
-        CompactString virtualRoot;
+        ACompactString virtualRoot;
         if(!Core::Assets::BuildAssetRootVirtualRoot(assetRoot, virtualRoot))
             return false;
 
@@ -601,7 +601,7 @@ static u64 EstimateRequiredMetadataBytes(const u64 fileCount){
 
 static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::VolumeBuildConfig& outConfig){
     if(!outConfig.volumeName.assign(s_VolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: volume name '{}' exceeds CompactString capacity"), StringConvert(s_VolumeName));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: volume name '{}' exceeds ACompactString capacity"), StringConvert(s_VolumeName));
         return false;
     }
     outConfig.metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
@@ -1704,7 +1704,7 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     stageDirectoryCleanup.dismiss();
 
     if(!outResult.volumeName.assign(__hidden_graphics_asset_cooker::s_VolumeName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: volume name exceeds CompactString capacity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: volume name exceeds ACompactString capacity"));
         return false;
     }
     outResult.fileCount = stagedFileCount;

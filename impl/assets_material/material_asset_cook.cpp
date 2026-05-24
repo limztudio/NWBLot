@@ -389,11 +389,11 @@ static bool ParseMaterialParameters(
             return false;
         }
 
-        CompactString key;
-        CompactString value;
+        ACompactString key;
+        ACompactString value;
         const AStringView paramValueText(paramValue.asString().data(), paramValue.asString().size());
         if(!key.assign(paramKeyText) || !value.assign(paramValueText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' exceeds CompactString capacity")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' exceeds ACompactString capacity")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
@@ -447,9 +447,9 @@ static bool ParseMaterialParameters(
                 return false;
             }
 
-            CompactString flattenedKey;
+            ACompactString flattenedKey;
             if(!flattenedKey.assign(paramKeyText) || !flattenedKey.pushBack('.') || !flattenedKey.append(blockParamKeyText)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}.{}' exceeds CompactString capacity")
+                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity")
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(paramKeyText)
                     , StringConvert(blockParamKeyText)
@@ -979,9 +979,9 @@ static bool AppendMaterialBindFieldConstants(
         return false;
     }
 
-    CompactString keyText;
+    ACompactString keyText;
     if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' exceeds ACompactString capacity")
             , StringConvert(includePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)

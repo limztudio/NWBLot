@@ -30,10 +30,10 @@ NWB_FILESYSTEM_BEGIN
     return hash;
 }
 
-[[nodiscard]] inline CompactString MakeVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
+[[nodiscard]] inline ACompactString MakeVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
     const u64 hash = HashVolumeSegmentFileName(volumeName, segmentIndex);
 
-    CompactString fileName;
+    ACompactString fileName;
     AppendHexU64(hash, fileName);
     fileName += ".vol";
     return fileName;

@@ -30,7 +30,7 @@ static AssetString DescribeAvailableCookers(AssetArena& arena, const CookerMap& 
         return AssetString("(none)", arena);
 
     Alloc::ScratchArena<> scratchArena;
-    Vector<CompactString, Alloc::ScratchArena<>> types{scratchArena};
+    Vector<ACompactString, Alloc::ScratchArena<>> types{scratchArena};
     types.reserve(cookers.size());
     for(const auto& [_, cooker] : cookers)
         types.push_back(cooker->assetTypeText());
@@ -38,7 +38,7 @@ static AssetString DescribeAvailableCookers(AssetArena& arena, const CookerMap& 
     Sort(types.begin(), types.end());
 
     usize outputSize = 0;
-    for(const CompactString& type : types){
+    for(const ACompactString& type : types){
         const usize typeSize = type.view().size();
         if(typeSize > Limit<usize>::s_Max - outputSize){
             outputSize = 0;

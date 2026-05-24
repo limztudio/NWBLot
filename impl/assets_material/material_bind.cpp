@@ -722,8 +722,8 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
 }
 
 static bool BuildMaterialParameterGpuData(
-    const CompactString& key,
-    const CompactString& value,
+    const ACompactString& key,
+    const ACompactString& value,
     MaterialParameterGpuData& outParameter
 ){
     outParameter = {};
@@ -812,9 +812,9 @@ static bool BuildMaterialTypedLayoutDefaultValue(
 ){
     outDefaultValue = {};
 
-    CompactString key;
+    ACompactString key;
     if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), key)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity")
             , StringConvert(instance.name)
             , StringConvert(bindField.name)
             , StringConvert(materialName.c_str())
@@ -822,10 +822,10 @@ static bool BuildMaterialTypedLayoutDefaultValue(
         return false;
     }
 
-    CompactString defaultText;
+    ACompactString defaultText;
     const AStringView defaultArgument = bindField.defaultArgument();
     if(!defaultText.assign(defaultArgument)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default for '{}.{}' in '{}' exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default for '{}.{}' in '{}' exceeds ACompactString capacity")
             , StringConvert(instance.name)
             , StringConvert(bindField.name)
             , StringConvert(materialName.c_str())
@@ -1074,9 +1074,9 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 return false;
             }
 
-            CompactString parameterName;
+            ACompactString parameterName;
             if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), parameterName)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds CompactString capacity")
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: field '{}.{}' for '{}' exceeds ACompactString capacity")
                     , StringConvert(instance.name)
                     , StringConvert(bindField.name)
                     , StringConvert(contextLabel)
@@ -1119,8 +1119,8 @@ static bool WriteMaterialTypedLayoutFieldBytes(
 
 static bool ParseMaterialTypedLayoutParameterValue(
     const Name& materialName,
-    const CompactString& parameterName,
-    const CompactString& parameterValue,
+    const ACompactString& parameterName,
+    const ACompactString& parameterValue,
     const MaterialTypedLayoutField& field,
     UInt4U& outValue
 ){
@@ -1155,8 +1155,8 @@ static bool ParseMaterialTypedLayoutParameterValue(
 static bool ApplyMaterialBindTypedLayoutParameterValue(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
-    const CompactString& parameterName,
-    const CompactString& parameterValue,
+    const ACompactString& parameterName,
+    const ACompactString& parameterValue,
     Material::TypedBlockByteVector& inOutBlockBytes
 ){
     const auto parameterIt = layout.parameterLookup.find(parameterName);
@@ -1475,7 +1475,7 @@ void MaterialBindTypedLayoutCache::reserve(const usize count){
 bool BuildMaterialBindParameterKey(
     const AStringView instanceName,
     const AStringView fieldName,
-    CompactString& outKey
+    ACompactString& outKey
 ){
     outKey.clear();
     return outKey.assign(instanceName) && outKey.pushBack('.') && outKey.append(fieldName);

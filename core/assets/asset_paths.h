@@ -80,7 +80,7 @@ template<typename StringT>
     return hasComponent;
 }
 
-[[nodiscard]] inline bool ExtractAssetVirtualRoot(const AStringView virtualPath, CompactString& outVirtualRoot){
+[[nodiscard]] inline bool ExtractAssetVirtualRoot(const AStringView virtualPath, ACompactString& outVirtualRoot){
     outVirtualRoot.clear();
 
     const Path virtualPathPath(virtualPath);
@@ -151,14 +151,14 @@ template<typename StringT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BuildAssetRootVirtualRoot(const Path& assetRoot, CompactString& outVirtualRoot){
+[[nodiscard]] inline bool BuildAssetRootVirtualRoot(const Path& assetRoot, ACompactString& outVirtualRoot){
     outVirtualRoot.clear();
 
     AStringView virtualRootText;
     if(!AssetPathsDetail::ResolveAssetRootVirtualRootText(assetRoot, virtualRootText))
         return false;
     if(!outVirtualRoot.assign(virtualRootText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset virtual root '{}' exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset virtual root '{}' exceeds ACompactString capacity")
             , StringConvert(virtualRootText)
         );
         return false;
@@ -196,7 +196,7 @@ template<typename StringT>
 
 [[nodiscard]] inline bool BuildDerivedAssetVirtualPath(
     const Path& assetRoot,
-    const CompactString& virtualRoot,
+    const ACompactString& virtualRoot,
     const Path& sourceOrMetaPath,
     Name& outVirtualPath
 ){
@@ -204,7 +204,7 @@ template<typename StringT>
 }
 
 [[nodiscard]] inline bool HasReservedAssetVirtualRoot(const AStringView virtualPath){
-    CompactString virtualRoot;
+    ACompactString virtualRoot;
     if(!AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, virtualRoot))
         return false;
 
@@ -223,7 +223,7 @@ template<typename AssetRootVector>
     if(componentIt == virtualPathPath.end())
         return false;
 
-    CompactString requestedVirtualRoot;
+    ACompactString requestedVirtualRoot;
     {
         Alloc::ScratchArena<> scratchArena;
         const AString<Alloc::ScratchArena<>> componentText = PathToString(scratchArena, *componentIt);
@@ -232,7 +232,7 @@ template<typename AssetRootVector>
     }
 
     for(const Path& assetRoot : assetRoots){
-        CompactString assetVirtualRoot;
+        ACompactString assetVirtualRoot;
         if(!BuildAssetRootVirtualRoot(assetRoot, assetVirtualRoot))
             return false;
         if(assetVirtualRoot != requestedVirtualRoot)
@@ -431,7 +431,7 @@ template<typename MetadataValue>
 template<typename MetadataValue>
 [[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(
     const Path& assetRoot,
-    const CompactString& virtualRoot,
+    const ACompactString& virtualRoot,
     const Path& nwbFilePath,
     const MetadataValue& asset,
     const AStringView assetLabel,

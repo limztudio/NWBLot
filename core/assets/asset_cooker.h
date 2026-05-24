@@ -29,8 +29,8 @@ struct AssetCookOptions{
     AssetVector<AssetString> assetRoots;
     AssetString outputDirectory;
     AssetString cacheDirectory;
-    CompactString configuration;
-    CompactString assetType;
+    ACompactString configuration;
+    ACompactString assetType;
 };
 
 
@@ -39,7 +39,7 @@ struct AssetCookOptions{
 
 class IAssetCooker{
 public:
-    IAssetCooker(AssetArena& arena, const CompactString& assetTypeText)
+    IAssetCooker(AssetArena& arena, const ACompactString& assetTypeText)
         : m_arena(arena)
         , m_assetTypeText(assetTypeText)
         , m_assetType(assetTypeText.empty() ? NAME_NONE : Name(assetTypeText.view()))
@@ -48,7 +48,7 @@ public:
 
 
 public:
-    [[nodiscard]] const CompactString& assetTypeText()const{ return m_assetTypeText; }
+    [[nodiscard]] const ACompactString& assetTypeText()const{ return m_assetTypeText; }
     [[nodiscard]] const Name& assetType()const{ return m_assetType; }
 
     virtual bool cook(const AssetCookOptions& options) = 0;
@@ -59,7 +59,7 @@ protected:
 
 
 private:
-    CompactString m_assetTypeText;
+    ACompactString m_assetTypeText;
     Name m_assetType = NAME_NONE;
 };
 

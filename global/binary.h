@@ -216,13 +216,13 @@ template<typename Container, typename StringT>
 }
 
 template<typename Container>
-[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, CompactString& outText){
+[[nodiscard]] inline bool ReadString(const Container& binary, usize& inOutOffset, ACompactString& outText){
     usize cursor = inOutOffset;
     AStringView parsedTextView;
     if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, parsedTextView))
         return false;
 
-    CompactString parsedText;
+    ACompactString parsedText;
     if(!parsedText.assign(parsedTextView))
         return false;
 
@@ -381,14 +381,14 @@ template<typename Container>
     const usize stringTableOffset,
     const usize stringTableByteCount,
     const u32 textOffset,
-    CompactString& outText
+    ACompactString& outText
 ){
     outText.clear();
     AStringView parsedTextView;
     if(!BinaryDetail::ReadStringTableTextView(binary, stringTableOffset, stringTableByteCount, textOffset, parsedTextView))
         return false;
 
-    CompactString parsedText;
+    ACompactString parsedText;
     if(!parsedText.assign(parsedTextView))
         return false;
 

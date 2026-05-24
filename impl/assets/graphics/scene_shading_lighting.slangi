@@ -2,31 +2,31 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_BXDF_LIGHTING_SLANGI
-#define NWB_BXDF_LIGHTING_SLANGI
+#ifndef NWB_SCENE_SHADING_LIGHTING_SLANGI
+#define NWB_SCENE_SHADING_LIGHTING_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <nwb_shader_math.slangi>
+#include "nwb_shader_math.slangi"
 #include "scene_shading_buffer.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbProjectDirectionalLightVector(){
+float3 nwbSceneDirectionalLightVector(){
     return nwbSafeNormalize(g_NwbSceneDirectionalLightDirection.xyz, float3(0.0, 0.0, -1.0));
 }
 
-float3 nwbProjectDirectionalLightRadiance(){
+float3 nwbSceneDirectionalLightRadiance(){
     const float3 lightColor = clamp(g_NwbSceneDirectionalLightColorIntensity.xyz, float3(0.0), float3(1.5));
     const float lightIntensity = min(max(g_NwbSceneDirectionalLightColorIntensity.w, 0.0), 2.0);
     return lightColor * lightIntensity;
 }
 
-float3 nwbProjectApplyDirectionalShading(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition){
+float3 nwbSceneApplyDirectionalShading(float3 baseColor, float3 normal, float4 tangent, float3 worldPosition){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
     const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
@@ -35,10 +35,10 @@ float3 nwbProjectApplyDirectionalShading(float3 baseColor, float3 normal, float4
         cross(normalVector, nwbFrameFallbackTangent(normalVector))
     );
 
-    const float3 lightVector = nwbProjectDirectionalLightVector();
+    const float3 lightVector = nwbSceneDirectionalLightVector();
     const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, lightVector);
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
-    const float3 lightRadiance = nwbProjectDirectionalLightRadiance();
+    const float3 lightRadiance = nwbSceneDirectionalLightRadiance();
 
     const float ndotlRaw = dot(normalVector, lightVector);
     const float ndotl = max(ndotlRaw, 0.0);

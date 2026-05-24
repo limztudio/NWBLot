@@ -103,8 +103,8 @@ static constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 static constexpr AStringView s_VolumePublishLogPrefix = "Filesystem volume publish";
 
 
-static CompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
-    CompactString detail;
+static ACompactString FilesystemMutationFailureDetail(const ErrorCode& errorCode, const AStringView fallbackDetail){
+    ACompactString detail;
     if(errorCode && detail.assign(errorCode.message()))
         return detail;
 
@@ -185,16 +185,16 @@ static bool LessName(const Name& lhs, const Name& rhs){
     return ::LessNameHash(lhs.hash(), rhs.hash());
 }
 
-static CompactString LastErrnoMessage(){
+static ACompactString LastErrnoMessage(){
     const i32 errorNumber = errno;
     if(errorNumber == 0)
-        return CompactString("none");
+        return ACompactString("none");
 
     char errorText[256] = {};
     if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
-        return CompactString("unknown");
+        return ACompactString("unknown");
 
-    CompactString output(errorText);
+    ACompactString output(errorText);
     output += " (";
     char numberText[32] = {};
     output += FormatDecimal(errorNumber, numberText);

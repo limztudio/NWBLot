@@ -31,7 +31,7 @@ NWB_IMPL_BEGIN
 struct GraphicsCookEnvironment{
     using AssetRootVector = Vector<Path, Core::Alloc::GlobalArena>;
 
-    CompactString configuration;
+    ACompactString configuration;
     Path repoRoot;
     AssetRootVector assetRoots;
     Path outputDirectory;
@@ -43,7 +43,7 @@ struct GraphicsCookEnvironment{
 };
 
 struct GraphicsCookResult{
-    CompactString volumeName;
+    ACompactString volumeName;
     u64 fileCount = 0;
     u64 segmentCount = 0;
 };
@@ -52,7 +52,7 @@ struct GraphicsCookResult{
 class GraphicsAssetCooker final : public Core::Assets::IAssetCooker{
 public:
     explicit GraphicsAssetCooker(Core::Alloc::GlobalArena& arena)
-        : IAssetCooker(arena, CompactString("graphics"))
+        : IAssetCooker(arena, ACompactString("graphics"))
     {}
 
     virtual bool cook(const Core::Assets::AssetCookOptions& options)override;

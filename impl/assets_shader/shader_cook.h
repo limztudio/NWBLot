@@ -107,9 +107,9 @@ public:
 
     struct ShaderEntry{
         CookString name;
-        CompactString stage;
-        CompactString archiveStage;
-        CompactString targetProfile;
+        ACompactString stage;
+        ACompactString archiveStage;
+        ACompactString targetProfile;
         CookString entryPoint;
         CookString source;
 

@@ -96,20 +96,46 @@ static void TestRejectedStringReadsDoNotAdvanceCursor(TestContext& context){
     const char textWithNull[] = { 'a', '\0', 'b' };
     NWB_GLOBAL_TEST_CHECK(context, AppendString(embeddedNull, AStringView(textWithNull, sizeof(textWithNull))));
 
-    CompactString compact("unchanged");
+    ACompactString compact("unchanged");
     NWB_GLOBAL_TEST_CHECK(context, !ReadString(embeddedNull, cursor, compact));
     NWB_GLOBAL_TEST_CHECK(context, cursor == 0u);
     NWB_GLOBAL_TEST_CHECK(context, compact.view() == AStringView("unchanged"));
 }
 
-static void TestRejectedCompactStringAssignResetsText(TestContext& context){
-    CompactString compact("seed");
+static void TestRejectedACompactStringAssignResetsText(TestContext& context){
+    ACompactString compact("seed");
     const char textWithNull[] = { 'a', '\0', 'b' };
 
     NWB_GLOBAL_TEST_CHECK(context, !compact.assign(AStringView(textWithNull, sizeof(textWithNull))));
     NWB_GLOBAL_TEST_CHECK(context, compact.empty());
     NWB_GLOBAL_TEST_CHECK(context, compact.view().empty());
     NWB_GLOBAL_TEST_CHECK(context, compact.c_str()[0] == '\0');
+}
+
+static void TestBasicCompactStringAliases(TestContext& context){
+    static_assert(sizeof(CompactString) == sizeof(ACompactString));
+    static_assert(sizeof(ACompactString) == ACompactString::s_StorageBytes);
+    static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes);
+
+    ACompactString narrow("Folder\\File.TXT");
+    NWB_GLOBAL_TEST_CHECK(context, narrow.view() == AStringView("folder/file.txt"));
+
+    WCompactString wide(L"Folder\\File.TXT");
+    NWB_GLOBAL_TEST_CHECK(context, wide.view() == WStringView(L"folder/file.txt"));
+
+    wide += L"\\More";
+    NWB_GLOBAL_TEST_CHECK(context, wide.view() == WStringView(L"folder/file.txt/more"));
+
+    const WCompactString fileText = wide.substr(7u, 4u);
+    NWB_GLOBAL_TEST_CHECK(context, fileText.view() == WStringView(L"file"));
+
+    wchar oversized[WCompactString::s_MaxLength + 2u] = {};
+    for(usize i = 0u; i < WCompactString::s_MaxLength + 1u; ++i)
+        oversized[i] = L'a';
+
+    WCompactString rejected(L"unchanged");
+    NWB_GLOBAL_TEST_CHECK(context, !rejected.assign(WStringView(oversized, WCompactString::s_MaxLength + 1u)));
+    NWB_GLOBAL_TEST_CHECK(context, rejected.empty());
 }
 
 static void TestStringTableText(TestContext& context){
@@ -122,7 +148,7 @@ static void TestStringTableText(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, alphaOffset == 0u);
     NWB_GLOBAL_TEST_CHECK(context, betaOffset == 6u);
 
-    CompactString parsed;
+    ACompactString parsed;
     NWB_GLOBAL_TEST_CHECK(context, ReadStringTableText(stringTable, 0u, stringTable.size(), alphaOffset, parsed));
     NWB_GLOBAL_TEST_CHECK(context, parsed.view() == AStringView("alpha"));
 
@@ -142,7 +168,7 @@ static void TestInvalidStringTableReads(TestContext& context){
     unterminated.push_back(static_cast<u8>('a'));
     unterminated.push_back(static_cast<u8>('b'));
 
-    CompactString parsed("unchanged");
+    ACompactString parsed("unchanged");
     NWB_GLOBAL_TEST_CHECK(context, !ReadStringTableText(unterminated, 0u, unterminated.size(), 0u, parsed));
     NWB_GLOBAL_TEST_CHECK(context, parsed.empty());
 
@@ -296,7 +322,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_global_tests::TestPodRoundTrip(context);
     __hidden_global_tests::TestLengthPrefixedStringRoundTrip(context);
     __hidden_global_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
-    __hidden_global_tests::TestRejectedCompactStringAssignResetsText(context);
+    __hidden_global_tests::TestRejectedACompactStringAssignResetsText(context);
+    __hidden_global_tests::TestBasicCompactStringAliases(context);
     __hidden_global_tests::TestStringTableText(context);
     __hidden_global_tests::TestInvalidStringTableReads(context);
     __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);

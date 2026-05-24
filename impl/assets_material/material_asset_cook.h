@@ -53,7 +53,7 @@ struct MaterialCookEntry{
         , typedBlockBytes(arena)
         , shaderVariant(arena)
         , stageShaders(0, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena)
-        , parameters(0, Hasher<CompactString>(), EqualTo<CompactString>(), arena)
+        , parameters(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena)
     {}
 
     void reset(){

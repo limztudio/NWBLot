@@ -5,7 +5,7 @@
 #define NWB_SCENE_SHADING_SET 0
 #define NWB_SCENE_SHADING_BINDING 5
 
-#include <bxdf_lighting.slangi>
+#include "scene_shading_lighting.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +50,7 @@ NwbDeferredLightingPixelOutput main(NwbDeferredLightingPixelInput input){
     const float3 normal = nwbDeferredDecodeNormal(g_GBufferNormal.Sample(g_DeferredSampler, input.uv).rgb);
     const float3 worldPosition = g_GBufferWorldPosition.Sample(g_DeferredSampler, input.uv).xyz;
     const float3 shadedColor = clamp(
-        nwbProjectApplyDirectionalShading(baseColor, normal, float4(0.0, 0.0, 0.0, 1.0), worldPosition),
+        nwbSceneApplyDirectionalShading(baseColor, normal, float4(0.0, 0.0, 0.0, 1.0), worldPosition),
         float3(0.0),
         float3(1.0)
     );

@@ -62,7 +62,7 @@ using VolumeBytes = Vector<u8, VolumeArena>;
 using VolumeBuildFileMap = HashMap<VolumeString, VolumeBytes, VolumeArena>;
 
 struct VolumeMountDesc{
-    CompactString volumeName;
+    ACompactString volumeName;
     Path mountDirectory;
 
     u64 segmentSize = 0;
@@ -75,7 +75,7 @@ struct VolumeMountDesc{
 
 
 struct VolumeBuildConfig{
-    CompactString volumeName;
+    ACompactString volumeName;
     u64 segmentSize = 0;
     u64 metadataSize = 0;
 };
@@ -105,8 +105,8 @@ public:
 
 private:
     Path m_directoryPath;
-    CompactString m_operationName;
-    CompactString m_label;
+    ACompactString m_operationName;
+    ACompactString m_label;
     bool m_active = true;
 };
 
@@ -217,7 +217,7 @@ private:
     bool m_mounted = false;
     bool m_writable = false;
 
-    CompactString m_volumeName;
+    ACompactString m_volumeName;
     Path m_mountDirectory;
 
     u64 m_segmentSize = 0;

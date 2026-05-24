@@ -1051,7 +1051,7 @@ bool DescriptorHeapManager::writeDescriptor(const BindingSetItem& item, const De
     return vkWriteResourceDescriptorsEXT(m_context.device, 1, &resourceInfo, &dstRange) == VK_SUCCESS;
 }
 
-bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const CompactString& debugName, const u32 capacityBytes, const u32 reservedRangeBytes){
+bool DescriptorHeapManager::initializeHeap(HeapStorage& heap, const ACompactString& debugName, const u32 capacityBytes, const u32 reservedRangeBytes){
     VkResult res = VK_SUCCESS;
 
     shutdownHeap(heap);

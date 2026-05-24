@@ -285,9 +285,9 @@ static Core::GlobalUniquePtr<ShaderCook::IShaderCompiler> CreateDefaultShaderCom
 // metadata helpers
 
 
-static CompactString CanonicalAssetType(const Metascript::Document& doc){
+static ACompactString CanonicalAssetType(const Metascript::Document& doc){
     const auto assetType = doc.assetType();
-    return CompactString(AStringView(assetType.data(), assetType.size()));
+    return ACompactString(AStringView(assetType.data(), assetType.size()));
 }
 
 
@@ -707,7 +707,7 @@ static bool ParseCompactStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
     const AStringView fieldName,
-    CompactString& outValue
+    ACompactString& outValue
 ){
     const Metascript::Value* fieldValue = nullptr;
     if(!FindOptionalStringField(nwbFilePath, asset, fieldName, fieldValue))
@@ -717,7 +717,7 @@ static bool ParseCompactStringField(
 
     const AStringView fieldText(fieldValue->asString().data(), fieldValue->asString().size());
     if(!outValue.assign(fieldText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' exceeds ACompactString capacity")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );

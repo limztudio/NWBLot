@@ -43,7 +43,7 @@ using ScratchString = AString<Core::Alloc::ScratchArena<>>;
 
 struct DiscoveredNwbFile{
     Path assetRoot;
-    CompactString virtualRoot;
+    ACompactString virtualRoot;
     Path filePath;
 };
 
@@ -61,7 +61,7 @@ static bool BuildDiscoveredNwbFile(
     outFile.virtualRoot.clear();
     outFile.filePath = nwbFilePath;
     if(!outFile.virtualRoot.assign(virtualRoot)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': virtual root exceeds CompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': virtual root exceeds ACompactString capacity")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;

@@ -141,7 +141,7 @@ struct MaterialBindEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MaterialBindParameterMap = MaterialCookMap<CompactString, CompactString>;
+using MaterialBindParameterMap = MaterialCookMap<ACompactString, ACompactString>;
 
 struct MaterialBindTypedLayoutBlockLookupEntry{
     u32 blockIndex = 0u;
@@ -154,7 +154,7 @@ struct MaterialBindTypedLayoutParameterLookupEntry{
 };
 
 using MaterialBindTypedLayoutBlockLookup = MaterialCookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
-using MaterialBindTypedLayoutParameterLookup = MaterialCookMap<CompactString, MaterialBindTypedLayoutParameterLookupEntry>;
+using MaterialBindTypedLayoutParameterLookup = MaterialCookMap<ACompactString, MaterialBindTypedLayoutParameterLookupEntry>;
 
 struct MaterialBindTypedLayout{
     const MaterialBindEntry* bindEntry = nullptr;
@@ -170,7 +170,7 @@ struct MaterialBindTypedLayout{
         , typedLayoutFields(memoryArena)
         , typedBlockBytes(memoryArena)
         , blockLookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
-        , parameterLookup(0, Hasher<CompactString>(), EqualTo<CompactString>(), memoryArena)
+        , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
     {}
 
     void reset();
@@ -196,7 +196,7 @@ struct MaterialBindTypedLayoutCache{
 [[nodiscard]] bool BuildMaterialBindParameterKey(
     AStringView instanceName,
     AStringView fieldName,
-    CompactString& outKey
+    ACompactString& outKey
 );
 [[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey);
 [[nodiscard]] bool BuildMaterialBindTypedLayout(

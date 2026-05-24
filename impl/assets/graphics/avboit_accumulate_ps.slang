@@ -5,8 +5,7 @@
 #define NWB_SCENE_SHADING_SET 1
 #define NWB_SCENE_SHADING_BINDING 4
 #include "avboit_common.slangi"
-#include <bxdf.slangi>
-#include <bxdf_lighting.slangi>
+#include "scene_shading_lighting.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,9 +89,9 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
     const float transmittance = nwbAvboitLinearBiasedTransmittance(fragCoord.xy, fragCoord.z);
     const float weightedAlpha = alpha * transmittance;
 
-    const float3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), float3(0.0), float3(1.0));
+    const float3 baseColor = clamp(inColor.rgb, float3(0.0), float3(1.0));
     const float3 shadedColor = clamp(
-        nwbProjectApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition),
+        nwbSceneApplyDirectionalShading(baseColor, inNormal, inTangent, inWorldPosition),
         float3(0.0),
         float3(1.0)
     );

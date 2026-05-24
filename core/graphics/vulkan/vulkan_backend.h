@@ -1288,7 +1288,7 @@ public:
 
 
 private:
-    bool initializeHeap(HeapStorage& heap, const CompactString& debugName, u32 capacityBytes, u32 reservedRangeBytes);
+    bool initializeHeap(HeapStorage& heap, const ACompactString& debugName, u32 capacityBytes, u32 reservedRangeBytes);
     void shutdownHeap(HeapStorage& heap);
 
 

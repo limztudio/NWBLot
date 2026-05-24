@@ -5,6 +5,7 @@
 #include "vulkan_backend.h"
 
 #include <core/common/log.h>
+#include <core/graphics/spirv_entry_point.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,18 +22,6 @@ namespace __hidden_vulkan_shader{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace EntryPointLookupResult{
-    enum Enum : u8{
-        Found,
-        NotFound,
-        InvalidSpirv,
-    };
-};
-
-inline constexpr u16 s_OpEntryPoint = 15u;
-inline constexpr u32 s_SpirvMagic = 0x07230203u;
-inline constexpr usize s_SpirvHeaderWords = 5u;
 
 struct SpirvWordBuffer{
     const u32* data = nullptr;
@@ -89,87 +78,6 @@ inline bool CopySpirvWords(
     return true;
 }
 
-inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
-    switch(executionModel){
-    case 0u: return ShaderType::Vertex;
-    case 1u: return ShaderType::Hull;
-    case 2u: return ShaderType::Domain;
-    case 3u: return ShaderType::Geometry;
-    case 4u: return ShaderType::Pixel;
-    case 5u: return ShaderType::Compute;
-    case 5267u: return ShaderType::Amplification;
-    case 5268u: return ShaderType::Mesh;
-    case 5313u: return ShaderType::RayGeneration;
-    case 5314u: return ShaderType::Intersection;
-    case 5315u: return ShaderType::AnyHit;
-    case 5316u: return ShaderType::ClosestHit;
-    case 5317u: return ShaderType::Miss;
-    case 5318u: return ShaderType::Callable;
-    case 5364u: return ShaderType::Amplification;
-    case 5365u: return ShaderType::Mesh;
-    default: return ShaderType::None;
-    }
-}
-
-inline EntryPointLookupResult::Enum ResolveEntryPointName(
-    const u32* words,
-    const usize wordCount,
-    const AStringView entryName,
-    const ShaderType::Mask shaderType,
-    GraphicsString& outEntryPointName
-){
-    outEntryPointName.clear();
-
-    if(entryName.empty() || shaderType == ShaderType::None)
-        return EntryPointLookupResult::NotFound;
-
-    if(!words || wordCount < s_SpirvHeaderWords)
-        return EntryPointLookupResult::InvalidSpirv;
-
-    if(words[0] != s_SpirvMagic)
-        return EntryPointLookupResult::InvalidSpirv;
-
-    for(usize instructionIndex = s_SpirvHeaderWords; instructionIndex < wordCount; ){
-        const u32 instruction = words[instructionIndex];
-        const u16 opcode = static_cast<u16>(instruction & 0xFFFFu);
-        const u16 instructionWordCount = static_cast<u16>(instruction >> 16u);
-        if(instructionWordCount == 0)
-            return EntryPointLookupResult::InvalidSpirv;
-
-        if(static_cast<usize>(instructionWordCount) > wordCount - instructionIndex)
-            return EntryPointLookupResult::InvalidSpirv;
-
-        const usize nextInstructionIndex = instructionIndex + instructionWordCount;
-        if(opcode == s_OpEntryPoint){
-            if(instructionWordCount <= 3)
-                return EntryPointLookupResult::InvalidSpirv;
-
-            const ShaderType::Mask candidateShaderType = ConvertExecutionModel(words[instructionIndex + 1]);
-            if(candidateShaderType != ShaderType::None && candidateShaderType == shaderType){
-                const auto* entryPointBytes = reinterpret_cast<const char*>(&words[instructionIndex + 3]);
-                const usize entryPointMaxBytes = (instructionWordCount - 3u) * sizeof(u32);
-
-                usize entryPointLength = 0;
-                while(entryPointLength < entryPointMaxBytes && entryPointBytes[entryPointLength] != '\0')
-                    ++entryPointLength;
-
-                if(entryPointLength == entryPointMaxBytes)
-                    return EntryPointLookupResult::InvalidSpirv;
-
-                const AStringView candidateEntryPoint(entryPointBytes, entryPointLength);
-                if(candidateEntryPoint == entryName){
-                    outEntryPointName.assign(candidateEntryPoint.data(), candidateEntryPoint.size());
-                    return EntryPointLookupResult::Found;
-                }
-            }
-        }
-
-        instructionIndex = nextInstructionIndex;
-    }
-
-    return EntryPointLookupResult::NotFound;
-}
-
 inline bool ResolveShaderEntryPoint(
     const u32* words,
     const usize wordCount,
@@ -178,12 +86,12 @@ inline bool ResolveShaderEntryPoint(
     const char* errorContext,
     GraphicsString& outEntryPointName
 ){
-    const EntryPointLookupResult::Enum lookupResult = ResolveEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
+    const SpirvEntryPointLookupResult::Enum lookupResult = ResolveSpirvEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
     switch(lookupResult){
-    case EntryPointLookupResult::Found:
+    case SpirvEntryPointLookupResult::Found:
         return true;
 
-    case EntryPointLookupResult::NotFound:
+    case SpirvEntryPointLookupResult::NotFound:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}")
             , StringConvert(entryName)
             , static_cast<u32>(shaderType)
@@ -191,7 +99,7 @@ inline bool ResolveShaderEntryPoint(
         );
         return false;
 
-    case EntryPointLookupResult::InvalidSpirv:
+    case SpirvEntryPointLookupResult::InvalidSpirv:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}")
             , StringConvert(entryName)
             , static_cast<u32>(shaderType)

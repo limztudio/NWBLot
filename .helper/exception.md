@@ -27,7 +27,7 @@ That shape is allowed because the engine depends on the abstract asset/material 
 
 Shader asset binary payload helpers, including SPIR-V bytecode payload validation, are owned by `impl/assets_shader/shader_binary_payload.h`.
 
-Do not move those helpers into `core/graphics` only because Vulkan also needs SPIR-V constants. Core graphics should keep Vulkan parsing constants local, or place shared runtime contracts in a core-owned graphics header that is not an asset payload helper.
+Runtime SPIR-V entry-point parsing is owned by `core/graphics/spirv_entry_point.*` because it maps SPIR-V execution models to engine `ShaderType` values for runtime shader setup. Do not move shader payload helpers into `core/graphics` only because runtime parsing also needs SPIR-V constants, and do not make core graphics depend on `impl/assets_shader` for runtime parsing.
 
 ## Still Invalid
 

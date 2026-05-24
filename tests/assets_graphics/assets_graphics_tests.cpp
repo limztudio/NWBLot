@@ -17,6 +17,7 @@
 #include <core/filesystem/filesystem.h>
 #include <core/graphics/common.h>
 #include <core/graphics/shader_archive.h>
+#include <core/graphics/spirv_entry_point.h>
 
 #include <global/binary.h>
 #include <global/compile.h>
@@ -1358,6 +1359,81 @@ static void TestShaderArchiveVariantLookupIsExact(TestContext& context){
         virtualPath
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, virtualPath == NAME_NONE);
+}
+
+static constexpr u32 PackSpirvStringWord(const char a, const char b, const char c, const char d){
+    return
+        static_cast<u32>(static_cast<u8>(a))
+        | (static_cast<u32>(static_cast<u8>(b)) << 8u)
+        | (static_cast<u32>(static_cast<u8>(c)) << 16u)
+        | (static_cast<u32>(static_cast<u8>(d)) << 24u)
+    ;
+}
+
+static void TestSpirvEntryPointLookup(TestContext& context){
+    TestArena testArena;
+    NWB::Core::GraphicsString entryPoint(testArena.arena);
+
+    const u32 words[] = {
+        0x07230203u,
+        0x00010500u,
+        0u,
+        16u,
+        0u,
+        (5u << 16u) | 15u,
+        4u,
+        1u,
+        PackSpirvStringWord('m', 'a', 'i', 'n'),
+        0u,
+    };
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Core::ResolveSpirvEntryPointName(
+            words,
+            LengthOf(words),
+            "main",
+            NWB::Core::ShaderType::Pixel,
+            entryPoint
+        ) == NWB::Core::SpirvEntryPointLookupResult::Found
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, entryPoint == "main");
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Core::ResolveSpirvEntryPointName(
+            words,
+            LengthOf(words),
+            "main",
+            NWB::Core::ShaderType::Compute,
+            entryPoint
+        ) == NWB::Core::SpirvEntryPointLookupResult::NotFound
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, entryPoint.empty());
+
+    const u32 invalidWords[] = {
+        0x07230203u,
+        0x00010500u,
+        0u,
+        16u,
+        0u,
+        (5u << 16u) | 15u,
+        4u,
+        1u,
+        PackSpirvStringWord('m', 'a', 'i', 'n'),
+    };
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Core::ResolveSpirvEntryPointName(
+            invalidWords,
+            LengthOf(invalidWords),
+            "main",
+            NWB::Core::ShaderType::Pixel,
+            entryPoint
+        ) == NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, entryPoint.empty());
 }
 
 static void TestShaderMetadataRejectsDefaultVariantAlias(TestContext& context){
@@ -3550,6 +3626,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedCounts(context);
     __hidden_assets_graphics_tests::TestSkinnedGeometryCodecRejectsMalformedDependentCounts(context);
     __hidden_assets_graphics_tests::TestShaderArchiveVariantLookupIsExact(context);
+    __hidden_assets_graphics_tests::TestSpirvEntryPointLookup(context);
     __hidden_assets_graphics_tests::TestShaderMetadataRejectsDefaultVariantAlias(context);
     __hidden_assets_graphics_tests::TestMaterialMetadataInterfaceAndBlockParameters(context);
     __hidden_assets_graphics_tests::TestMaterialCodecTypedLayoutBoundary(context);

@@ -37,6 +37,7 @@ struct SceneCameraView{
 
 
 [[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = 1.0f);
+[[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

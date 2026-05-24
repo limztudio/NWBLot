@@ -31,6 +31,14 @@ static_assert(alignof(SceneDirectionalLight) >= alignof(Float4), "SceneDirection
 
 
 [[nodiscard]] SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis);
+Core::ECS::EntityID CreateDirectionalLightEntity(
+    Core::ECS::World& world,
+    f32 pitchRadians,
+    f32 yawRadians,
+    f32 rollRadians,
+    const Float4& color,
+    f32 intensity
+);
 [[nodiscard]] bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const LightComponent& light, SceneDirectionalLight& outLight);
 [[nodiscard]] SceneDirectionalLight ResolveSceneDirectionalLight(Core::ECS::World& world, const SceneViewBasis& defaultBasis);
 

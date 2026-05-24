@@ -54,6 +54,28 @@ SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& ba
     return light;
 }
 
+Core::ECS::EntityID CreateDirectionalLightEntity(
+    Core::ECS::World& world,
+    const f32 pitchRadians,
+    const f32 yawRadians,
+    const f32 rollRadians,
+    const Float4& color,
+    const f32 intensity
+){
+    auto lightEntity = world.createEntity();
+    auto& transform = lightEntity.addComponent<TransformComponent>();
+    StoreFloat(
+        QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians),
+        &transform.rotation
+    );
+
+    auto& light = lightEntity.addComponent<LightComponent>();
+    light.type = LightType::Directional;
+    light.setColor(color);
+    light.setIntensity(intensity);
+    return lightEntity.id();
+}
+
 bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const LightComponent& light, SceneDirectionalLight& outLight){
     outLight = SceneDirectionalLight{};
     if(light.type != LightType::Directional)

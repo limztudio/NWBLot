@@ -68,6 +68,12 @@ static void CheckStringValue(TestContext& context, const Value* value, MStringVi
         NWB_METASCRIPT_TEST_CHECK(context, value->asString() == expected);
 }
 
+static void CheckStringListElement(TestContext& context, const Value& value, const AString& expected){
+    NWB_METASCRIPT_TEST_CHECK(context, value.isString());
+    if(value.isString())
+        NWB_METASCRIPT_TEST_CHECK(context, value.asString() == ViewOf(expected));
+}
+
 static void CheckStringField(TestContext& context, const Value& value, MStringView fieldName, MStringView expected){
     CheckStringValue(context, FindField(value, fieldName), expected);
 }
@@ -90,11 +96,14 @@ static void CheckImplicitMaterialBindParseFailsWithMessage(TestContext& context,
 static void CheckSingleStringListValue(TestContext& context, const Value& value, const AString& text){
     NWB_METASCRIPT_TEST_CHECK(context, value.isList());
     NWB_METASCRIPT_TEST_CHECK(context, value.isList() && value.asList().size() == 1u);
-    if(value.isList() && value.asList().size() == 1u){
-        const Value& copiedText = value.asList()[0u];
-        NWB_METASCRIPT_TEST_CHECK(context, copiedText.isString());
-        NWB_METASCRIPT_TEST_CHECK(context, copiedText.asString() == ViewOf(text));
-    }
+    if(value.isList() && value.asList().size() == 1u)
+        CheckStringListElement(context, value.asList()[0u], text);
+}
+
+template<typename ArenaT>
+static void MakeSingleStringList(Value& list, ArenaT& arena, const AString& text){
+    list.makeList();
+    list.append(Value(ViewOf(text), arena.arena));
 }
 
 static void TestCrossArenaMoveAssignmentCopiesIntoDestinationArena(TestContext& context){
@@ -120,8 +129,7 @@ static void TestCrossArenaCopyAssignmentCopiesNestedValuesIntoDestinationArena(T
     Value source(sourceArena.arena);
     source.makeMap();
     Value& list = source.field(MStringView("items", 5u));
-    list.makeList();
-    list.append(Value(ViewOf(text), sourceArena.arena));
+    MakeSingleStringList(list, sourceArena, text);
 
     Value destination(destinationArena.arena);
 
@@ -142,8 +150,7 @@ static void TestCrossArenaListConcatCopiesIntoResultArena(TestContext& context){
     const AString text(128u, 'p');
 
     Value source(sourceArena.arena);
-    source.makeList();
-    source.append(Value(ViewOf(text), sourceArena.arena));
+    MakeSingleStringList(source, sourceArena, text);
 
     Value destination(destinationArena.arena);
     destination.makeList();
@@ -173,17 +180,14 @@ static void TestListSelfAppendCopiesOriginalValues(TestContext& context){
     const AString text(128u, 's');
 
     Value list(arena.arena);
-    list.makeList();
-    list.append(Value(ViewOf(text), arena.arena));
+    MakeSingleStringList(list, arena, text);
 
     list += list;
 
     NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
     if(list.asList().size() == 2u){
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isString());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isString());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].asString() == ViewOf(text));
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asString() == ViewOf(text));
+        CheckStringListElement(context, list.asList()[0u], text);
+        CheckStringListElement(context, list.asList()[1u], text);
     }
 }
 
@@ -192,22 +196,19 @@ static void TestAppendSelfMoveCopiesOriginalValue(TestContext& context){
     const AString text(128u, 'v');
 
     Value list(arena.arena);
-    list.makeList();
-    list.append(Value(ViewOf(text), arena.arena));
+    MakeSingleStringList(list, arena, text);
 
     list.append(Move(list));
 
     NWB_METASCRIPT_TEST_CHECK(context, list.isList());
     NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
     if(list.isList() && list.asList().size() == 2u){
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isString());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].asString() == ViewOf(text));
+        CheckStringListElement(context, list.asList()[0u], text);
         NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isList());
         NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asList().size() == 1u);
         if(list.asList()[1u].isList() && list.asList()[1u].asList().size() == 1u){
             const Value& nestedText = list.asList()[1u].asList()[0u];
-            NWB_METASCRIPT_TEST_CHECK(context, nestedText.isString());
-            NWB_METASCRIPT_TEST_CHECK(context, nestedText.asString() == ViewOf(text));
+            CheckStringListElement(context, nestedText, text);
         }
     }
 }
@@ -217,8 +218,7 @@ static void TestAppendExistingListElementMoveCopiesBeforeDestroy(TestContext& co
     const AString text(128u, 'e');
 
     Value list(arena.arena);
-    list.makeList();
-    list.append(Value(ViewOf(text), arena.arena));
+    MakeSingleStringList(list, arena, text);
 
     list.append(Move(list.asList()[0u]));
 
@@ -226,8 +226,7 @@ static void TestAppendExistingListElementMoveCopiesBeforeDestroy(TestContext& co
     NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
     if(list.isList() && list.asList().size() == 2u){
         NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isNull());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isString());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asString() == ViewOf(text));
+        CheckStringListElement(context, list.asList()[1u], text);
     }
 }
 
@@ -236,18 +235,15 @@ static void TestListAppendExistingElementCopiesBeforeReallocation(TestContext& c
     const AString text(128u, 'r');
 
     Value list(arena.arena);
-    list.makeList();
-    list.append(Value(ViewOf(text), arena.arena));
+    MakeSingleStringList(list, arena, text);
 
     list += list.asList()[0u];
 
     NWB_METASCRIPT_TEST_CHECK(context, list.isList());
     NWB_METASCRIPT_TEST_CHECK(context, list.asList().size() == 2u);
     if(list.isList() && list.asList().size() == 2u){
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].isString());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].isString());
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[0u].asString() == ViewOf(text));
-        NWB_METASCRIPT_TEST_CHECK(context, list.asList()[1u].asString() == ViewOf(text));
+        CheckStringListElement(context, list.asList()[0u], text);
+        CheckStringListElement(context, list.asList()[1u], text);
     }
 }
 

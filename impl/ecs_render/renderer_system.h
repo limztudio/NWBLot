@@ -304,6 +304,8 @@ private:
     void destroyGeometryBindingSets();
     [[nodiscard]] bool createMeshBindingSet(GeometryResources& geometry);
     [[nodiscard]] bool createComputeBindingSet(GeometryResources& geometry);
+    void addGeometrySourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const;
+    void addGeometryFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
 
 private:
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);

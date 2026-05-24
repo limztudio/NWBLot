@@ -272,6 +272,17 @@ void RendererSystem::pruneRuntimeGeometryResources(){
     }
 }
 
+void RendererSystem::addGeometrySourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const{
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
+}
+
+void RendererSystem::addGeometryFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, m_materialTypedBuffer.get()));
+}
+
 bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
     if(geometry.meshBindingSet)
         return true;
@@ -291,11 +302,8 @@ bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
     }
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, m_materialTypedBuffer.get()));
+    addGeometrySourceBindingItems(bindingSetDesc, geometry);
+    addGeometryFrameBindingItems(bindingSetDesc);
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
@@ -352,12 +360,9 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
     }
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
+    addGeometrySourceBindingItems(bindingSetDesc, geometry);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, m_materialTypedBuffer.get()));
+    addGeometryFrameBindingItems(bindingSetDesc);
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);

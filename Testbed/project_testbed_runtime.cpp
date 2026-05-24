@@ -212,28 +212,6 @@ static void ApplyFlyCameraInputToMainCamera(
     );
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
-    auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<NWB::Impl::TransformComponent>();
-    transform.position = Float4(0.0f, s_CharacterCameraTargetY, -s_CameraStartDepth);
-    cameraEntity.addComponent<NWB::Impl::CameraComponent>();
-    return cameraEntity.id();
-}
-
-static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
-    auto lightEntity = world.createEntity();
-    auto& transform = lightEntity.addComponent<NWB::Impl::TransformComponent>();
-    StoreFloat(
-        QuaternionRotationRollPitchYaw(s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f),
-        &transform.rotation
-    );
-
-    auto& light = lightEntity.addComponent<NWB::Impl::LightComponent>();
-    light.type = NWB::Impl::LightType::Directional;
-    light.setColor(Float4(1.0f, 0.96f, 0.88f));
-    light.setIntensity(s_DefaultDirectionalLightIntensity);
-}
-
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){
     TestbedSkinnedGeometryRef geometry;
     geometry.virtualPath = Name(s_SkinnedGeometryFemalePath);
@@ -321,8 +299,20 @@ void ProjectTestbed::destroyWorld(){
 bool ProjectTestbed::onStartup(){
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::ActiveCameraComponent>();
-    activeCamera.camera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
-    __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
+    const Float4 cameraPosition(
+        0.0f,
+        __hidden_project_testbed_runtime::s_CharacterCameraTargetY,
+        -__hidden_project_testbed_runtime::s_CameraStartDepth
+    );
+    activeCamera.camera = NWB::Impl::CreateSceneCameraEntity(*m_world, cameraPosition);
+    NWB::Impl::CreateDirectionalLightEntity(
+        *m_world,
+        __hidden_project_testbed_runtime::s_DefaultDirectionalLightPitch,
+        __hidden_project_testbed_runtime::s_DefaultDirectionalLightYaw,
+        0.0f,
+        Float4(1.0f, 0.96f, 0.88f),
+        __hidden_project_testbed_runtime::s_DefaultDirectionalLightIntensity
+    );
 
     createDefaultScene();
     registerInputHandler();

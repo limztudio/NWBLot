@@ -41,28 +41,6 @@ static constexpr AStringView s_TransparentGreenMaterialPath = "project/smoke/tra
 static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/transparent_multi/materials/blue";
 
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateMainCameraEntity(NWB::Core::ECS::World& world){
-    auto cameraEntity = world.createEntity();
-    auto& transform = cameraEntity.addComponent<NWB::Impl::TransformComponent>();
-    transform.position = Float4(0.0f, s_CameraTargetY, -s_CameraStartDepth);
-    cameraEntity.addComponent<NWB::Impl::CameraComponent>();
-    return cameraEntity.id();
-}
-
-static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
-    auto lightEntity = world.createEntity();
-    auto& transform = lightEntity.addComponent<NWB::Impl::TransformComponent>();
-    StoreFloat(
-        QuaternionRotationRollPitchYaw(s_DefaultDirectionalLightPitch, s_DefaultDirectionalLightYaw, 0.0f),
-        &transform.rotation
-    );
-
-    auto& light = lightEntity.addComponent<NWB::Impl::LightComponent>();
-    light.type = NWB::Impl::LightType::Directional;
-    light.setColor(Float4(1.0f, 0.96f, 0.88f));
-    light.setIntensity(s_DefaultDirectionalLightIntensity);
-}
-
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
     NWB::Core::ECS::World& world,
     const AStringView geometryPath,
@@ -155,8 +133,18 @@ public:
     virtual bool onStartup()override{
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::ActiveCameraComponent>();
-        activeCamera.camera = CreateMainCameraEntity(*m_world);
-        CreateDefaultDirectionalLightEntity(*m_world);
+        activeCamera.camera = NWB::Impl::CreateSceneCameraEntity(
+            *m_world,
+            Float4(0.0f, s_CameraTargetY, -s_CameraStartDepth)
+        );
+        NWB::Impl::CreateDirectionalLightEntity(
+            *m_world,
+            s_DefaultDirectionalLightPitch,
+            s_DefaultDirectionalLightYaw,
+            0.0f,
+            Float4(1.0f, 0.96f, 0.88f),
+            s_DefaultDirectionalLightIntensity
+        );
 
         const auto cubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,

@@ -135,6 +135,13 @@ struct FlatGeometryVertex{
 };
 static_assert(IsTriviallyCopyable_V<FlatGeometryVertex>);
 
+struct TriangleAreaNormal64{
+    f64 x = 0.0;
+    f64 y = 0.0;
+    f64 z = 0.0;
+};
+static_assert(IsTriviallyCopyable_V<TriangleAreaNormal64>);
+
 struct SkinExportContext{
     UtilityVector<ufbx_node*> joints;
     UtilityVector<GeometryJointMatrix> inverseBindMatrices;
@@ -197,6 +204,20 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
     };
 }
 
+[[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vec3& a, const Vec3& b, const Vec3& c){
+    const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
+    const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
+    const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
+    const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
+    const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
+    const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
+    return TriangleAreaNormal64{
+        abY * acZ - abZ * acY,
+        abZ * acX - abX * acZ,
+        abX * acY - abY * acX,
+    };
+}
+
 [[nodiscard]] bool TriangleHasArea(
     const FlatGeometryVertex (&vertices)[3],
     const f64 triangleAreaLengthSquaredEpsilon
@@ -204,30 +225,21 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
     const Vec3& a = vertices[0u].vertex.position;
     const Vec3& b = vertices[1u].vertex.position;
     const Vec3& c = vertices[2u].vertex.position;
-    const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
-    const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
-    const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
-    const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
-    const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
-    const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
-    const f64 crossX = abY * acZ - abZ * acY;
-    const f64 crossY = abZ * acX - abX * acZ;
-    const f64 crossZ = abX * acY - abY * acX;
-    const f64 areaLengthSquared = crossX * crossX + crossY * crossY + crossZ * crossZ;
+    const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(a, b, c);
+    const f64 areaLengthSquared =
+        areaNormal.x * areaNormal.x
+        + areaNormal.y * areaNormal.y
+        + areaNormal.z * areaNormal.z
+    ;
     return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
 }
 
 [[nodiscard]] Vec3 TriangleAreaNormal(const Vec3& a, const Vec3& b, const Vec3& c){
-    const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
-    const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
-    const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
-    const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
-    const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
-    const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
+    const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(a, b, c);
     return Vec3{
-        static_cast<f32>(abY * acZ - abZ * acY),
-        static_cast<f32>(abZ * acX - abX * acZ),
-        static_cast<f32>(abX * acY - abY * acX),
+        static_cast<f32>(areaNormal.x),
+        static_cast<f32>(areaNormal.y),
+        static_cast<f32>(areaNormal.z),
     };
 }
 

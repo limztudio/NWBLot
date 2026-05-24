@@ -30,12 +30,20 @@ class CaptureResult:
     height: int
     has_pixel_variation: bool
     appears_blank: bool
+    transparent_multi: "TransparentMultiAnalysis"
 
 
 @dataclass(frozen=True)
 class ImageAnalysis:
     has_pixel_variation: bool
     appears_blank: bool
+
+
+@dataclass(frozen=True)
+class TransparentMultiAnalysis:
+    left_pixels: int
+    center_pixels: int
+    right_pixels: int
 
 
 def write_status(message):
@@ -197,6 +205,9 @@ def build_launch_environment(args):
     env = os.environ.copy()
     system = platform.system()
 
+    if args.testbed_scene:
+        env["NWB_TESTBED_SCENE"] = args.testbed_scene
+
     if system == "Linux":
         if not env.get("DISPLAY"):
             raise SmokeSkip("DISPLAY is not set; X11 window capture is unavailable")
@@ -234,7 +245,15 @@ def write_bmp_24(path, width, height, rows_rgb):
 def write_capture_rows(handle, width, height, rows_rgb, output_path):
     write_bmp_24(output_path, width, height, rows_rgb)
     analysis = analyze_rgb_rows(rows_rgb)
-    return CaptureResult(handle, width, height, analysis.has_pixel_variation, analysis.appears_blank)
+    transparent_multi = analyze_transparent_multi_rows(rows_rgb)
+    return CaptureResult(
+        handle,
+        width,
+        height,
+        analysis.has_pixel_variation,
+        analysis.appears_blank,
+        transparent_multi,
+    )
 
 
 def analyze_rgb_rows(rows_rgb):
@@ -269,6 +288,60 @@ def analyze_rgb_rows(rows_rgb):
     non_white_fraction = non_white_pixels / total_pixels
     appears_blank = (max_luma - min_luma) <= 3 or (mean_luma >= 245.0 and non_white_fraction < 0.01)
     return ImageAnalysis(has_pixel_variation, appears_blank)
+
+
+def analyze_transparent_multi_rows(rows_rgb):
+    height = len(rows_rgb)
+    width = len(rows_rgb[0]) if height else 0
+    if width == 0 or height == 0:
+        return TransparentMultiAnalysis(0, 0, 0)
+
+    background = estimate_background_rgb(rows_rgb, width, height)
+
+    left_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.16, 0.30, 0.43, 0.70)
+    center_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.34, 0.27, 0.58, 0.70)
+    right_pixels = count_foreground_pixels(rows_rgb, width, height, background, 0.62, 0.30, 0.90, 0.70)
+    return TransparentMultiAnalysis(left_pixels, center_pixels, right_pixels)
+
+
+def estimate_background_rgb(rows_rgb, width, height):
+    samples = []
+    edge = min(max(min(width, height) // 24, 8), 32)
+    step = max(min(width, height) // 128, 1)
+
+    for y in range(0, edge, step):
+        samples.extend(rows_rgb[y][::step])
+    for y in range(max(height - edge, 0), height, step):
+        samples.extend(rows_rgb[y][::step])
+    for row in rows_rgb[::step]:
+        samples.extend(row[:edge:step])
+        samples.extend(row[max(width - edge, 0):width:step])
+
+    if not samples:
+        return (0, 0, 0)
+
+    return tuple(sorted(channel)[len(samples) // 2] for channel in zip(*samples))
+
+
+def count_foreground_pixels(rows_rgb, width, height, background, x0, y0, x1, y1):
+    start_x = min(max(int(width * x0), 0), width)
+    end_x = min(max(int(width * x1), start_x), width)
+    start_y = min(max(int(height * y0), 0), height)
+    end_y = min(max(int(height * y1), start_y), height)
+    count = 0
+
+    for y in range(start_y, end_y):
+        for x in range(start_x, end_x):
+            red, green, blue = rows_rgb[y][x]
+            channel_delta = (
+                abs(red - background[0]),
+                abs(green - background[1]),
+                abs(blue - background[2]),
+            )
+            if sum(channel_delta) >= 34 and max(channel_delta) >= 14:
+                count += 1
+
+    return count
 
 
 def channel_from_mask(pixel, mask):
@@ -1184,9 +1257,32 @@ def validate_capture_result(result):
         raise SmokeFailure(f"captured window 0x{result.handle:x}, but the image appears flat")
 
 
+def validate_transparent_multi_result(result):
+    analysis = result.transparent_multi
+    min_pixels = max(180, (result.width * result.height) // 5000)
+    missing = []
+    if analysis.left_pixels < min_pixels:
+        missing.append(f"left={analysis.left_pixels}")
+    if analysis.center_pixels < min_pixels:
+        missing.append(f"center={analysis.center_pixels}")
+    if analysis.right_pixels < min_pixels:
+        missing.append(f"right={analysis.right_pixels}")
+
+    if missing:
+        observed = (
+            f"left={analysis.left_pixels}, "
+            f"center={analysis.center_pixels}, "
+            f"right={analysis.right_pixels}, "
+            f"min={min_pixels}"
+        )
+        raise SmokeFailure(f"transparent multi-object scene did not show all expected color regions ({observed})")
+
+
 def capture_checked_window(args, backend, handle):
     result = backend.capture_window(handle, args.output)
     validate_capture_result(result)
+    if args.expect_transparent_multi:
+        validate_transparent_multi_result(result)
     return result
 
 
@@ -1235,6 +1331,12 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
+    parser.add_argument("--testbed-scene", help="Set NWB_TESTBED_SCENE for the launched testbed process.")
+    parser.add_argument(
+        "--expect-transparent-multi",
+        action="store_true",
+        help="Assert that the captured scene contains multiple distinct transparent mesh colors.",
+    )
     parser.add_argument(
         "--software-vulkan",
         choices=("auto", "on", "off"),
@@ -1254,6 +1356,9 @@ def parse_args(argv):
     require_positive_arg(parser, "--timeout", args.timeout)
     require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
 
+    if args.expect_transparent_multi and args.testbed_scene != "transparent_multi":
+        parser.error("--expect-transparent-multi requires --testbed-scene transparent_multi")
+
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()
     return args
@@ -1269,7 +1374,14 @@ def main(argv):
         else:
             result = launch_and_capture(args, backend)
 
-        write_status(f"captured window 0x{result.handle:x} ({result.width}x{result.height}) -> {args.output}")
+        status = f"captured window 0x{result.handle:x} ({result.width}x{result.height}) -> {args.output}"
+        if args.expect_transparent_multi:
+            analysis = result.transparent_multi
+            status = (
+                f"{status}; transparent regions "
+                f"left={analysis.left_pixels}, center={analysis.center_pixels}, right={analysis.right_pixels}"
+            )
+        write_status(status)
         return 0
     except SmokeSkip as exc:
         write_status(f"SKIP: {exc}")

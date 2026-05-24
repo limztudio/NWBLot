@@ -24,7 +24,10 @@ private:
     static void verifyRendererSystemOrDie(NWB::Core::ECS::World& world);
 
 private:
+    [[nodiscard]] bool transparentSmokeSceneEnabled()const;
     void drawUiControls();
+    void createDefaultScene();
+    void createTransparentSmokeScene();
     void registerInputHandler();
     void unregisterInputHandler();
     void clearInputState();
@@ -57,6 +60,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_characterEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    bool m_transparentSmokeScene = false;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;

@@ -602,16 +602,16 @@ static bool ParseMaterialBindSource(
 // material bind typed layout helpers
 
 
-struct MaterialParameterGpuData{
+struct MaterialTypedValueData{
     UInt4 meta = {};
     UInt4 data = {};
 };
 static_assert(
-    sizeof(MaterialParameterGpuData) == sizeof(u32) * 8u,
-    "MaterialParameterGpuData layout must stay stable for typed value parsing"
+    sizeof(MaterialTypedValueData) == sizeof(u32) * 8u,
+    "MaterialTypedValueData layout must stay stable for typed value parsing"
 );
-static_assert(alignof(MaterialParameterGpuData) >= alignof(UInt4), "MaterialParameterGpuData must stay SIMD-aligned");
-static_assert(IsTriviallyCopyable_V<MaterialParameterGpuData>, "MaterialParameterGpuData must stay cheap to copy");
+static_assert(alignof(MaterialTypedValueData) >= alignof(UInt4), "MaterialTypedValueData must stay SIMD-aligned");
+static_assert(IsTriviallyCopyable_V<MaterialTypedValueData>, "MaterialTypedValueData must stay cheap to copy");
 
 static bool SplitMaterialParameterCall(const AStringView text, AStringView& outType, AStringView& outArgs){
     const AStringView trimmed = TrimView(text);
@@ -727,10 +727,10 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
     }
 }
 
-static bool BuildMaterialParameterGpuData(
+static bool BuildMaterialTypedValueData(
     const ACompactString& key,
     const ACompactString& value,
-    MaterialParameterGpuData& outParameter
+    MaterialTypedValueData& outParameter
 ){
     outParameter = {};
     if(!key || !value)
@@ -802,7 +802,7 @@ static bool ParseMaterialBindBlockClass(
     return false;
 }
 
-static UInt4U ToMaterialTypedLayoutDefaultValue(const MaterialParameterGpuData& parameter){
+static UInt4U ToMaterialTypedLayoutDefaultValue(const MaterialTypedValueData& parameter){
     UInt4U result = {};
     for(u32 i = 0u; i < 4u; ++i)
         result.raw[i] = parameter.data.raw[i];
@@ -839,8 +839,8 @@ static bool BuildMaterialTypedLayoutDefaultValue(
         return false;
     }
 
-    MaterialParameterGpuData defaultParameter;
-    if(!BuildMaterialParameterGpuData(key, defaultText, defaultParameter)){
+    MaterialTypedValueData defaultParameter;
+    if(!BuildMaterialTypedValueData(key, defaultText, defaultParameter)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: default '{}' for '{}.{}' in '{}' is invalid")
             , StringConvert(defaultArgument)
             , StringConvert(instance.name)
@@ -1132,8 +1132,8 @@ static bool ParseMaterialTypedLayoutParameterValue(
 ){
     outValue = {};
 
-    MaterialParameterGpuData parameter;
-    if(!BuildMaterialParameterGpuData(parameterName, parameterValue, parameter)){
+    MaterialTypedValueData parameter;
+    if(!BuildMaterialTypedValueData(parameterName, parameterValue, parameter)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: parameter '{}' for '{}' has invalid value '{}'")
             , StringConvert(parameterName.c_str())
             , StringConvert(materialName.c_str())

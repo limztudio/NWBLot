@@ -257,12 +257,12 @@ Updated: 2026-05-22
 - For asset bindings:
   - When a component references an asset, use `Core::Assets::AssetRef<T>`.
   - When an asset references another asset, use `Core::Assets::AssetRef<T>`.
-  - Do not store those bindings as raw `Name`, `CompactString`, `AString`, or other untyped text.
+  - Do not store those bindings as raw `Name`, `ACompactString`, `AString`, or other untyped text.
   - Do not add convenience setters/constructors that accept raw path text or raw `Name` for typed asset bindings; accept or store `AssetRef<T>` directly.
-- Do not force case-sensitive external API text into `Name` or `CompactString`.
+- Do not force case-sensitive external API text into `Name` or `ACompactString`.
   - Keep `Name` for canonical identity/lookups.
   - Keep exact text separately at the boundary when the API requires original spelling/case, such as Vulkan/SPIR-V shader entry-point names, shader define names, and shader variant signatures.
-- For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `stage` and `target_profile`), prefer `CompactString` over heap-backed `AString`.
+- For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `stage` and `target_profile`), prefer `ACompactString` over heap-backed `AString`.
 - Debug/profiling marker labels are also plain external text.
   - Model command-list markers as text views/strings, not `Name`, so GPU markers and crash-dump labels keep their original spelling.
 - For simple generated geometry assets, keep the shape description/payload in `.nwb` metadata.

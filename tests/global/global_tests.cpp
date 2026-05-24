@@ -112,8 +112,7 @@ static void TestRejectedACompactStringAssignResetsText(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, compact.c_str()[0] == '\0');
 }
 
-static void TestBasicCompactStringAliases(TestContext& context){
-    static_assert(sizeof(CompactString) == sizeof(ACompactString));
+static void TestBasicCompactStringTypes(TestContext& context){
     static_assert(sizeof(ACompactString) == ACompactString::s_StorageBytes);
     static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes);
 
@@ -323,7 +322,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_global_tests::TestLengthPrefixedStringRoundTrip(context);
     __hidden_global_tests::TestRejectedStringReadsDoNotAdvanceCursor(context);
     __hidden_global_tests::TestRejectedACompactStringAssignResetsText(context);
-    __hidden_global_tests::TestBasicCompactStringAliases(context);
+    __hidden_global_tests::TestBasicCompactStringTypes(context);
     __hidden_global_tests::TestStringTableText(context);
     __hidden_global_tests::TestInvalidStringTableReads(context);
     __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);

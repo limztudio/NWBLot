@@ -463,7 +463,7 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
         destroyGeometryBindingSets();
     }
 
-    const ECSRenderDetail::MeshViewState viewState =
+    const ECSRenderDetail::MeshViewGpuData viewState =
         ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio)
     ;
 

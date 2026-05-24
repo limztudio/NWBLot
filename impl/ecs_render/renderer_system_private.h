@@ -85,10 +85,6 @@ struct SceneShadingGpuData{
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
-using MeshViewState = MeshViewGpuData;
-using SceneShadingState = SceneShadingGpuData;
-using MeshViewBasis = NWB::Impl::SceneViewBasis;
-
 struct MaterialTypedByteBlock{
     u32 byteOffset = 0;
     u32 byteCount = 0;
@@ -247,7 +243,7 @@ inline InstanceGpuData BuildInstanceGpuData(
 }
 
 inline void ApplyDirectionalLightSceneShadingState(
-    SceneShadingState& state,
+    SceneShadingGpuData& state,
     const NWB::Impl::SceneDirectionalLight& light
 ){
     state.directionalLightDirection = light.direction;
@@ -269,7 +265,11 @@ inline void StoreProjectedViewColumn(
     StoreFloat(column, &outWorldToClip[columnIndex]);
 }
 
-inline void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBasis& basis, const Float4& projectionParams){
+inline void StoreWorldToClipMatrix(
+    Float4 (&outWorldToClip)[4],
+    const NWB::Impl::SceneViewBasis& basis,
+    const Float4& projectionParams
+){
     const SIMDVector positionDepthBias = LoadFloat(basis.positionDepthBias);
     const SIMDVector right = LoadFloat(basis.right);
     const SIMDVector up = LoadFloat(basis.up);
@@ -317,9 +317,9 @@ inline void StoreWorldToClipMatrix(Float4 (&outWorldToClip)[4], const MeshViewBa
     );
 }
 
-inline MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
-    MeshViewState state;
-    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
+inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
+    MeshViewGpuData state;
+    const NWB::Impl::SceneViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
 
     const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
@@ -340,9 +340,9 @@ inline MeshViewState ResolveMeshViewState(Core::ECS::World& world, const f32 fal
     return state;
 }
 
-inline SceneShadingState ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
-    SceneShadingState state;
-    const MeshViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
+inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
+    SceneShadingGpuData state;
+    const NWB::Impl::SceneViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
 
     const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){

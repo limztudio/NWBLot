@@ -27,7 +27,7 @@ namespace SkinnedGeometryBinaryPayload{
 
 
 inline constexpr u32 s_SkinnedGeometryMagic = 0x44474F31u; // DGO1
-inline constexpr u32 s_SkinnedGeometryVersion = 3u;
+inline constexpr u32 s_SkinnedGeometryVersion = 1u;
 inline constexpr u32 s_SkinnedGeometrySkeletonJointLimit = static_cast<u32>(Limit<u16>::s_Max) + 1u;
 
 #pragma pack(push, 1)

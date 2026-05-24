@@ -16,8 +16,8 @@ Updated: 2026-04-19
 10. GPU debug markers / Aftermath event labels are debug text, not identity keys; keep them as exact strings instead of `Name`.
 11. Strip UTF-8 BOM on shader source/include text before compilation or include scanning; otherwise the first token/include can fail on BOM-prefixed files.
 12. Do not store unused case-sensitive shader entry-point metadata in hash-only archive/index formats; keep only the lookup keys and exact text actually required at the consuming API boundary.
-13. Shader define names and variant signatures are exact case-sensitive shader text; do not route them through `Name` or `CompactString`, or distinct variants can collide.
-14. Short canonical shader metadata tokens like `compiler`, `stage`, and `target_profile` are good `CompactString` candidates; keep `AString` for unbounded or exact-text fields instead.
+13. Shader define names and variant signatures are exact case-sensitive shader text; do not route them through `Name` or `ACompactString`, or distinct variants can collide.
+14. Short canonical shader metadata tokens like `compiler`, `stage`, and `target_profile` are good `ACompactString` candidates; keep `AString` for unbounded or exact-text fields instead.
 15. The ECS renderer material contract is shader-driven only: prefer `MeshShader + PS` on mesh-capable hardware, otherwise use `CS + PS`; do not add a material-facing `VS + PS` fallback path back into this renderer.
 16. If a mesh-capable device and material both provide the mesh path, failures creating or using that mesh path are errors to fix, not reasons to silently fall back to compute.
 17. Keep mesh and compute-emulation renderer resources path-specific: mesh path bindings stay read-only (`SRV` geometry buffers + push constants), while compute-emulation owns the UAV vertex expansion buffer and its internal raster bridge resources.

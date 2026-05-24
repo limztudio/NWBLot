@@ -271,7 +271,6 @@ private:
 
 using ACompactString = BasicCompactString<char>;
 using WCompactString = BasicCompactString<wchar>;
-using CompactString = ACompactString;
 
 static_assert(sizeof(ACompactString) == ACompactString::s_StorageBytes, "ACompactString must stay 256 bytes");
 static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes, "WCompactString must stay 256 bytes");

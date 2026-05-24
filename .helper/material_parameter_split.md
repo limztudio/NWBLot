@@ -6,19 +6,17 @@ Updated: 2026-05-22
 
 Material parameter layout must not be decided by an authored shader alone. The layout is a contract between a material family, its material assets, shader cook, and runtime binding code.
 
-The design goal is to replace the current generic name-hash lookup path with typed, generated Slang accessors while also splitting data by update frequency. Shaders should read fields such as `surface.base_color`, but the CPU should only upload the smallest block that actually changed.
+The design goal is to keep the typed, generated Slang accessor path while also splitting data by update frequency. Shaders should read fields such as `surface.base_color`, but the CPU should only upload the smallest block that actually changed.
 
 This document is a design specification. It does not describe the current runtime ABI.
 
-## Current Path
+## Current Runtime Contract
 
-The current material cook path reads `asset.parameters`, hashes each parameter name with canonical FNV64, stores `MaterialParameterGpuData`, and lets Slang call helpers such as `nwbMaterialFindFloat4(instance, key, defaultValue)`.
+The current material cook path resolves `asset.interface`, validates `asset.parameters` against the parsed `.bind` schema, serializes typed layout metadata plus packed typed block bytes, and generates Slang accessors that compile only with `NWB_MATERIAL_TYPED_BINDING=1`.
 
-That shape is flexible, but it has three costs:
+Mesh material shaders read the packed typed payload through the helper surface in `mesh_shader_authoring.slangi`, which owns `[[vk::binding(6, 0)]] g_NwbMaterialTypedWords`. The old shader-side hash lookup helpers and any material binding at slot `5` are removed and should not be reintroduced.
 
-- Slang code cannot naturally express a typed material contract.
-- Every shader-side access pays an indirection and lookup cost.
-- All material parameters share one generic update bucket, even when some fields change rarely and others change every frame.
+The remaining improvement area is update granularity: all typed block bytes are currently uploaded through one packed material payload even when some fields change rarely and others change every frame.
 
 ## Ownership Model
 
@@ -273,27 +271,25 @@ struct NwbProjectBxdfRuntimeMaterial{
     float3 padding0;
 };
 
-struct NwbProjectBxdfMaterialBinding{
-    uint surface;
-    uint runtime;
-    uint flags;
-    uint padding0;
-};
+static const uint NWB_PROJECT_BXDF_SURFACE_BASE_COLOR_BYTE_OFFSET = 0u;
+static const uint NWB_PROJECT_BXDF_SURFACE_ROUGHNESS_BYTE_OFFSET = 16u;
+static const uint NWB_PROJECT_BXDF_SURFACE_METALLIC_BYTE_OFFSET = 20u;
+static const uint NWB_PROJECT_BXDF_RUNTIME_COLOR_TINT_BYTE_OFFSET = 32u;
+static const uint NWB_PROJECT_BXDF_RUNTIME_FADE_ALPHA_BYTE_OFFSET = 48u;
 
-[[vk::binding(5, 0)]] StructuredBuffer<NwbProjectBxdfMaterialBinding, Std430DataLayout> g_NwbProjectBxdfMaterialBindings;
-[[vk::binding(6, 0)]] StructuredBuffer<NwbProjectBxdfSurfaceMaterial, Std430DataLayout> g_NwbProjectBxdfSurfaceMaterials;
-[[vk::binding(7, 0)]] StructuredBuffer<NwbProjectBxdfRuntimeMaterial, Std430DataLayout> g_NwbProjectBxdfRuntimeMaterials;
-
-NwbProjectBxdfMaterialBinding nwbProjectLoadBxdfMaterialBinding(const NwbMeshInstanceData instance){
-    return g_NwbProjectBxdfMaterialBindings[instance.materialParameters.x];
+NwbProjectBxdfSurfaceMaterial nwbProjectLoadBxdfSurfaceMaterial(const NwbMeshInstanceData instance){
+    NwbProjectBxdfSurfaceMaterial result;
+    result.base_color = nwbMaterialLoadFloat4(instance, NWB_PROJECT_BXDF_SURFACE_BASE_COLOR_BYTE_OFFSET);
+    result.roughness = nwbMaterialLoadFloat(instance, NWB_PROJECT_BXDF_SURFACE_ROUGHNESS_BYTE_OFFSET);
+    result.metallic = nwbMaterialLoadFloat(instance, NWB_PROJECT_BXDF_SURFACE_METALLIC_BYTE_OFFSET);
+    return result;
 }
 
-NwbProjectBxdfSurfaceMaterial nwbProjectLoadBxdfSurfaceMaterial(const NwbProjectBxdfMaterialBinding binding){
-    return g_NwbProjectBxdfSurfaceMaterials[binding.surface];
-}
-
-NwbProjectBxdfRuntimeMaterial nwbProjectLoadBxdfRuntimeMaterial(const NwbProjectBxdfMaterialBinding binding){
-    return g_NwbProjectBxdfRuntimeMaterials[binding.runtime];
+NwbProjectBxdfRuntimeMaterial nwbProjectLoadBxdfRuntimeMaterial(const NwbMeshInstanceData instance){
+    NwbProjectBxdfRuntimeMaterial result;
+    result.color_tint = nwbMaterialLoadFloat4(instance, NWB_PROJECT_BXDF_RUNTIME_COLOR_TINT_BYTE_OFFSET);
+    result.fade_alpha = nwbMaterialLoadFloat(instance, NWB_PROJECT_BXDF_RUNTIME_FADE_ALPHA_BYTE_OFFSET);
+    return result;
 }
 
 #endif
@@ -302,9 +298,8 @@ NwbProjectBxdfRuntimeMaterial nwbProjectLoadBxdfRuntimeMaterial(const NwbProject
 Authored Slang then reads typed fields:
 
 ```slang
-const NwbProjectBxdfMaterialBinding materialBinding = nwbProjectLoadBxdfMaterialBinding(instance);
-const NwbProjectBxdfSurfaceMaterial surface = nwbProjectLoadBxdfSurfaceMaterial(materialBinding);
-const NwbProjectBxdfRuntimeMaterial runtime = nwbProjectLoadBxdfRuntimeMaterial(materialBinding);
+const NwbProjectBxdfSurfaceMaterial surface = nwbProjectLoadBxdfSurfaceMaterial(instance);
+const NwbProjectBxdfRuntimeMaterial runtime = nwbProjectLoadBxdfRuntimeMaterial(instance);
 const float4 materialColor = surface.base_color * runtime.color_tint;
 ```
 

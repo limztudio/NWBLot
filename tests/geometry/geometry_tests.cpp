@@ -23,6 +23,9 @@ namespace __hidden_geometry_tests{
 using TestContext = NWB::Tests::TestContext;
 using NWB::Tests::MakeQuadTriangleIndices;
 using NWB::Tests::MakeTriangleIndices;
+using NWB::Tests::NearlyEqual;
+using NWB::Tests::NearlyEqual3;
+using NWB::Tests::NearlyEqual4;
 using TangentFrameRebuildVertex = NWB::Core::Geometry::TangentFrameRebuildVertex;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
@@ -33,27 +36,6 @@ using Vector = NWB::Tests::TestVector<T>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.00001f){
-    return Abs(lhs - rhs) <= epsilon;
-}
-
-static bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f32 z, const f32 w){
-    return
-        NearlyEqual(value.x, x)
-        && NearlyEqual(value.y, y)
-        && NearlyEqual(value.z, z)
-        && NearlyEqual(value.w, w)
-    ;
-}
-
-static bool NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z){
-    return
-        NearlyEqual(value.x, x)
-        && NearlyEqual(value.y, y)
-        && NearlyEqual(value.z, z)
-    ;
-}
 
 static void TestGeometryClassMetadata(TestContext& context){
     using namespace NWB::Core::Geometry;

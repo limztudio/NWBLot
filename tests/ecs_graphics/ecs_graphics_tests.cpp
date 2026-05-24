@@ -38,6 +38,7 @@ namespace __hidden_ecs_graphics_tests{
 using TestContext = NWB::Tests::TestContext;
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeTriangleIndices;
+using NWB::Tests::NearlyEqual;
 using AString = NWB::Tests::TestAString;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
@@ -151,11 +152,6 @@ static void TestGeometrySystemResolvesGeometryComponent(TestContext& context){
     auto missingGeometryEntity = testWorld.world.createEntity();
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !geometrySystem.resolveGeometry(missingGeometryEntity.id(), resolvedGeometry));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !resolvedGeometry.valid());
-}
-
-static bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = 0.00001f){
-    const f32 difference = lhs > rhs ? lhs - rhs : rhs - lhs;
-    return difference <= epsilon;
 }
 
 static NWB::Impl::SkinnedGeometryVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){

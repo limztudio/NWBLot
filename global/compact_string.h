@@ -18,6 +18,8 @@
 
 class CompactString{
 public:
+    using value_type = char;
+
     static constexpr usize s_StorageBytes = 256;
     static constexpr usize s_LengthBytes = sizeof(u8);
     static constexpr usize s_BufferBytes = s_StorageBytes - s_LengthBytes;
@@ -163,6 +165,10 @@ public:
         return s_MaxLength;
     }
 
+    [[nodiscard]] constexpr usize max_size()const{
+        return capacity();
+    }
+
     [[nodiscard]] usize remainingCapacity()const{
         return s_MaxLength - m_size;
     }
@@ -238,6 +244,10 @@ public:
         NWB_ASSERT_MSG(appended, NWB_TEXT("CompactString append exceeded capacity"));
         static_cast<void>(appended);
         return *this;
+    }
+
+    void push_back(const char ch){
+        *this += ch;
     }
 
 

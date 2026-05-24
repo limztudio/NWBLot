@@ -160,16 +160,26 @@ template<typename CharT>
 }
 
 template<typename StringT>
-inline void AppendHexU64Impl(const u64 value, StringT& outText){
-    if(outText.size() > outText.max_size() - 16u)
+inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& outText){
+    if(outText.size() > outText.max_size() || outText.max_size() - outText.size() < nibbleCount)
         return;
 
     using CharT = typename StringT::value_type;
-    for(u32 nibbleIndex = 0; nibbleIndex < 16u; ++nibbleIndex){
-        const u32 shift = (15 - nibbleIndex) * 4;
+    for(u32 nibbleIndex = 0; nibbleIndex < nibbleCount; ++nibbleIndex){
+        const u32 shift = (nibbleCount - 1u - nibbleIndex) * 4u;
         const usize nibble = static_cast<usize>((value >> shift) & 0xF);
         outText.push_back(HexDigit<CharT>(nibble));
     }
+}
+
+template<typename StringT>
+inline void AppendHexU32Impl(const u32 value, StringT& outText){
+    AppendFixedHexImpl(static_cast<u64>(value), 8u, outText);
+}
+
+template<typename StringT>
+inline void AppendHexU64Impl(const u64 value, StringT& outText){
+    AppendFixedHexImpl(value, 16u, outText);
 }
 
 
@@ -181,6 +191,34 @@ inline void AppendHexU64Impl(const u64 value, StringT& outText){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+template<typename CharT, typename ArenaT>
+inline void AppendHexU32(const u32 value, BasicString<CharT, ArenaT>& outText){
+    HashUtilsDetail::AppendHexU32Impl(value, outText);
+}
+template<typename StringT>
+    requires requires(StringT& text){
+        typename StringT::value_type;
+        text.size();
+        text.max_size();
+        text.push_back(typename StringT::value_type{});
+    }
+inline void AppendHexU32(const u32 value, StringT& outText){
+    HashUtilsDetail::AppendHexU32Impl(value, outText);
+}
+
+template<typename StringT>
+    requires requires(StringT& text){
+        typename StringT::value_type;
+        text += typename StringT::value_type{};
+    }
+inline void AppendHexU32UnsignedLiteral(const u32 value, StringT& outText){
+    using CharT = typename StringT::value_type;
+    outText += static_cast<CharT>('0');
+    outText += static_cast<CharT>('x');
+    AppendHexU32(value, outText);
+    outText += static_cast<CharT>('u');
+}
 
 template<typename CharT, typename ArenaT>
 inline void AppendHexU64(const u64 value, BasicString<CharT, ArenaT>& outText){

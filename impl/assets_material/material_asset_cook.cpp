@@ -626,31 +626,17 @@ static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& 
         inOutText += "Value";
 }
 
-static void AppendHexU32Slang(const u32 value, CookString& inOutText){
-    static constexpr char s_HexDigits[] = "0123456789abcdef";
-    inOutText += "0x";
-    for(u32 nibbleIndex = 0u; nibbleIndex < 8u; ++nibbleIndex){
-        const u32 shift = (7u - nibbleIndex) * 4u;
-        inOutText += s_HexDigits[(value >> shift) & 0xfu];
-    }
-    inOutText += 'u';
-}
-
-static void AppendU32Decimal(const u32 value, CookString& inOutText){
+static void AppendU32Slang(const u32 value, CookString& inOutText){
     char digits[16u];
     inOutText += FormatDecimal(static_cast<usize>(value), digits);
-}
-
-static void AppendU32Slang(const u32 value, CookString& inOutText){
-    AppendU32Decimal(value, inOutText);
     inOutText += 'u';
 }
 
 static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
     inOutText += "uint2(";
-    AppendHexU32Slang(static_cast<u32>(value & 0xffffffffull), inOutText);
+    AppendHexU32UnsignedLiteral(static_cast<u32>(value & 0xffffffffull), inOutText);
     inOutText += ", ";
-    AppendHexU32Slang(static_cast<u32>(value >> 32u), inOutText);
+    AppendHexU32UnsignedLiteral(static_cast<u32>(value >> 32u), inOutText);
     inOutText += ")";
 }
 
@@ -894,7 +880,8 @@ static bool AppendMaterialBindLayoutConstants(
     const NameHash& interfaceHash = interfaceName.hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         CookString laneSuffix("INTERFACE_HASH_", arena);
-        AppendU32Decimal(lane, laneSuffix);
+        char laneDigits[16u];
+        laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const CookString symbol = BuildMaterialBindGlobalSymbol(arena, AStringView(laneSuffix));
         if(!AppendMaterialBindU64Constant(
             includePath,

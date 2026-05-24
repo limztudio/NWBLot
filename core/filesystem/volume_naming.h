@@ -34,17 +34,7 @@ NWB_FILESYSTEM_BEGIN
     const u64 hash = HashVolumeSegmentFileName(volumeName, segmentIndex);
 
     CompactString fileName;
-    static constexpr char s_HexDigits[16] = {
-        '0', '1', '2', '3',
-        '4', '5', '6', '7',
-        '8', '9', 'a', 'b',
-        'c', 'd', 'e', 'f'
-    };
-    for(u32 nibbleIndex = 0; nibbleIndex < 16u; ++nibbleIndex){
-        const u32 shift = (15 - nibbleIndex) * 4;
-        const usize nibble = static_cast<usize>((hash >> shift) & 0xF);
-        fileName += s_HexDigits[nibble];
-    }
+    AppendHexU64(hash, fileName);
     fileName += ".vol";
     return fileName;
 }

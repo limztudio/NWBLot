@@ -1583,14 +1583,6 @@ static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offs
     return true;
 }
 
-static bool OverwriteU32(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u32 value){
-    return OverwritePOD(binary, offset, value);
-}
-
-static bool OverwriteU64(NWB::Core::Assets::AssetBytes& binary, const usize offset, const u64 value){
-    return OverwritePOD(binary, offset, value);
-}
-
 static usize SkinnedGeometryHeaderCountOffset(const usize countIndex){
     return (sizeof(u32) * 3u) + (sizeof(u64) * countIndex);
 }
@@ -1784,7 +1776,7 @@ static void CheckCodecRejectsUnsupportedBinaryVersion(
     CodecT codec;
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(asset, binary));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(binary, sizeof(u32), unsupportedVersion));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(binary, sizeof(u32), unsupportedVersion));
 
     CheckCodecRejectsBinary(context, testArena, codec, asset.virtualPath(), binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
@@ -1866,7 +1858,7 @@ static void TestSkinnedGeometryCodecRejectsMalformedCounts(TestContext& context)
 
     const usize skeletonJointCountOffset = SkinnedGeometryHeaderCountOffset(3u);
     const u64 invalidJointCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(binary, skeletonJointCountOffset, invalidJointCount));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(binary, skeletonJointCountOffset, invalidJointCount));
 
     CheckCodecRejectsBinary(context, testArena, codec, geometry.virtualPath(), binary);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
@@ -1889,7 +1881,7 @@ static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext&
 
     {
         NWB::Core::Assets::AssetBytes malformed = binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(
             malformed,
             SkinnedGeometryHeaderCountOffset(2u),
             static_cast<u64>(geometry.restVertices().size() - 1u)
@@ -1900,7 +1892,7 @@ static void TestSkinnedGeometryCodecRejectsMalformedDependentCounts(TestContext&
 
     {
         NWB::Core::Assets::AssetBytes malformed = binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(
             malformed,
             SkinnedGeometryHeaderCountOffset(4u),
             static_cast<u64>(geometry.restVertices().size() - 1u)
@@ -1936,39 +1928,13 @@ static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
 }
 
-static void AppendHexU32SlangText(const u32 value, AString& inOutText){
-    static constexpr char s_HexDigits[] = "0123456789abcdef";
-    inOutText += "0x";
-    for(u32 nibbleIndex = 0u; nibbleIndex < 8u; ++nibbleIndex){
-        const u32 shift = (7u - nibbleIndex) * 4u;
-        inOutText += s_HexDigits[(value >> shift) & 0xfu];
-    }
-    inOutText += 'u';
-}
-
-static void AppendU32DecimalText(const u32 value, AString& inOutText){
-    char digits[10u];
-    u32 digitCount = 0u;
-    u32 remaining = value;
-    do{
-        digits[digitCount] = static_cast<char>('0' + (remaining % 10u));
-        remaining /= 10u;
-        ++digitCount;
-    } while(remaining != 0u);
-
-    while(digitCount > 0u){
-        --digitCount;
-        inOutText += digits[digitCount];
-    }
-}
-
 static AString BuildGeneratedUint2ConstantText(const AStringView symbol, const u64 value){
     AString text("static const uint2 ");
     text.append(symbol.data(), symbol.size());
     text += " = uint2(";
-    AppendHexU32SlangText(static_cast<u32>(value & 0xffffffffull), text);
+    AppendHexU32UnsignedLiteral(static_cast<u32>(value & 0xffffffffull), text);
     text += ", ";
-    AppendHexU32SlangText(static_cast<u32>(value >> 32u), text);
+    AppendHexU32UnsignedLiteral(static_cast<u32>(value >> 32u), text);
     text += ");";
     return text;
 }
@@ -1977,7 +1943,8 @@ static AString BuildGeneratedUintConstantText(const AStringView symbol, const u3
     AString text("static const uint ");
     text.append(symbol.data(), symbol.size());
     text += " = ";
-    AppendU32DecimalText(value, text);
+    char digits[16u];
+    text += FormatDecimal(static_cast<usize>(value), digits);
     text += "u;";
     return text;
 }
@@ -2369,7 +2336,8 @@ static void CheckGeneratedMaterialBindBinaryConstants(
     const NameHash& materialInterfaceHash = material.materialInterface().hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         AString symbol("NWB_MATERIAL_BIND_INTERFACE_HASH_");
-        AppendU32DecimalText(lane, symbol);
+        char laneDigits[16u];
+        symbol += FormatDecimal(static_cast<usize>(lane), laneDigits);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUint2Constant(
             generatedSourceView,
             AStringView(symbol.data(), symbol.size()),
@@ -2526,12 +2494,12 @@ static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
                 ? material.typedLayoutHash() - 1u
                 : material.typedLayoutHash() + 1u
         ;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU64(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
         CheckCodecRejectsBinary(context, testArena, codec, material.virtualPath(), hashMismatchBinary);
 
         NWB::Core::Assets::AssetBytes byteSizeMismatchBinary = binary;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !material.typedBlockBytes().empty());
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwriteU32(
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(
             byteSizeMismatchBinary,
             blockByteCountOffset,
             static_cast<u32>(material.typedBlockBytes().size() - 1u)

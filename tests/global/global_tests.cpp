@@ -281,6 +281,48 @@ static void TestTriviallyCopyableVectorAlias(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, values[2u] == 4u);
 }
 
+static void TestBoundedRuntimeWrappers(TestContext& context){
+    u32 copiedValue = 0u;
+    const u32 sourceValue = 0xAABBCCDDu;
+    NWB_MEMCPY(&copiedValue, sizeof(copiedValue), &sourceValue, sizeof(sourceValue));
+    NWB_GLOBAL_TEST_CHECK(context, copiedValue == sourceValue);
+
+    char copiedText[8] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCPY(copiedText, sizeof(copiedText), "alpha") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCMP(copiedText, "alpha") == 0);
+
+    char copiedPrefix[8] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRNCPY(copiedPrefix, sizeof(copiedPrefix), "abcdef", 3u) == 0);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCMP(copiedPrefix, "abc") == 0);
+
+    char appendedText[8] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCPY(appendedText, sizeof(appendedText), "ab") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCAT(appendedText, sizeof(appendedText), "cd") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCMP(appendedText, "abcd") == 0);
+
+    char formattedText[8] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_SPRINTF(formattedText, sizeof(formattedText), "%s", "ok") == 2);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCMP(formattedText, "ok") == 0);
+
+    wchar wideText[8] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_WSTRCPY(wideText, sizeof(wideText) / sizeof(wideText[0]), L"wide") == 0);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_WSTRCMP(wideText, L"wide") == 0);
+
+    wchar formattedWideText[8] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_WSPRINTF(formattedWideText, sizeof(formattedWideText) / sizeof(formattedWideText[0]), L"%ls", L"ok") == 2);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_WSTRCMP(formattedWideText, L"ok") == 0);
+
+#if !defined(_MSC_VER)
+    char truncatedText[4] = {};
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef") != 0);
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCMP(truncatedText, "abc") == 0);
+
+    char nullTerminatedText[4] = { 'a', 'b', 'c', 'd' };
+    NWB_GLOBAL_TEST_CHECK(context, NWB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e") != 0);
+    NWB_GLOBAL_TEST_CHECK(context, nullTerminatedText[sizeof(nullTerminatedText) - 1u] == '\0');
+#endif
+}
+
 static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard guard(logger);
@@ -330,6 +372,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
     __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
     __hidden_global_tests::TestTriviallyCopyableVectorAlias(context);
+    __hidden_global_tests::TestBoundedRuntimeWrappers(context);
     __hidden_global_tests::TestLoggerMacrosBehaveAsSingleStatements(context);
 })
 

@@ -1,6 +1,6 @@
 # Dependency Inversion Exceptions
 
-Updated: 2026-05-18
+Updated: 2026-05-25
 
 Read this before changing code for the dependency-inversion cleanup schedule.
 
@@ -23,6 +23,12 @@ engine/runtime consumes selected asset through asset APIs or declared shader hoo
 
 That shape is allowed because the engine depends on the abstract asset/material contract, not on project code or project-specific implementation details.
 
+## Asset Payload Ownership
+
+Shader asset binary payload helpers, including SPIR-V bytecode payload validation, are owned by `impl/assets_shader/shader_binary_payload.h`.
+
+Do not move those helpers into `core/graphics` only because Vulkan also needs SPIR-V constants. Core graphics should keep Vulkan parsing constants local, or place shared runtime contracts in a core-owned graphics header that is not an asset payload helper.
+
 ## Still Invalid
 
 Do not use this exception to justify these shapes:
@@ -33,6 +39,7 @@ Do not use this exception to justify these shapes:
 - Project-specific shader or material implementations placed under `impl/assets/graphics/` only because an engine path needs a default.
 - Engine shaders depending on arbitrary project shader internals instead of a narrow declared hook.
 - Hardcoded engine lookups of one project asset when the project should provide metadata or typed `AssetRef<T>` selection.
+- Moving shader asset binary payload ownership into `core/graphics` solely to share SPIR-V validation details with Vulkan runtime code.
 
 ## Scheduler Rule
 

@@ -32,7 +32,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/spirv_binary.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vulkan_backend_context.h"

@@ -7,6 +7,7 @@
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 #include <impl/assets_material/material_asset_cook.h>
 #include <impl/assets_material/material_binary_payload.h>
+#include <impl/assets_shader/shader_cook.h>
 
 #include <tests/capturing_logger.h>
 #include <tests/test_context.h>

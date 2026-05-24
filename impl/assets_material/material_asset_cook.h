@@ -16,11 +16,9 @@
 
 #include "material_asset.h"
 #include "material_bind.h"
+#include "material_cook_types.h"
 
 #include <core/alloc/scratch.h>
-
-#include <impl/assets_shader/shader_cook.h>
-
 #include <core/metascript/parser.h>
 
 
@@ -33,8 +31,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ShaderCook;
+
 struct MaterialCookEntry{
-    using StageShaderMap = ShaderCook::CookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
+    using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
     using ParameterMap = MaterialBindParameterMap;
 
     Name virtualPath = NAME_NONE;
@@ -43,12 +43,12 @@ struct MaterialCookEntry{
     Material::TypedLayoutBlockVector typedLayoutBlocks;
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
-    ShaderCook::CookString shaderVariant;
+    MaterialCookString shaderVariant;
     StageShaderMap stageShaders;
     ParameterMap parameters;
     bool transparent = false;
 
-    explicit MaterialCookEntry(ShaderCook::CookArena& arena)
+    explicit MaterialCookEntry(MaterialCookArena& arena)
         : typedLayoutBlocks(arena)
         , typedLayoutFields(arena)
         , typedBlockBytes(arena)
@@ -85,29 +85,29 @@ struct MaterialCookEntry{
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool ValidateMaterialCookInterfaces(
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool BuildMaterialBindIncludeSource(
-    ShaderCook::CookArena& arena,
+    MaterialCookArena& arena,
     const MaterialBindEntry& entry,
-    ShaderCook::CookString& outSource,
+    MaterialCookString& outSource,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool EmitMaterialBindIncludes(
-    ShaderCook::CookArena& arena,
+    MaterialCookArena& arena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
     Path& outIncludeRoot,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool ResolveMaterialBindDependencyInterface(
     AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const ShaderCook::CookVector<Path>& dependencies,
-    ShaderCook::CookString& outInterfacePath,
+    const MaterialCookVector<Path>& dependencies,
+    MaterialCookString& outInterfacePath,
     Name& outInterfaceName,
     Core::Alloc::ScratchArena& scratchArena
 );

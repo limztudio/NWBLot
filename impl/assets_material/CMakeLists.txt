@@ -21,6 +21,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/material_cook_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_shader_stage_names.h"
     )
-    target_link_libraries(nwb_assets_material_cook PUBLIC nwb_assets nwb_assets_shader_cook nwb_graphics)
+    target_link_libraries(nwb_assets_material_cook PUBLIC nwb_assets nwb_metascript nwb_graphics)
+    target_link_libraries(nwb_assets_material_cook PRIVATE nwb_assets_shader_cook)
     target_compile_definitions(nwb_assets_material_cook PRIVATE NWB_COOK=1)
 endif()

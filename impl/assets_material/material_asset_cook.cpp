@@ -12,6 +12,8 @@
 #include "material_asset_metadata.h"
 #include "material_binary_payload.h"
 
+#include <impl/assets_shader/shader_cook.h>
+
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_paths.h>
 #include <core/filesystem/filesystem.h>
@@ -38,11 +40,16 @@ namespace __hidden_material_asset{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookString = ShaderCook::CookString;
+using CookArena = MaterialCookArena;
+using CookString = MaterialCookString;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 template<typename T>
+using CookVector = MaterialCookVector<T>;
+template<typename T>
 using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, ScratchArena>;
+template<typename T>
+using CookHashSet = MaterialCookHashSet<T>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +66,7 @@ static Path BuildMaterialBindIncludeRoot(
 }
 
 static bool BuildMaterialBindIncludeVirtualPathImpl(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const MaterialBindEntry& entry,
     CookString& outIncludePath
 ){
@@ -137,7 +144,7 @@ static bool TryResolveMaterialBindDependencyInterface(
 static bool ResolveMaterialBindDependencyInterface(
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const ShaderCook::CookVector<Path>& dependencies,
+    const CookVector<Path>& dependencies,
     CookString& outInterfacePath,
     Name& outInterfaceName,
     ScratchArena& scratchArena
@@ -158,7 +165,7 @@ static bool ResolveMaterialBindDependencyInterface(
         }
     }
 
-    ShaderCook::CookArena& arena = outInterfacePath.get_allocator().arena();
+    CookArena& arena = outInterfacePath.get_allocator().arena();
     CookString dependencyInterfacePath{arena};
     for(const Path& dependency : dependencies){
         if(!TryResolveMaterialBindDependencyInterface(
@@ -210,7 +217,7 @@ static bool ParseVariantField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
-    ShaderCook::CookString& outVariant,
+    CookString& outVariant,
     ScratchArena& scratchArena
 ){
     auto& arena = outVariant.get_allocator().arena();
@@ -225,7 +232,7 @@ static bool ParseVariantField(
         return false;
     }
 
-    ShaderCook::CookString rawVariant{arena};
+    CookString rawVariant{arena};
     if(variantValue->isList()){
         const auto& list = variantValue->asList();
         usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
@@ -273,7 +280,7 @@ static bool ParseVariantField(
         return true;
     }
 
-    ShaderCook::CookString canonicalVariant{arena};
+    CookString canonicalVariant{arena};
     if(!shaderCook.canonicalizeVariantSignature(rawVariantView, canonicalVariant, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
             , PathToString<tchar>(nwbFilePath)
@@ -534,7 +541,7 @@ using MaterialBindInterfaceLookup = HashMap<
 >;
 
 static void BuildMaterialBindInterfaceLookup(
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
     MaterialBindInterfaceLookup& outLookup
 ){
     outLookup.reserve(materialBindEntries.size());
@@ -595,14 +602,14 @@ static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
     inOutText += ")";
 }
 
-static CookString BuildMaterialBindIncludeGuard(ShaderCook::CookArena& arena, const AStringView includePath){
+static CookString BuildMaterialBindIncludeGuard(CookArena& arena, const AStringView includePath){
     CookString guard("NWB_GENERATED_MATERIAL_BIND_", arena);
     AppendGeneratedUpperIdentifier(AStringView(includePath), guard);
     return guard;
 }
 
 static CookString BuildMaterialBindGeneratedSymbol(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const InitializerList<AStringView> nameSegments,
     const AStringView suffix
 ){
@@ -619,7 +626,7 @@ static CookString BuildMaterialBindGeneratedSymbol(
 }
 
 static CookString BuildMaterialBindAccessorName(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const InitializerList<AStringView> nameSegments
 ){
     CookString functionName("nwbMaterialBindLoad", arena);
@@ -772,7 +779,7 @@ static bool ResolveMaterialBindGeneratedLayoutBlock(
 }
 
 static bool AppendMaterialBindLayoutConstants(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const AStringView includePath,
     const MaterialBindEntry& entry,
     const MaterialBindTypedLayout& layout,
@@ -963,7 +970,7 @@ static void AppendMaterialBindFieldAccessor(
 }
 
 static bool AppendMaterialBindGeneratedInstance(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const AStringView includePath,
     const MaterialBindInstance& instance,
     const MaterialBindStruct& bindStruct,
@@ -1117,7 +1124,7 @@ static bool AppendMaterialBindGeneratedInstance(
 }
 
 static bool BuildMaterialBindIncludeSourceImpl(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const MaterialBindEntry& entry,
     CookString& outSource,
     ScratchArena& scratchArena
@@ -1252,10 +1259,10 @@ static bool PrepareMaterialBindIncludeRoot(const Path& includeRoot){
 }
 
 static bool EmitMaterialBindIncludes(
-    ShaderCook::CookArena& arena,
+    CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
     Path& outIncludeRoot,
     ScratchArena& scratchArena
 ){
@@ -1267,7 +1274,7 @@ static bool EmitMaterialBindIncludes(
     if(!PrepareMaterialBindIncludeRoot(outIncludeRoot))
         return false;
 
-    ShaderCook::CookHashSet<CookString> seenIncludePaths{arena};
+    CookHashSet<CookString> seenIncludePaths{arena};
     seenIncludePaths.reserve(materialBindEntries.size());
 
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
@@ -1308,8 +1315,8 @@ static bool EmitMaterialBindIncludes(
 
 
 static bool ValidateMaterialCookInterfaces(
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
+    CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
 ){
     MaterialBindInterfaceLookup materialBindLookup(
@@ -1470,27 +1477,27 @@ bool ParseMaterialCookMetadata(
 }
 
 bool ValidateMaterialCookInterfaces(
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
-    ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
+    MaterialCookVector<MaterialCookEntry>& materialEntries,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::ValidateMaterialCookInterfaces(materialBindEntries, materialEntries, scratchArena);
 }
 
 bool BuildMaterialBindIncludeSource(
-    ShaderCook::CookArena& arena,
+    MaterialCookArena& arena,
     const MaterialBindEntry& entry,
-    ShaderCook::CookString& outSource,
+    MaterialCookString& outSource,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_material_asset::BuildMaterialBindIncludeSourceImpl(arena, entry, outSource, scratchArena);
 }
 
 bool EmitMaterialBindIncludes(
-    ShaderCook::CookArena& arena,
+    MaterialCookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const ShaderCook::CookVector<MaterialBindEntry>& materialBindEntries,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
     Path& outIncludeRoot,
     Core::Alloc::ScratchArena& scratchArena
 ){
@@ -1507,8 +1514,8 @@ bool EmitMaterialBindIncludes(
 bool ResolveMaterialBindDependencyInterface(
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
-    const ShaderCook::CookVector<Path>& dependencies,
-    ShaderCook::CookString& outInterfacePath,
+    const MaterialCookVector<Path>& dependencies,
+    MaterialCookString& outInterfacePath,
     Name& outInterfaceName,
     Core::Alloc::ScratchArena& scratchArena
 ){

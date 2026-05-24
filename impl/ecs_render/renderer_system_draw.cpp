@@ -221,7 +221,6 @@ void RendererSystem::gatherMaterialPassDrawItems(
             drawItem.geometryKey = geometry.geometryName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
-            drawItem.alpha = materialInfo->alpha;
             drawItems.push_back(drawItem);
             return true;
         };
@@ -571,8 +570,7 @@ void RendererSystem::setMaterialPassDrawPushConstants(
             drawItem.instanceIndex,
             geometry.sourceVertexLayout,
             context.viewportState,
-            *context.avboitTargets,
-            drawItem.alpha
+            *context.avboitTargets
         );
         return;
     }

@@ -176,7 +176,7 @@ public:
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     void setMaterialInterface(const Name& materialInterface){ m_materialInterface = materialInterface; }
-    void setRenderProperties(f32 alpha, bool transparent);
+    void setTransparent(const bool transparent){ m_transparent = transparent; }
     void setTypedLayout(
         u64 layoutHash,
         const TypedLayoutBlockVector& blocks,
@@ -196,7 +196,6 @@ public:
     [[nodiscard]] const TypedBlockByteVector& typedBlockBytes()const{ return m_typedBlockBytes; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
-    [[nodiscard]] f32 alpha()const{ return m_alpha; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
 
 
@@ -212,7 +211,6 @@ private:
     TypedLayoutFieldVector m_typedLayoutFields;
     TypedBlockByteVector m_typedBlockBytes;
     StageShaderArray m_stageShaders;
-    f32 m_alpha = 1.f;
     u32 m_stageShaderCount = 0;
     bool m_transparent = false;
 };

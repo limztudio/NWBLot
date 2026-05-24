@@ -1,7 +1,6 @@
 material asset;
 
 asset.interface = "project/material_interfaces/bxdf";
-asset.alpha = 0.42;
 asset.transparent = 1;
 
 asset.shaders = {
@@ -14,6 +13,6 @@ asset.shader_variant = [
 ];
 asset.parameters = {
     "surface": {
-        "base_color": "float4(0.12, 0.44, 1.0, 1.0)",
+        "base_color": "float4(0.12, 0.44, 1.0, 0.42)",
     },
 };

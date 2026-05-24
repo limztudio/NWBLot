@@ -41,7 +41,7 @@ static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = 96u;
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState();
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState();
 [[nodiscard]] bool MaterialPipelinePassUsesRendererAvboit(MaterialPipelinePass::Enum pass);
-[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets, f32 alpha);
+[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

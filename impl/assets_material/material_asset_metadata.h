@@ -29,7 +29,6 @@ static constexpr AStringView s_InterfaceField = "interface";
 static constexpr AStringView s_ShadersField = "shaders";
 static constexpr AStringView s_ShaderVariantField = "shader_variant";
 static constexpr AStringView s_ParametersField = "parameters";
-static constexpr AStringView s_AlphaField = "alpha";
 static constexpr AStringView s_TransparentField = "transparent";
 
 static constexpr AStringView s_AllowedAssetFields[] = {
@@ -37,8 +36,7 @@ static constexpr AStringView s_AllowedAssetFields[] = {
     s_ShadersField,
     s_ShaderVariantField,
     s_ParametersField,
-    s_AlphaField,
-    s_TransparentField
+    s_TransparentField,
 };
 
 [[nodiscard]] inline bool IsAllowedAssetField(const AStringView fieldName){

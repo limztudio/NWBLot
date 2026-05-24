@@ -80,7 +80,6 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         material.typedBlockBytes().begin(),
         material.typedBlockBytes().end()
     );
-    createdInfo.alpha = material.alpha();
     createdInfo.transparent = material.transparent();
 
     auto result = m_materialSurfaceInfos.try_emplace(materialPath, Move(createdInfo));

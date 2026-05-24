@@ -181,7 +181,7 @@ bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pas
     }
 }
 
-RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets, const f32 alpha){
+RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets){
     RendererAvboitPushConstants pushConstants;
     pushConstants.frame[0] = targets.fullWidth;
     pushConstants.frame[1] = targets.fullHeight;
@@ -195,7 +195,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSyste
     );
     pushConstants.volume[3] = DivideUp(targets.virtualSliceCount, 32u);
     pushConstants.params = Float4(
-        alpha,
+        0.f,
         __hidden_renderer_avboit::s_AvboitExtinctionFixedScale,
         __hidden_renderer_avboit::s_AvboitSelfOcclusionSliceBias,
         0.f
@@ -794,7 +794,7 @@ void RendererSystem::dispatchAvboitDepthWarp(Core::ICommandList& commandList, Av
     computeState.addBindingSet(targets.depthWarpBindingSet.get());
     commandList.setComputeState(computeState);
 
-    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets, 1.f);
+    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(1, 1, 1);
 }
@@ -811,7 +811,7 @@ void RendererSystem::dispatchAvboitIntegration(Core::ICommandList& commandList, 
     computeState.addBindingSet(targets.integrateBindingSet.get());
     commandList.setComputeState(computeState);
 
-    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets, 1.f);
+    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;

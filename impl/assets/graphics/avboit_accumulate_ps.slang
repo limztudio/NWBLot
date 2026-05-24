@@ -82,7 +82,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
     inTangent = input.tangent;
     inWorldPosition = input.worldPosition;
 
-    const float alpha = nwbAvboitMaterialAlpha();
+    const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
     if(alpha <= 0.0)
         discard;
 

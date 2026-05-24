@@ -25,7 +25,7 @@ static float4 inColor;
 void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
     inColor = input.color;
 
-    float alpha;
+    const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
     uint virtualSlice;
     if(!nwbAvboitAcceptLowDepthFragment(g_OpaqueDepth, g_PointSampler, fragCoord, alpha, virtualSlice))
         discard;

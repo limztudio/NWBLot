@@ -46,7 +46,6 @@ struct MaterialCookEntry{
     ShaderCook::CookString shaderVariant;
     StageShaderMap stageShaders;
     ParameterMap parameters;
-    f32 alpha = 1.f;
     bool transparent = false;
 
     explicit MaterialCookEntry(ShaderCook::CookArena& arena)
@@ -68,7 +67,6 @@ struct MaterialCookEntry{
         shaderVariant.clear();
         stageShaders.clear();
         parameters.clear();
-        alpha = 1.f;
         transparent = false;
     }
 };

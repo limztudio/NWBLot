@@ -129,7 +129,6 @@ private:
         Core::Assets::AssetRef<Shader> pixelShader;
         Core::Assets::AssetRef<Shader> meshShader;
         MaterialTypedByteVector typedBytes;
-        f32 alpha = 1.f;
         bool transparent = false;
         bool valid = false;
 
@@ -153,7 +152,6 @@ private:
         Name geometryKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
         u32 instanceIndex = 0;
-        f32 alpha = 1.f;
     };
 
 

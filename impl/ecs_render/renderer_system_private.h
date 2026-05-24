@@ -401,12 +401,11 @@ inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 instanceIndex,
     const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
-    const RendererSystem::AvboitFrameTargets& targets,
-    const f32 alpha
+    const RendererSystem::AvboitFrameTargets& targets
 ){
     TransparentDrawPushConstants pushConstants;
     pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState);
-    pushConstants.avboit = BuildRendererAvboitPushConstants(targets, alpha);
+    pushConstants.avboit = BuildRendererAvboitPushConstants(targets);
     return pushConstants;
 }
 
@@ -429,11 +428,10 @@ inline void SetTransparentDrawPushConstants(
     const u32 instanceIndex,
     const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
-    const RendererSystem::AvboitFrameTargets& targets,
-    const f32 alpha
+    const RendererSystem::AvboitFrameTargets& targets
 ){
     const TransparentDrawPushConstants pushConstants =
-        BuildTransparentDrawPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState, targets, alpha)
+        BuildTransparentDrawPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState, targets)
     ;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }

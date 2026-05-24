@@ -260,7 +260,6 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_typedLayoutFields.clear();
     m_typedBlockBytes.clear();
     clearStageShaders();
-    m_alpha = 1.f;
     m_transparent = false;
 
     usize cursor = 0;
@@ -353,12 +352,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     u32 materialFlags = 0u;
-    if(!ReadPOD(binary, cursor, m_alpha) || !ReadPOD(binary, cursor, materialFlags)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material render properties"));
-        return false;
-    }
-    if(!IsFinite(m_alpha) || m_alpha < 0.0f || m_alpha > 1.0f){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material alpha must be in the [0, 1] range"));
+    if(!ReadPOD(binary, cursor, materialFlags)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material flags"));
         return false;
     }
     if((materialFlags & ~MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u){
@@ -379,11 +374,6 @@ void Material::clearStageShaders(){
     for(Core::Assets::AssetRef<Shader>& shaderAsset : m_stageShaders)
         shaderAsset.reset();
     m_stageShaderCount = 0;
-}
-
-void Material::setRenderProperties(const f32 alpha, const bool transparent){
-    m_alpha = alpha;
-    m_transparent = transparent;
 }
 
 void Material::setTypedLayout(

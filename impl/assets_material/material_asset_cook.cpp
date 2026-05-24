@@ -489,36 +489,6 @@ static bool ParseMaterialInterface(
     return true;
 }
 
-static bool ParseMaterialAlphaProperty(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    f32& outAlpha
-){
-    outAlpha = 1.f;
-
-    const auto* alphaValue = asset.findField(MaterialAssetMetadataSchema::s_AlphaField);
-    if(!alphaValue)
-        return true;
-
-    f64 parsedAlpha = 0.0;
-    if(alphaValue->isInteger())
-        parsedAlpha = static_cast<f64>(alphaValue->asInteger());
-    else if(alphaValue->isDouble())
-        parsedAlpha = alphaValue->asDouble();
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': alpha must be a number"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    if(!IsFinite(parsedAlpha) || parsedAlpha < 0.0 || parsedAlpha > 1.0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': alpha must be in the [0, 1] range"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    outAlpha = static_cast<f32>(parsedAlpha);
-    return true;
-}
-
 static bool ParseMaterialTransparentProperty(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -549,8 +519,6 @@ static bool ParseMaterialRenderProperties(
     const Core::Metascript::Value& asset,
     MaterialCookEntry& outEntry
 ){
-    if(!ParseMaterialAlphaProperty(nwbFilePath, asset, outEntry.alpha))
-        return false;
     if(!ParseMaterialTransparentProperty(nwbFilePath, asset, outEntry.transparent))
         return false;
 
@@ -1578,7 +1546,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial = Material(arena, materialEntry.virtualPath);
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
     outMaterial.setMaterialInterface(materialEntry.materialInterface);
-    outMaterial.setRenderProperties(materialEntry.alpha, materialEntry.transparent);
+    outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTypedLayout(
         materialEntry.typedLayoutHash,
         materialEntry.typedLayoutBlocks,
@@ -1661,11 +1629,6 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
         return false;
     }
-    if(!IsFinite(material.alpha()) || material.alpha() < 0.0f || material.alpha() > 1.0f){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material alpha must be in the [0, 1] range"));
-        return false;
-    }
-
     usize reserveBytes = sizeof(u32); // magic
     bool canReserve = AddBinaryStringReserveBytes(reserveBytes, AStringView(material.shaderVariant()))
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash))
@@ -1686,7 +1649,6 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryReserveBytes(reserveBytes, material.typedBlockBytes().size())
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
-        && AddBinaryReserveBytes(reserveBytes, sizeof(f32))
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
     ;
 
@@ -1744,7 +1706,6 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         AppendPOD(outBinary, shaderAsset.name().hash());
     }
 
-    AppendPOD(outBinary, material.alpha());
     const u32 materialFlags = material.transparent() ? MaterialBinaryPayload::s_MaterialFlagTransparent : 0u;
     AppendPOD(outBinary, materialFlags);
 

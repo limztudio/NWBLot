@@ -221,7 +221,14 @@ public:
         AppendCommandPathArgument(m_memoryArena, command, diagnosticsPath);
         command += " 2>&1";
 
+#if defined(_WIN32)
+        CookString systemCommand("\"", m_memoryArena);
+        systemCommand += command;
+        systemCommand += '"';
+        const int exitCode = std::system(systemCommand.c_str());
+#else
         const int exitCode = std::system(command.c_str());
+#endif
         if(exitCode != 0){
             CookString diagnostics{m_memoryArena};
             if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){

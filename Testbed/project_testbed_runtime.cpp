@@ -8,8 +8,8 @@
 #include <core/geometry/frame_math.h>
 #include <core/graphics/graphics.h>
 #include <global/simplemath.h>
-#include <impl/assets_geometry/skinned_geometry_asset.h>
 #include <impl/assets_material/material_asset.h>
+#include <impl/assets_geometry/skinned_geometry_asset.h>
 #include <impl/ecs_camera/camera.h>
 #include <impl/ecs_geometry/ecs_geometry.h>
 #include <impl/ecs_lighting/lighting.h>
@@ -17,10 +17,6 @@
 #include <impl/ecs_ui/ecs_ui.h>
 
 #include <imgui.h>
-
-#include <cstdlib>
-#include <cstring>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -32,7 +28,6 @@ namespace __hidden_project_testbed_runtime{
 
 
 using TestbedSkinnedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedGeometry>;
-using TestbedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 struct EditorVec3 : public Float4{
@@ -59,25 +54,12 @@ static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
-static constexpr const char* s_TestbedSceneEnv = "NWB_TESTBED_SCENE";
-static constexpr const char* s_TransparentSmokeSceneValue = "transparent_multi";
 static constexpr AStringView s_SkinnedGeometryFemalePath = "project/characters/female";
 static constexpr AStringView s_SkinnedGeometryMaterialPath = "project/materials/mat_skinned_uv";
-static constexpr AStringView s_CubeGeometryPath = "project/meshes/cube";
-static constexpr AStringView s_SphereGeometryPath = "project/meshes/sphere";
-static constexpr AStringView s_TetrahedronGeometryPath = "project/meshes/tetrahedron";
-static constexpr AStringView s_TransparentOrangeMaterialPath = "project/materials/mat_transparent";
-static constexpr AStringView s_TransparentGreenMaterialPath = "project/materials/mat_transparent_sphere";
-static constexpr AStringView s_TransparentBlueMaterialPath = "project/materials/mat_transparent_blue";
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
     return (positive ? 1.0f : 0.0f) - (negative ? 1.0f : 0.0f);
-}
-
-[[nodiscard]] static bool TransparentSmokeSceneRequested(){
-    const char* value = NWB_GETENV(s_TestbedSceneEnv);
-    return value && std::strcmp(value, s_TransparentSmokeSceneValue) == 0;
 }
 
 [[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
@@ -271,35 +253,6 @@ static void CreateDefaultDirectionalLightEntity(NWB::Core::ECS::World& world){
     return entity.id();
 }
 
-[[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
-    NWB::Core::ECS::World& world,
-    const AStringView geometryPath,
-    const AStringView materialPath,
-    const Float4& position,
-    const Float4& scale
-){
-    TestbedGeometryRef geometry;
-    geometry.virtualPath = Name(geometryPath);
-    TestbedMaterialRef material;
-    material.virtualPath = Name(materialPath);
-
-    auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
-    transform.position = position;
-    transform.scale = scale;
-
-    auto& geometryComponent = entity.addComponent<NWB::Impl::GeometryComponent>();
-    geometryComponent.geometry = geometry;
-
-    auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
-    renderer.material = material;
-    return entity.id();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -349,7 +302,6 @@ void ProjectTestbed::drawUiControls(){
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(createInitialWorldOrDie(context))
-    , m_transparentSmokeScene(__hidden_project_testbed_runtime::TransparentSmokeSceneRequested())
 {
     verifyRendererSystemOrDie(*m_world);
 }
@@ -372,19 +324,9 @@ bool ProjectTestbed::onStartup(){
     activeCamera.camera = __hidden_project_testbed_runtime::CreateMainCameraEntity(*m_world);
     __hidden_project_testbed_runtime::CreateDefaultDirectionalLightEntity(*m_world);
 
-    if(transparentSmokeSceneEnabled()){
-        createTransparentSmokeScene();
-        registerInputHandler();
-        return true;
-    }
-
     createDefaultScene();
     registerInputHandler();
     return m_characterEntity.valid();
-}
-
-bool ProjectTestbed::transparentSmokeSceneEnabled()const{
-    return m_transparentSmokeScene;
 }
 
 void ProjectTestbed::createDefaultScene(){
@@ -400,41 +342,6 @@ void ProjectTestbed::createDefaultScene(){
     NWB_LOGGER_ESSENTIAL_INFO(
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
         NWB_TEXT("directional light and female skinned character")
-    );
-}
-
-void ProjectTestbed::createTransparentSmokeScene(){
-    using namespace __hidden_project_testbed_runtime;
-
-    const auto cubeEntity = CreateTransparentStaticMeshEntity(
-        *m_world,
-        s_CubeGeometryPath,
-        s_TransparentOrangeMaterialPath,
-        Float4(-0.68f, s_CharacterCameraTargetY, 0.02f),
-        Float4(0.62f, 0.62f, 0.62f)
-    );
-    const auto sphereEntity = CreateTransparentStaticMeshEntity(
-        *m_world,
-        s_SphereGeometryPath,
-        s_TransparentGreenMaterialPath,
-        Float4(0.0f, s_CharacterCameraTargetY, 0.0f),
-        Float4(0.82f, 0.82f, 0.82f)
-    );
-    const auto tetrahedronEntity = CreateTransparentStaticMeshEntity(
-        *m_world,
-        s_TetrahedronGeometryPath,
-        s_TransparentBlueMaterialPath,
-        Float4(0.68f, s_CharacterCameraTargetY, 0.04f),
-        Float4(0.74f, 0.74f, 0.74f)
-    );
-    NWB_FATAL_ASSERT_MSG(
-        cubeEntity.valid() && sphereEntity.valid() && tetrahedronEntity.valid(),
-        NWB_TEXT("ProjectTestbed: transparent smoke scene failed to create all mesh entities")
-    );
-
-    NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("ProjectTestbed: startup scene created ({})"),
-        NWB_TEXT("three transparent static meshes")
     );
 }
 

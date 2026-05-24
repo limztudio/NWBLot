@@ -205,9 +205,6 @@ def build_launch_environment(args):
     env = os.environ.copy()
     system = platform.system()
 
-    if args.testbed_scene:
-        env["NWB_TESTBED_SCENE"] = args.testbed_scene
-
     if system == "Linux":
         if not env.get("DISPLAY"):
             raise SmokeSkip("DISPLAY is not set; X11 window capture is unavailable")
@@ -1320,8 +1317,8 @@ def launch_and_capture(args, backend):
 
 
 def parse_args(argv):
-    parser = argparse.ArgumentParser(description="Launch the NWB testbed and capture its native window handle.")
-    parser.add_argument("--executable", help="Path to the testbed executable. Optional when --window-handle is used.")
+    parser = argparse.ArgumentParser(description="Launch an NWB executable and capture its native window handle.")
+    parser.add_argument("--executable", help="Path to the executable. Optional when --window-handle is used.")
     parser.add_argument("--working-directory", type=Path, default=Path.cwd(), help="Working directory for launched processes.")
     parser.add_argument("--output", type=Path, required=True, help="Screenshot output path. The script writes a 24-bit BMP.")
     parser.add_argument("--window-handle", type=parse_int, help="Capture an existing native window handle instead of launching testbed.")
@@ -1331,7 +1328,6 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
-    parser.add_argument("--testbed-scene", help="Set NWB_TESTBED_SCENE for the launched testbed process.")
     parser.add_argument(
         "--expect-transparent-multi",
         action="store_true",
@@ -1355,9 +1351,6 @@ def parse_args(argv):
         parser.error("--executable is required unless --window-handle is provided")
     require_positive_arg(parser, "--timeout", args.timeout)
     require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
-
-    if args.expect_transparent_multi and args.testbed_scene != "transparent_multi":
-        parser.error("--expect-transparent-multi requires --testbed-scene transparent_multi")
 
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()

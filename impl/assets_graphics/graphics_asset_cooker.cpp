@@ -67,10 +67,6 @@ static const Name& IncludeAssetTypeName(){
     return s_Name;
 }
 
-static bool IsMeshShaderStage(const AStringView stageName){
-    return stageName == "mesh";
-}
-
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 
 static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entry, const AStringView defineName){
@@ -98,14 +94,6 @@ static bool SetShaderImplicitDefine(
     CookString defineNameKey(defineName, arena);
     entry.implicitDefines.insert_or_assign(Move(defineNameKey), CookString(defineValue, arena));
     return true;
-}
-
-static bool EnableMaterialTypedBinding(ShaderCook::ShaderEntry& entry){
-    return SetShaderImplicitDefine(
-        entry,
-        MaterialBindNames::TypedBindingImplicitDefineText(),
-        MaterialBindNames::TypedBindingImplicitDefineValueText()
-    );
 }
 
 static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry, ShaderCook::ShaderEntry& outEntry){
@@ -448,22 +436,6 @@ static bool DiscoverFilesWithExtension(
     );
 
     return true;
-}
-
-static bool DiscoverNwbFiles(
-    const ShaderCook::CookVector<Path>& assetRoots,
-    DiscoveredNwbFileVector& outNwbFiles,
-    ScratchArena& scratchArena
-){
-    return DiscoverFilesWithExtension(assetRoots, Core::Assets::s_NwbExtension, outNwbFiles, scratchArena);
-}
-
-static bool DiscoverBindFiles(
-    const ShaderCook::CookVector<Path>& assetRoots,
-    DiscoveredBindFileVector& outBindFiles,
-    ScratchArena& scratchArena
-){
-    return DiscoverFilesWithExtension(assetRoots, MaterialBindNames::SourceExtensionText(), outBindFiles, scratchArena);
 }
 
 static bool AppendIncludeDirectory(
@@ -1267,11 +1239,15 @@ static bool PrepareShaderEntriesForCook(
         ))
             return false;
         preparedEntry.usesMaterialTypedBinding =
-            IsMeshShaderStage(preparedEntry.entry.archiveStage.view())
+            preparedEntry.entry.archiveStage.view() == "mesh"
             && preparedEntry.materialTypedBindingInterface
         ;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
-        if(preparedEntry.usesMaterialTypedBinding && !EnableMaterialTypedBinding(preparedEntry.entry))
+        if(preparedEntry.usesMaterialTypedBinding && !SetShaderImplicitDefine(
+            preparedEntry.entry,
+            MaterialBindNames::TypedBindingImplicitDefineText(),
+            MaterialBindNames::TypedBindingImplicitDefineValueText()
+        ))
             return false;
         if(!shaderCook.computeDependencyChecksum(preparedEntry.dependencies, preparedEntry.dependencyChecksum, scratchArena))
             return false;
@@ -1280,7 +1256,7 @@ static bool PrepareShaderEntriesForCook(
         if(!AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
-        const bool emitMeshComputeShadow = IsMeshShaderStage(preparedEntry.entry.archiveStage.view());
+        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh";
         outPreparedPlan.preparedEntries.push_back(Move(preparedEntry));
 
         if(!emitMeshComputeShadow)
@@ -1529,57 +1505,6 @@ static bool AppendBuiltAssetsToVolume(
     return true;
 }
 
-static bool AppendMaterialAssetsToVolume(
-    const MaterialCookEntryVector& materialEntries,
-    Core::Filesystem::VolumeSession& volumeSession,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
-){
-    return AppendBuiltAssetsToVolume<Material, MaterialAssetCodec>(
-        NWB_TEXT("material"),
-        materialEntries,
-        volumeSession,
-        inOutSeenVirtualPathHashes,
-        false,
-        [](const MaterialCookEntry& materialEntry, Material& outMaterial){
-            return BuildMaterialAsset(materialEntry, outMaterial);
-        }
-    );
-}
-
-static bool AppendGeometryAssetsToVolume(
-    GeometryCookEntryVector& geometryEntries,
-    Core::Filesystem::VolumeSession& volumeSession,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
-){
-    return AppendBuiltAssetsToVolume<Geometry, GeometryAssetCodec>(
-        NWB_TEXT("geometry"),
-        geometryEntries,
-        volumeSession,
-        inOutSeenVirtualPathHashes,
-        true,
-        [](GeometryCookEntry& geometryEntry, Geometry& outGeometry){
-            return BuildGeometryAsset(geometryEntry, outGeometry);
-        }
-    );
-}
-
-static bool AppendSkinnedGeometryAssetsToVolume(
-    SkinnedGeometryCookEntryVector& geometryEntries,
-    Core::Filesystem::VolumeSession& volumeSession,
-    VirtualPathHashSet& inOutSeenVirtualPathHashes
-){
-    return AppendBuiltAssetsToVolume<SkinnedGeometry, SkinnedGeometryAssetCodec>(
-        NWB_TEXT("skinned geometry"),
-        geometryEntries,
-        volumeSession,
-        inOutSeenVirtualPathHashes,
-        true,
-        [](SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
-            return BuildSkinnedGeometryAsset(geometryEntry, outGeometry);
-        }
-    );
-}
-
 };
 
 
@@ -1625,11 +1550,21 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
 
     // discover cook input files from asset roots
     __hidden_graphics_asset_cooker::DiscoveredNwbFileVector nwbFiles{ m_arena };
-    if(!__hidden_graphics_asset_cooker::DiscoverNwbFiles(resolvedPaths.assetRoots, nwbFiles, scratchArena))
+    if(!__hidden_graphics_asset_cooker::DiscoverFilesWithExtension(
+        resolvedPaths.assetRoots,
+        Core::Assets::s_NwbExtension,
+        nwbFiles,
+        scratchArena
+    ))
         return false;
 
     __hidden_graphics_asset_cooker::DiscoveredBindFileVector bindFiles{ m_arena };
-    if(!__hidden_graphics_asset_cooker::DiscoverBindFiles(resolvedPaths.assetRoots, bindFiles, scratchArena))
+    if(!__hidden_graphics_asset_cooker::DiscoverFilesWithExtension(
+        resolvedPaths.assetRoots,
+        MaterialBindNames::SourceExtensionText(),
+        bindFiles,
+        scratchArena
+    ))
         return false;
 
     __hidden_graphics_asset_cooker::ParsedAssetMetadata parsedMetadata(m_arena);
@@ -1742,14 +1677,37 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             return false;
         }
 
-        if(!__hidden_graphics_asset_cooker::AppendMaterialAssetsToVolume(parsedMetadata.materialEntries, volumeSession, seenVirtualPathHashes))
+        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<Material, MaterialAssetCodec>(
+            NWB_TEXT("material"),
+            parsedMetadata.materialEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            false,
+            [](const MaterialCookEntry& materialEntry, Material& outMaterial){
+                return BuildMaterialAsset(materialEntry, outMaterial);
+            }
+        ))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendGeometryAssetsToVolume(parsedMetadata.geometryEntries, volumeSession, seenVirtualPathHashes))
+        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<Geometry, GeometryAssetCodec>(
+            NWB_TEXT("geometry"),
+            parsedMetadata.geometryEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            true,
+            [](GeometryCookEntry& geometryEntry, Geometry& outGeometry){
+                return BuildGeometryAsset(geometryEntry, outGeometry);
+            }
+        ))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendSkinnedGeometryAssetsToVolume(
+        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<SkinnedGeometry, SkinnedGeometryAssetCodec>(
+            NWB_TEXT("skinned geometry"),
             parsedMetadata.skinnedGeometryEntries,
             volumeSession,
-            seenVirtualPathHashes
+            seenVirtualPathHashes,
+            true,
+            [](SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
+                return BuildSkinnedGeometryAsset(geometryEntry, outGeometry);
+            }
         ))
             return false;
         if(!volumeSession.flush()){

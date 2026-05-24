@@ -204,18 +204,6 @@ static bool ResolveMaterialBindDependencyInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsMaterialPixelShaderStage(const Core::ShaderType::Enum shaderType){
-    return shaderType == Core::ShaderType::PixelStage;
-}
-
-static bool IsMaterialMeshShaderStage(const Core::ShaderType::Enum shaderType){
-    return shaderType == Core::ShaderType::MeshStage;
-}
-
-static bool IsSupportedRendererMaterialShaderStage(const Core::ShaderType::Enum shaderType){
-    return IsMaterialPixelShaderStage(shaderType) || IsMaterialMeshShaderStage(shaderType);
-}
-
 namespace MaterialAssetFields{
 
 static constexpr AStringView s_Interface = "interface";
@@ -346,7 +334,7 @@ static bool ParseMaterialStageShaders(
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
-        if(!IsSupportedRendererMaterialShaderStage(shaderType)){
+        if(shaderType != Core::ShaderType::PixelStage && shaderType != Core::ShaderType::MeshStage){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
@@ -673,31 +661,6 @@ static CookString BuildMaterialBindGeneratedSymbol(
     return symbol;
 }
 
-static CookString BuildMaterialBindGlobalSymbol(ShaderCook::CookArena& arena, const AStringView suffix){
-    return BuildMaterialBindGeneratedSymbol(arena, {}, suffix);
-}
-
-static CookString BuildMaterialBindBlockSymbol(
-    ShaderCook::CookArena& arena,
-    const AStringView blockName,
-    const AStringView suffix
-){
-    return BuildMaterialBindGeneratedSymbol(arena, { blockName }, suffix);
-}
-
-static CookString BuildMaterialBindFieldSymbol(
-    ShaderCook::CookArena& arena,
-    const MaterialBindInstance& instance,
-    const MaterialBindField& field,
-    const AStringView suffix
-){
-    return BuildMaterialBindGeneratedSymbol(
-        arena,
-        { AStringView(instance.name), AStringView(field.name) },
-        suffix
-    );
-}
-
 static CookString BuildMaterialBindAccessorName(
     ShaderCook::CookArena& arena,
     const InitializerList<AStringView> nameSegments
@@ -706,18 +669,6 @@ static CookString BuildMaterialBindAccessorName(
     for(const AStringView nameSegment : nameSegments)
         AppendGeneratedPascalIdentifier(nameSegment, functionName);
     return functionName;
-}
-
-static CookString BuildMaterialBindFieldAccessorName(
-    ShaderCook::CookArena& arena,
-    const MaterialBindInstance& instance,
-    const MaterialBindField& field
-){
-    return BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
-}
-
-static CookString BuildMaterialBindBlockAccessorName(ShaderCook::CookArena& arena, const MaterialBindInstance& instance){
-    return BuildMaterialBindAccessorName(arena, { AStringView(instance.name) });
 }
 
 static bool RegisterGeneratedMaterialBindSymbol(
@@ -892,7 +843,7 @@ static bool AppendMaterialBindLayoutConstants(
         CookString laneSuffix("INTERFACE_HASH_", arena);
         char laneDigits[16u];
         laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
-        const CookString symbol = BuildMaterialBindGlobalSymbol(arena, AStringView(laneSuffix));
+        const CookString symbol = BuildMaterialBindGeneratedSymbol(arena, {}, AStringView(laneSuffix));
         if(!AppendMaterialBindU64Constant(
             includePath,
             symbol,
@@ -904,10 +855,10 @@ static bool AppendMaterialBindLayoutConstants(
             return false;
     }
 
-    const CookString layoutHashSymbol = BuildMaterialBindGlobalSymbol(arena, "LAYOUT_HASH");
-    const CookString blockCountSymbol = BuildMaterialBindGlobalSymbol(arena, "BLOCK_COUNT");
-    const CookString fieldCountSymbol = BuildMaterialBindGlobalSymbol(arena, "FIELD_COUNT");
-    const CookString blockByteSizeSymbol = BuildMaterialBindGlobalSymbol(arena, "BLOCK_BYTE_SIZE");
+    const CookString layoutHashSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "LAYOUT_HASH");
+    const CookString blockCountSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "BLOCK_COUNT");
+    const CookString fieldCountSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "FIELD_COUNT");
+    const CookString blockByteSizeSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "BLOCK_BYTE_SIZE");
 
     if(!AppendMaterialBindU64Constant(includePath, layoutHashSymbol, layout.layoutHash, inOutSymbols, scratchArena, inOutSource))
         return false;
@@ -950,8 +901,10 @@ static bool AppendMaterialBindLayoutConstants(
         if(!ResolveMaterialBindGeneratedLayoutBlock(includePath, instance, layout, blockEntry, block))
             return false;
 
-        const CookString offsetSymbol = BuildMaterialBindBlockSymbol(arena, AStringView(instance.name), "_BLOCK_BYTE_OFFSET");
-        const CookString sizeSymbol = BuildMaterialBindBlockSymbol(arena, AStringView(instance.name), "_BLOCK_BYTE_SIZE");
+        const CookString offsetSymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BLOCK_BYTE_OFFSET");
+        const CookString sizeSymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BLOCK_BYTE_SIZE");
         if(!AppendMaterialBindU32Constant(
             includePath,
             offsetSymbol,
@@ -1124,10 +1077,14 @@ static bool AppendMaterialBindGeneratedInstance(
             return false;
         }
 
-        const CookString keySymbol = BuildMaterialBindFieldSymbol(arena, instance, field, "_KEY");
-        const CookString defaultSymbol = BuildMaterialBindFieldSymbol(arena, instance, field, "_DEFAULT");
-        const CookString byteOffsetSymbol = BuildMaterialBindFieldSymbol(arena, instance, field, "_BYTE_OFFSET");
-        const CookString functionName = BuildMaterialBindFieldAccessorName(arena, instance, field);
+        const CookString keySymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_KEY");
+        const CookString defaultSymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_DEFAULT");
+        const CookString byteOffsetSymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_BYTE_OFFSET");
+        const CookString functionName =
+            BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
         if(!RegisterGeneratedMaterialBindSymbol(
             includePath,
             AStringView(functionName),
@@ -1163,7 +1120,7 @@ static bool AppendMaterialBindGeneratedInstance(
         inOutSource += '\n';
     }
 
-    const CookString blockFunctionName = BuildMaterialBindBlockAccessorName(arena, instance);
+    const CookString blockFunctionName = BuildMaterialBindAccessorName(arena, { AStringView(instance.name) });
     if(!RegisterGeneratedMaterialBindSymbol(
         includePath,
         AStringView(blockFunctionName),
@@ -1180,7 +1137,8 @@ static bool AppendMaterialBindGeneratedInstance(
     inOutSource += bindStruct.name;
     inOutSource += " value;\n";
     for(const MaterialBindField& field : bindStruct.fields){
-        const CookString functionName = BuildMaterialBindFieldAccessorName(arena, instance, field);
+        const CookString functionName =
+            BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
         inOutSource += "    value.";
         inOutSource += field.name;
         inOutSource += " = ";

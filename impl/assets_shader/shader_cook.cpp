@@ -616,10 +616,6 @@ static bool ParseMetascriptDocument(const Path& sourceFilePath, const AStringVie
     return true;
 }
 
-static bool ParseNwbDocument(const Path& nwbFilePath, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
-    return ParseMetascriptDocument(nwbFilePath, "Meta", arena, outDoc);
-}
-
 static const Metascript::Value* FindAssetMapValue(const Path& nwbFilePath, const Metascript::Document& doc, const AStringView metaKind){
     const Metascript::MStringView assetVariable = doc.assetVariable();
     const Metascript::Value* asset = doc.findVariable(assetVariable);
@@ -800,7 +796,7 @@ ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFac
 
 
 bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
-    return __hidden_shader_cook::ParseNwbDocument(nwbFilePath, m_memoryArena, outDoc);
+    return __hidden_shader_cook::ParseMetascriptDocument(nwbFilePath, "Meta", m_memoryArena, outDoc);
 }
 
 

@@ -188,10 +188,6 @@ static bool ParseMaterialParameterTypeText(
     ;
 }
 
-static bool IsMaterialBindBlockClassAttribute(const AStringView attributeName){
-    return attributeName == "material_constant" || attributeName == "material_mutable";
-}
-
 static bool ParseMaterialBindStringField(
     const Path& bindFilePath,
     const Metascript::Value& map,
@@ -297,7 +293,7 @@ static bool ValidateMaterialBindStructAttributes(
     bool foundBlockClass = false;
 
     for(const MaterialBindAttribute& attribute : bindStruct.attributes){
-        if(!IsMaterialBindBlockClassAttribute(attribute.name)){
+        if(attribute.name != "material_constant" && attribute.name != "material_mutable"){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)

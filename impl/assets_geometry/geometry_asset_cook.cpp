@@ -659,21 +659,6 @@ static bool BuildGeometryAsset(GeometryCookEntry& geometryEntry, Geometry& outGe
     return outGeometry.validatePayload();
 }
 
-static bool ParseU32Value(const Path& nwbFilePath, const Core::Metascript::Value& value, const AStringView label, u32& outValue){
-    return ParseMetadataU32Value(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValue);
-}
-
-template<usize ComponentCount>
-static bool ParseF32Tuple(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const AStringView label,
-    f32 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    return ParseMetadataF32Tuple(nwbFilePath, value, s_SkinnedGeometryMetaKind, label, outValues, scratchArena);
-}
-
 template<usize ComponentCount>
 static bool ParseU16Tuple(
     const Path& nwbFilePath,
@@ -714,28 +699,6 @@ static bool ParseU16Tuple(
 }
 
 template<typename ElementT, usize ComponentCount, typename ElementVectorT>
-static bool ParseFloatListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView fieldName,
-    ElementVectorT& outValues,
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    return ParseMetadataFloatListField<ElementT, ComponentCount>(
-        nwbFilePath,
-        asset,
-        s_SkinnedGeometryMetaKind,
-        fieldName,
-        outValues,
-        scratchArena
-    );
-}
-
-static bool IsExplicitEmptyOptionalField(const Core::Metascript::Value& value){
-    return (value.isList() && value.asList().empty()) || (value.isMap() && value.asMap().empty());
-}
-
-template<typename ElementT, usize ComponentCount, typename ElementVectorT>
 static bool ParseOptionalFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -748,25 +711,18 @@ static bool ParseOptionalFloatListField(
     outProvided = false;
 
     const Core::Metascript::Value* field = FindField(asset, fieldName);
-    if(!field || IsExplicitEmptyOptionalField(*field))
+    if(!field || (field->isList() && field->asList().empty()) || (field->isMap() && field->asMap().empty()))
         return true;
 
     outProvided = true;
-    return ParseFloatListField<ElementT, ComponentCount>(nwbFilePath, asset, fieldName, outValues, scratchArena);
-}
-
-static bool ParseSkinnedGeometryIndexType(const Path& nwbFilePath, const Core::Metascript::Value& asset, bool& outUse32BitIndices){
-    return ParseMetadataIndexType(nwbFilePath, asset, s_SkinnedGeometryMetaKind, outUse32BitIndices);
-}
-
-static bool ParseSkinnedGeometryIndexField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const bool use32BitIndices,
-    Core::Assets::AssetVector<u32>& outIndices,
-    Core::Alloc::ScratchArena<>& scratchArena
-){
-    return ParseMetadataIndexField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, use32BitIndices, outIndices, scratchArena);
+    return ParseMetadataFloatListField<ElementT, ComponentCount>(
+        nwbFilePath,
+        asset,
+        s_SkinnedGeometryMetaKind,
+        fieldName,
+        outValues,
+        scratchArena
+    );
 }
 
 template<typename PositionVectorT, typename NormalVectorT, typename TangentVectorT, typename UvVectorT, typename ColorVectorT>
@@ -879,7 +835,7 @@ static bool ParseSkinInfluences(
     if(!skin)
         return true;
     if(!skin->isMap()){
-        if(IsExplicitEmptyOptionalField(*skin))
+        if((skin->isList() && skin->asList().empty()) || (skin->isMap() && skin->asMap().empty()))
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'skin' must be a map"), PathToString<tchar>(nwbFilePath));
@@ -912,7 +868,7 @@ static bool ParseSkinInfluences(
         SkinInfluence4 influence;
         if(!ParseU16Tuple(nwbFilePath, jointList[i], jointLabel, influence.joint, scratchArena))
             return false;
-        if(!ParseF32Tuple(nwbFilePath, weightList[i], weightLabel, influence.weight, scratchArena))
+        if(!ParseMetadataF32Tuple(nwbFilePath, weightList[i], s_SkinnedGeometryMetaKind, weightLabel, influence.weight, scratchArena))
             return false;
         if(!NormalizeSkinInfluenceWeights(nwbFilePath, weightLabel, influence))
             return false;
@@ -929,7 +885,7 @@ static bool ParseSkeletonJointCount(const Path& nwbFilePath, const Core::Metascr
     if(!jointCount)
         return true;
 
-    return ParseU32Value(nwbFilePath, *jointCount, "skeleton_joint_count", outJointCount);
+    return ParseMetadataU32Value(nwbFilePath, *jointCount, s_SkinnedGeometryMetaKind, "skeleton_joint_count", outJointCount);
 }
 
 static bool ParseInverseBindMatrices(
@@ -942,7 +898,7 @@ static bool ParseInverseBindMatrices(
     outMatrices.clear();
 
     const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
-    if(!matrices || IsExplicitEmptyOptionalField(*matrices))
+    if(!matrices || (matrices->isList() && matrices->asList().empty()) || (matrices->isMap() && matrices->asMap().empty()))
         return true;
     if(!matrices->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'inverse_bind_matrices' must be a list")
@@ -1039,9 +995,16 @@ static bool ParseSkinnedGeometryMeta(
     ScratchVector<Float4U> tangents{scratchArena};
     ScratchVector<Float2U> uv0{scratchArena};
     ScratchVector<Float4U> colors{scratchArena};
-    if(!ParseSkinnedGeometryIndexType(discoveredFile.filePath, asset, outEntry.use32BitIndices))
+    if(!ParseMetadataIndexType(discoveredFile.filePath, asset, s_SkinnedGeometryMetaKind, outEntry.use32BitIndices))
         return false;
-    if(!ParseFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, "positions", positions, scratchArena))
+    if(!ParseMetadataFloatListField<Float3U, 3u>(
+        discoveredFile.filePath,
+        asset,
+        s_SkinnedGeometryMetaKind,
+        "positions",
+        positions,
+        scratchArena
+    ))
         return false;
     bool normalsProvided = false;
     bool tangentsProvided = false;
@@ -1063,17 +1026,41 @@ static bool ParseSkinnedGeometryMeta(
         scratchArena
     ))
         return false;
-    if(!ParseFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, "uv0", uv0, scratchArena))
+    if(!ParseMetadataFloatListField<Float2U, 2u>(
+        discoveredFile.filePath,
+        asset,
+        s_SkinnedGeometryMetaKind,
+        "uv0",
+        uv0,
+        scratchArena
+    ))
         return false;
-    if(!ParseSkinnedGeometryIndexField(discoveredFile.filePath, asset, outEntry.use32BitIndices, outEntry.indices, scratchArena))
+    if(!ParseMetadataIndexField(
+        discoveredFile.filePath,
+        asset,
+        s_SkinnedGeometryMetaKind,
+        outEntry.use32BitIndices,
+        outEntry.indices,
+        scratchArena
+    ))
         return false;
     if(!normalsProvided)
         normals.assign(positions.size(), Float3U(0.0f, 0.0f, 1.0f));
     if(!tangentsProvided)
         tangents.assign(positions.size(), Float4U(1.0f, 0.0f, 0.0f, 1.0f));
     const Core::Metascript::Value* colorsField = FindField(asset, "colors");
-    if(colorsField && !IsExplicitEmptyOptionalField(*colorsField)){
-        if(!ParseFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, "colors", colors, scratchArena))
+    if(colorsField
+        && !(colorsField->isList() && colorsField->asList().empty())
+        && !(colorsField->isMap() && colorsField->asMap().empty())
+    ){
+        if(!ParseMetadataFloatListField<Float4U, 4u>(
+            discoveredFile.filePath,
+            asset,
+            s_SkinnedGeometryMetaKind,
+            "colors",
+            colors,
+            scratchArena
+        ))
             return false;
     }
     else

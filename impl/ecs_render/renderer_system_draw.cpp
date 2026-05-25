@@ -39,15 +39,6 @@ void RendererSystem::renderMaterialPass(
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
 
-    const Core::FramebufferInfoEx& meshViewFramebufferInfo = framebuffer->getFramebufferInfo();
-    f32 meshViewAspectRatio = 1.0f;
-    if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
-        meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
-    if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)
-        meshViewAspectRatio = static_cast<f32>(avboitTargets->fullWidth) / static_cast<f32>(avboitTargets->fullHeight);
-    if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
-        return;
-
     gatherMaterialPassDrawItems(
         framebuffer,
         pass,
@@ -58,6 +49,15 @@ void RendererSystem::renderMaterialPass(
         materialTypedBytes
     );
     if(meshDrawItems.empty() && computeDrawItems.empty())
+        return;
+
+    const Core::FramebufferInfoEx& meshViewFramebufferInfo = framebuffer->getFramebufferInfo();
+    f32 meshViewAspectRatio = 1.0f;
+    if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
+        meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
+    if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)
+        meshViewAspectRatio = static_cast<f32>(avboitTargets->fullWidth) / static_cast<f32>(avboitTargets->fullHeight);
+    if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
 
     if(!uploadInstanceBuffer(commandList, instanceData))

@@ -57,14 +57,18 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
 }
 
 template<typename Container>
+inline void ReserveAppendBytesIfSupported(Container& outBinary, const usize byteCount){
+    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
+        outBinary.reserve(outBinary.size() + byteCount);
+}
+
+template<typename Container>
 inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const usize byteCount){
     RequireByteContainer<Container>();
     if(byteCount == 0u)
         return;
 
-    if constexpr(requires(Container& c, usize n){ c.reserve(n); })
-        outBinary.reserve(outBinary.size() + byteCount);
-
+    ReserveAppendBytesIfSupported(outBinary, byteCount);
     AppendBytesNoReserveUnchecked(outBinary, bytes, byteCount);
 }
 
@@ -195,7 +199,7 @@ template<typename Container>
         return false;
 
     BinaryDetail::RequireByteContainer<Container>();
-    outBinary.reserve(outBinary.size() + byteCount);
+    BinaryDetail::ReserveAppendBytesIfSupported(outBinary, byteCount);
     BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, &textLength, sizeof(textLength));
     BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, text.data(), textLength);
     return true;
@@ -367,7 +371,7 @@ template<typename Container>
     const usize beginOffset = outStringTable.size();
     outOffset = static_cast<u32>(beginOffset);
     BinaryDetail::RequireByteContainer<Container>();
-    outStringTable.reserve(reserveBytes);
+    BinaryDetail::ReserveAppendBytesIfSupported(outStringTable, reserveBytes - beginOffset);
     BinaryDetail::AppendBytesNoReserveUnchecked(outStringTable, text.data(), text.size());
     outStringTable.push_back(typename Container::value_type{});
     return true;

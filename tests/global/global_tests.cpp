@@ -224,6 +224,26 @@ static void TestFixedVectorBinaryPayloadRoundTrip(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, tooSmall.empty());
 }
 
+static void TestFixedVectorBinaryStringWrites(TestContext& context){
+    FixedVector<u8, 16u> fixedBinary;
+    NWB_GLOBAL_TEST_CHECK(context, AppendString(fixedBinary, AStringView("fixed")));
+
+    usize cursor = 0u;
+    AString parsed;
+    NWB_GLOBAL_TEST_CHECK(context, ReadString(fixedBinary, cursor, parsed));
+    NWB_GLOBAL_TEST_CHECK(context, parsed == "fixed");
+    NWB_GLOBAL_TEST_CHECK(context, cursor == fixedBinary.size());
+
+    FixedVector<u8, 8u> fixedStringTable;
+    u32 textOffset = Limit<u32>::s_Max;
+    NWB_GLOBAL_TEST_CHECK(context, AppendStringTableText(fixedStringTable, AStringView("bind"), textOffset));
+    NWB_GLOBAL_TEST_CHECK(context, textOffset == 0u);
+
+    ACompactString tableText;
+    NWB_GLOBAL_TEST_CHECK(context, ReadStringTableText(fixedStringTable, 0u, fixedStringTable.size(), textOffset, tableText));
+    NWB_GLOBAL_TEST_CHECK(context, tableText.view() == AStringView("bind"));
+}
+
 static void TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(TestContext& context){
     Vector<u8> truncated;
     const u32 source = 0x12345678u;
@@ -369,6 +389,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("global", [](NWB::Tests::TestContext& context){
     __hidden_global_tests::TestInvalidStringTableReads(context);
     __hidden_global_tests::TestBinaryVectorPayloadRoundTrip(context);
     __hidden_global_tests::TestFixedVectorBinaryPayloadRoundTrip(context);
+    __hidden_global_tests::TestFixedVectorBinaryStringWrites(context);
     __hidden_global_tests::TestRejectedBinaryVectorPayloadReadsDoNotAdvanceCursor(context);
     __hidden_global_tests::TestAppendTriviallyCopyableVectorSelfAppend(context);
     __hidden_global_tests::TestTriviallyCopyableVectorAlias(context);

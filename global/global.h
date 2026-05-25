@@ -15,6 +15,7 @@
 #include "not_null.h"
 #include "containers.h"
 #include "text_utils.h"
+#include "process.h"
 #include "compact_string.h"
 #include "binary.h"
 #include "hash_utils.h"

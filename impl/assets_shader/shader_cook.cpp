@@ -10,8 +10,6 @@
 
 #include "shader_cook.h"
 
-#include <cstdlib>
-
 #include <core/assets/asset_paths.h>
 #include <core/metascript/parser.h>
 
@@ -99,7 +97,7 @@ static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outSta
 }
 
 static void AppendShellQuoted(CookString& inOutCommand, const AStringView value){
-#if defined(_WIN32)
+#if defined(NWB_PLATFORM_WINDOWS)
     inOutCommand += '"';
     for(const char ch : value){
         if(ch == '"' || ch == '\\')
@@ -221,14 +219,7 @@ public:
         AppendCommandPathArgument(m_memoryArena, command, diagnosticsPath);
         command += " 2>&1";
 
-#if defined(_WIN32)
-        CookString systemCommand("\"", m_memoryArena);
-        systemCommand += command;
-        systemCommand += '"';
-        const int exitCode = std::system(systemCommand.c_str());
-#else
-        const int exitCode = std::system(command.c_str());
-#endif
+        const int exitCode = RunSystemCommand(command);
         if(exitCode != 0){
             CookString diagnostics{m_memoryArena};
             if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){

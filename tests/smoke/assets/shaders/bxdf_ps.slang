@@ -12,7 +12,7 @@
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input);
 
-    const float3 baseColor = clamp(nwbProjectBxdfPixel(inColor.rgb), float3(0.0), float3(1.0));
+    const float3 baseColor = clamp(nwbBxdfPixelColor(inColor.rgb), float3(0.0), float3(1.0));
     nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
 
     return nwbBuildMeshGBufferOutput();

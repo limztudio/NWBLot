@@ -15,37 +15,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_PROJECT_BXDF
-#error "NWB_PROJECT_BXDF must be defined by shader metadata"
+#ifndef NWB_BXDF_COLOR_TRANSFORM
+#error "NWB_BXDF_COLOR_TRANSFORM must be defined by shader metadata"
 #endif
 
-#ifndef NWB_PROJECT_TINT
-#error "NWB_PROJECT_TINT must be defined by shader metadata"
+#ifndef NWB_BXDF_VERTEX_TINT
+#error "NWB_BXDF_VERTEX_TINT must be defined by shader metadata"
 #endif
 
-float3 nwbProjectApplyBxdf(float3 color){
-#if NWB_PROJECT_BXDF == 0
+float3 nwbBxdfApplyColorTransform(float3 color){
+#if NWB_BXDF_COLOR_TRANSFORM == 0
     return color;
-#elif NWB_PROJECT_BXDF == 1
+#elif NWB_BXDF_COLOR_TRANSFORM == 1
     return sqrt(max(color, float3(0.0)));
 #else
     return color;
 #endif
 }
 
-float3 nwbProjectApplyTint(float3 color){
-#if NWB_PROJECT_TINT == 1
+float3 nwbBxdfApplyVertexTint(float3 color){
+#if NWB_BXDF_VERTEX_TINT == 1
     return color * float3(1.0, 0.92, 0.85);
 #else
     return color;
 #endif
 }
 
-float3 nwbProjectBxdfVertex(float3 color){
-    return clamp(nwbProjectApplyTint(nwbProjectApplyBxdf(color)), float3(0.0), float3(1.0));
+float3 nwbBxdfVertexColor(float3 color){
+    return clamp(nwbBxdfApplyVertexTint(nwbBxdfApplyColorTransform(color)), float3(0.0), float3(1.0));
 }
 
-float3 nwbProjectBxdfPixel(float3 color){
+float3 nwbBxdfPixelColor(float3 color){
     return color;
 }
 

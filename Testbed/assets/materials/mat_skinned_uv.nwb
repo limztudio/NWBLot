@@ -7,8 +7,8 @@ asset.shaders = {
     "mesh": "engine/shaders/bxdf_ms",
 };
 asset.shader_variant = [
-    "NWB_PROJECT_BXDF=0",
-    "NWB_PROJECT_TINT=0",
+    "NWB_BXDF_COLOR_TRANSFORM=0",
+    "NWB_BXDF_VERTEX_TINT=0",
 ];
 asset.parameters = {
     "surface": {

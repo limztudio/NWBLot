@@ -96,8 +96,17 @@ static bool ValidateMaterialTypedLayout(
                 );
                 return false;
             }
-            if(field.offset != expectedOffset){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has non-contiguous offset")
+
+            u32 expectedFieldOffset = 0u;
+            if(!AlignMaterialLayoutFieldOffset(expectedOffset, field.fieldType, expectedFieldOffset)){
+                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} alignment overflows")
+                    , failureContext
+                    , fieldIndex
+                );
+                return false;
+            }
+            if(field.offset != expectedFieldOffset){
+                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} has misaligned offset")
                     , failureContext
                     , fieldIndex
                 );
@@ -105,14 +114,22 @@ static bool ValidateMaterialTypedLayout(
             }
 
             const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
-            if(fieldByteSize == 0u || expectedOffset > Limit<u32>::s_Max - fieldByteSize){
+            if(fieldByteSize == 0u || expectedFieldOffset > Limit<u32>::s_Max - fieldByteSize){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout field {} byte size overflows"), failureContext, fieldIndex);
                 return false;
             }
-            expectedOffset += fieldByteSize;
+            expectedOffset = expectedFieldOffset + fieldByteSize;
         }
 
-        if(expectedOffset != block.byteSize){
+        u32 expectedBlockByteSize = 0u;
+        if(!AlignMaterialLayoutBlockByteSize(expectedOffset, expectedBlockByteSize)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size overflows")
+                , failureContext
+                , blockIndex
+            );
+            return false;
+        }
+        if(expectedBlockByteSize != block.byteSize){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: typed layout block {} byte size does not match its fields")
                 , failureContext
                 , blockIndex

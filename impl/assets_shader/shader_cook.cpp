@@ -67,6 +67,34 @@ static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
 
+struct NormalizedDependencyRootAlias{
+    Path root;
+    CookString key;
+    usize depth = 0u;
+
+    explicit NormalizedDependencyRootAlias(ShaderCook::CookArena& arena)
+        : key(arena)
+    {}
+};
+
+static usize PathDepth(const Path& path){
+    usize depth = 0u;
+    for(auto it = path.begin(); it != path.end(); ++it)
+        ++depth;
+    return depth;
+}
+
+static Path NormalizeDependencyRootAliasPath(Path path){
+    path = path.lexically_normal();
+    while(!path.empty() && !path.has_filename()){
+        const Path parentPath = path.parent_path();
+        if(parentPath.empty() || parentPath == path)
+            break;
+        path = parentPath;
+    }
+    return path;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Slang source compiler
@@ -1163,6 +1191,7 @@ bool ShaderCook::canonicalizeVariantSignature(
 
 bool ShaderCook::computeDependencyChecksum(
     const CookVector<Path>& dependencies,
+    const InitializerList<DependencyRootAlias> dependencyRootAliases,
     u64& outChecksum,
     Alloc::ScratchArena& scratchArena
 ){
@@ -1172,12 +1201,76 @@ bool ShaderCook::computeDependencyChecksum(
 
     outChecksum = FNV64_OFFSET_BASIS;
 
+    if(dependencyRootAliases.size() == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
+        return false;
+    }
+
+    CookVector<__hidden_shader_cook::NormalizedDependencyRootAlias> normalizedRootAliases{m_memoryArena};
+    normalizedRootAliases.reserve(dependencyRootAliases.size());
+    for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
+        if(rootAlias.root.empty() || rootAlias.key.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root aliases"));
+            return false;
+        }
+
+        __hidden_shader_cook::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena};
+        errorCode.clear();
+        normalizedAlias.root = __hidden_shader_cook::NormalizeDependencyRootAliasPath(AbsolutePath(rootAlias.root, errorCode));
+        if(errorCode){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}")
+                , PathToString<tchar>(rootAlias.root)
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+
+        normalizedAlias.key = rootAlias.key;
+        CanonicalizeTextInPlace(normalizedAlias.key);
+        if(normalizedAlias.key.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
+            return false;
+        }
+        normalizedAlias.depth = __hidden_shader_cook::PathDepth(normalizedAlias.root);
+        normalizedRootAliases.push_back(Move(normalizedAlias));
+    }
+
     CookVector<SortedDependencyItem> sortedDependencies{m_memoryArena};
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item(m_memoryArena);
-        item.canonicalPath = PathToString(m_memoryArena, dependency);
-        CanonicalizeTextInPlace(item.canonicalPath);
+        errorCode.clear();
+        Path normalizedDependency = AbsolutePath(dependency, errorCode).lexically_normal();
+        if(errorCode){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}")
+                , PathToString<tchar>(dependency)
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+
+        const __hidden_shader_cook::NormalizedDependencyRootAlias* bestRootAlias = nullptr;
+        for(const __hidden_shader_cook::NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
+            if(normalizedDependency != rootAlias.root && !PathHasDirectoryAncestor(normalizedDependency, rootAlias.root))
+                continue;
+            if(!bestRootAlias || rootAlias.depth > bestRootAlias->depth)
+                bestRootAlias = &rootAlias;
+        }
+        if(!bestRootAlias){
+            NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases")
+                , PathToString<tchar>(dependency)
+            );
+            return false;
+        }
+
+        __hidden_shader_cook::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexically_relative(bestRootAlias->root));
+        CanonicalizeTextInPlace(relativePathText);
+
+        item.canonicalPath = bestRootAlias->key;
+        if(!relativePathText.empty()){
+            item.canonicalPath += '/';
+            item.canonicalPath += relativePathText;
+        }
         item.path = dependency;
         sortedDependencies.push_back(Move(item));
     }

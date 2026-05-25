@@ -1243,7 +1243,15 @@ static bool PrepareShaderEntriesForCook(
             MaterialBindNames::TypedBindingImplicitDefineValueText()
         ))
             return false;
-        if(!shaderCook.computeDependencyChecksum(preparedEntry.dependencies, preparedEntry.dependencyChecksum, scratchArena))
+        if(!shaderCook.computeDependencyChecksum(
+            preparedEntry.dependencies,
+            {
+                { resolvedPaths.repoRoot, "repo" },
+                { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() }
+            },
+            preparedEntry.dependencyChecksum,
+            scratchArena
+        ))
             return false;
         if(!CountShaderVariants(preparedEntry.entry, preparedEntry.variantCount))
             return false;

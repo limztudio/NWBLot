@@ -84,23 +84,6 @@ static bool BuildMaterialBindIncludeVirtualPathImpl(
     return true;
 }
 
-static bool PathHasDirectoryAncestor(const Path& normalizedPath, const Path& normalizedDirectory){
-    if(normalizedPath.empty() || normalizedDirectory.empty())
-        return false;
-
-    for(Path parent = normalizedPath.parent_path(); !parent.empty();){
-        if(parent == normalizedDirectory)
-            return true;
-
-        const Path nextParent = parent.parent_path();
-        if(nextParent == parent)
-            break;
-        parent = nextParent;
-    }
-
-    return false;
-}
-
 static bool TryResolveMaterialBindDependencyInterface(
     const Path& normalizedMaterialBindIncludeRoot,
     const Path& dependency,
@@ -677,6 +660,12 @@ static AStringView MaterialBindFieldLookupFunctionName(const MaterialLayoutField
         "nwbMaterialLoadBool3",
         "nwbMaterialLoadBool4"
     };
+    static constexpr AStringView s_HalfLookupNames[] = {
+        "nwbMaterialLoadHalf",
+        "nwbMaterialLoadHalf2",
+        "nwbMaterialLoadHalf3",
+        "nwbMaterialLoadHalf4"
+    };
 
     const u32 componentCount = MaterialLayoutFieldComponentCount(fieldType);
     if(componentCount == 0u || componentCount > 4u)
@@ -687,6 +676,7 @@ static AStringView MaterialBindFieldLookupFunctionName(const MaterialLayoutField
     case MaterialParameterValueType::Int: return s_IntLookupNames[componentCount - 1u];
     case MaterialParameterValueType::UInt: return s_UIntLookupNames[componentCount - 1u];
     case MaterialParameterValueType::Bool: return s_BoolLookupNames[componentCount - 1u];
+    case MaterialParameterValueType::Half: return s_HalfLookupNames[componentCount - 1u];
     default: return AStringView();
     }
 }
@@ -1267,12 +1257,11 @@ static bool EmitMaterialBindIncludes(
     ScratchArena& scratchArena
 ){
     outIncludeRoot.clear();
-    if(materialBindEntries.empty())
-        return true;
-
     outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
     if(!PrepareMaterialBindIncludeRoot(outIncludeRoot))
         return false;
+    if(materialBindEntries.empty())
+        return true;
 
     CookHashSet<CookString> seenIncludePaths{arena};
     seenIncludePaths.reserve(materialBindEntries.size());

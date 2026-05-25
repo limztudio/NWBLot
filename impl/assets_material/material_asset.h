@@ -34,6 +34,7 @@ namespace MaterialParameterValueType{
         Int = 2,
         UInt = 3,
         Bool = 4,
+        Half = 5,
     };
 };
 
@@ -69,11 +70,15 @@ namespace MaterialLayoutFieldType{
         Bool2 = 14,
         Bool3 = 15,
         Bool4 = 16,
+        Half = 17,
+        Half2 = 18,
+        Half3 = 19,
+        Half4 = 20,
     };
 };
 
 [[nodiscard]] inline bool IsValidMaterialLayoutFieldType(const MaterialLayoutFieldType::Enum fieldType){
-    return fieldType >= MaterialLayoutFieldType::Float && fieldType <= MaterialLayoutFieldType::Bool4;
+    return fieldType >= MaterialLayoutFieldType::Float && fieldType <= MaterialLayoutFieldType::Half4;
 }
 
 [[nodiscard]] inline u32 MaterialLayoutFieldComponentCount(const MaterialLayoutFieldType::Enum fieldType){
@@ -94,6 +99,7 @@ namespace MaterialLayoutFieldType{
     case 1u: return MaterialParameterValueType::Int;
     case 2u: return MaterialParameterValueType::UInt;
     case 3u: return MaterialParameterValueType::Bool;
+    case 4u: return MaterialParameterValueType::Half;
     default: return MaterialParameterValueType::None;
     }
 }
@@ -111,6 +117,7 @@ namespace MaterialLayoutFieldType{
     case MaterialParameterValueType::Int: firstFieldType = static_cast<u32>(MaterialLayoutFieldType::Int); break;
     case MaterialParameterValueType::UInt: firstFieldType = static_cast<u32>(MaterialLayoutFieldType::UInt); break;
     case MaterialParameterValueType::Bool: firstFieldType = static_cast<u32>(MaterialLayoutFieldType::Bool); break;
+    case MaterialParameterValueType::Half: firstFieldType = static_cast<u32>(MaterialLayoutFieldType::Half); break;
     default: return MaterialLayoutFieldType::None;
     }
 
@@ -118,7 +125,43 @@ namespace MaterialLayoutFieldType{
 }
 
 [[nodiscard]] inline u32 MaterialLayoutFieldByteSize(const MaterialLayoutFieldType::Enum fieldType){
-    return MaterialLayoutFieldComponentCount(fieldType) * sizeof(u32);
+    const u32 componentCount = MaterialLayoutFieldComponentCount(fieldType);
+    if(componentCount == 0u)
+        return 0u;
+
+    return componentCount * (MaterialLayoutFieldValueType(fieldType) == MaterialParameterValueType::Half
+        ? sizeof(u16)
+        : sizeof(u32));
+}
+
+[[nodiscard]] inline u32 MaterialLayoutFieldAlignment(const MaterialLayoutFieldType::Enum fieldType){
+    switch(MaterialLayoutFieldValueType(fieldType)){
+    case MaterialParameterValueType::Half:
+        return sizeof(u16);
+    case MaterialParameterValueType::Float:
+    case MaterialParameterValueType::Int:
+    case MaterialParameterValueType::UInt:
+    case MaterialParameterValueType::Bool:
+        return sizeof(u32);
+    default:
+        return 0u;
+    }
+}
+
+[[nodiscard]] inline bool AlignMaterialLayoutFieldOffset(
+    const u32 byteOffset,
+    const MaterialLayoutFieldType::Enum fieldType,
+    u32& outByteOffset
+){
+    const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
+    if(alignment == 0u)
+        return false;
+
+    return AlignUpU32Checked(byteOffset, alignment, outByteOffset);
+}
+
+[[nodiscard]] inline bool AlignMaterialLayoutBlockByteSize(const u32 byteSize, u32& outByteSize){
+    return AlignUpU32Checked(byteSize, sizeof(u32), outByteSize);
 }
 
 struct MaterialTypedLayoutBlock{

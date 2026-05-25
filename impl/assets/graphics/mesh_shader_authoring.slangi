@@ -174,7 +174,14 @@ uint nwbMaterialTypedByteCount(const NwbMeshInstanceData instance){
 }
 
 uint nwbMaterialLoadRawUInt(const NwbMeshInstanceData instance, const uint byteOffset){
-    return g_NwbMaterialTypedWords[(nwbMaterialTypedByteOffset(instance) + byteOffset) >> 2u];
+    const uint absoluteByteOffset = nwbMaterialTypedByteOffset(instance) + byteOffset;
+    const uint wordIndex = absoluteByteOffset >> 2u;
+    const uint byteShift = (absoluteByteOffset & 3u) << 3u;
+    const uint word = g_NwbMaterialTypedWords[wordIndex] >> byteShift;
+    if(byteShift == 0u)
+        return word;
+
+    return word | (g_NwbMaterialTypedWords[wordIndex + 1u] << (32u - byteShift));
 }
 
 float nwbMaterialLoadFloat(const NwbMeshInstanceData instance, const uint byteOffset){
@@ -287,6 +294,39 @@ bool4 nwbMaterialLoadBool4(const NwbMeshInstanceData instance, const uint byteOf
         nwbMaterialLoadBool(instance, byteOffset + 8u),
         nwbMaterialLoadBool(instance, byteOffset + 12u)
     );
+}
+
+float2 nwbMaterialLoadPackedHalf2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbUnpackHalf2x16(nwbMaterialLoadRawUInt(instance, byteOffset));
+}
+
+half nwbMaterialLoadHalf(const NwbMeshInstanceData instance, const uint byteOffset){
+    const uint absoluteByteOffset = nwbMaterialTypedByteOffset(instance) + byteOffset;
+    const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> 2u];
+    const uint byteLane = absoluteByteOffset & 3u;
+    if(byteLane == 0u || byteLane == 2u){
+        const float2 value = nwbUnpackHalf2x16(word);
+        return half(byteLane == 0u ? value.x : value.y);
+    }
+
+    const float2 value = nwbUnpackHalf2x16(nwbMaterialLoadRawUInt(instance, byteOffset));
+    return half(value.x);
+}
+
+half2 nwbMaterialLoadHalf2(const NwbMeshInstanceData instance, const uint byteOffset){
+    const float2 value = nwbMaterialLoadPackedHalf2(instance, byteOffset);
+    return half2(half(value.x), half(value.y));
+}
+
+half3 nwbMaterialLoadHalf3(const NwbMeshInstanceData instance, const uint byteOffset){
+    const half2 xy = nwbMaterialLoadHalf2(instance, byteOffset);
+    return half3(xy.x, xy.y, nwbMaterialLoadHalf(instance, byteOffset + 4u));
+}
+
+half4 nwbMaterialLoadHalf4(const NwbMeshInstanceData instance, const uint byteOffset){
+    const float2 xy = nwbMaterialLoadPackedHalf2(instance, byteOffset);
+    const float2 zw = nwbMaterialLoadPackedHalf2(instance, byteOffset + 4u);
+    return half4(half(xy.x), half(xy.y), half(zw.x), half(zw.y));
 }
 
 float3 nwbMeshTransformPosition(float3 localPosition, const NwbMeshInstanceData instance){

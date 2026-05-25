@@ -140,25 +140,38 @@ void RendererSystem::gatherMaterialPassDrawItems(
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
             return false;
         }
-        const usize remainingTypedByteCapacity = static_cast<usize>(Limit<u32>::s_Max) - materialTypedBytes.size();
-        if(materialInfo.typedBytes.size() > remainingTypedByteCapacity){
+        usize alignedByteBegin = 0u;
+        if(!AlignUpChecked(materialTypedBytes.size(), sizeof(u32), alignedByteBegin)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
+            return false;
+        }
+        usize byteEnd = alignedByteBegin;
+        if(materialInfo.typedBytes.size() > Limit<usize>::s_Max - byteEnd){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
+            return false;
+        }
+        byteEnd += materialInfo.typedBytes.size();
+        usize alignedByteEnd = 0u;
+        if(!AlignUpChecked(byteEnd, sizeof(u32), alignedByteEnd)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
+            return false;
+        }
+        if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
             return false;
         }
-        if(((materialTypedBytes.size() | materialInfo.typedBytes.size()) & (sizeof(u32) - 1u)) != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed bytes must be word-aligned"));
-            return false;
-        }
 
-        outBlock.byteOffset = static_cast<u32>(materialTypedBytes.size());
+        outBlock.byteOffset = static_cast<u32>(alignedByteBegin);
         outBlock.byteCount = static_cast<u32>(materialInfo.typedBytes.size());
-        const usize requiredTypedByteCapacity = materialTypedBytes.size() + materialInfo.typedBytes.size();
+        const usize requiredTypedByteCapacity = alignedByteEnd;
         if(requiredTypedByteCapacity > materialTypedBytes.capacity())
             materialTypedBytes.reserve(ECSRenderDetail::NextGrowingCapacity(
                 materialTypedBytes.capacity(),
                 requiredTypedByteCapacity
             ));
+        materialTypedBytes.resize(alignedByteBegin, 0u);
         AppendTriviallyCopyableVector(materialTypedBytes, materialInfo.typedBytes);
+        materialTypedBytes.resize(alignedByteEnd, 0u);
 
         materialTypedByteBlocks.emplace(materialInfo.materialName, outBlock);
         return true;

@@ -80,6 +80,16 @@ public:
 
     using ShaderCompilerFactory = Core::GlobalUniquePtr<IShaderCompiler> (*)(CookArena& memoryArena);
 
+    struct DependencyRootAlias{
+        Path root;
+        AStringView key;
+
+        DependencyRootAlias(const Path& rootPath, const AStringView rootKey)
+            : root(rootPath)
+            , key(rootKey)
+        {}
+    };
+
     using DefineCombo = CookMap<CookString, CookString>;
 
     struct DefineEntry{
@@ -205,6 +215,7 @@ public:
 
     bool computeDependencyChecksum(
         const CookVector<Path>& dependencies,
+        InitializerList<DependencyRootAlias> dependencyRootAliases,
         u64& outChecksum,
         Core::Alloc::ScratchArena& scratchArena
     );

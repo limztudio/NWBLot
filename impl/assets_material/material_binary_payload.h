@@ -25,7 +25,7 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = 0x4D544C32u; // MTL2
+inline constexpr u32 s_MaterialMagic = 0x4D544C31u; // MTL1
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 inline constexpr u32 s_MaterialFlagTransparent = 1u << 0u;
 

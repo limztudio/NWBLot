@@ -89,6 +89,23 @@ struct StagedDirectoryPaths{
     return path.lexically_normal();
 }
 
+[[nodiscard]] inline bool PathHasDirectoryAncestor(const Path& normalizedPath, const Path& normalizedDirectory){
+    if(normalizedPath.empty() || normalizedDirectory.empty())
+        return false;
+
+    for(Path parent = normalizedPath.parent_path(); !parent.empty();){
+        if(parent == normalizedDirectory)
+            return true;
+
+        const Path nextParent = parent.parent_path();
+        if(nextParent == parent)
+            break;
+        parent = nextParent;
+    }
+
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

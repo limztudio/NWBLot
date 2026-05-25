@@ -67,13 +67,6 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         );
         return false;
     }
-    if((material.typedBlockBytes().size() & (sizeof(u32) - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material data is not word-aligned")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
-
     createdInfo.typedBytes.reserve(material.typedBlockBytes().size());
     createdInfo.typedBytes.insert(
         createdInfo.typedBytes.end(),

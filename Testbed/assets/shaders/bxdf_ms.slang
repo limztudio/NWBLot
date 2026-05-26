@@ -3,7 +3,7 @@
 
 
 #include "mesh_shader_authoring.slangi"
-#include "project/material_interfaces/bxdf.bind"
+#include "project/shaders/bxdf_surface.bind"
 #include "bxdf.slangi"
 
 

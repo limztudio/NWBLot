@@ -8,7 +8,7 @@ Read this before changing code for the dependency-inversion cleanup schedule.
 
 Project-owned assets may implement an engine-defined runtime contract without being treated as dependency inversion.
 
-BxDF material policy is project-owned. Do not move BxDF shader stages, BxDF shader includes, BxDF material interfaces, or BxDF material metadata selectors into `impl/assets` or any `engine/...` virtual asset path. Each project or test asset tree that needs BxDF must own its own `project/material_interfaces/bxdf` and `project/shaders/bxdf*` assets.
+BxDF material policy is project-owned. Do not move BxDF shader stages, BxDF shader includes, BxDF material interfaces, or BxDF material metadata selectors into `impl/assets` or any `engine/...` virtual asset path. Each project or test asset tree that needs BxDF must own its own project-local BxDF material interface, such as `project/shaders/bxdf_surface`, and `project/shaders/bxdf*` assets.
 
 This includes project material/shader assets, such as BxDF shader stages under a project asset tree, being referenced by project material metadata and consumed by the engine through typed asset references, virtual asset paths, or declared shader-stage contracts.
 

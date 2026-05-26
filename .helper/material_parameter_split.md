@@ -151,7 +151,7 @@ A material asset then supplies values against named blocks instead of one flat g
 ```text
 material asset;
 
-asset.interface = "project/material_interfaces/bxdf_surface";
+asset.interface = "project/shaders/bxdf_surface";
 asset.shaders = {
     "ps": "project/shaders/bxdf_ps",
     "mesh": "project/shaders/bxdf_ms",
@@ -212,7 +212,7 @@ The declarations above define the interface schema. They do not directly declare
 Authored shaders may include the schema path as the stable authoring hook:
 
 ```slang
-#include "project/material_interfaces/bxdf_surface.bind"
+#include "project/shaders/bxdf_surface.bind"
 ```
 
 During shader cook, the include resolver maps that `.bind` include to the generated `.slangi` content for the parsed schema. Prefer a virtual include mapping or generated include path remap over editing the shader source on disk. The shader source remains stable, while the Slang compiler sees the generated material ABI.
@@ -232,7 +232,7 @@ The authoring flow is:
 
 Shader authors therefore know field names from the interface asset, not from a material instance and not from shader reflection. If the generated include is missing or stale, shader cook must regenerate it before Slang compilation. Editor tooling should also regenerate interface includes on interface save or before shader language-service indexing.
 
-The generated include path must be deterministic from the material interface identity. For example, an interface asset at `project/material_interfaces/bxdf_surface` can produce a generated include such as `nwb_generated/material_interfaces/project_bxdf_surface.slangi`. The exact path is implementation-defined, but it must be stable enough for shader source and editor tooling to reference.
+The generated include path must be deterministic from the material interface identity. For example, an interface asset at `project/shaders/bxdf_surface` can produce a generated include such as `nwb_generated/material_interfaces/project_bxdf_surface.slangi`. The exact path is implementation-defined, but it must be stable enough for shader source and editor tooling to reference.
 
 If NWBLot does not want authored shader source to include generated paths directly, the shader asset can declare the interface and cook can inject the generated include before compiling the entry point. In that mode the shader still depends on the interface schema; the include is just supplied by the cook pipeline instead of a handwritten `#include`.
 

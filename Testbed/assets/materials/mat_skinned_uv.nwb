@@ -1,6 +1,6 @@
 material asset;
 
-asset.interface = "project/material_interfaces/bxdf";
+asset.interface = "project/shaders/bxdf_surface";
 
 asset.shaders = {
     "ps": "project/shaders/uv_debug_ps",

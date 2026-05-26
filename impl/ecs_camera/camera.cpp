@@ -117,10 +117,9 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
         }
     }
 
-    return
-        requestedCamera.valid()
-            ? requestedCamera
-            : fallbackCamera
+    return requestedCamera.valid()
+        ? requestedCamera
+        : fallbackCamera
     ;
 }
 

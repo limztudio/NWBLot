@@ -216,19 +216,17 @@ struct formatter<TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>, Format
 
 template<typename CharT>
 inline constexpr CharT ToAsciiLower(CharT c){
-    return
-        (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
-            ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
-            : c
+    return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
+        ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
+        : c
     ;
 }
 
 template<typename CharT>
 inline constexpr CharT ToAsciiUpper(CharT c){
-    return
-        (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z'))
-            ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A')))
-            : c
+    return (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z'))
+        ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A')))
+        : c
     ;
 }
 

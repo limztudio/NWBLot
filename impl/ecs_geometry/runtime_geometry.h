@@ -81,10 +81,9 @@ struct RenderableGeometryDesc{
     bool runtime = false;
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            runtime
-                ? runtimeGeometry.valid()
-                : geometry.valid()
+        return runtime
+            ? runtimeGeometry.valid()
+            : geometry.valid()
         ;
     }
 };

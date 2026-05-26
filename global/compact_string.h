@@ -68,10 +68,9 @@ public:
 
 public:
     [[nodiscard]] bool assign(const value_type* text){
-        return
-            text == nullptr
-                ? clearAndReturn(true)
-                : assign(view_type(text))
+        return text == nullptr
+            ? clearAndReturn(true)
+            : assign(view_type(text))
         ;
     }
 
@@ -102,10 +101,9 @@ public:
     }
 
     [[nodiscard]] bool append(const value_type* text){
-        return
-            text == nullptr
-                ? true
-                : append(view_type(text))
+        return text == nullptr
+            ? true
+            : append(view_type(text))
         ;
     }
 

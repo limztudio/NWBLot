@@ -156,17 +156,18 @@ Updated: 2026-05-22
   - `value = cond ?`
   - `    valueA : valueB`
   - `;`
-- For standalone multiline ternary statements, place `return` on its own line and place the trailing `;` on its own line after the final branch expression:
+- For standalone multiline ternary return statements, keep `return <condition>` on the first line and place the trailing `;` on its own line after the final branch expression:
   - Correct:
+  - `return cond`
+  - `    ? valueA`
+  - `    : valueB`
+  - `;`
+  - Wrong:
   - `return`
   - `    cond`
   - `        ? valueA`
   - `        : valueB`
   - `;`
-  - Wrong:
-  - `return cond`
-  - `    ? valueA`
-  - `    : valueB;`
 - For standalone multiline `return` expressions, place `return` on its own line and place the trailing `;` on its own line after the final expression term:
   - Correct:
   - `return`

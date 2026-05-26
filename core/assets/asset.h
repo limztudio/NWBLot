@@ -59,10 +59,9 @@ private:
 
 template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
-    return
-        asset.virtualPath()
-            ? StringConvert(arena, asset.virtualPath().c_str())
-            : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena)
+    return asset.virtualPath()
+        ? StringConvert(arena, asset.virtualPath().c_str())
+        : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena)
     ;
 }
 

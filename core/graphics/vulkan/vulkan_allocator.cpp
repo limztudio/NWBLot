@@ -77,10 +77,9 @@ inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc,
 }
 
 inline VmaAllocationCreateInfo BuildStagingTextureAllocationInfo(const CpuAccessMode::Enum cpuAccess){
-    return
-        cpuAccess == CpuAccessMode::None
-            ? BuildDeviceLocalAllocationInfo()
-            : BuildCpuAccessAllocationInfo(cpuAccess)
+    return cpuAccess == CpuAccessMode::None
+        ? BuildDeviceLocalAllocationInfo()
+        : BuildCpuAccessAllocationInfo(cpuAccess)
     ;
 }
 

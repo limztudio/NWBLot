@@ -1,10 +1,10 @@
 material asset;
 
-asset.interface = "engine/material_interfaces/bxdf";
+asset.interface = "project/material_interfaces/bxdf";
 
 asset.shaders = {
     "ps": "project/shaders/uv_debug_ps",
-    "mesh": "engine/shaders/bxdf_ms",
+    "mesh": "project/shaders/bxdf_ms",
 };
 asset.shader_variant = [
     "NWB_BXDF_COLOR_TRANSFORM=0",

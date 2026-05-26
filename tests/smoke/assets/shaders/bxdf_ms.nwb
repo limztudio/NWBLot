@@ -1,6 +1,6 @@
 shader asset;
 
-asset.stage = "ps";
+asset.stage = "mesh";
 asset.target_profile = "spirv_1_5";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];

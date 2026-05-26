@@ -8,6 +8,8 @@ Read this before changing code for the dependency-inversion cleanup schedule.
 
 Project-owned assets may implement an engine-defined runtime contract without being treated as dependency inversion.
 
+BxDF material policy is project-owned. Do not move BxDF shader stages, BxDF shader includes, BxDF material interfaces, or BxDF material metadata selectors into `impl/assets` or any `engine/...` virtual asset path. Each project or test asset tree that needs BxDF must own its own `project/material_interfaces/bxdf` and `project/shaders/bxdf*` assets.
+
 This includes project material/shader assets, such as BxDF shader stages under a project asset tree, being referenced by project material metadata and consumed by the engine through typed asset references, virtual asset paths, or declared shader-stage contracts.
 
 It also includes engine render-pass shaders declaring a project include root for a named project shader hook, such as a project-owned BxDF lighting include, when that include is the project's implementation of the material/lighting contract.
@@ -36,7 +38,8 @@ Do not use this exception to justify these shapes:
 - Core modules including or linking implementation/project modules.
 - Compatibility aliases in `core/*` that expose implementation ECS types.
 - Engine default assets owning project-specific BxDF/material policy.
-- Project-specific shader or material implementations placed under `impl/assets/graphics/` only because an engine path needs a default.
+- BxDF shader stages, BxDF includes, BxDF material interfaces, or BxDF material metadata selectors placed under `impl/assets` or referenced as `engine/...`.
+- Project-specific shader or material implementations placed under `impl/assets/graphics/` or `impl/assets/shaders/` only because an engine path needs a default.
 - Engine shaders depending on arbitrary project shader internals instead of a narrow declared hook.
 - Hardcoded engine lookups of one project asset when the project should provide metadata or typed `AssetRef<T>` selection.
 - Moving shader asset binary payload ownership into `core/graphics` solely to share SPIR-V validation details with Vulkan runtime code.

@@ -4,7 +4,7 @@
 
 #include "fbx_to_nwb.h"
 
-#include <global/unique_ptr.h>
+#include "fbx_skin.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,89 +21,6 @@ namespace __hidden_fbx_import{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-AString FromUfbxString(const ufbx_string value){
-    if(!value.data || value.length == 0u)
-        return {};
-    return AString(value.data, value.length);
-}
-
-AStringView UfbxStringView(const ufbx_string value){
-    if(!value.data || value.length == 0u)
-        return {};
-    return AStringView(value.data, value.length);
-}
-
-bool NormalizedAsciiEqual(const ufbx_string value, const AStringView normalized){
-    const AStringView text = UfbxStringView(value);
-    if(text.size() != normalized.size())
-        return false;
-
-    for(usize i = 0u; i < normalized.size(); ++i){
-        if(ToAsciiLower(text[i]) != normalized[i])
-            return false;
-    }
-    return true;
-}
-
-bool NormalizedAsciiContains(const ufbx_string value, const AStringView normalized){
-    const AStringView text = UfbxStringView(value);
-    if(normalized.empty())
-        return true;
-    if(text.size() < normalized.size())
-        return false;
-
-    const usize lastBegin = text.size() - normalized.size();
-    for(usize begin = 0u; begin <= lastBegin; ++begin){
-        bool matched = true;
-        for(usize i = 0u; i < normalized.size(); ++i){
-            if(ToAsciiLower(text[begin + i]) != normalized[i]){
-                matched = false;
-                break;
-            }
-        }
-        if(matched)
-            return true;
-    }
-    return false;
-}
-
-AString MeshDisplayName(const MeshInstance& instance){
-    AString nodeName = FromUfbxString(instance.node->name);
-    AString meshName = FromUfbxString(instance.mesh->name);
-    if(nodeName.empty())
-        nodeName = "<unnamed node>";
-    if(meshName.empty())
-        meshName = "<unnamed mesh>";
-
-    AStringStream out;
-    out << "[" << instance.index << "] node=\"" << nodeName << "\" mesh=\"" << meshName
-        << "\" triangles=" << instance.mesh->num_triangles;
-    if(!instance.node->visible)
-        out << " hidden";
-    return out.str();
-}
-
-AString FormatUfbxError(const ufbx_error& error){
-    char buffer[4096] = {};
-    ufbx_format_error(buffer, sizeof(buffer), &error);
-    return buffer;
-}
-
-bool ParseIndexSelector(const AString& text, usize& outIndex){
-    const AString trimmed = Trim(text);
-    if(trimmed.empty())
-        return false;
-
-    u64 parsed = 0u;
-    if(!ParseU64(trimmed, parsed))
-        return false;
-    if(parsed > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
-
-    outIndex = static_cast<usize>(parsed);
-    return true;
-}
 
 Vec3 ToVec3(const ufbx_vec3 value){
     return Vec3{
@@ -129,11 +46,16 @@ Vec4 ToVec4(const ufbx_vec4 value){
     };
 }
 
-struct FlatGeometryVertex{
-    GeometryVertex vertex;
+struct SourceTriangleCorner{
+    Vec3 position;
+    Vec3 normal;
+    Vec4 tangent;
+    Vec2 uv0;
+    Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
     GeometrySkinInfluence skin;
+    bool hasTangent = false;
 };
-static_assert(IsTriviallyCopyable_V<FlatGeometryVertex>);
+static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
 
 struct TriangleAreaNormal64{
     f64 x = 0.0;
@@ -142,11 +64,22 @@ struct TriangleAreaNormal64{
 };
 static_assert(IsTriviallyCopyable_V<TriangleAreaNormal64>);
 
-struct SkinExportContext{
-    UtilityVector<ufbx_node*> joints;
-    UtilityVector<GeometryJointMatrix> inverseBindMatrices;
-    HashMap<ufbx_node*, u16> jointLookup;
-};
+[[nodiscard]] u32 FloatBits(f32 value){
+    if(value == 0.0f)
+        value = 0.0f;
+
+    u32 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+inline void HashFloat(usize& seed, const f32 value){
+    HashCombine(seed, FloatBits(value));
+}
+
+[[nodiscard]] bool FloatEqual(const f32 lhs, const f32 rhs){
+    return FloatBits(lhs) == FloatBits(rhs);
+}
 
 struct PositionKey{
     u32 x = 0u;
@@ -171,6 +104,119 @@ struct PositionKeyEqual{
 
 using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
 
+struct Vec2Hasher{
+    usize operator()(const Vec2& value)const{
+        usize seed = Hasher<u32>{}(FloatBits(value.x));
+        HashFloat(seed, value.y);
+        return seed;
+    }
+};
+
+struct Vec2Equal{
+    bool operator()(const Vec2& lhs, const Vec2& rhs)const{
+        return FloatEqual(lhs.x, rhs.x) && FloatEqual(lhs.y, rhs.y);
+    }
+};
+
+struct Vec3Hasher{
+    usize operator()(const Vec3& value)const{
+        usize seed = Hasher<u32>{}(FloatBits(value.x));
+        HashFloat(seed, value.y);
+        HashFloat(seed, value.z);
+        return seed;
+    }
+};
+
+struct Vec3Equal{
+    bool operator()(const Vec3& lhs, const Vec3& rhs)const{
+        return FloatEqual(lhs.x, rhs.x) && FloatEqual(lhs.y, rhs.y) && FloatEqual(lhs.z, rhs.z);
+    }
+};
+
+struct Vec4Hasher{
+    usize operator()(const Vec4& value)const{
+        usize seed = Hasher<u32>{}(FloatBits(value.x));
+        HashFloat(seed, value.y);
+        HashFloat(seed, value.z);
+        HashFloat(seed, value.w);
+        return seed;
+    }
+};
+
+struct Vec4Equal{
+    bool operator()(const Vec4& lhs, const Vec4& rhs)const{
+        return FloatEqual(lhs.x, rhs.x)
+            && FloatEqual(lhs.y, rhs.y)
+            && FloatEqual(lhs.z, rhs.z)
+            && FloatEqual(lhs.w, rhs.w);
+    }
+};
+
+struct GeometrySkinInfluenceHasher{
+    usize operator()(const GeometrySkinInfluence& value)const{
+        usize seed = Hasher<u16>{}(value.joint[0u]);
+        for(usize i = 1u; i < 4u; ++i)
+            HashCombine(seed, value.joint[i]);
+        for(const f32 weight : value.weight)
+            HashFloat(seed, weight);
+        return seed;
+    }
+};
+
+struct GeometrySkinInfluenceEqual{
+    bool operator()(const GeometrySkinInfluence& lhs, const GeometrySkinInfluence& rhs)const{
+        for(usize i = 0u; i < 4u; ++i){
+            if(lhs.joint[i] != rhs.joint[i] || !FloatEqual(lhs.weight[i], rhs.weight[i]))
+                return false;
+        }
+        return true;
+    }
+};
+
+struct SourceVertexRefHasher{
+    usize operator()(const SourceVertexRef& value)const{
+        usize seed = Hasher<u32>{}(value.position);
+        HashCombine(seed, value.normal);
+        HashCombine(seed, value.tangent);
+        HashCombine(seed, value.uv0);
+        HashCombine(seed, value.color);
+        HashCombine(seed, value.skin);
+        return seed;
+    }
+};
+
+struct SourceVertexRefEqual{
+    bool operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const{
+        return lhs.position == rhs.position
+            && lhs.normal == rhs.normal
+            && lhs.tangent == rhs.tangent
+            && lhs.uv0 == rhs.uv0
+            && lhs.color == rhs.color
+            && lhs.skin == rhs.skin;
+    }
+};
+
+using Vec2IndexMap = HashMap<Vec2, u32, Vec2Hasher, Vec2Equal>;
+using Vec3IndexMap = HashMap<Vec3, u32, Vec3Hasher, Vec3Equal>;
+using Vec4IndexMap = HashMap<Vec4, u32, Vec4Hasher, Vec4Equal>;
+using GeometrySkinInfluenceIndexMap = HashMap<GeometrySkinInfluence, u32, GeometrySkinInfluenceHasher, GeometrySkinInfluenceEqual>;
+using SourceVertexRefIndexMap = HashMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
+
+struct SourceGeometryBuildContext{
+    SourceGeometryStreams& geometry;
+    Vec3IndexMap positions;
+    Vec3IndexMap normals;
+    Vec4IndexMap tangents;
+    Vec2IndexMap uv0;
+    Vec4IndexMap colors;
+    GeometrySkinInfluenceIndexMap skin;
+    SourceVertexRefIndexMap vertexRefs;
+
+    explicit SourceGeometryBuildContext(SourceGeometryStreams& sourceGeometry)
+        : geometry(sourceGeometry)
+    {}
+};
+
 [[nodiscard]] bool EnsureTriangleIndexScratchCapacity(
     const ufbx_mesh& mesh,
     UtilityVector<u32>& inOutTriangleIndices,
@@ -187,20 +233,11 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
     return true;
 }
 
-[[nodiscard]] u32 FloatPositionBits(f32 value){
-    if(value == 0.0f)
-        value = 0.0f;
-
-    u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
 [[nodiscard]] PositionKey MakePositionKey(const Vec3& position){
     return PositionKey{
-        FloatPositionBits(position.x),
-        FloatPositionBits(position.y),
-        FloatPositionBits(position.z),
+        FloatBits(position.x),
+        FloatBits(position.y),
+        FloatBits(position.z),
     };
 }
 
@@ -219,12 +256,12 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
 }
 
 [[nodiscard]] bool TriangleHasArea(
-    const FlatGeometryVertex (&vertices)[3],
+    const SourceTriangleCorner (&vertices)[3],
     const f64 triangleAreaLengthSquaredEpsilon
 ){
-    const Vec3& a = vertices[0u].vertex.position;
-    const Vec3& b = vertices[1u].vertex.position;
-    const Vec3& c = vertices[2u].vertex.position;
+    const Vec3& a = vertices[0u].position;
+    const Vec3& b = vertices[1u].position;
+    const Vec3& c = vertices[2u].position;
     const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(a, b, c);
     const f64 areaLengthSquared =
         areaNormal.x * areaNormal.x
@@ -300,6 +337,137 @@ using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, Position
     if(!Normalize(outputNormal))
         outputNormal = Vec3{ 0.0f, 0.0f, 1.0f };
     return outputNormal;
+}
+
+[[nodiscard]] f32 Dot(const Vec3& lhs, const Vec3& rhs){
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+
+[[nodiscard]] Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
+    return Vec3{
+        lhs.y * rhs.z - lhs.z * rhs.y,
+        lhs.z * rhs.x - lhs.x * rhs.z,
+        lhs.x * rhs.y - lhs.y * rhs.x,
+    };
+}
+
+[[nodiscard]] bool LoadCornerOutputTangent(
+    const ufbx_mesh& mesh,
+    const ufbx_matrix& normalToWorld,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const u32 cornerIndex,
+    const Vec3& normal,
+    Vec4& outTangent
+){
+    if(!mesh.vertex_tangent.exists)
+        return false;
+
+    ufbx_vec3 tangent = ufbx_get_vertex_vec3(&mesh.vertex_tangent, cornerIndex);
+    if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
+        tangent = ufbx_transform_direction(&normalToWorld, tangent);
+
+    Vec3 outputTangent = ToVec3(tangent);
+    if(!Normalize(outputTangent))
+        return false;
+
+    f32 sign = 1.0f;
+    if(mesh.vertex_bitangent.exists){
+        ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
+        if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
+            bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
+
+        Vec3 outputBitangent = ToVec3(bitangent);
+        if(Normalize(outputBitangent)){
+            const Vec3 tangentSpaceBitangent = Cross(normal, outputTangent);
+            sign = Dot(tangentSpaceBitangent, outputBitangent) < 0.0f ? -1.0f : 1.0f;
+        }
+    }
+
+    outTangent = Vec4{ outputTangent.x, outputTangent.y, outputTangent.z, sign };
+    return true;
+}
+
+[[nodiscard]] bool IsFiniteVec2(const Vec2& value){
+    return IsFinite(value.x) && IsFinite(value.y);
+}
+
+[[nodiscard]] bool IsFiniteVec3(const Vec3& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+}
+
+[[nodiscard]] bool IsFiniteVec4(const Vec4& value){
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+}
+
+[[nodiscard]] bool IsFiniteSkinInfluence(const GeometrySkinInfluence& value){
+    for(const f32 weight : value.weight){
+        if(!IsFinite(weight))
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
+    if(!IsFiniteVec3(corner.position) || !IsFiniteVec3(corner.normal) || !IsFiniteVec2(corner.uv0) || !IsFiniteVec4(corner.color))
+        return false;
+    if(corner.hasTangent && !IsFiniteVec4(corner.tangent))
+        return false;
+    return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);
+}
+
+template<typename Value, typename Lookup>
+[[nodiscard]] bool InternSourceValue(
+    UtilityVector<Value>& stream,
+    Lookup& lookup,
+    const Value& value,
+    const char* streamName,
+    u32& outIndex,
+    AString& outError
+){
+    auto found = lookup.find(value);
+    if(found != lookup.end()){
+        outIndex = found.value();
+        return true;
+    }
+
+    if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
+        outError = AString(streamName) + " stream has too many unique values";
+        return false;
+    }
+
+    outIndex = static_cast<u32>(stream.size());
+    stream.push_back(value);
+    lookup.emplace(value, outIndex);
+    return true;
+}
+
+[[nodiscard]] bool InternSourceCorner(
+    SourceGeometryBuildContext& context,
+    const SourceTriangleCorner& corner,
+    const bool wantsSkinning,
+    u32& outVertexRefIndex,
+    AString& outError
+){
+    SourceVertexRef ref;
+    if(!InternSourceValue(context.geometry.positions, context.positions, corner.position, "position", ref.position, outError))
+        return false;
+    if(!InternSourceValue(context.geometry.normals, context.normals, corner.normal, "normal", ref.normal, outError))
+        return false;
+    if(corner.hasTangent){
+        if(!InternSourceValue(context.geometry.tangents, context.tangents, corner.tangent, "tangent", ref.tangent, outError))
+            return false;
+    }
+    if(!InternSourceValue(context.geometry.uv0, context.uv0, corner.uv0, "uv0", ref.uv0, outError))
+        return false;
+    if(!InternSourceValue(context.geometry.colors, context.colors, corner.color, "color", ref.color, outError))
+        return false;
+    if(wantsSkinning){
+        if(!InternSourceValue(context.geometry.skin, context.skin, corner.skin, "skin", ref.skin, outError))
+            return false;
+    }
+
+    return InternSourceValue(context.geometry.vertexRefs, context.vertexRefs, ref, "vertex_ref", outVertexRefIndex, outError);
 }
 
 template<typename VisitTriangle>
@@ -394,260 +562,18 @@ template<typename VisitTriangle>
     return true;
 }
 
-ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
-    ufbx_matrix matrix = {};
-    const f64 inverseScale = 1.0 / scale;
-    matrix.m00 = inverseScale;
-    matrix.m11 = inverseScale;
-    matrix.m22 = inverseScale;
-    return matrix;
-}
-
-bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
-    for(usize i = 0u; i < 12u; ++i){
-        if(!IsFinite(static_cast<f64>(matrix.v[i])))
-            return false;
-    }
-    return true;
-}
-
-GeometryJointMatrix ToGeometryJointMatrix(const ufbx_matrix& matrix){
-    GeometryJointMatrix result{};
-    result.columns[0] = Vec4{
-        static_cast<f32>(matrix.m00),
-        static_cast<f32>(matrix.m10),
-        static_cast<f32>(matrix.m20),
-        0.0f,
-    };
-    result.columns[1] = Vec4{
-        static_cast<f32>(matrix.m01),
-        static_cast<f32>(matrix.m11),
-        static_cast<f32>(matrix.m21),
-        0.0f,
-    };
-    result.columns[2] = Vec4{
-        static_cast<f32>(matrix.m02),
-        static_cast<f32>(matrix.m12),
-        static_cast<f32>(matrix.m22),
-        0.0f,
-    };
-    result.columns[3] = Vec4{
-        static_cast<f32>(matrix.m03),
-        static_cast<f32>(matrix.m13),
-        static_cast<f32>(matrix.m23),
-        1.0f,
-    };
-    return result;
-}
-
-bool NearlyEqualJointMatrix(const GeometryJointMatrix& lhs, const GeometryJointMatrix& rhs){
-    static constexpr f32 s_Epsilon = 0.0001f;
-    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-        const Vec4& a = lhs.columns[columnIndex];
-        const Vec4& b = rhs.columns[columnIndex];
-        if(
-            Abs(a.x - b.x) > s_Epsilon
-            || Abs(a.y - b.y) > s_Epsilon
-            || Abs(a.z - b.z) > s_Epsilon
-            || Abs(a.w - b.w) > s_Epsilon
-        ){
-            return false;
-        }
-    }
-    return true;
-}
-
-AString NodeDisplayName(const ufbx_node* node){
-    if(!node)
-        return "<null>";
-    AString name = FromUfbxString(node->name);
-    if(name.empty())
-        return "<unnamed node>";
-    return name;
-}
-
-ufbx_matrix BuildGeometryFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options){
-    const ufbx_matrix scaleInverse = MakeInverseUniformScaleMatrix(options.scale);
-    if(!options.bakeTransforms)
-        return scaleInverse;
-
-    const ufbx_matrix nodeGeometryToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
-    return ufbx_matrix_mul(&nodeGeometryToWorldInverse, &scaleInverse);
-}
-
-ufbx_matrix BuildOutputInverseBindMatrix(
-    const ufbx_skin_cluster& cluster,
-    const MeshInstance& instance,
-    const ImportOptions& options
-){
-    const ufbx_matrix geometryFromOutput = BuildGeometryFromOutputMatrix(instance, options);
-    return ufbx_matrix_mul(&cluster.geometry_to_bone, &geometryFromOutput);
-}
-
-bool FindOrAddJoint(
-    SkinExportContext& context,
-    ufbx_skin_cluster* cluster,
-    const ufbx_matrix& inverseBind,
-    u16& outJoint,
-    AString& outError
-){
-    outJoint = 0u;
-    if(!cluster || !cluster->bone_node){
-        outError = "skin cluster is missing a bone node";
-        return false;
-    }
-    if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= 0.00000001){
-        outError = "skin cluster inverse bind matrix is not finite and invertible";
-        return false;
-    }
-
-    const GeometryJointMatrix convertedMatrix = ToGeometryJointMatrix(inverseBind);
-    auto foundJoint = context.jointLookup.find(cluster->bone_node);
-    if(foundJoint != context.jointLookup.end()){
-        const usize jointIndex = static_cast<usize>(foundJoint.value());
-        if(jointIndex >= context.inverseBindMatrices.size()){
-            outError = "internal skeleton joint lookup is out of range";
-            return false;
-        }
-        if(!NearlyEqualJointMatrix(context.inverseBindMatrices[jointIndex], convertedMatrix)){
-            outError = "selected meshes bind skeleton joint \"" + NodeDisplayName(cluster->bone_node)
-                + "\" with different inverse bind matrices";
-            return false;
-        }
-
-        outJoint = foundJoint.value();
-        return true;
-    }
-
-    if(context.joints.size() > static_cast<usize>(Limit<u16>::s_Max)){
-        outError = "skeleton has more than 65536 joints";
-        return false;
-    }
-
-    outJoint = static_cast<u16>(context.joints.size());
-    context.joints.push_back(cluster->bone_node);
-    context.inverseBindMatrices.push_back(convertedMatrix);
-    context.jointLookup.emplace(cluster->bone_node, outJoint);
-    return true;
-}
-
-bool BuildClusterJointMap(
-    const MeshInstance& instance,
-    const ImportOptions& options,
-    ufbx_skin_deformer* skin,
-    SkinExportContext& context,
-    UtilityVector<u16>& outClusterJoints,
-    AString& outError
-){
-    outClusterJoints.clear();
-    if(!skin){
-        outError = "skinned geometry requires a skin deformer";
-        return false;
-    }
-    if(skin->clusters.count == 0u){
-        outError = "skin deformer contains no clusters";
-        return false;
-    }
-    if(skin->clusters.count > static_cast<usize>(Limit<u32>::s_Max)){
-        outError = "skin deformer has too many clusters";
-        return false;
-    }
-    if(skin->clusters.count > Limit<usize>::s_Max - context.joints.size()){
-        outError = "skin deformer cluster count overflows skeleton joint capacity";
-        return false;
-    }
-
-    const usize reservedJointCount = context.joints.size() + skin->clusters.count;
-    context.joints.reserve(reservedJointCount);
-    context.inverseBindMatrices.reserve(reservedJointCount);
-    context.jointLookup.reserve(reservedJointCount);
-    outClusterJoints.reserve(skin->clusters.count);
-    for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
-        ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
-        if(!cluster){
-            outError = "skin deformer contains a null cluster";
-            return false;
-        }
-
-        const ufbx_matrix inverseBind = BuildOutputInverseBindMatrix(*cluster, instance, options);
-        u16 joint = 0u;
-        if(!FindOrAddJoint(context, cluster, inverseBind, joint, outError))
-            return false;
-        outClusterJoints.push_back(joint);
-    }
-
-    return true;
-}
-
-bool BuildSkinInfluence(
-    ufbx_skin_deformer* skin,
-    const UtilityVector<u16>& clusterJoints,
-    const u32 logicalVertex,
-    GeometrySkinInfluence& outInfluence,
-    AString& outError
-){
-    outInfluence = GeometrySkinInfluence{};
-    if(!skin || logicalVertex >= skin->vertices.count){
-        outError = "skin deformer does not contain weights for every logical vertex";
-        return false;
-    }
-
-    const ufbx_skin_vertex skinVertex = skin->vertices.data[logicalVertex];
-    if(
-        skinVertex.weight_begin > skin->weights.count
-        || skinVertex.num_weights > skin->weights.count - skinVertex.weight_begin
-    ){
-        outError = "skin vertex weight range is out of bounds";
-        return false;
-    }
-
-    f64 weightSum = 0.0;
-    u32 writtenInfluenceCount = 0u;
-    for(u32 weightOffset = 0u; weightOffset < skinVertex.num_weights; ++weightOffset){
-        if(writtenInfluenceCount == 4u)
-            break;
-
-        const ufbx_skin_weight& weight = skin->weights.data[skinVertex.weight_begin + weightOffset];
-        const f64 value = static_cast<f64>(weight.weight);
-        if(!IsFinite(value)){
-            outError = "skin contains a non-finite weight";
-            return false;
-        }
-        if(value <= 0.0)
-            continue;
-        if(weight.cluster_index >= clusterJoints.size()){
-            outError = "skin weight references an out-of-range cluster";
-            return false;
-        }
-
-        outInfluence.joint[writtenInfluenceCount] = clusterJoints[weight.cluster_index];
-        outInfluence.weight[writtenInfluenceCount] = static_cast<f32>(value);
-        weightSum += value;
-        ++writtenInfluenceCount;
-    }
-
-    if(!IsFinite(weightSum) || weightSum <= 0.0){
-        outError = "skinned geometry contains a vertex with no positive skin weights";
-        return false;
-    }
-
-    const f32 inverseWeightSum = static_cast<f32>(1.0 / weightSum);
-    for(f32& weight : outInfluence.weight)
-        weight *= inverseWeightSum;
-
-    return true;
-}
-
 bool AppendInstanceGeometry(
     const MeshInstance& instance,
     const ImportOptions& options,
     const bool wantsSkinning,
+    const NormalMode::Enum normalMode,
     const Vec4& defaultColor,
     UtilityVector<u32>& inOutTriangleIndices,
-    UtilityVector<FlatGeometryVertex>& outFlatVertices,
-    SkinExportContext& inOutSkinContext,
+    SourceGeometryBuildContext& inOutGeometry,
+    FbxSkinDetail::ExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
     bool& inOutSawVertexUvs,
+    bool& inOutSawVertexTangents,
     AString& outError
 ){
     ufbx_mesh* mesh = instance.mesh;
@@ -666,8 +592,9 @@ bool AppendInstanceGeometry(
     }
 
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
-    const bool importUvs = wantsSkinning && mesh->vertex_uv.exists;
+    const bool importUvs = mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
+    const bool importTangents = mesh->vertex_tangent.exists;
     ufbx_skin_deformer* skin = nullptr;
     UtilityVector<u16> clusterJoints;
     if(wantsSkinning){
@@ -676,61 +603,79 @@ bool AppendInstanceGeometry(
             return false;
         }
         skin = mesh->skin_deformers.data[0u];
-        if(!BuildClusterJointMap(instance, options, skin, inOutSkinContext, clusterJoints, outError))
+        if(!FbxSkinDetail::BuildClusterJointMap(instance, options, skin, inOutSkinContext, clusterJoints, outError))
             return false;
     }
 
     PositionNormalMap smoothNormals;
-    if(!BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
+    if(normalMode != NormalMode::Imported && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
         return false;
 
     return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[3]){
-        FlatGeometryVertex triangleVertices[3] = {};
+        SourceTriangleCorner triangleCorners[3] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < 3u; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
             const u32 logicalVertex = mesh->vertex_indices.data[cornerIndex];
 
-            GeometryVertex vertex;
-            vertex.position = LoadCornerOutputPosition(*mesh, *node, options, wantsSkinning, cornerIndex);
-            vertex.normal = Vec3{ 0.0f, 0.0f, 0.0f };
-            auto foundNormal = smoothNormals.find(MakePositionKey(vertex.position));
-            if(foundNormal != smoothNormals.end())
-                vertex.normal = foundNormal.value();
-            if(!Normalize(vertex.normal))
-                vertex.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+            SourceTriangleCorner corner;
+            corner.position = LoadCornerOutputPosition(*mesh, *node, options, wantsSkinning, cornerIndex);
+            if(normalMode == NormalMode::Imported){
+                corner.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+            }
+            else{
+                auto foundNormal = smoothNormals.find(MakePositionKey(corner.position));
+                if(foundNormal != smoothNormals.end())
+                    corner.normal = foundNormal.value();
+                if(!Normalize(corner.normal))
+                    corner.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+            }
 
-            vertex.uv0 = Vec2{};
             if(importUvs){
-                vertex.uv0 = ToVec2(ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex));
+                corner.uv0 = ToVec2(ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex));
                 inOutSawVertexUvs = true;
             }
 
-            vertex.color = defaultColor;
+            corner.color = defaultColor;
             if(importColors){
-                vertex.color = ToVec4(ufbx_get_vertex_vec4(&mesh->vertex_color, cornerIndex));
+                corner.color = ToVec4(ufbx_get_vertex_vec4(&mesh->vertex_color, cornerIndex));
                 inOutSawVertexColors = true;
             }
 
-            if(!IsFiniteVertex(vertex)){
+            if(importTangents){
+                corner.hasTangent = LoadCornerOutputTangent(
+                    *mesh,
+                    normalToWorld,
+                    options,
+                    wantsSkinning,
+                    cornerIndex,
+                    corner.normal,
+                    corner.tangent
+                );
+                inOutSawVertexTangents = inOutSawVertexTangents || corner.hasTangent;
+            }
+
+            if(wantsSkinning){
+                if(!FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex, corner.skin, outError))
+                    return false;
+            }
+
+            if(!IsFiniteSourceTriangleCorner(corner, wantsSkinning)){
                 outError = "mesh contains non-finite vertex data";
                 return false;
             }
 
-            FlatGeometryVertex flatVertex{};
-            flatVertex.vertex = vertex;
-            if(wantsSkinning){
-                if(!BuildSkinInfluence(skin, clusterJoints, logicalVertex, flatVertex.skin, outError))
-                    return false;
-            }
-
-            triangleVertices[triangleCornerIndex] = flatVertex;
+            triangleCorners[triangleCornerIndex] = corner;
         }
 
-        if(!TriangleHasArea(triangleVertices, options.triangleAreaLengthSquaredEpsilon))
+        if(!TriangleHasArea(triangleCorners, options.triangleAreaLengthSquaredEpsilon))
             return true;
 
-        for(const FlatGeometryVertex& flatVertex : triangleVertices)
-            outFlatVertices.push_back(flatVertex);
+        for(const SourceTriangleCorner& corner : triangleCorners){
+            u32 vertexRefIndex = 0u;
+            if(!InternSourceCorner(inOutGeometry, corner, wantsSkinning, vertexRefIndex, outError))
+                return false;
+            inOutGeometry.geometry.indices.push_back(vertexRefIndex);
+        }
         return true;
     }, outError);
 }
@@ -761,262 +706,31 @@ bool EstimateSelectedTriangleCorners(
     return true;
 }
 
-bool ValidateFlatGeometry(const UtilityVector<FlatGeometryVertex>& flatVertices, AString& outError){
-    if(flatVertices.empty()){
-        outError = "selected meshes produced no triangles";
-        return false;
-    }
-    if(flatVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        outError = "geometry has more than u32-addressable vertices";
-        return false;
-    }
-
-    return true;
-}
-
-bool DeduplicateFlatGeometry(
-    UtilityVector<FlatGeometryVertex>& inOutFlatVertices,
-    UtilityVector<u32>& outIndices,
-    AString& outError
-){
-    const usize flatVertexCount = inOutFlatVertices.size();
-    outIndices.clear();
-    UniquePtr<u32[]> generatedIndices = MakeUnique<u32[]>(flatVertexCount);
-
-    ufbx_vertex_stream stream = {};
-    stream.data = inOutFlatVertices.data();
-    stream.vertex_count = flatVertexCount;
-    stream.vertex_size = sizeof(FlatGeometryVertex);
-
-    ufbx_error error = {};
-    const usize uniqueVertexCount = static_cast<usize>(ufbx_generate_indices(
-        &stream,
-        1u,
-        generatedIndices.get(),
-        flatVertexCount,
-        nullptr,
-        &error
-    ));
-    if(error.type != UFBX_ERROR_NONE){
-        outError = "ufbx failed to generate an index buffer: " + FormatUfbxError(error);
-        return false;
-    }
-    if(uniqueVertexCount > flatVertexCount){
-        outError = "ufbx generated more unique vertices than source vertices";
-        return false;
-    }
-
-    inOutFlatVertices.resize(uniqueVertexCount);
-    outIndices.assign(generatedIndices.get(), generatedIndices.get() + flatVertexCount);
-    return true;
-}
-
-bool ExpandFlatGeometryIndices(
-    const UtilityVector<FlatGeometryVertex>& flatVertices,
-    UtilityVector<u32>& outIndices,
-    AString& outError
-){
-    if(flatVertices.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        outError = "geometry has more than u32-addressable vertices";
-        return false;
-    }
-
-    outIndices.clear();
-    outIndices.reserve(flatVertices.size());
-    for(usize index = 0u; index < flatVertices.size(); ++index)
-        outIndices.push_back(static_cast<u32>(index));
-    return true;
-}
-
-void ExportFlatGeometry(
-    const UtilityVector<FlatGeometryVertex>& flatVertices,
-    const bool wantsSkinning,
-    UtilityVector<GeometryVertex>& outVertices,
-    UtilityVector<GeometrySkinInfluence>& outSkin
-){
-    outVertices.reserve(flatVertices.size());
-    if(wantsSkinning)
-        outSkin.reserve(flatVertices.size());
-
-    for(const FlatGeometryVertex& flatVertex : flatVertices){
-        outVertices.push_back(flatVertex.vertex);
-        if(wantsSkinning)
-            outSkin.push_back(flatVertex.skin);
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneHandle::~SceneHandle(){
-    if(scene){
-        ufbx_free_scene(scene);
-        scene = nullptr;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool LoadScene(const ImportOptions& options, SceneHandle& outScene, AString& outError){
-    ufbx_load_opts loadOptions = {};
-    loadOptions.load_external_files = true;
-    loadOptions.ignore_missing_external_files = true;
-    loadOptions.generate_missing_normals = true;
-    loadOptions.normalize_normals = true;
-    loadOptions.clean_skin_weights = true;
-    loadOptions.evaluate_skinning = true;
-    loadOptions.evaluate_caches = true;
-    loadOptions.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_PRESERVE;
-
-    if(!options.preserveSpace){
-        loadOptions.target_axes.right = UFBX_COORDINATE_AXIS_POSITIVE_X;
-        loadOptions.target_axes.up = UFBX_COORDINATE_AXIS_POSITIVE_Y;
-        loadOptions.target_axes.front = UFBX_COORDINATE_AXIS_POSITIVE_Z;
-        loadOptions.target_unit_meters = 1.0f;
-    }
-
-    const AString inputPath = PathToUtf8(PathFromUtf8(options.inputPath));
-    ufbx_error error = {};
-    outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
-    if(!outScene.scene){
-        outError = "failed to load FBX: " + __hidden_fbx_import::FormatUfbxError(error);
-        return false;
-    }
-
-    return true;
-}
-
-UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool includeHidden){
-    UtilityVector<MeshInstance> instances;
-    if(!scene)
-        return instances;
-
-    instances.reserve(scene->nodes.count);
-    for(usize i = 0; i < scene->nodes.count; ++i){
-        ufbx_node* node = scene->nodes.data[i];
-        if(!node || !node->mesh)
-            continue;
-        if(!includeHidden && !node->visible)
-            continue;
-
-        MeshInstance instance;
-        instance.node = node;
-        instance.mesh = node->mesh;
-        instance.index = instances.size();
-        instances.push_back(instance);
-    }
-
-    return instances;
-}
-
-void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
-    if(instances.empty()){
-        NWB_COUT << "No mesh instances found.\n";
-        return;
-    }
-
-    NWB_COUT << "Mesh instances:\n";
-    for(const MeshInstance& instance : instances)
-        NWB_COUT << "  " << __hidden_fbx_import::MeshDisplayName(instance) << "\n";
-}
-
-bool SelectMeshInstances(
-    const UtilityVector<MeshInstance>& instances,
-    const AString& selector,
-    UtilityVector<usize>& outSelection,
-    AString& outError
-){
-    outSelection.clear();
-    outError.clear();
-
-    const AString normalized = ToLower(Trim(selector));
-    if(normalized.empty() || normalized == "all"){
-        outSelection.reserve(instances.size());
-        for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
-            outSelection.push_back(instanceIndex);
-        return true;
-    }
-    if(normalized == "first"){
-        if(instances.empty()){
-            outError = "no mesh instances are available";
-            return false;
-        }
-        outSelection.push_back(0u);
-        return true;
-    }
-
-    usize parsedIndex = 0u;
-    if(__hidden_fbx_import::ParseIndexSelector(normalized, parsedIndex)){
-        if(parsedIndex >= instances.size()){
-            outError = "mesh index is out of range";
-            return false;
-        }
-        outSelection.push_back(parsedIndex);
-        return true;
-    }
-
-    UtilityVector<usize> partialSelection;
-    outSelection.reserve(instances.size());
-    for(const MeshInstance& instance : instances){
-        if(
-            __hidden_fbx_import::NormalizedAsciiEqual(instance.node->name, normalized)
-            || __hidden_fbx_import::NormalizedAsciiEqual(instance.mesh->name, normalized)
-        ){
-            outSelection.push_back(instance.index);
-        }
-        else if(
-            outSelection.empty()
-            && (
-                __hidden_fbx_import::NormalizedAsciiContains(instance.node->name, normalized)
-                || __hidden_fbx_import::NormalizedAsciiContains(instance.mesh->name, normalized)
-            )
-        ){
-            if(partialSelection.empty())
-                partialSelection.reserve(instances.size());
-            partialSelection.push_back(instance.index);
-        }
-    }
-    if(!outSelection.empty())
-        return true;
-    if(!partialSelection.empty()){
-        outSelection = Move(partialSelection);
-        return true;
-    }
-
-    outError = "mesh selector did not match any node or mesh";
-    return false;
-}
-
 bool BuildGeometry(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
     const Vec4& defaultColor,
-    UtilityVector<GeometryVertex>& outVertices,
-    UtilityVector<u32>& outIndices,
-    UtilityVector<GeometrySkinInfluence>& outSkin,
+    SourceGeometryStreams& outGeometry,
     u32& outSkeletonJointCount,
     UtilityVector<GeometryJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
+    bool& outSawVertexTangents,
     AString& outError
 ){
-    outVertices.clear();
-    outIndices.clear();
-    outSkin.clear();
+    outGeometry = SourceGeometryStreams{};
     outSkeletonJointCount = 0u;
     outInverseBindMatrices.clear();
     outSawVertexColors = false;
     outSawVertexUvs = false;
+    outSawVertexTangents = false;
     outError.clear();
 
     usize estimatedTriangleCorners = 0u;
@@ -1028,17 +742,40 @@ bool BuildGeometry(
     ))
         return false;
 
-    UtilityVector<__hidden_fbx_import::FlatGeometryVertex> flatVertices;
-    flatVertices.reserve(estimatedTriangleCorners);
-    outIndices.reserve(estimatedTriangleCorners);
-    UtilityVector<u32> triangleIndices;
     u32 geometryClass = 0u;
     if(!ParseGeometryClassText(options.geometryClass, geometryClass)){
         outError = GeometryClassErrorText();
         return false;
     }
+    NormalMode::Enum normalMode = NormalMode::Imported;
+    if(!ParseNormalModeText(options.normalMode, normalMode)){
+        outError = NormalModeErrorText();
+        return false;
+    }
+
+    outGeometry.positions.reserve(estimatedTriangleCorners);
+    outGeometry.normals.reserve(estimatedTriangleCorners);
+    outGeometry.uv0.reserve(estimatedTriangleCorners);
+    outGeometry.colors.reserve(estimatedTriangleCorners);
+    outGeometry.tangents.reserve(estimatedTriangleCorners);
+    outGeometry.indices.reserve(estimatedTriangleCorners);
+    outGeometry.vertexRefs.reserve(estimatedTriangleCorners);
     const bool wantsSkinning = GeometryClassUsesSkinning(geometryClass);
-    __hidden_fbx_import::SkinExportContext skinContext;
+    if(wantsSkinning)
+        outGeometry.skin.reserve(estimatedTriangleCorners);
+
+    __hidden_fbx_import::SourceGeometryBuildContext geometryContext{ outGeometry };
+    geometryContext.positions.reserve(estimatedTriangleCorners);
+    geometryContext.normals.reserve(estimatedTriangleCorners);
+    geometryContext.uv0.reserve(estimatedTriangleCorners);
+    geometryContext.colors.reserve(estimatedTriangleCorners);
+    geometryContext.tangents.reserve(estimatedTriangleCorners);
+    geometryContext.vertexRefs.reserve(estimatedTriangleCorners);
+    if(wantsSkinning)
+        geometryContext.skin.reserve(estimatedTriangleCorners);
+
+    UtilityVector<u32> triangleIndices;
+    FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             outError = "selected mesh index is out of range";
@@ -1049,12 +786,14 @@ bool BuildGeometry(
                 instances[instanceIndex],
                 options,
                 wantsSkinning,
+                normalMode,
                 defaultColor,
                 triangleIndices,
-                flatVertices,
+                geometryContext,
                 skinContext,
                 outSawVertexColors,
                 outSawVertexUvs,
+                outSawVertexTangents,
                 outError
             )
         ){
@@ -1062,19 +801,10 @@ bool BuildGeometry(
         }
     }
 
-    if(!__hidden_fbx_import::ValidateFlatGeometry(flatVertices, outError))
+    if(outGeometry.indices.empty()){
+        outError = "selected meshes produced no triangles";
         return false;
-
-    if(options.deduplicate){
-        if(!__hidden_fbx_import::DeduplicateFlatGeometry(flatVertices, outIndices, outError))
-            return false;
     }
-    else{
-        if(!__hidden_fbx_import::ExpandFlatGeometryIndices(flatVertices, outIndices, outError))
-            return false;
-    }
-
-    __hidden_fbx_import::ExportFlatGeometry(flatVertices, wantsSkinning, outVertices, outSkin);
     if(wantsSkinning){
         if(skinContext.joints.empty()){
             outError = "skinned geometry did not produce any skeleton joints";

@@ -29,7 +29,7 @@ struct OptionPresence{
     bool output = false;
     bool geometryClass = false;
     bool mesh = false;
-    bool indexType = false;
+    bool normalMode = false;
     bool defaultColor = false;
     bool scale = false;
     bool preserveSpace = false;
@@ -37,7 +37,6 @@ struct OptionPresence{
     bool local = false;
     bool ignoreColors = false;
     bool flipWinding = false;
-    bool noDeduplicate = false;
 };
 
 
@@ -173,7 +172,7 @@ bool ConfigurePromptsAfterLoad(
 ){
     if(!presence.geometryClass && !options.acceptDefaults){
         AString geometryClass;
-        AString prompt = "NWB geometry_class (";
+        AString prompt = "Asset type (";
         prompt += GeometryClassOptionsText();
         prompt += ")";
         PromptString(prompt, options.geometryClass, geometryClass, prompted);
@@ -197,10 +196,13 @@ bool ConfigurePromptsAfterLoad(
         options.outputPath = PathToUtf8(DefaultOutputPath(options.inputPath));
     options.outputPath = UnquotePath(Move(options.outputPath));
 
-    if(!presence.indexType && !options.acceptDefaults){
-        AString indexType;
-        PromptString("Index type (auto, u16, or u32)", options.indexType, indexType, prompted);
-        options.indexType = indexType;
+    if(!presence.normalMode && !options.acceptDefaults){
+        AString normalMode;
+        AString prompt = "Normal mode (";
+        prompt += NormalModeOptionsText();
+        prompt += ")";
+        PromptString(prompt, options.normalMode, normalMode, prompted);
+        options.normalMode = normalMode;
     }
 
     if(!presence.scale && !options.acceptDefaults)
@@ -220,9 +222,6 @@ bool ConfigurePromptsAfterLoad(
 
     if(!presence.flipWinding && !options.acceptDefaults)
         PromptBool("Flip triangle winding?", options.flipWinding, options.flipWinding, prompted);
-
-    if(!presence.noDeduplicate && !options.acceptDefaults)
-        PromptBool("Deduplicate equal vertices?", options.deduplicate, options.deduplicate, prompted);
 
     return true;
 }
@@ -248,21 +247,20 @@ int Run(int argc, char** argv, bool& prompted){
     std::string outputPathText(options.outputPath.data(), options.outputPath.size());
     std::string geometryClass(options.geometryClass.data(), options.geometryClass.size());
     std::string meshSelector(options.meshSelector.data(), options.meshSelector.size());
-    std::string indexType(options.indexType.data(), options.indexType.size());
+    std::string normalMode(options.normalMode.data(), options.normalMode.size());
     std::string defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
 
     bool local = false;
     bool ignoreColors = false;
-    bool noDeduplicate = false;
 
     CLI::Option* inputOption = app.add_option("input", inputPath, "Input FBX file path");
     CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB geometry metadata path");
-    std::string geometryClassDescription = "NWB geometry_class: ";
+    std::string geometryClassDescription = "Output asset type: ";
     const AString geometryClassOptions = GeometryClassOptionsText();
     geometryClassDescription.append(geometryClassOptions.data(), geometryClassOptions.size());
-    CLI::Option* geometryClassOption = app.add_option("--geometry-class", geometryClass, geometryClassDescription);
+    CLI::Option* geometryClassOption = app.add_option("--asset-type", geometryClass, geometryClassDescription);
     CLI::Option* meshOption = app.add_option("-m,--mesh", meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
-    CLI::Option* indexTypeOption = app.add_option("--index-type", indexType, "Index type: auto, u16, or u32");
+    CLI::Option* normalModeOption = app.add_option("--normal-mode", normalMode, "Normal mode: imported, smooth, or regenerate");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
     app.add_option(
         "--triangle-area-length-squared-epsilon",
@@ -275,7 +273,6 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::Option* localOption = app.add_flag("--local", local, "Do not bake node transforms into geometry");
     CLI::Option* ignoreColorsOption = app.add_flag("--ignore-colors", ignoreColors, "Use the default color instead of FBX vertex colors");
     CLI::Option* flipWindingOption = app.add_flag("--flip-winding", options.flipWinding, "Swap the second and third index of every triangle");
-    CLI::Option* noDeduplicateOption = app.add_flag("--no-deduplicate", noDeduplicate, "Write one vertex per triangle corner");
     app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
@@ -291,18 +288,17 @@ int Run(int argc, char** argv, bool& prompted){
     options.outputPath.assign(outputPathText.data(), outputPathText.size());
     options.geometryClass.assign(geometryClass.data(), geometryClass.size());
     options.meshSelector.assign(meshSelector.data(), meshSelector.size());
-    options.indexType.assign(indexType.data(), indexType.size());
+    options.normalMode.assign(normalMode.data(), normalMode.size());
     options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
 
     options.bakeTransforms = !local;
     options.importColors = !ignoreColors;
-    options.deduplicate = !noDeduplicate;
 
     presence.input = inputOption->count() > 0u;
     presence.output = outputOption->count() > 0u;
     presence.geometryClass = geometryClassOption->count() > 0u;
     presence.mesh = meshOption->count() > 0u;
-    presence.indexType = indexTypeOption->count() > 0u;
+    presence.normalMode = normalModeOption->count() > 0u;
     presence.scale = scaleOption->count() > 0u;
     presence.defaultColor = defaultColorOption->count() > 0u;
     presence.preserveSpace = preserveSpaceOption->count() > 0u;
@@ -310,7 +306,6 @@ int Run(int argc, char** argv, bool& prompted){
     presence.local = localOption->count() > 0u;
     presence.ignoreColors = ignoreColorsOption->count() > 0u;
     presence.flipWinding = flipWindingOption->count() > 0u;
-    presence.noDeduplicate = noDeduplicateOption->count() > 0u;
 
     if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
         return 1;
@@ -365,6 +360,10 @@ int Run(int argc, char** argv, bool& prompted){
         NWB_CERR << error << "\n";
         return 1;
     }
+    if(!ValidateNormalModeText(options.normalMode, error)){
+        NWB_CERR << error << "\n";
+        return 1;
+    }
 
     Vec4 defaultColor;
     if(!ParseColorText(options.defaultColorText, defaultColor)){
@@ -386,42 +385,35 @@ int Run(int argc, char** argv, bool& prompted){
     if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
         return 1;
 
-    UtilityVector<GeometryVertex> vertices;
-    UtilityVector<u32> indices;
-    UtilityVector<GeometrySkinInfluence> skin;
+    SourceGeometryStreams geometry;
     u32 skeletonJointCount = 0u;
     UtilityVector<GeometryJointMatrix> inverseBindMatrices;
     bool sawVertexColors = false;
     bool sawVertexUvs = false;
+    bool sawVertexTangents = false;
     if(!BuildGeometry(
         instances,
         selection,
         options,
         defaultColor,
-        vertices,
-        indices,
-        skin,
+        geometry,
         skeletonJointCount,
         inverseBindMatrices,
         sawVertexColors,
         sawVertexUvs,
+        sawVertexTangents,
         error
     )){
         NWB_CERR << "Failed to build geometry: " << error << "\n";
         return 1;
     }
 
-    AString resolvedIndexType;
     if(!WriteNwbGeometry(
         outputPath,
-        vertices,
-        indices,
-        skin,
+        geometry,
         skeletonJointCount,
         inverseBindMatrices,
-        options.indexType,
         options.geometryClass,
-        resolvedIndexType,
         error
     )){
         NWB_CERR << "Failed to write NWB geometry: " << error << "\n";
@@ -430,13 +422,15 @@ int Run(int argc, char** argv, bool& prompted){
 
     NWB_COUT
         << "Wrote " << PathToUtf8(outputPath) << "\n"
-        << "  vertices: " << vertices.size() << "\n"
-        << "  triangles: " << (indices.size() / 3u) << "\n"
-        << "  geometry_class: " << options.geometryClass << "\n"
-        << "  index_type: " << resolvedIndexType << "\n"
+        << "  positions: " << geometry.positions.size() << "\n"
+        << "  normals: " << geometry.normals.size() << "\n"
+        << "  vertex_refs: " << geometry.vertexRefs.size() << "\n"
+        << "  triangles: " << (geometry.indices.size() / 3u) << "\n"
+        << "  asset_type: " << (IsNormalizedSkinnedGeometryClass(options.geometryClass) ? "skinned_geometry" : "geometry") << "\n"
+        << "  normal_mode: " << options.normalMode << "\n"
+        << "  tangents: " << (sawVertexTangents ? "imported" : "omitted") << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
-    if(IsNormalizedSkinnedGeometryClass(options.geometryClass))
-        NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+    NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
     if(IsNormalizedSkinnedGeometryClass(options.geometryClass))
         NWB_COUT << "  skeleton joints: " << skeletonJointCount << "\n";
 

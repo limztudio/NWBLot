@@ -51,7 +51,7 @@ struct SkinnedGeometryCookEntry{
     Name virtualPath = NAME_NONE;
     Core::Assets::AssetVector<SkinnedGeometryVertex> restVertices;
     Core::Assets::AssetVector<u32> indices;
-    u32 geometryClass = Core::Geometry::GeometryClass::Invalid;
+    u32 geometryClass = Core::Geometry::GeometryClass::Skinned;
     Core::Assets::AssetVector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0u;
     Core::Assets::AssetVector<SkinnedGeometryJointMatrix> inverseBindMatrices;

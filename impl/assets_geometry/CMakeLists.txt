@@ -30,6 +30,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/geometry_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_asset_cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/geometry_asset_cook_source.inl"
     )
     target_link_libraries(nwb_assets_geometry_cook PUBLIC nwb_assets nwb_geometry nwb_metascript nwb_skinned_geometry_types)
     target_compile_definitions(nwb_assets_geometry_cook PRIVATE NWB_COOK=1)

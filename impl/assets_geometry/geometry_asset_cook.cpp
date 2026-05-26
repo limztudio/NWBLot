@@ -17,6 +17,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_paths.h>
+#include <core/geometry/frame_math.h>
 #include <core/metascript/parser.h>
 #include <global/binary.h>
 #include <global/text_utils.h>
@@ -401,76 +402,6 @@ static bool ParseMetadataIndexType(
     return false;
 }
 
-static bool ParseGeometryClassField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const tchar* metaKind,
-    u32& outGeometryClass
-){
-    const Core::Metascript::Value* geometryClass = FindField(asset, "geometry_class");
-    if(!geometryClass){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'geometry_class' is required")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
-        return false;
-    }
-
-    if(!geometryClass->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'geometry_class' must be a string")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
-        return false;
-    }
-
-    const Core::Metascript::MStringView text = geometryClass->asString();
-    const AStringView classText(text.data(), text.size());
-    if(Core::Geometry::ParseGeometryClassText(classText, outGeometryClass))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported geometry_class '{}', expected {} or {}")
-        , metaKind
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(classText)
-        , StringConvert(Core::Geometry::GeometryClassText(Core::Geometry::GeometryClass::Static))
-        , StringConvert(Core::Geometry::GeometryClassText(Core::Geometry::GeometryClass::Skinned))
-    );
-    return false;
-}
-
-static bool ParseStaticGeometryClassField(const Path& nwbFilePath, const Core::Metascript::Value& asset){
-    u32 geometryClass = Core::Geometry::GeometryClass::Invalid;
-    if(!ParseGeometryClassField(nwbFilePath, asset, s_GeometryMetaKind, geometryClass))
-        return false;
-
-    if(geometryClass == Core::Geometry::GeometryClass::Static)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': geometry_class must be 'static' for geometry assets")
-        , PathToString<tchar>(nwbFilePath)
-    );
-    return false;
-}
-
-static bool ParseSkinnedGeometryClassField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    u32& outGeometryClass
-){
-    if(!ParseGeometryClassField(nwbFilePath, asset, s_SkinnedGeometryMetaKind, outGeometryClass))
-        return false;
-
-    if(Core::Geometry::GeometryClassUsesSkinning(outGeometryClass))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class must be {}")
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(Core::Geometry::GeometryClassText(Core::Geometry::GeometryClass::Skinned))
-    );
-    return false;
-}
-
 template<typename IndexVectorT>
 static bool FillMetadataIndexRecursive(
     const Path& nwbFilePath,
@@ -550,6 +481,19 @@ static void BuildDefaultColors(const usize vertexCount, ColorVectorT& outColors)
     outColors.assign(vertexCount, Float4U(1.f, 1.f, 1.f, 1.f));
 }
 
+static bool ParseSourceGeometryMeta(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Value& asset,
+    GeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+);
+static bool ParseSourceSkinnedGeometryMeta(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Value& asset,
+    SkinnedGeometryCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+);
+
 template<typename PositionVectorT, typename NormalVectorT, typename ColorVectorT>
 static bool BuildGeometryStreams(
     const Path& nwbFilePath,
@@ -577,6 +521,31 @@ static bool BuildGeometryStreams(
         outColors.push_back(MakeGeometryColorStreamValue(colors[i]));
     }
     return true;
+}
+
+static bool RejectDeprecatedGeometryClassField(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Value& asset,
+    const tchar* metaKind
+){
+    if(!FindField(asset, "geometry_class"))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'geometry_class' is no longer supported; use 'geometry asset' or 'skinned_geometry asset'")
+        , metaKind
+        , PathToString<tchar>(discoveredFile.filePath)
+    );
+    return false;
+}
+
+static bool RejectSkinnedFieldsOnStaticGeometry(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
+    if(!FindField(asset, "skin") && !FindField(asset, "skeleton_joint_count") && !FindField(asset, "inverse_bind_matrices"))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Geometry meta '{}': skinned fields require a 'skinned_geometry asset' header")
+        , PathToString<tchar>(discoveredFile.filePath)
+    );
+    return false;
 }
 
 static bool RejectUnsupportedGeometryFields(const DiscoveredNwbFile& discoveredFile, const Core::Metascript::Value& asset){
@@ -620,8 +589,12 @@ static bool ParseGeometryMeta(
         return false;
     if(!RejectUnsupportedGeometryFields(discoveredFile, asset))
         return false;
-    if(!ParseStaticGeometryClassField(discoveredFile.filePath, asset))
+    if(!RejectDeprecatedGeometryClassField(discoveredFile, asset, s_GeometryMetaKind))
         return false;
+    if(!RejectSkinnedFieldsOnStaticGeometry(discoveredFile, asset))
+        return false;
+    if(FindField(asset, "vertex_refs"))
+        return ParseSourceGeometryMeta(discoveredFile, asset, outEntry, scratchArena);
 
     ScratchVector<Float3U> positions{scratchArena};
     ScratchVector<Float3U> normals{scratchArena};
@@ -762,6 +735,24 @@ static bool BuildGeometryRestVertices(
     return true;
 }
 
+static bool GenerateFallbackSkinnedGeometryTangents(Core::Assets::AssetVector<SkinnedGeometryVertex>& vertices){
+    for(SkinnedGeometryVertex& vertex : vertices){
+        const SIMDVector normal = Core::Geometry::FrameNormalizeDirection(
+            LoadSkinnedGeometryVertexNormal(vertex),
+            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        );
+        if(!Core::Geometry::FrameValidDirection(normal))
+            return false;
+
+        Float4U tangent;
+        StoreFloat(VectorSetW(Core::Geometry::FrameFallbackTangent(normal), 1.0f), &tangent);
+        StoreSkinnedGeometryVertexTangent(vertex, tangent);
+        if(SkinnedGeometryValidation::FindRestVertexPayloadFailure(vertex) != SkinnedGeometryValidation::RestVertexPayloadFailure::None)
+            return false;
+    }
+    return true;
+}
+
 static bool GenerateMissingSkinnedGeometryFrames(
     const Path& nwbFilePath,
     const bool normalsProvided,
@@ -772,6 +763,15 @@ static bool GenerateMissingSkinnedGeometryFrames(
 ){
     if(normalsProvided && tangentsProvided)
         return true;
+    if(normalsProvided && !tangentsProvided){
+        if(GenerateFallbackSkinnedGeometryTangents(vertices))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': failed to generate fallback tangents")
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
 
     Core::Geometry::TangentFrameRebuildResult rebuildResult;
     if(!SkinnedGeometryTangentFrameRebuild::Rebuild(vertices, indices, &rebuildResult, scratchArena)){
@@ -959,6 +959,8 @@ static bool RejectSkinnedGeometrySourceField(const DiscoveredNwbFile& discovered
     return false;
 }
 
+#include "geometry_asset_cook_source.inl"
+
 static bool ParseSkinnedGeometryMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
@@ -986,10 +988,13 @@ static bool ParseSkinnedGeometryMeta(
     ))
         return false;
 
+    if(!RejectDeprecatedGeometryClassField(discoveredFile, asset, s_SkinnedGeometryMetaKind))
+        return false;
     if(!RejectSkinnedGeometrySourceField(discoveredFile, asset))
         return false;
-    if(!ParseSkinnedGeometryClassField(discoveredFile.filePath, asset, outEntry.geometryClass))
-        return false;
+    outEntry.geometryClass = Core::Geometry::GeometryClass::Skinned;
+    if(FindField(asset, "vertex_refs"))
+        return ParseSourceSkinnedGeometryMeta(discoveredFile, asset, outEntry, scratchArena);
 
     ScratchVector<Float3U> positions{scratchArena};
     ScratchVector<Float3U> normals{scratchArena};
@@ -1089,10 +1094,9 @@ static bool ParseSkinnedGeometryMeta(
         scratchArena
     ))
         return false;
-    if(!Core::Geometry::GeometryClassMatchesSkinPayload(outEntry.geometryClass, !outEntry.skin.empty())){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': geometry_class '{}' does not match skin payload")
+    if(outEntry.skin.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry geometry meta '{}': 'skin' is required for skinned geometry")
             , PathToString<tchar>(discoveredFile.filePath)
-            , StringConvert(Core::Geometry::GeometryClassText(outEntry.geometryClass))
         );
         return false;
     }

@@ -75,11 +75,11 @@ static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
 
 )"
 
-#define NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS R"(asset.geometry_class = "static";
+#define NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_STATIC_CLASS R"(asset.geometry_class = "static";
 
 )"
 
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS R"(asset.geometry_class = "skinned";
+#define NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_SKINNED_GEOMETRY_CLASS R"(asset.geometry_class = "skinned";
 
 )"
 
@@ -146,26 +146,19 @@ asset.skin = {
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(geometryClass, indexType) \
-    "geometry asset;\n\n" \
-    geometryClass \
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(indexType) \
+    "skinned_geometry asset;\n\n" \
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(indexType)
 
-#define NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX(indexType) \
+#define NWB_ASSETS_GRAPHICS_TEST_LEGACY_SKINNED_GEOMETRY_TRIANGLE_PREFIX(indexType) \
     "geometry asset;\n\n" \
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(indexType)
 
 #define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS, \
-        NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 \
-    )
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
 
 #define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX( \
-        NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS, \
-        NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32 \
-    )
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32)
 
 #define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
     [0.0, 0.0, 1.0],
@@ -188,7 +181,6 @@ asset.skin = {
 
 static constexpr AStringView s_MinimalGeometryMeta =
     "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
@@ -202,7 +194,6 @@ static constexpr AStringView s_MinimalGeometryMeta =
 
 static constexpr AStringView s_DefaultColorGeometryMeta =
     "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
@@ -749,16 +740,15 @@ NwbTestSurfaceMaterial surface;
 #endif
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_MissingGeometryClassMeta =
+static constexpr AStringView s_DeprecatedGeometryClassMeta =
     "geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 static constexpr AStringView s_UnsupportedGeometryFieldsMeta = R"(geometry asset;
-
-asset.geometry_class = "static";
 
 asset.vertex_stride = 24;
 asset.index_type = "u16";
@@ -776,7 +766,6 @@ asset.index_data = [
 
 static constexpr AStringView s_MismatchedGeometryMeta =
     "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
@@ -793,8 +782,7 @@ static constexpr AStringView s_MinimalSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_GeneratedFrameSkinnedGeometryMeta =
-    "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
+    "skinned_geometry asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
@@ -815,9 +803,7 @@ static constexpr AStringView s_EmptyMapOptionalSkinnedGeometryMeta =
     R"(asset.colors = {};
 )" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
-static constexpr AStringView s_NativeCharacterMockSkinnedGeometryMeta = R"(geometry asset;
-
-asset.geometry_class = "skinned";
+static constexpr AStringView s_NativeCharacterMockSkinnedGeometryMeta = R"(skinned_geometry asset;
 
 asset.index_type = "u16";
 
@@ -905,20 +891,18 @@ static constexpr AStringView s_SkinnedOnlySkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_MissingGeometryClassSkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
+static constexpr AStringView s_DeprecatedGeometryClassSkinnedGeometryMeta =
+    "skinned_geometry asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_SKINNED_GEOMETRY_CLASS
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
-static constexpr AStringView s_StaticClassSkinnedGeometryMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(
-        NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS,
-        NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
-    )
+static constexpr AStringView s_LegacyHeaderSkinnedGeometryMeta =
+    NWB_ASSETS_GRAPHICS_TEST_LEGACY_SKINNED_GEOMETRY_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_MismatchedSkinnedGeometryMeta =
-    "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
+    "skinned_geometry asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
@@ -931,8 +915,7 @@ static constexpr AStringView s_MismatchedSkinnedGeometryMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 static constexpr AStringView s_MissingIndexTypeSkinnedGeometryMeta =
-    "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
+    "skinned_geometry asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
@@ -954,9 +937,7 @@ static constexpr AStringView s_MismatchedSkinSkinnedGeometryMeta =
 };
 )";
 
-static constexpr AStringView s_SourceImportSkinnedGeometryMeta = R"(geometry asset;
-
-asset.geometry_class = "skinned";
+static constexpr AStringView s_SourceImportSkinnedGeometryMeta = R"(skinned_geometry asset;
 
 asset.source = {
     "format": "external",
@@ -972,7 +953,7 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U16_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_U32_PREFIX
-#undef NWB_ASSETS_GRAPHICS_TEST_CLASSLESS_SKINNED_GEOMETRY_TRIANGLE_PREFIX
+#undef NWB_ASSETS_GRAPHICS_TEST_LEGACY_SKINNED_GEOMETRY_TRIANGLE_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
@@ -980,8 +961,8 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_CLASS
-#undef NWB_ASSETS_GRAPHICS_TEST_STATIC_CLASS
+#undef NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_SKINNED_GEOMETRY_CLASS
+#undef NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_STATIC_CLASS
 #undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
 #undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
 
@@ -4050,11 +4031,11 @@ static void TestGeometryCookerValidationFailures(TestContext& context){
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
-    expectCookFailure(s_MissingGeometryClassMeta, "missing_geometry_class");
+    expectCookFailure(s_DeprecatedGeometryClassMeta, "deprecated_geometry_class");
     expectCookFailure(s_UnsupportedGeometryFieldsMeta, "unsupported_geometry_fields");
     expectCookFailure(s_MismatchedGeometryMeta, "mismatched_geometry_streams");
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is no longer supported")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported geometry fields are present")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex stream counts must match")));
 #else
@@ -4199,15 +4180,15 @@ static void TestSkinnedGeometryCookerValidationFailures(TestContext& context){
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
-    expectCookFailure(s_MissingGeometryClassSkinnedGeometryMeta, "missing_geometry_class");
-    expectCookFailure(s_StaticClassSkinnedGeometryMeta, "static_class");
+    expectCookFailure(s_DeprecatedGeometryClassSkinnedGeometryMeta, "deprecated_geometry_class");
+    expectCookFailure(s_LegacyHeaderSkinnedGeometryMeta, "legacy_geometry_header");
     expectCookFailure(s_MismatchedSkinnedGeometryMeta, "mismatched_streams");
     expectCookFailure(s_MissingIndexTypeSkinnedGeometryMeta, "missing_index_type");
     expectCookFailure(s_MismatchedSkinSkinnedGeometryMeta, "mismatched_skin");
     expectCookFailure(s_SourceImportSkinnedGeometryMeta, "source_import");
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 6u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is required")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("geometry_class must be skinned")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'geometry_class' is no longer supported")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skinned fields require a 'skinned_geometry asset' header")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));

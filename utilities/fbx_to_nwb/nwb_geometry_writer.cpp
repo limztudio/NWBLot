@@ -97,29 +97,76 @@ void WriteJointMatrix(Stream& out, const GeometryJointMatrix& matrix){
     out << "    ]";
 }
 
-bool ChooseIndexType(const AString& requested, const usize vertexCount, AString& outIndexType, AString& outError){
-    const AString normalized = ToLower(Trim(requested));
-    if(normalized == "auto"){
-        outIndexType = vertexCount <= static_cast<usize>(Limit<u16>::s_Max)
-            ? "u16"
-            : "u32";
+bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName, AString& outError){
+    if(index < count)
         return true;
+
+    outError = "vertex_ref ";
+    outError += fieldName;
+    outError += " index is out of range";
+    return false;
+}
+
+bool ValidateOptionalStreamIndex(const u32 index, const usize count, const char* fieldName, AString& outError){
+    if(index == s_MissingSourceStreamIndex)
+        return true;
+    return ValidateStreamIndex(index, count, fieldName, outError);
+}
+
+bool ValidateSourceGeometry(const SourceGeometryStreams& geometry, const bool writeSkinnedGeometry, AString& outError){
+    if(geometry.positions.empty() || geometry.normals.empty() || geometry.uv0.empty() || geometry.colors.empty() || geometry.vertexRefs.empty() || geometry.indices.empty()){
+        outError = "geometry payload is incomplete";
+        return false;
     }
-    if(normalized == "u16"){
-        if(vertexCount > static_cast<usize>(Limit<u16>::s_Max)){
-            outError = "u16 index type requested but geometry has more than 65535 vertices";
-            return false;
-        }
-        outIndexType = "u16";
-        return true;
+    if((geometry.indices.size() % 3u) != 0u){
+        outError = "geometry index stream must contain whole triangles";
+        return false;
     }
-    if(normalized == "u32"){
-        outIndexType = "u32";
-        return true;
+    if(writeSkinnedGeometry && geometry.skin.empty()){
+        outError = "skinned geometry requires a skin stream";
+        return false;
+    }
+    if(!writeSkinnedGeometry && !geometry.skin.empty()){
+        outError = "static geometry cannot write a skin stream";
+        return false;
     }
 
-    outError = "index type must be auto, u16, or u32";
-    return false;
+    for(const SourceVertexRef& ref : geometry.vertexRefs){
+        if(!ValidateStreamIndex(ref.position, geometry.positions.size(), "position", outError))
+            return false;
+        if(!ValidateStreamIndex(ref.normal, geometry.normals.size(), "normal", outError))
+            return false;
+        if(!ValidateOptionalStreamIndex(ref.tangent, geometry.tangents.size(), "tangent", outError))
+            return false;
+        if(!ValidateStreamIndex(ref.uv0, geometry.uv0.size(), "uv0", outError))
+            return false;
+        if(!ValidateStreamIndex(ref.color, geometry.colors.size(), "color", outError))
+            return false;
+        if(writeSkinnedGeometry){
+            if(!ValidateStreamIndex(ref.skin, geometry.skin.size(), "skin", outError))
+                return false;
+        }
+        else if(ref.skin != s_MissingSourceStreamIndex){
+            outError = "static geometry vertex_ref cannot contain a skin index";
+            return false;
+        }
+    }
+
+    for(const u32 index : geometry.indices){
+        if(index >= geometry.vertexRefs.size()){
+            outError = "geometry triangle index references an out-of-range vertex_ref";
+            return false;
+        }
+    }
+    return true;
+}
+
+template<typename Stream>
+void WriteVertexRef(Stream& out, const SourceVertexRef& ref, const bool writeSkinnedGeometry){
+    out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color;
+    if(writeSkinnedGeometry)
+        out << ", " << ref.skin;
+    out << "]";
 }
 
 
@@ -134,35 +181,22 @@ bool ChooseIndexType(const AString& requested, const usize vertexCount, AString&
 
 bool WriteNwbGeometry(
     const Path& outputPath,
-    const UtilityVector<GeometryVertex>& vertices,
-    const UtilityVector<u32>& indices,
-    const UtilityVector<GeometrySkinInfluence>& skin,
+    const SourceGeometryStreams& geometry,
     const u32 skeletonJointCount,
     const UtilityVector<GeometryJointMatrix>& inverseBindMatrices,
-    const AString& requestedIndexType,
     const AString& geometryClassText,
-    AString& outIndexType,
     AString& outError
 ){
     outError.clear();
-    if(vertices.empty() || indices.empty() || (indices.size() % 3u) != 0u){
-        outError = "geometry payload is incomplete";
-        return false;
-    }
-    if(!__hidden_nwb_geometry_writer::ChooseIndexType(requestedIndexType, vertices.size(), outIndexType, outError))
-        return false;
-
     u32 geometryClass = 0u;
     if(!ParseGeometryClassText(geometryClassText, geometryClass)){
         outError = GeometryClassErrorText();
         return false;
     }
     const bool writeSkinnedGeometry = GeometryClassUsesSkinning(geometryClass);
+    if(!__hidden_nwb_geometry_writer::ValidateSourceGeometry(geometry, writeSkinnedGeometry, outError))
+        return false;
     if(writeSkinnedGeometry){
-        if(skin.size() != vertices.size()){
-            outError = "skinned geometry skin stream must match vertex count";
-            return false;
-        }
         if(skeletonJointCount == 0u){
             outError = "skinned geometry requires at least one skeleton joint";
             return false;
@@ -172,7 +206,7 @@ bool WriteNwbGeometry(
             return false;
         }
     }
-    else if(!skin.empty() || skeletonJointCount != 0u || !inverseBindMatrices.empty()){
+    else if(skeletonJointCount != 0u || !inverseBindMatrices.empty()){
         outError = "static geometry cannot write skeleton/skin payload";
         return false;
     }
@@ -193,55 +227,80 @@ bool WriteNwbGeometry(
     }
     file.precision(9);
 
-    file << "geometry asset;\n\n";
-    file << "asset.geometry_class = \"" << GeometryClassText(geometryClass) << "\";\n\n";
-    file << "asset.index_type = \"" << outIndexType << "\";\n\n";
+    file << (writeSkinnedGeometry ? "skinned_geometry asset;\n\n" : "geometry asset;\n\n");
 
     file << "asset.positions = [\n";
-    for(const GeometryVertex& vertex : vertices){
+    for(const Vec3& position : geometry.positions){
         file << "    ";
-        __hidden_nwb_geometry_writer::WriteVec3(file, vertex.position);
+        __hidden_nwb_geometry_writer::WriteVec3(file, position);
         file << ",\n";
     }
     file << "];\n\n";
 
     file << "asset.normals = [\n";
-    for(const GeometryVertex& vertex : vertices){
+    for(const Vec3& normal : geometry.normals){
         file << "    ";
-        __hidden_nwb_geometry_writer::WriteVec3(file, vertex.normal);
+        __hidden_nwb_geometry_writer::WriteVec3(file, normal);
+        file << ",\n";
+    }
+    file << "];\n\n";
+
+    if(!geometry.tangents.empty()){
+        file << "asset.tangents = [\n";
+        for(const Vec4& tangent : geometry.tangents){
+            file << "    ";
+            __hidden_nwb_geometry_writer::WriteVec4(file, tangent);
+            file << ",\n";
+        }
+        file << "];\n\n";
+    }
+
+    file << "asset.uv0 = [\n";
+    for(const Vec2& uv0 : geometry.uv0){
+        file << "    ";
+        __hidden_nwb_geometry_writer::WriteVec2(file, uv0);
+        file << ",\n";
+    }
+    file << "];\n\n";
+
+    file << "asset.colors = [\n";
+    for(const Vec4& color : geometry.colors){
+        file << "    ";
+        __hidden_nwb_geometry_writer::WriteVec4(file, color);
         file << ",\n";
     }
     file << "];\n\n";
 
     if(writeSkinnedGeometry){
-        file << "asset.tangents = [\n";
-        for(const GeometryVertex& vertex : vertices){
-            file << "    ";
-            __hidden_nwb_geometry_writer::WriteVec4(file, BuildFallbackTangent(vertex.normal));
+        file << "asset.skin = {\n";
+        file << "    \"joints0\": [\n";
+        for(const GeometrySkinInfluence& influence : geometry.skin){
+            file << "        ";
+            __hidden_nwb_geometry_writer::WriteSkinJoints(file, influence);
             file << ",\n";
         }
-        file << "];\n\n";
-
-        file << "asset.uv0 = [\n";
-        for(const GeometryVertex& vertex : vertices){
-            file << "    ";
-            __hidden_nwb_geometry_writer::WriteVec2(file, vertex.uv0);
+        file << "    ],\n";
+        file << "    \"weights0\": [\n";
+        for(const GeometrySkinInfluence& influence : geometry.skin){
+            file << "        ";
+            __hidden_nwb_geometry_writer::WriteSkinWeights(file, influence);
             file << ",\n";
         }
-        file << "];\n\n";
+        file << "    ],\n";
+        file << "};\n\n";
     }
 
-    file << "asset.colors = [\n";
-    for(const GeometryVertex& vertex : vertices){
+    file << "asset.vertex_refs = [\n";
+    for(const SourceVertexRef& ref : geometry.vertexRefs){
         file << "    ";
-        __hidden_nwb_geometry_writer::WriteVec4(file, vertex.color);
+        __hidden_nwb_geometry_writer::WriteVertexRef(file, ref, writeSkinnedGeometry);
         file << ",\n";
     }
     file << "];\n\n";
 
     file << "asset.indices = [\n";
-    for(usize i = 0u; i < indices.size(); i += 3u)
-        file << "    [" << indices[i + 0u] << ", " << indices[i + 1u] << ", " << indices[i + 2u] << "],\n";
+    for(usize i = 0u; i < geometry.indices.size(); i += 3u)
+        file << "    [" << geometry.indices[i + 0u] << ", " << geometry.indices[i + 1u] << ", " << geometry.indices[i + 2u] << "],\n";
     file << "];\n";
 
     if(writeSkinnedGeometry){
@@ -254,23 +313,6 @@ bool WriteNwbGeometry(
             file << ",\n";
         }
         file << "];\n\n";
-
-        file << "asset.skin = {\n";
-        file << "    \"joints0\": [\n";
-        for(const GeometrySkinInfluence& influence : skin){
-            file << "        ";
-            __hidden_nwb_geometry_writer::WriteSkinJoints(file, influence);
-            file << ",\n";
-        }
-        file << "    ],\n";
-        file << "    \"weights0\": [\n";
-        for(const GeometrySkinInfluence& influence : skin){
-            file << "        ";
-            __hidden_nwb_geometry_writer::WriteSkinWeights(file, influence);
-            file << ",\n";
-        }
-        file << "    ],\n";
-        file << "};\n\n";
     }
 
     if(!file){

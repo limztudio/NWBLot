@@ -906,25 +906,6 @@ static bool ReserveShaderIndexRecords(
     return true;
 }
 
-[[nodiscard]] static bool MetadataDeclaresSkinnedGeometry(const Core::Metascript::Document& doc){
-    const Core::Metascript::Value& asset = doc.asset();
-    if(!asset.isMap())
-        return false;
-
-    const Core::Metascript::Value* geometryClass = asset.findField("geometry_class");
-    if(geometryClass && geometryClass->isString()){
-        const Core::Metascript::MStringView text = geometryClass->asString();
-        if(AStringView(text.data(), text.size()) == AStringView("skinned"))
-            return true;
-    }
-
-    return
-        asset.findField("skin")
-        || asset.findField("skeleton_joint_count")
-        || asset.findField("inverse_bind_matrices")
-    ;
-}
-
 static bool ParseAssetMetadata(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
@@ -1049,7 +1030,7 @@ static bool ParseAssetMetadata(
             continue;
         }
 
-        if(assetType == Geometry::AssetTypeName() && MetadataDeclaresSkinnedGeometry(doc)){
+        if(assetType == SkinnedGeometry::AssetTypeName()){
             SkinnedGeometryCookEntry geometryEntry(cookArena);
             if(!ParseSkinnedGeometryCookMetadata(
                 discoveredNwbFile.assetRoot,

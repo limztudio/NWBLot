@@ -21,17 +21,6 @@ using Vec2 = Float2U;
 using Vec3 = Float3U;
 using Vec4 = Float4U;
 
-struct GeometryVertex{
-    Vec3 position;
-    Vec3 normal;
-    Vec2 uv0;
-    Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
-};
-static_assert(sizeof(GeometryVertex) == sizeof(f32) * 12u);
-static_assert(alignof(GeometryVertex) == alignof(f32));
-static_assert(IsTriviallyCopyable_V<GeometryVertex>);
-
-
 struct GeometrySkinInfluence{
     u16 joint[4] = {};
     f32 weight[4] = {};
@@ -47,6 +36,41 @@ static_assert(sizeof(GeometryJointMatrix) == sizeof(f32) * 16u);
 static_assert(alignof(GeometryJointMatrix) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<GeometryJointMatrix>);
 
+static constexpr u32 s_MissingSourceStreamIndex = Limit<u32>::s_Max;
+
+struct SourceVertexRef{
+    u32 position = s_MissingSourceStreamIndex;
+    u32 normal = s_MissingSourceStreamIndex;
+    u32 tangent = s_MissingSourceStreamIndex;
+    u32 uv0 = s_MissingSourceStreamIndex;
+    u32 color = s_MissingSourceStreamIndex;
+    u32 skin = s_MissingSourceStreamIndex;
+};
+static_assert(IsTriviallyCopyable_V<SourceVertexRef>);
+
+struct SourceGeometryStreams{
+    UtilityVector<Vec3> positions;
+    UtilityVector<Vec3> normals;
+    UtilityVector<Vec4> tangents;
+    UtilityVector<Vec2> uv0;
+    UtilityVector<Vec4> colors;
+    UtilityVector<GeometrySkinInfluence> skin;
+    UtilityVector<SourceVertexRef> vertexRefs;
+    UtilityVector<u32> indices;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NormalMode{
+    enum Enum : u8{
+        Imported,
+        Smooth,
+        Regenerate
+    };
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,7 +82,7 @@ struct ImportOptions{
     AString outputPath;
     AString geometryClass = "static";
     AString meshSelector = "all";
-    AString indexType = "auto";
+    AString normalMode = "imported";
     AString defaultColorText = "1,1,1,1";
     f64 scale = 1.0;
     f64 triangleAreaLengthSquaredEpsilon = s_DefaultTriangleAreaLengthSquaredEpsilon;
@@ -67,7 +91,6 @@ struct ImportOptions{
     bool bakeTransforms = true;
     bool importColors = true;
     bool flipWinding = false;
-    bool deduplicate = true;
     bool forceOverwrite = false;
     bool acceptDefaults = false;
     bool listMeshes = false;
@@ -112,10 +135,14 @@ bool GeometryClassUsesSkinning(u32 geometryClass);
 bool IsNormalizedSkinnedGeometryClass(AStringView value);
 bool IsSkinnedGeometryClass(const AString& value);
 bool ValidateGeometryClassText(AString& inOutValue, AString& outError);
+AStringView NormalModeText(NormalMode::Enum normalMode);
+AString NormalModeOptionsText();
+AString NormalModeErrorText();
+bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode);
+bool ParseNormalizedNormalModeText(AStringView value, NormalMode::Enum& outNormalMode);
+bool ValidateNormalModeText(AString& inOutValue, AString& outError);
 bool ParseColorText(const AString& text, Vec4& outColor);
 bool Normalize(Vec3& value);
-Vec4 BuildFallbackTangent(const Vec3& normal);
-bool IsFiniteVertex(const GeometryVertex& vertex);
 Path PathFromUtf8(const AString& value);
 AString PathToUtf8(const Path& path);
 Path DefaultOutputPath(const AString& inputPath);
@@ -134,26 +161,21 @@ bool BuildGeometry(
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
     const Vec4& defaultColor,
-    UtilityVector<GeometryVertex>& outVertices,
-    UtilityVector<u32>& outIndices,
-    UtilityVector<GeometrySkinInfluence>& outSkin,
+    SourceGeometryStreams& outGeometry,
     u32& outSkeletonJointCount,
     UtilityVector<GeometryJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
+    bool& outSawVertexTangents,
     AString& outError
 );
 
 bool WriteNwbGeometry(
     const Path& outputPath,
-    const UtilityVector<GeometryVertex>& vertices,
-    const UtilityVector<u32>& indices,
-    const UtilityVector<GeometrySkinInfluence>& skin,
+    const SourceGeometryStreams& geometry,
     const u32 skeletonJointCount,
     const UtilityVector<GeometryJointMatrix>& inverseBindMatrices,
-    const AString& requestedIndexType,
     const AString& geometryClassText,
-    AString& outIndexType,
     AString& outError
 );
 

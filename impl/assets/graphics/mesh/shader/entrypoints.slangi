@@ -87,13 +87,14 @@ void main(
     const uint groupThreadIndex = groupThreadID.x;
     const NwbMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const uint vertexCount = nwbMeshletVertexCount(meshlet);
-    const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
-    nwbMeshBuildMeshletPositions(meshlet, instance, groupThreadIndex);
     if(nwbMeshletCulled(meshletIndex, instance)){
         SetMeshOutputCounts(0u, 0u);
         return;
     }
+
+    const uint vertexCount = nwbMeshletVertexCount(meshlet);
+    const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    nwbMeshBuildMeshletPositions(meshlet, instance, groupThreadIndex);
 
     SetMeshOutputCounts(vertexCount, primitiveCount);
 

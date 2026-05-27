@@ -329,7 +329,9 @@ u32 RendererSystem::meshDispatchFlags(
     const MaterialPipelinePass::Enum pass,
     const bool twoSided
 )const{
-    u32 flags = ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
+    u32 flags = 0u;
+    if(!mesh.runtimeMesh)
+        flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
     if(!mesh.runtimeMesh && pass == MaterialPipelinePass::Opaque && !twoSided)
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletConeCull;
     return flags;

@@ -18,7 +18,6 @@
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_paths.h>
 #include <core/mesh/frame_math.h>
-#include <core/mesh/tangent_frame_rebuild.h>
 #include <core/metascript/parser.h>
 #include <global/binary.h>
 #include <global/text_utils.h>

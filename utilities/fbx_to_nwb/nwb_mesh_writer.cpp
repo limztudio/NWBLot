@@ -112,6 +112,10 @@ bool ValidateSourceMesh(const SourceMeshStreams& mesh, const bool writeSkinnedMe
         outError = "mesh payload is incomplete";
         return false;
     }
+    if(mesh.tangents.empty()){
+        outError = "mesh tangent stream is required";
+        return false;
+    }
     if((mesh.indices.size() % 3u) != 0u){
         outError = "mesh index stream must contain whole triangles";
         return false;
@@ -130,14 +134,12 @@ bool ValidateSourceMesh(const SourceMeshStreams& mesh, const bool writeSkinnedMe
             return false;
         if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), "normal", outError))
             return false;
-        if(!mesh.tangents.empty()){
-            if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), "tangent", outError))
-                return false;
-        }
-        else if(ref.tangent != s_MissingSourceStreamIndex){
-            outError = "mesh vertex_ref tangent must be UINT32_MAX when tangents are omitted";
+        if(ref.tangent == s_MissingSourceStreamIndex){
+            outError = "mesh vertex_ref tangent is missing";
             return false;
         }
+        if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), "tangent", outError))
+            return false;
         if(!ValidateStreamIndex(ref.uv0, mesh.uv0.size(), "uv0", outError))
             return false;
         if(!ValidateStreamIndex(ref.color, mesh.colors.size(), "color", outError))
@@ -245,15 +247,13 @@ bool WriteNwbMesh(
     }
     file << "];\n\n";
 
-    if(!mesh.tangents.empty()){
-        file << "asset.tangents = [\n";
-        for(const Vec4& tangent : mesh.tangents){
-            file << "    ";
-            __hidden_nwb_mesh_writer::WriteVec4(file, tangent);
-            file << ",\n";
-        }
-        file << "];\n\n";
+    file << "asset.tangents = [\n";
+    for(const Vec4& tangent : mesh.tangents){
+        file << "    ";
+        __hidden_nwb_mesh_writer::WriteVec4(file, tangent);
+        file << ",\n";
     }
+    file << "];\n\n";
 
     file << "asset.uv0 = [\n";
     for(const Vec2& uv0 : mesh.uv0){

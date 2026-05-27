@@ -6,6 +6,9 @@
 
 #include "fbx_skin.h"
 
+#include <core/mesh/frame_math.h>
+#include <core/mesh/tangent_frame_rebuild.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +44,7 @@ bool BuildMesh(
     UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
-    bool& outSawVertexTangents,
+    SourceTangentReport& outTangentReport,
     AString& outError
 ){
     outMesh = SourceMeshStreams{};
@@ -49,7 +52,7 @@ bool BuildMesh(
     outInverseBindMatrices.clear();
     outSawVertexColors = false;
     outSawVertexUvs = false;
-    outSawVertexTangents = false;
+    outTangentReport = SourceTangentReport{};
     outError.clear();
 
     usize estimatedTriangleCorners = 0u;
@@ -73,6 +76,7 @@ bool BuildMesh(
     }
 
     const bool wantsSkinning = MeshClassUsesSkinning(meshClass);
+    bool usedDefaultUvs = false;
     __hidden_fbx_import::ReserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
     __hidden_fbx_import::SourceMeshBuildContext meshContext{ outMesh };
     __hidden_fbx_import::ReserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
@@ -96,7 +100,7 @@ bool BuildMesh(
                 skinContext,
                 outSawVertexColors,
                 outSawVertexUvs,
-                outSawVertexTangents,
+                usedDefaultUvs,
                 outError
             )
         ){
@@ -108,9 +112,10 @@ bool BuildMesh(
         outError = "selected meshes produced no triangles";
         return false;
     }
-    if(__hidden_fbx_import::SourceMeshHasPartialTangents(outMesh)){
+    if(normalMode != NormalMode::Imported || !__hidden_fbx_import::SourceMeshHasCompleteTangents(outMesh)){
         __hidden_fbx_import::DropSourceMeshTangents(outMesh);
-        outSawVertexTangents = false;
+        if(!__hidden_fbx_import::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport, outError))
+            return false;
     }
     if(wantsSkinning){
         if(skinContext.joints.empty()){

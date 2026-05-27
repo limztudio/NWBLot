@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <functional>
 #include <compare>
 #include <memory>
 #include <iterator>

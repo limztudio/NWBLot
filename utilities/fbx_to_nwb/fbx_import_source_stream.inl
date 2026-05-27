@@ -44,59 +44,6 @@ struct TriangleAreaNormal64{
 };
 static_assert(IsTriviallyCopyable_V<TriangleAreaNormal64>);
 
-[[nodiscard]] u32 FloatBits(f32 value){
-    if(value == 0.0f)
-        value = 0.0f;
-
-    u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
-inline void HashFloat(usize& seed, const f32 value){
-    HashCombine(seed, FloatBits(value));
-}
-
-[[nodiscard]] bool FloatEqual(const f32 lhs, const f32 rhs){
-    return FloatBits(lhs) == FloatBits(rhs);
-}
-
-[[nodiscard]] usize HashVec2(const Vec2& value){
-    usize seed = Hasher<u32>{}(FloatBits(value.x));
-    HashFloat(seed, value.y);
-    return seed;
-}
-
-[[nodiscard]] usize HashVec3(const Vec3& value){
-    usize seed = Hasher<u32>{}(FloatBits(value.x));
-    HashFloat(seed, value.y);
-    HashFloat(seed, value.z);
-    return seed;
-}
-
-[[nodiscard]] usize HashVec4(const Vec4& value){
-    usize seed = Hasher<u32>{}(FloatBits(value.x));
-    HashFloat(seed, value.y);
-    HashFloat(seed, value.z);
-    HashFloat(seed, value.w);
-    return seed;
-}
-
-[[nodiscard]] bool Vec2EqualFloatBits(const Vec2& lhs, const Vec2& rhs){
-    return FloatEqual(lhs.x, rhs.x) && FloatEqual(lhs.y, rhs.y);
-}
-
-[[nodiscard]] bool Vec3EqualFloatBits(const Vec3& lhs, const Vec3& rhs){
-    return FloatEqual(lhs.x, rhs.x) && FloatEqual(lhs.y, rhs.y) && FloatEqual(lhs.z, rhs.z);
-}
-
-[[nodiscard]] bool Vec4EqualFloatBits(const Vec4& lhs, const Vec4& rhs){
-    return FloatEqual(lhs.x, rhs.x)
-        && FloatEqual(lhs.y, rhs.y)
-        && FloatEqual(lhs.z, rhs.z)
-        && FloatEqual(lhs.w, rhs.w);
-}
-
 struct PositionKey{
     u32 x = 0u;
     u32 y = 0u;
@@ -120,49 +67,13 @@ struct PositionKeyEqual{
 
 using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
 
-struct Vec2Hasher{
-    usize operator()(const Vec2& value)const{
-        return HashVec2(value);
-    }
-};
-
-struct Vec2Equal{
-    bool operator()(const Vec2& lhs, const Vec2& rhs)const{
-        return Vec2EqualFloatBits(lhs, rhs);
-    }
-};
-
-struct Vec3Hasher{
-    usize operator()(const Vec3& value)const{
-        return HashVec3(value);
-    }
-};
-
-struct Vec3Equal{
-    bool operator()(const Vec3& lhs, const Vec3& rhs)const{
-        return Vec3EqualFloatBits(lhs, rhs);
-    }
-};
-
-struct Vec4Hasher{
-    usize operator()(const Vec4& value)const{
-        return HashVec4(value);
-    }
-};
-
-struct Vec4Equal{
-    bool operator()(const Vec4& lhs, const Vec4& rhs)const{
-        return Vec4EqualFloatBits(lhs, rhs);
-    }
-};
-
 struct MeshSkinInfluenceHasher{
     usize operator()(const MeshSkinInfluence& value)const{
         usize seed = Hasher<u16>{}(value.joint[0u]);
         for(usize i = 1u; i < 4u; ++i)
             HashCombine(seed, value.joint[i]);
         for(const f32 weight : value.weight)
-            HashFloat(seed, weight);
+            HashCombine(seed, FloatHashBits(weight));
         return seed;
     }
 };
@@ -170,7 +81,7 @@ struct MeshSkinInfluenceHasher{
 struct MeshSkinInfluenceEqual{
     bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const{
         for(usize i = 0u; i < 4u; ++i){
-            if(lhs.joint[i] != rhs.joint[i] || !FloatEqual(lhs.weight[i], rhs.weight[i]))
+            if(lhs.joint[i] != rhs.joint[i] || FloatHashBits(lhs.weight[i]) != FloatHashBits(rhs.weight[i]))
                 return false;
         }
         return true;
@@ -200,9 +111,9 @@ struct SourceVertexRefEqual{
     }
 };
 
-using Vec2IndexMap = HashMap<Vec2, u32, Vec2Hasher, Vec2Equal>;
-using Vec3IndexMap = HashMap<Vec3, u32, Vec3Hasher, Vec3Equal>;
-using Vec4IndexMap = HashMap<Vec4, u32, Vec4Hasher, Vec4Equal>;
+using Vec2IndexMap = HashMap<Vec2, u32>;
+using Vec3IndexMap = HashMap<Vec3, u32>;
+using Vec4IndexMap = HashMap<Vec4, u32>;
 using MeshSkinInfluenceIndexMap = HashMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
 using SourceVertexRefIndexMap = HashMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
 
@@ -252,15 +163,15 @@ void ReserveSourceMeshBuildContext(
         context.skin.reserve(estimatedTriangleCorners);
 }
 
-[[nodiscard]] bool SourceMeshHasPartialTangents(const SourceMeshStreams& mesh){
-    if(mesh.tangents.empty())
+[[nodiscard]] bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh){
+    if(mesh.vertexRefs.empty() || mesh.tangents.empty())
         return false;
 
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(ref.tangent == s_MissingSourceStreamIndex)
-            return true;
+        if(ref.tangent >= mesh.tangents.size())
+            return false;
     }
-    return false;
+    return true;
 }
 
 void DropSourceMeshTangents(SourceMeshStreams& mesh){
@@ -313,9 +224,9 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
 [[nodiscard]] PositionKey MakePositionKey(const Vec3& position){
     return PositionKey{
-        FloatBits(position.x),
-        FloatBits(position.y),
-        FloatBits(position.z),
+        FloatHashBits(position.x),
+        FloatHashBits(position.y),
+        FloatHashBits(position.z),
     };
 }
 
@@ -515,6 +426,111 @@ template<typename Value, typename Lookup>
     outIndex = static_cast<u32>(stream.size());
     stream.push_back(value);
     lookup.emplace(value, outIndex);
+    return true;
+}
+
+[[nodiscard]] bool GenerateSourceMeshTangents(
+    SourceMeshStreams& mesh,
+    const bool usedDefaultUvs,
+    SourceTangentReport& outTangentReport,
+    AString& outError
+){
+    using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
+
+    outTangentReport = SourceTangentReport{};
+    if(mesh.vertexRefs.empty() || mesh.indices.empty()){
+        outError = "mesh has no source vertices for tangent generation";
+        return false;
+    }
+    if((mesh.indices.size() % 3u) != 0u){
+        outError = "mesh index stream must contain whole triangles for tangent generation";
+        return false;
+    }
+
+    UtilityVector<RebuildVertex> rebuildVertices;
+    rebuildVertices.reserve(mesh.vertexRefs.size());
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
+        if(ref.position >= mesh.positions.size() || ref.normal >= mesh.normals.size() || ref.uv0 >= mesh.uv0.size()){
+            outError = "mesh vertex_ref references an out-of-range stream while generating tangents";
+            return false;
+        }
+
+        const Vec3& position = mesh.positions[ref.position];
+        const Vec3& normal = mesh.normals[ref.normal];
+        rebuildVertices.push_back(RebuildVertex{
+            Float4(position.x, position.y, position.z, 0.0f),
+            Float4(normal.x, normal.y, normal.z, 0.0f),
+            Float4(1.0f, 0.0f, 0.0f, 1.0f),
+            mesh.uv0[ref.uv0],
+        });
+    }
+
+    UtilityVector<u32> rebuildIndices;
+    rebuildIndices.reserve(mesh.indices.size());
+    for(usize indexBase = 0u; indexBase < mesh.indices.size(); indexBase += 3u){
+        const u32 i0 = mesh.indices[indexBase + 0u];
+        const u32 i1 = mesh.indices[indexBase + 1u];
+        const u32 i2 = mesh.indices[indexBase + 2u];
+        if(i0 >= rebuildVertices.size() || i1 >= rebuildVertices.size() || i2 >= rebuildVertices.size()){
+            outError = "mesh index stream references an out-of-range vertex_ref while generating tangents";
+            return false;
+        }
+        if(i0 == i1 || i0 == i2 || i1 == i2)
+            continue;
+
+        const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
+        const SIMDVector edge01 = VectorSubtract(LoadFloat(rebuildVertices[i1].position), p0);
+        const SIMDVector edge02 = VectorSubtract(LoadFloat(rebuildVertices[i2].position), p0);
+        if(!Core::Mesh::FrameValidDirection(Vector3Cross(edge01, edge02)))
+            continue;
+
+        rebuildIndices.push_back(i0);
+        rebuildIndices.push_back(i1);
+        rebuildIndices.push_back(i2);
+    }
+    if(rebuildIndices.empty()){
+        outError = "mesh has no valid triangles for tangent generation";
+        return false;
+    }
+
+    Core::Mesh::TangentFrameRebuildResult rebuildResult;
+    if(!Core::Mesh::RebuildTangentFrames(rebuildVertices, rebuildIndices, &rebuildResult)){
+        outError = "failed to generate source tangent stream";
+        return false;
+    }
+
+    Vec4IndexMap tangentLookup;
+    tangentLookup.reserve(mesh.vertexRefs.size());
+    mesh.tangents.clear();
+    for(usize vertexRefIndex = 0u; vertexRefIndex < mesh.vertexRefs.size(); ++vertexRefIndex){
+        SourceVertexRef& ref = mesh.vertexRefs[vertexRefIndex];
+        const SIMDVector normal = Core::Mesh::FrameNormalizeDirection(
+            VectorSetW(LoadFloat(mesh.normals[ref.normal]), 0.0f),
+            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        );
+        const SIMDVector tangent = Core::Mesh::FrameResolveTangent(
+            normal,
+            VectorSetW(LoadFloat(rebuildVertices[vertexRefIndex].tangent), 0.0f),
+            Core::Mesh::FrameFallbackTangent(normal)
+        );
+        if(!Core::Mesh::FrameValidDirection(tangent)){
+            outError = "failed to resolve generated source tangent";
+            return false;
+        }
+
+        const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
+        Vec4 generatedTangent;
+        StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
+        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent, outError))
+            return false;
+    }
+    outTangentReport.degenerateUvTriangleCount = rebuildResult.degenerateUvTriangleCount;
+    outTangentReport.fallbackTangentVertexCount = rebuildResult.fallbackTangentVertexCount;
+    outTangentReport.mode =
+        usedDefaultUvs || rebuildResult.degenerateUvTriangleCount != 0u || rebuildResult.fallbackTangentVertexCount != 0u
+        ? SourceTangentMode::GeneratedFallback
+        : SourceTangentMode::GeneratedUv
+    ;
     return true;
 }
 

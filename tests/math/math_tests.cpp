@@ -214,6 +214,136 @@ static void TestHalfFloatBufferConversion(TestContext& context){
     NWB_MATH_TEST_CHECK(context, unpacked[5] == Limit<f32>::s_Infinity);
 }
 
+template<typename Value>
+static void CheckStorageHashMatchesEquality(TestContext& context, const Value& lhs, const Value& same, const Value& different){
+    NWB_MATH_TEST_CHECK(context, lhs == same);
+    NWB_MATH_TEST_CHECK(context, lhs != different);
+    NWB_MATH_TEST_CHECK(context, Hasher<Value>{}(lhs) == Hasher<Value>{}(same));
+}
+
+static Int2U MakeInt2Value(const i32 x, const i32 y){
+    Int2U value = {};
+    value.x = x;
+    value.y = y;
+    return value;
+}
+
+static Int3U MakeInt3Value(const i32 x, const i32 y, const i32 z){
+    Int3U value = {};
+    value.x = x;
+    value.y = y;
+    value.z = z;
+    return value;
+}
+
+static Int4 MakeInt4Value(const i32 x, const i32 y, const i32 z, const i32 w){
+    Int4 value = {};
+    value.x = x;
+    value.y = y;
+    value.z = z;
+    value.w = w;
+    return value;
+}
+
+static Int4U MakeInt4UValue(const i32 x, const i32 y, const i32 z, const i32 w){
+    Int4U value = {};
+    value.x = x;
+    value.y = y;
+    value.z = z;
+    value.w = w;
+    return value;
+}
+
+static UInt2U MakeUInt2Value(const u32 x, const u32 y){
+    UInt2U value = {};
+    value.x = x;
+    value.y = y;
+    return value;
+}
+
+static UInt3U MakeUInt3Value(const u32 x, const u32 y, const u32 z){
+    UInt3U value = {};
+    value.x = x;
+    value.y = y;
+    value.z = z;
+    return value;
+}
+
+static UInt4 MakeUInt4Value(const u32 x, const u32 y, const u32 z, const u32 w){
+    UInt4 value = {};
+    value.x = x;
+    value.y = y;
+    value.z = z;
+    value.w = w;
+    return value;
+}
+
+static UInt4U MakeUInt4UValue(const u32 x, const u32 y, const u32 z, const u32 w){
+    UInt4U value = {};
+    value.x = x;
+    value.y = y;
+    value.z = z;
+    value.w = w;
+    return value;
+}
+
+static void TestMathStorageHashAndEquality(TestContext& context){
+    NWB_MATH_TEST_CHECK(context, FloatHashBits(-0.0f) == FloatHashBits(0.0f));
+
+    const Half h1 = static_cast<Half>(1u);
+    const Half h2 = static_cast<Half>(2u);
+    const Half h3 = static_cast<Half>(3u);
+    const Half h4 = static_cast<Half>(4u);
+    const Half h5 = static_cast<Half>(5u);
+    CheckStorageHashMatchesEquality(context, Half2U(h1, h2), Half2U(h1, h2), Half2U(h1, h3));
+    CheckStorageHashMatchesEquality(context, Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h5));
+    CheckStorageHashMatchesEquality(context, Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
+    CheckStorageHashMatchesEquality(context, MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 5));
+    CheckStorageHashMatchesEquality(context, MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 5u));
+    CheckStorageHashMatchesEquality(context, Float2U(-0.0f, 1.0f), Float2U(0.0f, 1.0f), Float2U(0.0f, 2.0f));
+    CheckStorageHashMatchesEquality(context, Float3U(-0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 3.0f));
+    CheckStorageHashMatchesEquality(context, Float4U(-0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 4.0f));
+    CheckStorageHashMatchesEquality(context, MakeInt2Value(-1, 2), MakeInt2Value(-1, 2), MakeInt2Value(-1, 3));
+    CheckStorageHashMatchesEquality(context, MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -4));
+    CheckStorageHashMatchesEquality(context, MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 5));
+    CheckStorageHashMatchesEquality(context, MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 3u));
+    CheckStorageHashMatchesEquality(context, MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 4u));
+    CheckStorageHashMatchesEquality(context, MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 5u));
+
+    Float33U float33 = {};
+    Float34U float34u = {};
+    Float44U float44u = {};
+    Float34 float34 = {};
+    Float44 float44 = {};
+    for(usize i = 0u; i < 9u; ++i)
+        float33.raw[i] = static_cast<f32>(i + 1u);
+    for(usize i = 0u; i < 12u; ++i){
+        float34u.raw[i] = static_cast<f32>(i + 1u);
+        float34.raw[i] = static_cast<f32>(i + 1u);
+    }
+    for(usize i = 0u; i < 16u; ++i){
+        float44u.raw[i] = static_cast<f32>(i + 1u);
+        float44.raw[i] = static_cast<f32>(i + 1u);
+    }
+
+    Float33U different33 = float33;
+    Float34U different34u = float34u;
+    Float44U different44u = float44u;
+    Float34 different34 = float34;
+    Float44 different44 = float44;
+    different33.raw[8u] = 10.0f;
+    different34u.raw[11u] = 13.0f;
+    different44u.raw[15u] = 17.0f;
+    different34.raw[11u] = 13.0f;
+    different44.raw[15u] = 17.0f;
+
+    CheckStorageHashMatchesEquality(context, float33, float33, different33);
+    CheckStorageHashMatchesEquality(context, float34u, float34u, different34u);
+    CheckStorageHashMatchesEquality(context, float44u, float44u, different44u);
+    CheckStorageHashMatchesEquality(context, float34, float34, different34);
+    CheckStorageHashMatchesEquality(context, float44, float44, different44);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -239,6 +369,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("math", [](NWB::Tests::TestContext& context){
     __hidden_math_tests::TestRefractCriticalAngle(context);
     __hidden_math_tests::TestHalfFloatScalarConversion(context);
     __hidden_math_tests::TestHalfFloatBufferConversion(context);
+    __hidden_math_tests::TestMathStorageHashAndEquality(context);
 })
 
 

@@ -71,6 +71,20 @@ namespace NormalMode{
     };
 };
 
+namespace SourceTangentMode{
+    enum Enum : u8{
+        Imported,
+        GeneratedUv,
+        GeneratedFallback
+    };
+};
+
+struct SourceTangentReport{
+    SourceTangentMode::Enum mode = SourceTangentMode::Imported;
+    u32 degenerateUvTriangleCount = 0u;
+    u32 fallbackTangentVertexCount = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,6 +155,7 @@ AString NormalModeErrorText();
 bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode);
 bool ParseNormalizedNormalModeText(AStringView value, NormalMode::Enum& outNormalMode);
 bool ValidateNormalModeText(AString& inOutValue, AString& outError);
+AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
 bool ParseColorText(const AString& text, Vec4& outColor);
 bool Normalize(Vec3& value);
 Path PathFromUtf8(const AString& value);
@@ -166,7 +181,7 @@ bool BuildMesh(
     UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
-    bool& outSawVertexTangents,
+    SourceTangentReport& outTangentReport,
     AString& outError
 );
 

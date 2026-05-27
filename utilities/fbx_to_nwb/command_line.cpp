@@ -260,7 +260,11 @@ int Run(int argc, char** argv, bool& prompted){
     meshClassDescription.append(meshClassOptions.data(), meshClassOptions.size());
     CLI::Option* meshClassOption = app.add_option("--asset-type", meshClass, meshClassDescription);
     CLI::Option* meshOption = app.add_option("-m,--mesh", meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
-    CLI::Option* normalModeOption = app.add_option("--normal-mode", normalMode, "Normal mode: imported, smooth, or regenerate");
+    CLI::Option* normalModeOption = app.add_option(
+        "--normal-mode",
+        normalMode,
+        "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals"
+    );
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
     app.add_option(
         "--triangle-area-length-squared-epsilon",
@@ -390,7 +394,7 @@ int Run(int argc, char** argv, bool& prompted){
     UtilityVector<MeshJointMatrix> inverseBindMatrices;
     bool sawVertexColors = false;
     bool sawVertexUvs = false;
-    bool sawVertexTangents = false;
+    SourceTangentReport tangentReport;
     if(!BuildMesh(
         instances,
         selection,
@@ -401,7 +405,7 @@ int Run(int argc, char** argv, bool& prompted){
         inverseBindMatrices,
         sawVertexColors,
         sawVertexUvs,
-        sawVertexTangents,
+        tangentReport,
         error
     )){
         NWB_CERR << "Failed to build mesh: " << error << "\n";
@@ -428,9 +432,14 @@ int Run(int argc, char** argv, bool& prompted){
         << "  triangles: " << (mesh.indices.size() / 3u) << "\n"
         << "  asset_type: " << (IsNormalizedSkinnedMeshClass(options.meshClass) ? "skinned_mesh" : "mesh") << "\n"
         << "  normal_mode: " << options.normalMode << "\n"
-        << "  tangents: " << (sawVertexTangents ? "imported" : "omitted") << "\n"
+        << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
     NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+    if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
+        NWB_COUT
+            << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"
+            << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
+    }
     if(IsNormalizedSkinnedMeshClass(options.meshClass))
         NWB_COUT << "  skeleton joints: " << skeletonJointCount << "\n";
 

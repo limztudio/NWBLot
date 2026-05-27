@@ -79,31 +79,6 @@ static void TestSkinnedMeshCookerMinimalAsset(TestContext& context){
     );
 }
 
-static void TestSkinnedMeshCookerGeneratesMissingFrames(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedMesh>(
-        context,
-        s_GeneratedFrameSkinnedMeshMeta,
-        "generated_frames",
-        MinimalAssetKind::SkinnedMesh,
-        [&](const NWB::Impl::SkinnedMesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.normalStream().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.tangentStream().size() == 1u);
-            for(const Half4U& packedNormal : loadedMesh.normalStream()){
-                const Float4U normal = LoadHalf4U(packedNormal);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.x == 0.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.y == 0.0f);
-                NWB_ASSETS_GRAPHICS_TEST_CHECK(context, normal.z == 1.0f);
-            }
-            const Float4U tangent = LoadHalf4U(loadedMesh.tangentStream()[0]);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.x == 1.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.y == 0.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.z == 0.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.w == 1.0f);
-        }
-    );
-}
-
 static void TestSkinnedMeshCookerNativeCharacterMock(TestContext& context){
     CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedMesh>(
         context,
@@ -175,12 +150,16 @@ static void TestSkinnedMeshCookerValidationFailures(TestContext& context){
     expectCookFailure(s_MismatchedSkinnedMeshMeta, "mismatched_streams");
     expectCookFailure(s_MismatchedSkinSkinnedMeshMeta, "mismatched_skin");
     expectCookFailure(s_SourceImportSkinnedMeshMeta, "source_import");
+    expectCookFailure(s_MissingTangentFieldSkinnedMeshMeta, "missing_tangent_field");
+    expectCookFailure(s_MissingTangentVertexRefSkinnedMeshMeta, "missing_tangent_vertex_ref");
     expectCookFailure(s_EmptyListTangentSkinnedMeshMeta, "empty_list_tangent");
     expectCookFailure(s_EmptyMapTangentSkinnedMeshMeta, "empty_map_tangent");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 5u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 7u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'skin' must be a non-empty map")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must be non-empty and match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'source'")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty")));
 #else
     static_cast<void>(context);

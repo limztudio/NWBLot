@@ -113,17 +113,17 @@ static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
 )"
 
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS R"(asset.vertex_refs = [
-    [0, 0, 4294967295, 0, 0],
-    [1, 1, 4294967295, 1, 1],
-    [2, 2, 4294967295, 2, 2],
+    [0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1],
+    [2, 2, 2, 2, 2],
 ];
 
 )"
 
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS R"(asset.vertex_refs = [
-    [0, 0, 4294967295, 0, 0],
-    [1, 1, 4294967295, 1, 0],
-    [2, 2, 4294967295, 2, 0],
+    [0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0],
+    [2, 2, 2, 2, 0],
 ];
 
 )"
@@ -206,6 +206,7 @@ static constexpr AStringView s_MinimalMeshMeta =
     "mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     R"(asset.colors = [
     [1.0, 0.0, 0.0, 1.0],
@@ -220,6 +221,7 @@ static constexpr AStringView s_DefaultColorMeshMeta =
     "mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     R"(asset.colors = [
     [1.0, 1.0, 1.0, 1.0],
@@ -816,7 +818,8 @@ static constexpr AStringView s_MismatchedMeshMeta =
     [0.0, 0.0, 1.0],
 ];
 
-)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
+)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 #endif
 
 
@@ -824,17 +827,28 @@ static constexpr AStringView s_MinimalSkinnedMeshMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
-static constexpr AStringView s_GeneratedFrameSkinnedMeshMeta =
+#if defined(NWB_FINAL)
+static constexpr AStringView s_MissingTangentFieldSkinnedMeshMeta =
     "skinned_mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
+    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
+
+static constexpr AStringView s_MissingTangentVertexRefSkinnedMeshMeta =
+    "skinned_mesh asset;\n\n"
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
-#if defined(NWB_FINAL)
 static constexpr AStringView s_EmptyListTangentSkinnedMeshMeta =
     "skinned_mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
@@ -1013,10 +1027,14 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
 
@@ -1622,7 +1640,6 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_assets_graphics_tests::TestMaterialBindDiscoveryValidation(context);
     __hidden_assets_graphics_tests::TestMeshCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerMinimalAsset(context);
-    __hidden_assets_graphics_tests::TestSkinnedMeshCookerGeneratesMissingFrames(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerNativeCharacterMock(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerNormalizesSkinWeights(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerSkinnedClass(context);

@@ -10,7 +10,6 @@ struct SourceMeshStreams{
     ScratchVector<Float4U> colors;
     ScratchVector<MeshVertexRef> vertexRefs;
     Core::Assets::AssetVector<u32> indices;
-    bool tangentsProvided = false;
 
     SourceMeshStreams(Core::Assets::AssetArena& assetArena, Core::Alloc::ScratchArena& scratchArena)
         : positions(scratchArena)
@@ -109,34 +108,6 @@ static bool ParseSourceVertexRefs(
     return true;
 }
 
-template<typename ElementT, usize ComponentCount, typename ElementVectorT>
-static bool ParseOptionalSourceFloatListField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const tchar* metaKind,
-    const AStringView fieldName,
-    ElementVectorT& outValues,
-    bool& outProvided,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    outValues.clear();
-    outProvided = false;
-
-    const Core::Metascript::Value* field = FindField(asset, fieldName);
-    if(!field)
-        return true;
-
-    outProvided = true;
-    return ParseMetadataFloatListField<ElementT, ComponentCount>(
-        nwbFilePath,
-        asset,
-        metaKind,
-        fieldName,
-        outValues,
-        scratchArena
-    );
-}
-
 static bool ValidateSourceStreamIndex(
     const Path& nwbFilePath,
     const tchar* metaKind,
@@ -193,15 +164,8 @@ static bool ValidateSourceVertexRefs(
             return false;
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "normal", ref.normal, streams.normals.size()))
             return false;
-        if(streams.tangentsProvided && !ValidateSourceStreamIndex(nwbFilePath, metaKind, "tangent", ref.tangent, streams.tangents.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "tangent", ref.tangent, streams.tangents.size()))
             return false;
-        if(!streams.tangentsProvided && ref.tangent != s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref tangent must be UINT32_MAX when 'tangents' is omitted")
-                , metaKind
-                , PathToString<tchar>(nwbFilePath)
-            );
-            return false;
-        }
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "uv0", ref.uv0, streams.uv0.size()))
             return false;
         if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "color", ref.color, streams.colors.size()))
@@ -248,109 +212,6 @@ static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry){
     outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end());
 }
 
-template<typename CookEntryT>
-static u32 FindOrAppendTangent(CookEntryT& entry, const Half4U& packedTangent){
-    for(usize tangentIndex = 0u; tangentIndex < entry.tangents.size(); ++tangentIndex){
-        if(NWB_MEMCMP(&entry.tangents[tangentIndex], &packedTangent, sizeof(Half4U)) == 0)
-            return static_cast<u32>(tangentIndex);
-    }
-
-    const u32 tangentIndex = static_cast<u32>(entry.tangents.size());
-    entry.tangents.push_back(packedTangent);
-    return tangentIndex;
-}
-
-template<typename CookEntryT>
-static bool GenerateMissingTangents(
-    const Path& nwbFilePath,
-    const tchar* metaKind,
-    const Core::Assets::AssetVector<u32>& indices,
-    CookEntryT& entry,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(!entry.tangents.empty())
-        return true;
-
-    using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
-    ScratchVector<RebuildVertex> rebuildVertices{scratchArena};
-    rebuildVertices.reserve(entry.vertexRefs.size());
-    for(const MeshVertexRef& ref : entry.vertexRefs){
-        rebuildVertices.push_back(RebuildVertex{
-            Float4(entry.positions[ref.position].x, entry.positions[ref.position].y, entry.positions[ref.position].z, 0.0f),
-            Float4(LoadHalf4U(entry.normals[ref.normal]).x, LoadHalf4U(entry.normals[ref.normal]).y, LoadHalf4U(entry.normals[ref.normal]).z, 0.0f),
-            Float4(1.0f, 0.0f, 0.0f, 1.0f),
-            entry.uv0[ref.uv0],
-        });
-    }
-
-    ScratchVector<u32> rebuildIndices{scratchArena};
-    rebuildIndices.reserve(indices.size());
-    for(usize indexBase = 0u; indexBase + 2u < indices.size(); indexBase += 3u){
-        const u32 i0 = indices[indexBase + 0u];
-        const u32 i1 = indices[indexBase + 1u];
-        const u32 i2 = indices[indexBase + 2u];
-        if(i0 >= rebuildVertices.size() || i1 >= rebuildVertices.size() || i2 >= rebuildVertices.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': source triangle references an out-of-range vertex")
-                , metaKind
-                , PathToString<tchar>(nwbFilePath)
-            );
-            return false;
-        }
-        if(i0 == i1 || i0 == i2 || i1 == i2)
-            continue;
-
-        const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
-        const SIMDVector edge01 = VectorSubtract(LoadFloat(rebuildVertices[i1].position), p0);
-        const SIMDVector edge02 = VectorSubtract(LoadFloat(rebuildVertices[i2].position), p0);
-        if(!Core::Mesh::FrameValidDirection(Vector3Cross(edge01, edge02)))
-            continue;
-
-        rebuildIndices.push_back(i0);
-        rebuildIndices.push_back(i1);
-        rebuildIndices.push_back(i2);
-    }
-
-    Core::Mesh::TangentFrameRebuildResult rebuildResult;
-    if(!Core::Mesh::RebuildTangentFrames(rebuildVertices, rebuildIndices, &rebuildResult)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': failed to generate missing tangent stream")
-            , metaKind
-            , PathToString<tchar>(nwbFilePath)
-        );
-        return false;
-    }
-
-    for(usize vertexRefIndex = 0u; vertexRefIndex < entry.vertexRefs.size(); ++vertexRefIndex){
-        const MeshVertexRef& ref = entry.vertexRefs[vertexRefIndex];
-        const SIMDVector normal = Core::Mesh::FrameNormalizeDirection(
-            VectorSetW(LoadFloat(LoadHalf4U(entry.normals[ref.normal])), 0.0f),
-            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
-        );
-        const SIMDVector tangent = Core::Mesh::FrameResolveTangent(
-            normal,
-            VectorSetW(LoadFloat(rebuildVertices[vertexRefIndex].tangent), 0.0f),
-            Core::Mesh::FrameFallbackTangent(normal)
-        );
-        if(!Core::Mesh::FrameValidDirection(tangent)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': failed to resolve generated tangent")
-                , metaKind
-                , PathToString<tchar>(nwbFilePath)
-            );
-            return false;
-        }
-
-        const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
-        Float4U generatedTangent;
-        StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
-
-        const u32 tangentIndex = FindOrAppendTangent(
-            entry,
-            MakeHalf4U(generatedTangent.x, generatedTangent.y, generatedTangent.z, generatedTangent.w)
-        );
-        entry.vertexRefs[vertexRefIndex].tangent = tangentIndex;
-    }
-    return true;
-}
-
 #include "mesh_asset_cook_meshlet.inl"
 
 static bool ParseCommonSourceMeshStreams(
@@ -366,15 +227,7 @@ static bool ParseCommonSourceMeshStreams(
         return false;
     if(!ParseMetadataFloatListField<Float3U, 3u>(discoveredFile.filePath, asset, metaKind, "normals", streams.normals, scratchArena))
         return false;
-    if(!ParseOptionalSourceFloatListField<Float4U, 4u>(
-        discoveredFile.filePath,
-        asset,
-        metaKind,
-        "tangents",
-        streams.tangents,
-        streams.tangentsProvided,
-        scratchArena
-    ))
+    if(!ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, metaKind, "tangents", streams.tangents, scratchArena))
         return false;
     if(!ParseMetadataFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, metaKind, "uv0", streams.uv0, scratchArena))
         return false;
@@ -402,8 +255,6 @@ static bool ParseSourceMeshMeta(
         return false;
 
     CopySourceStreams(streams, outEntry);
-    if(!GenerateMissingTangents(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, scratchArena))
-        return false;
     return BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry);
 }
 
@@ -504,8 +355,6 @@ static bool ParseSourceSkinnedMeshMeta(
     }
 
     CopySourceStreams(streams, outEntry);
-    if(!GenerateMissingTangents(discoveredFile.filePath, s_SkinnedMeshMetaKind, streams.indices, outEntry, scratchArena))
-        return false;
     return BuildMeshlets(discoveredFile.filePath, s_SkinnedMeshMetaKind, streams.indices, outEntry);
 }
 

@@ -9,6 +9,7 @@
 #include <global/assert.h>
 #include <global/containers.h>
 #include <global/filesystem.h>
+#include <global/hash_utils.h>
 #include <global/limit.h>
 #include <global/math/type.h>
 #include <global/simplemath.h>
@@ -38,6 +39,10 @@ NWB_FBX_TO_NWB_BEGIN
 
 namespace UtilityDetail{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline Core::Alloc::GlobalArena& Arena(){
     static Core::Alloc::GlobalArena s_Arena("NWB::FbxToNwb::UtilityArena");
     return s_Arena;
@@ -46,7 +51,15 @@ inline Core::Alloc::GlobalArena& Arena(){
 template<typename T>
 using Allocator = ContainerDetail::DefaultArenaAllocatorFor_T<T, Core::Alloc::GlobalArena, Arena>;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename T>
 using Vector = std::vector<T, UtilityDetail::Allocator<T>>;

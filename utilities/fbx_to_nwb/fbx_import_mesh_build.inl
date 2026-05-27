@@ -106,7 +106,7 @@ bool AppendInstanceMesh(
     FbxSkinDetail::ExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
     bool& inOutSawVertexUvs,
-    bool& inOutSawVertexTangents,
+    bool& inOutUsedDefaultUvs,
     AString& outError
 ){
     ufbx_mesh* mesh = instance.mesh;
@@ -119,15 +119,15 @@ bool AppendInstanceMesh(
         outError = "mesh is missing positions";
         return false;
     }
-    if(!mesh->vertex_normal.exists){
-        outError = "mesh is missing normals after ufbx import";
+    if(normalMode == NormalMode::Imported && !mesh->vertex_normal.exists){
+        outError = "imported normal mode requires mesh normals after ufbx import";
         return false;
     }
 
     const ufbx_matrix normalToWorld = ufbx_matrix_for_normals(&node->geometry_to_world);
     const bool importUvs = mesh->vertex_uv.exists;
     const bool importColors = options.importColors && mesh->vertex_color.exists;
-    const bool importTangents = mesh->vertex_tangent.exists;
+    const bool importTangents = normalMode == NormalMode::Imported && mesh->vertex_tangent.exists;
     ufbx_skin_deformer* skin = nullptr;
     UtilityVector<u16> clusterJoints;
     if(wantsSkinning){
@@ -141,7 +141,7 @@ bool AppendInstanceMesh(
     }
 
     PositionNormalMap smoothNormals;
-    if(normalMode != NormalMode::Imported && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
+    if(normalMode == NormalMode::Smooth && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
         return false;
 
     return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[3]){
@@ -155,17 +155,29 @@ bool AppendInstanceMesh(
             if(normalMode == NormalMode::Imported){
                 corner.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
             }
-            else{
+            else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(corner.position));
-                if(foundNormal != smoothNormals.end())
-                    corner.normal = foundNormal.value();
-                if(!Normalize(corner.normal))
-                    corner.normal = LoadCornerOutputNormal(*mesh, normalToWorld, options, wantsSkinning, cornerIndex);
+                if(foundNormal == smoothNormals.end()){
+                    outError = "failed to generate smooth mesh normal";
+                    return false;
+                }
+                Vec3 smoothNormal = foundNormal.value();
+                if(!Normalize(smoothNormal)){
+                    outError = "failed to generate smooth mesh normal";
+                    return false;
+                }
+                corner.normal = smoothNormal;
+            }
+            else{
+                corner.normal = Vec3{ 0.0f, 0.0f, 1.0f };
             }
 
             if(importUvs){
                 corner.uv0 = ToVec2(ufbx_get_vertex_vec2(&mesh->vertex_uv, cornerIndex));
                 inOutSawVertexUvs = true;
+            }
+            else{
+                inOutUsedDefaultUvs = true;
             }
 
             corner.color = defaultColor;
@@ -184,7 +196,6 @@ bool AppendInstanceMesh(
                     corner.normal,
                     corner.tangent
                 );
-                inOutSawVertexTangents = inOutSawVertexTangents || corner.hasTangent;
             }
 
             if(wantsSkinning){
@@ -202,6 +213,20 @@ bool AppendInstanceMesh(
 
         if(!TriangleHasArea(triangleCorners, options.triangleAreaLengthSquaredEpsilon))
             return true;
+
+        if(normalMode == NormalMode::Regenerate){
+            Vec3 faceNormal = TriangleAreaNormal(
+                triangleCorners[0u].position,
+                triangleCorners[1u].position,
+                triangleCorners[2u].position
+            );
+            if(!Normalize(faceNormal)){
+                outError = "failed to regenerate mesh face normal";
+                return false;
+            }
+            for(SourceTriangleCorner& corner : triangleCorners)
+                corner.normal = faceNormal;
+        }
 
         for(const SourceTriangleCorner& corner : triangleCorners){
             u32 vertexRefIndex = 0u;

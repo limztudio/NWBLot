@@ -176,6 +176,19 @@ bool ValidateNormalModeText(AString& inOutValue, AString& outError){
     return false;
 }
 
+AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){
+    switch(mode){
+    case SourceTangentMode::Imported:
+        return "imported";
+    case SourceTangentMode::GeneratedUv:
+        return "generated_uv";
+    case SourceTangentMode::GeneratedFallback:
+        return "generated_fallback";
+    default:
+        return {};
+    }
+}
+
 bool ParseColorText(const AString& text, Vec4& outColor){
     AString normalized = text;
     Replace(normalized.begin(), normalized.end(), ',', ' ');

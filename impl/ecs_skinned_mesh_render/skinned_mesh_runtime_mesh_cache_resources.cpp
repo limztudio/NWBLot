@@ -158,32 +158,6 @@ using MeshPayloadValidation::CountFitsU32;
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] Core::BufferHandle SetupRuntimeBuffer(
     Core::Graphics& graphics,
-    const Name& debugName,
-    const PayloadVector& payload,
-    const bool canHaveUavs,
-    const tchar* label,
-    const bool canHaveRawViews = false
-){
-    if(payload.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: {} payload is empty"), label);
-        return {};
-    }
-    if(!RuntimeMeshBufferUpload::PayloadByteCountFits<PayloadT>(payload)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: {} payload byte size overflows"), label);
-        return {};
-    }
-
-    return RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(
-        graphics,
-        debugName,
-        payload,
-        { canHaveUavs, canHaveRawViews }
-    );
-}
-
-template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] Core::BufferHandle SetupRuntimeBuffer(
-    Core::Graphics& graphics,
     const SkinnedMeshRuntimeMeshInstance& instance,
     const AStringView suffix,
     const PayloadVector& payload,
@@ -205,17 +179,26 @@ template<typename PayloadT, typename PayloadVector>
         return {};
     }
 
-    Core::BufferHandle buffer = SetupRuntimeBuffer<PayloadT>(
+    Core::BufferHandle buffer;
+    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
         graphics,
         bufferName,
         payload,
-        canHaveUavs,
-        label,
-        canHaveRawViews
+        { canHaveUavs, canHaveRawViews },
+        buffer
     );
-    if(buffer)
+    switch(failure){
+    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return buffer;
-
+    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: {} payload is empty"), label);
+        return {};
+    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: {} payload byte size overflows"), label);
+        return {};
+    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+        break;
+    }
     NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: failed to create {} buffer for runtime mesh '{}'")
         , label
         , instance.handle.value

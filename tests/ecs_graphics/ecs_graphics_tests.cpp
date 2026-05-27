@@ -16,6 +16,7 @@
 #include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_lighting/lighting.h>
 #include <impl/ecs_render/components.h>
+#include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_mesh_asset.h>
 #include <impl/assets_mesh/mesh_asset.h>
 
@@ -154,16 +155,6 @@ static void TestMeshSystemResolvesMeshComponent(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !resolvedMesh.valid());
 }
 
-static NWB::Impl::SkinnedMeshVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){
-    return NWB::Impl::MakeSkinnedMeshVertex(
-        Float3U(x, y, z),
-        Float3U(0.0f, 0.0f, 1.0f),
-        Float4U(1.0f, 0.0f, 0.0f, 1.0f),
-        Float2U(u, 0.0f),
-        Float4U(1.0f, 1.0f, 1.0f, 1.0f)
-    );
-}
-
 static NWB::Impl::SkinnedMeshJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
     NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[3] = Float4(x, y, z, 1.0f);
@@ -213,8 +204,16 @@ static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
 
 static void AssignSingleJointSkin(NWB::Impl::SkinnedMeshRuntimeMeshInstance& instance, const u16 joint){
     instance.meshClass = NWB::Core::Mesh::MeshClass::Skinned;
-    instance.skin.assign(instance.restVertices.size(), MakeSingleJointSkin(joint));
+    instance.skin.assign(instance.restPositions.size(), MakeSingleJointSkin(joint));
     instance.skeletonJointCount = Max(instance.skeletonJointCount, static_cast<u32>(joint) + 1u);
+}
+
+static void AppendRuntimeVertex(NWB::Impl::SkinnedMeshRuntimeMeshInstance& instance, const Float3U& position, const f32 u){
+    instance.restPositions.push_back(position);
+    instance.restNormals.push_back(MakeHalf4U(0.0f, 0.0f, 1.0f, 0.0f));
+    instance.restTangents.push_back(MakeHalf4U(1.0f, 0.0f, 0.0f, 1.0f));
+    instance.uv0.push_back(Float2U(u, 0.0f));
+    instance.colors.push_back(MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f));
 }
 
 static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
@@ -223,13 +222,45 @@ static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
     instance.handle.value = 42u;
     instance.editRevision = 7u;
     instance.dirtyFlags = NWB::Impl::RuntimeMeshDirtyFlag::None;
-    instance.restVertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f));
-    instance.restVertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 0.5f));
-    instance.restVertices.push_back(MakeVertex(0.0f, 1.0f, 0.0f, 1.0f));
-    const auto triangleIndices = MakeTriangleIndices();
-    instance.indices.insert(instance.indices.end(), triangleIndices.begin(), triangleIndices.end());
+    AppendRuntimeVertex(instance, Float3U(-1.0f, -1.0f, 0.0f), 0.0f);
+    AppendRuntimeVertex(instance, Float3U(1.0f, -1.0f, 0.0f), 0.5f);
+    AppendRuntimeVertex(instance, Float3U(0.0f, 1.0f, 0.0f), 1.0f);
+
+    instance.meshlets.push_back(NWB::Impl::MeshletDesc{
+        0u,
+        0u,
+        0u,
+        0u,
+        NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u),
+    });
+    instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{
+        Float4U(0.0f, 0.0f, 0.0f, 2.0f),
+        NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f),
+        0u,
+    });
+    for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
+        instance.meshletPositionRefs.push_back(NWB::Impl::MeshletDeformedPositionRef{
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+        });
+        instance.meshletAttributeRefs.push_back(NWB::Impl::MeshletShadingAttributeRef{
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+        });
+        instance.meshletLocalVertexRefs.push_back(NWB::Impl::MeshletLocalVertexRef{
+            static_cast<u16>(vertexIndex),
+            static_cast<u16>(vertexIndex),
+        });
+        instance.attributeSkins.push_back(static_cast<u32>(vertexIndex));
+    }
+    for(const u32 index : MakeTriangleIndices())
+        instance.meshletPrimitiveIndices.push_back(static_cast<u8>(index));
+
     return instance;
 }
+
 static NWB::Impl::SkinnedMeshJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
@@ -245,7 +276,7 @@ static void CheckJointRotationQuaternion(
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::SkinnedMeshRuntime::TryBuildJointRotationQuaternion(
-            NWB::Impl::SkinnedMeshRuntime::LoadJointMatrix(joint),
+            LoadFloat(joint),
             quaternion
         )
     );
@@ -268,7 +299,7 @@ static void TestJointRotationQuaternionBuildsColumnVectorRotations(TestContext& 
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::SkinnedMeshRuntime::TryBuildJointRotationQuaternion(
-            NWB::Impl::SkinnedMeshRuntime::LoadJointMatrix(MakeNonUniformScaleJointMatrix()),
+            LoadFloat(MakeNonUniformScaleJointMatrix()),
             quaternion
         )
     );
@@ -339,7 +370,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
         context,
         NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.size() == instance.restVertices.size());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.size() == instance.skin.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences[0u].joint[0u] == 0u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(skinInfluences[0u].weight.x, 1.0f));

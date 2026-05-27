@@ -123,7 +123,7 @@ static bool ParseOptionalSourceFloatListField(
     outProvided = false;
 
     const Core::Metascript::Value* field = FindField(asset, fieldName);
-    if(!field || (field->isList() && field->asList().empty()) || (field->isMap() && field->asMap().empty()))
+    if(!field)
         return true;
 
     outProvided = true;

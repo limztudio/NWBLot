@@ -971,13 +971,12 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
     const f32 viewWidth,
     const f32 viewHeight,
     const f32 nearZ,
-    const f32 farZ,
     const f32 rangeDenominator,
     const f32 rangeNearScale)noexcept
 {
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, 0.00001f));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, 0.00001f));
 
     const f32 range = 1.0f / rangeDenominator;
     return MatrixSet(
@@ -994,13 +993,12 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterImpl(
     const f32 viewBottom,
     const f32 viewTop,
     const f32 nearZ,
-    const f32 farZ,
     const f32 rangeDenominator,
     const f32 rangeNearScale)noexcept
 {
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, 0.00001f));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, 0.00001f));
-    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, 0.00001f));
+    NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, 0.00001f));
 
     const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
     const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);
@@ -1032,19 +1030,19 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterRH(f32 viewLeft, f32 vi
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, farZ, farZ - nearZ, -1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, farZ - nearZ, -1.0f);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, farZ, nearZ - farZ, 1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, nearZ - farZ, 1.0f);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, farZ - nearZ, -1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ - nearZ, -1.0f);
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
-    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, nearZ - farZ, 1.0f);
+    return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, nearZ - farZ, 1.0f);
 }
 
 

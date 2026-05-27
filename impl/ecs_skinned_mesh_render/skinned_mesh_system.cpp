@@ -156,9 +156,7 @@ void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
     if(!m_runtimeResources.empty()){
         for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
             const RuntimeResources& resources = it.value();
-            const SkinnedMeshRuntimeMeshInstance* instance =
-                m_runtimeMeshCache->findInstance(resources.handle)
-            ;
+            const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(resources.handle);
             if(!instance || !instance->valid() || instance->editRevision != resources.editRevision){
                 it = m_runtimeResources.erase(it);
                 continue;
@@ -197,15 +195,11 @@ void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
             if(!__hidden_skinned_mesh_system::RuntimeMeshRenderVisible(m_world, entity) || !renderer.runtimeMesh.valid())
                 return;
 
-            SkinnedMeshRuntimeMeshInstance* instance =
-                m_runtimeMeshCache->findInstance(renderer.runtimeMesh)
-            ;
+            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(renderer.runtimeMesh);
             if(!instance || !instance->valid())
                 return;
 
-            const SkinnedMeshJointPaletteComponent* jointPalette =
-                m_world.tryGetComponent<SkinnedMeshJointPaletteComponent>(entity)
-            ;
+            const SkinnedMeshJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkinnedMeshJointPaletteComponent>(entity);
             const SkinnedMeshSkeletonPoseComponent* skeletonPose =
                 m_world.tryGetComponent<SkinnedMeshSkeletonPoseComponent>(entity)
             ;

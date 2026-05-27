@@ -30,6 +30,15 @@ struct BufferFlags{
     bool canHaveRawViews = false;
 };
 
+namespace BufferSetupFailure{
+    enum Enum : u8{
+        None,
+        EmptyPayload,
+        ByteSizeOverflow,
+        CreateFailed,
+    };
+};
+
 [[nodiscard]] inline bool PayloadByteCount(const usize count, const usize stride, usize& outBytes)noexcept{
     outBytes = 0u;
     if(stride == 0u || count > Limit<usize>::s_Max / stride)
@@ -88,6 +97,24 @@ template<typename PayloadT, typename PayloadVector>
     const BufferFlags flags = {}
 ){
     return SetupBuffer<PayloadT>(graphics, debugName, payload.data(), payload.size(), flags);
+}
+
+template<typename PayloadT, typename PayloadVector>
+[[nodiscard]] inline BufferSetupFailure::Enum SetupRequiredBuffer(
+    Core::Graphics& graphics,
+    const Name& debugName,
+    const PayloadVector& payload,
+    const BufferFlags flags,
+    Core::BufferHandle& outBuffer
+){
+    outBuffer = nullptr;
+    if(payload.empty())
+        return BufferSetupFailure::EmptyPayload;
+    if(!PayloadByteCountFits<PayloadT>(payload))
+        return BufferSetupFailure::ByteSizeOverflow;
+
+    outBuffer = SetupBuffer<PayloadT>(graphics, debugName, payload, flags);
+    return outBuffer ? BufferSetupFailure::None : BufferSetupFailure::CreateFailed;
 }
 
 

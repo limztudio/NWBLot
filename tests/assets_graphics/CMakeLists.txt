@@ -1,6 +1,12 @@
 nwb_declare_executable(nwb_assets_graphics_tests)
 target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_acceptance_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_codec_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_material_cook_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_material_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_mesh_cooker_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_shader_tests.inl"
 )
 target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1)
 target_link_libraries(nwb_assets_graphics_tests PRIVATE

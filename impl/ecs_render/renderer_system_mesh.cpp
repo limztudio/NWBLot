@@ -31,21 +31,6 @@ template<typename PayloadT, typename PayloadVector>
     const tchar* label,
     const bool canHaveRawViews = false
 ){
-    if(payload.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
-            , StringConvert(meshName.c_str())
-            , label
-        );
-        return {};
-    }
-    if(!RuntimeMeshBufferUpload::PayloadByteCountFits<PayloadT>(payload)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
-            , StringConvert(meshName.c_str())
-            , label
-        );
-        return {};
-    }
-
     const Name bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
@@ -55,15 +40,32 @@ template<typename PayloadT, typename PayloadVector>
         return {};
     }
 
-    Core::BufferHandle buffer = RuntimeMeshBufferUpload::SetupBuffer<PayloadT>(
+    Core::BufferHandle buffer;
+    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
         graphics,
         bufferName,
         payload,
-        { false, canHaveRawViews }
+        { false, canHaveRawViews },
+        buffer
     );
-    if(buffer)
+    switch(failure){
+    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return buffer;
-
+    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
+            , StringConvert(meshName.c_str())
+            , label
+        );
+        return {};
+    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
+            , StringConvert(meshName.c_str())
+            , label
+        );
+        return {};
+    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+        break;
+    }
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
         , label
         , StringConvert(meshName.c_str())

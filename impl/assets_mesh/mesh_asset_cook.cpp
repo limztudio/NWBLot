@@ -238,7 +238,7 @@ static bool ParseInverseBindMatrices(
     outMatrices.clear();
 
     const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
-    if(!matrices || (matrices->isList() && matrices->asList().empty()) || (matrices->isMap() && matrices->asMap().empty()))
+    if(!matrices)
         return true;
     if(!matrices->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': 'inverse_bind_matrices' must be a list")

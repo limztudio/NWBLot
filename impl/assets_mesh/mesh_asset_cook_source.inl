@@ -283,8 +283,35 @@ static bool GenerateMissingTangents(
         });
     }
 
+    ScratchVector<u32> rebuildIndices{scratchArena};
+    rebuildIndices.reserve(indices.size());
+    for(usize indexBase = 0u; indexBase + 2u < indices.size(); indexBase += 3u){
+        const u32 i0 = indices[indexBase + 0u];
+        const u32 i1 = indices[indexBase + 1u];
+        const u32 i2 = indices[indexBase + 2u];
+        if(i0 >= rebuildVertices.size() || i1 >= rebuildVertices.size() || i2 >= rebuildVertices.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': source triangle references an out-of-range vertex")
+                , metaKind
+                , PathToString<tchar>(nwbFilePath)
+            );
+            return false;
+        }
+        if(i0 == i1 || i0 == i2 || i1 == i2)
+            continue;
+
+        const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
+        const SIMDVector edge01 = VectorSubtract(LoadFloat(rebuildVertices[i1].position), p0);
+        const SIMDVector edge02 = VectorSubtract(LoadFloat(rebuildVertices[i2].position), p0);
+        if(!Core::Mesh::FrameValidDirection(Vector3Cross(edge01, edge02)))
+            continue;
+
+        rebuildIndices.push_back(i0);
+        rebuildIndices.push_back(i1);
+        rebuildIndices.push_back(i2);
+    }
+
     Core::Mesh::TangentFrameRebuildResult rebuildResult;
-    if(!Core::Mesh::RebuildTangentFrames(rebuildVertices, indices, &rebuildResult)){
+    if(!Core::Mesh::RebuildTangentFrames(rebuildVertices, rebuildIndices, &rebuildResult)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': failed to generate missing tangent stream")
             , metaKind
             , PathToString<tchar>(nwbFilePath)

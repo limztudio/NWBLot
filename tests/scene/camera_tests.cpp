@@ -50,7 +50,14 @@ static void TestCameraProjectionHelpers(TestContext& context){
 
     NWB::Impl::CameraProjectionData projectionData;
     NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::CameraProjectionDataValid(projectionData));
+    NWB_SCENE_CAMERA_TEST_CHECK(
+        context,
+        NWB::Impl::CameraProjectionDataValid(
+            LoadFloat(projectionData.projectionParams),
+            projectionData.aspectRatio,
+            projectionData.tanHalfVerticalFov
+        )
+    );
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionData.projectionParams.x == projectionParams.x);
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionData.projectionParams.y == projectionParams.y);
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionData.projectionParams.z == projectionParams.z);
@@ -61,9 +68,14 @@ static void TestCameraProjectionHelpers(TestContext& context){
     camera.setNearPlane(0.0f);
     NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::CameraClipRangeValid(camera));
     NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
+    const NWB::Impl::CameraProjectionData emptyProjectionData{};
     NWB_SCENE_CAMERA_TEST_CHECK(
         context,
-        !NWB::Impl::CameraProjectionDataValid(NWB::Impl::CameraProjectionData{})
+        !NWB::Impl::CameraProjectionDataValid(
+            LoadFloat(emptyProjectionData.projectionParams),
+            emptyProjectionData.aspectRatio,
+            emptyProjectionData.tanHalfVerticalFov
+        )
     );
 
     camera = NWB::Impl::CameraComponent{};

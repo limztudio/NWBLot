@@ -365,18 +365,6 @@ template<typename StringT>
     return true;
 }
 
-template<typename MetadataValue>
-[[nodiscard]] inline bool RejectVirtualPathOverrideField(const Path& nwbFilePath, const MetadataValue& asset, const AStringView assetLabel){
-    if(!asset.findField("name"))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field 'name' is no longer supported; virtual paths are derived from the asset file hierarchy")
-        , StringConvert(assetLabel)
-        , PathToString<tchar>(nwbFilePath)
-    );
-    return false;
-}
-
 [[nodiscard]] inline bool IsListedMetadataAssetField(
     const AStringView fieldName,
     const InitializerList<AStringView> allowedFields
@@ -428,28 +416,20 @@ template<typename MetadataValue>
     );
 }
 
-template<typename MetadataValue>
 [[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
-    const MetadataValue& asset,
-    const AStringView assetLabel,
     Name& outVirtualPath,
     Alloc::ScratchArena& scratchArena
 ){
-    if(!RejectVirtualPathOverrideField(nwbFilePath, asset, assetLabel))
-        return false;
     return BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outVirtualPath, scratchArena);
 }
 
-template<typename MetadataValue>
 [[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(
     const Path& assetRoot,
     const ACompactString& virtualRoot,
     const Path& nwbFilePath,
-    const MetadataValue& asset,
-    const AStringView assetLabel,
     Name& outVirtualPath,
     Alloc::ScratchArena& scratchArena
 ){
@@ -457,8 +437,6 @@ template<typename MetadataValue>
         assetRoot,
         virtualRoot.view(),
         nwbFilePath,
-        asset,
-        assetLabel,
         outVirtualPath,
         scratchArena
     );

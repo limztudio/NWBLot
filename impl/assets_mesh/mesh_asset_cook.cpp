@@ -104,8 +104,6 @@ static bool ParseMeshMeta(
         discoveredFile.assetRoot,
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
-        asset,
-        "Mesh",
         outEntry.virtualPath,
         scratchArena
     ))
@@ -309,8 +307,6 @@ static bool ParseSkinnedMeshMeta(
         discoveredFile.assetRoot,
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
-        asset,
-        "SkinnedMesh",
         outEntry.virtualPath,
         scratchArena
     ))

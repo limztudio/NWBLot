@@ -1409,8 +1409,6 @@ static bool ParseMaterialMeta(
         assetRoot,
         virtualRoot,
         nwbFilePath,
-        asset,
-        "Material",
         outEntry.virtualPath,
         scratchArena
     ))

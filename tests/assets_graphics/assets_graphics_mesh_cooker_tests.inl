@@ -2,6 +2,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void ExpectCookFailure(
+    TestContext& context,
+    TestArena& testArena,
+    const CookSingleMetaFn cookSingleMeta,
+    const AStringView metaText,
+    const AStringView caseName
+){
+    Path root;
+    Path outputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !cookSingleMeta(
+        metaText,
+        caseName,
+        testArena,
+        root,
+        outputDirectory
+    ));
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(root, errorCode));
+}
+
+static void ExpectCookFailure(
+    TestContext& context,
+    TestArena& testArena,
+    const CookSingleMetaFn cookSingleMeta,
+    const AString& metaText,
+    const AStringView caseName
+){
+    ExpectCookFailure(context, testArena, cookSingleMeta, AStringView(metaText.data(), metaText.size()), caseName);
+}
+
 static void TestMeshCookerTypedStreams(TestContext& context){
     CookAndCheckMinimalTypedAsset<NWB::Impl::Mesh>(
         context,
@@ -11,7 +42,7 @@ static void TestMeshCookerTypedStreams(TestContext& context){
         [&](const NWB::Impl::Mesh& loadedMesh){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Static);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 3u);
+            CheckMinimalRuntimeMeshletPayload(context, loadedMesh);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream()[0].x == -0.5f);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedMesh.normalStream()[0]).z == 1.f);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedMesh.colorStream()[2]).z == 1.f);
@@ -42,26 +73,81 @@ static void TestMeshCookerValidationFailures(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
-        Path root;
-        Path outputDirectory;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookSingleMeshMeta(
-            metaText,
-            caseName,
-            testArena,
-            root,
-            outputDirectory
-        ));
-
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(root, errorCode));
-    };
-
-    expectCookFailure(s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields");
-    expectCookFailure(s_MismatchedMeshMeta, "mismatched_mesh_streams");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 2u);
+    ExpectCookFailure(context, testArena, CookSingleMeshMeta, s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields");
+    ExpectCookFailure(context, testArena, CookSingleMeshMeta, s_MismatchedMeshMeta, "mismatched_mesh_streams");
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta("", s_TriangleTangentField, s_TriangleVertexRefsField),
+        "missing_mesh_normal_field"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(
+            s_TriangleNormalField,
+            s_TriangleTangentField,
+            s_TriangleMissingNormalVertexRefsField
+        ),
+        "missing_mesh_normal_vertex_ref"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(s_EmptyNormalListField, s_TriangleTangentField, s_TriangleVertexRefsField),
+        "empty_list_mesh_normal"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(s_EmptyNormalMapField, s_TriangleTangentField, s_TriangleVertexRefsField),
+        "empty_map_mesh_normal"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(s_TriangleNormalField, "", s_TriangleVertexRefsField),
+        "missing_mesh_tangent_field"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(
+            s_TriangleNormalField,
+            s_TriangleTangentField,
+            s_TriangleMissingTangentVertexRefsField
+        ),
+        "missing_mesh_tangent_vertex_ref"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(s_TriangleNormalField, s_EmptyTangentListField, s_TriangleVertexRefsField),
+        "empty_list_mesh_tangent"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleMeshMeta,
+        BuildMeshTriangleMeta(s_TriangleNormalField, s_EmptyTangentMapField, s_TriangleVertexRefsField),
+        "empty_map_mesh_tangent"
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 10u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'uv0' must be a list")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'normals' must be a list")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex_ref normal index is out of range")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'normals' must not be empty")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty")));
 #else
     static_cast<void>(context);
 #endif
@@ -132,32 +218,80 @@ static void TestSkinnedMeshCookerValidationFailures(TestContext& context){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    auto expectCookFailure = [&](const AStringView metaText, const AStringView caseName){
-        Path root;
-        Path outputDirectory;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !CookSingleSkinnedMeshMeta(
-            metaText,
-            caseName,
-            testArena,
-            root,
-            outputDirectory
-        ));
-
-        ErrorCode errorCode;
-        static_cast<void>(RemoveAllIfExists(root, errorCode));
-    };
-
-    expectCookFailure(s_MismatchedSkinnedMeshMeta, "mismatched_streams");
-    expectCookFailure(s_MismatchedSkinSkinnedMeshMeta, "mismatched_skin");
-    expectCookFailure(s_SourceImportSkinnedMeshMeta, "source_import");
-    expectCookFailure(s_MissingTangentFieldSkinnedMeshMeta, "missing_tangent_field");
-    expectCookFailure(s_MissingTangentVertexRefSkinnedMeshMeta, "missing_tangent_vertex_ref");
-    expectCookFailure(s_EmptyListTangentSkinnedMeshMeta, "empty_list_tangent");
-    expectCookFailure(s_EmptyMapTangentSkinnedMeshMeta, "empty_map_tangent");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 7u);
+    ExpectCookFailure(context, testArena, CookSingleSkinnedMeshMeta, s_MismatchedSkinnedMeshMeta, "mismatched_streams");
+    ExpectCookFailure(context, testArena, CookSingleSkinnedMeshMeta, s_MismatchedSkinSkinnedMeshMeta, "mismatched_skin");
+    ExpectCookFailure(context, testArena, CookSingleSkinnedMeshMeta, s_SourceImportSkinnedMeshMeta, "source_import");
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta("", s_TriangleTangentField, s_SkinnedTriangleVertexRefsField),
+        "missing_normal_field"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(
+            s_TriangleNormalField,
+            s_TriangleTangentField,
+            s_SkinnedTriangleMissingNormalVertexRefsField
+        ),
+        "missing_normal_vertex_ref"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(s_EmptyNormalListField, s_TriangleTangentField, s_SkinnedTriangleVertexRefsField),
+        "empty_list_normal"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(s_EmptyNormalMapField, s_TriangleTangentField, s_SkinnedTriangleVertexRefsField),
+        "empty_map_normal"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(s_TriangleNormalField, "", s_SkinnedTriangleVertexRefsField),
+        "missing_tangent_field"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(
+            s_TriangleNormalField,
+            s_TriangleTangentField,
+            s_SkinnedTriangleMissingTangentVertexRefsField
+        ),
+        "missing_tangent_vertex_ref"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(s_TriangleNormalField, s_EmptyTangentListField, s_SkinnedTriangleVertexRefsField),
+        "empty_list_tangent"
+    );
+    ExpectCookFailure(
+        context,
+        testArena,
+        CookSingleSkinnedMeshMeta,
+        BuildSkinnedTriangleMeta(s_TriangleNormalField, s_EmptyTangentMapField, s_SkinnedTriangleVertexRefsField),
+        "empty_map_tangent"
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 11u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'skin' must be a non-empty map")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must be non-empty and match")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'source'")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'normals' must be a list")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex_ref normal index is out of range")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'normals' must not be empty")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty")));

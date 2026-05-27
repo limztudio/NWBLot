@@ -857,8 +857,6 @@ bool ShaderCook::parseShaderMeta(
     ))
         return false;
 
-    if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Shader"))
-        return false;
     if(!Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
@@ -942,8 +940,6 @@ bool ShaderCook::parseIncludeMeta(
         return false;
     const Metascript::Value& asset = *assetValue;
 
-    if(!Assets::RejectVirtualPathOverrideField(nwbFilePath, asset, "Include"))
-        return false;
     if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Include meta", { "defines" }))
         return false;
     if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))

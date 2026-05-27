@@ -120,6 +120,14 @@ static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
 
 )"
 
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 4294967295, 0, 0, 0],
+    [1, 4294967295, 1, 1, 1],
+    [2, 4294967295, 2, 2, 2],
+];
+
+)"
+
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS R"(asset.vertex_refs = [
     [0, 0, 0, 0, 0],
     [1, 1, 1, 1, 0],
@@ -128,10 +136,26 @@ static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
 
 )"
 
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 0, 4294967295, 0, 0],
+    [1, 1, 4294967295, 1, 1],
+    [2, 2, 4294967295, 2, 2],
+];
+
+)"
+
 #define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS R"(asset.vertex_refs = [
     [0, 0, 0, 0, 0, 0],
     [1, 1, 1, 1, 0, 1],
     [2, 2, 2, 2, 0, 2],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_NORMAL_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 4294967295, 0, 0, 0, 0],
+    [1, 4294967295, 1, 1, 0, 1],
+    [2, 4294967295, 2, 2, 0, 2],
 ];
 
 )"
@@ -230,6 +254,72 @@ static constexpr AStringView s_DefaultColorMeshMeta =
 )"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
+
+static constexpr AStringView s_TriangleNormalField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS;
+static constexpr AStringView s_TriangleTangentField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS;
+static constexpr AStringView s_TriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS;
+static constexpr AStringView s_TriangleMissingNormalVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS;
+static constexpr AStringView s_TriangleMissingTangentVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS;
+static constexpr AStringView s_SkinnedTriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS;
+static constexpr AStringView s_SkinnedTriangleMissingNormalVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_NORMAL_VERTEX_REFS;
+static constexpr AStringView s_SkinnedTriangleMissingTangentVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS;
+
+static constexpr AStringView s_EmptyNormalListField = R"(asset.normals = [];
+
+)";
+
+static constexpr AStringView s_EmptyNormalMapField = R"(asset.normals = {};
+
+)";
+
+static constexpr AStringView s_EmptyTangentListField = R"(asset.tangents = [];
+
+)";
+
+static constexpr AStringView s_EmptyTangentMapField = R"(asset.tangents = {};
+
+)";
+
+static void AppendTestMeta(AString& inOutMeta, const AStringView text){
+    inOutMeta.append(text.data(), text.size());
+}
+
+static AString BuildTriangleMeta(
+    const AStringView assetHeader,
+    const AStringView normalField,
+    const AStringView tangentField,
+    const AStringView vertexRefsField,
+    const AStringView suffix
+){
+    AString meta;
+    meta.reserve(1536u);
+    AppendTestMeta(meta, assetHeader);
+    AppendTestMeta(meta, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS);
+    AppendTestMeta(meta, normalField);
+    AppendTestMeta(meta, tangentField);
+    AppendTestMeta(meta, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0);
+    AppendTestMeta(meta, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS);
+    AppendTestMeta(meta, vertexRefsField);
+    AppendTestMeta(meta, NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES);
+    AppendTestMeta(meta, suffix);
+    return meta;
+}
+
+static AString BuildMeshTriangleMeta(
+    const AStringView normalField,
+    const AStringView tangentField,
+    const AStringView vertexRefsField
+){
+    return BuildTriangleMeta("mesh asset;\n\n", normalField, tangentField, vertexRefsField, "");
+}
+
+static AString BuildSkinnedTriangleMeta(
+    const AStringView normalField,
+    const AStringView tangentField,
+    const AStringView vertexRefsField
+){
+    return BuildTriangleMeta("skinned_mesh asset;\n\n", normalField, tangentField, vertexRefsField, NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN);
+}
 
 static constexpr AStringView s_MinimalMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
@@ -827,55 +917,6 @@ static constexpr AStringView s_MinimalSkinnedMeshMeta =
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
-#if defined(NWB_FINAL)
-static constexpr AStringView s_MissingTangentFieldSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
-static constexpr AStringView s_MissingTangentVertexRefSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
-static constexpr AStringView s_EmptyListTangentSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    R"(asset.tangents = [];
-
-)"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
-static constexpr AStringView s_EmptyMapTangentSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    R"(asset.tangents = {};
-
-)"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-#endif
-
 static constexpr AStringView s_NativeCharacterMockSkinnedMeshMeta = R"(skinned_mesh asset;
 
 asset.positions = [
@@ -1028,12 +1069,15 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
+#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_NORMAL_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
+#undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS

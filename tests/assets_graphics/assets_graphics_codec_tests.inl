@@ -67,12 +67,33 @@ static bool CookAndLoadMinimalAssetByKind(
     );
 }
 
+template<typename MeshT>
+static void CheckMinimalRuntimeMeshletPayload(
+    TestContext& context,
+    const MeshT& loadedMesh
+){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshlets().size() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletBounds().size() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPositionRefs().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletAttributeRefs().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletLocalVertexRefs().size() == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 3u);
+
+    const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletVertexCount(meshlet) == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPrimitiveCount(meshlet) == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPositionCount(meshlet) == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletAttributeCount(meshlet) == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletBounds()[0u].sphere.w > 0.0f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
+}
+
 static void CheckMinimalSkinnedMeshDefaults(
     TestContext& context,
     const NWB::Core::Assets::IAsset& loadedAsset){
     const NWB::Impl::SkinnedMesh& loadedMesh = static_cast<const NWB::Impl::SkinnedMesh&>(loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 3u);
+    CheckMinimalRuntimeMeshletPayload(context, loadedMesh);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Skinned);
     const Float4U color0 = LoadHalf4U(loadedMesh.colorStream()[0]);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.x == 1.f);

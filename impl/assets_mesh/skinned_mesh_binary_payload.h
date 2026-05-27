@@ -25,7 +25,7 @@ namespace SkinnedMeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SkinnedMeshMagic = 0x534B4D33u; // SKM3
+inline constexpr u32 s_SkinnedMeshMagic = 0x534B4D34u; // SKM4
 inline constexpr u32 s_SkinnedMeshSkeletonJointLimit = static_cast<u32>(Limit<u16>::s_Max) + 1u;
 
 using SkinnedMeshHeaderBinary = MeshBinaryPayload::MeshHeaderBinary;

@@ -6,6 +6,7 @@
 
 #include <core/assets/asset_manager.h>
 #include <core/common/log.h>
+#include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_mesh_asset.h>
 
 
@@ -31,52 +32,100 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     | RuntimeMeshDirtyFlag::GpuUploadDirty
 ;
 
-[[nodiscard]] bool SourceVertexRefInRange(const MeshVertexRef& ref, const SkinnedMesh& mesh){
-    return
-        ref.position < mesh.positionStream().size()
-        && ref.normal < mesh.normalStream().size()
-        && ref.tangent < mesh.tangentStream().size()
-        && ref.uv0 < mesh.uv0Stream().size()
-        && ref.color < mesh.colorStream().size()
-        && ref.skin < mesh.skinStream().size()
-    ;
+#include <impl/assets_mesh/meshlet_ref_validation.inl>
+
+[[nodiscard]] bool ResolveAttributeSkins(
+    const SkinnedMesh& mesh,
+    SkinnedMeshRuntimeMeshInstance::AttributeSkinVector& outAttributeSkins
+){
+    return ResolveMeshletAttributeSkins(
+        mesh.meshlets(),
+        mesh.meshletPositionRefs(),
+        mesh.meshletLocalVertexRefs(),
+        mesh.meshletAttributeRefs().size(),
+        outAttributeSkins,
+        [](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
+            static_cast<void>(attributeIndex);
+            static_cast<void>(previousSkin);
+            static_cast<void>(skinIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source meshlet {} shares an attribute across skin identities")
+                , meshletIndex
+            );
+            return false;
+        },
+        [](const usize attributeIndex){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source attribute ref {} is unreferenced")
+                , attributeIndex
+            );
+            return false;
+        }
+    );
 }
 
-[[nodiscard]] bool BuildRuntimeVertexPayload(
+[[nodiscard]] bool BuildRuntimeZippedPayload(
     const SkinnedMesh& mesh,
     SkinnedMeshRuntimeMeshInstance& instance
 ){
-    const auto& sourceRefs = mesh.vertexRefs();
-    if(sourceRefs.size() > static_cast<usize>(Limit<u32>::s_Max))
+    const auto& sourcePositionRefs = mesh.meshletPositionRefs();
+    const auto& sourceAttributeRefs = mesh.meshletAttributeRefs();
+    if(
+        sourcePositionRefs.size() > static_cast<usize>(Limit<u32>::s_Max)
+        || sourceAttributeRefs.size() > static_cast<usize>(Limit<u32>::s_Max)
+    )
         return false;
 
     instance.restPositions.clear();
     instance.restNormals.clear();
     instance.restTangents.clear();
-    instance.vertexRefs.clear();
-    instance.restPositions.reserve(sourceRefs.size());
-    instance.restNormals.reserve(sourceRefs.size());
-    instance.restTangents.reserve(sourceRefs.size());
-    instance.vertexRefs.reserve(sourceRefs.size());
+    instance.meshletPositionRefs.clear();
+    instance.meshletAttributeRefs.clear();
+    instance.attributeSkins.clear();
+    instance.restPositions.reserve(sourcePositionRefs.size());
+    instance.restNormals.reserve(sourceAttributeRefs.size());
+    instance.restTangents.reserve(sourceAttributeRefs.size());
+    instance.meshletPositionRefs.reserve(sourcePositionRefs.size());
+    instance.meshletAttributeRefs.reserve(sourceAttributeRefs.size());
 
-    for(usize vertexRefIndex = 0u; vertexRefIndex < sourceRefs.size(); ++vertexRefIndex){
-        const MeshVertexRef& sourceRef = sourceRefs[vertexRefIndex];
-        if(!SourceVertexRefInRange(sourceRef, mesh)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source vertex ref {} is out of range")
-                , vertexRefIndex
+    if(!ResolveAttributeSkins(mesh, instance.attributeSkins))
+        return false;
+
+    for(usize positionRefIndex = 0u; positionRefIndex < sourcePositionRefs.size(); ++positionRefIndex){
+        const MeshletDeformedPositionRef& sourceRef = sourcePositionRefs[positionRefIndex];
+        if(!MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), mesh.skinStream().size(), true)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source position ref {} is out of range")
+                , positionRefIndex
             );
             return false;
         }
 
+        MeshletDeformedPositionRef runtimeRef = sourceRef;
+        runtimeRef.position = static_cast<u32>(positionRefIndex);
         instance.restPositions.push_back(mesh.positionStream()[sourceRef.position]);
+        instance.meshletPositionRefs.push_back(runtimeRef);
+    }
+
+    for(usize attributeRefIndex = 0u; attributeRefIndex < sourceAttributeRefs.size(); ++attributeRefIndex){
+        const MeshletShadingAttributeRef& sourceRef = sourceAttributeRefs[attributeRefIndex];
+        if(!MeshletAttributeRefInRange(
+            sourceRef,
+            mesh.normalStream().size(),
+            mesh.tangentStream().size(),
+            mesh.uv0Stream().size(),
+            mesh.colorStream().size()
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source attribute ref {} is out of range")
+                , attributeRefIndex
+            );
+            return false;
+        }
+
         instance.restNormals.push_back(mesh.normalStream()[sourceRef.normal]);
         instance.restTangents.push_back(mesh.tangentStream()[sourceRef.tangent]);
 
-        MeshVertexRef runtimeRef = sourceRef;
-        runtimeRef.position = static_cast<u32>(vertexRefIndex);
-        runtimeRef.normal = static_cast<u32>(vertexRefIndex);
-        runtimeRef.tangent = static_cast<u32>(vertexRefIndex);
-        instance.vertexRefs.push_back(runtimeRef);
+        MeshletShadingAttributeRef runtimeRef = sourceRef;
+        runtimeRef.normal = static_cast<u32>(attributeRefIndex);
+        runtimeRef.tangent = static_cast<u32>(attributeRefIndex);
+        instance.meshletAttributeRefs.push_back(runtimeRef);
     }
 
     return true;
@@ -145,10 +194,10 @@ bool SkinnedMeshRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, 
     instance.inverseBindMatrices = mesh->inverseBindMatrices();
     instance.meshlets = mesh->meshlets();
     instance.meshletBounds = mesh->meshletBounds();
-    instance.meshletVertexRefs = mesh->meshletVertexRefs();
+    instance.meshletLocalVertexRefs = mesh->meshletLocalVertexRefs();
     instance.meshletPrimitiveIndices = mesh->meshletPrimitiveIndices();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-    if(!__hidden_skinned_mesh_runtime_mesh_cache_source::BuildRuntimeVertexPayload(*mesh, instance)){
+    if(!__hidden_skinned_mesh_runtime_mesh_cache_source::BuildRuntimeZippedPayload(*mesh, instance)){
         eraseUnusedSource(sourceName);
         return false;
     }

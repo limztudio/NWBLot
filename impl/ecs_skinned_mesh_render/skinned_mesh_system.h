@@ -56,7 +56,8 @@ private:
     struct RuntimeResources{
         RuntimeMeshHandle handle;
         u32 editRevision = 0;
-        u32 vertexCount = 0;
+        u32 positionCount = 0;
+        u32 attributeCount = 0;
         u32 skinCount = 0;
         u32 jointCount = 0;
         Core::BufferHandle skinBuffer;

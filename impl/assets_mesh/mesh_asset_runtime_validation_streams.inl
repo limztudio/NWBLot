@@ -1,0 +1,106 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction){
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
+    return FiniteVector(direction, 0x7u) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f;
+}
+
+[[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent){
+    const SIMDVector direction = VectorSetW(tangent, 0.0f);
+    const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
+    const f32 handedness = Abs(VectorGetW(tangent));
+    return
+        FiniteVector(tangent, 0xFu)
+        && IsFinite(lengthSquared)
+        && Abs(lengthSquared - 1.0f) <= 0.01f
+        && Abs(handedness - 1.0f) <= 0.001f
+    ;
+}
+
+[[nodiscard]] static bool ValidateMeshStreams(
+    const Core::Assets::AssetVector<Float3U>& positions,
+    const Core::Assets::AssetVector<Half4U>& normals,
+    const Core::Assets::AssetVector<Half4U>& tangents,
+    const Core::Assets::AssetVector<Float2U>& uv0,
+    const Core::Assets::AssetVector<Half4U>& colors,
+    const tchar* contextText,
+    const TStringView meshPathText
+){
+    if(
+        !CountFitsU32(positions.size())
+        || !CountFitsU32(normals.size())
+        || !CountFitsU32(tangents.size())
+        || !CountFitsU32(uv0.size())
+        || !CountFitsU32(colors.size())
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' exceeds u32 stream count limits")
+            , contextText
+            , meshPathText
+        );
+        return false;
+    }
+
+    for(usize i = 0u; i < positions.size(); ++i){
+        if(FiniteVector(VectorSetW(LoadFloat(positions[i]), 0.0f), 0x7u))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' position {} contains non-finite data")
+            , contextText
+            , meshPathText
+            , i
+        );
+        return false;
+    }
+    for(usize i = 0u; i < normals.size(); ++i){
+        if(ValidDirectionVector(VectorSetW(LoadFloat(LoadHalf4U(normals[i])), 0.0f)))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' normal {} is invalid")
+            , contextText
+            , meshPathText
+            , i
+        );
+        return false;
+    }
+    for(usize i = 0u; i < tangents.size(); ++i){
+        if(ValidTangentVector(LoadFloat(LoadHalf4U(tangents[i]))))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' tangent {} is invalid")
+            , contextText
+            , meshPathText
+            , i
+        );
+        return false;
+    }
+    for(usize i = 0u; i < uv0.size(); ++i){
+        if(FiniteVector(VectorSetW(VectorSetZ(LoadFloat(uv0[i]), 0.0f), 0.0f), 0x3u))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' uv0 {} contains non-finite data")
+            , contextText
+            , meshPathText
+            , i
+        );
+        return false;
+    }
+    for(usize i = 0u; i < colors.size(); ++i){
+        if(FiniteVector(LoadFloat(LoadHalf4U(colors[i])), 0xFu))
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' color {} contains non-finite data")
+            , contextText
+            , meshPathText
+            , i
+        );
+        return false;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

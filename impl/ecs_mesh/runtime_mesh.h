@@ -34,10 +34,11 @@ struct RuntimeMeshDesc{
     Core::BufferHandle tangentBuffer;
     Core::BufferHandle uv0Buffer;
     Core::BufferHandle colorBuffer;
-    Core::BufferHandle vertexRefBuffer;
     Core::BufferHandle meshletDescBuffer;
     Core::BufferHandle meshletBoundsBuffer;
-    Core::BufferHandle meshletVertexRefBuffer;
+    Core::BufferHandle meshletPositionRefBuffer;
+    Core::BufferHandle meshletAttributeRefBuffer;
+    Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
     u32 meshletCount = 0u;
     u64 version = 0u;
@@ -51,10 +52,11 @@ struct RuntimeMeshDesc{
             && tangentBuffer != nullptr
             && uv0Buffer != nullptr
             && colorBuffer != nullptr
-            && vertexRefBuffer != nullptr
             && meshletDescBuffer != nullptr
             && meshletBoundsBuffer != nullptr
-            && meshletVertexRefBuffer != nullptr
+            && meshletPositionRefBuffer != nullptr
+            && meshletAttributeRefBuffer != nullptr
+            && meshletLocalVertexRefBuffer != nullptr
             && meshletPrimitiveIndexBuffer != nullptr
             && meshletCount > 0u
         ;

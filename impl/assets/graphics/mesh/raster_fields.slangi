@@ -20,6 +20,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct NwbMeshRasterVertex{
+    float4 position : SV_Position;
+    NWB_MESH_RASTER_PAYLOAD_FIELDS
+};
+
+NwbMeshRasterVertex nwbMeshBuildRasterVertex(
+    const float4 position,
+    const float4 color,
+    const float3 normal,
+    const float4 tangent,
+    const float2 uv0,
+    const float3 worldPosition
+){
+    NwbMeshRasterVertex vertex;
+    vertex.position = position;
+    vertex.color = color;
+    vertex.normal = normal;
+    vertex.tangent = tangent;
+    vertex.uv0 = uv0;
+    vertex.worldPosition = worldPosition;
+    return vertex;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

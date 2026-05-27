@@ -176,15 +176,14 @@ bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
 }
 
 void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
-    NwbMeshGeneratedVertex vertex;
-    vertex.position = float4(2.0, 2.0, 0.0, 1.0);
-    vertex.normal = float3(0.0, 0.0, 1.0);
-    vertex.padding0 = 0.0;
-    vertex.tangent = float4(1.0, 0.0, 0.0, 1.0);
-    vertex.uv0 = float2(0.0);
-    vertex.padding1 = float2(0.0);
-    vertex.color = float4(0.0);
-    vertex.worldPosition = float4(0.0, 0.0, 0.0, 1.0);
+    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertex(
+        float4(2.0, 2.0, 0.0, 1.0),
+        float3(0.0, 0.0, 1.0),
+        float4(1.0, 0.0, 0.0, 1.0),
+        float2(0.0),
+        float4(0.0),
+        float3(0.0)
+    );
     for(uint corner = 0u; corner < 3u; ++corner)
         g_NwbMeshGeneratedVertices[primitiveBase + corner] = vertex;
 }

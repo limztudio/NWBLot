@@ -124,10 +124,11 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
         Move(meshEntry.tangents),
         Move(meshEntry.uv0),
         Move(meshEntry.colors),
-        Move(meshEntry.vertexRefs),
         Move(meshEntry.meshlets),
         Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletVertexRefs),
+        Move(meshEntry.meshletPositionRefs),
+        Move(meshEntry.meshletAttributeRefs),
+        Move(meshEntry.meshletLocalVertexRefs),
         Move(meshEntry.meshletPrimitiveIndices)
     );
     return outMesh.validatePayload();
@@ -335,10 +336,11 @@ static bool BuildSkinnedMeshAsset(SkinnedMeshCookEntry& meshEntry, SkinnedMesh& 
         Move(meshEntry.colors),
         Move(meshEntry.skin),
         Move(meshEntry.inverseBindMatrices),
-        Move(meshEntry.vertexRefs),
         Move(meshEntry.meshlets),
         Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletVertexRefs),
+        Move(meshEntry.meshletPositionRefs),
+        Move(meshEntry.meshletAttributeRefs),
+        Move(meshEntry.meshletLocalVertexRefs),
         Move(meshEntry.meshletPrimitiveIndices)
     );
     return outMesh.validatePayload();

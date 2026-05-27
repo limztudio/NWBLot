@@ -17,15 +17,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshletCountMask = 0xffffu;
-inline constexpr u32 s_MeshletPrimitiveCountShift = 16u;
+inline constexpr u32 s_MeshletCountMask = 0xffu;
+inline constexpr u32 s_MeshletPrimitiveCountShift = 8u;
+inline constexpr u32 s_MeshletPositionCountShift = 16u;
+inline constexpr u32 s_MeshletAttributeCountShift = 24u;
 inline constexpr u32 s_MeshletConeAxisXShift = 0u;
 inline constexpr u32 s_MeshletConeAxisYShift = 8u;
 inline constexpr u32 s_MeshletConeCutoffShift = 16u;
 inline constexpr u32 s_MeshletConeFlagShift = 24u;
 
-[[nodiscard]] inline constexpr u32 PackMeshletCounts(const u32 vertexCount, const u32 primitiveCount){
-    return (vertexCount & s_MeshletCountMask) | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift);
+[[nodiscard]] inline constexpr u32 PackMeshletCounts(
+    const u32 vertexCount,
+    const u32 primitiveCount,
+    const u32 positionCount,
+    const u32 attributeCount
+){
+    return (vertexCount & s_MeshletCountMask)
+        | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
+        | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift)
+        | ((attributeCount & s_MeshletCountMask) << s_MeshletAttributeCountShift)
+    ;
 }
 
 [[nodiscard]] inline constexpr u32 MeshletVertexCount(const MeshletDesc& meshlet){
@@ -33,7 +44,15 @@ inline constexpr u32 s_MeshletConeFlagShift = 24u;
 }
 
 [[nodiscard]] inline constexpr u32 MeshletPrimitiveCount(const MeshletDesc& meshlet){
-    return meshlet.counts >> s_MeshletPrimitiveCountShift;
+    return (meshlet.counts >> s_MeshletPrimitiveCountShift) & s_MeshletCountMask;
+}
+
+[[nodiscard]] inline constexpr u32 MeshletPositionCount(const MeshletDesc& meshlet){
+    return (meshlet.counts >> s_MeshletPositionCountShift) & s_MeshletCountMask;
+}
+
+[[nodiscard]] inline constexpr u32 MeshletAttributeCount(const MeshletDesc& meshlet){
+    return meshlet.counts >> s_MeshletAttributeCountShift;
 }
 
 [[nodiscard]] inline u32 PackMeshletConeUnorm8(const f32 value){

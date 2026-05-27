@@ -56,10 +56,11 @@ bool Mesh::validatePayload()const{
         || m_tangentStream.empty()
         || m_uv0Stream.empty()
         || m_colorStream.empty()
-        || m_vertexRefs.empty()
         || m_meshlets.empty()
         || m_meshletBounds.empty()
-        || m_meshletVertexRefs.empty()
+        || m_meshletPositionRefs.empty()
+        || m_meshletAttributeRefs.empty()
+        || m_meshletLocalVertexRefs.empty()
         || m_meshletPrimitiveIndices.empty()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload")
@@ -74,10 +75,11 @@ bool Mesh::validatePayload()const{
         m_tangentStream,
         m_uv0Stream,
         m_colorStream,
-        m_vertexRefs,
+        m_meshletPositionRefs,
+        m_meshletAttributeRefs,
+        m_meshletLocalVertexRefs,
         m_meshlets,
         m_meshletBounds,
-        m_meshletVertexRefs,
         m_meshletPrimitiveIndices,
         0u,
         false,
@@ -101,10 +103,11 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
     m_tangentStream.clear();
     m_uv0Stream.clear();
     m_colorStream.clear();
-    m_vertexRefs.clear();
     m_meshlets.clear();
     m_meshletBounds.clear();
-    m_meshletVertexRefs.clear();
+    m_meshletPositionRefs.clear();
+    m_meshletAttributeRefs.clear();
+    m_meshletLocalVertexRefs.clear();
     m_meshletPrimitiveIndices.clear();
 
     const tchar* const loadFailureContext = NWB_TEXT("Mesh::loadBinary");
@@ -148,10 +151,11 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         binary,
         cursor,
         header,
-        m_vertexRefs,
         m_meshlets,
         m_meshletBounds,
-        m_meshletVertexRefs,
+        m_meshletPositionRefs,
+        m_meshletAttributeRefs,
+        m_meshletLocalVertexRefs,
         m_meshletPrimitiveIndices,
         loadFailureContext
     ))

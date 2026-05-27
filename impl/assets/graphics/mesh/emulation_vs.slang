@@ -14,24 +14,19 @@ struct NwbMeshEmulationVertexInput{
     [[vk::location(5)]] float4 worldPosition : TEXCOORD1;
 };
 
-struct NwbMeshEmulationVertexOutput{
-    float4 position : SV_Position;
-    NWB_MESH_RASTER_PAYLOAD_FIELDS
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbMeshEmulationVertexOutput main(NwbMeshEmulationVertexInput input){
-    NwbMeshEmulationVertexOutput output;
-    output.position = input.position;
-    output.color = input.color;
-    output.normal = input.normal;
-    output.tangent = input.tangent;
-    output.uv0 = input.uv0;
-    output.worldPosition = input.worldPosition.xyz;
-    return output;
+NwbMeshRasterVertex main(NwbMeshEmulationVertexInput input){
+    return nwbMeshBuildRasterVertex(
+        input.position,
+        input.color,
+        input.normal,
+        input.tangent,
+        input.uv0,
+        input.worldPosition.xyz
+    );
 }
 
 

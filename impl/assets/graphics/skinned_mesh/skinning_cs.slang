@@ -2,31 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../common/math.slangi"
+#include "../mesh/shader/payload.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct NwbMeshVertexRef{
-    uint position;
-    uint normal;
-    uint tangent;
-    uint uv0;
-    uint color;
-    uint skin;
-};
-
-struct NwbMeshHalf4{
-    uint xy;
-    uint zw;
-};
-
-struct NwbMeshPosition{
-    float x;
-    float y;
-    float z;
-};
 
 struct NwbSkinnedMeshSkinInfluence{
     uint4 joint;
@@ -46,9 +26,10 @@ struct NwbSkinnedMeshJointMatrix{
 [[vk::binding(3, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
 [[vk::binding(4, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
 [[vk::binding(5, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
-[[vk::binding(6, 0)]] StructuredBuffer<NwbMeshVertexRef, Std430DataLayout> g_NwbSkinnedMeshVertexRefs;
-[[vk::binding(7, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
-[[vk::binding(8, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
+[[vk::binding(6, 0)]] StructuredBuffer<NwbMeshletDeformedPositionRef, Std430DataLayout> g_NwbSkinnedMeshPositionRefs;
+[[vk::binding(7, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
+[[vk::binding(8, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
+[[vk::binding(9, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
 
 struct NwbSkinnedMeshPushConstants{
     uint4 payload0;
@@ -62,7 +43,7 @@ ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbSkinnedMeshVertexCount(){
+uint nwbSkinnedMeshPositionCount(){
     return g_NwbSkinnedMeshPushConstants.payload0.x;
 }
 
@@ -78,30 +59,8 @@ uint nwbSkinnedMeshSkinningMode(){
     return g_NwbSkinnedMeshPushConstants.payload0.w;
 }
 
-float4 nwbSkinnedMeshLoadHalf4(const NwbMeshHalf4 value){
-    return float4(
-        nwbUnpackHalf2x16(value.xy),
-        nwbUnpackHalf2x16(value.zw)
-    );
-}
-
-float3 nwbSkinnedMeshLoadPosition(const NwbMeshPosition value){
-    return float3(value.x, value.y, value.z);
-}
-
-NwbMeshPosition nwbSkinnedMeshStorePosition(const float3 value){
-    NwbMeshPosition storedValue;
-    storedValue.x = value.x;
-    storedValue.y = value.y;
-    storedValue.z = value.z;
-    return storedValue;
-}
-
-NwbMeshHalf4 nwbSkinnedMeshStoreHalf4(const float4 value){
-    NwbMeshHalf4 packedValue;
-    packedValue.xy = nwbPackHalf2x16(value.xy);
-    packedValue.zw = nwbPackHalf2x16(value.zw);
-    return packedValue;
+uint nwbSkinnedMeshAttributeCount(){
+    return g_NwbSkinnedMeshPushConstants.payload1.x;
 }
 
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){
@@ -257,33 +216,49 @@ void nwbSkinnedMeshApplySkin(const uint skinIndex, inout float3 position, inout 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbSkinnedMeshMain(uint vertexId){
-    if(vertexId >= nwbSkinnedMeshVertexCount())
+void nwbSkinnedMeshSkinPosition(uint positionId){
+    if(positionId >= nwbSkinnedMeshPositionCount())
         return;
 
-    const NwbMeshVertexRef vertexRef = g_NwbSkinnedMeshVertexRefs[vertexId];
-    float3 position = nwbSkinnedMeshLoadPosition(g_NwbSkinnedMeshRestPositions[vertexRef.position]);
-    float3 normal = nwbSkinnedMeshLoadHalf4(g_NwbSkinnedMeshRestNormals[vertexRef.normal]).xyz;
-    float4 tangent = nwbSkinnedMeshLoadHalf4(g_NwbSkinnedMeshRestTangents[vertexRef.tangent]);
+    const NwbMeshletDeformedPositionRef positionRef = g_NwbSkinnedMeshPositionRefs[positionId];
+    float3 position = nwbMeshLoadPosition(g_NwbSkinnedMeshRestPositions[positionRef.position]);
+    float3 normal = float3(0.0, 0.0, 1.0);
+    float4 tangent = float4(1.0, 0.0, 0.0, 1.0);
+    const float3 preSkinPosition = position;
+    nwbSkinnedMeshApplySkin(positionRef.skin, position, normal, tangent);
+    if(!nwbFiniteFloat3(position))
+        position = preSkinPosition;
+
+    g_NwbSkinnedMeshSkinnedPositions[positionId] = nwbMeshStorePosition(position);
+}
+
+void nwbSkinnedMeshSkinAttribute(uint attributeId){
+    if(attributeId >= nwbSkinnedMeshAttributeCount())
+        return;
+
+    float3 position = float3(0.0);
+    float3 normal = nwbMeshLoadHalf4(g_NwbSkinnedMeshRestNormals[attributeId]).xyz;
+    float4 tangent = nwbMeshLoadHalf4(g_NwbSkinnedMeshRestTangents[attributeId]);
     const float3 restNormal = normal;
     const float4 restTangent = tangent;
 
     nwbOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
-    const float3 preSkinPosition = position;
     const float3 preSkinNormal = normal;
     const float4 preSkinTangent = tangent;
-    nwbSkinnedMeshApplySkin(vertexRef.skin, position, normal, tangent);
-    if(!nwbFiniteFloat3(position))
-        position = preSkinPosition;
+    nwbSkinnedMeshApplySkin(g_NwbSkinnedMeshAttributeSkins[attributeId], position, normal, tangent);
     if(!nwbFiniteFloat3(normal))
         normal = preSkinNormal;
     if(!nwbFiniteFloat4(tangent))
         tangent = preSkinTangent;
     nwbOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
 
-    g_NwbSkinnedMeshSkinnedPositions[vertexId] = nwbSkinnedMeshStorePosition(position);
-    g_NwbSkinnedMeshSkinnedNormals[vertexId] = nwbSkinnedMeshStoreHalf4(float4(normal, 0.0));
-    g_NwbSkinnedMeshSkinnedTangents[vertexId] = nwbSkinnedMeshStoreHalf4(tangent);
+    g_NwbSkinnedMeshSkinnedNormals[attributeId] = nwbMeshStoreHalf4(float4(normal, 0.0));
+    g_NwbSkinnedMeshSkinnedTangents[attributeId] = nwbMeshStoreHalf4(tangent);
+}
+
+void nwbSkinnedMeshMain(uint workItemId){
+    nwbSkinnedMeshSkinPosition(workItemId);
+    nwbSkinnedMeshSkinAttribute(workItemId);
 }
 
 

@@ -35,11 +35,11 @@ namespace __hidden_skinned_mesh_system_skinning{
 static constexpr u32 s_SkinnedMeshGroupSize = 64u;
 
 struct SkinnedMeshPushConstants{
-    u32 vertexCount = 0;
+    u32 positionCount = 0;
     u32 skinCount = 0;
     u32 jointCount = 0;
     u32 skinningMode = SkinnedMeshSkinningMode::LinearBlend;
-    u32 padding0 = 0;
+    u32 attributeCount = 0;
     u32 padding1 = 0;
     u32 padding2 = 0;
     u32 padding3 = 0;
@@ -51,8 +51,8 @@ static const Name& SkinnedMeshComputeShaderName(){
     return s;
 }
 
-static u32 DispatchGroupCount(const u32 vertexCount){
-    return DivideUp(vertexCount, s_SkinnedMeshGroupSize);
+static u32 DispatchGroupCount(const u32 workItemCount){
+    return DivideUp(workItemCount, s_SkinnedMeshGroupSize);
 }
 
 static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){
@@ -160,6 +160,7 @@ bool SkinnedMeshSystem::ensurePipeline(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(7, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(8, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1));
         bindingLayoutDesc.addItem(
             Core::BindingLayoutItem::PushConstants(
                 0,
@@ -292,7 +293,8 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
         instance,
         Core::ResourceStates::UnorderedAccess
     );
-    commandList.setBufferState(instance.vertexRefBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletPositionRefBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.attributeSkinBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(resources->skinBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
@@ -303,12 +305,17 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     commandList.setComputeState(computeState);
 
     __hidden_skinned_mesh_system_skinning::SkinnedMeshPushConstants pushConstants;
-    pushConstants.vertexCount = static_cast<u32>(instance.vertexRefs.size());
+    pushConstants.positionCount = static_cast<u32>(instance.meshletPositionRefs.size());
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
     pushConstants.skinningMode = resolvedSkinningMode;
+    pushConstants.attributeCount = static_cast<u32>(instance.meshletAttributeRefs.size());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(__hidden_skinned_mesh_system_skinning::DispatchGroupCount(pushConstants.vertexCount), 1, 1);
+    commandList.dispatch(
+        __hidden_skinned_mesh_system_skinning::DispatchGroupCount(Max(pushConstants.positionCount, pushConstants.attributeCount)),
+        1,
+        1
+    );
 
     __hidden_skinned_mesh_system_skinning::SetSkinnedBufferStates(
         commandList,
@@ -397,7 +404,8 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     const bool rebuild =
         inserted
         || resources.editRevision != instance.editRevision
-        || resources.vertexCount != static_cast<u32>(instance.vertexRefs.size())
+        || resources.positionCount != static_cast<u32>(instance.meshletPositionRefs.size())
+        || resources.attributeCount != static_cast<u32>(instance.meshletAttributeRefs.size())
         || resources.skinCount != static_cast<u32>(payloadViews.skinInfluenceCount)
         || resources.jointCount != static_cast<u32>(payloadViews.jointPaletteCount)
         || !resources.skinBuffer
@@ -420,7 +428,8 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     RuntimeResources rebuilt;
     rebuilt.handle = instance.handle;
     rebuilt.editRevision = instance.editRevision;
-    rebuilt.vertexCount = static_cast<u32>(instance.vertexRefs.size());
+    rebuilt.positionCount = static_cast<u32>(instance.meshletPositionRefs.size());
+    rebuilt.attributeCount = static_cast<u32>(instance.meshletAttributeRefs.size());
     rebuilt.skinCount = static_cast<u32>(payloadViews.skinInfluenceCount);
     rebuilt.jointCount = static_cast<u32>(payloadViews.jointPaletteCount);
 
@@ -457,9 +466,10 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(3, instance.skinnedNormalBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, instance.restTangentBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(5, instance.skinnedTangentBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, instance.vertexRefBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(7, rebuilt.skinBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(8, rebuilt.jointPaletteBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, instance.meshletPositionRefBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(7, instance.attributeSkinBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(8, rebuilt.skinBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, rebuilt.jointPaletteBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     rebuilt.bindingSet = device->createBindingSet(bindingSetDesc, m_bindingLayout);

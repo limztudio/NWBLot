@@ -66,10 +66,11 @@ bool SkinnedMesh::validatePayload()const{
         || m_uv0Stream.empty()
         || m_colorStream.empty()
         || m_skin.empty()
-        || m_vertexRefs.empty()
         || m_meshlets.empty()
         || m_meshletBounds.empty()
-        || m_meshletVertexRefs.empty()
+        || m_meshletPositionRefs.empty()
+        || m_meshletAttributeRefs.empty()
+        || m_meshletLocalVertexRefs.empty()
         || m_meshletPrimitiveIndices.empty()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh::validatePayload failed: mesh '{}' has incomplete payload")
@@ -109,10 +110,11 @@ bool SkinnedMesh::validatePayload()const{
         m_tangentStream,
         m_uv0Stream,
         m_colorStream,
-        m_vertexRefs,
+        m_meshletPositionRefs,
+        m_meshletAttributeRefs,
+        m_meshletLocalVertexRefs,
         m_meshlets,
         m_meshletBounds,
-        m_meshletVertexRefs,
         m_meshletPrimitiveIndices,
         m_skin.size(),
         true,
@@ -158,10 +160,11 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
     m_colorStream.clear();
     m_skin.clear();
     m_inverseBindMatrices.clear();
-    m_vertexRefs.clear();
     m_meshlets.clear();
     m_meshletBounds.clear();
-    m_meshletVertexRefs.clear();
+    m_meshletPositionRefs.clear();
+    m_meshletAttributeRefs.clear();
+    m_meshletLocalVertexRefs.clear();
     m_meshletPrimitiveIndices.clear();
     m_meshClass = Core::Mesh::MeshClass::Invalid;
     m_skeletonJointCount = 0u;
@@ -223,10 +226,11 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
         binary,
         cursor,
         header,
-        m_vertexRefs,
         m_meshlets,
         m_meshletBounds,
-        m_meshletVertexRefs,
+        m_meshletPositionRefs,
+        m_meshletAttributeRefs,
+        m_meshletLocalVertexRefs,
         m_meshletPrimitiveIndices,
         loadFailureContext
     ))

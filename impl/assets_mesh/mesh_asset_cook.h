@@ -31,6 +31,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct MeshVertexRef{
+    u32 position = s_MeshMissingStreamIndex;
+    u32 normal = s_MeshMissingStreamIndex;
+    u32 tangent = s_MeshMissingStreamIndex;
+    u32 uv0 = s_MeshMissingStreamIndex;
+    u32 color = s_MeshMissingStreamIndex;
+    u32 skin = s_MeshMissingStreamIndex;
+};
+
 struct MeshCookEntry{
     Name virtualPath = NAME_NONE;
     Core::Assets::AssetVector<Float3U> positions;
@@ -41,7 +50,9 @@ struct MeshCookEntry{
     Core::Assets::AssetVector<MeshVertexRef> vertexRefs;
     Core::Assets::AssetVector<MeshletDesc> meshlets;
     Core::Assets::AssetVector<MeshletBounds> meshletBounds;
-    Core::Assets::AssetVector<u32> meshletVertexRefs;
+    Core::Assets::AssetVector<MeshletDeformedPositionRef> meshletPositionRefs;
+    Core::Assets::AssetVector<MeshletShadingAttributeRef> meshletAttributeRefs;
+    Core::Assets::AssetVector<MeshletLocalVertexRef> meshletLocalVertexRefs;
     Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
 
     explicit MeshCookEntry(Core::Assets::AssetArena& arena)
@@ -53,7 +64,9 @@ struct MeshCookEntry{
         , vertexRefs(arena)
         , meshlets(arena)
         , meshletBounds(arena)
-        , meshletVertexRefs(arena)
+        , meshletPositionRefs(arena)
+        , meshletAttributeRefs(arena)
+        , meshletLocalVertexRefs(arena)
         , meshletPrimitiveIndices(arena)
     {}
 };
@@ -72,7 +85,9 @@ struct SkinnedMeshCookEntry{
     Core::Assets::AssetVector<MeshVertexRef> vertexRefs;
     Core::Assets::AssetVector<MeshletDesc> meshlets;
     Core::Assets::AssetVector<MeshletBounds> meshletBounds;
-    Core::Assets::AssetVector<u32> meshletVertexRefs;
+    Core::Assets::AssetVector<MeshletDeformedPositionRef> meshletPositionRefs;
+    Core::Assets::AssetVector<MeshletShadingAttributeRef> meshletAttributeRefs;
+    Core::Assets::AssetVector<MeshletLocalVertexRef> meshletLocalVertexRefs;
     Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
 
     explicit SkinnedMeshCookEntry(Core::Assets::AssetArena& arena)
@@ -86,7 +101,9 @@ struct SkinnedMeshCookEntry{
         , vertexRefs(arena)
         , meshlets(arena)
         , meshletBounds(arena)
-        , meshletVertexRefs(arena)
+        , meshletPositionRefs(arena)
+        , meshletAttributeRefs(arena)
+        , meshletLocalVertexRefs(arena)
         , meshletPrimitiveIndices(arena)
     {}
 };

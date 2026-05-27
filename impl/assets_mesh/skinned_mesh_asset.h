@@ -35,10 +35,11 @@ public:
         , m_colorStream(arena)
         , m_skin(arena)
         , m_inverseBindMatrices(arena)
-        , m_vertexRefs(arena)
         , m_meshlets(arena)
         , m_meshletBounds(arena)
-        , m_meshletVertexRefs(arena)
+        , m_meshletPositionRefs(arena)
+        , m_meshletAttributeRefs(arena)
+        , m_meshletLocalVertexRefs(arena)
         , m_meshletPrimitiveIndices(arena)
     {}
     SkinnedMesh(Core::Assets::AssetArena& arena, const Name& virtualPath)
@@ -50,10 +51,11 @@ public:
         , m_colorStream(arena)
         , m_skin(arena)
         , m_inverseBindMatrices(arena)
-        , m_vertexRefs(arena)
         , m_meshlets(arena)
         , m_meshletBounds(arena)
-        , m_meshletVertexRefs(arena)
+        , m_meshletPositionRefs(arena)
+        , m_meshletAttributeRefs(arena)
+        , m_meshletLocalVertexRefs(arena)
         , m_meshletPrimitiveIndices(arena)
     {}
 
@@ -73,10 +75,11 @@ public:
         Core::Assets::AssetVector<Half4U>&& colors,
         Core::Assets::AssetVector<SkinInfluence4>&& skin,
         Core::Assets::AssetVector<SkinnedMeshJointMatrix>&& inverseBindMatrices,
-        Core::Assets::AssetVector<MeshVertexRef>&& vertexRefs,
         Core::Assets::AssetVector<MeshletDesc>&& meshlets,
         Core::Assets::AssetVector<MeshletBounds>&& meshletBounds,
-        Core::Assets::AssetVector<u32>&& meshletVertexRefs,
+        Core::Assets::AssetVector<MeshletDeformedPositionRef>&& meshletPositionRefs,
+        Core::Assets::AssetVector<MeshletShadingAttributeRef>&& meshletAttributeRefs,
+        Core::Assets::AssetVector<MeshletLocalVertexRef>&& meshletLocalVertexRefs,
         Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices
     ){
         m_positionStream = Move(positions);
@@ -86,10 +89,11 @@ public:
         m_colorStream = Move(colors);
         m_skin = Move(skin);
         m_inverseBindMatrices = Move(inverseBindMatrices);
-        m_vertexRefs = Move(vertexRefs);
         m_meshlets = Move(meshlets);
         m_meshletBounds = Move(meshletBounds);
-        m_meshletVertexRefs = Move(meshletVertexRefs);
+        m_meshletPositionRefs = Move(meshletPositionRefs);
+        m_meshletAttributeRefs = Move(meshletAttributeRefs);
+        m_meshletLocalVertexRefs = Move(meshletLocalVertexRefs);
         m_meshletPrimitiveIndices = Move(meshletPrimitiveIndices);
     }
 
@@ -98,10 +102,11 @@ public:
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const{ return m_tangentStream; }
     [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const{ return m_uv0Stream; }
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const{ return m_colorStream; }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshVertexRef>& vertexRefs()const{ return m_vertexRefs; }
     [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const{ return m_meshlets; }
     [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const{ return m_meshletBounds; }
-    [[nodiscard]] const Core::Assets::AssetVector<u32>& meshletVertexRefs()const{ return m_meshletVertexRefs; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletDeformedPositionRef>& meshletPositionRefs()const{ return m_meshletPositionRefs; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletShadingAttributeRef>& meshletAttributeRefs()const{ return m_meshletAttributeRefs; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const{ return m_meshletLocalVertexRefs; }
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const{ return m_meshletPrimitiveIndices; }
     [[nodiscard]] u32 meshClass()const{ return m_meshClass; }
     [[nodiscard]] const Core::Assets::AssetVector<SkinInfluence4>& skinStream()const{ return m_skin; }
@@ -117,10 +122,11 @@ private:
     Core::Assets::AssetVector<SkinInfluence4> m_skin;
     u32 m_skeletonJointCount = 0;
     Core::Assets::AssetVector<SkinnedMeshJointMatrix> m_inverseBindMatrices;
-    Core::Assets::AssetVector<MeshVertexRef> m_vertexRefs;
     Core::Assets::AssetVector<MeshletDesc> m_meshlets;
     Core::Assets::AssetVector<MeshletBounds> m_meshletBounds;
-    Core::Assets::AssetVector<u32> m_meshletVertexRefs;
+    Core::Assets::AssetVector<MeshletDeformedPositionRef> m_meshletPositionRefs;
+    Core::Assets::AssetVector<MeshletShadingAttributeRef> m_meshletAttributeRefs;
+    Core::Assets::AssetVector<MeshletLocalVertexRef> m_meshletLocalVertexRefs;
     Core::Assets::AssetVector<u8> m_meshletPrimitiveIndices;
 };
 

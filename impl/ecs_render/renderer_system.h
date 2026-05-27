@@ -105,10 +105,11 @@ private:
         Core::BufferHandle tangentBuffer;
         Core::BufferHandle uv0Buffer;
         Core::BufferHandle colorBuffer;
-        Core::BufferHandle vertexRefBuffer;
         Core::BufferHandle meshletDescBuffer;
         Core::BufferHandle meshletBoundsBuffer;
-        Core::BufferHandle meshletVertexRefBuffer;
+        Core::BufferHandle meshletPositionRefBuffer;
+        Core::BufferHandle meshletAttributeRefBuffer;
+        Core::BufferHandle meshletLocalVertexRefBuffer;
         Core::BufferHandle meshletPrimitiveIndexBuffer;
         Core::BufferHandle emulationVertexBuffer;
         Core::BindingSetHandle meshBindingSet;
@@ -126,10 +127,11 @@ private:
                 && tangentBuffer != nullptr
                 && uv0Buffer != nullptr
                 && colorBuffer != nullptr
-                && vertexRefBuffer != nullptr
                 && meshletDescBuffer != nullptr
                 && meshletBoundsBuffer != nullptr
-                && meshletVertexRefBuffer != nullptr
+                && meshletPositionRefBuffer != nullptr
+                && meshletAttributeRefBuffer != nullptr
+                && meshletLocalVertexRefBuffer != nullptr
                 && meshletPrimitiveIndexBuffer != nullptr
                 && meshletCount > 0
                 && meshletPrimitiveIndexCount > 0
@@ -334,10 +336,11 @@ private:
         handler(s_MeshTangentBindingSlot, false);
         handler(s_MeshUv0BindingSlot, false);
         handler(s_MeshColorBindingSlot, false);
-        handler(s_MeshVertexRefBindingSlot, false);
         handler(s_MeshletDescBindingSlot, false);
         handler(s_MeshletBoundsBindingSlot, true);
-        handler(s_MeshletVertexRefBindingSlot, false);
+        handler(s_MeshletPositionRefBindingSlot, false);
+        handler(s_MeshletAttributeRefBindingSlot, false);
+        handler(s_MeshletLocalVertexRefBindingSlot, false);
         handler(s_MeshletPrimitiveIndexBindingSlot, true);
     }
     [[nodiscard]] static const Core::BufferHandle& meshSourceBuffer(const MeshResources& mesh, u32 bindingSlot){
@@ -347,10 +350,11 @@ private:
         case s_MeshTangentBindingSlot: return mesh.tangentBuffer;
         case s_MeshUv0BindingSlot: return mesh.uv0Buffer;
         case s_MeshColorBindingSlot: return mesh.colorBuffer;
-        case s_MeshVertexRefBindingSlot: return mesh.vertexRefBuffer;
         case s_MeshletDescBindingSlot: return mesh.meshletDescBuffer;
         case s_MeshletBoundsBindingSlot: return mesh.meshletBoundsBuffer;
-        case s_MeshletVertexRefBindingSlot: return mesh.meshletVertexRefBuffer;
+        case s_MeshletPositionRefBindingSlot: return mesh.meshletPositionRefBuffer;
+        case s_MeshletAttributeRefBindingSlot: return mesh.meshletAttributeRefBuffer;
+        case s_MeshletLocalVertexRefBindingSlot: return mesh.meshletLocalVertexRefBuffer;
         case s_MeshletPrimitiveIndexBindingSlot: return mesh.meshletPrimitiveIndexBuffer;
         default:
             NWB_ASSERT(false);
@@ -370,15 +374,16 @@ private:
     static constexpr u32 s_MeshTangentBindingSlot = 2u;
     static constexpr u32 s_MeshUv0BindingSlot = 3u;
     static constexpr u32 s_MeshColorBindingSlot = 4u;
-    static constexpr u32 s_MeshVertexRefBindingSlot = 5u;
-    static constexpr u32 s_MeshletDescBindingSlot = 6u;
-    static constexpr u32 s_MeshletBoundsBindingSlot = 7u;
-    static constexpr u32 s_MeshletVertexRefBindingSlot = 8u;
-    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = 9u;
-    static constexpr u32 s_MeshInstanceBindingSlot = 10u;
-    static constexpr u32 s_MeshViewBindingSlot = 11u;
-    static constexpr u32 s_MeshMaterialTypedBindingSlot = 12u;
-    static constexpr u32 s_MeshGeneratedVertexBindingSlot = 13u;
+    static constexpr u32 s_MeshletDescBindingSlot = 5u;
+    static constexpr u32 s_MeshletBoundsBindingSlot = 6u;
+    static constexpr u32 s_MeshletPositionRefBindingSlot = 7u;
+    static constexpr u32 s_MeshletAttributeRefBindingSlot = 8u;
+    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = 9u;
+    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = 10u;
+    static constexpr u32 s_MeshInstanceBindingSlot = 11u;
+    static constexpr u32 s_MeshViewBindingSlot = 12u;
+    static constexpr u32 s_MeshMaterialTypedBindingSlot = 13u;
+    static constexpr u32 s_MeshGeneratedVertexBindingSlot = 14u;
 
 private:
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);

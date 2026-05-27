@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 #include <core/graphics/graphics.h>
+#include <impl/assets_mesh/meshlet_payload_packing.h>
+#include <impl/assets_mesh/mesh_payload_validation.h>
 #include <impl/assets_mesh/skinned_mesh_validation.h>
 #include <impl/ecs_mesh/runtime_mesh_buffer_upload.h>
 
@@ -27,23 +29,9 @@ namespace __hidden_skinned_mesh_runtime_mesh_cache_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CountFitsU32(const usize count){
-    return count <= static_cast<usize>(Limit<u32>::s_Max);
-}
+using MeshPayloadValidation::CountFitsU32;
 
-[[nodiscard]] bool RuntimeVertexRefInRange(
-    const MeshVertexRef& ref,
-    const SkinnedMeshRuntimeMeshInstance& instance
-){
-    return
-        ref.position < instance.restPositions.size()
-        && ref.normal < instance.restNormals.size()
-        && ref.tangent < instance.restTangents.size()
-        && ref.uv0 < instance.uv0.size()
-        && ref.color < instance.colors.size()
-        && ref.skin < instance.skin.size()
-    ;
-}
+#include <impl/assets_mesh/meshlet_ref_validation.inl>
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const SkinnedMeshRuntimeMeshInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
@@ -60,16 +48,18 @@ namespace __hidden_skinned_mesh_runtime_mesh_cache_resources{
     }
     if(
         instance.restPositions.empty()
-        || instance.restNormals.size() != instance.restPositions.size()
-        || instance.restTangents.size() != instance.restPositions.size()
+        || instance.restNormals.empty()
+        || instance.restTangents.size() != instance.restNormals.size()
         || instance.uv0.empty()
         || instance.colors.empty()
         || instance.skin.empty()
-        || instance.vertexRefs.empty()
         || instance.meshlets.empty()
         || instance.meshletBounds.size() != instance.meshlets.size()
-        || instance.meshletVertexRefs.empty()
+        || instance.meshletPositionRefs.empty()
+        || instance.meshletAttributeRefs.empty()
+        || instance.meshletLocalVertexRefs.empty()
         || instance.meshletPrimitiveIndices.empty()
+        || instance.attributeSkins.size() != instance.meshletAttributeRefs.size()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' has incomplete split mesh payload")
             , TStringView(sourceText)
@@ -81,9 +71,10 @@ namespace __hidden_skinned_mesh_runtime_mesh_cache_resources{
         || !CountFitsU32(instance.uv0.size())
         || !CountFitsU32(instance.colors.size())
         || !CountFitsU32(instance.skin.size())
-        || !CountFitsU32(instance.vertexRefs.size())
         || !CountFitsU32(instance.meshlets.size())
-        || !CountFitsU32(instance.meshletVertexRefs.size())
+        || !CountFitsU32(instance.meshletPositionRefs.size())
+        || !CountFitsU32(instance.meshletAttributeRefs.size())
+        || !CountFitsU32(instance.meshletLocalVertexRefs.size())
         || !CountFitsU32(instance.meshletPrimitiveIndices.size())
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' exceeds u32 payload limits")
@@ -126,13 +117,37 @@ namespace __hidden_skinned_mesh_runtime_mesh_cache_resources{
         return false;
     }
 
-    for(usize vertexRefIndex = 0u; vertexRefIndex < instance.vertexRefs.size(); ++vertexRefIndex){
-        if(RuntimeVertexRefInRange(instance.vertexRefs[vertexRefIndex], instance))
+    for(usize positionRefIndex = 0u; positionRefIndex < instance.meshletPositionRefs.size(); ++positionRefIndex){
+        if(MeshletPositionRefInRange(
+            instance.meshletPositionRefs[positionRefIndex],
+            instance.restPositions.size(),
+            instance.skin.size(),
+            true
+        ))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' vertex ref {} is out of range")
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' position ref {} is out of range")
             , TStringView(sourceText)
-            , vertexRefIndex
+            , positionRefIndex
+        );
+        return false;
+    }
+    for(usize attributeRefIndex = 0u; attributeRefIndex < instance.meshletAttributeRefs.size(); ++attributeRefIndex){
+        if(
+            MeshletAttributeRefInRange(
+                instance.meshletAttributeRefs[attributeRefIndex],
+                instance.restNormals.size(),
+                instance.restTangents.size(),
+                instance.uv0.size(),
+                instance.colors.size()
+            )
+            && instance.attributeSkins[attributeRefIndex] < instance.skin.size()
+        )
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' attribute ref {} is out of range")
+            , TStringView(sourceText)
+            , attributeRefIndex
         );
         return false;
     }
@@ -315,15 +330,6 @@ bool SkinnedMeshRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMes
         false,
         NWB_TEXT("color")
     ) && uploaded;
-    uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<MeshVertexRef>(
-        m_graphics,
-        instance,
-        instance.vertexRefBuffer,
-        AStringView("vertex_refs"),
-        instance.vertexRefs,
-        false,
-        NWB_TEXT("vertex ref")
-    ) && uploaded;
     uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<MeshletDesc>(
         m_graphics,
         instance,
@@ -343,14 +349,32 @@ bool SkinnedMeshRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMes
         NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
-    uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<u32>(
+    uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<MeshletDeformedPositionRef>(
         m_graphics,
         instance,
-        instance.meshletVertexRefBuffer,
-        AStringView("meshlet_vertex_refs"),
-        instance.meshletVertexRefs,
+        instance.meshletPositionRefBuffer,
+        AStringView("meshlet_position_refs"),
+        instance.meshletPositionRefs,
         false,
-        NWB_TEXT("meshlet vertex ref")
+        NWB_TEXT("meshlet position ref")
+    ) && uploaded;
+    uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<MeshletShadingAttributeRef>(
+        m_graphics,
+        instance,
+        instance.meshletAttributeRefBuffer,
+        AStringView("meshlet_attribute_refs"),
+        instance.meshletAttributeRefs,
+        false,
+        NWB_TEXT("meshlet attribute ref")
+    ) && uploaded;
+    uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<MeshletLocalVertexRef>(
+        m_graphics,
+        instance,
+        instance.meshletLocalVertexRefBuffer,
+        AStringView("meshlet_local_vertex_refs"),
+        instance.meshletLocalVertexRefs,
+        false,
+        NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
     uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<u8>(
         m_graphics,
@@ -361,6 +385,15 @@ bool SkinnedMeshRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMes
         false,
         NWB_TEXT("meshlet primitive index"),
         true
+    ) && uploaded;
+    uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<u32>(
+        m_graphics,
+        instance,
+        instance.attributeSkinBuffer,
+        AStringView("attribute_skins"),
+        instance.attributeSkins,
+        false,
+        NWB_TEXT("attribute skin")
     ) && uploaded;
 
     return uploaded;

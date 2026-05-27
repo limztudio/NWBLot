@@ -27,11 +27,13 @@ struct SkinnedMeshRuntimeMeshInstance{
     using Half4Vector = Vector<Half4U, Core::Alloc::GlobalArena>;
     using SkinVector = Vector<SkinInfluence4, Core::Alloc::GlobalArena>;
     using JointVector = Vector<SkinnedMeshJointMatrix, Core::Alloc::GlobalArena>;
-    using VertexRefVector = Vector<MeshVertexRef, Core::Alloc::GlobalArena>;
     using MeshletVector = Vector<MeshletDesc, Core::Alloc::GlobalArena>;
     using MeshletBoundsVector = Vector<MeshletBounds, Core::Alloc::GlobalArena>;
-    using MeshletVertexRefVector = Vector<u32, Core::Alloc::GlobalArena>;
+    using MeshletPositionRefVector = Vector<MeshletDeformedPositionRef, Core::Alloc::GlobalArena>;
+    using MeshletAttributeRefVector = Vector<MeshletShadingAttributeRef, Core::Alloc::GlobalArena>;
+    using MeshletLocalVertexRefVector = Vector<MeshletLocalVertexRef, Core::Alloc::GlobalArena>;
     using MeshletPrimitiveIndexVector = Vector<u8, Core::Alloc::GlobalArena>;
+    using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
 
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle handle;
@@ -42,11 +44,13 @@ struct SkinnedMeshRuntimeMeshInstance{
     Half4Vector restTangents;
     Float2Vector uv0;
     Half4Vector colors;
-    VertexRefVector vertexRefs;
     MeshletVector meshlets;
     MeshletBoundsVector meshletBounds;
-    MeshletVertexRefVector meshletVertexRefs;
+    MeshletPositionRefVector meshletPositionRefs;
+    MeshletAttributeRefVector meshletAttributeRefs;
+    MeshletLocalVertexRefVector meshletLocalVertexRefs;
     MeshletPrimitiveIndexVector meshletPrimitiveIndices;
+    AttributeSkinVector attributeSkins;
     u32 skeletonJointCount = 0;
     SkinVector skin;
     JointVector inverseBindMatrices;
@@ -58,11 +62,13 @@ struct SkinnedMeshRuntimeMeshInstance{
     Core::BufferHandle skinnedTangentBuffer;
     Core::BufferHandle uv0Buffer;
     Core::BufferHandle colorBuffer;
-    Core::BufferHandle vertexRefBuffer;
     Core::BufferHandle meshletDescBuffer;
     Core::BufferHandle meshletBoundsBuffer;
-    Core::BufferHandle meshletVertexRefBuffer;
+    Core::BufferHandle meshletPositionRefBuffer;
+    Core::BufferHandle meshletAttributeRefBuffer;
+    Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
+    Core::BufferHandle attributeSkinBuffer;
     u32 editRevision = 0;
     RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
 
@@ -72,11 +78,13 @@ struct SkinnedMeshRuntimeMeshInstance{
         , restTangents(arena)
         , uv0(arena)
         , colors(arena)
-        , vertexRefs(arena)
         , meshlets(arena)
         , meshletBounds(arena)
-        , meshletVertexRefs(arena)
+        , meshletPositionRefs(arena)
+        , meshletAttributeRefs(arena)
+        , meshletLocalVertexRefs(arena)
         , meshletPrimitiveIndices(arena)
+        , attributeSkins(arena)
         , skin(arena)
         , inverseBindMatrices(arena)
     {}
@@ -88,16 +96,18 @@ struct SkinnedMeshRuntimeMeshInstance{
             && source.valid()
             && Core::Mesh::MeshClassUsesSkinning(meshClass)
             && !restPositions.empty()
-            && restNormals.size() == restPositions.size()
-            && restTangents.size() == restPositions.size()
+            && !restNormals.empty()
+            && restTangents.size() == restNormals.size()
             && !uv0.empty()
             && !colors.empty()
             && !skin.empty()
-            && !vertexRefs.empty()
             && !meshlets.empty()
             && meshletBounds.size() == meshlets.size()
-            && !meshletVertexRefs.empty()
+            && !meshletPositionRefs.empty()
+            && !meshletAttributeRefs.empty()
+            && !meshletLocalVertexRefs.empty()
             && !meshletPrimitiveIndices.empty()
+            && attributeSkins.size() == meshletAttributeRefs.size()
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && restPositionBuffer != nullptr
             && restNormalBuffer != nullptr
@@ -107,11 +117,13 @@ struct SkinnedMeshRuntimeMeshInstance{
             && skinnedTangentBuffer != nullptr
             && uv0Buffer != nullptr
             && colorBuffer != nullptr
-            && vertexRefBuffer != nullptr
             && meshletDescBuffer != nullptr
             && meshletBoundsBuffer != nullptr
-            && meshletVertexRefBuffer != nullptr
+            && meshletPositionRefBuffer != nullptr
+            && meshletAttributeRefBuffer != nullptr
+            && meshletLocalVertexRefBuffer != nullptr
             && meshletPrimitiveIndexBuffer != nullptr
+            && attributeSkinBuffer != nullptr
         ;
     }
 };

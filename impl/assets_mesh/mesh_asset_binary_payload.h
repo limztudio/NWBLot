@@ -91,10 +91,11 @@ template<typename HeaderT>
         && header.tangentCount != 0u
         && header.uv0Count != 0u
         && header.colorCount != 0u
-        && header.vertexRefCount != 0u
         && header.meshletCount != 0u
         && header.meshletBoundCount == header.meshletCount
-        && header.meshletVertexRefCount != 0u
+        && header.meshletPositionRefCount != 0u
+        && header.meshletAttributeRefCount != 0u
+        && header.meshletLocalVertexRefCount != 0u
         && header.meshletPrimitiveIndexCount != 0u
     ;
 }
@@ -128,25 +129,25 @@ template<
 
 template<
     typename HeaderT,
-    typename VertexRefContainer,
     typename MeshletContainer,
     typename MeshletBoundsContainer,
-    typename MeshletVertexRefContainer,
+    typename MeshletPositionRefContainer,
+    typename MeshletAttributeRefContainer,
+    typename MeshletLocalVertexRefContainer,
     typename MeshletPrimitiveIndexContainer
 >
 [[nodiscard]] bool ReadMeshletStreams(
     const Core::Assets::AssetBytes& binary,
     usize& inOutCursor,
     const HeaderT& header,
-    VertexRefContainer& outVertexRefs,
     MeshletContainer& outMeshlets,
     MeshletBoundsContainer& outMeshletBounds,
-    MeshletVertexRefContainer& outMeshletVertexRefs,
+    MeshletPositionRefContainer& outMeshletPositionRefs,
+    MeshletAttributeRefContainer& outMeshletAttributeRefs,
+    MeshletLocalVertexRefContainer& outMeshletLocalVertexRefs,
     MeshletPrimitiveIndexContainer& outMeshletPrimitiveIndices,
     const tchar* failureContext
 ){
-    if(!ReadVector(binary, inOutCursor, header.vertexRefCount, outVertexRefs, failureContext, NWB_TEXT("vertex refs")))
-        return false;
     if(!ReadVector(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
         return false;
     if(!ReadVector(
@@ -161,10 +162,28 @@ template<
     if(!ReadVector(
         binary,
         inOutCursor,
-        header.meshletVertexRefCount,
-        outMeshletVertexRefs,
+        header.meshletPositionRefCount,
+        outMeshletPositionRefs,
         failureContext,
-        NWB_TEXT("meshlet vertex refs")
+        NWB_TEXT("meshlet position refs")
+    ))
+        return false;
+    if(!ReadVector(
+        binary,
+        inOutCursor,
+        header.meshletAttributeRefCount,
+        outMeshletAttributeRefs,
+        failureContext,
+        NWB_TEXT("meshlet attribute refs")
+    ))
+        return false;
+    if(!ReadVector(
+        binary,
+        inOutCursor,
+        header.meshletLocalVertexRefCount,
+        outMeshletLocalVertexRefs,
+        failureContext,
+        NWB_TEXT("meshlet local vertex refs")
     ))
         return false;
     return ReadVector(
@@ -215,10 +234,11 @@ template<typename MeshT>
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.tangentStream())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.uv0Stream())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.colorStream())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.vertexRefs())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshlets())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletBounds())
-        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletVertexRefs())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPositionRefs())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletAttributeRefs())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletLocalVertexRefs())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPrimitiveIndices())
     ;
 }
@@ -231,10 +251,11 @@ void FillMeshBaseHeader(HeaderT& header, const MeshT& mesh){
     header.tangentCount = static_cast<u64>(mesh.tangentStream().size());
     header.uv0Count = static_cast<u64>(mesh.uv0Stream().size());
     header.colorCount = static_cast<u64>(mesh.colorStream().size());
-    header.vertexRefCount = static_cast<u64>(mesh.vertexRefs().size());
     header.meshletCount = static_cast<u64>(mesh.meshlets().size());
     header.meshletBoundCount = static_cast<u64>(mesh.meshletBounds().size());
-    header.meshletVertexRefCount = static_cast<u64>(mesh.meshletVertexRefs().size());
+    header.meshletPositionRefCount = static_cast<u64>(mesh.meshletPositionRefs().size());
+    header.meshletAttributeRefCount = static_cast<u64>(mesh.meshletAttributeRefs().size());
+    header.meshletLocalVertexRefCount = static_cast<u64>(mesh.meshletLocalVertexRefs().size());
     header.meshletPrimitiveIndexCount = static_cast<u64>(mesh.meshletPrimitiveIndices().size());
 }
 
@@ -258,10 +279,11 @@ template<typename MeshT>
     const MeshT& mesh,
     const tchar* failureContext
 ){
-    return AppendVector(outBinary, mesh.vertexRefs(), failureContext, NWB_TEXT("vertex refs"))
-        && AppendVector(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
+    return AppendVector(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
         && AppendVector(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
-        && AppendVector(outBinary, mesh.meshletVertexRefs(), failureContext, NWB_TEXT("meshlet vertex refs"))
+        && AppendVector(outBinary, mesh.meshletPositionRefs(), failureContext, NWB_TEXT("meshlet position refs"))
+        && AppendVector(outBinary, mesh.meshletAttributeRefs(), failureContext, NWB_TEXT("meshlet attribute refs"))
+        && AppendVector(outBinary, mesh.meshletLocalVertexRefs(), failureContext, NWB_TEXT("meshlet local vertex refs"))
         && AppendVector(outBinary, mesh.meshletPrimitiveIndices(), failureContext, NWB_TEXT("meshlet primitive indices"))
     ;
 }

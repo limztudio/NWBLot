@@ -16,6 +16,10 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     const NwbMeshInstanceData instance
 );
 
+groupshared float3 g_NwbMeshletSourcePositions[NWB_MESH_SHADER_MAX_VERTICES];
+groupshared float3 g_NwbMeshletWorldPositions[NWB_MESH_SHADER_MAX_VERTICES];
+groupshared float4 g_NwbMeshletClipPositions[NWB_MESH_SHADER_MAX_VERTICES];
+
 uint nwbMeshletPrimitiveBase(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex){
     return meshlet.primitiveOffset + localPrimitiveIndex * 3u;
 }
@@ -28,32 +32,75 @@ uint3 nwbMeshLoadMeshletPrimitive(const uint primitiveBase){
     );
 }
 
+void nwbMeshBuildMeshletPositions(
+    const NwbMeshletDesc meshlet,
+    const NwbMeshInstanceData instance,
+    const uint groupThreadIndex
+){
+    const uint positionCount = nwbMeshletPositionCount(meshlet);
+    for(
+        uint localPositionIndex = groupThreadIndex;
+        localPositionIndex < positionCount;
+        localPositionIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+    ){
+        const NwbMeshletDeformedPositionRef positionRef = nwbMeshLoadMeshletPositionRef(meshlet, localPositionIndex);
+        const float3 objectPosition = nwbMeshLoadPosition(g_NwbMeshPositions[positionRef.position]);
+        const float3 worldPosition = nwbMeshTransformPosition(objectPosition, instance);
+        g_NwbMeshletSourcePositions[localPositionIndex] = objectPosition;
+        g_NwbMeshletWorldPositions[localPositionIndex] = worldPosition;
+        g_NwbMeshletClipPositions[localPositionIndex] = nwbMeshTransformWorldToClip(worldPosition);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+}
+
 NwbMeshGeneratedVertex nwbMeshBuildMeshletVertex(
     const uint meshletIndex,
     const NwbMeshletDesc meshlet,
     const uint localVertexIndex,
     const NwbMeshInstanceData instance
 ){
-    const uint vertexRefIndex = g_NwbMeshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
+    const NwbMeshletLocalVertexRef localVertexRef = nwbMeshLoadMeshletLocalVertexRef(meshlet, localVertexIndex);
+    const uint localPositionIndex = nwbMeshletLocalDeformedPosition(localVertexRef);
     return nwbMeshBuildVertex(
         meshletIndex,
         localVertexIndex,
-        nwbMeshLoadSourceVertex(vertexRefIndex),
+        nwbMeshLoadSourceVertex(
+            meshlet,
+            localVertexIndex,
+            g_NwbMeshletSourcePositions[localPositionIndex],
+            g_NwbMeshletWorldPositions[localPositionIndex],
+            g_NwbMeshletClipPositions[localPositionIndex]
+        ),
         instance
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if NWB_MESH_SHADER_EMULATION_COMPUTE == 0
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NwbMeshRasterVertex nwbMeshBuildRasterVertex(const NwbMeshGeneratedVertex generatedVertex){
-    NwbMeshRasterVertex vertex;
-    vertex.position = generatedVertex.position;
-    vertex.color = generatedVertex.color;
-    vertex.normal = generatedVertex.normal;
-    vertex.tangent = generatedVertex.tangent;
-    vertex.uv0 = generatedVertex.uv0;
-    vertex.worldPosition = generatedVertex.worldPosition.xyz;
-    return vertex;
+    return nwbMeshBuildRasterVertex(
+        generatedVertex.position,
+        generatedVertex.color,
+        generatedVertex.normal,
+        generatedVertex.tangent,
+        generatedVertex.uv0,
+        generatedVertex.worldPosition.xyz
+    );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

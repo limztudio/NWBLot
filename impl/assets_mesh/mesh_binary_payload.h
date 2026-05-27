@@ -23,7 +23,7 @@ namespace MeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshMagic = 0x4D534833u; // MSH3
+inline constexpr u32 s_MeshMagic = 0x4D534834u; // MSH4
 
 #pragma pack(push, 1)
 struct MeshHeaderBinary{
@@ -37,14 +37,15 @@ struct MeshHeaderBinary{
     u64 skinCount = 0;
     u64 skeletonJointCount = 0;
     u64 inverseBindMatrixCount = 0;
-    u64 vertexRefCount = 0;
     u64 meshletCount = 0;
     u64 meshletBoundCount = 0;
-    u64 meshletVertexRefCount = 0;
+    u64 meshletPositionRefCount = 0;
+    u64 meshletAttributeRefCount = 0;
+    u64 meshletLocalVertexRefCount = 0;
     u64 meshletPrimitiveIndexCount = 0;
 };
 #pragma pack(pop)
-static_assert(sizeof(MeshHeaderBinary) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 13u), "MeshHeaderBinary layout drifted");
+static_assert(sizeof(MeshHeaderBinary) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 14u), "MeshHeaderBinary layout drifted");
 static_assert(alignof(MeshHeaderBinary) == 1u, "MeshHeaderBinary must stay packed");
 static_assert(IsStandardLayout_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");

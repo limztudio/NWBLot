@@ -10,6 +10,11 @@
 
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint meshletIndex = groupID.x;
@@ -20,6 +25,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const bool meshletCulled = nwbMeshletCulled(meshletIndex, instance);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    nwbMeshBuildMeshletPositions(meshlet, instance, groupThreadID.x);
 
     for(
         uint localPrimitiveIndex = groupThreadID.x;
@@ -52,7 +58,17 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
             g_NwbMeshGeneratedVertices[primitiveBase + corner] = generatedVertices[corner];
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #else
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [shader("mesh")]
 [numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
 [outputtopology("triangle")]
@@ -73,6 +89,7 @@ void main(
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const uint vertexCount = nwbMeshletVertexCount(meshlet);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    nwbMeshBuildMeshletPositions(meshlet, instance, groupThreadIndex);
     if(nwbMeshletCulled(meshletIndex, instance)){
         SetMeshOutputCounts(0u, 0u);
         return;
@@ -105,6 +122,11 @@ void main(
         );
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

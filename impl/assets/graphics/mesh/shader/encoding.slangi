@@ -11,8 +11,9 @@
 
 static const uint NWB_MESHLET_BOUNDS_STRIDE = 24u;
 static const uint NWB_MESHLET_CONE_FLAG_ENABLED = 1u;
-static const uint NWB_MESHLET_COUNT_MASK = 0xffffu;
-static const uint NWB_MESHLET_PRIMITIVE_COUNT_SHIFT = 16u;
+static const uint NWB_MESHLET_COUNT_MASK = 0xffu;
+static const uint NWB_MESHLET_PRIMITIVE_COUNT_SHIFT = 8u;
+static const uint NWB_MESHLET_POSITION_COUNT_SHIFT = 16u;
 static const uint NWB_MESHLET_CONE_AXIS_X_SHIFT = 0u;
 static const uint NWB_MESHLET_CONE_AXIS_Y_SHIFT = 8u;
 static const uint NWB_MESHLET_CONE_CUTOFF_SHIFT = 16u;
@@ -27,7 +28,11 @@ uint nwbMeshletVertexCount(const NwbMeshletDesc meshlet){
 }
 
 uint nwbMeshletPrimitiveCount(const NwbMeshletDesc meshlet){
-    return meshlet.counts >> NWB_MESHLET_PRIMITIVE_COUNT_SHIFT;
+    return (meshlet.counts >> NWB_MESHLET_PRIMITIVE_COUNT_SHIFT) & NWB_MESHLET_COUNT_MASK;
+}
+
+uint nwbMeshletPositionCount(const NwbMeshletDesc meshlet){
+    return (meshlet.counts >> NWB_MESHLET_POSITION_COUNT_SHIFT) & NWB_MESHLET_COUNT_MASK;
 }
 
 NwbMeshletBounds nwbMeshLoadMeshletBounds(const uint meshletIndex){

@@ -248,14 +248,6 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
         mesh.colorStream(),
         NWB_TEXT("color")
     ) && uploaded;
-    uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<MeshVertexRef>(
-        m_graphics,
-        meshPath,
-        createdMesh.vertexRefBuffer,
-        AStringView(":vertex_refs"),
-        mesh.vertexRefs(),
-        NWB_TEXT("vertex ref")
-    ) && uploaded;
     uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<MeshletDesc>(
         m_graphics,
         meshPath,
@@ -273,13 +265,29 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
         NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
-    uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<u32>(
+    uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<MeshletDeformedPositionRef>(
         m_graphics,
         meshPath,
-        createdMesh.meshletVertexRefBuffer,
-        AStringView(":meshlet_vertex_refs"),
-        mesh.meshletVertexRefs(),
-        NWB_TEXT("meshlet vertex ref")
+        createdMesh.meshletPositionRefBuffer,
+        AStringView(":meshlet_position_refs"),
+        mesh.meshletPositionRefs(),
+        NWB_TEXT("meshlet position ref")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<MeshletShadingAttributeRef>(
+        m_graphics,
+        meshPath,
+        createdMesh.meshletAttributeRefBuffer,
+        AStringView(":meshlet_attribute_refs"),
+        mesh.meshletAttributeRefs(),
+        NWB_TEXT("meshlet attribute ref")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
+        m_graphics,
+        meshPath,
+        createdMesh.meshletLocalVertexRefBuffer,
+        AStringView(":meshlet_local_vertex_refs"),
+        mesh.meshletLocalVertexRefs(),
+        NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
     uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<u8>(
         m_graphics,
@@ -330,10 +338,11 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
     createdMesh.tangentBuffer = desc.tangentBuffer;
     createdMesh.uv0Buffer = desc.uv0Buffer;
     createdMesh.colorBuffer = desc.colorBuffer;
-    createdMesh.vertexRefBuffer = desc.vertexRefBuffer;
     createdMesh.meshletDescBuffer = desc.meshletDescBuffer;
     createdMesh.meshletBoundsBuffer = desc.meshletBoundsBuffer;
-    createdMesh.meshletVertexRefBuffer = desc.meshletVertexRefBuffer;
+    createdMesh.meshletPositionRefBuffer = desc.meshletPositionRefBuffer;
+    createdMesh.meshletAttributeRefBuffer = desc.meshletAttributeRefBuffer;
+    createdMesh.meshletLocalVertexRefBuffer = desc.meshletLocalVertexRefBuffer;
     createdMesh.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
     createdMesh.meshletCount = desc.meshletCount;
     createdMesh.runtimeMesh = true;

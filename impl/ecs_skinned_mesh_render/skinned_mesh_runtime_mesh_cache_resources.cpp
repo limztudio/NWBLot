@@ -243,6 +243,9 @@ template<typename PayloadT, typename PayloadVector>
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool SkinnedMeshRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMeshInstance& instance){
     if(!__hidden_skinned_mesh_runtime_mesh_cache_resources::ValidateRuntimeMeshUploadPayload(m_arena, instance))
         return false;

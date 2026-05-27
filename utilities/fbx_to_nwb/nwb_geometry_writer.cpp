@@ -107,12 +107,6 @@ bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldNa
     return false;
 }
 
-bool ValidateOptionalStreamIndex(const u32 index, const usize count, const char* fieldName, AString& outError){
-    if(index == s_MissingSourceStreamIndex)
-        return true;
-    return ValidateStreamIndex(index, count, fieldName, outError);
-}
-
 bool ValidateSourceGeometry(const SourceGeometryStreams& geometry, const bool writeSkinnedGeometry, AString& outError){
     if(geometry.positions.empty() || geometry.normals.empty() || geometry.uv0.empty() || geometry.colors.empty() || geometry.vertexRefs.empty() || geometry.indices.empty()){
         outError = "geometry payload is incomplete";
@@ -136,8 +130,14 @@ bool ValidateSourceGeometry(const SourceGeometryStreams& geometry, const bool wr
             return false;
         if(!ValidateStreamIndex(ref.normal, geometry.normals.size(), "normal", outError))
             return false;
-        if(!ValidateOptionalStreamIndex(ref.tangent, geometry.tangents.size(), "tangent", outError))
+        if(!geometry.tangents.empty()){
+            if(!ValidateStreamIndex(ref.tangent, geometry.tangents.size(), "tangent", outError))
+                return false;
+        }
+        else if(ref.tangent != s_MissingSourceStreamIndex){
+            outError = "geometry vertex_ref tangent must be UINT32_MAX when tangents are omitted";
             return false;
+        }
         if(!ValidateStreamIndex(ref.uv0, geometry.uv0.size(), "uv0", outError))
             return false;
         if(!ValidateStreamIndex(ref.color, geometry.colors.size(), "color", outError))

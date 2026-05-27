@@ -97,8 +97,6 @@ public:
     virtual void render(Core::IFramebuffer* framebuffer)override;
     virtual void invalidateResources()override;
 
-    virtual usize runtimeGeometryCandidateCount()override;
-    virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor)override;
     virtual bool resolveRuntimeGeometry(Core::ECS::EntityID entity, RuntimeGeometryDesc& outGeometry)override;
     virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version)override;
 

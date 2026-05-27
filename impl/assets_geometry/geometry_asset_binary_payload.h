@@ -63,7 +63,7 @@ template<typename Header>
     }
 
     if(outHeader.magic != expectedMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid magic"), failureContext);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid geometry asset format; recook required"), failureContext);
         return false;
     }
 

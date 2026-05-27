@@ -58,15 +58,12 @@ struct RuntimeGeometryDesc{
         ;
     }
 };
-using RuntimeGeometryVisitor = Function<void(const RuntimeGeometryDesc&)>;
 
 class IRuntimeGeometryProvider{
 public:
     virtual ~IRuntimeGeometryProvider() = default;
 
 public:
-    [[nodiscard]] virtual usize runtimeGeometryCandidateCount() = 0;
-    virtual void forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor) = 0;
     [[nodiscard]] virtual bool resolveRuntimeGeometry(Core::ECS::EntityID entity, RuntimeGeometryDesc& outGeometry) = 0;
     [[nodiscard]] virtual bool containsRuntimeGeometry(const Name& geometryKey, u64 version) = 0;
 };

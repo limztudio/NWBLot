@@ -154,23 +154,6 @@ void SkinnedGeometrySystem::update(Core::ECS::World& world, const f32 delta){
     m_runtimeMeshCache->update(world);
 }
 
-usize SkinnedGeometrySystem::runtimeGeometryCandidateCount(){
-    return m_world.view<SkinnedGeometryComponent>().candidateCount();
-}
-
-void SkinnedGeometrySystem::forEachRuntimeGeometry(const RuntimeGeometryVisitor& visitor){
-    m_world.view<SkinnedGeometryComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedGeometryComponent& component){
-            static_cast<void>(component);
-            RuntimeGeometryDesc desc;
-            if(!resolveRuntimeGeometry(entity, desc))
-                return;
-
-            visitor(desc);
-        }
-    );
-}
-
 bool SkinnedGeometrySystem::resolveRuntimeGeometry(const Core::ECS::EntityID entity, RuntimeGeometryDesc& outGeometry){
     outGeometry = RuntimeGeometryDesc{};
     if(!__hidden_skinned_geometry_system::RuntimeMeshRenderVisible(m_world, entity))
@@ -206,10 +189,16 @@ bool SkinnedGeometrySystem::containsRuntimeGeometry(const Name& geometryKey, con
         return false;
 
     bool found = false;
-    forEachRuntimeGeometry(
-        [&](const RuntimeGeometryDesc& desc){
+    m_world.view<SkinnedGeometryComponent>().each(
+        [&](Core::ECS::EntityID entity, SkinnedGeometryComponent& component){
+            static_cast<void>(component);
             if(found)
                 return;
+
+            RuntimeGeometryDesc desc;
+            if(!resolveRuntimeGeometry(entity, desc))
+                return;
+
             found = desc.geometryKey == geometryKey && desc.version == version;
         }
     );

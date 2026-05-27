@@ -32,7 +32,7 @@ struct SourceTriangleCorner{
     Vec4 tangent;
     Vec2 uv0;
     Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
-    GeometrySkinInfluence skin;
+    MeshSkinInfluence skin;
     bool hasTangent = false;
 };
 static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
@@ -156,8 +156,8 @@ struct Vec4Equal{
     }
 };
 
-struct GeometrySkinInfluenceHasher{
-    usize operator()(const GeometrySkinInfluence& value)const{
+struct MeshSkinInfluenceHasher{
+    usize operator()(const MeshSkinInfluence& value)const{
         usize seed = Hasher<u16>{}(value.joint[0u]);
         for(usize i = 1u; i < 4u; ++i)
             HashCombine(seed, value.joint[i]);
@@ -167,8 +167,8 @@ struct GeometrySkinInfluenceHasher{
     }
 };
 
-struct GeometrySkinInfluenceEqual{
-    bool operator()(const GeometrySkinInfluence& lhs, const GeometrySkinInfluence& rhs)const{
+struct MeshSkinInfluenceEqual{
+    bool operator()(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs)const{
         for(usize i = 0u; i < 4u; ++i){
             if(lhs.joint[i] != rhs.joint[i] || !FloatEqual(lhs.weight[i], rhs.weight[i]))
                 return false;
@@ -203,42 +203,42 @@ struct SourceVertexRefEqual{
 using Vec2IndexMap = HashMap<Vec2, u32, Vec2Hasher, Vec2Equal>;
 using Vec3IndexMap = HashMap<Vec3, u32, Vec3Hasher, Vec3Equal>;
 using Vec4IndexMap = HashMap<Vec4, u32, Vec4Hasher, Vec4Equal>;
-using GeometrySkinInfluenceIndexMap = HashMap<GeometrySkinInfluence, u32, GeometrySkinInfluenceHasher, GeometrySkinInfluenceEqual>;
+using MeshSkinInfluenceIndexMap = HashMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
 using SourceVertexRefIndexMap = HashMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
 
-struct SourceGeometryBuildContext{
-    SourceGeometryStreams& geometry;
+struct SourceMeshBuildContext{
+    SourceMeshStreams& mesh;
     Vec3IndexMap positions;
     Vec3IndexMap normals;
     Vec4IndexMap tangents;
     Vec2IndexMap uv0;
     Vec4IndexMap colors;
-    GeometrySkinInfluenceIndexMap skin;
+    MeshSkinInfluenceIndexMap skin;
     SourceVertexRefIndexMap vertexRefs;
 
-    explicit SourceGeometryBuildContext(SourceGeometryStreams& sourceGeometry)
-        : geometry(sourceGeometry)
+    explicit SourceMeshBuildContext(SourceMeshStreams& sourceMesh)
+        : mesh(sourceMesh)
     {}
 };
 
-void ReserveSourceGeometryStreams(
-    SourceGeometryStreams& geometry,
+void ReserveSourceMeshStreams(
+    SourceMeshStreams& mesh,
     const usize estimatedTriangleCorners,
     const bool wantsSkinning
 ){
-    geometry.positions.reserve(estimatedTriangleCorners);
-    geometry.normals.reserve(estimatedTriangleCorners);
-    geometry.uv0.reserve(estimatedTriangleCorners);
-    geometry.colors.reserve(estimatedTriangleCorners);
-    geometry.tangents.reserve(estimatedTriangleCorners);
-    geometry.indices.reserve(estimatedTriangleCorners);
-    geometry.vertexRefs.reserve(estimatedTriangleCorners);
+    mesh.positions.reserve(estimatedTriangleCorners);
+    mesh.normals.reserve(estimatedTriangleCorners);
+    mesh.uv0.reserve(estimatedTriangleCorners);
+    mesh.colors.reserve(estimatedTriangleCorners);
+    mesh.tangents.reserve(estimatedTriangleCorners);
+    mesh.indices.reserve(estimatedTriangleCorners);
+    mesh.vertexRefs.reserve(estimatedTriangleCorners);
     if(wantsSkinning)
-        geometry.skin.reserve(estimatedTriangleCorners);
+        mesh.skin.reserve(estimatedTriangleCorners);
 }
 
-void ReserveSourceGeometryBuildContext(
-    SourceGeometryBuildContext& context,
+void ReserveSourceMeshBuildContext(
+    SourceMeshBuildContext& context,
     const usize estimatedTriangleCorners,
     const bool wantsSkinning
 ){
@@ -252,28 +252,28 @@ void ReserveSourceGeometryBuildContext(
         context.skin.reserve(estimatedTriangleCorners);
 }
 
-[[nodiscard]] bool SourceGeometryHasPartialTangents(const SourceGeometryStreams& geometry){
-    if(geometry.tangents.empty())
+[[nodiscard]] bool SourceMeshHasPartialTangents(const SourceMeshStreams& mesh){
+    if(mesh.tangents.empty())
         return false;
 
-    for(const SourceVertexRef& ref : geometry.vertexRefs){
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
         if(ref.tangent == s_MissingSourceStreamIndex)
             return true;
     }
     return false;
 }
 
-void DropSourceGeometryTangents(SourceGeometryStreams& geometry){
-    geometry.tangents.clear();
+void DropSourceMeshTangents(SourceMeshStreams& mesh){
+    mesh.tangents.clear();
 
     SourceVertexRefIndexMap compactLookup;
-    compactLookup.reserve(geometry.vertexRefs.size());
+    compactLookup.reserve(mesh.vertexRefs.size());
     UtilityVector<SourceVertexRef> compactVertexRefs;
-    compactVertexRefs.reserve(geometry.vertexRefs.size());
+    compactVertexRefs.reserve(mesh.vertexRefs.size());
     UtilityVector<u32> vertexRefRemap;
-    vertexRefRemap.reserve(geometry.vertexRefs.size());
+    vertexRefRemap.reserve(mesh.vertexRefs.size());
 
-    for(SourceVertexRef ref : geometry.vertexRefs){
+    for(SourceVertexRef ref : mesh.vertexRefs){
         ref.tangent = s_MissingSourceStreamIndex;
 
         auto found = compactLookup.find(ref);
@@ -288,11 +288,11 @@ void DropSourceGeometryTangents(SourceGeometryStreams& geometry){
         vertexRefRemap.push_back(compactIndex);
     }
 
-    for(u32& index : geometry.indices){
+    for(u32& index : mesh.indices){
         NWB_ASSERT(index < vertexRefRemap.size());
         index = vertexRefRemap[index];
     }
-    geometry.vertexRefs = Move(compactVertexRefs);
+    mesh.vertexRefs = Move(compactVertexRefs);
 }
 
 [[nodiscard]] bool EnsureTriangleIndexScratchCapacity(
@@ -480,7 +480,7 @@ void DropSourceGeometryTangents(SourceGeometryStreams& geometry){
     return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
-[[nodiscard]] bool IsFiniteSkinInfluence(const GeometrySkinInfluence& value){
+[[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){
     for(const f32 weight : value.weight){
         if(!IsFinite(weight))
             return false;
@@ -523,31 +523,31 @@ template<typename Value, typename Lookup>
 }
 
 [[nodiscard]] bool InternSourceCorner(
-    SourceGeometryBuildContext& context,
+    SourceMeshBuildContext& context,
     const SourceTriangleCorner& corner,
     const bool wantsSkinning,
     u32& outVertexRefIndex,
     AString& outError
 ){
     SourceVertexRef ref;
-    if(!InternSourceValue(context.geometry.positions, context.positions, corner.position, "position", ref.position, outError))
+    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, "position", ref.position, outError))
         return false;
-    if(!InternSourceValue(context.geometry.normals, context.normals, corner.normal, "normal", ref.normal, outError))
+    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, "normal", ref.normal, outError))
         return false;
     if(corner.hasTangent){
-        if(!InternSourceValue(context.geometry.tangents, context.tangents, corner.tangent, "tangent", ref.tangent, outError))
+        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, "tangent", ref.tangent, outError))
             return false;
     }
-    if(!InternSourceValue(context.geometry.uv0, context.uv0, corner.uv0, "uv0", ref.uv0, outError))
+    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, "uv0", ref.uv0, outError))
         return false;
-    if(!InternSourceValue(context.geometry.colors, context.colors, corner.color, "color", ref.color, outError))
+    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, "color", ref.color, outError))
         return false;
     if(wantsSkinning){
-        if(!InternSourceValue(context.geometry.skin, context.skin, corner.skin, "skin", ref.skin, outError))
+        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, "skin", ref.skin, outError))
             return false;
     }
 
-    return InternSourceValue(context.geometry.vertexRefs, context.vertexRefs, ref, "vertex_ref", outVertexRefIndex, outError);
+    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, "vertex_ref", outVertexRefIndex, outError);
 }
 
 

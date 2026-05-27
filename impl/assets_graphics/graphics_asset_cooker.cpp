@@ -10,7 +10,7 @@
 
 #include "graphics_asset_cooker.h"
 
-#include <impl/assets_geometry/geometry_asset_cook.h>
+#include <impl/assets_mesh/mesh_asset_cook.h>
 #include <impl/assets_material/material_asset_cook.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
@@ -178,8 +178,8 @@ using PreparedShaderVector = Vector<PreparedShaderEntry, ShaderCook::CookArena>;
 using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
 using DiscoveredNwbFileVector = CookVector<DiscoveredNwbFile>;
 using DiscoveredBindFileVector = CookVector<DiscoveredNwbFile>;
-using GeometryCookEntryVector = CookVector<GeometryCookEntry>;
-using SkinnedGeometryCookEntryVector = CookVector<SkinnedGeometryCookEntry>;
+using MeshCookEntryVector = CookVector<MeshCookEntry>;
+using SkinnedMeshCookEntryVector = CookVector<SkinnedMeshCookEntry>;
 using MaterialCookEntryVector = CookVector<MaterialCookEntry>;
 using MaterialBindEntryVector = CookVector<MaterialBindEntry>;
 
@@ -187,16 +187,16 @@ struct ParsedAssetMetadata{
     IncludeMetadataMap includeMetadata;
     ShaderEntryVector shaderEntries;
     MaterialBindEntryVector materialBindEntries;
-    GeometryCookEntryVector geometryEntries;
-    SkinnedGeometryCookEntryVector skinnedGeometryEntries;
+    MeshCookEntryVector meshEntries;
+    SkinnedMeshCookEntryVector skinnedMeshEntries;
     MaterialCookEntryVector materialEntries;
 
     explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
         : includeMetadata(arena)
         , shaderEntries(arena)
         , materialBindEntries(arena)
-        , geometryEntries(arena)
-        , skinnedGeometryEntries(arena)
+        , meshEntries(arena)
+        , skinnedMeshEntries(arena)
         , materialEntries(arena)
     {}
 };
@@ -918,8 +918,8 @@ static bool ParseAssetMetadata(
     outMetadata.shaderEntries.reserve(nwbFiles.size());
     outMetadata.materialBindEntries.reserve(bindFiles.size());
     outMetadata.materialEntries.reserve(nwbFiles.size());
-    outMetadata.geometryEntries.reserve(nwbFiles.size());
-    outMetadata.skinnedGeometryEntries.reserve(nwbFiles.size());
+    outMetadata.meshEntries.reserve(nwbFiles.size());
+    outMetadata.skinnedMeshEntries.reserve(nwbFiles.size());
 
     HashSet<
         PreparedShaderKey,
@@ -1030,36 +1030,36 @@ static bool ParseAssetMetadata(
             continue;
         }
 
-        if(assetType == SkinnedGeometry::AssetTypeName()){
-            SkinnedGeometryCookEntry geometryEntry(cookArena);
-            if(!ParseSkinnedGeometryCookMetadata(
+        if(assetType == SkinnedMesh::AssetTypeName()){
+            SkinnedMeshCookEntry meshEntry(cookArena);
+            if(!ParseSkinnedMeshCookMetadata(
                 discoveredNwbFile.assetRoot,
                 discoveredNwbFile.virtualRoot.view(),
                 discoveredNwbFile.filePath,
                 doc,
-                geometryEntry,
+                meshEntry,
                 scratchArena
             ))
                 return false;
 
-            if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.skinnedGeometryEntries))
+            if(!AppendUniquePropertyAssetEntry(meshEntry, seenPropertyAssetPathHashes, outMetadata.skinnedMeshEntries))
                 return false;
             continue;
         }
 
-        if(assetType == Geometry::AssetTypeName()){
-            GeometryCookEntry geometryEntry(cookArena);
-            if(!ParseGeometryCookMetadata(
+        if(assetType == Mesh::AssetTypeName()){
+            MeshCookEntry meshEntry(cookArena);
+            if(!ParseMeshCookMetadata(
                 discoveredNwbFile.assetRoot,
                 discoveredNwbFile.virtualRoot.view(),
                 discoveredNwbFile.filePath,
                 doc,
-                geometryEntry,
+                meshEntry,
                 scratchArena
             ))
                 return false;
 
-            if(!AppendUniquePropertyAssetEntry(geometryEntry, seenPropertyAssetPathHashes, outMetadata.geometryEntries))
+            if(!AppendUniquePropertyAssetEntry(meshEntry, seenPropertyAssetPathHashes, outMetadata.meshEntries))
                 return false;
             continue;
         }
@@ -1092,9 +1092,9 @@ static bool ParseAssetMetadata(
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: material assets require at least one shader entry"));
             return false;
         }
-        if(!outMetadata.geometryEntries.empty())
+        if(!outMetadata.meshEntries.empty())
             return true;
-        if(!outMetadata.skinnedGeometryEntries.empty())
+        if(!outMetadata.skinnedMeshEntries.empty())
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no graphics asset metadata found in asset roots"));
@@ -1585,10 +1585,10 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.materialEntries.size()), preparedPlan.plannedFileCount))
         return false;
-    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.geometryEntries.size()), preparedPlan.plannedFileCount))
+    if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(static_cast<u64>(parsedMetadata.meshEntries.size()), preparedPlan.plannedFileCount))
         return false;
     if(!__hidden_graphics_asset_cooker::AddPlannedFileCount(
-        static_cast<u64>(parsedMetadata.skinnedGeometryEntries.size()),
+        static_cast<u64>(parsedMetadata.skinnedMeshEntries.size()),
         preparedPlan.plannedFileCount
     ))
         return false;
@@ -1671,25 +1671,25 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
             }
         ))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<Geometry, GeometryAssetCodec>(
-            NWB_TEXT("geometry"),
-            parsedMetadata.geometryEntries,
+        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<Mesh, MeshAssetCodec>(
+            NWB_TEXT("mesh"),
+            parsedMetadata.meshEntries,
             volumeSession,
             seenVirtualPathHashes,
             true,
-            [](GeometryCookEntry& geometryEntry, Geometry& outGeometry){
-                return BuildGeometryAsset(geometryEntry, outGeometry);
+            [](MeshCookEntry& meshEntry, Mesh& outMesh){
+                return BuildMeshAsset(meshEntry, outMesh);
             }
         ))
             return false;
-        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<SkinnedGeometry, SkinnedGeometryAssetCodec>(
-            NWB_TEXT("skinned geometry"),
-            parsedMetadata.skinnedGeometryEntries,
+        if(!__hidden_graphics_asset_cooker::AppendBuiltAssetsToVolume<SkinnedMesh, SkinnedMeshAssetCodec>(
+            NWB_TEXT("skinned mesh"),
+            parsedMetadata.skinnedMeshEntries,
             volumeSession,
             seenVirtualPathHashes,
             true,
-            [](SkinnedGeometryCookEntry& geometryEntry, SkinnedGeometry& outGeometry){
-                return BuildSkinnedGeometryAsset(geometryEntry, outGeometry);
+            [](SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
+                return BuildSkinnedMeshAsset(meshEntry, outMesh);
             }
         ))
             return false;

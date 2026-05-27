@@ -27,7 +27,7 @@ namespace __hidden_command_line{
 struct OptionPresence{
     bool input = false;
     bool output = false;
-    bool geometryClass = false;
+    bool meshClass = false;
     bool mesh = false;
     bool normalMode = false;
     bool defaultColor = false;
@@ -170,13 +170,13 @@ bool ConfigurePromptsAfterLoad(
     const UtilityVector<MeshInstance>& visibleInstances,
     bool& prompted
 ){
-    if(!presence.geometryClass && !options.acceptDefaults){
-        AString geometryClass;
+    if(!presence.meshClass && !options.acceptDefaults){
+        AString meshClass;
         AString prompt = "Asset type (";
-        prompt += GeometryClassOptionsText();
+        prompt += MeshClassOptionsText();
         prompt += ")";
-        PromptString(prompt, options.geometryClass, geometryClass, prompted);
-        options.geometryClass = geometryClass;
+        PromptString(prompt, options.meshClass, meshClass, prompted);
+        options.meshClass = meshClass;
     }
 
     if(!presence.mesh && !options.acceptDefaults){
@@ -209,7 +209,7 @@ bool ConfigurePromptsAfterLoad(
         PromptDouble("Additional uniform scale", options.scale, options.scale, prompted);
 
     if(!presence.local && !options.acceptDefaults)
-        PromptBool("Bake node transforms into the geometry?", options.bakeTransforms, options.bakeTransforms, prompted);
+        PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, options.bakeTransforms, prompted);
 
     if(!presence.ignoreColors && !options.acceptDefaults)
         PromptBool("Import FBX vertex colors when present?", options.importColors, options.importColors, prompted);
@@ -245,7 +245,7 @@ int Run(int argc, char** argv, bool& prompted){
 
     std::string inputPath(options.inputPath.data(), options.inputPath.size());
     std::string outputPathText(options.outputPath.data(), options.outputPath.size());
-    std::string geometryClass(options.geometryClass.data(), options.geometryClass.size());
+    std::string meshClass(options.meshClass.data(), options.meshClass.size());
     std::string meshSelector(options.meshSelector.data(), options.meshSelector.size());
     std::string normalMode(options.normalMode.data(), options.normalMode.size());
     std::string defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
@@ -254,11 +254,11 @@ int Run(int argc, char** argv, bool& prompted){
     bool ignoreColors = false;
 
     CLI::Option* inputOption = app.add_option("input", inputPath, "Input FBX file path");
-    CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB geometry metadata path");
-    std::string geometryClassDescription = "Output asset type: ";
-    const AString geometryClassOptions = GeometryClassOptionsText();
-    geometryClassDescription.append(geometryClassOptions.data(), geometryClassOptions.size());
-    CLI::Option* geometryClassOption = app.add_option("--asset-type", geometryClass, geometryClassDescription);
+    CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB mesh metadata path");
+    std::string meshClassDescription = "Output asset type: ";
+    const AString meshClassOptions = MeshClassOptionsText();
+    meshClassDescription.append(meshClassOptions.data(), meshClassOptions.size());
+    CLI::Option* meshClassOption = app.add_option("--asset-type", meshClass, meshClassDescription);
     CLI::Option* meshOption = app.add_option("-m,--mesh", meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* normalModeOption = app.add_option("--normal-mode", normalMode, "Normal mode: imported, smooth, or regenerate");
     CLI::Option* scaleOption = app.add_option("--scale", options.scale, "Additional uniform scale applied after import");
@@ -270,7 +270,7 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::Option* defaultColorOption = app.add_option("--default-color", defaultColorText, "Default RGBA color, for example 1,1,1,1");
     CLI::Option* preserveSpaceOption = app.add_flag("--preserve-space", options.preserveSpace, "Keep the FBX source axes and units");
     CLI::Option* includeHiddenOption = app.add_flag("--include-hidden", options.includeHidden, "Include hidden FBX mesh nodes");
-    CLI::Option* localOption = app.add_flag("--local", local, "Do not bake node transforms into geometry");
+    CLI::Option* localOption = app.add_flag("--local", local, "Do not bake node transforms into mesh");
     CLI::Option* ignoreColorsOption = app.add_flag("--ignore-colors", ignoreColors, "Use the default color instead of FBX vertex colors");
     CLI::Option* flipWindingOption = app.add_flag("--flip-winding", options.flipWinding, "Swap the second and third index of every triangle");
     app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
@@ -286,7 +286,7 @@ int Run(int argc, char** argv, bool& prompted){
 
     options.inputPath.assign(inputPath.data(), inputPath.size());
     options.outputPath.assign(outputPathText.data(), outputPathText.size());
-    options.geometryClass.assign(geometryClass.data(), geometryClass.size());
+    options.meshClass.assign(meshClass.data(), meshClass.size());
     options.meshSelector.assign(meshSelector.data(), meshSelector.size());
     options.normalMode.assign(normalMode.data(), normalMode.size());
     options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
@@ -296,7 +296,7 @@ int Run(int argc, char** argv, bool& prompted){
 
     presence.input = inputOption->count() > 0u;
     presence.output = outputOption->count() > 0u;
-    presence.geometryClass = geometryClassOption->count() > 0u;
+    presence.meshClass = meshClassOption->count() > 0u;
     presence.mesh = meshOption->count() > 0u;
     presence.normalMode = normalModeOption->count() > 0u;
     presence.scale = scaleOption->count() > 0u;
@@ -356,7 +356,7 @@ int Run(int argc, char** argv, bool& prompted){
     if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
         return 1;
 
-    if(!ValidateGeometryClassText(options.geometryClass, error)){
+    if(!ValidateMeshClassText(options.meshClass, error)){
         NWB_CERR << error << "\n";
         return 1;
     }
@@ -385,18 +385,18 @@ int Run(int argc, char** argv, bool& prompted){
     if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
         return 1;
 
-    SourceGeometryStreams geometry;
+    SourceMeshStreams mesh;
     u32 skeletonJointCount = 0u;
-    UtilityVector<GeometryJointMatrix> inverseBindMatrices;
+    UtilityVector<MeshJointMatrix> inverseBindMatrices;
     bool sawVertexColors = false;
     bool sawVertexUvs = false;
     bool sawVertexTangents = false;
-    if(!BuildGeometry(
+    if(!BuildMesh(
         instances,
         selection,
         options,
         defaultColor,
-        geometry,
+        mesh,
         skeletonJointCount,
         inverseBindMatrices,
         sawVertexColors,
@@ -404,34 +404,34 @@ int Run(int argc, char** argv, bool& prompted){
         sawVertexTangents,
         error
     )){
-        NWB_CERR << "Failed to build geometry: " << error << "\n";
+        NWB_CERR << "Failed to build mesh: " << error << "\n";
         return 1;
     }
 
-    if(!WriteNwbGeometry(
+    if(!WriteNwbMesh(
         outputPath,
-        geometry,
+        mesh,
         skeletonJointCount,
         inverseBindMatrices,
-        options.geometryClass,
+        options.meshClass,
         error
     )){
-        NWB_CERR << "Failed to write NWB geometry: " << error << "\n";
+        NWB_CERR << "Failed to write NWB mesh: " << error << "\n";
         return 1;
     }
 
     NWB_COUT
         << "Wrote " << PathToUtf8(outputPath) << "\n"
-        << "  positions: " << geometry.positions.size() << "\n"
-        << "  normals: " << geometry.normals.size() << "\n"
-        << "  vertex_refs: " << geometry.vertexRefs.size() << "\n"
-        << "  triangles: " << (geometry.indices.size() / 3u) << "\n"
-        << "  asset_type: " << (IsNormalizedSkinnedGeometryClass(options.geometryClass) ? "skinned_geometry" : "geometry") << "\n"
+        << "  positions: " << mesh.positions.size() << "\n"
+        << "  normals: " << mesh.normals.size() << "\n"
+        << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
+        << "  triangles: " << (mesh.indices.size() / 3u) << "\n"
+        << "  asset_type: " << (IsNormalizedSkinnedMeshClass(options.meshClass) ? "skinned_mesh" : "mesh") << "\n"
         << "  normal_mode: " << options.normalMode << "\n"
         << "  tangents: " << (sawVertexTangents ? "imported" : "omitted") << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
     NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
-    if(IsNormalizedSkinnedGeometryClass(options.geometryClass))
+    if(IsNormalizedSkinnedMeshClass(options.meshClass))
         NWB_COUT << "  skeleton joints: " << skeletonJointCount << "\n";
 
     return 0;

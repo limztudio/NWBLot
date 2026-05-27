@@ -16,7 +16,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     if(meshletIndex >= nwbMeshletCount())
         return;
 
-    const NwbGeometryMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
+    const NwbMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
 
     for(
@@ -64,7 +64,7 @@ void main(
     }
 
     const uint groupThreadIndex = groupThreadID.x;
-    const NwbGeometryMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
+    const NwbMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     SetMeshOutputCounts(meshlet.vertexCount, meshlet.primitiveCount);
 

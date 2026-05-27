@@ -43,11 +43,11 @@ if(Python3_Interpreter_FOUND)
             nwb_alloc
             nwb_loader
             nwb_ecs_camera
-            nwb_ecs_geometry
+            nwb_ecs_mesh
             nwb_ecs_lighting
             nwb_ecs_scene
             nwb_ecs_render
-            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_geometry>"
+            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material>"
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
         )

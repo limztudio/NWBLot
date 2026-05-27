@@ -13,7 +13,7 @@
 #include <core/graphics/common.h>
 #include <core/graphics/render_pass.h>
 #include <impl/assets_material/material_asset.h>
-#include <impl/ecs_geometry/runtime_geometry.h>
+#include <impl/ecs_mesh/runtime_mesh.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ NWB_IMPL_BEGIN
 
 
 class Shader;
-class Geometry;
+class Mesh;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -97,8 +97,8 @@ private:
         bool operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const;
     };
 
-    struct GeometryResources{
-        Name geometryName = NAME_NONE;
+    struct MeshResources{
+        Name meshName = NAME_NONE;
         Core::BufferHandle positionBuffer;
         Core::BufferHandle normalBuffer;
         Core::BufferHandle tangentBuffer;
@@ -114,12 +114,12 @@ private:
         Core::BindingSetHandle computeBindingSet;
         u32 meshletCount = 0;
         u32 meshletPrimitiveIndexCount = 0;
-        bool runtimeGeometry = false;
-        u64 runtimeGeometryVersion = 0u;
+        bool runtimeMesh = false;
+        u64 runtimeMeshVersion = 0u;
 
         [[nodiscard]] bool valid()const noexcept{
             return
-                geometryName != NAME_NONE
+                meshName != NAME_NONE
                 && positionBuffer != nullptr
                 && normalBuffer != nullptr
                 && tangentBuffer != nullptr
@@ -162,7 +162,7 @@ private:
     };
 
     struct MaterialPassDrawItem{
-        Name geometryKey = NAME_NONE;
+        Name meshKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
         u32 instanceIndex = 0;
     };
@@ -311,17 +311,48 @@ public:
 
 
 private:
-    [[nodiscard]] bool createGeometryResources(const Core::Assets::AssetRef<Geometry>& geometryAsset, GeometryResources*& outGeometry);
-    [[nodiscard]] bool createRuntimeGeometryResources(const RuntimeGeometryDesc& desc, GeometryResources*& outGeometry);
-    void pruneRuntimeGeometryResources();
-    void destroyGeometryBindingSets();
-    [[nodiscard]] bool createMeshBindingSet(GeometryResources& geometry);
-    [[nodiscard]] bool createComputeBindingSet(GeometryResources& geometry);
-    [[nodiscard]] bool geometryFrameBindingResourcesReady(const tchar* context)const;
-    [[nodiscard]] bool materialPassDrawResourcesReady(const GeometryResources& geometry)const;
-    void addGeometrySourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const;
-    void addGeometryFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
-    void addGeometryDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const;
+    [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
+    [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
+    void pruneRuntimeMeshResources();
+    void destroyMeshBindingSets();
+    [[nodiscard]] bool createMeshBindingSet(MeshResources& mesh);
+    [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);
+    [[nodiscard]] bool meshFrameBindingResourcesReady(const tchar* context)const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
+    void addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
+    void addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
+    void addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
+    static void addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
+    static void addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
+    template<typename BufferHandler>
+    static void forEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler){
+        handler(s_MeshPositionBindingSlot, mesh.positionBuffer, false);
+        handler(s_MeshNormalBindingSlot, mesh.normalBuffer, false);
+        handler(s_MeshTangentBindingSlot, mesh.tangentBuffer, false);
+        handler(s_MeshUv0BindingSlot, mesh.uv0Buffer, false);
+        handler(s_MeshColorBindingSlot, mesh.colorBuffer, false);
+        handler(s_MeshVertexRefBindingSlot, mesh.vertexRefBuffer, false);
+        handler(s_MeshletDescBindingSlot, mesh.meshletDescBuffer, false);
+        handler(s_MeshletBoundsBindingSlot, mesh.meshletBoundsBuffer, false);
+        handler(s_MeshletVertexRefBindingSlot, mesh.meshletVertexRefBuffer, false);
+        handler(s_MeshletPrimitiveIndexBindingSlot, mesh.meshletPrimitiveIndexBuffer, true);
+    }
+
+private:
+    static constexpr u32 s_MeshPositionBindingSlot = 0u;
+    static constexpr u32 s_MeshNormalBindingSlot = 1u;
+    static constexpr u32 s_MeshTangentBindingSlot = 2u;
+    static constexpr u32 s_MeshUv0BindingSlot = 3u;
+    static constexpr u32 s_MeshColorBindingSlot = 4u;
+    static constexpr u32 s_MeshVertexRefBindingSlot = 5u;
+    static constexpr u32 s_MeshletDescBindingSlot = 6u;
+    static constexpr u32 s_MeshletBoundsBindingSlot = 7u;
+    static constexpr u32 s_MeshletVertexRefBindingSlot = 8u;
+    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = 9u;
+    static constexpr u32 s_MeshInstanceBindingSlot = 10u;
+    static constexpr u32 s_MeshViewBindingSlot = 11u;
+    static constexpr u32 s_MeshMaterialTypedBindingSlot = 12u;
+    static constexpr u32 s_MeshGeneratedVertexBindingSlot = 13u;
 
 private:
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
@@ -351,11 +382,11 @@ private:
         InstanceGpuDataVector& instanceData,
         MaterialTypedByteDataVector& materialTypedBytes
     );
-    void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const GeometryResources& geometry);
+    void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const MeshResources& mesh);
     void setMaterialPassDrawPushConstants(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
-        const GeometryResources& geometry
+        const MeshResources& mesh
     );
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
@@ -370,18 +401,18 @@ private:
     );
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
-        GeometryResources*& outGeometry,
+        MeshResources*& outMesh,
         MaterialPipelineResources*& outPipelineResources
     );
     template<typename DrawItemHandler>
     void forEachMaterialPassDrawItemResources(const MaterialPassDrawItemVector& drawItems, DrawItemHandler&& handler){
         for(const MaterialPassDrawItem& drawItem : drawItems){
-            GeometryResources* geometry = nullptr;
+            MeshResources* mesh = nullptr;
             MaterialPipelineResources* pipelineResources = nullptr;
-            if(!findMaterialPassDrawItemResources(drawItem, geometry, pipelineResources))
+            if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
                 continue;
 
-            handler(drawItem, *geometry, *pipelineResources);
+            handler(drawItem, *mesh, *pipelineResources);
         }
     }
 
@@ -436,7 +467,7 @@ private:
     ShaderPathResolveCallback m_shaderPathResolver;
 
 private:
-    HashMap<Name, GeometryResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_geometryMeshes;
+    HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_meshMeshes;
 
 
 private:

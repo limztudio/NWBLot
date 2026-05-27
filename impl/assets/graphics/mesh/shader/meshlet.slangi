@@ -16,7 +16,7 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     const NwbMeshInstanceData instance
 );
 
-uint nwbMeshletPrimitiveBase(const NwbGeometryMeshletDesc meshlet, const uint localPrimitiveIndex){
+uint nwbMeshletPrimitiveBase(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex){
     return meshlet.primitiveOffset + localPrimitiveIndex * 3u;
 }
 
@@ -30,7 +30,7 @@ uint3 nwbMeshLoadMeshletPrimitive(const uint primitiveBase){
 
 NwbMeshGeneratedVertex nwbMeshBuildMeshletVertex(
     const uint meshletIndex,
-    const NwbGeometryMeshletDesc meshlet,
+    const NwbMeshletDesc meshlet,
     const uint localVertexIndex,
     const NwbMeshInstanceData instance
 ){

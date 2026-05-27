@@ -1,7 +1,7 @@
 add_subdirectory(global)
 add_subdirectory(math)
 add_subdirectory(metascript)
-add_subdirectory(geometry)
+add_subdirectory(mesh)
 add_subdirectory(ecs)
 add_subdirectory(scene)
 add_subdirectory(ecs_graphics)

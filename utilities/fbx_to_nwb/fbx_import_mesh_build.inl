@@ -95,14 +95,14 @@ template<typename VisitTriangle>
     return true;
 }
 
-bool AppendInstanceGeometry(
+bool AppendInstanceMesh(
     const MeshInstance& instance,
     const ImportOptions& options,
     const bool wantsSkinning,
     const NormalMode::Enum normalMode,
     const Vec4& defaultColor,
     UtilityVector<u32>& inOutTriangleIndices,
-    SourceGeometryBuildContext& inOutGeometry,
+    SourceMeshBuildContext& inOutMesh,
     FbxSkinDetail::ExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
     bool& inOutSawVertexUvs,
@@ -132,7 +132,7 @@ bool AppendInstanceGeometry(
     UtilityVector<u16> clusterJoints;
     if(wantsSkinning){
         if(mesh->skin_deformers.count != 1u){
-            outError = "skinned geometry requires exactly one skin deformer per selected mesh";
+            outError = "skinned mesh requires exactly one skin deformer per selected mesh";
             return false;
         }
         skin = mesh->skin_deformers.data[0u];
@@ -205,9 +205,9 @@ bool AppendInstanceGeometry(
 
         for(const SourceTriangleCorner& corner : triangleCorners){
             u32 vertexRefIndex = 0u;
-            if(!InternSourceCorner(inOutGeometry, corner, wantsSkinning, vertexRefIndex, outError))
+            if(!InternSourceCorner(inOutMesh, corner, wantsSkinning, vertexRefIndex, outError))
                 return false;
-            inOutGeometry.geometry.indices.push_back(vertexRefIndex);
+            inOutMesh.mesh.indices.push_back(vertexRefIndex);
         }
         return true;
     }, outError);

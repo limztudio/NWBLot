@@ -5,13 +5,13 @@
 #include "project_testbed.h"
 
 #include <core/common/log.h>
-#include <core/geometry/frame_math.h>
+#include <core/mesh/frame_math.h>
 #include <core/graphics/graphics.h>
 #include <global/simplemath.h>
 #include <impl/assets_material/material_asset.h>
-#include <impl/assets_geometry/skinned_geometry_asset.h>
+#include <impl/assets_mesh/skinned_mesh_asset.h>
 #include <impl/ecs_camera/camera.h>
-#include <impl/ecs_geometry/ecs_geometry.h>
+#include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_lighting/lighting.h>
 #include <impl/ecs_scene/scene.h>
 #include <impl/ecs_ui/ecs_ui.h>
@@ -27,7 +27,7 @@ namespace __hidden_project_testbed_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TestbedSkinnedGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedGeometry>;
+using TestbedSkinnedMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedMesh>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 struct EditorVec3 : public Float4{
@@ -54,8 +54,8 @@ static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
-static constexpr AStringView s_SkinnedGeometryFemalePath = "project/characters/female";
-static constexpr AStringView s_SkinnedGeometryMaterialPath = "project/materials/mat_skinned_uv";
+static constexpr AStringView s_SkinnedMeshFemalePath = "project/characters/female";
+static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_skinned_uv";
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -213,18 +213,18 @@ static void ApplyFlyCameraInputToMainCamera(
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){
-    TestbedSkinnedGeometryRef geometry;
-    geometry.virtualPath = Name(s_SkinnedGeometryFemalePath);
+    TestbedSkinnedMeshRef mesh;
+    mesh.virtualPath = Name(s_SkinnedMeshFemalePath);
     TestbedMaterialRef material;
-    material.virtualPath = Name(s_SkinnedGeometryMaterialPath);
+    material.virtualPath = Name(s_SkinnedMeshMaterialPath);
 
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
     transform.position = Float4(0.0f, 0.0f, 0.0f);
     transform.scale = Float4(1.0f, 1.0f, 1.0f);
 
-    auto& skinnedGeometry = entity.addComponent<NWB::Impl::SkinnedGeometryComponent>();
-    skinnedGeometry.skinnedGeometry = geometry;
+    auto& skinnedMesh = entity.addComponent<NWB::Impl::SkinnedMeshComponent>();
+    skinnedMesh.skinnedMesh = mesh;
 
     auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
     renderer.material = material;
@@ -256,10 +256,10 @@ void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
         rendererSystem,
         NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
     );
-    auto* skinnedGeometrySystem = world.getSystem<NWB::Impl::SkinnedGeometrySystem>();
+    auto* skinnedMeshSystem = world.getSystem<NWB::Impl::SkinnedMeshSystem>();
     NWB_FATAL_ASSERT_MSG(
-        skinnedGeometrySystem,
-        NWB_TEXT("ProjectTestbed initialization failed: skinned geometry system is missing in initial world")
+        skinnedMeshSystem,
+        NWB_TEXT("ProjectTestbed initialization failed: skinned mesh system is missing in initial world")
     );
 }
 

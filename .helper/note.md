@@ -8,7 +8,7 @@ Updated: 2026-04-19
 2. Use `getDevice()` and rely on invariant/assert behavior instead of defensive null handling that adds overhead and hides invalid states.
 3. Asset-to-asset and component-to-asset bindings must use typed `Core::Assets::AssetRef<T>`, not raw `Name` or string forms.
 4. Graphics pipeline caches must include framebuffer/render-target compatibility in the cache key; material/shader identity alone is not enough when pipeline creation depends on framebuffer info.
-5. Basic built-in geometry should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.
+5. Basic built-in mesh should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.
 6. If an asset invariant is format-wide, validate it in the asset/codec layer, not only in one cooker path.
 7. Vulkan command buffers must retain bound `IBindingSet` objects until GPU completion; descriptor tables and descriptor-heap ranges are GPU-visible lifetime, not temporary CPU-side state.
 8. Explicit textual config tokens like shader `compiler` and `stage` should fail on unknown values; do not silently fall back to a different backend/language.
@@ -20,10 +20,10 @@ Updated: 2026-04-19
 14. Short canonical shader metadata tokens like `compiler`, `stage`, and `target_profile` are good `ACompactString` candidates; keep `AString` for unbounded or exact-text fields instead.
 15. The ECS renderer material contract is shader-driven only: prefer `MeshShader + PS` on mesh-capable hardware, otherwise use `CS + PS`; do not add a material-facing `VS + PS` fallback path back into this renderer.
 16. If a mesh-capable device and material both provide the mesh path, failures creating or using that mesh path are errors to fix, not reasons to silently fall back to compute.
-17. Keep mesh and compute-emulation renderer resources path-specific: mesh path bindings stay read-only (`SRV` geometry buffers + push constants), while compute-emulation owns the UAV vertex expansion buffer and its internal raster bridge resources.
+17. Keep mesh and compute-emulation renderer resources path-specific: mesh path bindings stay read-only (`SRV` mesh buffers + push constants), while compute-emulation owns the UAV vertex expansion buffer and its internal raster bridge resources.
 18. The compute-emulation path still intentionally uses the internal `engine/graphics/mesh_emulation_vs` bridge and the device-manager render-pass integration; those are runtime requirements, not leftovers from the removed material-facing `VS + PS` path.
 19. ECS renderer material assets expose only `mesh` and `ps` stages. Do not add a user-authored `cs` or `task` stage for this path; the cooker derives the internal compute-emulation stage from the mesh shader source automatically.
-20. In the ECS renderer geometry pass, once material/framebuffer render-path selection is cached, bucket draw work by path first and run path-specific submission loops; do not keep branching on render path inside the hot per-draw submission section.
+20. In the ECS renderer mesh pass, once material/framebuffer render-path selection is cached, bucket draw work by path first and run path-specific submission loops; do not keep branching on render path inside the hot per-draw submission section.
 21. `Core::Filesystem::VolumeSession::pushDataDeferred()` copies payload bytes into the staged volume immediately; caller-local temporary buffers only need to stay alive for the duration of the call, so reuse/scratch-backed staging payload buffers are valid there.
 22. The public math API in `global/` lives directly under `NWB`, not `NWB::Math`, and it uses column-vector transform semantics by design: matrices store columns, translation lives in the fourth column, and `result = M * v`; do not mix row-vector formulas into this layer without an explicit transpose/convention bridge.
 23. The math subsystem lives under `global/`, with internal implementation detail under `global/detail/`; keep math in the global/domain layer instead of a separate top-level `math/` tree.

@@ -6,8 +6,8 @@
 
 #include <core/ecs/ecs.h>
 #include <core/graphics/graphics.h>
-#include <impl/ecs_skinned_geometry_render/ecs_skinned_geometry_render.h>
-#include <impl/ecs_geometry/ecs_geometry.h>
+#include <impl/ecs_skinned_mesh_render/ecs_skinned_mesh_render.h>
+#include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_render/ecs_render.h>
 #include <impl/ecs_ui/ecs_ui.h>
 #include <core/common/log.h>
@@ -46,9 +46,9 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         return false;
     }
 
-    auto& geometrySystem = world->addSystem<NWB::Impl::GeometrySystem>(*world);
-    if(!world->getSystem<NWB::Impl::GeometrySystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core geometry system was not created"));
+    auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
+    if(!world->getSystem<NWB::Impl::MeshSystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core mesh system was not created"));
         return false;
     }
     auto& rendererSystem = world->addSystem<NWB::Impl::RendererSystem>(
@@ -61,15 +61,15 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core renderer system was not created"));
         return false;
     }
-    auto& skinnedGeometrySystem = world->addSystem<NWB::Impl::SkinnedGeometrySystem>(
+    auto& skinnedMeshSystem = world->addSystem<NWB::Impl::SkinnedMeshSystem>(
         *world,
         context.graphics,
         context.assetManager,
-        geometrySystem,
+        meshSystem,
         context.shaderPathResolver
     );
-    if(!world->getSystem<NWB::Impl::SkinnedGeometrySystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: skinned geometry system was not created"));
+    if(!world->getSystem<NWB::Impl::SkinnedMeshSystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: skinned mesh system was not created"));
         return false;
     }
     auto& uiSystem = world->addSystem<NWB::Impl::UiSystem>(
@@ -83,7 +83,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core UI system was not created"));
         return false;
     }
-    context.graphics.addRenderPassToBack(skinnedGeometrySystem);
+    context.graphics.addRenderPassToBack(skinnedMeshSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiSystem);
 
@@ -99,9 +99,9 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    auto* skinnedGeometrySystem = world->getSystem<NWB::Impl::SkinnedGeometrySystem>();
-    if(!skinnedGeometrySystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: skinned geometry system is null"));
+    auto* skinnedMeshSystem = world->getSystem<NWB::Impl::SkinnedMeshSystem>();
+    if(!skinnedMeshSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: skinned mesh system is null"));
         return;
     }
 
@@ -111,9 +111,9 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    auto* geometrySystem = world->getSystem<NWB::Impl::GeometrySystem>();
-    if(!geometrySystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core geometry system is null"));
+    auto* meshSystem = world->getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: core mesh system is null"));
         return;
     }
 
@@ -123,7 +123,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    context.graphics.removeRenderPass(*skinnedGeometrySystem);
+    context.graphics.removeRenderPass(*skinnedMeshSystem);
     context.graphics.removeRenderPass(*rendererSystem);
     context.graphics.removeRenderPass(*uiSystem);
 

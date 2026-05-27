@@ -14,13 +14,13 @@
 #include <core/ecs/world.h>
 #include <core/graphics/graphics.h>
 #include <core/graphics/shader_archive.h>
-#include <impl/assets_geometry/geometry_asset.h>
+#include <impl/assets_mesh/mesh_asset.h>
 #include <impl/assets_material/material_asset.h>
 #include <impl/assets_material/material_shader_stage_names.h>
 #include <impl/assets_shader/shader_asset.h>
 #include <impl/assets_shader/shader_asset_loader.h>
 #include <impl/ecs_camera/camera.h>
-#include <impl/ecs_geometry/ecs_geometry.h>
+#include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_lighting/lighting.h>
 
 
@@ -155,25 +155,6 @@ inline bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& 
     return CreateClampSampler(device, sampler, false, failureMessage);
 }
 
-inline void AddGeometrySourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(7, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(8, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(9, 1));
-}
-
-inline void AddGeometryFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(11, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(12, 1));
-}
-
 inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
@@ -209,7 +190,7 @@ inline Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-inline Core::RenderState BuildGeometryRenderState(){
+inline Core::RenderState BuildMeshRenderState(){
     Core::RenderState renderState;
     renderState.depthStencilState
         .enableDepthTest()
@@ -223,14 +204,14 @@ inline Core::RenderState BuildGeometryRenderState(){
 inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::Opaque:
-        return BuildGeometryRenderState();
+        return BuildMeshRenderState();
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
         return BuildRendererAvboitVoxelRenderState();
     case MaterialPipelinePass::AvboitAccumulate:
         return BuildRendererAvboitAccumulateRenderState();
     default:
-        return BuildGeometryRenderState();
+        return BuildMeshRenderState();
     }
 }
 

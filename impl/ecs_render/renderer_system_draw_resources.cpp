@@ -20,8 +20,8 @@ bool RendererSystem::createMeshShaderResources(){
 
     Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-    ECSRenderDetail::AddGeometrySourceBindingLayoutItems(bindingLayoutDesc);
-    ECSRenderDetail::AddGeometryFrameBindingLayoutItems(bindingLayoutDesc);
+    addMeshSourceBindingLayoutItems(bindingLayoutDesc);
+    addMeshFrameBindingLayoutItems(bindingLayoutDesc);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
     Core::IDevice* device = m_graphics.getDevice();
@@ -38,9 +38,9 @@ bool RendererSystem::createComputeEmulationResources(){
     if(!m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        ECSRenderDetail::AddGeometrySourceBindingLayoutItems(bindingLayoutDesc);
-        ECSRenderDetail::AddGeometryFrameBindingLayoutItems(bindingLayoutDesc);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(13, 1));
+        addMeshSourceBindingLayoutItems(bindingLayoutDesc);
+        addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         Core::IDevice* device = m_graphics.getDevice();
@@ -147,7 +147,7 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
 
     m_instanceBuffer = Move(instanceBuffer);
     m_instanceBufferCapacity = capacity;
-    destroyGeometryBindingSets();
+    destroyMeshBindingSets();
     return true;
 }
 
@@ -180,7 +180,7 @@ bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
 
     m_materialTypedBuffer = Move(materialTypedBuffer);
     m_materialTypedBufferCapacity = capacity;
-    destroyGeometryBindingSets();
+    destroyMeshBindingSets();
     return true;
 }
 
@@ -200,7 +200,7 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
         }
 
         m_meshViewBuffer = Move(meshViewBuffer);
-        destroyGeometryBindingSets();
+        destroyMeshBindingSets();
     }
 
     const ECSRenderDetail::MeshViewGpuData viewState =
@@ -269,21 +269,21 @@ bool RendererSystem::uploadMaterialTypedBuffer(
 
 bool RendererSystem::findMaterialPassDrawItemResources(
     const MaterialPassDrawItem& drawItem,
-    GeometryResources*& outGeometry,
+    MeshResources*& outMesh,
     MaterialPipelineResources*& outPipelineResources
 ){
-    outGeometry = nullptr;
+    outMesh = nullptr;
     outPipelineResources = nullptr;
 
-    const auto foundGeometry = m_geometryMeshes.find(drawItem.geometryKey);
-    if(foundGeometry == m_geometryMeshes.end())
+    const auto foundMesh = m_meshMeshes.find(drawItem.meshKey);
+    if(foundMesh == m_meshMeshes.end())
         return false;
 
     const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
     if(foundPipeline == m_materialPipelines.end())
         return false;
 
-    outGeometry = &foundGeometry.value();
+    outMesh = &foundMesh.value();
     outPipelineResources = &foundPipeline.value();
     return true;
 }

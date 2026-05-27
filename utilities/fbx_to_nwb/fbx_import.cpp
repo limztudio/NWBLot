@@ -31,20 +31,20 @@ namespace __hidden_fbx_import{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildGeometry(
+bool BuildMesh(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
     const Vec4& defaultColor,
-    SourceGeometryStreams& outGeometry,
+    SourceMeshStreams& outMesh,
     u32& outSkeletonJointCount,
-    UtilityVector<GeometryJointMatrix>& outInverseBindMatrices,
+    UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
     bool& outSawVertexTangents,
     AString& outError
 ){
-    outGeometry = SourceGeometryStreams{};
+    outMesh = SourceMeshStreams{};
     outSkeletonJointCount = 0u;
     outInverseBindMatrices.clear();
     outSawVertexColors = false;
@@ -61,9 +61,9 @@ bool BuildGeometry(
     ))
         return false;
 
-    u32 geometryClass = 0u;
-    if(!ParseGeometryClassText(options.geometryClass, geometryClass)){
-        outError = GeometryClassErrorText();
+    u32 meshClass = 0u;
+    if(!ParseMeshClassText(options.meshClass, meshClass)){
+        outError = MeshClassErrorText();
         return false;
     }
     NormalMode::Enum normalMode = NormalMode::Imported;
@@ -72,10 +72,10 @@ bool BuildGeometry(
         return false;
     }
 
-    const bool wantsSkinning = GeometryClassUsesSkinning(geometryClass);
-    __hidden_fbx_import::ReserveSourceGeometryStreams(outGeometry, estimatedTriangleCorners, wantsSkinning);
-    __hidden_fbx_import::SourceGeometryBuildContext geometryContext{ outGeometry };
-    __hidden_fbx_import::ReserveSourceGeometryBuildContext(geometryContext, estimatedTriangleCorners, wantsSkinning);
+    const bool wantsSkinning = MeshClassUsesSkinning(meshClass);
+    __hidden_fbx_import::ReserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
+    __hidden_fbx_import::SourceMeshBuildContext meshContext{ outMesh };
+    __hidden_fbx_import::ReserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
 
     UtilityVector<u32> triangleIndices;
     FbxSkinDetail::ExportContext skinContext;
@@ -85,14 +85,14 @@ bool BuildGeometry(
             return false;
         }
         if(
-            !__hidden_fbx_import::AppendInstanceGeometry(
+            !__hidden_fbx_import::AppendInstanceMesh(
                 instances[instanceIndex],
                 options,
                 wantsSkinning,
                 normalMode,
                 defaultColor,
                 triangleIndices,
-                geometryContext,
+                meshContext,
                 skinContext,
                 outSawVertexColors,
                 outSawVertexUvs,
@@ -104,17 +104,17 @@ bool BuildGeometry(
         }
     }
 
-    if(outGeometry.indices.empty()){
+    if(outMesh.indices.empty()){
         outError = "selected meshes produced no triangles";
         return false;
     }
-    if(__hidden_fbx_import::SourceGeometryHasPartialTangents(outGeometry)){
-        __hidden_fbx_import::DropSourceGeometryTangents(outGeometry);
+    if(__hidden_fbx_import::SourceMeshHasPartialTangents(outMesh)){
+        __hidden_fbx_import::DropSourceMeshTangents(outMesh);
         outSawVertexTangents = false;
     }
     if(wantsSkinning){
         if(skinContext.joints.empty()){
-            outError = "skinned geometry did not produce any skeleton joints";
+            outError = "skinned mesh did not produce any skeleton joints";
             return false;
         }
         outSkeletonJointCount = static_cast<u32>(skinContext.joints.size());

@@ -21,20 +21,20 @@ using Vec2 = Float2U;
 using Vec3 = Float3U;
 using Vec4 = Float4U;
 
-struct GeometrySkinInfluence{
+struct MeshSkinInfluence{
     u16 joint[4] = {};
     f32 weight[4] = {};
 };
-static_assert(sizeof(GeometrySkinInfluence) == sizeof(u16) * 4u + sizeof(f32) * 4u);
-static_assert(alignof(GeometrySkinInfluence) == alignof(f32));
-static_assert(IsTriviallyCopyable_V<GeometrySkinInfluence>);
+static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * 4u + sizeof(f32) * 4u);
+static_assert(alignof(MeshSkinInfluence) == alignof(f32));
+static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
-struct GeometryJointMatrix{
+struct MeshJointMatrix{
     Vec4 columns[4];
 };
-static_assert(sizeof(GeometryJointMatrix) == sizeof(f32) * 16u);
-static_assert(alignof(GeometryJointMatrix) == alignof(f32));
-static_assert(IsTriviallyCopyable_V<GeometryJointMatrix>);
+static_assert(sizeof(MeshJointMatrix) == sizeof(f32) * 16u);
+static_assert(alignof(MeshJointMatrix) == alignof(f32));
+static_assert(IsTriviallyCopyable_V<MeshJointMatrix>);
 
 static constexpr u32 s_MissingSourceStreamIndex = Limit<u32>::s_Max;
 
@@ -48,13 +48,13 @@ struct SourceVertexRef{
 };
 static_assert(IsTriviallyCopyable_V<SourceVertexRef>);
 
-struct SourceGeometryStreams{
+struct SourceMeshStreams{
     UtilityVector<Vec3> positions;
     UtilityVector<Vec3> normals;
     UtilityVector<Vec4> tangents;
     UtilityVector<Vec2> uv0;
     UtilityVector<Vec4> colors;
-    UtilityVector<GeometrySkinInfluence> skin;
+    UtilityVector<MeshSkinInfluence> skin;
     UtilityVector<SourceVertexRef> vertexRefs;
     UtilityVector<u32> indices;
 };
@@ -80,7 +80,7 @@ static constexpr f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
 struct ImportOptions{
     AString inputPath;
     AString outputPath;
-    AString geometryClass = "static";
+    AString meshClass = "mesh";
     AString meshSelector = "all";
     AString normalMode = "imported";
     AString defaultColorText = "1,1,1,1";
@@ -125,16 +125,16 @@ struct SceneHandle{
 AString Trim(AString value);
 AString UnquotePath(AString value);
 AString ToLower(AString value);
-AString NormalizeGeometryClassText(AString value);
-AStringView GeometryClassText(u32 geometryClass);
-AString GeometryClassOptionsText();
-AString GeometryClassErrorText();
-bool ParseGeometryClassText(const AString& value, u32& outGeometryClass);
-bool ParseNormalizedGeometryClassText(AStringView value, u32& outGeometryClass);
-bool GeometryClassUsesSkinning(u32 geometryClass);
-bool IsNormalizedSkinnedGeometryClass(AStringView value);
-bool IsSkinnedGeometryClass(const AString& value);
-bool ValidateGeometryClassText(AString& inOutValue, AString& outError);
+AString NormalizeMeshClassText(AString value);
+AStringView MeshClassText(u32 meshClass);
+AString MeshClassOptionsText();
+AString MeshClassErrorText();
+bool ParseMeshClassText(const AString& value, u32& outMeshClass);
+bool ParseNormalizedMeshClassText(AStringView value, u32& outMeshClass);
+bool MeshClassUsesSkinning(u32 meshClass);
+bool IsNormalizedSkinnedMeshClass(AStringView value);
+bool IsSkinnedMeshClass(const AString& value);
+bool ValidateMeshClassText(AString& inOutValue, AString& outError);
 AStringView NormalModeText(NormalMode::Enum normalMode);
 AString NormalModeOptionsText();
 AString NormalModeErrorText();
@@ -156,26 +156,26 @@ bool SelectMeshInstances(
     UtilityVector<usize>& outSelection,
     AString& outError
 );
-bool BuildGeometry(
+bool BuildMesh(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
     const Vec4& defaultColor,
-    SourceGeometryStreams& outGeometry,
+    SourceMeshStreams& outMesh,
     u32& outSkeletonJointCount,
-    UtilityVector<GeometryJointMatrix>& outInverseBindMatrices,
+    UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
     bool& outSawVertexTangents,
     AString& outError
 );
 
-bool WriteNwbGeometry(
+bool WriteNwbMesh(
     const Path& outputPath,
-    const SourceGeometryStreams& geometry,
+    const SourceMeshStreams& mesh,
     const u32 skeletonJointCount,
-    const UtilityVector<GeometryJointMatrix>& inverseBindMatrices,
-    const AString& geometryClassText,
+    const UtilityVector<MeshJointMatrix>& inverseBindMatrices,
+    const AString& meshClassText,
     AString& outError
 );
 

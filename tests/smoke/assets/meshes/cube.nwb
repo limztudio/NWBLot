@@ -1,4 +1,4 @@
-geometry asset;
+mesh asset;
 
 asset.positions = [
     [    -0.5,     -0.5,     -0.5],

@@ -25,7 +25,7 @@ namespace FbxSkinDetail{
 
 struct ExportContext{
     UtilityVector<ufbx_node*> joints;
-    UtilityVector<GeometryJointMatrix> inverseBindMatrices;
+    UtilityVector<MeshJointMatrix> inverseBindMatrices;
     HashMap<ufbx_node*, u16> jointLookup;
 };
 
@@ -42,7 +42,7 @@ bool BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
     u32 logicalVertex,
-    GeometrySkinInfluence& outInfluence,
+    MeshSkinInfluence& outInfluence,
     AString& outError
 );
 

@@ -6,12 +6,12 @@
 
 #include <core/common/log.h>
 #include <core/ecs/ecs.h>
-#include <core/geometry/frame_math.h>
+#include <core/mesh/frame_math.h>
 #include <core/graphics/graphics.h>
-#include <impl/assets_geometry/geometry_asset.h>
+#include <impl/assets_mesh/mesh_asset.h>
 #include <impl/assets_material/material_asset.h>
 #include <impl/ecs_camera/camera.h>
-#include <impl/ecs_geometry/ecs_geometry.h>
+#include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_lighting/lighting.h>
 #include <impl/ecs_render/ecs_render.h>
 #include <impl/ecs_scene/scene.h>
@@ -26,7 +26,7 @@ namespace __hidden_transparent_multi_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SmokeGeometryRef = NWB::Core::Assets::AssetRef<NWB::Impl::Geometry>;
+using SmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 
@@ -35,7 +35,7 @@ static constexpr f32 s_CameraTargetY = 0.85f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
-static constexpr AStringView s_CubeGeometryPath = "project/meshes/cube";
+static constexpr AStringView s_CubeMeshPath = "project/meshes/cube";
 static constexpr AStringView s_TransparentOrangeMaterialPath = "project/smoke/transparent_multi/materials/orange";
 static constexpr AStringView s_TransparentGreenMaterialPath = "project/smoke/transparent_multi/materials/green";
 static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/transparent_multi/materials/blue";
@@ -43,13 +43,13 @@ static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/tran
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
     NWB::Core::ECS::World& world,
-    const AStringView geometryPath,
+    const AStringView meshPath,
     const AStringView materialPath,
     const Float4& position,
     const Float4& scale
 ){
-    SmokeGeometryRef geometry;
-    geometry.virtualPath = Name(geometryPath);
+    SmokeMeshRef mesh;
+    mesh.virtualPath = Name(meshPath);
     SmokeMaterialRef material;
     material.virtualPath = Name(materialPath);
 
@@ -58,8 +58,8 @@ static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/tran
     transform.position = position;
     transform.scale = scale;
 
-    auto& geometryComponent = entity.addComponent<NWB::Impl::GeometryComponent>();
-    geometryComponent.geometry = geometry;
+    auto& meshComponent = entity.addComponent<NWB::Impl::MeshComponent>();
+    meshComponent.mesh = mesh;
 
     auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
     renderer.material = material;
@@ -80,9 +80,9 @@ private:
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
-        world->addSystem<NWB::Impl::GeometrySystem>(*world);
-        if(!world->getSystem<NWB::Impl::GeometrySystem>()){
-            NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: geometry system is missing"));
+        world->addSystem<NWB::Impl::MeshSystem>(*world);
+        if(!world->getSystem<NWB::Impl::MeshSystem>()){
+            NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: mesh system is missing"));
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
         }
 
@@ -148,21 +148,21 @@ public:
 
         const auto cubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
-            s_CubeGeometryPath,
+            s_CubeMeshPath,
             s_TransparentOrangeMaterialPath,
             Float4(-0.68f, s_CameraTargetY, 0.02f),
             Float4(0.62f, 0.62f, 0.62f)
         );
         const auto centerCubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
-            s_CubeGeometryPath,
+            s_CubeMeshPath,
             s_TransparentGreenMaterialPath,
             Float4(0.0f, s_CameraTargetY, 0.0f),
             Float4(0.78f, 0.78f, 0.78f)
         );
         const auto rightCubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
-            s_CubeGeometryPath,
+            s_CubeMeshPath,
             s_TransparentBlueMaterialPath,
             Float4(0.68f, s_CameraTargetY, 0.04f),
             Float4(0.68f, 0.68f, 0.68f)

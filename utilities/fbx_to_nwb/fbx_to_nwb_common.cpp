@@ -4,7 +4,7 @@
 
 #include "fbx_to_nwb.h"
 
-#include <core/geometry/geometry_class.h>
+#include <core/mesh/mesh_class.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,60 +49,64 @@ AString ToLower(AString value){
     return value;
 }
 
-AString NormalizeGeometryClassText(AString value){
-    value = ToLower(Trim(Move(value)));
-    if(value == "geometry")
-        return AString("static");
-    if(value == "skinned_geometry")
-        return AString("skinned");
-    return value;
+AString NormalizeMeshClassText(AString value){
+    return ToLower(Trim(Move(value)));
 }
 
-AStringView GeometryClassText(const u32 geometryClass){
-    return NWB::Core::Geometry::GeometryClassText(geometryClass);
+AStringView MeshClassText(const u32 meshClass){
+    return NWB::Core::Mesh::MeshClassText(meshClass);
 }
 
-AString GeometryClassOptionsText(){
-    return AString("geometry/static or skinned_geometry/skinned");
+AString MeshClassOptionsText(){
+    return AString("mesh or skinned_mesh");
 }
 
-AString GeometryClassErrorText(){
+AString MeshClassErrorText(){
     AString error = "Asset type must be ";
-    error += GeometryClassOptionsText();
+    error += MeshClassOptionsText();
     return error;
 }
 
-bool ParseNormalizedGeometryClassText(const AStringView value, u32& outGeometryClass){
-    outGeometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    return NWB::Core::Geometry::ParseGeometryClassText(value, outGeometryClass);
+bool ParseNormalizedMeshClassText(const AStringView value, u32& outMeshClass){
+    if(value == "mesh"){
+        outMeshClass = NWB::Core::Mesh::MeshClass::Static;
+        return true;
+    }
+    if(value == "skinned_mesh"){
+        outMeshClass = NWB::Core::Mesh::MeshClass::Skinned;
+        return true;
+    }
+
+    outMeshClass = NWB::Core::Mesh::MeshClass::Invalid;
+    return false;
 }
 
-bool ParseGeometryClassText(const AString& value, u32& outGeometryClass){
-    const AString normalized = NormalizeGeometryClassText(value);
-    return ParseNormalizedGeometryClassText(normalized, outGeometryClass);
+bool ParseMeshClassText(const AString& value, u32& outMeshClass){
+    const AString normalized = NormalizeMeshClassText(value);
+    return ParseNormalizedMeshClassText(normalized, outMeshClass);
 }
 
-bool GeometryClassUsesSkinning(const u32 geometryClass){
-    return NWB::Core::Geometry::GeometryClassUsesSkinning(geometryClass);
+bool MeshClassUsesSkinning(const u32 meshClass){
+    return NWB::Core::Mesh::MeshClassUsesSkinning(meshClass);
 }
 
-bool IsNormalizedSkinnedGeometryClass(const AStringView value){
-    u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    return ParseNormalizedGeometryClassText(value, geometryClass) && GeometryClassUsesSkinning(geometryClass);
+bool IsNormalizedSkinnedMeshClass(const AStringView value){
+    u32 meshClass = NWB::Core::Mesh::MeshClass::Invalid;
+    return ParseNormalizedMeshClassText(value, meshClass) && MeshClassUsesSkinning(meshClass);
 }
 
-bool IsSkinnedGeometryClass(const AString& value){
-    const AString normalized = NormalizeGeometryClassText(value);
-    return IsNormalizedSkinnedGeometryClass(normalized);
+bool IsSkinnedMeshClass(const AString& value){
+    const AString normalized = NormalizeMeshClassText(value);
+    return IsNormalizedSkinnedMeshClass(normalized);
 }
 
-bool ValidateGeometryClassText(AString& inOutValue, AString& outError){
-    inOutValue = NormalizeGeometryClassText(Move(inOutValue));
-    u32 geometryClass = NWB::Core::Geometry::GeometryClass::Invalid;
-    if(ParseNormalizedGeometryClassText(inOutValue, geometryClass))
+bool ValidateMeshClassText(AString& inOutValue, AString& outError){
+    inOutValue = NormalizeMeshClassText(Move(inOutValue));
+    u32 meshClass = NWB::Core::Mesh::MeshClass::Invalid;
+    if(ParseNormalizedMeshClassText(inOutValue, meshClass))
         return true;
 
-    outError = GeometryClassErrorText();
+    outError = MeshClassErrorText();
     return false;
 }
 

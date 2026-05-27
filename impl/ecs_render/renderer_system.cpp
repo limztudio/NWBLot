@@ -50,7 +50,7 @@ RendererSystem::RendererSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_geometryMeshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_meshMeshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
     , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
     , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
@@ -80,7 +80,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 }
 
 void RendererSystem::invalidateResources(){
-    m_geometryMeshes.clear();
+    m_meshMeshes.clear();
     m_materialPipelines.clear();
     m_loggedMaterialPaths.clear();
 
@@ -126,7 +126,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     if(!framebuffer)
         return;
 
-    pruneRuntimeGeometryResources();
+    pruneRuntimeMeshResources();
 
     if(!m_deferredTargets.valid())
         return;

@@ -1,6 +1,6 @@
 nwb_declare_interface_library(nwb_assets_graphics)
 target_link_libraries(nwb_assets_graphics INTERFACE
-    nwb_assets_geometry
+    nwb_assets_mesh
     nwb_assets_material
     nwb_assets_shader
 )
@@ -13,7 +13,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
     )
     target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets)
     target_link_libraries(nwb_assets_graphics_cook PRIVATE
-        nwb_assets_geometry_cook
+        nwb_assets_mesh_cook
         nwb_assets_material_cook
         nwb_assets_shader_cook
         nwb_graphics

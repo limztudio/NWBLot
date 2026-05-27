@@ -88,7 +88,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         return;
 
     auto rendererView = m_world.view<RendererComponent>();
-    auto* geometrySystem = m_world.getSystem<NWB::Impl::GeometrySystem>();
+    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     usize rendererCapacity = rendererView.candidateCount();
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
@@ -177,12 +177,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
         return true;
     };
 
-    auto appendDrawForGeometry = [&](
+    auto appendDrawForMesh = [&](
         const Core::ECS::EntityID entity,
         const Core::Assets::AssetRef<Material>& material,
-        GeometryResources& geometry
+        MeshResources& mesh
     ) -> bool{
-        if(!geometry.valid())
+        if(!mesh.valid())
             return false;
 
         const NWB::Impl::TransformComponent* transform =
@@ -231,7 +231,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 return false;
 
             MaterialPassDrawItem drawItem;
-            drawItem.geometryKey = geometry.geometryName;
+            drawItem.meshKey = mesh.meshName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
             drawItems.push_back(drawItem);
@@ -258,50 +258,43 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!renderer.visible)
             continue;
 
-        if(!geometrySystem){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: GeometrySystem is not registered; renderers cannot resolve geometry"));
+        if(!meshSystem){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: MeshSystem is not registered; renderers cannot resolve mesh"));
             break;
         }
 
-        RenderableGeometryDesc resolvedGeometry;
-        if(!geometrySystem->resolveRenderableGeometry(entity, resolvedGeometry))
+        RenderableMeshDesc resolvedMesh;
+        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
             continue;
 
-        GeometryResources* geometry = nullptr;
-        if(resolvedGeometry.runtime){
-            if(!createRuntimeGeometryResources(resolvedGeometry.runtimeGeometry, geometry))
+        MeshResources* mesh = nullptr;
+        if(resolvedMesh.runtime){
+            if(!createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
                 continue;
         }
-        else if(!createGeometryResources(resolvedGeometry.geometry, geometry))
+        else if(!createMeshResources(resolvedMesh.mesh, mesh))
             continue;
 
-        if(geometry)
-            appendDrawForGeometry(entity, renderer.material, *geometry);
+        if(mesh)
+            appendDrawForMesh(entity, renderer.material, *mesh);
     }
 }
 
 void RendererSystem::setMaterialPassCommonBufferStates(
     Core::ICommandList& commandList,
-    const GeometryResources& geometry
+    const MeshResources& mesh
 ){
-    commandList.setBufferState(geometry.positionBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.normalBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.tangentBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.uv0Buffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.colorBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.vertexRefBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.meshletDescBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.meshletBoundsBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.meshletVertexRefBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(geometry.meshletPrimitiveIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+    forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
+        commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
+    });
     commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
-bool RendererSystem::materialPassDrawResourcesReady(const GeometryResources& geometry)const{
+bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
     return
-        geometry.valid()
+        mesh.valid()
         && m_instanceBuffer
         && m_meshViewBuffer
         && m_materialTypedBuffer
@@ -311,12 +304,12 @@ bool RendererSystem::materialPassDrawResourcesReady(const GeometryResources& geo
 void RendererSystem::setMaterialPassDrawPushConstants(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
-    const GeometryResources& geometry
+    const MeshResources& mesh
 ){
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
-            geometry.meshletCount,
+            mesh.meshletCount,
             drawItem.instanceIndex,
             context.viewportState,
             *context.avboitTargets
@@ -326,7 +319,7 @@ void RendererSystem::setMaterialPassDrawPushConstants(
 
     ECSRenderDetail::SetShaderDrivenPushConstants(
         context.commandList,
-        geometry.meshletCount,
+        mesh.meshletCount,
         drawItem.instanceIndex,
         context.viewportState
     );
@@ -336,29 +329,29 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(
-            !materialPassDrawResourcesReady(geometry)
+            !materialPassDrawResourcesReady(mesh)
             || !pipelineResources.meshletPipeline
         )
             return;
-        if(!createMeshBindingSet(geometry))
+        if(!createMeshBindingSet(mesh))
             return;
 
-        setMaterialPassCommonBufferStates(context.commandList, geometry);
+        setMaterialPassCommonBufferStates(context.commandList, mesh);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
         meshletState.setFramebuffer(context.framebuffer);
         meshletState.setViewport(context.viewportState);
-        meshletState.addBindingSet(geometry.meshBindingSet.get());
+        meshletState.addBindingSet(mesh.meshBindingSet.get());
         if(context.passBindingSet)
             meshletState.addBindingSet(context.passBindingSet);
 
         context.commandList.setMeshletState(meshletState);
 
-        setMaterialPassDrawPushConstants(context, drawItem, geometry);
-        context.commandList.dispatchMesh(geometry.meshletCount);
+        setMaterialPassDrawPushConstants(context, drawItem, mesh);
+        context.commandList.dispatchMesh(mesh.meshletCount);
     });
 }
 
@@ -373,36 +366,36 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
 
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, GeometryResources& geometry, MaterialPipelineResources& pipelineResources){
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(
-            !materialPassDrawResourcesReady(geometry)
+            !materialPassDrawResourcesReady(mesh)
             || !pipelineResources.computePipeline
             || !pipelineResources.emulationPipeline
         )
             return;
-        if(!createComputeBindingSet(geometry))
+        if(!createComputeBindingSet(mesh))
             return;
-        if(!geometry.computeBindingSet || !geometry.emulationVertexBuffer)
+        if(!mesh.computeBindingSet || !mesh.emulationVertexBuffer)
             return;
 
-        setMaterialPassCommonBufferStates(context.commandList, geometry);
-        context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        setMaterialPassCommonBufferStates(context.commandList, mesh);
+        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
         computeState.setPipeline(pipelineResources.computePipeline.get());
-        computeState.addBindingSet(geometry.computeBindingSet.get());
+        computeState.addBindingSet(mesh.computeBindingSet.get());
 
         context.commandList.setComputeState(computeState);
 
         ECSRenderDetail::SetShaderDrivenPushConstants(
             context.commandList,
-            geometry.meshletCount,
+            mesh.meshletCount,
             drawItem.instanceIndex,
             context.viewportState
         );
-        context.commandList.dispatch(geometry.meshletCount);
+        context.commandList.dispatch(mesh.meshletCount);
 
-        context.commandList.setBufferState(geometry.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
 
         Core::GraphicsState graphicsState;
         graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
@@ -410,7 +403,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         graphicsState.setViewport(context.viewportState);
         graphicsState.addVertexBuffer(
             Core::VertexBufferBinding()
-                .setBuffer(geometry.emulationVertexBuffer.get())
+                .setBuffer(mesh.emulationVertexBuffer.get())
                 .setSlot(0)
                 .setOffset(0)
         );
@@ -427,10 +420,10 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setGraphicsState(graphicsState);
 
         if(usesAvboit)
-            setMaterialPassDrawPushConstants(context, drawItem, geometry);
+            setMaterialPassDrawPushConstants(context, drawItem, mesh);
 
         Core::DrawArguments drawArgs;
-        drawArgs.setVertexCount(geometry.meshletPrimitiveIndexCount);
+        drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
         context.commandList.draw(drawArgs);
     });
 }

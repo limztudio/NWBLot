@@ -9,9 +9,9 @@
 
 #include <core/ecs/ecs.h>
 #include <core/input/input.h>
-#include <impl/ecs_skinned_geometry/ecs_skinned_geometry.h>
-#include <impl/ecs_skinned_geometry_render/ecs_skinned_geometry_render.h>
-#include <impl/ecs_geometry/ecs_geometry.h>
+#include <impl/ecs_skinned_mesh/ecs_skinned_mesh.h>
+#include <impl/ecs_skinned_mesh_render/ecs_skinned_mesh_render.h>
+#include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_render/ecs_render.h>
 
 

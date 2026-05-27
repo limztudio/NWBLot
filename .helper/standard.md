@@ -266,7 +266,7 @@ Updated: 2026-05-22
 - For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `stage` and `target_profile`), prefer `ACompactString` over heap-backed `AString`.
 - Debug/profiling marker labels are also plain external text.
   - Model command-list markers as text views/strings, not `Name`, so GPU markers and crash-dump labels keep their original spelling.
-- For simple generated geometry assets, keep the shape description/payload in `.nwb` metadata.
+- For simple generated mesh assets, keep the shape description/payload in `.nwb` metadata.
   - Do not hardcode primitive vertex/index tables in asset cooker C++ just to support built-in shapes.
 - Generic asset payload validation belongs in the asset type / codec domain.
   - Do not leave structural validation that applies to all instances of an asset type only inside one specific cooker implementation.

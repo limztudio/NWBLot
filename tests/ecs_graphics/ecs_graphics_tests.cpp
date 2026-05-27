@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_skinned_geometry_render/skinned_geometry_runtime_resource_names.h>
-#include <impl/ecs_skinned_geometry_render/skinned_geometry_skin_payload.h>
+#include <impl/ecs_skinned_mesh_render/skinned_mesh_runtime_resource_names.h>
+#include <impl/ecs_skinned_mesh_render/skinned_mesh_skin_payload.h>
 
 #include <tests/capturing_logger.h>
 #include <tests/ecs_test_world.h>
@@ -11,13 +11,13 @@
 
 #include <core/common/common.h>
 #include <core/ecs/ecs.h>
-#include <core/geometry/geometry_class.h>
-#include <impl/ecs_skinned_geometry/components.h>
-#include <impl/ecs_geometry/ecs_geometry.h>
+#include <core/mesh/mesh_class.h>
+#include <impl/ecs_skinned_mesh/components.h>
+#include <impl/ecs_mesh/ecs_mesh.h>
 #include <impl/ecs_lighting/lighting.h>
 #include <impl/ecs_render/components.h>
-#include <impl/assets_geometry/skinned_geometry_asset.h>
-#include <impl/assets_geometry/geometry_asset.h>
+#include <impl/assets_mesh/skinned_mesh_asset.h>
+#include <impl/assets_mesh/mesh_asset.h>
 
 #include <core/common/log.h>
 
@@ -49,12 +49,12 @@ using Vector = NWB::Tests::TestVector<T>;
 
 static void TestRuntimeResourceNameBuilderMatchesFormattedSuffix(TestContext& context){
     NWB::Tests::TestArena<> arena;
-    const Name sourceName("project/meshes/skinned_geometry_source");
-    const auto suffix = NWB::Impl::BuildRuntimeResourceSuffix(arena.arena, 42u, 17u, "skinned_geometry_ranges");
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, AStringView(suffix.data(), suffix.size()) == AStringView(":runtime_42_revision_17_skinned_geometry_ranges"));
+    const Name sourceName("project/meshes/skinned_mesh_source");
+    const auto suffix = NWB::Impl::BuildRuntimeResourceSuffix(arena.arena, 42u, 17u, "skinned_mesh_ranges");
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, AStringView(suffix.data(), suffix.size()) == AStringView(":runtime_42_revision_17_skinned_mesh_ranges"));
 
-    const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "skinned_geometry_ranges");
-    const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_skinned_geometry_ranges"));
+    const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "skinned_mesh_ranges");
+    const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_skinned_mesh_ranges"));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, builtName == formattedName);
 }
 
@@ -136,26 +136,26 @@ static void TestLightComponents(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLightCount == 1);
 }
 
-static void TestGeometrySystemResolvesGeometryComponent(TestContext& context){
+static void TestMeshSystemResolvesMeshComponent(TestContext& context){
     TestWorld testWorld;
-    auto& geometrySystem = testWorld.world.addSystem<NWB::Impl::GeometrySystem>(testWorld.world);
+    auto& meshSystem = testWorld.world.addSystem<NWB::Impl::MeshSystem>(testWorld.world);
 
     auto entity = testWorld.world.createEntity();
-    auto& geometry = entity.addComponent<NWB::Impl::GeometryComponent>();
-    geometry.geometry.virtualPath = Name("project/meshes/static_mesh");
+    auto& mesh = entity.addComponent<NWB::Impl::MeshComponent>();
+    mesh.mesh.virtualPath = Name("project/meshes/static_mesh");
 
-    NWB::Core::Assets::AssetRef<NWB::Impl::Geometry> resolvedGeometry;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, geometrySystem.resolveGeometry(entity.id(), resolvedGeometry));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedGeometry.name() == geometry.geometry.name());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, geometrySystem.findGeometry(entity.id()) == &geometry);
+    NWB::Core::Assets::AssetRef<NWB::Impl::Mesh> resolvedMesh;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, meshSystem.resolveMesh(entity.id(), resolvedMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedMesh.name() == mesh.mesh.name());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, meshSystem.findMesh(entity.id()) == &mesh);
 
-    auto missingGeometryEntity = testWorld.world.createEntity();
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, !geometrySystem.resolveGeometry(missingGeometryEntity.id(), resolvedGeometry));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, !resolvedGeometry.valid());
+    auto missingMeshEntity = testWorld.world.createEntity();
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !meshSystem.resolveMesh(missingMeshEntity.id(), resolvedMesh));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, !resolvedMesh.valid());
 }
 
-static NWB::Impl::SkinnedGeometryVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){
-    return NWB::Impl::MakeSkinnedGeometryVertex(
+static NWB::Impl::SkinnedMeshVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u = 0.0f){
+    return NWB::Impl::MakeSkinnedMeshVertex(
         Float3U(x, y, z),
         Float3U(0.0f, 0.0f, 1.0f),
         Float4U(1.0f, 0.0f, 0.0f, 1.0f),
@@ -164,42 +164,42 @@ static NWB::Impl::SkinnedGeometryVertex MakeVertex(const f32 x, const f32 y, con
     );
 }
 
-static NWB::Impl::SkinnedGeometryJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
-    NWB::Impl::SkinnedGeometryJointMatrix joint = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
+static NWB::Impl::SkinnedMeshJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
+    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[3] = Float4(x, y, z, 1.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedGeometryJointMatrix MakeZHalfTurnJointMatrix(){
-    NWB::Impl::SkinnedGeometryJointMatrix joint = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
+static NWB::Impl::SkinnedMeshJointMatrix MakeZHalfTurnJointMatrix(){
+    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedGeometryJointMatrix MakeXHalfTurnJointMatrix(){
-    NWB::Impl::SkinnedGeometryJointMatrix joint = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
+static NWB::Impl::SkinnedMeshJointMatrix MakeXHalfTurnJointMatrix(){
+    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedGeometryJointMatrix MakeYHalfTurnJointMatrix(){
-    NWB::Impl::SkinnedGeometryJointMatrix joint = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
+static NWB::Impl::SkinnedMeshJointMatrix MakeYHalfTurnJointMatrix(){
+    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedGeometryJointMatrix MakeZQuarterTurnJointMatrix(){
-    NWB::Impl::SkinnedGeometryJointMatrix joint = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
+static NWB::Impl::SkinnedMeshJointMatrix MakeZQuarterTurnJointMatrix(){
+    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[0] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedGeometryJointMatrix MakeNonUniformScaleJointMatrix(){
-    NWB::Impl::SkinnedGeometryJointMatrix joint = NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix();
+static NWB::Impl::SkinnedMeshJointMatrix MakeNonUniformScaleJointMatrix(){
+    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
@@ -211,14 +211,14 @@ static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
     return skin;
 }
 
-static void AssignSingleJointSkin(NWB::Impl::SkinnedGeometryRuntimeMeshInstance& instance, const u16 joint){
-    instance.geometryClass = NWB::Core::Geometry::GeometryClass::Skinned;
+static void AssignSingleJointSkin(NWB::Impl::SkinnedMeshRuntimeMeshInstance& instance, const u16 joint){
+    instance.meshClass = NWB::Core::Mesh::MeshClass::Skinned;
     instance.skin.assign(instance.restVertices.size(), MakeSingleJointSkin(joint));
     instance.skeletonJointCount = Max(instance.skeletonJointCount, static_cast<u32>(joint) + 1u);
 }
 
-static NWB::Impl::SkinnedGeometryRuntimeMeshInstance MakeTriangleInstance(){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance(NWB::Tests::TestDetail::Arena());
+static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance instance(NWB::Tests::TestDetail::Arena());
     instance.entity = NWB::Core::ECS::EntityID(1u, 0u);
     instance.handle.value = 42u;
     instance.editRevision = 7u;
@@ -230,13 +230,13 @@ static NWB::Impl::SkinnedGeometryRuntimeMeshInstance MakeTriangleInstance(){
     instance.indices.insert(instance.indices.end(), triangleIndices.begin(), triangleIndices.end());
     return instance;
 }
-static NWB::Impl::SkinnedGeometryJointMatrix MakeIdentityJointMatrix(){
+static NWB::Impl::SkinnedMeshJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 
 static void CheckJointRotationQuaternion(
     TestContext& context,
-    const NWB::Impl::SkinnedGeometryJointMatrix& joint,
+    const NWB::Impl::SkinnedMeshJointMatrix& joint,
     const f32 x,
     const f32 y,
     const f32 z,
@@ -244,8 +244,8 @@ static void CheckJointRotationQuaternion(
     SIMDVector quaternion = QuaternionIdentity();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedGeometryRuntime::TryBuildJointRotationQuaternion(
-            NWB::Impl::SkinnedGeometryRuntime::LoadJointMatrix(joint),
+        NWB::Impl::SkinnedMeshRuntime::TryBuildJointRotationQuaternion(
+            NWB::Impl::SkinnedMeshRuntime::LoadJointMatrix(joint),
             quaternion
         )
     );
@@ -267,18 +267,18 @@ static void TestJointRotationQuaternionBuildsColumnVectorRotations(TestContext& 
     SIMDVector quaternion = QuaternionIdentity();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometryRuntime::TryBuildJointRotationQuaternion(
-            NWB::Impl::SkinnedGeometryRuntime::LoadJointMatrix(MakeNonUniformScaleJointMatrix()),
+        !NWB::Impl::SkinnedMeshRuntime::TryBuildJointRotationQuaternion(
+            NWB::Impl::SkinnedMeshRuntime::LoadJointMatrix(MakeNonUniformScaleJointMatrix()),
             quaternion
         )
     );
 }
 
-static NWB::Impl::SkinnedGeometrySkeletonPoseComponent MakeTwoJointSkeletonPose(
-    const NWB::Impl::SkinnedGeometryJointMatrix& rootJoint,
-    const NWB::Impl::SkinnedGeometryJointMatrix& childJoint){
-    NWB::Impl::SkinnedGeometrySkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
-    pose.parentJoints.push_back(NWB::Impl::s_SkinnedGeometrySkeletonRootParent);
+static NWB::Impl::SkinnedMeshSkeletonPoseComponent MakeTwoJointSkeletonPose(
+    const NWB::Impl::SkinnedMeshJointMatrix& rootJoint,
+    const NWB::Impl::SkinnedMeshJointMatrix& childJoint){
+    NWB::Impl::SkinnedMeshSkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
+    pose.parentJoints.push_back(NWB::Impl::s_SkinnedMeshSkeletonRootParent);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(rootJoint);
     pose.localJoints.push_back(childJoint);
@@ -286,18 +286,18 @@ static NWB::Impl::SkinnedGeometrySkeletonPoseComponent MakeTwoJointSkeletonPose(
 }
 
 static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
-    NWB::Impl::SkinnedGeometrySkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
+    NWB::Impl::SkinnedMeshSkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
         MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
         MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)
     );
 
-    Vector<NWB::Impl::SkinnedGeometryJointMatrix> resolvedJoints;
-    u32 skinningMode = NWB::Impl::SkinnedGeometrySkinningMode::DualQuaternion;
+    Vector<NWB::Impl::SkinnedMeshJointMatrix> resolvedJoints;
+    u32 skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkinnedGeometrySkinningMode::LinearBlend);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkinnedMeshSkinningMode::LinearBlend);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedJoints.size() == 2u);
     if(resolvedJoints.size() == 2u){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[3].x, 1.0f));
@@ -306,38 +306,38 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[3].y, 2.0f));
     }
 
-    pose.skinningMode = NWB::Impl::SkinnedGeometrySkinningMode::DualQuaternion;
+    pose.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkinnedGeometrySkinningMode::DualQuaternion);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion);
 
     pose.parentJoints[1u] = 1u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        !NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
     pose.parentJoints[1u] = 0u;
     pose.parentJoints.pop_back();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometryRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        !NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
 }
-static void TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(TestContext& context){
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance instance = MakeTriangleInstance();
+static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& context){
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;
 
-    NWB::Impl::SkinnedGeometryJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
+    NWB::Impl::SkinnedMeshJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
     joints.joints.push_back(MakeIdentityJointMatrix());
 
-    Vector<NWB::Impl::SkinnedGeometrySkinInfluenceGpu> skinInfluences;
-    Vector<NWB::Impl::SkinnedGeometryJointMatrix> jointMatrices;
+    Vector<NWB::Impl::SkinnedMeshSkinInfluenceGpu> skinInfluences;
+    Vector<NWB::Impl::SkinnedMeshJointMatrix> jointMatrices;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
+        NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.size() == instance.restVertices.size());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
@@ -348,20 +348,20 @@ static void TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(TestContex
     joints.joints[0u] = MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
+        NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[3].x, 0.75f));
     joints.joints[0u] = MakeIdentityJointMatrix();
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance dualQuaternionInstance = MakeTriangleInstance();
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance dualQuaternionInstance = MakeTriangleInstance();
     AssignSingleJointSkin(dualQuaternionInstance, 0u);
     dualQuaternionInstance.handle.value = instance.handle.value;
-    joints.skinningMode = NWB::Impl::SkinnedGeometrySkinningMode::DualQuaternion;
+    joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeTranslationJointMatrix(2.0f, 4.0f, 6.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(dualQuaternionInstance, &joints, skinInfluences, jointMatrices)
+        NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(dualQuaternionInstance, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[0].x, 0.0f));
@@ -372,63 +372,63 @@ static void TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(TestContex
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].y, 2.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].z, 3.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].w, 0.0f));
-    joints.skinningMode = NWB::Impl::SkinnedGeometrySkinningMode::LinearBlend;
+    joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::LinearBlend;
     joints.joints[0u] = MakeIdentityJointMatrix();
 
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance missingSkeleton = instance;
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance missingSkeleton = instance;
     missingSkeleton.skeletonJointCount = 0u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(missingSkeleton, &joints, skinInfluences, jointMatrices)
+        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(missingSkeleton, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.empty());
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.empty());
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance outsideSkeleton = instance;
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance outsideSkeleton = instance;
     outsideSkeleton.skin[0u] = MakeSingleJointSkin(1u);
     outsideSkeleton.skeletonJointCount = 1u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(outsideSkeleton, &joints, skinInfluences, jointMatrices)
+        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(outsideSkeleton, &joints, skinInfluences, jointMatrices)
     );
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance outsidePalette = instance;
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance outsidePalette = instance;
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
     outsidePalette.skeletonJointCount = 2u;
     outsidePalette.inverseBindMatrices.clear();
-    joints.joints.resize(1u, NWB::Impl::MakeIdentitySkinnedGeometryJointMatrix());
+    joints.joints.resize(1u, NWB::Impl::MakeIdentitySkinnedMeshJointMatrix());
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices)
+        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices)
     );
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance nonAffineJoint = instance;
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance nonAffineJoint = instance;
     joints.joints[0u] = MakeIdentityJointMatrix();
     joints.joints[0u].rows[3].w = 0.0f;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)
+        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)
     );
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance invalidInverseBind = instance;
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance invalidInverseBind = instance;
     invalidInverseBind.inverseBindMatrices[0u].rows[3].w = 0.0f;
     joints.joints[0u] = MakeIdentityJointMatrix();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(invalidInverseBind, &joints, skinInfluences, jointMatrices)
+        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(invalidInverseBind, &joints, skinInfluences, jointMatrices)
     );
 
-    NWB::Impl::SkinnedGeometryRuntimeMeshInstance scaledDualQuaternionJoint = instance;
+    NWB::Impl::SkinnedMeshRuntimeMeshInstance scaledDualQuaternionJoint = instance;
     scaledDualQuaternionJoint.inverseBindMatrices.clear();
-    joints.skinningMode = NWB::Impl::SkinnedGeometrySkinningMode::DualQuaternion;
+    joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeNonUniformScaleJointMatrix();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedGeometrySkinPayload::BuildSkinPayload(
+        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(
             scaledDualQuaternionJoint,
             &joints,
             skinInfluences,
@@ -472,10 +472,10 @@ NWB_DEFINE_TEST_ENTRY_POINT("ecs graphics", [](NWB::Tests::TestContext& context)
 
     __hidden_ecs_graphics_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
     __hidden_ecs_graphics_tests::TestLightComponents(context);
-    __hidden_ecs_graphics_tests::TestGeometrySystemResolvesGeometryComponent(context);
+    __hidden_ecs_graphics_tests::TestMeshSystemResolvesMeshComponent(context);
     __hidden_ecs_graphics_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
     __hidden_ecs_graphics_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
-    __hidden_ecs_graphics_tests::TestSkinnedGeometrySkinPayloadValidatesSkeletonAndPalette(context);
+    __hidden_ecs_graphics_tests::TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(context);
 })
 
 

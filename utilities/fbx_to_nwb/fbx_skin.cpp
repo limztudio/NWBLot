@@ -37,8 +37,8 @@ bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
     return true;
 }
 
-GeometryJointMatrix ToGeometryJointMatrix(const ufbx_matrix& matrix){
-    GeometryJointMatrix result{};
+MeshJointMatrix ToMeshJointMatrix(const ufbx_matrix& matrix){
+    MeshJointMatrix result{};
     result.columns[0] = Vec4{
         static_cast<f32>(matrix.m00),
         static_cast<f32>(matrix.m10),
@@ -66,7 +66,7 @@ GeometryJointMatrix ToGeometryJointMatrix(const ufbx_matrix& matrix){
     return result;
 }
 
-bool NearlyEqualJointMatrix(const GeometryJointMatrix& lhs, const GeometryJointMatrix& rhs){
+bool NearlyEqualJointMatrix(const MeshJointMatrix& lhs, const MeshJointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
     for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
         const Vec4& a = lhs.columns[columnIndex];
@@ -94,13 +94,13 @@ AString NodeDisplayName(const ufbx_node* node){
     return name;
 }
 
-ufbx_matrix BuildGeometryFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options){
+ufbx_matrix BuildMeshFromOutputMatrix(const MeshInstance& instance, const ImportOptions& options){
     const ufbx_matrix scaleInverse = MakeInverseUniformScaleMatrix(options.scale);
     if(!options.bakeTransforms)
         return scaleInverse;
 
-    const ufbx_matrix nodeGeometryToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
-    return ufbx_matrix_mul(&nodeGeometryToWorldInverse, &scaleInverse);
+    const ufbx_matrix nodeMeshToWorldInverse = ufbx_matrix_invert(&instance.node->geometry_to_world);
+    return ufbx_matrix_mul(&nodeMeshToWorldInverse, &scaleInverse);
 }
 
 ufbx_matrix BuildOutputInverseBindMatrix(
@@ -108,8 +108,8 @@ ufbx_matrix BuildOutputInverseBindMatrix(
     const MeshInstance& instance,
     const ImportOptions& options
 ){
-    const ufbx_matrix geometryFromOutput = BuildGeometryFromOutputMatrix(instance, options);
-    return ufbx_matrix_mul(&cluster.geometry_to_bone, &geometryFromOutput);
+    const ufbx_matrix meshFromOutput = BuildMeshFromOutputMatrix(instance, options);
+    return ufbx_matrix_mul(&cluster.geometry_to_bone, &meshFromOutput);
 }
 
 bool FindOrAddJoint(
@@ -129,7 +129,7 @@ bool FindOrAddJoint(
         return false;
     }
 
-    const GeometryJointMatrix convertedMatrix = ToGeometryJointMatrix(inverseBind);
+    const MeshJointMatrix convertedMatrix = ToMeshJointMatrix(inverseBind);
     auto foundJoint = context.jointLookup.find(cluster->bone_node);
     if(foundJoint != context.jointLookup.end()){
         const usize jointIndex = static_cast<usize>(foundJoint.value());
@@ -169,7 +169,7 @@ bool BuildClusterJointMap(
 ){
     outClusterJoints.clear();
     if(!skin){
-        outError = "skinned geometry requires a skin deformer";
+        outError = "skinned mesh requires a skin deformer";
         return false;
     }
     if(skin->clusters.count == 0u){
@@ -211,10 +211,10 @@ bool BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
     const u32 logicalVertex,
-    GeometrySkinInfluence& outInfluence,
+    MeshSkinInfluence& outInfluence,
     AString& outError
 ){
-    outInfluence = GeometrySkinInfluence{};
+    outInfluence = MeshSkinInfluence{};
     if(!skin || logicalVertex >= skin->vertices.count){
         outError = "skin deformer does not contain weights for every logical vertex";
         return false;
@@ -255,7 +255,7 @@ bool BuildInfluence(
     }
 
     if(!IsFinite(weightSum) || weightSum <= 0.0){
-        outError = "skinned geometry contains a vertex with no positive skin weights";
+        outError = "skinned mesh contains a vertex with no positive skin weights";
         return false;
     }
 

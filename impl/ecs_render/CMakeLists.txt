@@ -13,7 +13,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_deferred.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_geometry.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_mesh.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_lighting.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_material.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_shader.cpp"
@@ -26,12 +26,12 @@ target_sources(nwb_ecs_render PRIVATE
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components
     nwb_ecs
-    nwb_ecs_geometry
+    nwb_ecs_mesh
     nwb_graphics
     nwb_assets_material
 )
 target_link_libraries(nwb_ecs_render PRIVATE
-    nwb_assets_geometry
+    nwb_assets_mesh
     nwb_assets_shader_loader
     nwb_ecs_camera
     nwb_ecs_lighting

@@ -31,11 +31,11 @@ inline constexpr f32 s_AvboitExtinctionFixedScale = 45.985905f;
 inline constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
 inline constexpr usize s_AvboitControlWordCount = 8u;
 
-inline constexpr Name s_AvboitOccupancyPixelShaderName("engine/graphics/avboit_occupancy_ps");
-inline constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit_depth_warp_cs");
-inline constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit_extinction_ps");
-inline constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit_integrate_cs");
-inline constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit_accumulate_ps");
+inline constexpr Name s_AvboitOccupancyPixelShaderName("engine/graphics/avboit/occupancy_ps");
+inline constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit/depth_warp_cs");
+inline constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit/extinction_ps");
+inline constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit/integrate_cs");
+inline constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit/accumulate_ps");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

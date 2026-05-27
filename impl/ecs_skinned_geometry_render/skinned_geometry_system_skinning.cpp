@@ -47,7 +47,7 @@ struct SkinnedGeometryPushConstants{
 static_assert(sizeof(SkinnedGeometryPushConstants) == 32, "SkinnedGeometry push constants layout must match the shader ABI");
 
 static const Name& SkinnedGeometryComputeShaderName(){
-    static const Name s("engine/graphics/skinned_geometry_cs");
+    static const Name s("engine/graphics/skinned_geometry/skinning_cs");
     return s;
 }
 

@@ -2,21 +2,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_MESH_VIEW_BUFFER_SLANGI
-#define NWB_MESH_VIEW_BUFFER_SLANGI
+#ifndef NWB_GRAPHICS_MESH_PIXEL_INPUT_SLANGI
+#define NWB_GRAPHICS_MESH_PIXEL_INPUT_SLANGI
+
+#include "raster_fields.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbMeshViewBuffer{
-    float4x4 g_NwbMeshWorldToClip;
+struct NwbMeshPixelInput{
+    NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
 
-[[vk::binding(11, 0)]]
-ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
+static float4 inColor;
+static float3 inNormal;
+static float4 inTangent;
+static float2 inUv0;
+static float3 inWorldPosition;
 
-#define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip
+void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
+    inColor = input.color;
+    inNormal = input.normal;
+    inTangent = input.tangent;
+    inUv0 = input.uv0;
+    inWorldPosition = input.worldPosition;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

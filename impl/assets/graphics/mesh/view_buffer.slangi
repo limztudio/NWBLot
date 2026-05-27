@@ -2,19 +2,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_MESH_RASTER_FIELDS_SLANGI
-#define NWB_MESH_RASTER_FIELDS_SLANGI
+#ifndef NWB_GRAPHICS_MESH_VIEW_BUFFER_SLANGI
+#define NWB_GRAPHICS_MESH_VIEW_BUFFER_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_MESH_RASTER_PAYLOAD_FIELDS \
-    [[vk::location(0)]] float4 color : COLOR0; \
-    [[vk::location(1)]] float3 normal : NORMAL0; \
-    [[vk::location(2)]] float4 tangent : TANGENT0; \
-    [[vk::location(3)]] float2 uv0 : TEXCOORD0; \
-    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
+struct NwbMeshViewBuffer{
+    float4x4 g_NwbMeshWorldToClip;
+};
+
+[[vk::binding(11, 0)]]
+ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
+
+#define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

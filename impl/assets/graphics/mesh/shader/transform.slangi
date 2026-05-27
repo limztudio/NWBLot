@@ -1,0 +1,127 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_TRANSFORM_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_TRANSFORM_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbMeshTransformPosition(float3 localPosition, const NwbMeshInstanceData instance){
+    return nwbRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
+}
+
+float3 nwbMeshTransformPosition(float3 localPosition){
+    return nwbMeshTransformPosition(localPosition, nwbMeshLoadInstance());
+}
+
+float3 nwbMeshTransformDirection(float3 localDirection, const NwbMeshInstanceData instance){
+    return normalize(nwbRotateVectorByQuaternion(localDirection, instance.rotation));
+}
+
+float3 nwbMeshTransformDirection(float3 localDirection){
+    return nwbMeshTransformDirection(localDirection, nwbMeshLoadInstance());
+}
+
+bool nwbMeshDispatchFlagEnabled(uint flag){
+    return (g_NwbMeshPushConstants.dispatch.y & flag) != 0u;
+}
+
+float2 nwbMeshClipToFramebuffer(const float4 p){
+    const float2 viewportMin = g_NwbMeshPushConstants.viewportRect.xy;
+    const float2 viewportMax = g_NwbMeshPushConstants.viewportRect.zw;
+    const float2 viewportSize = viewportMax - viewportMin;
+    const float2 ndc = p.xy / p.w;
+
+    return float2(
+        viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x,
+        viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y
+    );
+}
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+bool nwbMeshScissorCullEnabled(){
+    return nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL);
+}
+
+bool nwbMeshAllOutsideClipPlane(const float4 a, const float4 b, const float4 c){
+    if(a.x < -a.w && b.x < -b.w && c.x < -c.w)
+        return true;
+    if(a.x > a.w && b.x > b.w && c.x > c.w)
+        return true;
+    if(a.y < -a.w && b.y < -b.w && c.y < -c.w)
+        return true;
+    if(a.y > a.w && b.y > b.w && c.y > c.w)
+        return true;
+    if(a.z < 0.0 && b.z < 0.0 && c.z < 0.0)
+        return true;
+    if(a.z > a.w && b.z > b.w && c.z > c.w)
+        return true;
+
+    return false;
+}
+
+bool nwbMeshInsideClipVolume(const float4 p){
+    return
+        p.w > 0.0
+        && p.x >= -p.w
+        && p.x <= p.w
+        && p.y >= -p.w
+        && p.y <= p.w
+        && p.z >= 0.0
+        && p.z <= p.w
+    ;
+}
+
+bool nwbMeshAllOutsideScissor(const float4 a, const float4 b, const float4 c){
+    if(!nwbMeshScissorCullEnabled())
+        return false;
+    if(!nwbMeshInsideClipVolume(a) || !nwbMeshInsideClipVolume(b) || !nwbMeshInsideClipVolume(c))
+        return false;
+
+    const float2 p0 = nwbMeshClipToFramebuffer(a);
+    const float2 p1 = nwbMeshClipToFramebuffer(b);
+    const float2 p2 = nwbMeshClipToFramebuffer(c);
+    const float2 triMin = min(p0, min(p1, p2));
+    const float2 triMax = max(p0, max(p1, p2));
+    const float4 scissorRect = g_NwbMeshPushConstants.scissorRect;
+
+    return
+        triMax.x < scissorRect.x
+        || triMin.x > scissorRect.z
+        || triMax.y < scissorRect.y
+        || triMin.y > scissorRect.w
+    ;
+}
+
+bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
+    const float4 a = vertices[0].position;
+    const float4 b = vertices[1].position;
+    const float4 c = vertices[2].position;
+    return nwbMeshAllOutsideClipPlane(a, b, c) || nwbMeshAllOutsideScissor(a, b, c);
+}
+
+NwbMeshGeneratedVertex nwbMeshCulledVertex(){
+    NwbMeshGeneratedVertex vertex;
+    vertex.position = float4(2.0, 2.0, 0.0, 1.0);
+    vertex.normal = float3(0.0, 0.0, 1.0);
+    vertex.padding0 = 0.0;
+    vertex.tangent = float4(1.0, 0.0, 0.0, 1.0);
+    vertex.uv0 = float2(0.0);
+    vertex.padding1 = float2(0.0);
+    vertex.color = float4(0.0);
+    vertex.worldPosition = float4(0.0, 0.0, 0.0, 1.0);
+    return vertex;
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

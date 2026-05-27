@@ -1152,7 +1152,7 @@ static bool BuildMaterialBindIncludeSourceImpl(
     outSource += "\n\n\n";
     AppendMaterialBindGeneratedSeparator(outSource, 3u);
     outSource += "#ifndef NWB_MATERIAL_TYPED_BINDING\n";
-    outSource += "#error \"generated material bind includes require mesh_shader_authoring.slangi\"\n";
+    outSource += "#error \"generated material bind includes require mesh/shader/authoring.slangi\"\n";
     outSource += "#endif\n\n";
     outSource += "#if NWB_MATERIAL_TYPED_BINDING != 1\n";
     outSource += "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING=1\"\n";

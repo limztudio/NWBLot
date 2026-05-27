@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_MESHLET_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_MESHLET_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshGeneratedVertex nwbMeshBuildVertex(
+    uint meshletIndex,
+    uint localVertexIndex,
+    NwbMeshSourceVertex source,
+    const NwbMeshInstanceData instance
+);
+
+uint nwbMeshletPrimitiveBase(const NwbGeometryMeshletDesc meshlet, const uint localPrimitiveIndex){
+    return meshlet.primitiveOffset + localPrimitiveIndex * 3u;
+}
+
+uint3 nwbMeshLoadMeshletPrimitive(const uint primitiveBase){
+    return uint3(
+        nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 0u),
+        nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 1u),
+        nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 2u)
+    );
+}
+
+NwbMeshGeneratedVertex nwbMeshBuildMeshletVertex(
+    const uint meshletIndex,
+    const NwbGeometryMeshletDesc meshlet,
+    const uint localVertexIndex,
+    const NwbMeshInstanceData instance
+){
+    const uint vertexRefIndex = g_NwbMeshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
+    return nwbMeshBuildVertex(
+        meshletIndex,
+        localVertexIndex,
+        nwbMeshLoadSourceVertex(vertexRefIndex),
+        instance
+    );
+}
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE == 0
+NwbMeshRasterVertex nwbMeshBuildRasterVertex(const NwbMeshGeneratedVertex generatedVertex){
+    NwbMeshRasterVertex vertex;
+    vertex.position = generatedVertex.position;
+    vertex.color = generatedVertex.color;
+    vertex.normal = generatedVertex.normal;
+    vertex.tangent = generatedVertex.tangent;
+    vertex.uv0 = generatedVertex.uv0;
+    vertex.worldPosition = generatedVertex.worldPosition.xyz;
+    return vertex;
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

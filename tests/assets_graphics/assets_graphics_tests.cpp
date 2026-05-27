@@ -291,7 +291,7 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
+static constexpr AStringView s_MaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/shader/authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
@@ -326,7 +326,7 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 
 )NWB_SLANG";
 
-static constexpr AStringView s_HalfMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
+static constexpr AStringView s_HalfMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/shader/authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
@@ -365,7 +365,7 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 )NWB_SLANG";
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
+static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/shader/authoring.slangi"
 #include "project/material_interfaces/other_surface.bind"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
@@ -392,7 +392,7 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 #endif
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_UnboundMaterialShaderProbeSource = R"NWB_SLANG(#include "mesh_shader_authoring.slangi"
+static constexpr AStringView s_UnboundMaterialShaderProbeSource = R"NWB_SLANG(#include "mesh/shader/authoring.slangi"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
     uint triangleIndex,

@@ -37,12 +37,12 @@ static constexpr usize s_DefaultIndexCapacity = 8192u;
 
 
 static const Name& UiVertexShaderName(){
-    static const Name s("engine/graphics/imgui_vs");
+    static const Name s("engine/graphics/imgui/vs");
     return s;
 }
 
 static const Name& UiPixelShaderName(){
-    static const Name s("engine/graphics/imgui_ps");
+    static const Name s("engine/graphics/imgui/ps");
     return s;
 }
 

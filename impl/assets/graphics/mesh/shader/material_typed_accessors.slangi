@@ -1,0 +1,183 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_MATERIAL_TYPED_ACCESSORS_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_MATERIAL_TYPED_ACCESSORS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbMaterialTypedByteOffset(const NwbMeshInstanceData instance){
+    return instance.materialTypedBytes.x;
+}
+
+uint nwbMaterialTypedByteCount(const NwbMeshInstanceData instance){
+    return instance.materialTypedBytes.y;
+}
+
+uint nwbMaterialLoadRawUInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    const uint absoluteByteOffset = nwbMaterialTypedByteOffset(instance) + byteOffset;
+    const uint wordIndex = absoluteByteOffset >> 2u;
+    const uint byteShift = (absoluteByteOffset & 3u) << 3u;
+    const uint word = g_NwbMaterialTypedWords[wordIndex] >> byteShift;
+    if(byteShift == 0u)
+        return word;
+
+    return word | (g_NwbMaterialTypedWords[wordIndex + 1u] << (32u - byteShift));
+}
+
+float nwbMaterialLoadFloat(const NwbMeshInstanceData instance, const uint byteOffset){
+    return asfloat(nwbMaterialLoadRawUInt(instance, byteOffset));
+}
+
+float2 nwbMaterialLoadFloat2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return float2(
+        nwbMaterialLoadFloat(instance, byteOffset + 0u),
+        nwbMaterialLoadFloat(instance, byteOffset + 4u)
+    );
+}
+
+float3 nwbMaterialLoadFloat3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return float3(
+        nwbMaterialLoadFloat(instance, byteOffset + 0u),
+        nwbMaterialLoadFloat(instance, byteOffset + 4u),
+        nwbMaterialLoadFloat(instance, byteOffset + 8u)
+    );
+}
+
+float4 nwbMaterialLoadFloat4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return float4(
+        nwbMaterialLoadFloat(instance, byteOffset + 0u),
+        nwbMaterialLoadFloat(instance, byteOffset + 4u),
+        nwbMaterialLoadFloat(instance, byteOffset + 8u),
+        nwbMaterialLoadFloat(instance, byteOffset + 12u)
+    );
+}
+
+int nwbMaterialLoadInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return asint(nwbMaterialLoadRawUInt(instance, byteOffset));
+}
+
+int2 nwbMaterialLoadInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return int2(
+        nwbMaterialLoadInt(instance, byteOffset + 0u),
+        nwbMaterialLoadInt(instance, byteOffset + 4u)
+    );
+}
+
+int3 nwbMaterialLoadInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return int3(
+        nwbMaterialLoadInt(instance, byteOffset + 0u),
+        nwbMaterialLoadInt(instance, byteOffset + 4u),
+        nwbMaterialLoadInt(instance, byteOffset + 8u)
+    );
+}
+
+int4 nwbMaterialLoadInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return int4(
+        nwbMaterialLoadInt(instance, byteOffset + 0u),
+        nwbMaterialLoadInt(instance, byteOffset + 4u),
+        nwbMaterialLoadInt(instance, byteOffset + 8u),
+        nwbMaterialLoadInt(instance, byteOffset + 12u)
+    );
+}
+
+uint nwbMaterialLoadUInt(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadRawUInt(instance, byteOffset);
+}
+
+uint2 nwbMaterialLoadUInt2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return uint2(
+        nwbMaterialLoadUInt(instance, byteOffset + 0u),
+        nwbMaterialLoadUInt(instance, byteOffset + 4u)
+    );
+}
+
+uint3 nwbMaterialLoadUInt3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return uint3(
+        nwbMaterialLoadUInt(instance, byteOffset + 0u),
+        nwbMaterialLoadUInt(instance, byteOffset + 4u),
+        nwbMaterialLoadUInt(instance, byteOffset + 8u)
+    );
+}
+
+uint4 nwbMaterialLoadUInt4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return uint4(
+        nwbMaterialLoadUInt(instance, byteOffset + 0u),
+        nwbMaterialLoadUInt(instance, byteOffset + 4u),
+        nwbMaterialLoadUInt(instance, byteOffset + 8u),
+        nwbMaterialLoadUInt(instance, byteOffset + 12u)
+    );
+}
+
+bool nwbMaterialLoadBool(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbMaterialLoadRawUInt(instance, byteOffset) != 0u;
+}
+
+bool2 nwbMaterialLoadBool2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return bool2(
+        nwbMaterialLoadBool(instance, byteOffset + 0u),
+        nwbMaterialLoadBool(instance, byteOffset + 4u)
+    );
+}
+
+bool3 nwbMaterialLoadBool3(const NwbMeshInstanceData instance, const uint byteOffset){
+    return bool3(
+        nwbMaterialLoadBool(instance, byteOffset + 0u),
+        nwbMaterialLoadBool(instance, byteOffset + 4u),
+        nwbMaterialLoadBool(instance, byteOffset + 8u)
+    );
+}
+
+bool4 nwbMaterialLoadBool4(const NwbMeshInstanceData instance, const uint byteOffset){
+    return bool4(
+        nwbMaterialLoadBool(instance, byteOffset + 0u),
+        nwbMaterialLoadBool(instance, byteOffset + 4u),
+        nwbMaterialLoadBool(instance, byteOffset + 8u),
+        nwbMaterialLoadBool(instance, byteOffset + 12u)
+    );
+}
+
+float2 nwbMaterialLoadPackedHalf2(const NwbMeshInstanceData instance, const uint byteOffset){
+    return nwbUnpackHalf2x16(nwbMaterialLoadRawUInt(instance, byteOffset));
+}
+
+half nwbMaterialLoadHalf(const NwbMeshInstanceData instance, const uint byteOffset){
+    const uint absoluteByteOffset = nwbMaterialTypedByteOffset(instance) + byteOffset;
+    const uint word = g_NwbMaterialTypedWords[absoluteByteOffset >> 2u];
+    const uint byteLane = absoluteByteOffset & 3u;
+    if(byteLane == 0u || byteLane == 2u){
+        const float2 value = nwbUnpackHalf2x16(word);
+        return half(byteLane == 0u ? value.x : value.y);
+    }
+
+    const float2 value = nwbUnpackHalf2x16(nwbMaterialLoadRawUInt(instance, byteOffset));
+    return half(value.x);
+}
+
+half2 nwbMaterialLoadHalf2(const NwbMeshInstanceData instance, const uint byteOffset){
+    const float2 value = nwbMaterialLoadPackedHalf2(instance, byteOffset);
+    return half2(half(value.x), half(value.y));
+}
+
+half3 nwbMaterialLoadHalf3(const NwbMeshInstanceData instance, const uint byteOffset){
+    const half2 xy = nwbMaterialLoadHalf2(instance, byteOffset);
+    return half3(xy.x, xy.y, nwbMaterialLoadHalf(instance, byteOffset + 4u));
+}
+
+half4 nwbMaterialLoadHalf4(const NwbMeshInstanceData instance, const uint byteOffset){
+    const float2 xy = nwbMaterialLoadPackedHalf2(instance, byteOffset);
+    const float2 zw = nwbMaterialLoadPackedHalf2(instance, byteOffset + 4u);
+    return half4(half(xy.x), half(xy.y), half(zw.x), half(zw.y));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

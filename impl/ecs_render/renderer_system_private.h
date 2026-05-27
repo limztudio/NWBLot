@@ -102,14 +102,14 @@ static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuD
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh_emulation_vs");
+inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh/emulation_vs");
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
 inline constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
-inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred_composite_vs");
-inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred_lighting_ps");
-inline constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred_composite_ps");
+inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred/composite_vs");
+inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred/lighting_ps");
+inline constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred/composite_ps");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

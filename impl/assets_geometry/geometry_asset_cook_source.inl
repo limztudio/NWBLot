@@ -350,19 +350,8 @@ static bool ParseCommonSourceGeometryStreams(
     if(!ParseMetadataFloatListField<Float2U, 2u>(discoveredFile.filePath, asset, metaKind, "uv0", streams.uv0, scratchArena))
         return false;
 
-    bool colorsProvided = false;
-    if(!ParseOptionalSourceFloatListField<Float4U, 4u>(
-        discoveredFile.filePath,
-        asset,
-        metaKind,
-        "colors",
-        streams.colors,
-        colorsProvided,
-        scratchArena
-    ))
+    if(!ParseMetadataFloatListField<Float4U, 4u>(discoveredFile.filePath, asset, metaKind, "colors", streams.colors, scratchArena))
         return false;
-    if(!colorsProvided)
-        BuildDefaultColors(1u, streams.colors);
 
     if(!ParseSourceVertexRefs(discoveredFile.filePath, asset, metaKind, includeSkin, streams.vertexRefs, scratchArena))
         return false;

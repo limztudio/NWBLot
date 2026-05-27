@@ -40,18 +40,16 @@ namespace ECSRenderDetail{
 
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
-inline constexpr u32 s_StaticGeometrySourceWordStride = 7u;
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
-inline constexpr u32 s_TrianglesPerWorkgroup = 32u;
 inline constexpr u32 s_MeshDispatchFlagScissorCull = 1u << 0u;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 
 
 struct ShaderDrivenPushConstants{
-    u32 triangleCount = 0;
+    u32 meshletCount = 0;
     u32 dispatchFlags = 0;
     u32 instanceIndex = 0;
-    u32 sourceVertexLayout = 0;
+    u32 reserved0 = 0;
     Float4 viewportRect = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scissorRect = Float4(0.f, 0.f, 0.f, 0.f);
 };
@@ -131,13 +129,18 @@ inline Core::Format::Enum SelectSupportedFormat(
     return Core::Format::UNKNOWN;
 }
 
-inline bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
+inline bool CreateClampSampler(
+    Core::IDevice& device,
+    Core::SamplerHandle& sampler,
+    const bool linearFiltering,
+    const tchar* failureMessage
+){
     if(sampler)
         return true;
 
     Core::SamplerDesc samplerDesc;
     samplerDesc
-        .setAllFilters(false)
+        .setAllFilters(linearFiltering)
         .setAllAddressModes(Core::SamplerAddressMode::Clamp)
     ;
     sampler = device.createSampler(samplerDesc);
@@ -146,6 +149,29 @@ inline bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& 
 
     NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
     return false;
+}
+
+inline bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
+    return CreateClampSampler(device, sampler, false, failureMessage);
+}
+
+inline void AddGeometrySourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(5, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(7, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(8, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(9, 1));
+}
+
+inline void AddGeometryFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(11, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(12, 1));
 }
 
 inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
@@ -366,15 +392,13 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
 }
 
 inline ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
-    const u32 triangleCount,
+    const u32 meshletCount,
     const u32 instanceIndex,
-    const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState
 ){
     ShaderDrivenPushConstants pushConstants;
-    pushConstants.triangleCount = triangleCount;
+    pushConstants.meshletCount = meshletCount;
     pushConstants.instanceIndex = instanceIndex;
-    pushConstants.sourceVertexLayout = sourceVertexLayout;
 
     if(viewportState.viewports.empty())
         return pushConstants;
@@ -397,41 +421,38 @@ inline ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
 }
 
 inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
-    const u32 triangleCount,
+    const u32 meshletCount,
     const u32 instanceIndex,
-    const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
     const RendererSystem::AvboitFrameTargets& targets
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState);
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets);
     return pushConstants;
 }
 
 inline void SetShaderDrivenPushConstants(
     Core::ICommandList& commandList,
-    const u32 triangleCount,
+    const u32 meshletCount,
     const u32 instanceIndex,
-    const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState
 ){
     const ShaderDrivenPushConstants pushConstants =
-        BuildShaderDrivenPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState)
+        BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState)
     ;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
 inline void SetTransparentDrawPushConstants(
     Core::ICommandList& commandList,
-    const u32 triangleCount,
+    const u32 meshletCount,
     const u32 instanceIndex,
-    const u32 sourceVertexLayout,
     const Core::ViewportState& viewportState,
     const RendererSystem::AvboitFrameTargets& targets
 ){
     const TransparentDrawPushConstants pushConstants =
-        BuildTransparentDrawPushConstants(triangleCount, instanceIndex, sourceVertexLayout, viewportState, targets)
+        BuildTransparentDrawPushConstants(meshletCount, instanceIndex, viewportState, targets)
     ;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }

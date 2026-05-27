@@ -115,7 +115,6 @@ private:
         RuntimeResources*& outResources,
         bool& outResourcesRebuilt
     );
-    [[nodiscard]] bool ensureDefaultSkinnedGeometryBuffers();
 
 
 private:
@@ -131,8 +130,6 @@ private:
     Core::BindingLayoutHandle m_bindingLayout;
     Core::ShaderHandle m_computeShader;
     Core::ComputePipelineHandle m_computePipeline;
-    Core::BufferHandle m_defaultSkinBuffer;
-    Core::BufferHandle m_defaultJointPaletteBuffer;
 };
 
 

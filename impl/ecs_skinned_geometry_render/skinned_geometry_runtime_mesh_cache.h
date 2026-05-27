@@ -111,14 +111,6 @@ private:
     [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const;
     [[nodiscard]] SkinnedGeometryRuntimeMeshInstance* findInstanceByEntity(Core::ECS::EntityID entity);
     [[nodiscard]] const SkinnedGeometryRuntimeMeshInstance* findInstanceByEntity(Core::ECS::EntityID entity)const;
-    [[nodiscard]] Name deriveRuntimeBufferName(const SkinnedGeometryRuntimeMeshInstance& instance, AStringView suffix)const;
-    [[nodiscard]] bool computePayloadBytes(
-        const SkinnedGeometryRuntimeMeshInstance& instance,
-        usize count,
-        usize stride,
-        usize& outBytes,
-        const char* label
-    )const;
 
 
 private:

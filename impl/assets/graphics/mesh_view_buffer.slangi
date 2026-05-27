@@ -13,7 +13,7 @@ struct NwbMeshViewBuffer{
     float4x4 g_NwbMeshWorldToClip;
 };
 
-[[vk::binding(4, 0)]]
+[[vk::binding(11, 0)]]
 ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
 
 #define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip

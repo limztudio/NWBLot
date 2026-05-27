@@ -24,14 +24,52 @@
 #include "mesh_raster_fields.slangi"
 
 #ifndef NWB_MESH_SHADER_GROUP_SIZE_X
-#define NWB_MESH_SHADER_GROUP_SIZE_X 32
+#define NWB_MESH_SHADER_GROUP_SIZE_X 128
 #endif
 
-#define NWB_MESH_SHADER_MAX_VERTICES (NWB_MESH_SHADER_GROUP_SIZE_X * 3)
+#define NWB_MESH_SHADER_MAX_VERTICES 64
+#define NWB_MESH_SHADER_MAX_TRIANGLES 96
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct NwbGeometryPosition{
+    float x;
+    float y;
+    float z;
+};
+
+struct NwbGeometryUv0{
+    float x;
+    float y;
+};
+
+struct NwbGeometryHalf4{
+    uint xy;
+    uint zw;
+};
+
+struct NwbGeometryVertexRef{
+    uint position;
+    uint normal;
+    uint tangent;
+    uint uv0;
+    uint color;
+    uint skin;
+};
+
+struct NwbGeometryMeshletDesc{
+    uint vertexOffset;
+    uint primitiveOffset;
+    uint vertexCount;
+    uint primitiveCount;
+};
+
+struct NwbGeometryMeshletBounds{
+    float4 sphere;
+    float4 cone;
+};
 
 struct NwbMeshSourceVertex{
     float3 position;
@@ -64,11 +102,18 @@ struct NwbMeshInstanceData{
     uint4 materialTypedBytes;
 };
 
-// Geometry vertices are uploaded as tightly packed 32-bit words, with float words and half2 words decoded manually.
-[[vk::binding(0, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMeshSourceVertexWords;
-[[vk::binding(1, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMeshSourceIndices;
-[[vk::binding(3, 0)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
-[[vk::binding(6, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
+[[vk::binding(0, 0)]] StructuredBuffer<NwbGeometryPosition, Std430DataLayout> g_NwbMeshPositions;
+[[vk::binding(1, 0)]] StructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbMeshNormals;
+[[vk::binding(2, 0)]] StructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbMeshTangents;
+[[vk::binding(3, 0)]] StructuredBuffer<NwbGeometryUv0, Std430DataLayout> g_NwbMeshUv0;
+[[vk::binding(4, 0)]] StructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbMeshColors;
+[[vk::binding(5, 0)]] StructuredBuffer<NwbGeometryVertexRef, Std430DataLayout> g_NwbMeshVertexRefs;
+[[vk::binding(6, 0)]] StructuredBuffer<NwbGeometryMeshletDesc, Std430DataLayout> g_NwbMeshlets;
+[[vk::binding(7, 0)]] StructuredBuffer<NwbGeometryMeshletBounds, Std430DataLayout> g_NwbMeshletBounds;
+[[vk::binding(8, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMeshletVertexRefs;
+[[vk::binding(9, 0)]] ByteAddressBuffer g_NwbMeshletPrimitiveIndices;
+[[vk::binding(10, 0)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
+[[vk::binding(12, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
 
 struct NwbMeshPushConstants{
     uint4 dispatch;
@@ -83,16 +128,12 @@ ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
 #include "nwb_shader_math.slangi"
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
-[[vk::binding(2, 0)]] RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbMeshGeneratedVertices;
+[[vk::binding(13, 0)]] RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbMeshGeneratedVertices;
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static const uint NWB_MESH_SOURCE_VERTEX_WORD_STRIDE = 7u;
-static const uint NWB_MESH_SOURCE_VERTEX_LAYOUT_SKINNED_GEOMETRY_RUNTIME = 1u;
-static const uint NWB_MESH_SKINNED_GEOMETRY_VERTEX_WORD_STRIDE = 11u;
 
 static const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
 
@@ -100,16 +141,12 @@ static const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbMeshTriangleCount(){
+uint nwbMeshletCount(){
     return g_NwbMeshPushConstants.dispatch.x;
 }
 
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshPushConstants.dispatch.z;
-}
-
-uint nwbMeshSourceVertexLayout(){
-    return g_NwbMeshPushConstants.dispatch.w;
 }
 
 float4x4 nwbMeshWorldToClip(){
@@ -120,44 +157,36 @@ float4 nwbMeshTransformWorldToClip(float3 worldPosition){
     return mul(nwbMeshWorldToClip(), float4(worldPosition, 1.0));
 }
 
-float4 nwbMeshLoadSourceHalf4(const uint wordBase){
+float3 nwbMeshLoadPosition(const NwbGeometryPosition value){
+    return float3(value.x, value.y, value.z);
+}
+
+float2 nwbMeshLoadUv0(const NwbGeometryUv0 value){
+    return float2(value.x, value.y);
+}
+
+float4 nwbMeshLoadHalf4(const NwbGeometryHalf4 value){
     return float4(
-        nwbUnpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 0u]),
-        nwbUnpackHalf2x16(g_NwbMeshSourceVertexWords[wordBase + 1u])
+        nwbUnpackHalf2x16(value.xy),
+        nwbUnpackHalf2x16(value.zw)
     );
 }
 
-NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint triangleIndex, const uint corner){
-    const uint indexBase = triangleIndex * 3u;
-    const uint sourceVertexIndex = g_NwbMeshSourceIndices[indexBase + corner];
-    const bool skinnedGeometryLayout = nwbMeshSourceVertexLayout() == NWB_MESH_SOURCE_VERTEX_LAYOUT_SKINNED_GEOMETRY_RUNTIME;
-    const uint wordStride = skinnedGeometryLayout
-        ? NWB_MESH_SKINNED_GEOMETRY_VERTEX_WORD_STRIDE
-        : NWB_MESH_SOURCE_VERTEX_WORD_STRIDE
-    ;
-    const uint wordBase = sourceVertexIndex * wordStride;
-    const float4 normal = nwbMeshLoadSourceHalf4(wordBase + 3u);
+uint nwbMeshLoadMeshletPrimitiveIndex(const uint primitiveIndex){
+    const uint byteOffset = primitiveIndex;
+    const uint word = g_NwbMeshletPrimitiveIndices.Load(byteOffset & ~3u);
+    return (word >> ((byteOffset & 3u) << 3u)) & 0xffu;
+}
+
+NwbMeshSourceVertex nwbMeshLoadSourceVertex(const uint vertexRefIndex){
+    const NwbGeometryVertexRef vertexRef = g_NwbMeshVertexRefs[vertexRefIndex];
 
     NwbMeshSourceVertex sourceVertex;
-    sourceVertex.position = float3(
-        asfloat(g_NwbMeshSourceVertexWords[wordBase + 0u]),
-        asfloat(g_NwbMeshSourceVertexWords[wordBase + 1u]),
-        asfloat(g_NwbMeshSourceVertexWords[wordBase + 2u])
-    );
-    sourceVertex.normal = normal.xyz;
-    if(skinnedGeometryLayout){
-        sourceVertex.tangent = nwbMeshLoadSourceHalf4(wordBase + 5u);
-        sourceVertex.uv0 = float2(
-            asfloat(g_NwbMeshSourceVertexWords[wordBase + 7u]),
-            asfloat(g_NwbMeshSourceVertexWords[wordBase + 8u])
-        );
-        sourceVertex.color = nwbMeshLoadSourceHalf4(wordBase + 9u);
-    }
-    else{
-        sourceVertex.tangent = float4(1.0, 0.0, 0.0, 1.0);
-        sourceVertex.uv0 = float2(0.0);
-        sourceVertex.color = nwbMeshLoadSourceHalf4(wordBase + 5u);
-    }
+    sourceVertex.position = nwbMeshLoadPosition(g_NwbMeshPositions[vertexRef.position]);
+    sourceVertex.normal = nwbMeshLoadHalf4(g_NwbMeshNormals[vertexRef.normal]).xyz;
+    sourceVertex.tangent = nwbMeshLoadHalf4(g_NwbMeshTangents[vertexRef.tangent]);
+    sourceVertex.uv0 = nwbMeshLoadUv0(g_NwbMeshUv0[vertexRef.uv0]);
+    sourceVertex.color = nwbMeshLoadHalf4(g_NwbMeshColors[vertexRef.color]);
     return sourceVertex;
 }
 
@@ -438,8 +467,8 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
 #endif
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
-    uint triangleIndex,
-    uint corner,
+    uint meshletIndex,
+    uint localVertexIndex,
     NwbMeshSourceVertex source,
     const NwbMeshInstanceData instance
 );
@@ -447,6 +476,39 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
 [numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
+    const uint meshletIndex = groupID.x;
+    if(meshletIndex >= nwbMeshletCount())
+        return;
+
+    const uint localPrimitiveIndex = groupThreadID.x;
+    const NwbGeometryMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
+    if(localPrimitiveIndex >= meshlet.primitiveCount)
+        return;
+
+    const uint primitiveBase = meshlet.primitiveOffset + localPrimitiveIndex * 3u;
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    NwbMeshGeneratedVertex generatedVertices[3];
+    for(uint corner = 0u; corner < 3u; ++corner){
+        const uint localVertexIndex = nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + corner);
+        const uint vertexRefIndex = g_NwbMeshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
+        generatedVertices[corner] = nwbMeshBuildVertex(
+            meshletIndex,
+            localVertexIndex,
+            nwbMeshLoadSourceVertex(vertexRefIndex),
+            instance
+        );
+    }
+
+    if(nwbMeshTriangleCulled(generatedVertices)){
+        const NwbMeshGeneratedVertex culledVertex = nwbMeshCulledVertex();
+        for(uint corner = 0u; corner < 3u; ++corner)
+            g_NwbMeshGeneratedVertices[primitiveBase + corner] = culledVertex;
+        return;
+    }
+
+    for(uint corner = 0u; corner < 3u; ++corner)
+        g_NwbMeshGeneratedVertices[primitiveBase + corner] = generatedVertices[corner];
+}
 #else
 [shader("mesh")]
 [numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
@@ -455,62 +517,45 @@ void main(
     uint3 groupThreadID : SV_GroupThreadID,
     uint3 groupID : SV_GroupID,
     OutputVertices<NwbMeshRasterVertex, NWB_MESH_SHADER_MAX_VERTICES> vertices,
-    OutputIndices<uint3, NWB_MESH_SHADER_GROUP_SIZE_X> triangles
+    OutputIndices<uint3, NWB_MESH_SHADER_MAX_TRIANGLES> triangles
 ){
-#endif
-    const uint groupThreadIndex = groupThreadID.x;
-    const uint baseTriangle = groupID.x * NWB_MESH_SHADER_GROUP_SIZE_X;
-    const uint remainingTriangles = nwbMeshTriangleCount() > baseTriangle
-        ? (nwbMeshTriangleCount() - baseTriangle)
-        : 0u
-    ;
-    const uint activeTriangles = min(uint(NWB_MESH_SHADER_GROUP_SIZE_X), remainingTriangles);
-
-#if !NWB_MESH_SHADER_EMULATION_COMPUTE
-    SetMeshOutputCounts(activeTriangles * 3u, activeTriangles);
-#endif
-
-    if(groupThreadIndex >= activeTriangles)
+    const uint meshletIndex = groupID.x;
+    if(meshletIndex >= nwbMeshletCount()){
+        SetMeshOutputCounts(0u, 0u);
         return;
+    }
 
-    const uint triangleIndex = baseTriangle + groupThreadIndex;
-    const uint vertexBase = groupThreadIndex * 3u;
+    const uint groupThreadIndex = groupThreadID.x;
+    const NwbGeometryMeshletDesc meshlet = g_NwbMeshlets[meshletIndex];
+    SetMeshOutputCounts(meshlet.vertexCount, meshlet.primitiveCount);
 
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    NwbMeshGeneratedVertex generatedVertices[3];
-    for(uint corner = 0u; corner < 3u; ++corner){
-        generatedVertices[corner] = nwbMeshBuildVertex(
-            triangleIndex,
-            corner,
-            nwbMeshLoadSourceVertex(triangleIndex, corner),
-            instance
+    if(groupThreadIndex < meshlet.vertexCount){
+        const uint vertexRefIndex = g_NwbMeshletVertexRefs[meshlet.vertexOffset + groupThreadIndex];
+        const NwbMeshGeneratedVertex generatedVertex = nwbMeshBuildVertex(
+            meshletIndex,
+            groupThreadIndex,
+            nwbMeshLoadSourceVertex(vertexRefIndex),
+            nwbMeshLoadInstance()
+        );
+
+        vertices[groupThreadIndex].position = generatedVertex.position;
+        vertices[groupThreadIndex].color = generatedVertex.color;
+        vertices[groupThreadIndex].normal = generatedVertex.normal;
+        vertices[groupThreadIndex].tangent = generatedVertex.tangent;
+        vertices[groupThreadIndex].uv0 = generatedVertex.uv0;
+        vertices[groupThreadIndex].worldPosition = generatedVertex.worldPosition.xyz;
+    }
+
+    if(groupThreadIndex < meshlet.primitiveCount){
+        const uint primitiveBase = meshlet.primitiveOffset + groupThreadIndex * 3u;
+        triangles[groupThreadIndex] = uint3(
+            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 0u),
+            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 1u),
+            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 2u)
         );
     }
-
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
-    if(nwbMeshTriangleCulled(generatedVertices)){
-        const NwbMeshGeneratedVertex culledVertex = nwbMeshCulledVertex();
-        for(uint corner = 0u; corner < 3u; ++corner)
-            g_NwbMeshGeneratedVertices[triangleIndex * 3u + corner] = culledVertex;
-        return;
-    }
-
-    for(uint corner = 0u; corner < 3u; ++corner)
-        g_NwbMeshGeneratedVertices[triangleIndex * 3u + corner] = generatedVertices[corner];
-#else
-    for(uint corner = 0u; corner < 3u; ++corner){
-        const uint outputVertex = vertexBase + corner;
-        vertices[outputVertex].position = generatedVertices[corner].position;
-        vertices[outputVertex].color = generatedVertices[corner].color;
-        vertices[outputVertex].normal = generatedVertices[corner].normal;
-        vertices[outputVertex].tangent = generatedVertices[corner].tangent;
-        vertices[outputVertex].uv0 = generatedVertices[corner].uv0;
-        vertices[outputVertex].worldPosition = generatedVertices[corner].worldPosition.xyz;
-    }
-
-    triangles[groupThreadIndex] = uint3(vertexBase + 0u, vertexBase + 1u, vertexBase + 2u);
-#endif
 }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

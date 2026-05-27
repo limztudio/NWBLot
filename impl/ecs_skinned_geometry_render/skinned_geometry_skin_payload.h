@@ -63,12 +63,6 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         );
         return false;
     }
-    if(instance.skin.size() != instance.restVertices.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometrySystem: runtime mesh '{}' skin count does not match vertex count")
-            , instance.handle.value
-        );
-        return false;
-    }
     if(instance.skeletonJointCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometrySystem: runtime mesh '{}' has skin but no skeleton joint count")
             , instance.handle.value

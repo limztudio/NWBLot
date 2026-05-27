@@ -4,7 +4,7 @@
 
 #include "renderer_system_private.h"
 
-#include <bit>
+#include <impl/ecs_geometry/runtime_geometry_buffer_upload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,58 +22,110 @@ namespace __hidden_renderer_system_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct StaticGeometrySourceVertexWords{
-    u32 positionX = 0u;
-    u32 positionY = 0u;
-    u32 positionZ = 0u;
-    u32 normalXy = 0u;
-    u32 normalZw = 0u;
-    u32 colorXy = 0u;
-    u32 colorZw = 0u;
-};
-static_assert(
-    sizeof(StaticGeometrySourceVertexWords) == sizeof(u32) * ECSRenderDetail::s_StaticGeometrySourceWordStride,
-    "Static geometry source word layout drifted"
-);
+template<typename PayloadT, typename PayloadVector>
+[[nodiscard]] static Core::BufferHandle SetupGeometryBuffer(
+    Core::Graphics& graphics,
+    const Name& geometryName,
+    const AStringView suffix,
+    const PayloadVector& payload,
+    const tchar* label,
+    const bool canHaveRawViews = false
+){
+    if(payload.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' has empty {} payload")
+            , StringConvert(geometryName.c_str())
+            , label
+        );
+        return {};
+    }
+    if(!RuntimeGeometryBufferUpload::PayloadByteCountFits<PayloadT>(payload)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' {} payload byte size overflows")
+            , StringConvert(geometryName.c_str())
+            , label
+        );
+        return {};
+    }
 
-using SourceVertexWordVector = Vector<StaticGeometrySourceVertexWords, Core::Alloc::ScratchArena>;
+    const Name bufferName = DeriveName(geometryName, suffix);
+    if(!bufferName){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for geometry '{}'")
+            , label
+            , StringConvert(geometryName.c_str())
+        );
+        return {};
+    }
 
-[[nodiscard]] static u32 FloatWord(const f32 value){
-    return std::bit_cast<u32>(value);
+    Core::BufferHandle buffer = RuntimeGeometryBufferUpload::SetupBuffer<PayloadT>(
+        graphics,
+        bufferName,
+        payload,
+        { false, canHaveRawViews }
+    );
+    if(buffer)
+        return buffer;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for geometry '{}'")
+        , label
+        , StringConvert(geometryName.c_str())
+    );
+    return {};
 }
 
-[[nodiscard]] static bool BuildStaticGeometrySourceWords(const Geometry& geometry, SourceVertexWordVector& outWords, usize& outBytes){
-    outWords.clear();
-    outBytes = 0u;
+template<typename PayloadT, typename PayloadVector>
+[[nodiscard]] static bool AssignGeometryBuffer(
+    Core::Graphics& graphics,
+    const Name& geometryName,
+    Core::BufferHandle& outBuffer,
+    const AStringView suffix,
+    const PayloadVector& payload,
+    const tchar* label,
+    const bool canHaveRawViews = false
+){
+    outBuffer = SetupGeometryBuffer<PayloadT>(
+        graphics,
+        geometryName,
+        suffix,
+        payload,
+        label,
+        canHaveRawViews
+    );
+    return outBuffer != nullptr;
+}
 
-    const usize vertexCount = geometry.vertexCount();
-    if(vertexCount == 0u)
+[[nodiscard]] static bool ResolveBufferElementCount(
+    const Core::BufferHandle& buffer,
+    u32& outCount,
+    const Name& geometryName,
+    const tchar* label
+){
+    outCount = 0u;
+    if(!buffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' has no {} buffer")
+            , StringConvert(geometryName.c_str())
+            , label
+        );
         return false;
-    if(vertexCount > Limit<usize>::s_Max / sizeof(StaticGeometrySourceVertexWords))
-        return false;
-
-    const usize sourceVertexBytes = vertexCount * sizeof(StaticGeometrySourceVertexWords);
-
-    const auto& positions = geometry.positions();
-    const auto& normals = geometry.normals();
-    const auto& colors = geometry.colors();
-    outWords.reserve(vertexCount);
-    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        const Float3U& position = positions[vertexIndex];
-        const Half4U& normal = normals[vertexIndex];
-        const Half4U& color = colors[vertexIndex];
-
-        StaticGeometrySourceVertexWords vertexWords;
-        vertexWords.positionX = FloatWord(position.x);
-        vertexWords.positionY = FloatWord(position.y);
-        vertexWords.positionZ = FloatWord(position.z);
-        vertexWords.normalXy = normal.packed[0];
-        vertexWords.normalZw = normal.packed[1];
-        vertexWords.colorXy = color.packed[0];
-        vertexWords.colorZw = color.packed[1];
-        outWords.push_back(vertexWords);
     }
-    outBytes = sourceVertexBytes;
+
+    const Core::BufferDesc& desc = buffer->getDescription();
+    if(desc.structStride == 0u || desc.byteSize == 0u || (desc.byteSize % desc.structStride) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' {} buffer has invalid structured layout")
+            , StringConvert(geometryName.c_str())
+            , label
+        );
+        return false;
+    }
+
+    const u64 count = desc.byteSize / desc.structStride;
+    if(count > static_cast<u64>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' {} buffer element count exceeds u32 limits")
+            , StringConvert(geometryName.c_str())
+            , label
+        );
+        return false;
+    }
+
+    outCount = static_cast<u32>(count);
     return true;
 }
 
@@ -122,82 +174,108 @@ bool RendererSystem::createGeometryResources(const Core::Assets::AssetRef<Geomet
     }
 
     const Geometry& geometry = static_cast<const Geometry&>(*loadedAsset);
-
-    GeometryResources createdGeometry;
-    createdGeometry.geometryName = geometryPath;
-    createdGeometry.sourceVertexLayout = MeshSourceLayout::StaticGeometryStreams;
-
-    const usize indexCount = geometry.indices().size();
-    if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' index count exceeds u32 limits"), StringConvert(geometryPath.c_str()));
+    if(!geometry.validatePayload())
         return false;
-    }
 
-    createdGeometry.indexCount = static_cast<u32>(indexCount);
-    if(createdGeometry.indexCount == 0 || (createdGeometry.indexCount % 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' index count {} is incompatible with triangle-based mesh rendering")
+    if(
+        geometry.meshlets().size() > static_cast<usize>(Limit<u32>::s_Max)
+        || geometry.meshletPrimitiveIndices().size() > static_cast<usize>(Limit<u32>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' meshlet payload exceeds u32 limits")
             , StringConvert(geometryPath.c_str())
-            , createdGeometry.indexCount
         );
         return false;
     }
 
-    createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, ECSRenderDetail::s_TrianglesPerWorkgroup);
-    if(createdGeometry.dispatchGroupCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' produced no dispatch groups"), StringConvert(geometryPath.c_str()));
-        return false;
-    }
+    GeometryResources createdGeometry;
+    createdGeometry.geometryName = geometryPath;
+    createdGeometry.meshletCount = static_cast<u32>(geometry.meshlets().size());
+    createdGeometry.meshletPrimitiveIndexCount = static_cast<u32>(geometry.meshletPrimitiveIndices().size());
 
-    const Name shaderVertexBufferName = DeriveName(geometryPath, AStringView(":shader_vb"));
-    const Name shaderIndexBufferName = DeriveName(geometryPath, AStringView(":shader_ib"));
-    if(!shaderVertexBufferName || !shaderIndexBufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shader-driven buffer names for geometry '{}'"), StringConvert(geometryPath.c_str()));
+    bool uploaded = true;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<Float3U>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.positionBuffer,
+        AStringView(":positions"),
+        geometry.positionStream(),
+        NWB_TEXT("position")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<Half4U>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.normalBuffer,
+        AStringView(":normals"),
+        geometry.normalStream(),
+        NWB_TEXT("normal")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<Half4U>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.tangentBuffer,
+        AStringView(":tangents"),
+        geometry.tangentStream(),
+        NWB_TEXT("tangent")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<Float2U>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.uv0Buffer,
+        AStringView(":uv0"),
+        geometry.uv0Stream(),
+        NWB_TEXT("uv0")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<Half4U>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.colorBuffer,
+        AStringView(":colors"),
+        geometry.colorStream(),
+        NWB_TEXT("color")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<GeometryVertexRef>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.vertexRefBuffer,
+        AStringView(":vertex_refs"),
+        geometry.vertexRefs(),
+        NWB_TEXT("vertex ref")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<GeometryMeshletDesc>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.meshletDescBuffer,
+        AStringView(":meshlets"),
+        geometry.meshlets(),
+        NWB_TEXT("meshlet descriptor")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<GeometryMeshletBounds>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.meshletBoundsBuffer,
+        AStringView(":meshlet_bounds"),
+        geometry.meshletBounds(),
+        NWB_TEXT("meshlet bounds")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<u32>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.meshletVertexRefBuffer,
+        AStringView(":meshlet_vertex_refs"),
+        geometry.meshletVertexRefs(),
+        NWB_TEXT("meshlet vertex ref")
+    ) && uploaded;
+    uploaded = __hidden_renderer_system_geometry::AssignGeometryBuffer<u8>(
+        m_graphics,
+        geometryPath,
+        createdGeometry.meshletPrimitiveIndexBuffer,
+        AStringView(":meshlet_primitive_indices"),
+        geometry.meshletPrimitiveIndices(),
+        NWB_TEXT("meshlet primitive index"),
+        true
+    ) && uploaded;
+    if(!uploaded || !createdGeometry.valid())
         return false;
-    }
-
-    Core::Alloc::ScratchArena scratchArena;
-    __hidden_renderer_system_geometry::SourceVertexWordVector sourceVertexWords{ scratchArena };
-    usize sourceVertexBytes = 0u;
-    if(!__hidden_renderer_system_geometry::BuildStaticGeometrySourceWords(geometry, sourceVertexWords, sourceVertexBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' source vertex stream size overflows"), StringConvert(geometryPath.c_str()));
-        return false;
-    }
-
-    Core::Graphics::BufferSetupDesc shaderVertexSetup;
-    shaderVertexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(sourceVertexBytes))
-        .setStructStride(sizeof(u32))
-        .setDebugName(shaderVertexBufferName)
-    ;
-    shaderVertexSetup.data = sourceVertexWords.data();
-    shaderVertexSetup.dataSize = sourceVertexBytes;
-    createdGeometry.shaderVertexBuffer = m_graphics.setupBuffer(shaderVertexSetup);
-    if(!createdGeometry.shaderVertexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shader vertex buffer for geometry '{}'"), StringConvert(geometryPath.c_str()));
-        return false;
-    }
-
-    const usize expandedIndexCount = static_cast<usize>(createdGeometry.indexCount);
-    if(expandedIndexCount > Limit<usize>::s_Max / sizeof(u32)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: geometry '{}' expanded index buffer size overflows"), StringConvert(geometryPath.c_str()));
-        return false;
-    }
-    const usize expandedIndexBytes = expandedIndexCount * sizeof(u32);
-
-    Core::Graphics::BufferSetupDesc shaderIndexSetup;
-    shaderIndexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(expandedIndexBytes))
-        .setStructStride(sizeof(u32))
-        .setDebugName(shaderIndexBufferName)
-    ;
-    shaderIndexSetup.data = geometry.indices().data();
-    shaderIndexSetup.dataSize = expandedIndexBytes;
-    createdGeometry.shaderIndexBuffer = m_graphics.setupBuffer(shaderIndexSetup);
-    if(!createdGeometry.shaderIndexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shader index buffer for geometry '{}'"), StringConvert(geometryPath.c_str()));
-        return false;
-    }
 
     auto result = m_geometryMeshes.try_emplace(geometryPath, Move(createdGeometry));
     auto it = result.first;
@@ -231,18 +309,28 @@ bool RendererSystem::createRuntimeGeometryResources(const RuntimeGeometryDesc& d
 
     GeometryResources createdGeometry;
     createdGeometry.geometryName = desc.geometryKey;
-    createdGeometry.shaderVertexBuffer = desc.shaderVertexBuffer;
-    createdGeometry.shaderIndexBuffer = desc.shaderIndexBuffer;
-    createdGeometry.indexCount = desc.indexCount;
-    createdGeometry.triangleCount = createdGeometry.indexCount / 3u;
-    createdGeometry.dispatchGroupCount = DivideUp(createdGeometry.triangleCount, ECSRenderDetail::s_TrianglesPerWorkgroup);
-    createdGeometry.sourceVertexLayout = desc.sourceVertexLayout;
+    createdGeometry.positionBuffer = desc.positionBuffer;
+    createdGeometry.normalBuffer = desc.normalBuffer;
+    createdGeometry.tangentBuffer = desc.tangentBuffer;
+    createdGeometry.uv0Buffer = desc.uv0Buffer;
+    createdGeometry.colorBuffer = desc.colorBuffer;
+    createdGeometry.vertexRefBuffer = desc.vertexRefBuffer;
+    createdGeometry.meshletDescBuffer = desc.meshletDescBuffer;
+    createdGeometry.meshletBoundsBuffer = desc.meshletBoundsBuffer;
+    createdGeometry.meshletVertexRefBuffer = desc.meshletVertexRefBuffer;
+    createdGeometry.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
+    createdGeometry.meshletCount = desc.meshletCount;
     createdGeometry.runtimeGeometry = true;
     createdGeometry.runtimeGeometryVersion = desc.version;
-    if(createdGeometry.dispatchGroupCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime geometry '{}' produced no dispatch groups"), StringConvert(desc.geometryKey.c_str()));
+    if(!__hidden_renderer_system_geometry::ResolveBufferElementCount(
+        createdGeometry.meshletPrimitiveIndexBuffer,
+        createdGeometry.meshletPrimitiveIndexCount,
+        createdGeometry.geometryName,
+        NWB_TEXT("meshlet primitive index")
+    ))
         return false;
-    }
+    if(!createdGeometry.valid())
+        return false;
 
     auto result = m_geometryMeshes.try_emplace(desc.geometryKey, Move(createdGeometry));
     auto it = result.first;
@@ -273,14 +361,44 @@ void RendererSystem::pruneRuntimeGeometryResources(){
 }
 
 void RendererSystem::addGeometrySourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const{
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.shaderVertexBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.shaderIndexBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, geometry.positionBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, geometry.normalBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, geometry.tangentBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, geometry.uv0Buffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, geometry.colorBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(5, geometry.vertexRefBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, geometry.meshletDescBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(7, geometry.meshletBoundsBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(8, geometry.meshletVertexRefBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(9, geometry.meshletPrimitiveIndexBuffer.get()));
 }
 
 void RendererSystem::addGeometryFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, m_materialTypedBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, m_instanceBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(11, m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(12, m_materialTypedBuffer.get()));
+}
+
+void RendererSystem::addGeometryDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const{
+    addGeometrySourceBindingItems(bindingSetDesc, geometry);
+    addGeometryFrameBindingItems(bindingSetDesc);
+}
+
+bool RendererSystem::geometryFrameBindingResourcesReady(const tchar* context)const{
+    if(!m_instanceBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
+        return false;
+    }
+    if(!m_meshViewBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a mesh view buffer"), context);
+        return false;
+    }
+    if(!m_materialTypedBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a material typed buffer"), context);
+        return false;
+    }
+
+    return true;
 }
 
 bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
@@ -288,22 +406,11 @@ bool RendererSystem::createMeshBindingSet(GeometryResources& geometry){
         return true;
     if(!createMeshShaderResources())
         return false;
-    if(!m_instanceBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires an instance buffer"));
+    if(!geometryFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
         return false;
-    }
-    if(!m_meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a mesh view buffer"));
-        return false;
-    }
-    if(!m_materialTypedBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh binding set requires a material typed buffer"));
-        return false;
-    }
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
-    addGeometrySourceBindingItems(bindingSetDesc, geometry);
-    addGeometryFrameBindingItems(bindingSetDesc);
+    addGeometryDrawBindingItems(bindingSetDesc, geometry);
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
@@ -320,18 +427,8 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
         return true;
     if(!createComputeEmulationResources())
         return false;
-    if(!m_instanceBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires an instance buffer"));
+    if(!geometryFrameBindingResourcesReady(NWB_TEXT("compute binding set")))
         return false;
-    }
-    if(!m_meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a mesh view buffer"));
-        return false;
-    }
-    if(!m_materialTypedBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute binding set requires a material typed buffer"));
-        return false;
-    }
 
     if(!geometry.emulationVertexBuffer){
         const Name emulationVertexBufferName = DeriveName(geometry.geometryName, AStringView(":emulation_vb"));
@@ -344,7 +441,7 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
 
         Core::BufferDesc emulationVertexBufferDesc;
         emulationVertexBufferDesc
-            .setByteSize(static_cast<u64>(geometry.indexCount) * ECSRenderDetail::s_EmulatedVertexStride)
+            .setByteSize(static_cast<u64>(geometry.meshletPrimitiveIndexCount) * ECSRenderDetail::s_EmulatedVertexStride)
             .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
@@ -360,9 +457,8 @@ bool RendererSystem::createComputeBindingSet(GeometryResources& geometry){
     }
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
-    addGeometrySourceBindingItems(bindingSetDesc, geometry);
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, geometry.emulationVertexBuffer.get()));
-    addGeometryFrameBindingItems(bindingSetDesc);
+    addGeometryDrawBindingItems(bindingSetDesc, geometry);
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(13, geometry.emulationVertexBuffer.get()));
 
     Core::IDevice* device = m_graphics.getDevice();
     geometry.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);

@@ -5,9 +5,28 @@
 #include "nwb_shader_math.slangi"
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct NwbGeometryVertexRef{
+    uint position;
+    uint normal;
+    uint tangent;
+    uint uv0;
+    uint color;
+    uint skin;
+};
+
+struct NwbGeometryHalf4{
+    uint xy;
+    uint zw;
+};
+
+struct NwbGeometryPosition{
+    float x;
+    float y;
+    float z;
+};
 
 struct NwbSkinnedGeometrySkinInfluence{
     uint4 joint;
@@ -21,10 +40,15 @@ struct NwbSkinnedGeometryJointMatrix{
     float4 column3;
 };
 
-[[vk::binding(0, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedGeometryRestVertexWords;
-[[vk::binding(1, 0)]] RWStructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedGeometrySkinnedVertexWords;
-[[vk::binding(4, 0)]] StructuredBuffer<NwbSkinnedGeometrySkinInfluence, Std430DataLayout> g_NwbSkinnedGeometrySkinInfluences;
-[[vk::binding(5, 0)]] StructuredBuffer<NwbSkinnedGeometryJointMatrix, Std430DataLayout> g_NwbSkinnedGeometryJointPalette;
+[[vk::binding(0, 0)]] StructuredBuffer<NwbGeometryPosition, Std430DataLayout> g_NwbSkinnedGeometryRestPositions;
+[[vk::binding(1, 0)]] RWStructuredBuffer<NwbGeometryPosition, Std430DataLayout> g_NwbSkinnedGeometrySkinnedPositions;
+[[vk::binding(2, 0)]] StructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbSkinnedGeometryRestNormals;
+[[vk::binding(3, 0)]] RWStructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbSkinnedGeometrySkinnedNormals;
+[[vk::binding(4, 0)]] StructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbSkinnedGeometryRestTangents;
+[[vk::binding(5, 0)]] RWStructuredBuffer<NwbGeometryHalf4, Std430DataLayout> g_NwbSkinnedGeometrySkinnedTangents;
+[[vk::binding(6, 0)]] StructuredBuffer<NwbGeometryVertexRef, Std430DataLayout> g_NwbSkinnedGeometryVertexRefs;
+[[vk::binding(7, 0)]] StructuredBuffer<NwbSkinnedGeometrySkinInfluence, Std430DataLayout> g_NwbSkinnedGeometrySkinInfluences;
+[[vk::binding(8, 0)]] StructuredBuffer<NwbSkinnedGeometryJointMatrix, Std430DataLayout> g_NwbSkinnedGeometryJointPalette;
 
 struct NwbSkinnedGeometryPushConstants{
     uint4 payload0;
@@ -42,55 +66,42 @@ uint nwbSkinnedGeometryVertexCount(){
     return g_NwbSkinnedGeometryPushConstants.payload0.x;
 }
 
-uint nwbSkinnedGeometryRestWordStride(){
+uint nwbSkinnedGeometrySkinCount(){
     return g_NwbSkinnedGeometryPushConstants.payload0.y;
 }
 
-uint nwbSkinnedGeometrySkinnedWordStride(){
+uint nwbSkinnedGeometryJointCount(){
     return g_NwbSkinnedGeometryPushConstants.payload0.z;
 }
 
-uint nwbSkinnedGeometrySkinCount(){
+uint nwbSkinnedGeometrySkinningMode(){
     return g_NwbSkinnedGeometryPushConstants.payload0.w;
 }
 
-uint nwbSkinnedGeometryJointCount(){
-    return g_NwbSkinnedGeometryPushConstants.payload1.x;
-}
-
-uint nwbSkinnedGeometrySkinningMode(){
-    return g_NwbSkinnedGeometryPushConstants.payload1.y;
-}
-
-void nwbSkinnedGeometryCopyRestPayload(const uint restBase, const uint skinnedBase, const uint restWordStride){
-    for(uint i = 0u; i < restWordStride; ++i)
-        g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + i] = g_NwbSkinnedGeometryRestVertexWords[restBase + i];
-}
-
-float3 nwbSkinnedGeometryLoadRestPosition(const uint restBase){
-    return float3(
-        asfloat(g_NwbSkinnedGeometryRestVertexWords[restBase + 0u]),
-        asfloat(g_NwbSkinnedGeometryRestVertexWords[restBase + 1u]),
-        asfloat(g_NwbSkinnedGeometryRestVertexWords[restBase + 2u])
-    );
-}
-
-float4 nwbSkinnedGeometryLoadRestHalf4(const uint restBase){
+float4 nwbSkinnedGeometryLoadHalf4(const NwbGeometryHalf4 value){
     return float4(
-        nwbUnpackHalf2x16(g_NwbSkinnedGeometryRestVertexWords[restBase + 0u]),
-        nwbUnpackHalf2x16(g_NwbSkinnedGeometryRestVertexWords[restBase + 1u])
+        nwbUnpackHalf2x16(value.xy),
+        nwbUnpackHalf2x16(value.zw)
     );
 }
 
-void nwbSkinnedGeometryStoreSkinnedPosition(const uint skinnedBase, const float3 position){
-    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = asuint(position.x);
-    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = asuint(position.y);
-    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 2u] = asuint(position.z);
+float3 nwbSkinnedGeometryLoadPosition(const NwbGeometryPosition value){
+    return float3(value.x, value.y, value.z);
 }
 
-void nwbSkinnedGeometryStoreSkinnedHalf4(const uint skinnedBase, const float4 value){
-    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 0u] = nwbPackHalf2x16(value.xy);
-    g_NwbSkinnedGeometrySkinnedVertexWords[skinnedBase + 1u] = nwbPackHalf2x16(value.zw);
+NwbGeometryPosition nwbSkinnedGeometryStorePosition(const float3 value){
+    NwbGeometryPosition storedValue;
+    storedValue.x = value.x;
+    storedValue.y = value.y;
+    storedValue.z = value.z;
+    return storedValue;
+}
+
+NwbGeometryHalf4 nwbSkinnedGeometryStoreHalf4(const float4 value){
+    NwbGeometryHalf4 packedValue;
+    packedValue.xy = nwbPackHalf2x16(value.xy);
+    packedValue.zw = nwbPackHalf2x16(value.zw);
+    return packedValue;
 }
 
 float4x4 nwbSkinnedGeometryLoadJointMatrix(const uint jointId){
@@ -144,12 +155,12 @@ float3 nwbSkinnedGeometryTransformDualQuaternionPosition(const float4 real, cons
     return rotatedPosition + translation;
 }
 
-bool nwbSkinnedGeometryApplyLinearSkin(const uint vertexId, inout float3 position, inout float3 normal, inout float4 tangent){
+bool nwbSkinnedGeometryApplyLinearSkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
     const uint jointCount = nwbSkinnedGeometryJointCount();
-    if(nwbSkinnedGeometrySkinCount() != nwbSkinnedGeometryVertexCount() || jointCount == 0u)
+    if(skinIndex >= nwbSkinnedGeometrySkinCount() || jointCount == 0u)
         return true;
 
-    const NwbSkinnedGeometrySkinInfluence skin = g_NwbSkinnedGeometrySkinInfluences[vertexId];
+    const NwbSkinnedGeometrySkinInfluence skin = g_NwbSkinnedGeometrySkinInfluences[skinIndex];
     float3 skinnedPosition = float3(0.0);
     float3 skinnedNormal = float3(0.0);
     float3 skinnedTangent = float3(0.0);
@@ -183,12 +194,12 @@ bool nwbSkinnedGeometryApplyLinearSkin(const uint vertexId, inout float3 positio
     return true;
 }
 
-bool nwbSkinnedGeometryApplyDualQuaternionSkin(const uint vertexId, inout float3 position, inout float3 normal, inout float4 tangent){
+bool nwbSkinnedGeometryApplyDualQuaternionSkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
     const uint jointCount = nwbSkinnedGeometryJointCount();
-    if(nwbSkinnedGeometrySkinCount() != nwbSkinnedGeometryVertexCount() || jointCount == 0u)
+    if(skinIndex >= nwbSkinnedGeometrySkinCount() || jointCount == 0u)
         return true;
 
-    const NwbSkinnedGeometrySkinInfluence skin = g_NwbSkinnedGeometrySkinInfluences[vertexId];
+    const NwbSkinnedGeometrySkinInfluence skin = g_NwbSkinnedGeometrySkinInfluences[skinIndex];
     float4 blendedReal = float4(0.0);
     float4 blendedDual = float4(0.0);
     float4 referenceReal = float4(0.0);
@@ -232,11 +243,11 @@ bool nwbSkinnedGeometryApplyDualQuaternionSkin(const uint vertexId, inout float3
     return true;
 }
 
-void nwbSkinnedGeometryApplySkin(const uint vertexId, inout float3 position, inout float3 normal, inout float4 tangent){
+void nwbSkinnedGeometryApplySkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
     const uint dualQuaternionSkinningMode = 1u;
     const bool skinApplied = nwbSkinnedGeometrySkinningMode() == dualQuaternionSkinningMode
-        ? nwbSkinnedGeometryApplyDualQuaternionSkin(vertexId, position, normal, tangent)
-        : nwbSkinnedGeometryApplyLinearSkin(vertexId, position, normal, tangent)
+        ? nwbSkinnedGeometryApplyDualQuaternionSkin(skinIndex, position, normal, tangent)
+        : nwbSkinnedGeometryApplyLinearSkin(skinIndex, position, normal, tangent)
     ;
     if(!skinApplied)
         return;
@@ -250,14 +261,10 @@ void nwbSkinnedGeometryMain(uint vertexId){
     if(vertexId >= nwbSkinnedGeometryVertexCount())
         return;
 
-    const uint restWordStride = nwbSkinnedGeometryRestWordStride();
-    const uint skinnedWordStride = nwbSkinnedGeometrySkinnedWordStride();
-    const uint restBase = vertexId * restWordStride;
-    const uint skinnedBase = vertexId * skinnedWordStride;
-
-    float3 position = nwbSkinnedGeometryLoadRestPosition(restBase);
-    float3 normal = nwbSkinnedGeometryLoadRestHalf4(restBase + 3u).xyz;
-    float4 tangent = nwbSkinnedGeometryLoadRestHalf4(restBase + 5u);
+    const NwbGeometryVertexRef vertexRef = g_NwbSkinnedGeometryVertexRefs[vertexId];
+    float3 position = nwbSkinnedGeometryLoadPosition(g_NwbSkinnedGeometryRestPositions[vertexRef.position]);
+    float3 normal = nwbSkinnedGeometryLoadHalf4(g_NwbSkinnedGeometryRestNormals[vertexRef.normal]).xyz;
+    float4 tangent = nwbSkinnedGeometryLoadHalf4(g_NwbSkinnedGeometryRestTangents[vertexRef.tangent]);
     const float3 restNormal = normal;
     const float4 restTangent = tangent;
 
@@ -265,7 +272,7 @@ void nwbSkinnedGeometryMain(uint vertexId){
     const float3 preSkinPosition = position;
     const float3 preSkinNormal = normal;
     const float4 preSkinTangent = tangent;
-    nwbSkinnedGeometryApplySkin(vertexId, position, normal, tangent);
+    nwbSkinnedGeometryApplySkin(vertexRef.skin, position, normal, tangent);
     if(!nwbFiniteFloat3(position))
         position = preSkinPosition;
     if(!nwbFiniteFloat3(normal))
@@ -274,10 +281,9 @@ void nwbSkinnedGeometryMain(uint vertexId){
         tangent = preSkinTangent;
     nwbOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
 
-    nwbSkinnedGeometryCopyRestPayload(restBase, skinnedBase, restWordStride);
-    nwbSkinnedGeometryStoreSkinnedPosition(skinnedBase, position);
-    nwbSkinnedGeometryStoreSkinnedHalf4(skinnedBase + 3u, float4(normal, 0.0));
-    nwbSkinnedGeometryStoreSkinnedHalf4(skinnedBase + 5u, tangent);
+    g_NwbSkinnedGeometrySkinnedPositions[vertexId] = nwbSkinnedGeometryStorePosition(position);
+    g_NwbSkinnedGeometrySkinnedNormals[vertexId] = nwbSkinnedGeometryStoreHalf4(float4(normal, 0.0));
+    g_NwbSkinnedGeometrySkinnedTangents[vertexId] = nwbSkinnedGeometryStoreHalf4(tangent);
 }
 
 

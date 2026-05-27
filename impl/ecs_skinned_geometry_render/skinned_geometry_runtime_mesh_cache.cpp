@@ -4,14 +4,9 @@
 
 #include "skinned_geometry_runtime_mesh_cache.h"
 
-#include <core/assets/asset_manager.h>
-#include <core/ecs/world.h>
-#include <core/graphics/graphics.h>
-#include <impl/assets_geometry/skinned_geometry_asset.h>
-#include <impl/assets_geometry/skinned_geometry_payload_logging.h>
 #include <core/common/log.h>
-
-#include "skinned_geometry_runtime_resource_names.h"
+#include <core/ecs/world.h>
+#include <impl/assets_geometry/skinned_geometry_asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,14 +25,6 @@ namespace __hidden_skinned_geometry_runtime_mesh_cache{
 
 
 static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag::All;
-// uploadRuntimeMeshBuffers seeds the skinned draw buffer from the rest pose,
-// so the upload also satisfies the static skinned geometry input update.
-static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
-    RuntimeMeshDirtyFlag::TopologyDirty
-    | RuntimeMeshDirtyFlag::AttributesDirty
-    | RuntimeMeshDirtyFlag::SkinnedGeometryInputDirty
-    | RuntimeMeshDirtyFlag::GpuUploadDirty
-;
 
 [[nodiscard]] RuntimeMeshDirtyFlags SanitizeDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
     return static_cast<RuntimeMeshDirtyFlags>(dirtyFlags & s_KnownDirtyFlags);
@@ -54,57 +41,6 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
         expanded = static_cast<RuntimeMeshDirtyFlags>(expanded | RuntimeMeshDirtyFlag::SkinnedGeometryInputDirty);
     }
     return expanded;
-}
-
-[[nodiscard]] SkinnedGeometryValidation::RuntimePayloadFailureInfo FindRuntimeMeshPayloadFailure(
-    const SkinnedGeometryRuntimeMeshInstance& instance
-){
-    return SkinnedGeometryValidation::FindRuntimePayloadFailure(
-        SkinnedGeometryValidation::RuntimePayloadArrays{
-            instance.restVertices,
-            instance.indices,
-            instance.skeletonJointCount,
-            instance.skin,
-            instance.inverseBindMatrices
-        }
-    );
-}
-
-[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const SkinnedGeometryRuntimeMeshInstance& instance){
-    TString<Core::Alloc::GlobalArena> sourceText{arena};
-    if(instance.source.name())
-        sourceText = StringConvert(arena, instance.source.name().c_str());
-    else
-        sourceText.assign(NWB_TEXT("<unnamed>"));
-
-    if(!Core::Geometry::GeometryClassUsesSkinning(instance.geometryClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' has invalid geometry class")
-            , TStringView(sourceText)
-        );
-        return false;
-    }
-    const bool hasSkin = !instance.skin.empty();
-    if(!Core::Geometry::GeometryClassMatchesSkinPayload(instance.geometryClass, hasSkin)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' class '{}' does not match skin payload")
-            , TStringView(sourceText)
-            , StringConvert(Core::Geometry::GeometryClassText(instance.geometryClass))
-        );
-        return false;
-    }
-    const SkinnedGeometryValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
-        FindRuntimeMeshPayloadFailure(instance)
-    ;
-    if(runtimePayloadFailure.reason != SkinnedGeometryValidation::RuntimePayloadFailure::None){
-        SkinnedGeometryValidation::LogRuntimePayloadFailure(
-            NWB_TEXT("SkinnedGeometryRuntimeMeshCache"),
-            NWB_TEXT("runtime mesh"),
-            TStringView(sourceText),
-            runtimePayloadFailure
-        );
-        return false;
-    }
-
-    return true;
 }
 
 
@@ -227,197 +163,6 @@ bool SkinnedGeometryRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle h
     return true;
 }
 
-bool SkinnedGeometryRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedGeometryComponent& component){
-    const Name sourceName = component.skinnedGeometry.name();
-    if(!sourceName){
-        releaseRuntimeMesh(entity);
-        component.runtimeMesh.reset();
-        return false;
-    }
-
-    const auto foundInstance = m_instances.find(entity);
-    if(foundInstance != m_instances.end()){
-        SkinnedGeometryRuntimeMeshInstance& instance = foundInstance.value();
-        if(instance.source.name() == sourceName){
-            component.runtimeMesh = instance.handle;
-            if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u){
-                if(!uploadRuntimeMeshBuffers(instance)){
-                    releaseRuntimeMesh(entity);
-                    component.runtimeMesh.reset();
-                    return false;
-                }
-                instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-                    instance.dirtyFlags & ~__hidden_skinned_geometry_runtime_mesh_cache::s_GpuUploadHandledDirtyFlags
-                );
-            }
-            return instance.valid();
-        }
-
-        releaseRuntimeMesh(entity);
-        component.runtimeMesh.reset();
-    }
-
-    SkinnedGeometrySource* source = nullptr;
-    if(!ensureSourceLoaded(component.skinnedGeometry, source))
-        return false;
-    const SkinnedGeometry* geometry = source ? source->geometry() : nullptr;
-    if(!geometry)
-        return false;
-
-    SkinnedGeometryRuntimeMeshInstance instance(m_arena);
-    instance.entity = entity;
-    instance.handle = allocateHandle();
-    if(!instance.handle.valid()){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-    instance.source = component.skinnedGeometry;
-    instance.geometryClass = geometry->geometryClass();
-    instance.restVertices = geometry->restVertices();
-    instance.indices = geometry->indices();
-    instance.skeletonJointCount = geometry->skeletonJointCount();
-    instance.skin = geometry->skin();
-    instance.inverseBindMatrices = geometry->inverseBindMatrices();
-    instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-
-    if(!uploadRuntimeMeshBuffers(instance)){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags & ~__hidden_skinned_geometry_runtime_mesh_cache::s_GpuUploadHandledDirtyFlags
-    );
-
-    ++source->referenceCount;
-    const RuntimeMeshHandle handle = instance.handle;
-    auto result = m_instances.try_emplace(entity, Move(instance));
-    auto it = result.first;
-    m_handleToEntity.emplace(handle.value, entity);
-    component.runtimeMesh = handle;
-    return it.value().valid();
-}
-
-bool SkinnedGeometryRuntimeMeshCache::ensureSourceLoaded(const Core::Assets::AssetRef<SkinnedGeometry>& sourceAsset, SkinnedGeometrySource*& outSource){
-    outSource = nullptr;
-
-    const Name sourceName = sourceAsset.name();
-    if(!sourceName){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: skinned geometry renderer source asset is empty"));
-        return false;
-    }
-
-    const auto foundSource = m_sources.find(sourceName);
-    if(foundSource != m_sources.end()){
-        outSource = &foundSource.value();
-        return outSource->geometry() != nullptr;
-    }
-
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(SkinnedGeometry::AssetTypeName(), sourceName, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: failed to load skinned geometry '{}'")
-            , StringConvert(sourceName.c_str())
-        );
-        return false;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != SkinnedGeometry::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: asset '{}' is not skinned geometry")
-            , StringConvert(sourceName.c_str())
-        );
-        return false;
-    }
-
-    SkinnedGeometrySource source;
-    source.sourceName = sourceName;
-    source.asset = Move(loadedAsset);
-
-    auto result = m_sources.try_emplace(sourceName, Move(source));
-    auto it = result.first;
-    outSource = &it.value();
-    return outSource->geometry() != nullptr;
-}
-
-bool SkinnedGeometryRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedGeometryRuntimeMeshInstance& instance){
-    if(!__hidden_skinned_geometry_runtime_mesh_cache::ValidateRuntimeMeshUploadPayload(m_arena, instance))
-        return false;
-
-    usize restVertexBytes = 0;
-    usize indexBytes = 0;
-    if(!computePayloadBytes(
-        instance,
-        instance.restVertices.size(),
-        sizeof(SkinnedGeometryVertex),
-        restVertexBytes,
-        "rest vertices"
-    ))
-        return false;
-    if(!computePayloadBytes(
-        instance,
-        instance.indices.size(),
-        sizeof(u32),
-        indexBytes,
-        "indices"
-    ))
-        return false;
-
-    const Name restVertexBufferName = deriveRuntimeBufferName(instance, AStringView("rest_vb"));
-    const Name indexBufferName = deriveRuntimeBufferName(instance, AStringView("index"));
-    const Name skinnedVertexBufferName = deriveRuntimeBufferName(instance, AStringView("skinned_vb"));
-    if(!restVertexBufferName || !indexBufferName || !skinnedVertexBufferName)
-        return false;
-
-    Core::Graphics::BufferSetupDesc restVertexSetup;
-    restVertexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(restVertexBytes))
-        .setStructStride(sizeof(SkinnedGeometryVertex))
-        .setDebugName(restVertexBufferName)
-    ;
-    restVertexSetup.data = instance.restVertices.data();
-    restVertexSetup.dataSize = restVertexBytes;
-    instance.restVertexBuffer = m_graphics.setupBuffer(restVertexSetup);
-    if(!instance.restVertexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: failed to create rest vertex buffer for '{}'")
-            , StringConvert(instance.source.name().c_str())
-        );
-        return false;
-    }
-
-    Core::Graphics::BufferSetupDesc indexSetup;
-    indexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(indexBytes))
-        .setStructStride(sizeof(u32))
-        .setDebugName(indexBufferName)
-    ;
-    indexSetup.data = instance.indices.data();
-    indexSetup.dataSize = indexBytes;
-    instance.indexBuffer = m_graphics.setupBuffer(indexSetup);
-    if(!instance.indexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: failed to create index buffer for '{}'")
-            , StringConvert(instance.source.name().c_str())
-        );
-        return false;
-    }
-
-    Core::Graphics::BufferSetupDesc skinnedVertexSetup;
-    skinnedVertexSetup.bufferDesc
-        .setByteSize(static_cast<u64>(restVertexBytes))
-        .setStructStride(sizeof(SkinnedGeometryVertex))
-        .setCanHaveUAVs(true)
-        .setIsVertexBuffer(true)
-        .setDebugName(skinnedVertexBufferName)
-    ;
-    skinnedVertexSetup.data = instance.restVertices.data();
-    skinnedVertexSetup.dataSize = restVertexBytes;
-    instance.skinnedVertexBuffer = m_graphics.setupBuffer(skinnedVertexSetup);
-    if(!instance.skinnedVertexBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: failed to create skinned vertex buffer for '{}'")
-            , StringConvert(instance.source.name().c_str())
-        );
-        return false;
-    }
-
-    return true;
-}
-
 RuntimeMeshHandle SkinnedGeometryRuntimeMeshCache::allocateHandle(){
     while(m_nextHandleValue != 0u){
         RuntimeMeshHandle handle;
@@ -486,34 +231,6 @@ const SkinnedGeometryRuntimeMeshInstance* SkinnedGeometryRuntimeMeshCache::findI
         return nullptr;
     return &foundInstance.value();
 }
-
-Name SkinnedGeometryRuntimeMeshCache::deriveRuntimeBufferName(const SkinnedGeometryRuntimeMeshInstance& instance, const AStringView suffix)const{
-    return DeriveRuntimeResourceName(instance.source.name(), instance.entity.id, instance.editRevision, suffix);
-}
-
-bool SkinnedGeometryRuntimeMeshCache::computePayloadBytes(
-    const SkinnedGeometryRuntimeMeshInstance& instance,
-    const usize count,
-    const usize stride,
-    usize& outBytes,
-    const char* label
-)const{
-    outBytes = 0;
-    if(stride == 0u || count > Limit<usize>::s_Max / stride){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometryRuntimeMeshCache: runtime mesh '{}' '{}' payload byte size overflows")
-            , StringConvert(instance.source.name().c_str())
-            , StringConvert(label)
-        );
-        return false;
-    }
-
-    outBytes = count * stride;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_IMPL_END
 

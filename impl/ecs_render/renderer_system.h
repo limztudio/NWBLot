@@ -99,26 +99,39 @@ private:
 
     struct GeometryResources{
         Name geometryName = NAME_NONE;
-        Core::BufferHandle shaderVertexBuffer;
-        Core::BufferHandle shaderIndexBuffer;
-        Core::BindingSetHandle meshBindingSet;
+        Core::BufferHandle positionBuffer;
+        Core::BufferHandle normalBuffer;
+        Core::BufferHandle tangentBuffer;
+        Core::BufferHandle uv0Buffer;
+        Core::BufferHandle colorBuffer;
+        Core::BufferHandle vertexRefBuffer;
+        Core::BufferHandle meshletDescBuffer;
+        Core::BufferHandle meshletBoundsBuffer;
+        Core::BufferHandle meshletVertexRefBuffer;
+        Core::BufferHandle meshletPrimitiveIndexBuffer;
         Core::BufferHandle emulationVertexBuffer;
+        Core::BindingSetHandle meshBindingSet;
         Core::BindingSetHandle computeBindingSet;
-        u32 indexCount = 0;
-        u32 triangleCount = 0;
-        u32 dispatchGroupCount = 0;
-        u32 sourceVertexLayout = 0;
+        u32 meshletCount = 0;
+        u32 meshletPrimitiveIndexCount = 0;
         bool runtimeGeometry = false;
         u64 runtimeGeometryVersion = 0u;
 
         [[nodiscard]] bool valid()const noexcept{
             return
                 geometryName != NAME_NONE
-                && shaderVertexBuffer != nullptr
-                && shaderIndexBuffer != nullptr
-                && indexCount > 0
-                && triangleCount > 0
-                && dispatchGroupCount > 0
+                && positionBuffer != nullptr
+                && normalBuffer != nullptr
+                && tangentBuffer != nullptr
+                && uv0Buffer != nullptr
+                && colorBuffer != nullptr
+                && vertexRefBuffer != nullptr
+                && meshletDescBuffer != nullptr
+                && meshletBoundsBuffer != nullptr
+                && meshletVertexRefBuffer != nullptr
+                && meshletPrimitiveIndexBuffer != nullptr
+                && meshletCount > 0
+                && meshletPrimitiveIndexCount > 0
             ;
         }
     };
@@ -304,8 +317,11 @@ private:
     void destroyGeometryBindingSets();
     [[nodiscard]] bool createMeshBindingSet(GeometryResources& geometry);
     [[nodiscard]] bool createComputeBindingSet(GeometryResources& geometry);
+    [[nodiscard]] bool geometryFrameBindingResourcesReady(const tchar* context)const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(const GeometryResources& geometry)const;
     void addGeometrySourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const;
     void addGeometryFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
+    void addGeometryDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const GeometryResources& geometry)const;
 
 private:
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
@@ -386,7 +402,7 @@ private:
 
 private:
     [[nodiscard]] bool createAvboitResources();
-    [[nodiscard]] bool createAvboitPipelines(AvboitFrameTargets& targets);
+    [[nodiscard]] bool createAvboitPipelines();
     [[nodiscard]] bool createAvboitFrameTargets(
         DeferredFrameTargets& createdTargets,
         Core::Format::Enum lowRasterFormat,

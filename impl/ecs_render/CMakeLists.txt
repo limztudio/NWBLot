@@ -8,8 +8,11 @@ nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_targets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_deferred.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_geometry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_lighting.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_material.cpp"
@@ -17,6 +20,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ecs_render.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_private.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC
@@ -33,3 +37,4 @@ target_link_libraries(nwb_ecs_render PRIVATE
     nwb_ecs_lighting
     nwb_ecs_scene
 )
+

@@ -26,35 +26,37 @@ class Geometry;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace MeshSourceLayout{
-    enum Enum : u32{
-        StaticGeometryStreams = 0u,
-        SkinnedGeometryRuntime = 1u,
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct RuntimeGeometryDesc{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     Name geometryKey = NAME_NONE;
-    Core::BufferHandle shaderVertexBuffer;
-    Core::BufferHandle shaderIndexBuffer;
-    u32 indexCount = 0u;
-    u32 sourceVertexLayout = MeshSourceLayout::StaticGeometryStreams;
+    Core::BufferHandle positionBuffer;
+    Core::BufferHandle normalBuffer;
+    Core::BufferHandle tangentBuffer;
+    Core::BufferHandle uv0Buffer;
+    Core::BufferHandle colorBuffer;
+    Core::BufferHandle vertexRefBuffer;
+    Core::BufferHandle meshletDescBuffer;
+    Core::BufferHandle meshletBoundsBuffer;
+    Core::BufferHandle meshletVertexRefBuffer;
+    Core::BufferHandle meshletPrimitiveIndexBuffer;
+    u32 meshletCount = 0u;
     u64 version = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return
             entity.valid()
             && geometryKey != NAME_NONE
-            && shaderVertexBuffer != nullptr
-            && shaderIndexBuffer != nullptr
-            && indexCount > 0u
-            && (indexCount % 3u) == 0u
+            && positionBuffer != nullptr
+            && normalBuffer != nullptr
+            && tangentBuffer != nullptr
+            && uv0Buffer != nullptr
+            && colorBuffer != nullptr
+            && vertexRefBuffer != nullptr
+            && meshletDescBuffer != nullptr
+            && meshletBoundsBuffer != nullptr
+            && meshletVertexRefBuffer != nullptr
+            && meshletPrimitiveIndexBuffer != nullptr
+            && meshletCount > 0u
         ;
     }
 };

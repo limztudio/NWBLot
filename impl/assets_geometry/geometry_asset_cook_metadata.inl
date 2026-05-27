@@ -394,11 +394,5 @@ static bool ParseMetadataIndexField(
     return true;
 }
 
-template<typename ColorVectorT>
-static void BuildDefaultColors(const usize vertexCount, ColorVectorT& outColors){
-    outColors.assign(vertexCount, Float4U(1.f, 1.f, 1.f, 1.f));
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

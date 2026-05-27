@@ -38,7 +38,13 @@ static bool HasPotentialSkinnedMeshWork(
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinnedMeshInputDirty) != 0u)
         return true;
 
-    return !instance.skin.empty() && ((jointPalette && !jointPalette->joints.empty()) || SkinnedMeshRuntime::HasSkeletonPose(skeletonPose));
+    return
+        !instance.skin.empty()
+        && (
+            (jointPalette && !jointPalette->joints.empty())
+            || SkinnedMeshRuntime::HasSkeletonPose(skeletonPose)
+        )
+    ;
 }
 
 static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::EntityID entity){
@@ -82,8 +88,7 @@ SkinnedMeshSystem::SkinnedMeshSystem(
     m_runtimeMeshRegistry.registerRuntimeMeshProvider(*this);
 }
 
-SkinnedMeshSystem::~SkinnedMeshSystem()
-{
+SkinnedMeshSystem::~SkinnedMeshSystem(){
     m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
 }
 

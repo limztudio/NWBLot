@@ -78,7 +78,10 @@ inline constexpr u32 s_MeshletConeFlagShift = 24u;
         y = foldedY;
     }
 
-    return (PackMeshletConeUnorm8(x * 0.5f + 0.5f) << s_MeshletConeAxisXShift) | (PackMeshletConeUnorm8(y * 0.5f + 0.5f) << s_MeshletConeAxisYShift);
+    return
+        (PackMeshletConeUnorm8(x * 0.5f + 0.5f) << s_MeshletConeAxisXShift)
+        | (PackMeshletConeUnorm8(y * 0.5f + 0.5f) << s_MeshletConeAxisYShift)
+    ;
 }
 
 [[nodiscard]] inline u32 PackMeshletCone(const SIMDVector axis, const f32 cutoff){
@@ -89,7 +92,11 @@ inline constexpr u32 s_MeshletConeFlagShift = 24u;
     if(packedCutoff == 0u)
         return 0u;
 
-    return PackMeshletConeOct16(axis) | (packedCutoff << s_MeshletConeCutoffShift) | (s_MeshletConeFlagEnabled << s_MeshletConeFlagShift);
+    return
+        PackMeshletConeOct16(axis)
+        | (packedCutoff << s_MeshletConeCutoffShift)
+        | (s_MeshletConeFlagEnabled << s_MeshletConeFlagShift)
+    ;
 }
 
 [[nodiscard]] inline u32 MeshletConeFlags(const MeshletBounds& bounds){
@@ -112,3 +119,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

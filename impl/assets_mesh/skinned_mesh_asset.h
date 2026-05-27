@@ -104,14 +104,22 @@ public:
     [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const{ return m_colorStream; }
     [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const{ return m_meshlets; }
     [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const{ return m_meshletBounds; }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletDeformedPositionRef>& meshletPositionRefs()const{ return m_meshletPositionRefs; }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletShadingAttributeRef>& meshletAttributeRefs()const{ return m_meshletAttributeRefs; }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const{ return m_meshletLocalVertexRefs; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletDeformedPositionRef>& meshletPositionRefs()const{
+        return m_meshletPositionRefs;
+    }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletShadingAttributeRef>& meshletAttributeRefs()const{
+        return m_meshletAttributeRefs;
+    }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const{
+        return m_meshletLocalVertexRefs;
+    }
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const{ return m_meshletPrimitiveIndices; }
     [[nodiscard]] u32 meshClass()const{ return m_meshClass; }
     [[nodiscard]] const Core::Assets::AssetVector<SkinInfluence4>& skinStream()const{ return m_skin; }
     [[nodiscard]] u32 skeletonJointCount()const{ return m_skeletonJointCount; }
-    [[nodiscard]] const Core::Assets::AssetVector<SkinnedMeshJointMatrix>& inverseBindMatrices()const{ return m_inverseBindMatrices; }
+    [[nodiscard]] const Core::Assets::AssetVector<SkinnedMeshJointMatrix>& inverseBindMatrices()const{
+        return m_inverseBindMatrices;
+    }
 private:
     u32 m_meshClass = Core::Mesh::MeshClass::Invalid;
     Core::Assets::AssetVector<Float3U> m_positionStream;
@@ -149,3 +157,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

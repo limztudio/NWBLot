@@ -79,7 +79,8 @@ bool nwbMeshletBackfaceCull(
 
 bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instance){
     const NwbMeshletBounds bounds = nwbMeshLoadMeshletBounds(meshletIndex);
-    const float3 center = nwbRotateVectorByQuaternion(bounds.sphere.xyz * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
+    const float3 localCenter = bounds.sphere.xyz * instance.scale.xyz;
+    const float3 center = nwbRotateVectorByQuaternion(localCenter, instance.rotation) + instance.translation.xyz;
     const float radius = bounds.sphere.w * nwbMeshMaxAbsScale(instance.scale.xyz);
 
     if(nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL) && nwbMeshSphereOutsideFrustum(center, radius))
@@ -206,3 +207,4 @@ void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -78,10 +78,6 @@ static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_
     return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
 }
 
-[[nodiscard]] static bool FiniteFloat3(const Float4& value){
-    return FiniteVector3(LoadFloat(value));
-}
-
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
     auto* uiSystem = world.getSystem<NWB::Impl::UiSystem>();
     return uiSystem && uiSystem->wantsKeyboardCapture();
@@ -111,9 +107,9 @@ static void ResolveFlyCameraAnglesFromTransform(
     const NWB::Impl::TransformComponent& transform,
     f32& outYawRadians,
     f32& outPitchRadians){
-    const Float4 localForward(0.0f, 0.0f, 1.0f);
+    const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const EditorVec3 forward = NormalizeVec3(
-        Vector3Rotate(LoadFloat(localForward), LoadFloat(transform.rotation)),
+        Vector3Rotate(localForward, LoadFloat(transform.rotation)),
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
     const f32 clampedForwardY = Min(Max(forward.y, -1.0f), 1.0f);
@@ -121,10 +117,7 @@ static void ResolveFlyCameraAnglesFromTransform(
     const f32 pitchRadians = -ASin(clampedForwardY);
 
     outYawRadians = IsFinite(yawRadians) ? yawRadians : 0.0f;
-    outPitchRadians = IsFinite(pitchRadians)
-        ? ClampPitch(pitchRadians, s_FlyCameraPitchLimitRadians)
-        : 0.0f
-    ;
+    outPitchRadians = IsFinite(pitchRadians) ? ClampPitch(pitchRadians, s_FlyCameraPitchLimitRadians) : 0.0f;
 }
 
 static void ApplyFlyCameraInput(
@@ -159,7 +152,7 @@ static void ApplyFlyCameraInput(
 
     const SIMDVector rotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
     StoreFloat(rotation, &transform.rotation);
-    if(!FiniteFloat3(transform.position))
+    if(!FiniteVector3(LoadFloat(transform.position)))
         transform.position = Float4(0.0f, 0.0f, 0.0f);
 
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
@@ -172,8 +165,8 @@ static void ApplyFlyCameraInput(
         if(!IsFinite(moveScale))
             return;
 
-        const Float4 localMove(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale);
-        const SIMDVector worldMove = Vector3Rotate(LoadFloat(localMove), rotation);
+        const SIMDVector localMove = VectorSet(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale, 0.0f);
+        const SIMDVector worldMove = Vector3Rotate(localMove, rotation);
         if(!FiniteVector3(worldMove))
             return;
 

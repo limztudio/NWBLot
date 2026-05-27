@@ -17,7 +17,8 @@ template<typename CookEntryT>
     const u32 localVertexIndex
 ){
     const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-    const MeshletDeformedPositionRef& positionRef = entry.meshletPositionRefs[meshlet.positionOffset + localVertexRef.localDeformedPosition];
+    const usize positionRefIndex = meshlet.positionOffset + localVertexRef.localDeformedPosition;
+    const MeshletDeformedPositionRef& positionRef = entry.meshletPositionRefs[positionRefIndex];
     return LoadMeshletPositionVector(entry, positionRef);
 }
 
@@ -40,9 +41,12 @@ template<typename CookEntryT, typename CallbackT>
 static void ForEachMeshletFaceNormalVector(const CookEntryT& entry, const MeshletDesc& meshlet, CallbackT callback){
     for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
         const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
-        const SIMDVector p0 = LoadMeshletLocalPositionVector(entry, meshlet, entry.meshletPrimitiveIndices[primitiveOffset + 0u]);
-        const SIMDVector p1 = LoadMeshletLocalPositionVector(entry, meshlet, entry.meshletPrimitiveIndices[primitiveOffset + 1u]);
-        const SIMDVector p2 = LoadMeshletLocalPositionVector(entry, meshlet, entry.meshletPrimitiveIndices[primitiveOffset + 2u]);
+        const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
+        const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
+        const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
+        const SIMDVector p0 = LoadMeshletLocalPositionVector(entry, meshlet, localVertex0);
+        const SIMDVector p1 = LoadMeshletLocalPositionVector(entry, meshlet, localVertex1);
+        const SIMDVector p2 = LoadMeshletLocalPositionVector(entry, meshlet, localVertex2);
         callback(BuildMeshletFaceNormal(p0, p1, p2));
     }
 }
@@ -278,8 +282,16 @@ static bool BuildMeshlets(
         );
 
         entry.meshletPositionRefs.insert(entry.meshletPositionRefs.end(), localPositionRefs.begin(), localPositionRefs.end());
-        entry.meshletAttributeRefs.insert(entry.meshletAttributeRefs.end(), localAttributeRefs.begin(), localAttributeRefs.end());
-        entry.meshletLocalVertexRefs.insert(entry.meshletLocalVertexRefs.end(), localVertexRefs.begin(), localVertexRefs.end());
+        entry.meshletAttributeRefs.insert(
+            entry.meshletAttributeRefs.end(),
+            localAttributeRefs.begin(),
+            localAttributeRefs.end()
+        );
+        entry.meshletLocalVertexRefs.insert(
+            entry.meshletLocalVertexRefs.end(),
+            localVertexRefs.begin(),
+            localVertexRefs.end()
+        );
         entry.meshlets.push_back(current);
         entry.meshletBounds.push_back(BuildMeshletBounds(entry, current));
 
@@ -349,3 +361,4 @@ static bool BuildMeshlets(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

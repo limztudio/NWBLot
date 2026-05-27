@@ -93,15 +93,29 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
     const usize skinCount = instance.skin.size();
     const usize jointCount = sourceJoints.size();
     const bool useDualQuaternionPayload = skinningMode == SkinnedMeshSkinningMode::DualQuaternion;
+    const bool hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
     outJointPalette.reserve(jointCount);
 
     for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
+        if(hasInverseBindMatrices && jointIndex >= instance.inverseBindMatrices.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' joint palette entry {} has no inverse bind matrix")
+                , instance.handle.value
+                , jointIndex
+            );
+            return false;
+        }
+
+        const SIMDMatrix poseJoint = LoadFloat(sourceJoints[jointIndex]);
+        const SIMDMatrix inverseBind = hasInverseBindMatrices
+            ? LoadFloat(instance.inverseBindMatrices[jointIndex])
+            : SIMDMatrix{}
+        ;
         SIMDMatrix jointMatrix;
         if(
             !SkinnedMeshRuntime::ResolveSkinningJointMatrix(
-                instance.inverseBindMatrices,
-                static_cast<u32>(jointIndex),
-                sourceJoints[jointIndex],
+                poseJoint,
+                hasInverseBindMatrices,
+                inverseBind,
                 jointMatrix
             )
         ){
@@ -128,17 +142,28 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
                 );
                 return false;
             }
-            outJointPalette.push_back(SkinnedMeshRuntime::StoreJointDualQuaternionPayload(real, dual));
+            SkinnedMeshJointMatrix storedJointMatrix{};
+            StoreFloat(real, &storedJointMatrix.rows[0]);
+            StoreFloat(dual, &storedJointMatrix.rows[1]);
+            outJointPalette.push_back(storedJointMatrix);
         }
         else{
-            outJointPalette.push_back(SkinnedMeshRuntime::StoreJointMatrix(jointMatrix));
+            SkinnedMeshJointMatrix storedJointMatrix{};
+            StoreFloat(jointMatrix, &storedJointMatrix);
+            outJointPalette.push_back(storedJointMatrix);
         }
     }
 
     outSkinInfluences.reserve(skinCount);
     for(usize vertexIndex = 0; vertexIndex < skinCount; ++vertexIndex){
         const SkinInfluence4& sourceSkin = instance.skin[vertexIndex];
-        if(!SkinnedMeshValidation::ValidSkinInfluence(sourceSkin)){
+        const SIMDVector weights = VectorSet(
+            sourceSkin.weight[0u],
+            sourceSkin.weight[1u],
+            sourceSkin.weight[2u],
+            sourceSkin.weight[3u]
+        );
+        if(!SkinnedMeshValidation::ValidSkinInfluenceWeights(weights)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' vertex {} has invalid skin weights")
                 , instance.handle.value
                 , vertexIndex

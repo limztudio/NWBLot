@@ -28,6 +28,8 @@ namespace MaterialBinaryPayload{
 inline constexpr u32 s_MaterialMagic = 0x4D544C31u; // MTL1
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 inline constexpr u32 s_MaterialFlagTransparent = 1u << 0u;
+inline constexpr u32 s_MaterialFlagTwoSided = 1u << 1u;
+inline constexpr u32 s_MaterialFlagMask = s_MaterialFlagTransparent | s_MaterialFlagTwoSided;
 
 static_assert(sizeof(Core::ShaderType::Enum) == sizeof(u8), "Material shader stage indices must stay byte-sized");
 

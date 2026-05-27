@@ -23,7 +23,7 @@
 
 #include "runtime.slangi"
 #include "material_typed_accessors.slangi"
-#include "transform.slangi"
+#include "culling.slangi"
 #include "meshlet.slangi"
 #include "entrypoints.slangi"
 

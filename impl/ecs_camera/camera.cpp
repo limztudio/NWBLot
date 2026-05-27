@@ -22,9 +22,8 @@ namespace __hidden_ecs_camera{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SceneFloat3Finite(const Float4& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
+[[nodiscard]] bool SceneFloat3FiniteVector(const SIMDVector value){
+    return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
 }
 
 [[nodiscard]] bool SceneCameraTransformValid(const TransformComponent& transform){
@@ -33,10 +32,10 @@ namespace __hidden_ecs_camera{
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
     return
-        SceneFloat3Finite(transform.position)
+        SceneFloat3FiniteVector(LoadFloat(transform.position))
         && !QuaternionIsNaN(rotation)
         && !QuaternionIsInfinite(rotation)
-        && SceneFloat3Finite(transform.scale)
+        && SceneFloat3FiniteVector(LoadFloat(transform.scale))
         && IsFinite(rotationLengthSquared)
         && rotationLengthSquared >= 1.0f - s_CameraRotationUnitLengthSquaredTolerance
         && rotationLengthSquared <= 1.0f + s_CameraRotationUnitLengthSquaredTolerance

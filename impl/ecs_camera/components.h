@@ -113,15 +113,18 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     return 1.0f;
 }
 
-[[nodiscard]] inline bool CameraProjectionDataValid(const CameraProjectionData& projectionData){
-    const SIMDVector projectionParams = LoadFloat(projectionData.projectionParams);
+[[nodiscard]] inline bool CameraProjectionDataValid(
+    const SIMDVector projectionParams,
+    const f32 aspectRatio,
+    const f32 tanHalfVerticalFov
+){
     return
-        IsFinite(projectionData.aspectRatio)
-        && IsFinite(projectionData.tanHalfVerticalFov)
+        IsFinite(aspectRatio)
+        && IsFinite(tanHalfVerticalFov)
         && !Vector4IsNaN(projectionParams)
         && !Vector4IsInfinite(projectionParams)
-        && projectionData.aspectRatio > 0.0f
-        && projectionData.tanHalfVerticalFov > 0.0f
+        && aspectRatio > 0.0f
+        && tanHalfVerticalFov > 0.0f
         && Vector3Greater(projectionParams, VectorZero())
         && VectorGetW(projectionParams) < 0.0f
     ;
@@ -152,7 +155,11 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
         camera.farPlane() / depthRange,
         -(camera.nearPlane() * camera.farPlane()) / depthRange
     );
-    if(!CameraProjectionDataValid(projectionData))
+    if(!CameraProjectionDataValid(
+        LoadFloat(projectionData.projectionParams),
+        projectionData.aspectRatio,
+        projectionData.tanHalfVerticalFov
+    ))
         return false;
 
     outProjectionData = projectionData;

@@ -30,7 +30,11 @@ struct SceneCameraView{
             entity.valid()
             && transform != nullptr
             && camera != nullptr
-            && CameraProjectionDataValid(projectionData)
+            && CameraProjectionDataValid(
+                LoadFloat(projectionData.projectionParams),
+                projectionData.aspectRatio,
+                projectionData.tanHalfVerticalFov
+            )
         ;
     }
 };

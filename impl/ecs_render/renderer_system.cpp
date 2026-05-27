@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const{
     usize seed = Hasher<Name>{}(key.material);
     Core::CoreDetail::HashCombine(seed, static_cast<u32>(key.pass));
+    Core::CoreDetail::HashCombine(seed, key.twoSided ? 1u : 0u);
     Core::CoreDetail::HashCombine(seed, key.framebufferInfo.depthFormat);
     Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleCount);
     Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleQuality);
@@ -29,7 +30,12 @@ usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipeli
 }
 
 bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return lhs.material == rhs.material && lhs.pass == rhs.pass && lhs.framebufferInfo == rhs.framebufferInfo;
+    return
+        lhs.material == rhs.material
+        && lhs.pass == rhs.pass
+        && lhs.twoSided == rhs.twoSided
+        && lhs.framebufferInfo == rhs.framebufferInfo
+    ;
 }
 
 

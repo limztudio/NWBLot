@@ -314,6 +314,8 @@ Updated: 2026-05-22
 - Data captured by async jobs/callbacks (e.g., lambda captures submitted to `ThreadPool`/`JobSystem`) is considered outliving the current scope; do not back such captures with `ScratchArena`.
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena instead of default allocators when arena ownership exists.
 - SIMD math helpers should accept and return SIMD-domain values such as `SIMDVector` or `SIMDMatrix`.
+  - Math-composition helper inputs and outputs must stay in the SIMD domain (`SIMDVector`, `SIMDMatrix`, or arrays/references of those types).
+  - Do not take or return storage/payload types (`Float4`, `Float4U`, component structs, asset payload structs, GPU upload structs, etc.) from a SIMD math helper just to hide conversion.
   - Do not hide repeated `LoadFloat()` / `StoreFloat()` traffic inside small math helpers called from loops.
   - Load from struct or asset storage at the call-site boundary, keep intermediate values in SIMD variables while composing operations, then store once when the result leaves the SIMD domain.
   - Boundary helpers with explicit names such as `LoadFoo(...)` or `StoreFoo(...)` are fine, but accumulation, validation, blending, and transform helpers should operate directly on already-loaded vectors.

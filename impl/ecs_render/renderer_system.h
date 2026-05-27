@@ -89,6 +89,7 @@ private:
         Name material = NAME_NONE;
         Core::FramebufferInfo framebufferInfo;
         MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
+        bool twoSided = false;
     };
     struct MaterialPipelineKeyHasher{
         usize operator()(const MaterialPipelineKey& key)const;
@@ -143,6 +144,7 @@ private:
         Core::Assets::AssetRef<Shader> meshShader;
         MaterialTypedByteVector typedBytes;
         bool transparent = false;
+        bool twoSided = false;
         bool valid = false;
 
         explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
@@ -319,6 +321,7 @@ private:
     [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);
     [[nodiscard]] bool meshFrameBindingResourcesReady(const tchar* context)const;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
+    [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided)const;
     void addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
     void addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
     void addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;

@@ -8,6 +8,7 @@
 #include "renderer_system.h"
 
 #include "renderer_avboit.h"
+#include "renderer_system_mesh_view_private.h"
 
 #include <core/assets/asset_manager.h>
 #include <core/common/log.h>
@@ -42,6 +43,8 @@ namespace ECSRenderDetail{
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
 inline constexpr u32 s_MeshDispatchFlagScissorCull = 1u << 0u;
+inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = 1u << 1u;
+inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = 1u << 2u;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 
 
@@ -68,15 +71,6 @@ struct EmulatedVertex{
     Float4 worldPosition;
 };
 
-struct MeshViewGpuData{
-    Float4 worldToClip[4] = {
-        Float4(1.f, 0.f, 0.f, 0.f),
-        Float4(0.f, 1.f, 0.f, 0.f),
-        Float4(0.f, 0.f, 1.f, 0.f),
-        Float4(0.f, 0.f, 0.f, 1.f),
-    };
-};
-
 struct SceneShadingGpuData{
     Float4 directionalLightDirection = Float4(0.f, 0.f, -1.f, 0.f);
     Float4 directionalLightColorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
@@ -93,8 +87,6 @@ static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparen
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
-static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 16u, "MeshViewGpuData layout must match the mesh shaders");
-static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * 12u, "SceneShadingGpuData layout must match the shading shaders");
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
 
@@ -105,7 +97,6 @@ static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuD
 inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh/emulation_vs");
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
-inline constexpr Name s_MeshViewBufferName("ecs_render/mesh_view_data");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred/composite_vs");
 inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred/lighting_ps");
@@ -201,17 +192,23 @@ inline Core::RenderState BuildMeshRenderState(){
     return renderState;
 }
 
-inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass){
+inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enum pass, const bool twoSided){
+    auto applyTwoSided = [&](Core::RenderState renderState){
+        if(twoSided)
+            renderState.rasterState.setCullNone();
+        return renderState;
+    };
+
     switch(pass){
     case MaterialPipelinePass::Opaque:
-        return BuildMeshRenderState();
+        return applyTwoSided(BuildMeshRenderState());
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
-        return BuildRendererAvboitVoxelRenderState();
+        return applyTwoSided(BuildRendererAvboitVoxelRenderState());
     case MaterialPipelinePass::AvboitAccumulate:
-        return BuildRendererAvboitAccumulateRenderState();
+        return applyTwoSided(BuildRendererAvboitAccumulateRenderState());
     default:
-        return BuildMeshRenderState();
+        return applyTwoSided(BuildMeshRenderState());
     }
 }
 
@@ -249,104 +246,6 @@ inline InstanceGpuData BuildInstanceGpuData(
     return data;
 }
 
-inline void ApplyDirectionalLightSceneShadingState(
-    SceneShadingGpuData& state,
-    const NWB::Impl::SceneDirectionalLight& light
-){
-    state.directionalLightDirection = light.direction;
-    state.directionalLightColorIntensity = light.colorIntensity;
-}
-
-inline void StoreProjectedViewColumn(
-    Float4 (&outWorldToClip)[4],
-    const usize columnIndex,
-    const f32 viewX,
-    const f32 viewY,
-    const f32 viewZ,
-    const f32 viewW,
-    const SIMDVector projection
-){
-    SIMDVector column = VectorMultiply(VectorSet(viewX, viewY, viewZ, viewZ), projection);
-    column = VectorMultiplyAdd(VectorSet(0.0f, 0.0f, viewW, 0.0f), VectorSplatW(projection), column);
-    column = VectorSetW(column, viewZ);
-    StoreFloat(column, &outWorldToClip[columnIndex]);
-}
-
-inline void StoreWorldToClipMatrix(
-    Float4 (&outWorldToClip)[4],
-    const NWB::Impl::SceneViewBasis& basis,
-    const Float4& projectionParams
-){
-    const SIMDVector positionDepthBias = LoadFloat(basis.positionDepthBias);
-    const SIMDVector right = LoadFloat(basis.right);
-    const SIMDVector up = LoadFloat(basis.up);
-    const SIMDVector forward = LoadFloat(basis.forward);
-    const SIMDVector projection = LoadFloat(projectionParams);
-    const f32 translationX = -VectorGetX(Vector3Dot(positionDepthBias, right));
-    const f32 translationY = -VectorGetX(Vector3Dot(positionDepthBias, up));
-    const f32 translationZ = -VectorGetX(Vector3Dot(positionDepthBias, forward)) + basis.positionDepthBias.w;
-
-    StoreProjectedViewColumn(
-        outWorldToClip,
-        0u,
-        basis.right.x,
-        basis.up.x,
-        basis.forward.x,
-        0.0f,
-        projection
-    );
-    StoreProjectedViewColumn(
-        outWorldToClip,
-        1u,
-        basis.right.y,
-        basis.up.y,
-        basis.forward.y,
-        0.0f,
-        projection
-    );
-    StoreProjectedViewColumn(
-        outWorldToClip,
-        2u,
-        basis.right.z,
-        basis.up.z,
-        basis.forward.z,
-        0.0f,
-        projection
-    );
-    StoreProjectedViewColumn(
-        outWorldToClip,
-        3u,
-        translationX,
-        translationY,
-        translationZ,
-        1.0f,
-        projection
-    );
-}
-
-inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
-    MeshViewGpuData state;
-    const NWB::Impl::SceneViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
-
-    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
-    if(cameraView.valid()){
-        StoreWorldToClipMatrix(
-            state.worldToClip,
-            NWB::Impl::BuildSceneViewBasis(*cameraView.transform),
-            cameraView.projectionData.projectionParams
-        );
-    }
-    else{
-        StoreWorldToClipMatrix(
-            state.worldToClip,
-            defaultBasis,
-            NWB::Impl::BuildDefaultCameraProjectionParams(fallbackAspectRatio)
-        );
-    }
-
-    return state;
-}
-
 inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     SceneShadingGpuData state;
     const NWB::Impl::SceneViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
@@ -355,19 +254,12 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
     if(cameraView.valid()){
         StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
     }
-    else{
-        state.cameraPosition = Float4(
-            defaultBasis.positionDepthBias.x,
-            defaultBasis.positionDepthBias.y,
-            defaultBasis.positionDepthBias.z,
-            1.0f
-        );
-    }
+    else
+        StoreFloat(VectorSetW(LoadFloat(defaultBasis.positionDepthBias), 1.0f), &state.cameraPosition);
 
-    ECSRenderDetail::ApplyDirectionalLightSceneShadingState(
-        state,
-        NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis)
-    );
+    const NWB::Impl::SceneDirectionalLight light = NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis);
+    state.directionalLightDirection = light.direction;
+    state.directionalLightColorIntensity = light.colorIntensity;
 
     return state;
 }
@@ -375,17 +267,19 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
 inline ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
-    const Core::ViewportState& viewportState
+    const Core::ViewportState& viewportState,
+    const u32 dispatchFlags
 ){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.meshletCount = meshletCount;
+    pushConstants.dispatchFlags = dispatchFlags;
     pushConstants.instanceIndex = instanceIndex;
 
     if(viewportState.viewports.empty())
         return pushConstants;
 
     const Core::Viewport& viewport = viewportState.viewports[0];
-    pushConstants.dispatchFlags = s_MeshDispatchFlagScissorCull;
+    pushConstants.dispatchFlags |= s_MeshDispatchFlagScissorCull;
     pushConstants.viewportRect = Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
 
     Core::Rect scissorRect(viewport);
@@ -405,10 +299,11 @@ inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
     const Core::ViewportState& viewportState,
-    const RendererSystem::AvboitFrameTargets& targets
+    const RendererSystem::AvboitFrameTargets& targets,
+    const u32 dispatchFlags
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState, dispatchFlags);
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets);
     return pushConstants;
 }
@@ -417,10 +312,11 @@ inline void SetShaderDrivenPushConstants(
     Core::ICommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
-    const Core::ViewportState& viewportState
+    const Core::ViewportState& viewportState,
+    const u32 dispatchFlags
 ){
     const ShaderDrivenPushConstants pushConstants =
-        BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState)
+        BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState, dispatchFlags)
     ;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
@@ -430,10 +326,11 @@ inline void SetTransparentDrawPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
     const Core::ViewportState& viewportState,
-    const RendererSystem::AvboitFrameTargets& targets
+    const RendererSystem::AvboitFrameTargets& targets,
+    const u32 dispatchFlags
 ){
     const TransparentDrawPushConstants pushConstants =
-        BuildTransparentDrawPushConstants(meshletCount, instanceIndex, viewportState, targets)
+        BuildTransparentDrawPushConstants(meshletCount, instanceIndex, viewportState, targets, dispatchFlags)
     ;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }

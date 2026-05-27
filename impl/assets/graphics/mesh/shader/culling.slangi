@@ -2,31 +2,103 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_GRAPHICS_MESH_SHADER_TRANSFORM_SLANGI
-#define NWB_GRAPHICS_MESH_SHADER_TRANSFORM_SLANGI
+#ifndef NWB_GRAPHICS_MESH_SHADER_CULLING_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_CULLING_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbMeshTransformPosition(float3 localPosition, const NwbMeshInstanceData instance){
-    return nwbRotateVectorByQuaternion(localPosition * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
-}
-
-float3 nwbMeshTransformPosition(float3 localPosition){
-    return nwbMeshTransformPosition(localPosition, nwbMeshLoadInstance());
-}
-
-float3 nwbMeshTransformDirection(float3 localDirection, const NwbMeshInstanceData instance){
-    return normalize(nwbRotateVectorByQuaternion(localDirection, instance.rotation));
-}
-
-float3 nwbMeshTransformDirection(float3 localDirection){
-    return nwbMeshTransformDirection(localDirection, nwbMeshLoadInstance());
-}
-
 bool nwbMeshDispatchFlagEnabled(uint flag){
     return (g_NwbMeshPushConstants.dispatch.y & flag) != 0u;
+}
+
+float nwbMeshMaxAbsScale(const float3 scale){
+    const float3 absScale = abs(scale);
+    return max(absScale.x, max(absScale.y, absScale.z));
+}
+
+float nwbMeshMinAbsScale(const float3 scale){
+    const float3 absScale = abs(scale);
+    return min(absScale.x, min(absScale.y, absScale.z));
+}
+
+bool nwbMeshScaleUniformEnough(const float3 scale){
+    const float maxScale = nwbMeshMaxAbsScale(scale);
+    if(maxScale <= 0.000001)
+        return false;
+
+    return (maxScale - nwbMeshMinAbsScale(scale)) <= maxScale * 0.001;
+}
+
+bool nwbMeshletConeCullEnabled(const NwbMeshInstanceData instance){
+    return
+        nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL)
+        && all(instance.scale.xyz > float3(0.0, 0.0, 0.0))
+        && nwbMeshScaleUniformEnough(instance.scale.xyz)
+    ;
+}
+
+bool nwbMeshSphereOutsideFrustum(const float3 center, const float radius){
+    for(uint planeIndex = 0u; planeIndex < 6u; ++planeIndex){
+        const float4 plane = g_NwbMeshFrustumPlanes[planeIndex];
+        if(dot(plane.xyz, center) + plane.w < -radius)
+            return true;
+    }
+
+    return false;
+}
+
+bool nwbMeshletBackfaceCull(
+    const float3 cameraPos,
+    const float3 center,
+    const float radius,
+    const float3 coneAxis,
+    const float coneCos
+){
+    const float3 toCamera = cameraPos - center;
+    const float dist = length(toCamera);
+    if(dist <= radius)
+        return false;
+
+    if(coneCos <= 0.0)
+        return false;
+
+    const float3 view = toCamera / dist;
+    const float sinTheta = sqrt(max(0.0, 1.0 - coneCos * coneCos));
+    const float sinAlpha = saturate(radius / dist);
+    const float cosAlpha = sqrt(max(0.0, 1.0 - sinAlpha * sinAlpha));
+
+    const float cosThetaPlusAlpha = coneCos * cosAlpha - sinTheta * sinAlpha;
+    if(cosThetaPlusAlpha <= 0.0)
+        return false;
+
+    const float sinThetaPlusAlpha = sinTheta * cosAlpha + coneCos * sinAlpha;
+    return dot(coneAxis, view) <= -sinThetaPlusAlpha;
+}
+
+bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instance){
+    const NwbMeshletBounds bounds = g_NwbMeshletBounds[meshletIndex];
+    const float3 center = nwbRotateVectorByQuaternion(bounds.sphere.xyz * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
+    const float radius = bounds.sphere.w * nwbMeshMaxAbsScale(instance.scale.xyz);
+
+    if(nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL) && nwbMeshSphereOutsideFrustum(center, radius))
+        return true;
+
+    if(!nwbMeshletConeCullEnabled(instance))
+        return false;
+
+    const float3 coneAxis = nwbSafeNormalize(
+        nwbRotateVectorByQuaternion(bounds.cone.xyz, instance.rotation),
+        float3(0.0, 0.0, 1.0)
+    );
+    return nwbMeshletBackfaceCull(
+        g_NwbMeshCameraPosition.xyz,
+        center,
+        radius,
+        coneAxis,
+        bounds.cone.w
+    );
 }
 
 float2 nwbMeshClipToFramebuffer(const float4 p){
@@ -103,7 +175,7 @@ bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
     return nwbMeshAllOutsideClipPlane(a, b, c) || nwbMeshAllOutsideScissor(a, b, c);
 }
 
-NwbMeshGeneratedVertex nwbMeshCulledVertex(){
+void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
     NwbMeshGeneratedVertex vertex;
     vertex.position = float4(2.0, 2.0, 0.0, 1.0);
     vertex.normal = float3(0.0, 0.0, 1.0);
@@ -113,7 +185,8 @@ NwbMeshGeneratedVertex nwbMeshCulledVertex(){
     vertex.padding1 = float2(0.0);
     vertex.color = float4(0.0);
     vertex.worldPosition = float4(0.0, 0.0, 0.0, 1.0);
-    return vertex;
+    for(uint corner = 0u; corner < 3u; ++corner)
+        g_NwbMeshGeneratedVertices[primitiveBase + corner] = vertex;
 }
 #endif
 

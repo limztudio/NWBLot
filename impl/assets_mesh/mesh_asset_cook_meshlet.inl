@@ -2,109 +2,102 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Float3U LoadPositionRef(
-    const Core::Assets::AssetVector<Float3U>& positions,
-    const Core::Assets::AssetVector<MeshVertexRef>& vertexRefs,
+template<typename CookEntryT>
+[[nodiscard]] static SIMDVector LoadMeshletPositionVector(
+    const CookEntryT& entry,
     const u32 vertexRefIndex
 ){
-    return positions[vertexRefs[vertexRefIndex].position];
+    return VectorSetW(LoadFloat(entry.positions[entry.vertexRefs[vertexRefIndex].position]), 0.0f);
 }
 
-[[nodiscard]] static Float3U Cross(const Float3U& a, const Float3U& b){
-    return Float3U(
-        a.y * b.z - a.z * b.y,
-        a.z * b.x - a.x * b.z,
-        a.x * b.y - a.y * b.x
-    );
-}
-
-[[nodiscard]] static f32 Dot(const Float3U& a, const Float3U& b){
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
-[[nodiscard]] static Float3U Subtract(const Float3U& a, const Float3U& b){
-    return Float3U(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-
-[[nodiscard]] static Float3U NormalizeOrZero(const Float3U& value){
-    const f32 lengthSquared = Dot(value, value);
-    if(!IsFinite(lengthSquared) || lengthSquared <= SkinnedMeshValidation::s_Epsilon)
-        return Float3U(0.0f, 0.0f, 0.0f);
-
-    const f32 inverseLength = 1.0f / Sqrt(lengthSquared);
-    return Float3U(value.x * inverseLength, value.y * inverseLength, value.z * inverseLength);
-}
-
-template<typename CookEntryT>
-[[nodiscard]] static Float3U BuildMeshletFaceNormal(
-    const CookEntryT& entry,
-    const MeshletDesc& meshlet,
-    const usize primitiveOffset
+[[nodiscard]] static SIMDVector BuildMeshletFaceNormal(
+    const SIMDVector p0,
+    const SIMDVector p1,
+    const SIMDVector p2
 ){
-    const u32 i0 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 0u]];
-    const u32 i1 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 1u]];
-    const u32 i2 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 2u]];
-    const Float3U p0 = LoadPositionRef(entry.positions, entry.vertexRefs, i0);
-    return Cross(
-        Subtract(LoadPositionRef(entry.positions, entry.vertexRefs, i1), p0),
-        Subtract(LoadPositionRef(entry.positions, entry.vertexRefs, i2), p0)
-    );
+    return Vector3Cross(VectorSubtract(p1, p0), VectorSubtract(p2, p0));
+}
+
+[[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value){
+    if(!Core::Mesh::FrameValidDirection(value))
+        return VectorZero();
+
+    return VectorSetW(Vector3Normalize(value), 0.0f);
+}
+
+template<typename CookEntryT, typename CallbackT>
+static void ForEachMeshletFaceNormalVector(const CookEntryT& entry, const MeshletDesc& meshlet, CallbackT callback){
+    for(u32 primitiveIndex = 0u; primitiveIndex < meshlet.primitiveCount; ++primitiveIndex){
+        const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
+        const u32 vertexRefIndex0 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 0u]];
+        const u32 vertexRefIndex1 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 1u]];
+        const u32 vertexRefIndex2 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 2u]];
+        const SIMDVector p0 = LoadMeshletPositionVector(entry, vertexRefIndex0);
+        const SIMDVector p1 = LoadMeshletPositionVector(entry, vertexRefIndex1);
+        const SIMDVector p2 = LoadMeshletPositionVector(entry, vertexRefIndex2);
+        callback(BuildMeshletFaceNormal(p0, p1, p2));
+    }
 }
 
 template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
-    Float3U minBounds(Limit<f32>::s_Max, Limit<f32>::s_Max, Limit<f32>::s_Max);
-    Float3U maxBounds(-Limit<f32>::s_Max, -Limit<f32>::s_Max, -Limit<f32>::s_Max);
+    SIMDVector minBounds = VectorReplicate(Limit<f32>::s_Max);
+    SIMDVector maxBounds = VectorReplicate(-Limit<f32>::s_Max);
     for(u32 localVertexIndex = 0u; localVertexIndex < meshlet.vertexCount; ++localVertexIndex){
         const u32 vertexRefIndex = entry.meshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
-        const Float3U position = LoadPositionRef(entry.positions, entry.vertexRefs, vertexRefIndex);
-        minBounds.x = Min(minBounds.x, position.x);
-        minBounds.y = Min(minBounds.y, position.y);
-        minBounds.z = Min(minBounds.z, position.z);
-        maxBounds.x = Max(maxBounds.x, position.x);
-        maxBounds.y = Max(maxBounds.y, position.y);
-        maxBounds.z = Max(maxBounds.z, position.z);
+        const SIMDVector position = LoadMeshletPositionVector(entry, vertexRefIndex);
+        minBounds = VectorMin(minBounds, position);
+        maxBounds = VectorMax(maxBounds, position);
     }
 
-    const Float3U center(
-        (minBounds.x + maxBounds.x) * 0.5f,
-        (minBounds.y + maxBounds.y) * 0.5f,
-        (minBounds.z + maxBounds.z) * 0.5f
-    );
-    f32 radiusSquared = 0.0f;
+    const SIMDVector center = VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), 0.5f), 0.0f);
+    SIMDVector radiusSquared = VectorZero();
     for(u32 localVertexIndex = 0u; localVertexIndex < meshlet.vertexCount; ++localVertexIndex){
         const u32 vertexRefIndex = entry.meshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
-        const Float3U delta = Subtract(LoadPositionRef(entry.positions, entry.vertexRefs, vertexRefIndex), center);
-        radiusSquared = Max(radiusSquared, Dot(delta, delta));
+        const SIMDVector delta = VectorSubtract(LoadMeshletPositionVector(entry, vertexRefIndex), center);
+        radiusSquared = VectorMax(radiusSquared, Vector3LengthSq(delta));
     }
 
-    Float3U areaWeightedNormal(0.0f, 0.0f, 0.0f);
-    for(u32 primitiveIndex = 0u; primitiveIndex < meshlet.primitiveCount; ++primitiveIndex){
-        const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
-        const Float3U faceNormal = BuildMeshletFaceNormal(entry, meshlet, primitiveOffset);
-        areaWeightedNormal.x += faceNormal.x;
-        areaWeightedNormal.y += faceNormal.y;
-        areaWeightedNormal.z += faceNormal.z;
-    }
+    SIMDVector areaWeightedNormal = VectorZero();
+    ForEachMeshletFaceNormalVector(entry, meshlet, [&](const SIMDVector faceNormal){
+        areaWeightedNormal = VectorAdd(areaWeightedNormal, faceNormal);
+    });
 
-    const Float3U coneAxis = NormalizeOrZero(areaWeightedNormal);
+    const SIMDVector coneAxis = NormalizeMeshletDirectionOrZero(areaWeightedNormal);
     f32 coneCutoff = -1.0f;
-    if(Dot(coneAxis, coneAxis) > 0.0f){
+    if(Core::Mesh::FrameValidDirection(coneAxis)){
         coneCutoff = 1.0f;
-        for(u32 primitiveIndex = 0u; primitiveIndex < meshlet.primitiveCount; ++primitiveIndex){
-            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
-            const Float3U faceNormal = NormalizeOrZero(BuildMeshletFaceNormal(entry, meshlet, primitiveOffset));
-            if(Dot(faceNormal, faceNormal) > 0.0f)
-                coneCutoff = Min(coneCutoff, Dot(coneAxis, faceNormal));
-        }
+        ForEachMeshletFaceNormalVector(entry, meshlet, [&](const SIMDVector meshletFaceNormal){
+            const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
+            if(Core::Mesh::FrameValidDirection(faceNormal))
+                coneCutoff = Min(coneCutoff, VectorGetX(Vector3Dot(coneAxis, faceNormal)));
+        });
         if(coneCutoff <= 0.0f)
             coneCutoff = -1.0f;
     }
 
     MeshletBounds bounds;
-    bounds.sphere = Float4U(center.x, center.y, center.z, Sqrt(radiusSquared));
-    bounds.cone = Float4U(coneAxis.x, coneAxis.y, coneAxis.z, coneCutoff);
+    StoreFloat(VectorSetW(center, VectorGetX(VectorSqrt(radiusSquared))), &bounds.sphere);
+    StoreFloat(VectorSetW(coneAxis, coneCutoff), &bounds.cone);
     return bounds;
+}
+
+template<typename VertexRefVectorT>
+[[nodiscard]] static bool FindMeshletLocalVertex(
+    const VertexRefVectorT& localVertexRefs,
+    const u32 vertexRefIndex,
+    u8& outLocalVertex
+){
+    outLocalVertex = 0u;
+    for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
+        if(localVertexRefs[localIndex] != vertexRefIndex)
+            continue;
+
+        outLocalVertex = static_cast<u8>(localIndex);
+        return true;
+    }
+
+    return false;
 }
 
 template<typename CookEntryT>
@@ -155,14 +148,8 @@ static bool BuildMeshlets(
 
         u32 missingCount = 0u;
         for(const u32 vertexRefIndex : triangleRefs){
-            bool found = false;
-            for(const u32 localRef : localVertexRefs){
-                if(localRef == vertexRefIndex){
-                    found = true;
-                    break;
-                }
-            }
-            if(!found)
+            u8 localVertex = 0u;
+            if(!FindMeshletLocalVertex(localVertexRefs, vertexRefIndex, localVertex))
                 ++missingCount;
         }
 
@@ -177,15 +164,7 @@ static bool BuildMeshlets(
 
         for(const u32 vertexRefIndex : triangleRefs){
             u8 localVertex = 0u;
-            bool found = false;
-            for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
-                if(localVertexRefs[localIndex] != vertexRefIndex)
-                    continue;
-
-                localVertex = static_cast<u8>(localIndex);
-                found = true;
-                break;
-            }
+            const bool found = FindMeshletLocalVertex(localVertexRefs, vertexRefIndex, localVertex);
             if(!found){
                 if(localVertexRefs.size() >= s_MeshMaxMeshletVertices){
                     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet")

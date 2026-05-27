@@ -35,8 +35,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
 
 using MeshPayloadValidation::FiniteVector;
 
-[[nodiscard]] inline bool ValidSkinInfluence(const SkinInfluence4& skin){
-    const SIMDVector weights = VectorSet(skin.weight[0], skin.weight[1], skin.weight[2], skin.weight[3]);
+[[nodiscard]] inline bool ValidSkinInfluenceWeights(const SIMDVector weights){
     const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
     if(!FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero()))
         return false;
@@ -60,12 +59,11 @@ using MeshPayloadValidation::FiniteVector;
     return true;
 }
 
-[[nodiscard]] inline bool ValidAffineJointMatrix(const SkinnedMeshJointMatrix& matrix){
-    const SIMDMatrix simdMatrix = LoadFloat(matrix);
-    const SIMDVector column0 = simdMatrix.v[0];
-    const SIMDVector column1 = simdMatrix.v[1];
-    const SIMDVector column2 = simdMatrix.v[2];
-    const SIMDVector column3 = simdMatrix.v[3];
+[[nodiscard]] inline bool ValidAffineJointMatrix(const SIMDMatrix matrix){
+    const SIMDVector column0 = matrix.v[0];
+    const SIMDVector column1 = matrix.v[1];
+    const SIMDVector column2 = matrix.v[2];
+    const SIMDVector column3 = matrix.v[3];
     const SIMDVector affineW = VectorSet(
         VectorGetW(column0),
         VectorGetW(column1),
@@ -97,7 +95,7 @@ using MeshPayloadValidation::FiniteVector;
         return false;
 
     for(const SkinnedMeshJointMatrix& matrix : inverseBindMatrices){
-        if(!ValidAffineJointMatrix(matrix))
+        if(!ValidAffineJointMatrix(LoadFloat(matrix)))
             return false;
     }
     return true;

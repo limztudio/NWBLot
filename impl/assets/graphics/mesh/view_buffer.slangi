@@ -11,12 +11,16 @@
 
 struct NwbMeshViewBuffer{
     float4x4 g_NwbMeshWorldToClip;
+    float4 g_NwbMeshCameraPosition;
+    float4 g_NwbMeshFrustumPlanes[6];
 };
 
 [[vk::binding(11, 0)]]
 ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
 
 #define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip
+#define g_NwbMeshCameraPosition g_NwbMeshViewBuffer.g_NwbMeshCameraPosition
+#define g_NwbMeshFrustumPlanes g_NwbMeshViewBuffer.g_NwbMeshFrustumPlanes
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

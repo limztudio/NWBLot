@@ -479,28 +479,35 @@ static bool ParseMaterialInterface(
     return true;
 }
 
-static bool ParseMaterialTransparentProperty(
+static bool ParseMaterialBoolProperty(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    bool& outTransparent
+    const AStringView fieldName,
+    bool& outValue
 ){
-    outTransparent = false;
+    outValue = false;
 
-    const auto* transparentValue = asset.findField(MaterialAssetMetadataSchema::s_TransparentField);
-    if(!transparentValue)
+    const auto* propertyValue = asset.findField(fieldName);
+    if(!propertyValue)
         return true;
-    if(!transparentValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': transparent must be 0 or 1"), PathToString<tchar>(nwbFilePath));
+    if(!propertyValue->isInteger()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
         return false;
     }
 
-    const i64 transparentInt = transparentValue->asInteger();
-    if(transparentInt != 0 && transparentInt != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': transparent must be 0 or 1"), PathToString<tchar>(nwbFilePath));
+    const i64 propertyInt = propertyValue->asInteger();
+    if(propertyInt != 0 && propertyInt != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
         return false;
     }
 
-    outTransparent = transparentInt != 0;
+    outValue = propertyInt != 0;
     return true;
 }
 
@@ -509,7 +516,9 @@ static bool ParseMaterialRenderProperties(
     const Core::Metascript::Value& asset,
     MaterialCookEntry& outEntry
 ){
-    if(!ParseMaterialTransparentProperty(nwbFilePath, asset, outEntry.transparent))
+    if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TransparentField, outEntry.transparent))
+        return false;
+    if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TwoSidedField, outEntry.twoSided))
         return false;
 
     return true;
@@ -1543,6 +1552,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
     outMaterial.setMaterialInterface(materialEntry.materialInterface);
     outMaterial.setTransparent(materialEntry.transparent);
+    outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setTypedLayout(
         materialEntry.typedLayoutHash,
         materialEntry.typedLayoutBlocks,
@@ -1702,7 +1712,11 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         AppendPOD(outBinary, shaderAsset.name().hash());
     }
 
-    const u32 materialFlags = material.transparent() ? MaterialBinaryPayload::s_MaterialFlagTransparent : 0u;
+    u32 materialFlags = 0u;
+    if(material.transparent())
+        materialFlags |= MaterialBinaryPayload::s_MaterialFlagTransparent;
+    if(material.twoSided())
+        materialFlags |= MaterialBinaryPayload::s_MaterialFlagTwoSided;
     AppendPOD(outBinary, materialFlags);
 
     return true;

@@ -22,19 +22,13 @@ namespace __hidden_ecs_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void StoreRotatedLightBasisVector(Float4& outVector, const Float4& localVector, const SIMDVector rotation){
-    StoreFloat(Vector3Rotate(LoadFloat(localVector), rotation), &outVector);
-}
-
-static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& forward){
-    const SIMDVector lightDirection = VectorNegate(LoadFloat(forward));
+static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward){
+    const SIMDVector lightDirection = VectorNegate(forward);
     const f32 lightDirectionLengthSquared = VectorGetX(Vector3LengthSq(lightDirection));
-    if(!IsFinite(lightDirectionLengthSquared) || lightDirectionLengthSquared <= 0.0001f){
-        outDirection = Float4(0.0f, 0.0f, -1.0f, 0.0f);
-        return;
-    }
+    if(!IsFinite(lightDirectionLengthSquared) || lightDirectionLengthSquared <= 0.0001f)
+        return VectorSet(0.0f, 0.0f, -1.0f, 0.0f);
 
-    StoreFloat(VectorSetW(Vector3Normalize(lightDirection), 0.0f), &outDirection);
+    return VectorSetW(Vector3Normalize(lightDirection), 0.0f);
 }
 
 
@@ -49,7 +43,10 @@ static void StoreDirectionalLightDirection(Float4& outDirection, const Float4& f
 
 SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis){
     SceneDirectionalLight light;
-    __hidden_ecs_lighting::StoreDirectionalLightDirection(light.direction, basis.forward);
+    StoreFloat(
+        __hidden_ecs_lighting::BuildDirectionalLightDirectionVector(LoadFloat(basis.forward)),
+        &light.direction
+    );
     light.colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     return light;
 }
@@ -102,9 +99,12 @@ bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const Li
         return false;
     }
 
-    Float4 lightForward;
-    __hidden_ecs_lighting::StoreRotatedLightBasisVector(lightForward, Float4(0.0f, 0.0f, 1.0f), rotation);
-    __hidden_ecs_lighting::StoreDirectionalLightDirection(outLight.direction, lightForward);
+    StoreFloat(
+        __hidden_ecs_lighting::BuildDirectionalLightDirectionVector(
+            Vector3Rotate(s_SIMDIdentityR2, rotation)
+        ),
+        &outLight.direction
+    );
     outLight.colorIntensity = light.colorIntensity;
     return true;
 }

@@ -278,6 +278,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_typedBlockBytes.clear();
     clearStageShaders();
     m_transparent = false;
+    m_twoSided = false;
 
     usize cursor = 0;
     u32 magic = 0;
@@ -373,11 +374,12 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material flags"));
         return false;
     }
-    if((materialFlags & ~MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u){
+    if((materialFlags & ~MaterialBinaryPayload::s_MaterialFlagMask) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material flags contain unsupported bits {}"), materialFlags);
         return false;
     }
     m_transparent = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTransparent) != 0u;
+    m_twoSided = (materialFlags & MaterialBinaryPayload::s_MaterialFlagTwoSided) != 0u;
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));

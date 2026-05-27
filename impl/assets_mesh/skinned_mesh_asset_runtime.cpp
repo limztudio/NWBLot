@@ -121,9 +121,16 @@ bool SkinnedMesh::validatePayload()const{
         return false;
 
     for(usize i = 0u; i < m_skin.size(); ++i){
-        if(SkinnedMeshValidation::ValidSkinInfluence(m_skin[i])){
+        const SkinInfluence4& skin = m_skin[i];
+        const SIMDVector weights = VectorSet(
+            skin.weight[0u],
+            skin.weight[1u],
+            skin.weight[2u],
+            skin.weight[3u]
+        );
+        if(SkinnedMeshValidation::ValidSkinInfluenceWeights(weights)){
             u32 failedJoint = 0u;
-            if(SkinnedMeshValidation::SkinInfluenceFitsSkeleton(m_skin[i], m_skeletonJointCount, failedJoint))
+            if(SkinnedMeshValidation::SkinInfluenceFitsSkeleton(skin, m_skeletonJointCount, failedJoint))
                 continue;
         }
 

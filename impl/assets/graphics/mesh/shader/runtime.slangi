@@ -124,6 +124,8 @@ ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
 
 
 static const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
+static const uint NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL = 1u << 1u;
+static const uint NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL = 1u << 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -21,6 +21,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_mesh_view_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_system_private.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC

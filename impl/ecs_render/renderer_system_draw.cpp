@@ -199,6 +199,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.material = materialInfo->materialName;
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
+        pipelineKey.twoSided = materialInfo->twoSided;
 
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
@@ -301,18 +302,31 @@ bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)co
     ;
 }
 
+u32 RendererSystem::meshDispatchFlags(
+    const MeshResources& mesh,
+    const MaterialPipelinePass::Enum pass,
+    const bool twoSided
+)const{
+    u32 flags = ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
+    if(!mesh.runtimeMesh && pass == MaterialPipelinePass::Opaque && !twoSided)
+        flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletConeCull;
+    return flags;
+}
+
 void RendererSystem::setMaterialPassDrawPushConstants(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
     const MeshResources& mesh
 ){
+    const u32 dispatchFlags = meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided);
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
             mesh.meshletCount,
             drawItem.instanceIndex,
             context.viewportState,
-            *context.avboitTargets
+            *context.avboitTargets,
+            dispatchFlags
         );
         return;
     }
@@ -321,7 +335,8 @@ void RendererSystem::setMaterialPassDrawPushConstants(
         context.commandList,
         mesh.meshletCount,
         drawItem.instanceIndex,
-        context.viewportState
+        context.viewportState,
+        dispatchFlags
     );
 }
 
@@ -391,7 +406,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
             context.commandList,
             mesh.meshletCount,
             drawItem.instanceIndex,
-            context.viewportState
+            context.viewportState,
+            meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided)
         );
         context.commandList.dispatch(mesh.meshletCount);
 

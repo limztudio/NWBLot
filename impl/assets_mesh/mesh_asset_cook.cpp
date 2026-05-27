@@ -176,19 +176,21 @@ static bool NormalizeSkinInfluenceWeights(
     const AStringView label,
     SkinInfluence4& influence
 ){
-    f32 weightSum = 0.0f;
-    for(u32 influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
-        const f32 weight = influence.weight[influenceIndex];
-        if(!IsFinite(weight) || weight < 0.0f){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights must be finite and non-negative")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(label)
-            );
-            return false;
-        }
-        weightSum += weight;
+    const SIMDVector weights = VectorSet(
+        influence.weight[0u],
+        influence.weight[1u],
+        influence.weight[2u],
+        influence.weight[3u]
+    );
+    if(!SkinnedMeshValidation::FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights must be finite and non-negative")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(label)
+        );
+        return false;
     }
 
+    const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
     if(!IsFinite(weightSum) || weightSum <= SkinnedMeshValidation::s_Epsilon){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
@@ -198,10 +200,13 @@ static bool NormalizeSkinInfluenceWeights(
     }
 
     const f32 inverseWeightSum = 1.0f / weightSum;
-    for(f32& weight : influence.weight)
-        weight *= inverseWeightSum;
+    const SIMDVector normalizedWeights = VectorScale(weights, inverseWeightSum);
+    influence.weight[0u] = VectorGetX(normalizedWeights);
+    influence.weight[1u] = VectorGetY(normalizedWeights);
+    influence.weight[2u] = VectorGetZ(normalizedWeights);
+    influence.weight[3u] = VectorGetW(normalizedWeights);
 
-    if(!SkinnedMeshValidation::ValidSkinInfluence(influence)){
+    if(!SkinnedMeshValidation::ValidSkinInfluenceWeights(normalizedWeights)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights failed normalization")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -269,7 +274,7 @@ static bool ParseInverseBindMatrices(
             matrix.rows[columnIndex] = Float4(column[0u], column[1u], column[2u], column[3u]);
         }
 
-        if(!SkinnedMeshValidation::ValidAffineJointMatrix(matrix)){
+        if(!SkinnedMeshValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex

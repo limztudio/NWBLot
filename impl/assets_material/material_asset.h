@@ -220,6 +220,7 @@ public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     void setMaterialInterface(const Name& materialInterface){ m_materialInterface = materialInterface; }
     void setTransparent(const bool transparent){ m_transparent = transparent; }
+    void setTwoSided(const bool twoSided){ m_twoSided = twoSided; }
     void setTypedLayout(
         u64 layoutHash,
         const TypedLayoutBlockVector& blocks,
@@ -240,6 +241,7 @@ public:
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
+    [[nodiscard]] bool twoSided()const{ return m_twoSided; }
 
 
 private:
@@ -256,6 +258,7 @@ private:
     StageShaderArray m_stageShaders;
     u32 m_stageShaderCount = 0;
     bool m_transparent = false;
+    bool m_twoSided = false;
 };
 
 

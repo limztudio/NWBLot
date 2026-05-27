@@ -9,14 +9,12 @@ using MeshPayloadValidation::FiniteVector;
     return index < count;
 }
 
-[[nodiscard]] static bool ValidHalfDirection(const Half4U& value){
-    const SIMDVector direction = VectorSetW(LoadFloat(LoadHalf4U(value)), 0.0f);
+[[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction){
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
     return FiniteVector(direction, 0x7u) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f;
 }
 
-[[nodiscard]] static bool ValidHalfTangent(const Half4U& value){
-    const SIMDVector tangent = LoadFloat(LoadHalf4U(value));
+[[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent){
     const SIMDVector direction = VectorSetW(tangent, 0.0f);
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
     const f32 handedness = Abs(VectorGetW(tangent));
@@ -63,7 +61,7 @@ using MeshPayloadValidation::FiniteVector;
         return false;
     }
     for(usize i = 0u; i < normals.size(); ++i){
-        if(ValidHalfDirection(normals[i]))
+        if(ValidDirectionVector(VectorSetW(LoadFloat(LoadHalf4U(normals[i])), 0.0f)))
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' normal {} is invalid")
@@ -74,7 +72,7 @@ using MeshPayloadValidation::FiniteVector;
         return false;
     }
     for(usize i = 0u; i < tangents.size(); ++i){
-        if(ValidHalfTangent(tangents[i]))
+        if(ValidTangentVector(LoadFloat(LoadHalf4U(tangents[i]))))
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' tangent {} is invalid")

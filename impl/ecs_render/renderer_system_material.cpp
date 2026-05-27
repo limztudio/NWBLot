@@ -74,6 +74,7 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         material.typedBlockBytes().end()
     );
     createdInfo.transparent = material.transparent();
+    createdInfo.twoSided = material.twoSided();
 
     auto result = m_materialSurfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
@@ -162,7 +163,7 @@ bool RendererSystem::createRendererPipeline(
     }
 
     Core::IDevice* device = m_graphics.getDevice();
-    const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass);
+    const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, materialInfo.twoSided);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!hasMeshShader)

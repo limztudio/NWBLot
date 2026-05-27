@@ -239,18 +239,17 @@ static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry){
 
     outEntry.positions.insert(outEntry.positions.end(), streams.positions.begin(), streams.positions.end());
     for(const Float3U& normal : streams.normals)
-        outEntry.normals.push_back(MakeMeshNormalStreamValue(normal));
+        outEntry.normals.push_back(MakeHalf4U(normal.x, normal.y, normal.z, 0.0f));
     for(const Float4U& tangent : streams.tangents)
         outEntry.tangents.push_back(MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w));
     outEntry.uv0.insert(outEntry.uv0.end(), streams.uv0.begin(), streams.uv0.end());
     for(const Float4U& color : streams.colors)
-        outEntry.colors.push_back(MakeMeshColorStreamValue(color));
+        outEntry.colors.push_back(MakeHalf4U(color.x, color.y, color.z, color.w));
     outEntry.vertexRefs.insert(outEntry.vertexRefs.end(), streams.vertexRefs.begin(), streams.vertexRefs.end());
 }
 
 template<typename CookEntryT>
-static u32 FindOrAppendTangent(CookEntryT& entry, const Float4U& tangent){
-    const Half4U packedTangent = MakeHalf4U(tangent.x, tangent.y, tangent.z, tangent.w);
+static u32 FindOrAppendTangent(CookEntryT& entry, const Half4U& packedTangent){
     for(usize tangentIndex = 0u; tangentIndex < entry.tangents.size(); ++tangentIndex){
         if(NWB_MEMCMP(&entry.tangents[tangentIndex], &packedTangent, sizeof(Half4U)) == 0)
             return static_cast<u32>(tangentIndex);
@@ -316,7 +315,10 @@ static bool GenerateMissingTangents(
         Float4U generatedTangent;
         StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
 
-        const u32 tangentIndex = FindOrAppendTangent(entry, generatedTangent);
+        const u32 tangentIndex = FindOrAppendTangent(
+            entry,
+            MakeHalf4U(generatedTangent.x, generatedTangent.y, generatedTangent.z, generatedTangent.w)
+        );
         entry.vertexRefs[vertexRefIndex].tangent = tangentIndex;
     }
     return true;

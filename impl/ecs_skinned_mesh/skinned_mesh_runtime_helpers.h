@@ -47,16 +47,6 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] inline SIMDMatrix LoadJointMatrix(const SkinnedMeshJointMatrix& matrix){
-    return LoadFloat(matrix);
-}
-
-[[nodiscard]] inline SkinnedMeshJointMatrix StoreJointMatrix(const SIMDMatrix& matrix){
-    SkinnedMeshJointMatrix result{};
-    StoreFloat(matrix, &result);
-    return result;
-}
-
 [[nodiscard]] inline SIMDVector TransformJointColumn(const SIMDMatrix& matrix, const SIMDVector column){
     SIMDVector result = VectorMultiply(VectorSplatX(column), matrix.v[0]);
     result = VectorMultiplyAdd(VectorSplatY(column), matrix.v[1], result);
@@ -104,21 +94,16 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
 }
 
-template<typename JointMatrixVector>
 [[nodiscard]] inline bool ResolveSkinningJointMatrix(
-    const JointMatrixVector& inverseBindMatrices,
-    const u32 jointIndex,
-    const SkinnedMeshJointMatrix& poseJoint,
+    const SIMDMatrix& poseJoint,
+    const bool hasInverseBind,
+    const SIMDMatrix& inverseBind,
     SIMDMatrix& outMatrix){
-    outMatrix = LoadJointMatrix(poseJoint);
+    outMatrix = poseJoint;
     if(!IsInvertibleAffineJointMatrix(outMatrix))
         return false;
-    if(inverseBindMatrices.empty())
+    if(!hasInverseBind)
         return true;
-    if(jointIndex >= inverseBindMatrices.size())
-        return false;
-
-    const SIMDMatrix inverseBind = LoadJointMatrix(inverseBindMatrices[jointIndex]);
     if(!IsInvertibleAffineJointMatrix(inverseBind))
         return false;
 
@@ -150,7 +135,7 @@ template<typename JointMatrixVector>
     outJointPalette.reserve(jointCount);
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const u32 parentJoint = pose.parentJoints[jointIndex];
-        SIMDMatrix jointMatrix = LoadJointMatrix(pose.localJoints[jointIndex]);
+        SIMDMatrix jointMatrix = LoadFloat(pose.localJoints[jointIndex]);
         if(!IsInvertibleAffineJointMatrix(jointMatrix))
             return false;
 
@@ -158,12 +143,14 @@ template<typename JointMatrixVector>
             if(parentJoint >= jointIndex)
                 return false;
 
-            jointMatrix = MultiplyJointMatrices(LoadJointMatrix(outJointPalette[parentJoint]), jointMatrix);
+            jointMatrix = MultiplyJointMatrices(LoadFloat(outJointPalette[parentJoint]), jointMatrix);
             if(!IsInvertibleAffineJointMatrix(jointMatrix))
                 return false;
         }
 
-        outJointPalette.push_back(StoreJointMatrix(jointMatrix));
+        SkinnedMeshJointMatrix storedJointMatrix{};
+        StoreFloat(jointMatrix, &storedJointMatrix);
+        outJointPalette.push_back(storedJointMatrix);
     }
 
     outSkinningMode = pose.skinningMode;
@@ -255,38 +242,6 @@ template<typename JointMatrixVector>
     const SIMDVector translation = VectorSetW(matrix.v[3], 0.0f);
     outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
     return FiniteVector(outDual, 0xFu);
-}
-
-[[nodiscard]] inline SkinnedMeshJointMatrix StoreJointDualQuaternionPayload(const SIMDVector real, const SIMDVector dual){
-    SkinnedMeshJointMatrix result{};
-    StoreFloat(real, &result.rows[0]);
-    StoreFloat(dual, &result.rows[1]);
-    return result;
-}
-
-[[nodiscard]] inline bool NormalizeBlendedDualQuaternion(SIMDVector& real, SIMDVector& dual){
-    const f32 lengthSquared = VectorGetX(QuaternionLengthSq(real));
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_Epsilon)
-        return false;
-
-    const f32 invLength = 1.0f / Sqrt(lengthSquared);
-    real = VectorScale(real, invLength);
-    dual = VectorScale(dual, invLength);
-    dual = VectorSubtract(dual, VectorScale(real, VectorGetX(Vector4Dot(real, dual))));
-    return
-        FiniteVector(real, 0xFu)
-        && FiniteVector(dual, 0xFu)
-    ;
-}
-
-[[nodiscard]] inline SIMDVector TransformDualQuaternionPosition(const SIMDVector real, const SIMDVector dual, const SIMDVector position){
-    const SIMDVector rotatedPosition = Vector3Rotate(position, real);
-    const SIMDVector translation = VectorScale(QuaternionMultiply(dual, QuaternionConjugate(real)), 2.0f);
-    return VectorAdd(rotatedPosition, translation);
-}
-
-[[nodiscard]] inline SIMDVector TransformDualQuaternionDirection(const SIMDVector real, const SIMDVector direction){
-    return Vector3Rotate(direction, real);
 }
 
 };

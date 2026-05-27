@@ -54,26 +54,28 @@ static_assert(
     return 1.0f;
 }
 
-[[nodiscard]] bool ValidInputVertex(const TangentFrameRebuildVertex& vertex){
+[[nodiscard]] bool ValidInputVertex(const SIMDVector position, const SIMDVector uv0){
     return
-        FrameFiniteVector(LoadFloat(vertex.position), 0x7u)
-        && FrameFiniteVector(LoadFloat(vertex.uv0), 0x3u)
+        FrameFiniteVector(position, 0x7u)
+        && FrameFiniteVector(uv0, 0x3u)
     ;
 }
 
 [[nodiscard]] bool AccumulateTriangleTangentFrame(
-    const TangentFrameRebuildVertex& vertex0,
-    const TangentFrameRebuildVertex& vertex1,
-    const TangentFrameRebuildVertex& vertex2,
+    const SIMDVector uv0,
+    const SIMDVector uv1,
+    const SIMDVector uv2,
     SIMDVector edge01,
     SIMDVector edge02,
     SIMDVector& outTangent,
     SIMDVector& outBitangent
 ){
-    const f32 du1 = vertex1.uv0.x - vertex0.uv0.x;
-    const f32 dv1 = vertex1.uv0.y - vertex0.uv0.y;
-    const f32 du2 = vertex2.uv0.x - vertex0.uv0.x;
-    const f32 dv2 = vertex2.uv0.y - vertex0.uv0.y;
+    const SIMDVector uvDelta1 = VectorSubtract(uv1, uv0);
+    const SIMDVector uvDelta2 = VectorSubtract(uv2, uv0);
+    const f32 du1 = VectorGetX(uvDelta1);
+    const f32 dv1 = VectorGetY(uvDelta1);
+    const f32 du2 = VectorGetX(uvDelta2);
+    const f32 dv2 = VectorGetY(uvDelta2);
     const f32 determinant = (du1 * dv2) - (dv1 * du2);
     if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
         return false;
@@ -122,7 +124,7 @@ bool RebuildTangentFrames(
         return false;
 
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        if(!ValidInputVertex(vertices[vertexIndex]))
+        if(!ValidInputVertex(LoadFloat(vertices[vertexIndex].position), LoadFloat(vertices[vertexIndex].uv0)))
             return false;
     }
 
@@ -155,6 +157,9 @@ bool RebuildTangentFrames(
         const SIMDVector p0 = LoadFloat(vertex0.position);
         const SIMDVector edge01 = VectorSubtract(LoadFloat(vertex1.position), p0);
         const SIMDVector edge02 = VectorSubtract(LoadFloat(vertex2.position), p0);
+        const SIMDVector uv0 = LoadFloat(vertex0.uv0);
+        const SIMDVector uv1 = LoadFloat(vertex1.uv0);
+        const SIMDVector uv2 = LoadFloat(vertex2.uv0);
         const SIMDVector faceNormal = Vector3Cross(edge01, edge02);
         if(!FrameValidDirection(faceNormal))
             return false;
@@ -168,7 +173,7 @@ bool RebuildTangentFrames(
 
         SIMDVector tangent = VectorZero();
         SIMDVector bitangent = VectorZero();
-        if(AccumulateTriangleTangentFrame(vertex0, vertex1, vertex2, edge01, edge02, tangent, bitangent)){
+        if(AccumulateTriangleTangentFrame(uv0, uv1, uv2, edge01, edge02, tangent, bitangent)){
             accumulator0.tangent = VectorAdd(accumulator0.tangent, tangent);
             accumulator1.tangent = VectorAdd(accumulator1.tangent, tangent);
             accumulator2.tangent = VectorAdd(accumulator2.tangent, tangent);

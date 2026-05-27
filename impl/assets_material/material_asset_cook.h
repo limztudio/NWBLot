@@ -47,6 +47,7 @@ struct MaterialCookEntry{
     StageShaderMap stageShaders;
     ParameterMap parameters;
     bool transparent = false;
+    bool twoSided = false;
 
     explicit MaterialCookEntry(MaterialCookArena& arena)
         : typedLayoutBlocks(arena)
@@ -68,6 +69,7 @@ struct MaterialCookEntry{
         stageShaders.clear();
         parameters.clear();
         transparent = false;
+        twoSided = false;
     }
 };
 

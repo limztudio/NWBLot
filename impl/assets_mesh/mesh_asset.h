@@ -21,18 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Half4U MakeMeshNormalStreamValue(const Float3U& normal)noexcept{
-    return MakeHalf4U(normal.x, normal.y, normal.z, 0.0f);
-}
-
-[[nodiscard]] inline Half4U MakeMeshColorStreamValue(const Float4U& color0)noexcept{
-    return MakeHalf4U(color0.x, color0.y, color0.z, color0.w);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class Mesh final : public Core::Assets::TypedAsset<Mesh>{
 public:
     NWB_DEFINE_ASSET_TYPE("mesh")

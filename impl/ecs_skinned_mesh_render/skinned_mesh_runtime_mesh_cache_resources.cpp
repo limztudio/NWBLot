@@ -106,9 +106,15 @@ namespace __hidden_skinned_mesh_runtime_mesh_cache_resources{
 
     for(usize skinIndex = 0u; skinIndex < instance.skin.size(); ++skinIndex){
         const SkinInfluence4& skin = instance.skin[skinIndex];
+        const SIMDVector weights = VectorSet(
+            skin.weight[0u],
+            skin.weight[1u],
+            skin.weight[2u],
+            skin.weight[3u]
+        );
         u32 failedJoint = 0u;
         if(
-            SkinnedMeshValidation::ValidSkinInfluence(skin)
+            SkinnedMeshValidation::ValidSkinInfluenceWeights(weights)
             && SkinnedMeshValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount, failedJoint)
         )
             continue;

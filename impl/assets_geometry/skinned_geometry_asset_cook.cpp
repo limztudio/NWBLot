@@ -16,8 +16,6 @@
 #include <global/binary.h>
 #include <core/common/log.h>
 
-#include <cstddef>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,9 +40,8 @@ bool SkinnedGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Cor
         return false;
 
     usize reserveBytes = sizeof(SkinnedGeometryBinaryPayload::SkinnedGeometryHeaderBinary);
-    bool canReserve = AddBinaryVectorReserveBytes(reserveBytes, geometry.restVertices())
-        && AddBinaryVectorReserveBytes(reserveBytes, geometry.indices())
-        && AddBinaryVectorReserveBytes(reserveBytes, geometry.skin())
+    const bool canReserve = GeometryAssetBinaryPayload::AddGeometryBaseReserveBytes(reserveBytes, geometry)
+        && AddBinaryVectorReserveBytes(reserveBytes, geometry.skinStream())
         && AddBinaryVectorReserveBytes(reserveBytes, geometry.inverseBindMatrices())
     ;
 
@@ -53,10 +50,9 @@ bool SkinnedGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Cor
         outBinary.reserve(reserveBytes);
 
     SkinnedGeometryBinaryPayload::SkinnedGeometryHeaderBinary header;
-    header.geometryClass = geometry.geometryClass();
-    header.restVertexCount = static_cast<u64>(geometry.restVertices().size());
-    header.indexCount = static_cast<u64>(geometry.indices().size());
-    header.skinCount = static_cast<u64>(geometry.skin().size());
+    header.magic = SkinnedGeometryBinaryPayload::s_SkinnedGeometryMagic;
+    GeometryAssetBinaryPayload::FillGeometryBaseHeader(header, geometry);
+    header.skinCount = static_cast<u64>(geometry.skinStream().size());
     header.skeletonJointCount = static_cast<u64>(geometry.skeletonJointCount());
     header.inverseBindMatrixCount = static_cast<u64>(geometry.inverseBindMatrices().size());
     AppendPOD(outBinary, header);
@@ -65,16 +61,13 @@ bool SkinnedGeometryAssetCodec::serialize(const Core::Assets::IAsset& asset, Cor
     auto appendVector = [&](const auto& values, const tchar* label){
         return GeometryAssetBinaryPayload::AppendVector(outBinary, values, serializeFailureContext, label);
     };
-    if(!appendVector(geometry.restVertices(), NWB_TEXT("rest vertices")))
+    if(!GeometryAssetBinaryPayload::AppendGeometryAttributeStreams(outBinary, geometry, serializeFailureContext))
         return false;
-    if(!appendVector(geometry.indices(), NWB_TEXT("indices")))
-        return false;
-    if(!appendVector(geometry.skin(), NWB_TEXT("skin")))
+    if(!appendVector(geometry.skinStream(), NWB_TEXT("skin")))
         return false;
     if(!appendVector(geometry.inverseBindMatrices(), NWB_TEXT("inverse bind matrices")))
         return false;
-
-    return true;
+    return GeometryAssetBinaryPayload::AppendGeometryMeshletStreams(outBinary, geometry, serializeFailureContext);
 }
 
 
@@ -91,4 +84,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

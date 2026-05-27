@@ -121,6 +121,38 @@ static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
 
 )"
 
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 0, 4294967295, 0, 0],
+    [1, 1, 4294967295, 1, 1],
+    [2, 2, 4294967295, 2, 2],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 0, 4294967295, 0, 0],
+    [1, 1, 4294967295, 1, 0],
+    [2, 2, 4294967295, 2, 0],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 1],
+    [2, 2, 2, 2, 0, 2],
+];
+
+)"
+
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS R"(asset.vertex_refs = [
+    [0, 0, 4294967295, 0, 0, 0],
+    [1, 1, 4294967295, 1, 0, 1],
+    [2, 2, 4294967295, 2, 0, 2],
+];
+
+)"
+
 #define NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN R"(asset.skeleton_joint_count = 1;
 
 asset.skin = {
@@ -139,11 +171,11 @@ asset.skin = {
 )"
 
 #define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_STREAMS(indexType) \
-    indexType \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 
 #define NWB_ASSETS_GRAPHICS_TEST_SKINNED_GEOMETRY_TRIANGLE_PREFIX(indexType) \
@@ -181,22 +213,24 @@ asset.skin = {
 
 static constexpr AStringView s_MinimalGeometryMeta =
     "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     R"(asset.colors = [
     [1.0, 0.0, 0.0, 1.0],
     [0.0, 1.0, 0.0, 1.0],
     [0.0, 0.0, 1.0, 1.0],
 ];
 
-)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
+)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 static constexpr AStringView s_DefaultColorGeometryMeta =
     "geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
 static constexpr AStringView s_MinimalMaterialBindSource = R"NWB_BIND([material_constant]
@@ -783,9 +817,10 @@ static constexpr AStringView s_MinimalSkinnedGeometryMeta =
 
 static constexpr AStringView s_GeneratedFrameSkinnedGeometryMeta =
     "skinned_geometry asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
+    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
@@ -804,8 +839,6 @@ static constexpr AStringView s_EmptyMapOptionalSkinnedGeometryMeta =
 )" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_NativeCharacterMockSkinnedGeometryMeta = R"(skinned_geometry asset;
-
-asset.index_type = "u16";
 
 asset.positions = [
     [-0.5, -0.5, 0.0],
@@ -828,6 +861,13 @@ asset.colors = [
     [0.0, 1.0, 0.0, 1.0],
     [0.0, 0.0, 1.0, 1.0],
     [1.0, 1.0, 1.0, 0.5],
+];
+
+asset.vertex_refs = [
+    [0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1, 1],
+    [2, 2, 2, 2, 2, 2],
+    [3, 3, 3, 3, 3, 3],
 ];
 
 asset.indices = [
@@ -2024,12 +2064,61 @@ static NWB::Impl::SkinnedGeometry BuildValidSkinnedGeometry(TestArena& testArena
     auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkinnedGeometryJointMatrix>(testArena);
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
 
+    auto positions = MakeAssetVector<Float3U>(testArena);
+    auto normals = MakeAssetVector<Half4U>(testArena);
+    auto tangents = MakeAssetVector<Half4U>(testArena);
+    auto uv0 = MakeAssetVector<Float2U>(testArena);
+    auto colors = MakeAssetVector<Half4U>(testArena);
+    auto vertexRefs = MakeAssetVector<NWB::Impl::GeometryVertexRef>(testArena);
+    auto meshlets = MakeAssetVector<NWB::Impl::GeometryMeshletDesc>(testArena);
+    auto meshletBounds = MakeAssetVector<NWB::Impl::GeometryMeshletBounds>(testArena);
+    auto meshletVertexRefs = MakeAssetVector<u32>(testArena);
+    auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        const NWB::Impl::SkinnedGeometryVertex& vertex = vertices[vertexIndex];
+        positions.push_back(vertex.position);
+        normals.push_back(vertex.normal);
+        tangents.push_back(vertex.tangent);
+        uv0.push_back(vertex.uv0);
+        colors.push_back(vertex.color0);
+        vertexRefs.push_back(NWB::Impl::GeometryVertexRef{
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+        });
+        meshletVertexRefs.push_back(static_cast<u32>(vertexIndex));
+    }
+    meshlets.push_back(NWB::Impl::GeometryMeshletDesc{ 0u, 0u, static_cast<u32>(vertices.size()), 2u });
+    meshletBounds.push_back(NWB::Impl::GeometryMeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 1.0f), Float4U(0.0f, 0.0f, 1.0f, 1.0f) });
+    for(const u32 index : indices)
+        meshletPrimitiveIndices.push_back(static_cast<u8>(index));
+
+    auto canonicalSkin = MakeAssetVectorFrom(testArena, skin);
+    auto canonicalInverseBindMatrices = MakeAssetVectorFrom(testArena, inverseBindMatrices);
+    auto runtimeVertices = MakeAssetVectorFrom(testArena, vertices);
+    auto runtimeIndices = MakeAssetVectorFrom(testArena, indices);
+    auto runtimeSkin = MakeAssetVectorFrom(testArena, skin);
+
     geometry.setGeometryClass(NWB::Core::Geometry::GeometryClass::Skinned);
-    geometry.setRestVertices(Move(vertices));
-    geometry.setIndices(Move(indices));
-    geometry.setSkin(Move(skin));
     geometry.setSkeletonJointCount(1u);
-    geometry.setInverseBindMatrices(Move(inverseBindMatrices));
+    geometry.setPayload(
+        Move(positions),
+        Move(normals),
+        Move(tangents),
+        Move(uv0),
+        Move(colors),
+        Move(canonicalSkin),
+        Move(canonicalInverseBindMatrices),
+        Move(vertexRefs),
+        Move(meshlets),
+        Move(meshletBounds),
+        Move(meshletVertexRefs),
+        Move(meshletPrimitiveIndices)
+    );
+    geometry.setRuntimeStreams(Move(runtimeVertices), Move(runtimeIndices), Move(runtimeSkin));
     return geometry;
 }
 
@@ -2046,11 +2135,61 @@ static NWB::Impl::SkinnedGeometry BuildMinimalSkinnedGeometry(TestArena& testAre
     auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
     skin.assign(vertices.size(), MakeRootSkin());
 
+    auto positions = MakeAssetVector<Float3U>(testArena);
+    auto normals = MakeAssetVector<Half4U>(testArena);
+    auto tangents = MakeAssetVector<Half4U>(testArena);
+    auto uv0 = MakeAssetVector<Float2U>(testArena);
+    auto colors = MakeAssetVector<Half4U>(testArena);
+    auto vertexRefs = MakeAssetVector<NWB::Impl::GeometryVertexRef>(testArena);
+    auto meshlets = MakeAssetVector<NWB::Impl::GeometryMeshletDesc>(testArena);
+    auto meshletBounds = MakeAssetVector<NWB::Impl::GeometryMeshletBounds>(testArena);
+    auto meshletVertexRefs = MakeAssetVector<u32>(testArena);
+    auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
+    for(usize vertexIndex = 0u; vertexIndex < vertices.size(); ++vertexIndex){
+        const NWB::Impl::SkinnedGeometryVertex& vertex = vertices[vertexIndex];
+        positions.push_back(vertex.position);
+        normals.push_back(vertex.normal);
+        tangents.push_back(vertex.tangent);
+        uv0.push_back(vertex.uv0);
+        colors.push_back(vertex.color0);
+        vertexRefs.push_back(NWB::Impl::GeometryVertexRef{
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+        });
+        meshletVertexRefs.push_back(static_cast<u32>(vertexIndex));
+    }
+    meshlets.push_back(NWB::Impl::GeometryMeshletDesc{ 0u, 0u, static_cast<u32>(vertices.size()), 1u });
+    meshletBounds.push_back(NWB::Impl::GeometryMeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 1.0f), Float4U(0.0f, 0.0f, 1.0f, 1.0f) });
+    for(const u32 index : indices)
+        meshletPrimitiveIndices.push_back(static_cast<u8>(index));
+
+    auto canonicalSkin = MakeAssetVectorFrom(testArena, skin);
+    auto runtimeVertices = MakeAssetVectorFrom(testArena, vertices);
+    auto runtimeIndices = MakeAssetVectorFrom(testArena, indices);
+    auto runtimeSkin = MakeAssetVectorFrom(testArena, skin);
+    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkinnedGeometryJointMatrix>(testArena);
+
     geometry.setGeometryClass(NWB::Core::Geometry::GeometryClass::Skinned);
-    geometry.setRestVertices(Move(vertices));
-    geometry.setIndices(Move(indices));
-    geometry.setSkin(Move(skin));
     geometry.setSkeletonJointCount(1u);
+    geometry.setPayload(
+        Move(positions),
+        Move(normals),
+        Move(tangents),
+        Move(uv0),
+        Move(colors),
+        Move(canonicalSkin),
+        Move(inverseBindMatrices),
+        Move(vertexRefs),
+        Move(meshlets),
+        Move(meshletBounds),
+        Move(meshletVertexRefs),
+        Move(meshletPrimitiveIndices)
+    );
+    geometry.setRuntimeStreams(Move(runtimeVertices), Move(runtimeIndices), Move(runtimeSkin));
     return geometry;
 }
 
@@ -2072,8 +2211,57 @@ static NWB::Impl::Geometry BuildMinimalGeometry(TestArena& testArena){
 
     auto indices = MakeAssetVectorFrom(testArena, MakeTriangleIndices());
 
-    geometry.setStreams(Move(positions), Move(normals), Move(colors));
-    geometry.setIndices(Move(indices));
+    auto tangents = MakeAssetVector<Half4U>(testArena);
+    tangents.push_back(MakeHalf4U(1.0f, 0.0f, 0.0f, 1.0f));
+
+    auto uv0 = MakeAssetVector<Float2U>(testArena);
+    uv0.push_back(Float2U(0.0f, 0.0f));
+    uv0.push_back(Float2U(1.0f, 0.0f));
+    uv0.push_back(Float2U(0.5f, 1.0f));
+
+    auto vertexRefs = MakeAssetVector<NWB::Impl::GeometryVertexRef>(testArena);
+    for(usize vertexIndex = 0u; vertexIndex < positions.size(); ++vertexIndex){
+        vertexRefs.push_back(NWB::Impl::GeometryVertexRef{
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            0u,
+            static_cast<u32>(vertexIndex),
+            static_cast<u32>(vertexIndex),
+            NWB::Impl::s_GeometryMissingStreamIndex,
+        });
+    }
+
+    auto meshlets = MakeAssetVector<NWB::Impl::GeometryMeshletDesc>(testArena);
+    meshlets.push_back(NWB::Impl::GeometryMeshletDesc{ 0u, 0u, 3u, 1u });
+    auto meshletBounds = MakeAssetVector<NWB::Impl::GeometryMeshletBounds>(testArena);
+    meshletBounds.push_back(NWB::Impl::GeometryMeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 1.0f), Float4U(0.0f, 0.0f, 1.0f, 1.0f) });
+    auto meshletVertexRefs = MakeAssetVector<u32>(testArena);
+    meshletVertexRefs.push_back(0u);
+    meshletVertexRefs.push_back(1u);
+    meshletVertexRefs.push_back(2u);
+    auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
+    meshletPrimitiveIndices.push_back(0u);
+    meshletPrimitiveIndices.push_back(1u);
+    meshletPrimitiveIndices.push_back(2u);
+
+    auto runtimePositions = MakeAssetVectorFrom(testArena, positions);
+    auto runtimeNormals = MakeAssetVectorFrom(testArena, normals);
+    auto runtimeColors = MakeAssetVectorFrom(testArena, colors);
+    auto runtimeIndices = MakeAssetVectorFrom(testArena, indices);
+
+    geometry.setPayload(
+        Move(positions),
+        Move(normals),
+        Move(tangents),
+        Move(uv0),
+        Move(colors),
+        Move(vertexRefs),
+        Move(meshlets),
+        Move(meshletBounds),
+        Move(meshletVertexRefs),
+        Move(meshletPrimitiveIndices)
+    );
+    geometry.setRuntimeStreams(Move(runtimePositions), Move(runtimeNormals), Move(runtimeColors), Move(runtimeIndices));
     return geometry;
 }
 

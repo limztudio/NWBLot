@@ -35,33 +35,59 @@ struct GeometryCookEntry{
     Name virtualPath = NAME_NONE;
     Core::Assets::AssetVector<Float3U> positions;
     Core::Assets::AssetVector<Half4U> normals;
+    Core::Assets::AssetVector<Half4U> tangents;
+    Core::Assets::AssetVector<Float2U> uv0;
     Core::Assets::AssetVector<Half4U> colors;
-    Core::Assets::AssetVector<u32> indices;
-    bool use32BitIndices = false;
+    Core::Assets::AssetVector<GeometryVertexRef> vertexRefs;
+    Core::Assets::AssetVector<GeometryMeshletDesc> meshlets;
+    Core::Assets::AssetVector<GeometryMeshletBounds> meshletBounds;
+    Core::Assets::AssetVector<u32> meshletVertexRefs;
+    Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
 
     explicit GeometryCookEntry(Core::Assets::AssetArena& arena)
         : positions(arena)
         , normals(arena)
+        , tangents(arena)
+        , uv0(arena)
         , colors(arena)
-        , indices(arena)
+        , vertexRefs(arena)
+        , meshlets(arena)
+        , meshletBounds(arena)
+        , meshletVertexRefs(arena)
+        , meshletPrimitiveIndices(arena)
     {}
 };
 
 struct SkinnedGeometryCookEntry{
     Name virtualPath = NAME_NONE;
-    Core::Assets::AssetVector<SkinnedGeometryVertex> restVertices;
-    Core::Assets::AssetVector<u32> indices;
     u32 geometryClass = Core::Geometry::GeometryClass::Skinned;
+    Core::Assets::AssetVector<Float3U> positions;
+    Core::Assets::AssetVector<Half4U> normals;
+    Core::Assets::AssetVector<Half4U> tangents;
+    Core::Assets::AssetVector<Float2U> uv0;
+    Core::Assets::AssetVector<Half4U> colors;
     Core::Assets::AssetVector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0u;
     Core::Assets::AssetVector<SkinnedGeometryJointMatrix> inverseBindMatrices;
-    bool use32BitIndices = true;
+    Core::Assets::AssetVector<GeometryVertexRef> vertexRefs;
+    Core::Assets::AssetVector<GeometryMeshletDesc> meshlets;
+    Core::Assets::AssetVector<GeometryMeshletBounds> meshletBounds;
+    Core::Assets::AssetVector<u32> meshletVertexRefs;
+    Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
 
     explicit SkinnedGeometryCookEntry(Core::Assets::AssetArena& arena)
-        : restVertices(arena)
-        , indices(arena)
+        : positions(arena)
+        , normals(arena)
+        , tangents(arena)
+        , uv0(arena)
+        , colors(arena)
         , skin(arena)
         , inverseBindMatrices(arena)
+        , vertexRefs(arena)
+        , meshlets(arena)
+        , meshletBounds(arena)
+        , meshletVertexRefs(arena)
+        , meshletPrimitiveIndices(arena)
     {}
 };
 

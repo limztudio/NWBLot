@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "geometry_payload_validation.h"
 #include "skinned_geometry_types.h"
 
 #include <core/assets/asset.h>
@@ -27,134 +28,12 @@ namespace SkinnedGeometryValidation{
 
 static constexpr f32 s_Epsilon = 0.000001f;
 static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
-static constexpr f32 s_RestFrameLengthSquaredEpsilon = 0.000001f;
-static constexpr f32 s_RestFrameUnitLengthSquaredEpsilon = 0.01f;
-static constexpr f32 s_RestFrameOrthogonalityEpsilon = 0.01f;
-static constexpr f32 s_TangentHandednessEpsilon = 0.000001f;
-static constexpr f32 s_TangentHandednessUnitEpsilon = 0.001f;
-static constexpr f32 s_TriangleAreaLengthSquaredEpsilon = 1.0e-20f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace RestVertexPayloadFailure{
-    enum Enum : u8{
-        None,
-        NonFiniteData,
-        DegenerateFrame,
-        InvalidFrame,
-    };
-};
-
-namespace RuntimePayloadFailure{
-    enum Enum : u8{
-        None,
-        IncompleteRestIndexPayload,
-        VertexIndexCountLimit,
-        IndexCountNotTriangleList,
-        InvalidRestVertex,
-        IndexOutOfRange,
-        DegenerateTriangle,
-        ZeroAreaTriangle,
-        SkinCountMismatch,
-        SkinMissingSkeleton,
-        SkeletonJointCountLimit,
-        InvalidInverseBindMatrices,
-        InvalidSkinInfluence,
-        SkinJointOutOfRange,
-    };
-};
-
-struct RuntimePayloadFailureInfo{
-    RuntimePayloadFailure::Enum reason = RuntimePayloadFailure::None;
-    usize vertexIndex = 0;
-    usize indexBase = 0;
-    u32 vertexId = 0;
-    usize count = 0;
-    usize expectedCount = 0;
-    u32 failedJoint = 0;
-    RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None;
-};
-
-struct RuntimePayloadArrays{
-    const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices;
-    const Core::Assets::AssetVector<u32>& indices;
-    u32 skeletonJointCount;
-    const Core::Assets::AssetVector<SkinInfluence4>& skin;
-    const Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& inverseBindMatrices;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] inline RuntimePayloadFailureInfo MakeRuntimePayloadFailure(
-    const RuntimePayloadFailure::Enum reason,
-    const usize vertexIndex = 0,
-    const usize indexBase = 0,
-    const u32 vertexId = 0,
-    const usize count = 0,
-    const usize expectedCount = 0,
-    const u32 failedJoint = 0,
-    const RestVertexPayloadFailure::Enum restVertexFailure = RestVertexPayloadFailure::None
-){
-    RuntimePayloadFailureInfo info;
-    info.reason = reason;
-    info.vertexIndex = vertexIndex;
-    info.indexBase = indexBase;
-    info.vertexId = vertexId;
-    info.count = count;
-    info.expectedCount = expectedCount;
-    info.failedJoint = failedJoint;
-    info.restVertexFailure = restVertexFailure;
-    return info;
-}
-
-[[nodiscard]] inline bool FiniteVector(SIMDVector value, const u32 activeMask){
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
-    return (VectorMoveMask(invalid) & activeMask) == 0u;
-}
-
-[[nodiscard]] inline RestVertexPayloadFailure::Enum FindRestVertexPayloadFailure(const SkinnedGeometryVertex& vertex){
-    const SIMDVector position = LoadSkinnedGeometryVertexPosition(vertex);
-    const SIMDVector normal = LoadSkinnedGeometryVertexNormal(vertex);
-    const SIMDVector tangent = LoadSkinnedGeometryVertexTangent(vertex);
-    const SIMDVector uv0 = LoadSkinnedGeometryVertexUv0(vertex);
-    const SIMDVector color0 = LoadSkinnedGeometryVertexColor0(vertex);
-    if(
-        !FiniteVector(position, 0x7u)
-        || !FiniteVector(normal, 0x7u)
-        || !FiniteVector(tangent, 0xFu)
-        || !FiniteVector(uv0, 0x3u)
-        || !FiniteVector(color0, 0xFu)
-    )
-        return RestVertexPayloadFailure::NonFiniteData;
-
-    const f32 normalLengthSquared = VectorGetX(Vector3LengthSq(normal));
-    const f32 tangentLengthSquared = VectorGetX(Vector3LengthSq(tangent));
-    const f32 tangentHandedness = Abs(VectorGetW(tangent));
-    const SIMDVector frameCross = Vector3Cross(normal, tangent);
-    const f32 frameCrossLengthSquared = VectorGetX(Vector3LengthSq(frameCross));
-    if(
-        normalLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentLengthSquared <= s_RestFrameLengthSquaredEpsilon
-        || tangentHandedness <= s_TangentHandednessEpsilon
-        || Abs(tangentHandedness - 1.0f) > s_TangentHandednessUnitEpsilon
-        || frameCrossLengthSquared <= s_RestFrameLengthSquaredEpsilon
-    )
-        return RestVertexPayloadFailure::DegenerateFrame;
-
-    const f32 frameDot = VectorGetX(Vector3Dot(normal, tangent));
-    if(
-        Abs(normalLengthSquared - 1.0f) > s_RestFrameUnitLengthSquaredEpsilon
-        || Abs(tangentLengthSquared - 1.0f) > s_RestFrameUnitLengthSquaredEpsilon
-        || Abs(frameDot) > s_RestFrameOrthogonalityEpsilon
-    )
-        return RestVertexPayloadFailure::InvalidFrame;
-
-    return RestVertexPayloadFailure::None;
-}
+using GeometryPayloadValidation::FiniteVector;
 
 [[nodiscard]] inline bool ValidSkinInfluence(const SkinInfluence4& skin){
     const SIMDVector weights = VectorSet(skin.weight[0], skin.weight[1], skin.weight[2], skin.weight[3]);
@@ -222,115 +101,6 @@ struct RuntimePayloadArrays{
             return false;
     }
     return true;
-}
-
-[[nodiscard]] inline bool ValidTriangleArea(const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
-    const SIMDVector aPosition = LoadSkinnedGeometryVertexPosition(restVertices[a]);
-    const SIMDVector ab = VectorSubtract(LoadSkinnedGeometryVertexPosition(restVertices[b]), aPosition);
-    const SIMDVector ac = VectorSubtract(LoadSkinnedGeometryVertexPosition(restVertices[c]), aPosition);
-    const f32 areaLengthSquared = VectorGetX(Vector3LengthSq(Vector3Cross(ab, ac)));
-    return areaLengthSquared > s_TriangleAreaLengthSquaredEpsilon;
-}
-
-[[nodiscard]] inline bool ValidTriangle(const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices, const u32 a, const u32 b, const u32 c){
-    if(a >= restVertices.size() || b >= restVertices.size() || c >= restVertices.size())
-        return false;
-    if(a == b || a == c || b == c)
-        return false;
-
-    return ValidTriangleArea(restVertices, a, b, c);
-}
-
-[[nodiscard]] inline RuntimePayloadFailureInfo FindRuntimePayloadFailure(const RuntimePayloadArrays& payload){
-    const Core::Assets::AssetVector<SkinnedGeometryVertex>& restVertices = payload.restVertices;
-    const Core::Assets::AssetVector<u32>& indices = payload.indices;
-    const u32 skeletonJointCount = payload.skeletonJointCount;
-    const Core::Assets::AssetVector<SkinInfluence4>& skin = payload.skin;
-    const Core::Assets::AssetVector<SkinnedGeometryJointMatrix>& inverseBindMatrices = payload.inverseBindMatrices;
-
-    if(restVertices.empty() || indices.empty())
-        return MakeRuntimePayloadFailure(RuntimePayloadFailure::IncompleteRestIndexPayload);
-    if(
-        restVertices.size() > static_cast<usize>(Limit<u32>::s_Max)
-        || indices.size() > static_cast<usize>(Limit<u32>::s_Max)
-    )
-        return MakeRuntimePayloadFailure(RuntimePayloadFailure::VertexIndexCountLimit);
-    if((indices.size() % 3u) != 0u)
-        return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexCountNotTriangleList, 0, 0, 0, indices.size());
-    if(!skin.empty() && skin.size() != restVertices.size())
-        return MakeRuntimePayloadFailure(
-            RuntimePayloadFailure::SkinCountMismatch,
-            0,
-            0,
-            0,
-            skin.size(),
-            restVertices.size()
-        );
-    if(!skin.empty() && skeletonJointCount == 0u)
-        return MakeRuntimePayloadFailure(RuntimePayloadFailure::SkinMissingSkeleton);
-    if(skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u)
-        return MakeRuntimePayloadFailure(
-            RuntimePayloadFailure::SkeletonJointCountLimit,
-            0,
-            0,
-            0,
-            skeletonJointCount
-        );
-    if(!ValidInverseBindMatrices(inverseBindMatrices, skeletonJointCount))
-        return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidInverseBindMatrices);
-
-    for(usize vertexIndex = 0; vertexIndex < restVertices.size(); ++vertexIndex){
-        const RestVertexPayloadFailure::Enum restVertexFailure = FindRestVertexPayloadFailure(restVertices[vertexIndex]);
-        if(restVertexFailure != RestVertexPayloadFailure::None){
-            return MakeRuntimePayloadFailure(
-                RuntimePayloadFailure::InvalidRestVertex,
-                vertexIndex,
-                0,
-                0,
-                0,
-                0,
-                0,
-                restVertexFailure
-            );
-        }
-    }
-    for(usize indexBase = 0; indexBase < indices.size(); indexBase += 3u){
-        const u32 a = indices[indexBase + 0u];
-        const u32 b = indices[indexBase + 1u];
-        const u32 c = indices[indexBase + 2u];
-        if(a >= restVertices.size())
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexOutOfRange, 0, indexBase, a, restVertices.size());
-        if(b >= restVertices.size())
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexOutOfRange, 0, indexBase, b, restVertices.size());
-        if(c >= restVertices.size())
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::IndexOutOfRange, 0, indexBase, c, restVertices.size());
-        if(a == b || a == c || b == c)
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::DegenerateTriangle, 0, indexBase);
-        if(!ValidTriangleArea(restVertices, a, b, c))
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::ZeroAreaTriangle, 0, indexBase);
-    }
-    for(usize vertexIndex = 0; vertexIndex < skin.size(); ++vertexIndex){
-        const SkinInfluence4& influence = skin[vertexIndex];
-        if(!ValidSkinInfluence(influence))
-            return MakeRuntimePayloadFailure(RuntimePayloadFailure::InvalidSkinInfluence, vertexIndex);
-        u32 failedJoint = 0u;
-        if(!SkinInfluenceFitsSkeleton(influence, skeletonJointCount, failedJoint))
-            return MakeRuntimePayloadFailure(
-                RuntimePayloadFailure::SkinJointOutOfRange,
-                vertexIndex,
-                0,
-                0,
-                skeletonJointCount,
-                0,
-                failedJoint
-            );
-    }
-
-    return {};
-}
-
-[[nodiscard]] inline bool ValidRuntimePayloadArrays(const RuntimePayloadArrays& payload){
-    return FindRuntimePayloadFailure(payload).reason == RuntimePayloadFailure::None;
 }
 
 

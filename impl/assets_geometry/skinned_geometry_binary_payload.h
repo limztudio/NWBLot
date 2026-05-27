@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include "skinned_geometry_types.h"
+#include "geometry_binary_payload.h"
 
-#include <core/geometry/geometry_class.h>
 #include <global/binary.h>
 
 
@@ -26,24 +25,10 @@ namespace SkinnedGeometryBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_SkinnedGeometryMagic = 0x44474F31u; // DGO1
+inline constexpr u32 s_SkinnedGeometryMagic = 0x44474F32u; // DGO2
 inline constexpr u32 s_SkinnedGeometrySkeletonJointLimit = static_cast<u32>(Limit<u16>::s_Max) + 1u;
 
-#pragma pack(push, 1)
-struct SkinnedGeometryHeaderBinary{
-    u32 magic = s_SkinnedGeometryMagic;
-    u32 geometryClass = Core::Geometry::GeometryClass::Invalid;
-    u64 restVertexCount = 0;
-    u64 indexCount = 0;
-    u64 skinCount = 0;
-    u64 skeletonJointCount = 0;
-    u64 inverseBindMatrixCount = 0;
-};
-#pragma pack(pop)
-static_assert(sizeof(SkinnedGeometryHeaderBinary) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 5u), "SkinnedGeometryHeaderBinary layout drifted");
-static_assert(alignof(SkinnedGeometryHeaderBinary) == 1u, "SkinnedGeometryHeaderBinary must stay packed");
-static_assert(IsStandardLayout_V<SkinnedGeometryHeaderBinary>, "SkinnedGeometryHeaderBinary must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<SkinnedGeometryHeaderBinary>, "SkinnedGeometryHeaderBinary must stay binary-serializable");
+using SkinnedGeometryHeaderBinary = GeometryBinaryPayload::GeometryHeaderBinary;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,4 +44,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

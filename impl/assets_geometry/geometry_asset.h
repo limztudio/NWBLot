@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include "geometry_payload_types.h"
 
 #include <core/assets/asset.h>
 #include <core/geometry/geometry_class.h>
@@ -39,17 +40,29 @@ public:
 
 public:
     explicit Geometry(Core::Assets::AssetArena& arena)
-        : m_positions(arena)
-        , m_normals(arena)
-        , m_colors(arena)
-        , m_indices(arena)
+        : m_positionStream(arena)
+        , m_normalStream(arena)
+        , m_tangentStream(arena)
+        , m_uv0Stream(arena)
+        , m_colorStream(arena)
+        , m_vertexRefs(arena)
+        , m_meshlets(arena)
+        , m_meshletBounds(arena)
+        , m_meshletVertexRefs(arena)
+        , m_meshletPrimitiveIndices(arena)
     {}
     Geometry(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<Geometry>(virtualPath)
-        , m_positions(arena)
-        , m_normals(arena)
-        , m_colors(arena)
-        , m_indices(arena)
+        , m_positionStream(arena)
+        , m_normalStream(arena)
+        , m_tangentStream(arena)
+        , m_uv0Stream(arena)
+        , m_colorStream(arena)
+        , m_vertexRefs(arena)
+        , m_meshlets(arena)
+        , m_meshletBounds(arena)
+        , m_meshletVertexRefs(arena)
+        , m_meshletPrimitiveIndices(arena)
     {}
 
 
@@ -58,30 +71,54 @@ public:
     [[nodiscard]] bool validatePayload()const;
 
 public:
-    void setStreams(
+    void setPayload(
         Core::Assets::AssetVector<Float3U>&& positions,
         Core::Assets::AssetVector<Half4U>&& normals,
-        Core::Assets::AssetVector<Half4U>&& colors
+        Core::Assets::AssetVector<Half4U>&& tangents,
+        Core::Assets::AssetVector<Float2U>&& uv0,
+        Core::Assets::AssetVector<Half4U>&& colors,
+        Core::Assets::AssetVector<GeometryVertexRef>&& vertexRefs,
+        Core::Assets::AssetVector<GeometryMeshletDesc>&& meshlets,
+        Core::Assets::AssetVector<GeometryMeshletBounds>&& meshletBounds,
+        Core::Assets::AssetVector<u32>&& meshletVertexRefs,
+        Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices
     ){
-        m_positions = Move(positions);
-        m_normals = Move(normals);
-        m_colors = Move(colors);
+        m_positionStream = Move(positions);
+        m_normalStream = Move(normals);
+        m_tangentStream = Move(tangents);
+        m_uv0Stream = Move(uv0);
+        m_colorStream = Move(colors);
+        m_vertexRefs = Move(vertexRefs);
+        m_meshlets = Move(meshlets);
+        m_meshletBounds = Move(meshletBounds);
+        m_meshletVertexRefs = Move(meshletVertexRefs);
+        m_meshletPrimitiveIndices = Move(meshletPrimitiveIndices);
     }
-    void setIndices(Core::Assets::AssetVector<u32>&& indices){ m_indices = Move(indices); }
-
-    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positions()const{ return m_positions; }
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normals()const{ return m_normals; }
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colors()const{ return m_colors; }
-    [[nodiscard]] const Core::Assets::AssetVector<u32>& indices()const{ return m_indices; }
-    [[nodiscard]] usize vertexCount()const{ return m_positions.size(); }
+    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const{ return m_positionStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const{ return m_normalStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const{ return m_tangentStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const{ return m_uv0Stream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const{ return m_colorStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<GeometryVertexRef>& vertexRefs()const{ return m_vertexRefs; }
+    [[nodiscard]] const Core::Assets::AssetVector<GeometryMeshletDesc>& meshlets()const{ return m_meshlets; }
+    [[nodiscard]] const Core::Assets::AssetVector<GeometryMeshletBounds>& meshletBounds()const{ return m_meshletBounds; }
+    [[nodiscard]] const Core::Assets::AssetVector<u32>& meshletVertexRefs()const{ return m_meshletVertexRefs; }
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const{ return m_meshletPrimitiveIndices; }
+    [[nodiscard]] usize vertexCount()const{ return m_vertexRefs.size(); }
     [[nodiscard]] u32 geometryClass()const{ return Core::Geometry::GeometryClass::Static; }
 
 
 private:
-    Core::Assets::AssetVector<Float3U> m_positions;
-    Core::Assets::AssetVector<Half4U> m_normals;
-    Core::Assets::AssetVector<Half4U> m_colors;
-    Core::Assets::AssetVector<u32> m_indices;
+    Core::Assets::AssetVector<Float3U> m_positionStream;
+    Core::Assets::AssetVector<Half4U> m_normalStream;
+    Core::Assets::AssetVector<Half4U> m_tangentStream;
+    Core::Assets::AssetVector<Float2U> m_uv0Stream;
+    Core::Assets::AssetVector<Half4U> m_colorStream;
+    Core::Assets::AssetVector<GeometryVertexRef> m_vertexRefs;
+    Core::Assets::AssetVector<GeometryMeshletDesc> m_meshlets;
+    Core::Assets::AssetVector<GeometryMeshletBounds> m_meshletBounds;
+    Core::Assets::AssetVector<u32> m_meshletVertexRefs;
+    Core::Assets::AssetVector<u8> m_meshletPrimitiveIndices;
 };
 
 
@@ -107,4 +144,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

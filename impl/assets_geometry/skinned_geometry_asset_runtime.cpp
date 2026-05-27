@@ -5,12 +5,12 @@
 #include "skinned_geometry_asset.h"
 
 #include "geometry_asset_binary_payload.h"
+#include "geometry_payload_validation.h"
 #include "skinned_geometry_binary_payload.h"
-#include "skinned_geometry_payload_logging.h"
+#include "skinned_geometry_validation.h"
 
 #include <core/assets/asset_auto_registration.h>
 #include <core/alloc/scratch.h>
-#include <global/binary.h>
 #include <core/common/log.h>
 
 
@@ -34,6 +34,8 @@ UniquePtr<Core::Assets::IAssetCodec> CreateSkinnedGeometryAssetCodec(){
 }
 Core::Assets::AssetCodecAutoRegistrar s_SkinnedGeometryAssetCodecAutoRegistrar(&CreateSkinnedGeometryAssetCodec);
 
+#include "geometry_asset_runtime_validation.inl"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,31 +58,78 @@ bool SkinnedGeometry::validatePayload()const{
         return false;
     }
 
-    const bool hasSkin = !m_skin.empty();
-    if(!Core::Geometry::GeometryClassMatchesSkinPayload(m_geometryClass, hasSkin)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' class '{}' does not match skin payload")
+    if(
+        m_positionStream.empty()
+        || m_normalStream.empty()
+        || m_tangentStream.empty()
+        || m_uv0Stream.empty()
+        || m_colorStream.empty()
+        || m_skin.empty()
+        || m_vertexRefs.empty()
+        || m_meshlets.empty()
+        || m_meshletBounds.empty()
+        || m_meshletVertexRefs.empty()
+        || m_meshletPrimitiveIndices.empty()
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has incomplete payload")
             , geometryPathText
-            , StringConvert(Core::Geometry::GeometryClassText(m_geometryClass))
         );
         return false;
     }
-    const SkinnedGeometryValidation::RuntimePayloadFailureInfo runtimePayloadFailure =
-        SkinnedGeometryValidation::FindRuntimePayloadFailure(
-            SkinnedGeometryValidation::RuntimePayloadArrays{
-                m_restVertices,
-                m_indices,
-                m_skeletonJointCount,
-                m_skin,
-                m_inverseBindMatrices
-            }
-        )
-    ;
-    if(runtimePayloadFailure.reason != SkinnedGeometryValidation::RuntimePayloadFailure::None){
-        SkinnedGeometryValidation::LogRuntimePayloadFailure(
-            NWB_TEXT("SkinnedGeometry::validatePayload failed"),
-            NWB_TEXT("geometry"),
-            geometryPathText,
-            runtimePayloadFailure
+
+    if(m_skeletonJointCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' has skin but no skeleton joint count")
+            , geometryPathText
+        );
+        return false;
+    }
+    if(m_skeletonJointCount > SkinnedGeometryBinaryPayload::s_SkinnedGeometrySkeletonJointLimit){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' skeleton joint count exceeds skin stream limits")
+            , geometryPathText
+        );
+        return false;
+    }
+    if(m_inverseBindMatrices.size() != m_skeletonJointCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' inverse bind matrix count must match skeleton joint count")
+            , geometryPathText
+        );
+        return false;
+    }
+    if(!SkinnedGeometryValidation::ValidInverseBindMatrices(m_inverseBindMatrices, m_skeletonJointCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' inverse bind matrices are invalid")
+            , geometryPathText
+        );
+        return false;
+    }
+
+    if(!__hidden_skinned_geometry_asset::ValidateSharedGeometryPayload(
+        m_positionStream,
+        m_normalStream,
+        m_tangentStream,
+        m_uv0Stream,
+        m_colorStream,
+        m_vertexRefs,
+        m_meshlets,
+        m_meshletBounds,
+        m_meshletVertexRefs,
+        m_meshletPrimitiveIndices,
+        m_skin.size(),
+        true,
+        NWB_TEXT("SkinnedGeometry::validatePayload"),
+        geometryPathText
+    ))
+        return false;
+
+    for(usize i = 0u; i < m_skin.size(); ++i){
+        if(SkinnedGeometryValidation::ValidSkinInfluence(m_skin[i])){
+            u32 failedJoint = 0u;
+            if(SkinnedGeometryValidation::SkinInfluenceFitsSkeleton(m_skin[i], m_skeletonJointCount, failedJoint))
+                continue;
+        }
+
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::validatePayload failed: geometry '{}' skin influence {} is invalid")
+            , geometryPathText
+            , i
         );
         return false;
     }
@@ -94,12 +143,20 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    m_restVertices.clear();
-    m_indices.clear();
-    m_geometryClass = Core::Geometry::GeometryClass::Invalid;
+    m_positionStream.clear();
+    m_normalStream.clear();
+    m_tangentStream.clear();
+    m_uv0Stream.clear();
+    m_colorStream.clear();
     m_skin.clear();
-    m_skeletonJointCount = 0u;
     m_inverseBindMatrices.clear();
+    m_vertexRefs.clear();
+    m_meshlets.clear();
+    m_meshletBounds.clear();
+    m_meshletVertexRefs.clear();
+    m_meshletPrimitiveIndices.clear();
+    m_geometryClass = Core::Geometry::GeometryClass::Invalid;
+    m_skeletonJointCount = 0u;
 
     const tchar* const loadFailureContext = NWB_TEXT("SkinnedGeometry::loadBinary");
     usize cursor = 0;
@@ -113,71 +170,64 @@ bool SkinnedGeometry::loadBinary(const Core::Assets::AssetBytes& binary){
     ))
         return false;
 
-    const u32 geometryClass = header.geometryClass;
-    const u64 vertexCount = header.restVertexCount;
-    const u64 indexCount = header.indexCount;
-    const u64 skinCount = header.skinCount;
-    const u64 skeletonJointCount = header.skeletonJointCount;
-    const u64 inverseBindMatrixCount = header.inverseBindMatrixCount;
-    if(!Core::Geometry::GeometryClassUsesSkinning(geometryClass)){
+    if(!Core::Geometry::GeometryClassUsesSkinning(header.geometryClass)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: invalid geometry class"));
         return false;
     }
     if(
-        vertexCount > static_cast<u64>(Limit<u32>::s_Max)
-        || indexCount > static_cast<u64>(Limit<u32>::s_Max)
-        || skinCount > static_cast<u64>(Limit<u32>::s_Max)
-        || skeletonJointCount > static_cast<u64>(Limit<u32>::s_Max)
-        || inverseBindMatrixCount > static_cast<u64>(Limit<u32>::s_Max)
+        !GeometryAssetBinaryPayload::GeometryBaseHeaderComplete(header)
+        || header.skinCount == 0u
+        || header.skeletonJointCount == 0u
+        || header.inverseBindMatrixCount != header.skeletonJointCount
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: payload counts exceed u32 limits"));
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: geometry payload is incomplete"));
         return false;
     }
-    if(vertexCount == 0u || indexCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: rest/index payload is empty"));
-        return false;
-    }
-    if((indexCount % 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: index count is not a multiple of 3"));
-        return false;
-    }
-    if(skinCount != 0u && skinCount != vertexCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: skin count must be empty or match vertex count"));
-        return false;
-    }
-    if(skinCount != 0u && skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: skeleton joint count is required when skin is present"));
-        return false;
-    }
-    if(skeletonJointCount > SkinnedGeometryBinaryPayload::s_SkinnedGeometrySkeletonJointLimit){
+    if(header.skeletonJointCount > SkinnedGeometryBinaryPayload::s_SkinnedGeometrySkeletonJointLimit){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: skeleton joint count exceeds skin stream limits"));
         return false;
     }
-    if(inverseBindMatrixCount != 0u && inverseBindMatrixCount != skeletonJointCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: inverse bind matrix count must be empty or match skeleton joint count"));
-        return false;
-    }
-    if(!Core::Geometry::GeometryClassMatchesSkinPayload(geometryClass, skinCount != 0u)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedGeometry::loadBinary failed: geometry class does not match skin payload"));
-        return false;
-    }
 
-    auto readVector = [&](const u64 count, auto& outValues, const tchar* label){
-        return GeometryAssetBinaryPayload::ReadVector(binary, cursor, count, outValues, loadFailureContext, label);
-    };
-    if(!readVector(vertexCount, m_restVertices, NWB_TEXT("rest vertices")))
+    if(!GeometryAssetBinaryPayload::ReadGeometryAttributeStreams(
+        binary,
+        cursor,
+        header,
+        m_positionStream,
+        m_normalStream,
+        m_tangentStream,
+        m_uv0Stream,
+        m_colorStream,
+        loadFailureContext
+    ))
         return false;
-    if(!readVector(indexCount, m_indices, NWB_TEXT("indices")))
+    if(!GeometryAssetBinaryPayload::ReadVector(binary, cursor, header.skinCount, m_skin, loadFailureContext, NWB_TEXT("skin")))
         return false;
-    if(!readVector(skinCount, m_skin, NWB_TEXT("skin")))
+    if(!GeometryAssetBinaryPayload::ReadVector(
+        binary,
+        cursor,
+        header.inverseBindMatrixCount,
+        m_inverseBindMatrices,
+        loadFailureContext,
+        NWB_TEXT("inverse bind matrices")
+    ))
         return false;
-    m_geometryClass = geometryClass;
-    m_skeletonJointCount = static_cast<u32>(skeletonJointCount);
-    if(!readVector(inverseBindMatrixCount, m_inverseBindMatrices, NWB_TEXT("inverse bind matrices")))
+    if(!GeometryAssetBinaryPayload::ReadGeometryMeshletStreams(
+        binary,
+        cursor,
+        header,
+        m_vertexRefs,
+        m_meshlets,
+        m_meshletBounds,
+        m_meshletVertexRefs,
+        m_meshletPrimitiveIndices,
+        loadFailureContext
+    ))
         return false;
-
     if(!GeometryAssetBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;
+
+    m_geometryClass = header.geometryClass;
+    m_skeletonJointCount = static_cast<u32>(header.skeletonJointCount);
 
     return validatePayload();
 }
@@ -189,4 +239,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

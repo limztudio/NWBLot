@@ -121,11 +121,7 @@ struct SystemMemoryAllocator{
     SystemMemoryFreeFunction deallocate = nullptr;
 
     [[nodiscard]] bool valid()const noexcept{
-        return
-            allocate != nullptr
-            && reallocate != nullptr
-            && deallocate != nullptr
-        ;
+        return allocate != nullptr && reallocate != nullptr && deallocate != nullptr;
     }
 };
 
@@ -183,12 +179,7 @@ struct Color{
     {}
 };
 inline bool operator==(const Color& lhs, const Color& rhs)noexcept{
-    return
-    (lhs.r == rhs.r)
-    && (lhs.g == rhs.g)
-    && (lhs.b == rhs.b)
-    && (lhs.a == rhs.a)
-    ;
+    return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
 }
 inline bool operator!=(const Color& lhs, const Color& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -269,10 +260,7 @@ struct Rect{
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
 };
 inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
-    return
-    (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
-    && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
-    ;
+    return (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX) && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY);
 }
 inline bool operator!=(const Rect& lhs, const Rect& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -2192,11 +2180,7 @@ struct BindingLayoutItem{
 #undef NWB_BINDING_LAYOUT_ITEM_INITIALIZER
 };
 inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){
-    return
-        lhs.slot == rhs.slot
-        && lhs.type == rhs.type
-        && lhs.size == rhs.size
-    ;
+    return lhs.slot == rhs.slot && lhs.type == rhs.type && lhs.size == rhs.size;
 }
 inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){ return !(lhs == rhs); }
 static_assert(sizeof(BindingLayoutItem) == 8, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
@@ -2709,11 +2693,7 @@ struct VertexBufferBinding{
     constexpr VertexBufferBinding& setOffset(u64 value){ offset = value; return *this; }
 };
 inline bool operator==(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{
-    return
-        lhs.buffer == rhs.buffer
-        && lhs.offset == rhs.offset
-        && lhs.slot == rhs.slot
-    ;
+    return lhs.buffer == rhs.buffer && lhs.offset == rhs.offset && lhs.slot == rhs.slot;
 }
 inline bool operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -2727,11 +2707,7 @@ struct IndexBufferBinding{
     constexpr IndexBufferBinding& setOffset(u32 value){ offset = value; return *this; }
 };
 inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{
-    return
-        lhs.buffer == rhs.buffer
-        && lhs.offset == rhs.offset
-        && lhs.format == rhs.format
-    ;
+    return lhs.buffer == rhs.buffer && lhs.offset == rhs.offset && lhs.format == rhs.format;
 }
 inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 

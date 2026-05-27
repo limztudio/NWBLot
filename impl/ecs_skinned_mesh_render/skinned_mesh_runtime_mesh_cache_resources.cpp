@@ -88,6 +88,13 @@ using MeshPayloadValidation::CountFitsU32;
         );
         return false;
     }
+    if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
+            , TStringView(sourceText)
+            , instance.skeletonJointCount
+        );
+        return false;
+    }
     if(!SkinnedMeshValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' inverse bind matrices are invalid")
             , TStringView(sourceText)

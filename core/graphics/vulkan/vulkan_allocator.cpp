@@ -124,10 +124,7 @@ inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memo
         return true;
 
     const VkMemoryPropertyFlags propertyFlags = memoryProperties.memoryTypes[memoryTypeIndex].propertyFlags;
-    return
-        (propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0
-        && (propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0
-    ;
+    return (propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 && (propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0;
 }
 
 inline VmaAllocator ToVmaAllocator(const VulkanAllocatorHandle allocator){

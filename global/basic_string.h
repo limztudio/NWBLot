@@ -236,11 +236,7 @@ inline void WriteUtf8AsWString(Out& out, const AStringView src){
             const u8 third = static_cast<u8>(src[i + 1u]);
             if((second & 0xC0u) == 0x80u && (third & 0xC0u) == 0x80u){
                 i += 2u;
-                codePoint =
-                    (static_cast<u32>(first & 0x0Fu) << 12)
-                    | (static_cast<u32>(second & 0x3Fu) << 6)
-                    | static_cast<u32>(third & 0x3Fu)
-                ;
+                codePoint = (static_cast<u32>(first & 0x0Fu) << 12) | (static_cast<u32>(second & 0x3Fu) << 6) | static_cast<u32>(third & 0x3Fu);
             }
         }
         else if((first & 0xF8u) == 0xF0u && (i + 2u) < src.size()){

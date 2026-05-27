@@ -273,10 +273,7 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
     case DeviceExtensionFeature::RayTracingInvocationReorderExt:
         return SupportsRequestedValue(requested.rayTracingInvocationReorderExt.rayTracingInvocationReorder, supported.rayTracingInvocationReorderExt.rayTracingInvocationReorder);
     case DeviceExtensionFeature::RayTracingLinearSweptSpheres:
-        return
-            supported.rayTracingLinearSweptSpheres.spheres == VK_TRUE
-            || supported.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
-        ;
+        return supported.rayTracingLinearSweptSpheres.spheres == VK_TRUE || supported.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE;
     case DeviceExtensionFeature::MeshShader:
         return
             SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader)
@@ -584,9 +581,7 @@ bool BackendContext::createVulkanInstance(){
 
     for(const auto& ext : availableExtensions){
         GraphicsString name(ext.extensionName, m_arena);
-        const bool enableOptionalExtension =
-            m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end()
-        ;
+        const bool enableOptionalExtension = m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end();
         requiredExtensions.erase(name);
         if(enableOptionalExtension)
             m_enabledExtensions.instance.insert(Move(name));

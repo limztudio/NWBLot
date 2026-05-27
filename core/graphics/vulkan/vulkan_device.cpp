@@ -785,15 +785,9 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::ShaderExecutionReordering:
         return m_context.extensions.EXT_ray_tracing_invocation_reorder || m_context.extensions.NV_ray_tracing_invocation_reorder;
     case Feature::Spheres:
-        return
-            m_context.extensions.NV_ray_tracing_linear_swept_spheres
-            && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE
-        ;
+        return m_context.extensions.NV_ray_tracing_linear_swept_spheres && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE;
     case Feature::LinearSweptSpheres:
-        return
-            m_context.extensions.NV_ray_tracing_linear_swept_spheres
-            && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE
-        ;
+        return m_context.extensions.NV_ray_tracing_linear_swept_spheres && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE;
     case Feature::RayTracingOpacityMicromap:
         return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
     case Feature::RayTracingClusters:

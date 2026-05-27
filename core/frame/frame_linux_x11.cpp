@@ -181,11 +181,7 @@ static i32 DecodeUtf8CodePoint(const char* bytes, i32 length, u32& unicode){
         if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2))
             return 0;
 
-        unicode =
-            (static_cast<u32>(c0 & 0x0fu) << 12)
-            | (static_cast<u32>(c1 & 0x3fu) << 6)
-            | static_cast<u32>(c2 & 0x3fu)
-        ;
+        unicode = (static_cast<u32>(c0 & 0x0fu) << 12) | (static_cast<u32>(c1 & 0x3fu) << 6) | static_cast<u32>(c2 & 0x3fu);
         return unicode >= 0x800u ? 3 : 0;
     }
 
@@ -453,10 +449,7 @@ bool InitX11Frame(Frame& frame){
     }
 
     Bool detectableAutoRepeat = False;
-    s_DetectableAutoRepeat =
-        XkbSetDetectableAutoRepeat(GetX11Display(frameData), True, &detectableAutoRepeat) != False
-        && detectableAutoRepeat != False
-        ;
+    s_DetectableAutoRepeat = XkbSetDetectableAutoRepeat(GetX11Display(frameData), True, &detectableAutoRepeat) != False && detectableAutoRepeat != False;
 
     XSelectInput(GetX11Display(frameData), GetX11Window(frameData), EventMask);
     XStoreName(GetX11Display(frameData), GetX11Window(frameData), AppName);

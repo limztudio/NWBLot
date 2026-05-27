@@ -69,6 +69,18 @@ Updated: 2026-05-22
   - `if(condition)`
   - `    execute();`
 - Prefer single-line function calls, e.g. `foobar(a, b, c, d);`.
+- Prefer single-line local initializations/assignments when the right-hand side is a short single expression:
+  - Correct: `const Foo* foo = world.tryGetComponent<Foo>(entity);`
+  - Wrong:
+  - `const Foo* foo =`
+  - `    world.tryGetComponent<Foo>(entity)`
+  - `;`
+- Prefer single-line `return` statements when the returned expression is short and readable:
+  - Correct: `return value.valid() && value.visible;`
+  - Wrong:
+  - `return`
+  - `    value.valid() && value.visible`
+  - `;`
 - Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`.
 - Prefer single-line logger macro calls when they contain a single message and a small number of short formatting arguments.
 - For longer logger macro calls with formatting arguments, keep the message argument on the opener line and put subsequent formatting arguments on continuation lines with leading commas:
@@ -312,6 +324,10 @@ Updated: 2026-05-22
 - Prefer `ScratchArena` for containers/temporary objects that only live within a local scope.
 - For function-local temporary containers (`Vector`, `HashSet`, `HashMap`, etc.), default to `ScratchArena` + `ScratchAllocator`; use `GlobalArena` or another owning domain arena only when data must outlive the current scope.
 - Data captured by async jobs/callbacks (e.g., lambda captures submitted to `ThreadPool`/`JobSystem`) is considered outliving the current scope; do not back such captures with `ScratchArena`.
+- Do not repeat structural validation in hot paths that run every frame or for many draw/dispatch items.
+  - Move asset/payload/layout validation to cook, load, resource creation, or cache insertion time whenever possible.
+  - In realtime paths, keep opt/fin code on the already-validated fast path. Use `#if defined(NWB_DEBUG)` / `NWB_ASSERT` for invariant checks that are useful while debugging.
+  - Keep external API failure handling and resource creation failures in all configurations; those are not redundant validation.
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena instead of default allocators when arena ownership exists.
 - SIMD math helpers should accept and return SIMD-domain values such as `SIMDVector` or `SIMDMatrix`.
   - Math-composition helper inputs and outputs must stay in the SIMD domain (`SIMDVector`, `SIMDMatrix`, or arrays/references of those types).

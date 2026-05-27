@@ -464,11 +464,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     }
 
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
-        const u64 stride =
-            bindingInfo.hasExplicitStride
-            ? static_cast<u64>(bindingInfo.explicitStride)
-            : bindingInfo.requiredStride
-        ;
+        const u64 stride = bindingInfo.hasExplicitStride ? static_cast<u64>(bindingInfo.explicitStride) : bindingInfo.requiredStride;
         if(stride == 0 || stride > limits.maxVertexInputBindingStride){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}")
                 , bufferIndex
@@ -497,11 +493,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         VkVertexInputBindingDescription binding = {};
         binding.binding = bufferIndex;
-        binding.stride =
-            bindingInfo.hasExplicitStride
-            ? bindingInfo.explicitStride
-            : static_cast<u32>(bindingInfo.requiredStride)
-        ;
+        binding.stride = bindingInfo.hasExplicitStride ? bindingInfo.explicitStride : static_cast<u32>(bindingInfo.requiredStride);
         binding.inputRate = bindingInfo.isInstanced ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
         layout->m_bindings.push_back(binding);
     }

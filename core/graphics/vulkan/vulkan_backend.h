@@ -818,11 +818,7 @@ struct TextureViewKey{
 };
 
 inline bool operator==(const TextureViewKey& lhs, const TextureViewKey& rhs)noexcept{
-    return
-        lhs.subresources == rhs.subresources
-        && lhs.dimension == rhs.dimension
-        && lhs.format == rhs.format
-        ;
+    return lhs.subresources == rhs.subresources && lhs.dimension == rhs.dimension && lhs.format == rhs.format;
 }
 
 struct TextureViewKeyHasher{
@@ -1015,10 +1011,7 @@ struct ShaderLibraryKey{
 };
 
 inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)noexcept{
-    return
-        lhs.entryName == rhs.entryName
-        && lhs.shaderType == rhs.shaderType
-    ;
+    return lhs.entryName == rhs.entryName && lhs.shaderType == rhs.shaderType;
 }
 
 struct ShaderLibraryKeyHasher{
@@ -1675,11 +1668,7 @@ struct TextureSubresourceStateKeyHasher{
 
 struct TextureSubresourceStateKeyEqualTo{
     [[nodiscard]] bool operator()(const TextureSubresourceStateKey& lhs, const TextureSubresourceStateKey& rhs)const noexcept{
-        return
-            lhs.texture == rhs.texture
-            && lhs.mipLevel == rhs.mipLevel
-            && lhs.arraySlice == rhs.arraySlice
-        ;
+        return lhs.texture == rhs.texture && lhs.mipLevel == rhs.mipLevel && lhs.arraySlice == rhs.arraySlice;
     }
 };
 

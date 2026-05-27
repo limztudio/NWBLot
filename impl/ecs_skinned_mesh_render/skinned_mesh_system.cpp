@@ -38,10 +38,7 @@ static bool HasPotentialSkinnedMeshWork(
     if((instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinnedMeshInputDirty) != 0u)
         return true;
 
-    return
-        !instance.skin.empty()
-        && ((jointPalette && !jointPalette->joints.empty()) || SkinnedMeshRuntime::HasSkeletonPose(skeletonPose))
-    ;
+    return !instance.skin.empty() && ((jointPalette && !jointPalette->joints.empty()) || SkinnedMeshRuntime::HasSkeletonPose(skeletonPose));
 }
 
 static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::EntityID entity){
@@ -89,6 +86,7 @@ SkinnedMeshSystem::~SkinnedMeshSystem()
 void SkinnedMeshSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(delta);
     m_runtimeMeshCache->update(world);
+    pruneRuntimeResources();
 }
 
 bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
@@ -101,10 +99,14 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
         return false;
 
     const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(renderer->runtimeMesh);
-    if(!instance || !instance->valid() || instance->entity != entity)
+    if(!instance || instance->entity != entity)
+        return false;
+#if defined(NWB_DEBUG)
+    if(!instance->valid())
         return false;
     if(instance->meshlets.size() > static_cast<usize>(Limit<u32>::s_Max))
         return false;
+#endif
 
     outMesh.entity = entity;
     outMesh.meshKey = DeriveRuntimeResourceName(
@@ -126,7 +128,11 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
     outMesh.version = instance->editRevision;
+#if defined(NWB_DEBUG)
     return outMesh.valid();
+#else
+    return true;
+#endif
 }
 
 bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 version){
@@ -152,19 +158,6 @@ bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 versi
 
 void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
     static_cast<void>(framebuffer);
-
-    if(!m_runtimeResources.empty()){
-        for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
-            const RuntimeResources& resources = it.value();
-            const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(resources.handle);
-            if(!instance || !instance->valid() || instance->editRevision != resources.editRevision){
-                it = m_runtimeResources.erase(it);
-                continue;
-            }
-
-            ++it;
-        }
-    }
 
     Core::IDevice* device = m_graphics.getDevice();
     Core::CommandListHandle commandList;
@@ -196,13 +189,15 @@ void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
                 return;
 
             SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(renderer.runtimeMesh);
-            if(!instance || !instance->valid())
+            if(!instance)
                 return;
+#if defined(NWB_DEBUG)
+            if(!instance->valid())
+                return;
+#endif
 
             const SkinnedMeshJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkinnedMeshJointPaletteComponent>(entity);
-            const SkinnedMeshSkeletonPoseComponent* skeletonPose =
-                m_world.tryGetComponent<SkinnedMeshSkeletonPoseComponent>(entity)
-            ;
+            const SkinnedMeshSkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkinnedMeshSkeletonPoseComponent>(entity);
             if(!__hidden_skinned_mesh_system::HasPotentialSkinnedMeshWork(
                 *instance,
                 jointPalette,
@@ -224,6 +219,22 @@ void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
     if(submittedWork){
         Core::ICommandList* commandLists[] = { commandList.get() };
         device->executeCommandLists(commandLists, 1);
+    }
+}
+
+void SkinnedMeshSystem::pruneRuntimeResources(){
+    if(m_runtimeResources.empty())
+        return;
+
+    for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
+        const RuntimeResources& resources = it.value();
+        const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(resources.handle);
+        if(instance && instance->valid() && instance->editRevision == resources.editRevision){
+            ++it;
+            continue;
+        }
+
+        it = m_runtimeResources.erase(it);
     }
 }
 

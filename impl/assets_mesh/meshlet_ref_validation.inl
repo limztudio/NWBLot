@@ -8,14 +8,7 @@
     const usize skinCount,
     const bool skinRequired
 ){
-    return
-        ref.position < positionCount
-        && (
-            skinRequired
-                ? ref.skin < skinCount
-                : ref.skin == s_MeshMissingStreamIndex
-        )
-    ;
+    return ref.position < positionCount && ( skinRequired ? ref.skin < skinCount : ref.skin == s_MeshMissingStreamIndex );
 }
 
 [[nodiscard]] static bool MeshletAttributeRefInRange(
@@ -25,12 +18,7 @@
     const usize uv0Count,
     const usize colorCount
 ){
-    return
-        ref.normal < normalCount
-        && ref.tangent < tangentCount
-        && ref.uv0 < uv0Count
-        && ref.color < colorCount
-    ;
+    return ref.normal < normalCount && ref.tangent < tangentCount && ref.uv0 < uv0Count && ref.color < colorCount;
 }
 
 template<

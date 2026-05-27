@@ -341,11 +341,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     const Vec3& b = vertices[1u].position;
     const Vec3& c = vertices[2u].position;
     const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(a, b, c);
-    const f64 areaLengthSquared =
-        areaNormal.x * areaNormal.x
-        + areaNormal.y * areaNormal.y
-        + areaNormal.z * areaNormal.z
-    ;
+    const f64 areaLengthSquared = areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
     return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
 }
 

@@ -407,25 +407,8 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
     joints.joints[0u] = MakeIdentityJointMatrix();
 
 #if defined(NWB_FINAL)
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    NWB::Impl::SkinnedMeshRuntimeMeshInstance missingSkeleton = instance;
-    missingSkeleton.skeletonJointCount = 0u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(missingSkeleton, &joints, skinInfluences, jointMatrices)
-    );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinInfluences.empty());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.empty());
-
-    NWB::Impl::SkinnedMeshRuntimeMeshInstance outsideSkeleton = instance;
-    outsideSkeleton.skin[0u] = MakeSingleJointSkin(1u);
-    outsideSkeleton.skeletonJointCount = 1u;
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(outsideSkeleton, &joints, skinInfluences, jointMatrices)
-    );
+    CapturingLogger runtimeValidationLogger;
+    NWB::Core::Common::LoggerRegistrationGuard runtimeValidationLoggerRegistrationGuard(runtimeValidationLogger);
 
     NWB::Impl::SkinnedMeshRuntimeMeshInstance outsidePalette = instance;
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
@@ -445,14 +428,6 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
         !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)
     );
 
-    NWB::Impl::SkinnedMeshRuntimeMeshInstance invalidInverseBind = instance;
-    invalidInverseBind.inverseBindMatrices[0u].rows[3].w = 0.0f;
-    joints.joints[0u] = MakeIdentityJointMatrix();
-    NWB_ECS_GRAPHICS_TEST_CHECK(
-        context,
-        !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(invalidInverseBind, &joints, skinInfluences, jointMatrices)
-    );
-
     NWB::Impl::SkinnedMeshRuntimeMeshInstance scaledDualQuaternionJoint = instance;
     scaledDualQuaternionJoint.inverseBindMatrices.clear();
     joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
@@ -467,18 +442,15 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
         )
     );
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 6u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("has skin but no skeleton joint count")));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("outside skeleton joint count")));
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("outside palette size")));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, runtimeValidationLogger.errorCount() == 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count")));
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        logger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix"))
+        runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix"))
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices are invalid")));
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        logger.sawErrorContaining(NWB_TEXT("not rigid for dual-quaternion skinning"))
+        runtimeValidationLogger.sawErrorContaining(NWB_TEXT("failed dual-quaternion payload build"))
     );
 #endif
 }

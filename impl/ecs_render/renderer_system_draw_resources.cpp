@@ -119,18 +119,22 @@ bool RendererSystem::createEmulationViewResources(){
 bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
+#if defined(NWB_DEBUG)
     if(instanceCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer request exceeds u32 instance-index limits"));
         return false;
     }
+#endif
     if(m_instanceBuffer && m_instanceBufferCapacity >= instanceCount)
         return true;
 
     const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
+#if defined(NWB_DEBUG)
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
         return false;
     }
+#endif
 
     Core::BufferDesc instanceBufferDesc;
     instanceBufferDesc
@@ -153,6 +157,7 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
 
 bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
+#if defined(NWB_DEBUG)
     if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request overflows alignment"));
         return false;
@@ -161,6 +166,9 @@ bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request exceeds u32 byte-offset limits"));
         return false;
     }
+#else
+    requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
+#endif
     if(m_materialTypedBuffer && m_materialTypedBufferCapacity >= requiredByteCount)
         return true;
 
@@ -203,9 +211,7 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
         destroyMeshBindingSets();
     }
 
-    const ECSRenderDetail::MeshViewGpuData viewState =
-        ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio)
-    ;
+    const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);
 
     commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
@@ -220,13 +226,17 @@ bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const
         return true;
     if(!reserveInstanceBufferCapacity(instanceData.size()))
         return false;
+#if defined(NWB_DEBUG)
     if(!m_instanceBuffer)
         return false;
+#endif
 
+#if defined(NWB_DEBUG)
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance data upload size overflows"));
         return false;
     }
+#endif
 
     commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
@@ -240,6 +250,7 @@ bool RendererSystem::uploadMaterialTypedBuffer(
     Core::ICommandList& commandList,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
+#if defined(NWB_DEBUG)
     if(materialTypedBytes.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is empty"));
         return false;
@@ -254,10 +265,15 @@ bool RendererSystem::uploadMaterialTypedBuffer(
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload size overflows alignment"));
         return false;
     }
+#else
+    usize uploadBytes = AlignUp(materialTypedBytes.size(), sizeof(u32));
+#endif
     if(!reserveMaterialTypedBufferCapacity(uploadBytes))
         return false;
+#if defined(NWB_DEBUG)
     if(!m_materialTypedBuffer)
         return false;
+#endif
 
     commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();

@@ -11,12 +11,7 @@
     const SIMDVector direction = VectorSetW(tangent, 0.0f);
     const f32 lengthSquared = VectorGetX(Vector3LengthSq(direction));
     const f32 handedness = Abs(VectorGetW(tangent));
-    return
-        FiniteVector(tangent, 0xFu)
-        && IsFinite(lengthSquared)
-        && Abs(lengthSquared - 1.0f) <= 0.01f
-        && Abs(handedness - 1.0f) <= 0.001f
-    ;
+    return FiniteVector(tangent, 0xFu) && IsFinite(lengthSquared) && Abs(lengthSquared - 1.0f) <= 0.01f && Abs(handedness - 1.0f) <= 0.001f;
 }
 
 [[nodiscard]] static bool ValidateMeshStreams(

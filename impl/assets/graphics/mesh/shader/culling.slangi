@@ -113,7 +113,16 @@ float2 nwbMeshClipToFramebuffer(const float4 p){
     );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool nwbMeshScissorCullEnabled(){
     return nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL);
 }
@@ -160,12 +169,7 @@ bool nwbMeshAllOutsideScissor(const float4 a, const float4 b, const float4 c){
     const float2 triMax = max(p0, max(p1, p2));
     const float4 scissorRect = g_NwbMeshPushConstants.scissorRect;
 
-    return
-        triMax.x < scissorRect.x
-        || triMin.x > scissorRect.z
-        || triMax.y < scissorRect.y
-        || triMin.y > scissorRect.w
-    ;
+    return triMax.x < scissorRect.x || triMin.x > scissorRect.z || triMax.y < scissorRect.y || triMin.y > scissorRect.w;
 }
 
 bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
@@ -187,6 +191,11 @@ void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
     for(uint corner = 0u; corner < 3u; ++corner)
         g_NwbMeshGeneratedVertices[primitiveBase + corner] = vertex;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

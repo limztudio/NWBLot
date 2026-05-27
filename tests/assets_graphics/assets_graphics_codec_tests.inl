@@ -70,9 +70,7 @@ static bool CookAndLoadMinimalAssetByKind(
 static void CheckMinimalSkinnedMeshDefaults(
     TestContext& context,
     const NWB::Core::Assets::IAsset& loadedAsset){
-    const NWB::Impl::SkinnedMesh& loadedMesh =
-        static_cast<const NWB::Impl::SkinnedMesh&>(loadedAsset)
-    ;
+    const NWB::Impl::SkinnedMesh& loadedMesh = static_cast<const NWB::Impl::SkinnedMesh&>(loadedAsset);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Skinned);

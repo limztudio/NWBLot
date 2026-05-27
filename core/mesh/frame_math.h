@@ -26,10 +26,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 }
 
 [[nodiscard]] inline bool FrameValidDirection(const SIMDVector value){
-    return
-        FrameFiniteVector(value, 0x7u)
-        && VectorGetX(Vector3LengthSq(value)) > s_FrameDirectionEpsilon
-    ;
+    return FrameFiniteVector(value, 0x7u) && VectorGetX(Vector3LengthSq(value)) > s_FrameDirectionEpsilon;
 }
 
 [[nodiscard]] inline SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){

@@ -576,11 +576,7 @@ bool FillBlasGeometryForSizeQuery(
                 return false;
             }
             const u64 indexElementSize = GetRayTracingIndexElementSize(lss.indexFormat);
-            const u32 indicesPerPrimitive =
-                lss.primitiveFormat == RayTracingGeometryLssPrimitiveFormat::List
-                ? 2u
-                : 1u
-            ;
+            const u32 indicesPerPrimitive = lss.primitiveFormat == RayTracingGeometryLssPrimitiveFormat::List ? 2u : 1u;
             if(lss.primitiveCount > UINT32_MAX / indicesPerPrimitive){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: LSS primitive count overflows index consumption"), operation);
                 return false;

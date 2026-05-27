@@ -64,11 +64,7 @@ bool LessRecordPointer(const ShaderArchive::Record* lhs, const ShaderArchive::Re
 
 
 bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
-    return
-        lhs.shaderName == rhs.shaderName
-        && lhs.variantName == rhs.variantName
-        && lhs.stage == rhs.stage
-    ;
+    return lhs.shaderName == rhs.shaderName && lhs.variantName == rhs.variantName && lhs.stage == rhs.stage;
 }
 
 

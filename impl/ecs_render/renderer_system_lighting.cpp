@@ -99,9 +99,7 @@ bool RendererSystem::updateSceneShadingBuffer(Core::ICommandList& commandList, c
     if(!m_sceneShadingBuffer)
         return false;
 
-    const ECSRenderDetail::SceneShadingGpuData sceneShadingState =
-        ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio)
-    ;
+    const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio);
 
     commandList.setBufferState(m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();

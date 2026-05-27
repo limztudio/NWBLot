@@ -16,10 +16,7 @@
 
 template<typename CharT>
 [[nodiscard]] inline bool IsAsciiSpace(const CharT ch){
-    return
-        ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n')
-        || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v')
-    ;
+    return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
 }
 
 

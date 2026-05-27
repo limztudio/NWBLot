@@ -97,12 +97,7 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
 }
 
 [[nodiscard]] inline bool CameraClipRangeValid(const CameraComponent& camera){
-    return
-        IsFinite(camera.nearPlane())
-        && IsFinite(camera.farPlane())
-        && camera.nearPlane() > 0.0f
-        && camera.nearPlane() < camera.farPlane()
-    ;
+    return IsFinite(camera.nearPlane()) && IsFinite(camera.farPlane()) && camera.nearPlane() > 0.0f && camera.nearPlane() < camera.farPlane();
 }
 
 [[nodiscard]] inline f32 ResolveCameraAspectRatio(const CameraComponent& camera, const f32 fallbackAspectRatio){

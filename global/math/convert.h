@@ -68,11 +68,7 @@ namespace HalfConvertDetail{
         exponent = -112;
     }
 
-    const u32 result =
-        ((static_cast<u32>(value) & 0x8000u) << 16u)
-        | (static_cast<u32>(exponent + 112) << 23u)
-        | (mantissa << 13u)
-    ;
+    const u32 result = ((static_cast<u32>(value) & 0x8000u) << 16u) | (static_cast<u32>(exponent + 112) << 23u) | (mantissa << 13u);
     return std::bit_cast<f32>(result);
 }
 

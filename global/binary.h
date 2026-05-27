@@ -333,10 +333,7 @@ template<typename Container, typename ValueContainer>
     if(text.size() > Limit<u32>::s_Max)
         return false;
 
-    return
-        AddBinaryReserveBytes(inOutBytes, sizeof(u32))
-        && AddBinaryReserveBytes(inOutBytes, text.size())
-    ;
+    return AddBinaryReserveBytes(inOutBytes, sizeof(u32)) && AddBinaryReserveBytes(inOutBytes, text.size());
 }
 
 template<typename Container>

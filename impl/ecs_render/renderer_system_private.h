@@ -150,10 +150,7 @@ inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
     };
-    constexpr Core::FormatSupport::Mask requiredSupport =
-        Core::FormatSupport::Texture
-        | Core::FormatSupport::RenderTarget
-    ;
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
@@ -162,10 +159,7 @@ inline Core::Format::Enum SelectGBufferVectorFormat(Core::IDevice& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
     };
-    constexpr Core::FormatSupport::Mask requiredSupport =
-        Core::FormatSupport::Texture
-        | Core::FormatSupport::RenderTarget
-    ;
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
 
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
@@ -315,9 +309,7 @@ inline void SetShaderDrivenPushConstants(
     const Core::ViewportState& viewportState,
     const u32 dispatchFlags
 ){
-    const ShaderDrivenPushConstants pushConstants =
-        BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState, dispatchFlags)
-    ;
+    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState, dispatchFlags);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
@@ -329,9 +321,7 @@ inline void SetTransparentDrawPushConstants(
     const RendererSystem::AvboitFrameTargets& targets,
     const u32 dispatchFlags
 ){
-    const TransparentDrawPushConstants pushConstants =
-        BuildTransparentDrawPushConstants(meshletCount, instanceIndex, viewportState, targets, dispatchFlags)
-    ;
+    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, viewportState, targets, dispatchFlags);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 

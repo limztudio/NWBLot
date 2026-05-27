@@ -1213,10 +1213,7 @@ static bool PrepareShaderEntriesForCook(
             scratchArena
         ))
             return false;
-        preparedEntry.usesMaterialTypedBinding =
-            preparedEntry.entry.archiveStage.view() == "mesh"
-            && preparedEntry.materialTypedBindingInterface
-        ;
+        preparedEntry.usesMaterialTypedBinding = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.materialTypedBindingInterface;
         preparedEntry.materialTypedBindingInterfacePath = Move(materialTypedBindingInterfaceText);
         if(preparedEntry.usesMaterialTypedBinding && !SetShaderImplicitDefine(
             preparedEntry.entry,

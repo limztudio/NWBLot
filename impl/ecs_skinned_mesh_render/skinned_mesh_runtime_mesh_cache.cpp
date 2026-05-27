@@ -140,9 +140,7 @@ bool SkinnedMeshRuntimeMeshCache::bumpEditRevision(const RuntimeMeshHandle handl
     SkinnedMeshRuntimeMeshInstance* instance = findInstance(handle);
     if(!instance)
         return false;
-    const RuntimeMeshDirtyFlags expandedDirtyFlags =
-        __hidden_skinned_mesh_runtime_mesh_cache::ExpandDirtyFlags(dirtyFlags)
-    ;
+    const RuntimeMeshDirtyFlags expandedDirtyFlags = __hidden_skinned_mesh_runtime_mesh_cache::ExpandDirtyFlags(dirtyFlags);
     if(expandedDirtyFlags == RuntimeMeshDirtyFlag::None){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' revision bump requires dirty flags")
             , instance->handle.value

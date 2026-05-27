@@ -67,10 +67,7 @@ namespace SkinnedMeshSkinningMode{
 };
 
 [[nodiscard]] inline bool ValidSkinnedMeshSkinningMode(const u32 mode){
-    return
-        mode == SkinnedMeshSkinningMode::LinearBlend
-        || mode == SkinnedMeshSkinningMode::DualQuaternion
-    ;
+    return mode == SkinnedMeshSkinningMode::LinearBlend || mode == SkinnedMeshSkinningMode::DualQuaternion;
 }
 
 

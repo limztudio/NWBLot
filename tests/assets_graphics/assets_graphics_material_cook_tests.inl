@@ -18,10 +18,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         outputDirectory
     ));
 
-    const Path generatedIncludePath =
-        root / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
-    ;
+    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
     CheckGeneratedMaterialBindSource(context, AStringView(generatedSource.data(), generatedSource.size()));
@@ -347,10 +344,7 @@ static void TestMaterialBindDependencyInvalidation(TestContext& context){
 
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
-    const Path generatedIncludePath =
-        root / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
-    ;
+    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
 
@@ -442,10 +436,7 @@ static void TestMaterialBindDiscoveryValidation(TestContext& context){
         outputDirectory
     ));
 
-    const Path generatedIncludePath =
-        root / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
-    ;
+    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
     const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());

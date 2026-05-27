@@ -173,11 +173,7 @@ template<typename JointMatrixVector>
     outNormalMatrix.v[1] = VectorSetW(VectorMultiply(cross20, inverseDeterminant), 0.0f);
     outNormalMatrix.v[2] = VectorSetW(VectorMultiply(cross01, inverseDeterminant), 0.0f);
     outNormalMatrix.v[3] = VectorZero();
-    return
-        FiniteVector(outNormalMatrix.v[0], 0x7u)
-        && FiniteVector(outNormalMatrix.v[1], 0x7u)
-        && FiniteVector(outNormalMatrix.v[2], 0x7u)
-    ;
+    return FiniteVector(outNormalMatrix.v[0], 0x7u) && FiniteVector(outNormalMatrix.v[1], 0x7u) && FiniteVector(outNormalMatrix.v[2], 0x7u);
 }
 
 [[nodiscard]] inline bool TryTransformJointNormalDirection(const SIMDMatrix& matrix, const SIMDVector directionVector, SIMDVector& outDirection){

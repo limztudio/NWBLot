@@ -74,11 +74,7 @@ using TestAString = std::basic_string<char, std::char_traits<char>, TestDetail::
 }
 
 [[nodiscard]] inline bool NearlyEqual3(const SIMDVector value, const f32 x, const f32 y, const f32 z, const f32 epsilon = 0.00001f){
-    return
-        NearlyEqual(VectorGetX(value), x, epsilon)
-        && NearlyEqual(VectorGetY(value), y, epsilon)
-        && NearlyEqual(VectorGetZ(value), z, epsilon)
-    ;
+    return NearlyEqual(VectorGetX(value), x, epsilon) && NearlyEqual(VectorGetY(value), y, epsilon) && NearlyEqual(VectorGetZ(value), z, epsilon);
 }
 
 [[nodiscard]] inline bool NearlyEqual4(const SIMDVector value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = 0.00001f){
@@ -91,20 +87,11 @@ using TestAString = std::basic_string<char, std::char_traits<char>, TestDetail::
 }
 
 [[nodiscard]] inline bool NearlyEqual3(const Float4& value, const f32 x, const f32 y, const f32 z, const f32 epsilon = 0.00001f){
-    return
-        NearlyEqual(value.x, x, epsilon)
-        && NearlyEqual(value.y, y, epsilon)
-        && NearlyEqual(value.z, z, epsilon)
-    ;
+    return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon);
 }
 
 [[nodiscard]] inline bool NearlyEqual4(const Float4U& value, const f32 x, const f32 y, const f32 z, const f32 w, const f32 epsilon = 0.00001f){
-    return
-        NearlyEqual(value.x, x, epsilon)
-        && NearlyEqual(value.y, y, epsilon)
-        && NearlyEqual(value.z, z, epsilon)
-        && NearlyEqual(value.w, w, epsilon)
-    ;
+    return NearlyEqual(value.x, x, epsilon) && NearlyEqual(value.y, y, epsilon) && NearlyEqual(value.z, z, epsilon) && NearlyEqual(value.w, w, epsilon);
 }
 
 inline TestVector<u32> MakeTriangleIndices(){

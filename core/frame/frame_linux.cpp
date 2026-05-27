@@ -83,10 +83,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
     }
 
 #if defined(NWB_WITH_WAYLAND)
-    const bool preferWayland =
-        EnvEquals("XDG_SESSION_TYPE", "wayland")
-        || HasEnvValue("WAYLAND_DISPLAY")
-        ;
+    const bool preferWayland = EnvEquals("XDG_SESSION_TYPE", "wayland") || HasEnvValue("WAYLAND_DISPLAY");
     if(preferWayland){
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);

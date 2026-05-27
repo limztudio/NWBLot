@@ -55,10 +55,7 @@ static_assert(
 }
 
 [[nodiscard]] bool ValidInputVertex(const SIMDVector position, const SIMDVector uv0){
-    return
-        FrameFiniteVector(position, 0x7u)
-        && FrameFiniteVector(uv0, 0x3u)
-    ;
+    return FrameFiniteVector(position, 0x7u) && FrameFiniteVector(uv0, 0x3u);
 }
 
 [[nodiscard]] bool AccumulateTriangleTangentFrame(

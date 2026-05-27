@@ -126,6 +126,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             return true;
         }
 
+#if defined(NWB_DEBUG)
         if(materialInfo.typedBytes.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing typed material data")
                 , StringConvert(materialInfo.materialName.c_str())
@@ -140,26 +141,31 @@ void RendererSystem::gatherMaterialPassDrawItems(
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
             return false;
         }
-        usize alignedByteBegin = 0u;
-        if(!AlignUpChecked(materialTypedBytes.size(), sizeof(u32), alignedByteBegin)){
+        usize debugAlignedByteBegin = 0u;
+        if(!AlignUpChecked(materialTypedBytes.size(), sizeof(u32), debugAlignedByteBegin)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
             return false;
         }
-        usize byteEnd = alignedByteBegin;
-        if(materialInfo.typedBytes.size() > Limit<usize>::s_Max - byteEnd){
+        usize debugByteEnd = debugAlignedByteBegin;
+        if(materialInfo.typedBytes.size() > Limit<usize>::s_Max - debugByteEnd){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
             return false;
         }
-        byteEnd += materialInfo.typedBytes.size();
-        usize alignedByteEnd = 0u;
-        if(!AlignUpChecked(byteEnd, sizeof(u32), alignedByteEnd)){
+        debugByteEnd += materialInfo.typedBytes.size();
+        usize debugAlignedByteEnd = 0u;
+        if(!AlignUpChecked(debugByteEnd, sizeof(u32), debugAlignedByteEnd)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
             return false;
         }
-        if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
+        if(debugAlignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || debugAlignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
             return false;
         }
+#endif
+
+        const usize alignedByteBegin = AlignUp(materialTypedBytes.size(), sizeof(u32));
+        const usize byteEnd = alignedByteBegin + materialInfo.typedBytes.size();
+        const usize alignedByteEnd = AlignUp(byteEnd, sizeof(u32));
 
         outBlock.byteOffset = static_cast<u32>(alignedByteBegin);
         outBlock.byteCount = static_cast<u32>(materialInfo.typedBytes.size());
@@ -182,17 +188,21 @@ void RendererSystem::gatherMaterialPassDrawItems(
         const Core::Assets::AssetRef<Material>& material,
         MeshResources& mesh
     ) -> bool{
+#if defined(NWB_DEBUG)
         if(!mesh.valid())
             return false;
+#endif
 
-        const NWB::Impl::TransformComponent* transform =
-            m_world.tryGetComponent<NWB::Impl::TransformComponent>(entity)
-        ;
+        const NWB::Impl::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))
             return false;
-        if(!materialInfo || !materialInfo->valid || materialInfo->transparent != transparent)
+#if defined(NWB_DEBUG)
+        if(!materialInfo || !materialInfo->valid)
+            return false;
+#endif
+        if(materialInfo->transparent != transparent)
             return false;
 
         MaterialPipelineKey pipelineKey;
@@ -204,14 +214,18 @@ void RendererSystem::gatherMaterialPassDrawItems(
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
             return false;
+#if defined(NWB_DEBUG)
         if(!pipelineResources)
             return false;
+#endif
 
         auto appendInstance = [&]() -> u32{
+#if defined(NWB_DEBUG)
             if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer instance count exceeds u32 limits"));
                 return Limit<u32>::s_Max;
             }
+#endif
 
             ECSRenderDetail::MaterialTypedByteBlock typedByteBlock;
             if(!appendMaterialTypedByteBlock(*materialInfo, typedByteBlock))
@@ -241,13 +255,17 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
+#if defined(NWB_DEBUG)
             if(!pipelineResources->meshletPipeline)
                 return false;
+#endif
             return appendDrawItem(meshDrawItems);
         }
         case RenderPath::ComputeEmulation:{
+#if defined(NWB_DEBUG)
             if(!pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
                 return false;
+#endif
             return appendDrawItem(computeDrawItems);
         }
         default:
@@ -276,8 +294,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
         else if(!createMeshResources(resolvedMesh.mesh, mesh))
             continue;
 
+#if defined(NWB_DEBUG)
         if(mesh)
             appendDrawForMesh(entity, renderer.material, *mesh);
+#else
+        appendDrawForMesh(entity, renderer.material, *mesh);
+#endif
     }
 }
 
@@ -294,12 +316,12 @@ void RendererSystem::setMaterialPassCommonBufferStates(
 }
 
 bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
-    return
-        mesh.valid()
-        && m_instanceBuffer
-        && m_meshViewBuffer
-        && m_materialTypedBuffer
-    ;
+#if defined(NWB_DEBUG)
+    return mesh.valid() && m_instanceBuffer && m_meshViewBuffer && m_materialTypedBuffer;
+#else
+    static_cast<void>(mesh);
+    return true;
+#endif
 }
 
 u32 RendererSystem::meshDispatchFlags(
@@ -345,11 +367,10 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawItemVector& drawItems
 ){
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
-        if(
-            !materialPassDrawResourcesReady(mesh)
-            || !pipelineResources.meshletPipeline
-        )
+#if defined(NWB_DEBUG)
+        if(!materialPassDrawResourcesReady(mesh) || !pipelineResources.meshletPipeline)
             return;
+#endif
         if(!createMeshBindingSet(mesh))
             return;
 
@@ -376,22 +397,26 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 ){
     if(drawItems.empty())
         return;
-    if(!m_meshViewBuffer || !createEmulationViewResources() || !m_emulationViewBindingSet)
+    if(!createEmulationViewResources())
         return;
+#if defined(NWB_DEBUG)
+    if(!m_meshViewBuffer || !m_emulationViewBindingSet)
+        return;
+#endif
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
-        if(
-            !materialPassDrawResourcesReady(mesh)
-            || !pipelineResources.computePipeline
-            || !pipelineResources.emulationPipeline
-        )
+#if defined(NWB_DEBUG)
+        if(!materialPassDrawResourcesReady(mesh) || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
             return;
+#endif
         if(!createComputeBindingSet(mesh))
             return;
+#if defined(NWB_DEBUG)
         if(!mesh.computeBindingSet || !mesh.emulationVertexBuffer)
             return;
+#endif
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);

@@ -177,7 +177,11 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     const auto foundMesh = m_meshMeshes.find(meshPath);
     if(foundMesh != m_meshMeshes.end()){
         outMesh = &foundMesh.value();
+#if defined(NWB_DEBUG)
         return outMesh->valid();
+#else
+        return true;
+#endif
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
@@ -300,21 +304,31 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
         NWB_TEXT("meshlet primitive index"),
         true
     ) && uploaded;
-    if(!uploaded || !createdMesh.valid())
+    if(!uploaded)
         return false;
+#if defined(NWB_DEBUG)
+    if(!createdMesh.valid())
+        return false;
+#endif
 
     auto result = m_meshMeshes.try_emplace(meshPath, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
+#if defined(NWB_DEBUG)
     return outMesh->valid();
+#else
+    return true;
+#endif
 }
 
 bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
     outMesh = nullptr;
 
+#if defined(NWB_DEBUG)
     if(!desc.valid())
         return false;
+#endif
 
     const auto foundMesh = m_meshMeshes.find(desc.meshKey);
     if(foundMesh != m_meshMeshes.end()){
@@ -329,7 +343,11 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
         }
         else{
             outMesh = &foundMesh.value();
+#if defined(NWB_DEBUG)
             return outMesh->valid();
+#else
+            return true;
+#endif
         }
     }
 
@@ -356,14 +374,20 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
         NWB_TEXT("meshlet primitive index")
     ))
         return false;
+#if defined(NWB_DEBUG)
     if(!createdMesh.valid())
         return false;
+#endif
 
     auto result = m_meshMeshes.try_emplace(desc.meshKey, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
+#if defined(NWB_DEBUG)
     return outMesh->valid();
+#else
+    return true;
+#endif
 }
 
 void RendererSystem::pruneRuntimeMeshResources(){

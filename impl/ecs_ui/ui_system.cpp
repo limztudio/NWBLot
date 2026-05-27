@@ -450,10 +450,7 @@ void UiSystem::render(Core::IFramebuffer* framebuffer){
     }
 
     commandList->open();
-    const bool success =
-        processTextureRequests(*commandList, *drawData)
-        && uploadDrawBuffers(*commandList, *drawData)
-    ;
+    const bool success = processTextureRequests(*commandList, *drawData) && uploadDrawBuffers(*commandList, *drawData);
     if(success)
         renderDrawData(*commandList, framebuffer, *drawData);
 
@@ -655,10 +652,12 @@ bool UiSystem::ensureInputLayout(){
 bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     if(vertexCount == 0 || indexCount == 0)
         return true;
+#if defined(NWB_DEBUG)
     if(vertexCount > Limit<usize>::s_Max / sizeof(ImDrawVert) || indexCount > Limit<usize>::s_Max / sizeof(ImDrawIdx)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: draw buffer request overflows addressable memory"));
         return false;
     }
+#endif
 
     Core::IDevice* device = m_graphics.getDevice();
     if(!m_vertexBuffer || m_vertexBufferCapacity < vertexCount){

@@ -116,6 +116,7 @@ private:
         RuntimeResources*& outResources,
         bool& outResourcesRebuilt
     );
+    void pruneRuntimeResources();
 
 
 private:

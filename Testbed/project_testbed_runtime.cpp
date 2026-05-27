@@ -413,10 +413,7 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
             keyPressed(NWB::Core::Key::W)
         )
     ;
-    const bool boosted =
-        !keyboardCaptured
-        && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift))
-    ;
+    const bool boosted = !keyboardCaptured && (keyPressed(NWB::Core::Key::LeftShift) || keyPressed(NWB::Core::Key::RightShift));
 
     __hidden_project_testbed_runtime::ApplyFlyCameraInputToMainCamera(
         *m_world,

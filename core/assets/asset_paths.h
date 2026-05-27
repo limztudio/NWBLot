@@ -222,10 +222,7 @@ template<typename StringT>
     if(!AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, virtualRoot, scratchArena))
         return false;
 
-    return
-        virtualRoot.view() == s_EngineVirtualRoot
-        || virtualRoot.view() == s_ProjectVirtualRoot
-    ;
+    return virtualRoot.view() == s_EngineVirtualRoot || virtualRoot.view() == s_ProjectVirtualRoot;
 }
 
 template<typename AssetRootVector>

@@ -26,7 +26,11 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     const auto foundInfo = m_materialSurfaceInfos.find(materialPath);
     if(foundInfo != m_materialSurfaceInfos.end()){
         outInfo = &foundInfo.value();
+#if defined(NWB_DEBUG)
         return outInfo->valid;
+#else
+        return true;
+#endif
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
@@ -67,6 +71,12 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         );
         return false;
     }
+    if(material.typedBlockBytes().size() > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material data exceeds u32 limits")
+            , StringConvert(materialPath.c_str())
+        );
+        return false;
+    }
     createdInfo.typedBytes.reserve(material.typedBlockBytes().size());
     createdInfo.typedBytes.insert(
         createdInfo.typedBytes.end(),
@@ -79,7 +89,11 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     auto result = m_materialSurfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
     outInfo = &it.value();
+#if defined(NWB_DEBUG)
     return outInfo->valid;
+#else
+    return true;
+#endif
 }
 
 bool RendererSystem::createRendererPipeline(
@@ -95,10 +109,12 @@ bool RendererSystem::createRendererPipeline(
 
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
+#if defined(NWB_DEBUG)
     if(!materialInfo.valid || !materialKey){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
         return false;
     }
+#endif
 
     auto [it, inserted] = m_materialPipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
@@ -324,7 +340,11 @@ bool RendererSystem::hasTransparentRenderers(){
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))
             return false;
-        return materialInfo && materialInfo->valid && materialInfo->transparent;
+#if defined(NWB_DEBUG)
+        if(!materialInfo || !materialInfo->valid)
+            return false;
+#endif
+        return materialInfo->transparent;
     };
 
     auto rendererView = m_world.view<RendererComponent>();

@@ -30,12 +30,7 @@ usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipeli
 }
 
 bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return
-        lhs.material == rhs.material
-        && lhs.pass == rhs.pass
-        && lhs.twoSided == rhs.twoSided
-        && lhs.framebufferInfo == rhs.framebufferInfo
-    ;
+    return lhs.material == rhs.material && lhs.pass == rhs.pass && lhs.twoSided == rhs.twoSided && lhs.framebufferInfo == rhs.framebufferInfo;
 }
 
 
@@ -175,10 +170,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         );
     }
 
-    const bool hasDeferredDrawItems =
-        !opaqueMeshDrawItems.empty()
-        || !opaqueComputeDrawItems.empty()
-    ;
+    const bool hasDeferredDrawItems = !opaqueMeshDrawItems.empty() || !opaqueComputeDrawItems.empty();
     const bool deferredUploadReady =
         hasDeferredDrawItems
         && uploadInstanceBuffer(*commandList, instanceData)

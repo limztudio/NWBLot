@@ -260,6 +260,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
         resourcesRebuilt
     ))
         return false;
+#if defined(NWB_DEBUG)
     if(
         !resources
         || !resources->bindingSet
@@ -267,6 +268,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
         || !resources->jointPaletteBuffer
     )
         return false;
+#endif
 
     usize jointPaletteBytes = 0;
     if(!resourcesRebuilt){
@@ -377,15 +379,18 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
 ){
     outResources = nullptr;
     outResourcesRebuilt = false;
+#if defined(NWB_DEBUG)
     if((payloadViews.skinInfluenceCount == 0u) != (payloadViews.jointPaletteCount == 0u)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' has mismatched skin influence/joint payloads"), instance.handle.value);
         return false;
     }
+#endif
 
     const bool hasActiveSkin = payloadViews.hasActiveSkin();
     if(!hasActiveSkin)
         return false;
 
+#if defined(NWB_DEBUG)
     if(!payloadViews.skinInfluences || !payloadViews.jointPalette){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' has null active skinned mesh payloads"), instance.handle.value);
         return false;
@@ -398,6 +403,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skinned mesh payload exceeds u32 limits"), instance.handle.value);
         return false;
     }
+#endif
 
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
     RuntimeResources& resources = it.value();

@@ -331,12 +331,7 @@ namespace IncludeDirectiveKind{
 };
 
 static bool IsIncludeDirectiveBoundary(const AStringView line, const usize cursor){
-    return
-        cursor >= line.size()
-        || IsAsciiSpace(line[cursor])
-        || line[cursor] == '"'
-        || line[cursor] == '<'
-    ;
+    return cursor >= line.size() || IsAsciiSpace(line[cursor]) || line[cursor] == '"' || line[cursor] == '<';
 }
 
 static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, IncludeDirectiveKind::Enum& outKind){

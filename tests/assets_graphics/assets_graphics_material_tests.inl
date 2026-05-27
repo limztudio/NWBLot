@@ -1031,11 +1031,7 @@ static void TestMaterialCodecTypedLayoutBoundary(TestContext& context){
         ));
 
         NWB::Core::Assets::AssetBytes hashMismatchBinary = binary;
-        const u64 invalidLayoutHash =
-            material.typedLayoutHash() == Limit<u64>::s_Max
-                ? material.typedLayoutHash() - 1u
-                : material.typedLayoutHash() + 1u
-        ;
+        const u64 invalidLayoutHash = material.typedLayoutHash() == Limit<u64>::s_Max ? material.typedLayoutHash() - 1u : material.typedLayoutHash() + 1u;
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
         CheckCodecRejectsBinary(context, testArena, codec, material.virtualPath(), hashMismatchBinary);
 

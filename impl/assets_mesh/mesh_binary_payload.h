@@ -23,7 +23,7 @@ namespace MeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshMagic = 0x4D534832u; // MSH2
+inline constexpr u32 s_MeshMagic = 0x4D534833u; // MSH3
 
 #pragma pack(push, 1)
 struct MeshHeaderBinary{

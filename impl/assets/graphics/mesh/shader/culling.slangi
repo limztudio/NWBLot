@@ -78,7 +78,7 @@ bool nwbMeshletBackfaceCull(
 }
 
 bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instance){
-    const NwbMeshletBounds bounds = g_NwbMeshletBounds[meshletIndex];
+    const NwbMeshletBounds bounds = nwbMeshLoadMeshletBounds(meshletIndex);
     const float3 center = nwbRotateVectorByQuaternion(bounds.sphere.xyz * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
     const float radius = bounds.sphere.w * nwbMeshMaxAbsScale(instance.scale.xyz);
 
@@ -89,7 +89,7 @@ bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instanc
         return false;
 
     const float3 coneAxis = nwbSafeNormalize(
-        nwbRotateVectorByQuaternion(bounds.cone.xyz, instance.rotation),
+        nwbRotateVectorByQuaternion(nwbMeshUnpackConeAxis(bounds.conePacked), instance.rotation),
         float3(0.0, 0.0, 1.0)
     );
     return nwbMeshletBackfaceCull(
@@ -97,7 +97,7 @@ bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instanc
         center,
         radius,
         coneAxis,
-        bounds.cone.w
+        nwbMeshUnpackConeCutoff(bounds.conePacked)
     );
 }
 

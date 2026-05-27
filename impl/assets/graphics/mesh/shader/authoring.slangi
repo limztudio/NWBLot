@@ -22,6 +22,7 @@
 #endif
 
 #include "runtime.slangi"
+#include "encoding.slangi"
 #include "material_typed_accessors.slangi"
 #include "culling.slangi"
 #include "meshlet.slangi"

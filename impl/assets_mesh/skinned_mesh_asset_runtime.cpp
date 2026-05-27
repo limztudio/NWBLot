@@ -5,6 +5,7 @@
 #include "skinned_mesh_asset.h"
 
 #include "mesh_asset_binary_payload.h"
+#include "meshlet_payload_packing.h"
 #include "mesh_payload_validation.h"
 #include "skinned_mesh_binary_payload.h"
 #include "skinned_mesh_validation.h"

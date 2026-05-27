@@ -50,13 +50,12 @@ struct NwbMeshVertexRef{
 struct NwbMeshletDesc{
     uint vertexOffset;
     uint primitiveOffset;
-    uint vertexCount;
-    uint primitiveCount;
+    uint counts;
 };
 
 struct NwbMeshletBounds{
     float4 sphere;
-    float4 cone;
+    uint conePacked;
 };
 
 struct NwbMeshSourceVertex{
@@ -97,7 +96,7 @@ struct NwbMeshInstanceData{
 [[vk::binding(4, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshColors;
 [[vk::binding(5, 0)]] StructuredBuffer<NwbMeshVertexRef, Std430DataLayout> g_NwbMeshVertexRefs;
 [[vk::binding(6, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbMeshlets;
-[[vk::binding(7, 0)]] StructuredBuffer<NwbMeshletBounds, Std430DataLayout> g_NwbMeshletBounds;
+[[vk::binding(7, 0)]] ByteAddressBuffer g_NwbMeshletBounds;
 [[vk::binding(8, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMeshletVertexRefs;
 [[vk::binding(9, 0)]] ByteAddressBuffer g_NwbMeshletPrimitiveIndices;
 [[vk::binding(10, 0)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
@@ -139,12 +138,8 @@ uint nwbMeshInstanceIndex(){
     return g_NwbMeshPushConstants.dispatch.z;
 }
 
-float4x4 nwbMeshWorldToClip(){
-    return g_NwbMeshWorldToClip;
-}
-
 float4 nwbMeshTransformWorldToClip(float3 worldPosition){
-    return mul(nwbMeshWorldToClip(), float4(worldPosition, 1.0));
+    return mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
 }
 
 float3 nwbMeshLoadPosition(const NwbMeshPosition value){

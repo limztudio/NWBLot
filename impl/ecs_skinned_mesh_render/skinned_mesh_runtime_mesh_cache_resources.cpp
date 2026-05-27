@@ -340,7 +340,8 @@ bool SkinnedMeshRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMes
         AStringView("meshlet_bounds"),
         instance.meshletBounds,
         false,
-        NWB_TEXT("meshlet bounds")
+        NWB_TEXT("meshlet bounds"),
+        true
     ) && uploaded;
     uploaded = __hidden_skinned_mesh_runtime_mesh_cache_resources::AssignRuntimeBuffer<u32>(
         m_graphics,

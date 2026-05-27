@@ -327,18 +327,41 @@ private:
     void addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
     static void addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
     static void addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc);
+    template<typename BindingHandler>
+    static void forEachMeshSourceBindingSlot(BindingHandler&& handler){
+        handler(s_MeshPositionBindingSlot, false);
+        handler(s_MeshNormalBindingSlot, false);
+        handler(s_MeshTangentBindingSlot, false);
+        handler(s_MeshUv0BindingSlot, false);
+        handler(s_MeshColorBindingSlot, false);
+        handler(s_MeshVertexRefBindingSlot, false);
+        handler(s_MeshletDescBindingSlot, false);
+        handler(s_MeshletBoundsBindingSlot, true);
+        handler(s_MeshletVertexRefBindingSlot, false);
+        handler(s_MeshletPrimitiveIndexBindingSlot, true);
+    }
+    [[nodiscard]] static const Core::BufferHandle& meshSourceBuffer(const MeshResources& mesh, u32 bindingSlot){
+        switch(bindingSlot){
+        case s_MeshPositionBindingSlot: return mesh.positionBuffer;
+        case s_MeshNormalBindingSlot: return mesh.normalBuffer;
+        case s_MeshTangentBindingSlot: return mesh.tangentBuffer;
+        case s_MeshUv0BindingSlot: return mesh.uv0Buffer;
+        case s_MeshColorBindingSlot: return mesh.colorBuffer;
+        case s_MeshVertexRefBindingSlot: return mesh.vertexRefBuffer;
+        case s_MeshletDescBindingSlot: return mesh.meshletDescBuffer;
+        case s_MeshletBoundsBindingSlot: return mesh.meshletBoundsBuffer;
+        case s_MeshletVertexRefBindingSlot: return mesh.meshletVertexRefBuffer;
+        case s_MeshletPrimitiveIndexBindingSlot: return mesh.meshletPrimitiveIndexBuffer;
+        default:
+            NWB_ASSERT(false);
+            return mesh.positionBuffer;
+        }
+    }
     template<typename BufferHandler>
     static void forEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler){
-        handler(s_MeshPositionBindingSlot, mesh.positionBuffer, false);
-        handler(s_MeshNormalBindingSlot, mesh.normalBuffer, false);
-        handler(s_MeshTangentBindingSlot, mesh.tangentBuffer, false);
-        handler(s_MeshUv0BindingSlot, mesh.uv0Buffer, false);
-        handler(s_MeshColorBindingSlot, mesh.colorBuffer, false);
-        handler(s_MeshVertexRefBindingSlot, mesh.vertexRefBuffer, false);
-        handler(s_MeshletDescBindingSlot, mesh.meshletDescBuffer, false);
-        handler(s_MeshletBoundsBindingSlot, mesh.meshletBoundsBuffer, false);
-        handler(s_MeshletVertexRefBindingSlot, mesh.meshletVertexRefBuffer, false);
-        handler(s_MeshletPrimitiveIndexBindingSlot, mesh.meshletPrimitiveIndexBuffer, true);
+        forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
+            handler(bindingSlot, meshSourceBuffer(mesh, bindingSlot), rawView);
+        });
     }
 
 private:

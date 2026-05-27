@@ -13,6 +13,7 @@
 #include "skinned_mesh_validation.h"
 #include "mesh_asset_binary_payload.h"
 #include "mesh_binary_payload.h"
+#include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
 #include <core/assets/asset_paths.h>

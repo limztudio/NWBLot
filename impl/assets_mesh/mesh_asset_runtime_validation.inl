@@ -173,7 +173,9 @@ using MeshPayloadValidation::FiniteVector;
     usize expectedPrimitiveIndexCount = 0u;
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = meshlets[meshletIndex];
-        if(meshlet.vertexCount == 0u || meshlet.vertexCount > s_MeshMaxMeshletVertices){
+        const u32 vertexCount = MeshletVertexCount(meshlet);
+        const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
+        if(vertexCount == 0u || vertexCount > s_MeshMaxMeshletVertices){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid vertex count")
                 , contextText
                 , meshPathText
@@ -181,7 +183,7 @@ using MeshPayloadValidation::FiniteVector;
             );
             return false;
         }
-        if(meshlet.primitiveCount == 0u || meshlet.primitiveCount > s_MeshMaxMeshletTriangles){
+        if(primitiveCount == 0u || primitiveCount > s_MeshMaxMeshletTriangles){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid primitive count")
                 , contextText
                 , meshPathText
@@ -198,8 +200,8 @@ using MeshPayloadValidation::FiniteVector;
             return false;
         }
 
-        expectedVertexRefCount += meshlet.vertexCount;
-        expectedPrimitiveIndexCount += static_cast<usize>(meshlet.primitiveCount) * 3u;
+        expectedVertexRefCount += vertexCount;
+        expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * 3u;
         if(expectedVertexRefCount > meshletVertexRefs.size() || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} exceeds meshlet stream bounds")
                 , contextText
@@ -209,7 +211,34 @@ using MeshPayloadValidation::FiniteVector;
             return false;
         }
 
-        for(u32 localVertexIndex = 0u; localVertexIndex < meshlet.vertexCount; ++localVertexIndex){
+        const MeshletBounds& bounds = meshletBounds[meshletIndex];
+        const SIMDVector sphere = LoadFloat(bounds.sphere);
+        if(!FiniteVector(sphere, 0xFu) || VectorGetW(sphere) < 0.0f){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid bounds")
+                , contextText
+                , meshPathText
+                , meshletIndex
+            );
+            return false;
+        }
+        if(MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid cone flags")
+                , contextText
+                , meshPathText
+                , meshletIndex
+            );
+            return false;
+        }
+        if(MeshletConeEnabled(bounds) && MeshletConePackedCutoff(bounds) == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid cone cutoff")
+                , contextText
+                , meshPathText
+                , meshletIndex
+            );
+            return false;
+        }
+
+        for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
             const u32 vertexRefIndex = meshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
             if(vertexRefIndex < vertexRefs.size())
                 continue;
@@ -221,10 +250,10 @@ using MeshPayloadValidation::FiniteVector;
             );
             return false;
         }
-        for(u32 primitiveIndex = 0u; primitiveIndex < meshlet.primitiveCount; ++primitiveIndex){
+        for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
             const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
             for(usize corner = 0u; corner < 3u; ++corner){
-                if(meshletPrimitiveIndices[primitiveOffset + corner] < meshlet.vertexCount)
+                if(meshletPrimitiveIndices[primitiveOffset + corner] < vertexCount)
                     continue;
 
                 NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} has an out-of-range local vertex")

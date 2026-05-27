@@ -27,7 +27,7 @@ template<typename CookEntryT>
 
 template<typename CookEntryT, typename CallbackT>
 static void ForEachMeshletFaceNormalVector(const CookEntryT& entry, const MeshletDesc& meshlet, CallbackT callback){
-    for(u32 primitiveIndex = 0u; primitiveIndex < meshlet.primitiveCount; ++primitiveIndex){
+    for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
         const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
         const u32 vertexRefIndex0 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 0u]];
         const u32 vertexRefIndex1 = entry.meshletVertexRefs[meshlet.vertexOffset + entry.meshletPrimitiveIndices[primitiveOffset + 1u]];
@@ -43,7 +43,7 @@ template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
     SIMDVector minBounds = VectorReplicate(Limit<f32>::s_Max);
     SIMDVector maxBounds = VectorReplicate(-Limit<f32>::s_Max);
-    for(u32 localVertexIndex = 0u; localVertexIndex < meshlet.vertexCount; ++localVertexIndex){
+    for(u32 localVertexIndex = 0u; localVertexIndex < MeshletVertexCount(meshlet); ++localVertexIndex){
         const u32 vertexRefIndex = entry.meshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
         const SIMDVector position = LoadMeshletPositionVector(entry, vertexRefIndex);
         minBounds = VectorMin(minBounds, position);
@@ -52,7 +52,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
 
     const SIMDVector center = VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), 0.5f), 0.0f);
     SIMDVector radiusSquared = VectorZero();
-    for(u32 localVertexIndex = 0u; localVertexIndex < meshlet.vertexCount; ++localVertexIndex){
+    for(u32 localVertexIndex = 0u; localVertexIndex < MeshletVertexCount(meshlet); ++localVertexIndex){
         const u32 vertexRefIndex = entry.meshletVertexRefs[meshlet.vertexOffset + localVertexIndex];
         const SIMDVector delta = VectorSubtract(LoadMeshletPositionVector(entry, vertexRefIndex), center);
         radiusSquared = VectorMax(radiusSquared, Vector3LengthSq(delta));
@@ -78,7 +78,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
 
     MeshletBounds bounds;
     StoreFloat(VectorSetW(center, VectorGetX(VectorSqrt(radiusSquared))), &bounds.sphere);
-    StoreFloat(VectorSetW(coneAxis, coneCutoff), &bounds.cone);
+    bounds.conePacked = PackMeshletCone(coneAxis, coneCutoff);
     return bounds;
 }
 
@@ -121,17 +121,16 @@ static bool BuildMeshlets(
     localVertexRefs.reserve(s_MeshMaxMeshletVertices);
 
     auto flushMeshlet = [&](){
-        if(current.primitiveCount == 0u)
+        if(MeshletPrimitiveCount(current) == 0u)
             return;
 
-        current.vertexCount = static_cast<u32>(localVertexRefs.size());
+        current.counts = PackMeshletCounts(static_cast<u32>(localVertexRefs.size()), MeshletPrimitiveCount(current));
         entry.meshlets.push_back(current);
         entry.meshletVertexRefs.insert(entry.meshletVertexRefs.end(), localVertexRefs.begin(), localVertexRefs.end());
         entry.meshletBounds.push_back(BuildMeshletBounds(entry, current));
         current = MeshletDesc{
             static_cast<u32>(entry.meshletVertexRefs.size()),
             static_cast<u32>(entry.meshletPrimitiveIndices.size()),
-            0u,
             0u,
         };
         localVertexRefs.clear();
@@ -154,10 +153,10 @@ static bool BuildMeshlets(
         }
 
         if(
-            current.primitiveCount != 0u
+            MeshletPrimitiveCount(current) != 0u
             && (
                 localVertexRefs.size() + missingCount > s_MeshMaxMeshletVertices
-                || current.primitiveCount + 1u > s_MeshMaxMeshletTriangles
+                || MeshletPrimitiveCount(current) + 1u > s_MeshMaxMeshletTriangles
             )
         )
             flushMeshlet();
@@ -178,7 +177,7 @@ static bool BuildMeshlets(
             }
             entry.meshletPrimitiveIndices.push_back(localVertex);
         }
-        ++current.primitiveCount;
+        current.counts = PackMeshletCounts(0u, MeshletPrimitiveCount(current) + 1u);
     }
     flushMeshlet();
 

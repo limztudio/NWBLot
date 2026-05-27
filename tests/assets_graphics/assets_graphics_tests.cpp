@@ -4,6 +4,7 @@
 
 #include <impl/assets_mesh/skinned_mesh_asset.h>
 #include <impl/assets_mesh/mesh_asset.h>
+#include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_graphics/graphics_asset_cooker.h>
 #include <impl/assets_material/material_asset_cook.h>
 #include <impl/assets_material/material_binary_payload.h>
@@ -66,22 +67,6 @@ static auto MakeAssetVectorFrom(TestArena& testArena, const SourceVector& source
 static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
     return NWB::Core::Assets::AssetBytes(testArena.arena);
 }
-
-#define NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16 R"(asset.index_type = "u16";
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32 R"(asset.index_type = "u32";
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_STATIC_CLASS R"(asset.mesh_class = "static";
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_SKINNED_MESH_CLASS R"(asset.mesh_class = "skinned";
-
-)"
 
 #define NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS R"(asset.positions = [
     [-0.5, -0.5, 0.0],
@@ -170,7 +155,7 @@ asset.skin = {
 
 )"
 
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS(indexType) \
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS \
@@ -178,19 +163,9 @@ asset.skin = {
     NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS \
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX(indexType) \
+#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX \
     "skinned_mesh asset;\n\n" \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS(indexType)
-
-#define NWB_ASSETS_GRAPHICS_TEST_LEGACY_SKINNED_MESH_TRIANGLE_PREFIX(indexType) \
-    "mesh asset;\n\n" \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS(indexType)
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U32_PREFIX \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32)
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS
 
 #define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
     [0.0, 0.0, 1.0],
@@ -774,18 +749,9 @@ NwbTestSurfaceMaterial surface;
 #endif
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_DeprecatedMeshClassMeta =
-    "mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_STATIC_CLASS
-    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-
 static constexpr AStringView s_UnsupportedMeshFieldsMeta = R"(mesh asset;
 
 asset.vertex_stride = 24;
-asset.index_type = "u16";
 
 asset.vertex_data = [
     [-0.5, -0.5, 0.0, 1.0, 0.0, 0.0],
@@ -800,7 +766,6 @@ asset.index_data = [
 
 static constexpr AStringView s_MismatchedMeshMeta =
     "mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
     [0.0, 0.0, 1.0],
@@ -812,7 +777,7 @@ static constexpr AStringView s_MismatchedMeshMeta =
 
 
 static constexpr AStringView s_MinimalSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_GeneratedFrameSkinnedMeshMeta =
@@ -824,17 +789,13 @@ static constexpr AStringView s_GeneratedFrameSkinnedMeshMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
-static constexpr AStringView s_U32IndexTypeSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U32_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
 static constexpr AStringView s_EmptyListOptionalSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     R"(asset.colors = [];
 )" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 static constexpr AStringView s_EmptyMapOptionalSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     R"(asset.colors = {};
 )" NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
@@ -909,7 +870,7 @@ asset.skin = {
 )";
 
 static constexpr AStringView s_NonnormalizedSkinSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     R"(asset.skeleton_joint_count = 2;
 
 asset.skin = {
@@ -927,23 +888,12 @@ asset.skin = {
 )";
 
 static constexpr AStringView s_SkinnedOnlySkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
 
 #if defined(NWB_FINAL)
-static constexpr AStringView s_DeprecatedMeshClassSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_SKINNED_MESH_CLASS
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
-static constexpr AStringView s_LegacyHeaderSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_LEGACY_SKINNED_MESH_TRIANGLE_PREFIX(NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16)
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
 static constexpr AStringView s_MismatchedSkinnedMeshMeta =
     "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
     R"(asset.normals = [
     [0.0, 0.0, 1.0],
@@ -954,16 +904,8 @@ static constexpr AStringView s_MismatchedSkinnedMeshMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
-static constexpr AStringView s_MissingIndexTypeSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-
 static constexpr AStringView s_MismatchedSkinSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
+    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
     R"(asset.skin = {
     "joints0": [
         [0, 0, 0, 0],
@@ -991,9 +933,6 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U16_PREFIX
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_U32_PREFIX
-#undef NWB_ASSETS_GRAPHICS_TEST_LEGACY_SKINNED_MESH_TRIANGLE_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
 #undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
@@ -1001,10 +940,6 @@ asset.source = {
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-#undef NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_SKINNED_MESH_CLASS
-#undef NWB_ASSETS_GRAPHICS_TEST_DEPRECATED_STATIC_CLASS
-#undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U32
-#undef NWB_ASSETS_GRAPHICS_TEST_INDEX_TYPE_U16
 
 
 static bool PrepareCleanDirectory(const Path& directory){
@@ -1971,6 +1906,14 @@ static NWB::Impl::SkinInfluence4 MakeRootSkin(){
     return skin;
 }
 
+static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){
+    return NWB::Impl::MeshletBounds{
+        Float4U(0.0f, 0.0f, 0.0f, 1.0f),
+        NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f),
+        0u,
+    };
+}
+
 static NWB::Impl::SkinnedMeshJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
     NWB::Impl::SkinnedMeshJointMatrix matrix = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
     matrix.rows[3] = Float4(tx, ty, tz, 1.0f);
@@ -2091,8 +2034,8 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
         });
         meshletVertexRefs.push_back(static_cast<u32>(vertexIndex));
     }
-    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, static_cast<u32>(vertices.size()), 2u });
-    meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 1.0f), Float4U(0.0f, 0.0f, 1.0f, 1.0f) });
+    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, NWB::Impl::PackMeshletCounts(static_cast<u32>(vertices.size()), 2u) });
+    meshletBounds.push_back(MakeTestMeshletBounds());
     for(const u32 index : indices)
         meshletPrimitiveIndices.push_back(static_cast<u8>(index));
 
@@ -2162,8 +2105,8 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
         });
         meshletVertexRefs.push_back(static_cast<u32>(vertexIndex));
     }
-    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, static_cast<u32>(vertices.size()), 1u });
-    meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 1.0f), Float4U(0.0f, 0.0f, 1.0f, 1.0f) });
+    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, NWB::Impl::PackMeshletCounts(static_cast<u32>(vertices.size()), 1u) });
+    meshletBounds.push_back(MakeTestMeshletBounds());
     for(const u32 index : indices)
         meshletPrimitiveIndices.push_back(static_cast<u8>(index));
 
@@ -2232,9 +2175,9 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     }
 
     auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
-    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 3u, 1u });
+    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u) });
     auto meshletBounds = MakeAssetVector<NWB::Impl::MeshletBounds>(testArena);
-    meshletBounds.push_back(NWB::Impl::MeshletBounds{ Float4U(0.0f, 0.0f, 0.0f, 1.0f), Float4U(0.0f, 0.0f, 1.0f, 1.0f) });
+    meshletBounds.push_back(MakeTestMeshletBounds());
     auto meshletVertexRefs = MakeAssetVector<u32>(testArena);
     meshletVertexRefs.push_back(0u);
     meshletVertexRefs.push_back(1u);
@@ -4219,11 +4162,9 @@ static void TestMeshCookerValidationFailures(TestContext& context){
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
-    expectCookFailure(s_DeprecatedMeshClassMeta, "deprecated_mesh_class");
     expectCookFailure(s_UnsupportedMeshFieldsMeta, "unsupported_mesh_fields");
     expectCookFailure(s_MismatchedMeshMeta, "mismatched_mesh_streams");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'mesh_class' is no longer supported")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 2u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("unsupported mesh fields are present")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("vertex stream counts must match")));
 #else
@@ -4262,19 +4203,6 @@ static void TestSkinnedMeshCookerGeneratesMissingFrames(TestContext& context){
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.z == 0.0f);
                 NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tangent.w == 1.0f);
             }
-        }
-    );
-}
-
-static void TestSkinnedMeshCookerU32IndexType(TestContext& context){
-    CookAndCheckMinimalTypedAsset<NWB::Impl::SkinnedMesh>(
-        context,
-        s_U32IndexTypeSkinnedMeshMeta,
-        "u32_index_type",
-        MinimalAssetKind::SkinnedMesh,
-        [&](const NWB::Impl::SkinnedMesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.indices().size() == 3u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.indices()[2] == 2u);
         }
     );
 }
@@ -4368,17 +4296,11 @@ static void TestSkinnedMeshCookerValidationFailures(TestContext& context){
         static_cast<void>(RemoveAllIfExists(root, errorCode));
     };
 
-    expectCookFailure(s_DeprecatedMeshClassSkinnedMeshMeta, "deprecated_mesh_class");
-    expectCookFailure(s_LegacyHeaderSkinnedMeshMeta, "legacy_mesh_header");
     expectCookFailure(s_MismatchedSkinnedMeshMeta, "mismatched_streams");
-    expectCookFailure(s_MissingIndexTypeSkinnedMeshMeta, "missing_index_type");
     expectCookFailure(s_MismatchedSkinSkinnedMeshMeta, "mismatched_skin");
     expectCookFailure(s_SourceImportSkinnedMeshMeta, "source_import");
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 6u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'mesh_class' is no longer supported")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skinned fields require a 'skinned_mesh asset' header")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("rest vertex stream counts must match")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("'index_type' must be 'u16' or 'u32'")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin streams must match vertex count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("offline converter to emit native .nwb streams")));
 #else
@@ -4576,7 +4498,6 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_assets_graphics_tests::TestMeshCookerValidationFailures(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerMinimalAsset(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerGeneratesMissingFrames(context);
-    __hidden_assets_graphics_tests::TestSkinnedMeshCookerU32IndexType(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerExplicitEmptyOptionalLists(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerNativeCharacterMock(context);
     __hidden_assets_graphics_tests::TestSkinnedMeshCookerNormalizesSkinWeights(context);

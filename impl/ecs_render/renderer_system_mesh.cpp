@@ -149,16 +149,12 @@ void RendererSystem::destroyMeshBindingSets(){
 }
 
 void RendererSystem::addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshPositionBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshNormalBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshTangentBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshUv0BindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshColorBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshVertexRefBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshletDescBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshletBoundsBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshletVertexRefBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(s_MeshletPrimitiveIndexBindingSlot, 1));
+    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
+        if(rawView)
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(bindingSlot, 1));
+        else
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(bindingSlot, 1));
+    });
 }
 
 void RendererSystem::addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
@@ -274,7 +270,8 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
         createdMesh.meshletBoundsBuffer,
         AStringView(":meshlet_bounds"),
         mesh.meshletBounds(),
-        NWB_TEXT("meshlet bounds")
+        NWB_TEXT("meshlet bounds"),
+        true
     ) && uploaded;
     uploaded = __hidden_renderer_system_mesh::AssignMeshBuffer<u32>(
         m_graphics,

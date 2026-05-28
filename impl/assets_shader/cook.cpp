@@ -957,6 +957,12 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntr
 }
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata){
+    Alloc::ScratchArena scratchArena;
+    __hidden_cook::ScratchVector<const IncludeEntry*> inheritedEntries{scratchArena};
+    inheritedEntries.reserve(dependencies.size());
+
+    usize defineReserveCount = inOutEntry.defineValues.size();
+    bool canReserveDefineValues = true;
     for(const Path& dep : dependencies){
         CookString depKey = PathToString(m_memoryArena, dep);
         CanonicalizeTextInPlace(depKey);
@@ -965,16 +971,23 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
             continue;
 
         const IncludeEntry& includeEntry = found.value();
+        inheritedEntries.push_back(&includeEntry);
 
-        if(includeEntry.defineValues.size() <= Limit<usize>::s_Max - inOutEntry.defineValues.size())
-            inOutEntry.defineValues.reserve(inOutEntry.defineValues.size() + includeEntry.defineValues.size());
+        if(includeEntry.defineValues.size() > Limit<usize>::s_Max - defineReserveCount)
+            canReserveDefineValues = false;
+        else
+            defineReserveCount += includeEntry.defineValues.size();
+    }
 
-        for(const auto& [defineName, defineEntry] : includeEntry.defineValues){
+    if(canReserveDefineValues && defineReserveCount > inOutEntry.defineValues.size())
+        inOutEntry.defineValues.reserve(defineReserveCount);
+
+    for(const IncludeEntry* includeEntry : inheritedEntries){
+        for(const auto& [defineName, defineEntry] : includeEntry->defineValues){
             auto [defineIt, inserted] = inOutEntry.defineValues.try_emplace(defineName, m_memoryArena);
             if(inserted)
                 defineIt.value().values.assign(defineEntry.values.begin(), defineEntry.values.end());
         }
-
     }
 }
 

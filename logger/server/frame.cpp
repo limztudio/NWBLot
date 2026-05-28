@@ -4,7 +4,7 @@
 
 #include "frame.h"
 
-#include "server.h"
+#include "module.h"
 
 #include <core/alloc/standalone_runtime.h>
 

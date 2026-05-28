@@ -1,0 +1,191 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "raster_fields.slangi"
+#include "meshlet_payload.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbMeshSourceVertex{
+    float3 position;
+    float3 worldPosition;
+    float4 clipPosition;
+    float3 normal;
+    float4 tangent;
+    float2 uv0;
+    float4 color;
+};
+
+struct NwbMeshGeneratedVertex{
+    float4 position;
+    float3 normal;
+    float padding0;
+    float4 tangent;
+    float2 uv0;
+    float2 padding1;
+    float4 color;
+    float4 worldPosition;
+};
+
+NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
+    const float4 position,
+    const float3 normal,
+    const float4 tangent,
+    const float2 uv0,
+    const float4 color,
+    const float3 worldPosition
+){
+    NwbMeshGeneratedVertex generatedVertex;
+    generatedVertex.position = position;
+    generatedVertex.normal = normal;
+    generatedVertex.padding0 = 0.0;
+    generatedVertex.tangent = tangent;
+    generatedVertex.uv0 = uv0;
+    generatedVertex.padding1 = float2(0.0);
+    generatedVertex.color = color;
+    generatedVertex.worldPosition = float4(worldPosition, 1.0);
+    return generatedVertex;
+}
+
+struct NwbMeshInstanceData{
+    float4 rotation;
+    float4 translation;
+    float4 scale;
+    uint4 materialTypedBytes;
+};
+
+[[vk::binding(0, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbMeshPositions;
+[[vk::binding(1, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshNormals;
+[[vk::binding(2, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshTangents;
+[[vk::binding(3, 0)]] StructuredBuffer<NwbMeshUv0, Std430DataLayout> g_NwbMeshUv0;
+[[vk::binding(4, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshColors;
+[[vk::binding(5, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbMeshlets;
+[[vk::binding(6, 0)]] ByteAddressBuffer g_NwbMeshletBounds;
+[[vk::binding(7, 0)]] StructuredBuffer<NwbMeshletDeformedPositionRef, Std430DataLayout> g_NwbMeshletPositionRefs;
+[[vk::binding(8, 0)]] StructuredBuffer<NwbMeshletShadingAttributeRef, Std430DataLayout> g_NwbMeshletAttributeRefs;
+[[vk::binding(9, 0)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbMeshletLocalVertexRefs;
+[[vk::binding(10, 0)]] ByteAddressBuffer g_NwbMeshletPrimitiveIndices;
+[[vk::binding(11, 0)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
+[[vk::binding(13, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
+
+struct NwbMeshPushConstants{
+    uint4 dispatch;
+    float4 viewportRect;
+    float4 scissorRect;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
+
+#include "view_buffer.slangi"
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+[[vk::binding(14, 0)]] RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbMeshGeneratedVertices;
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
+static const uint NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL = 1u << 1u;
+static const uint NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL = 1u << 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbMeshletCount(){
+    return g_NwbMeshPushConstants.dispatch.x;
+}
+
+uint nwbMeshInstanceIndex(){
+    return g_NwbMeshPushConstants.dispatch.z;
+}
+
+float4 nwbMeshTransformWorldToClip(float3 worldPosition){
+    return mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
+}
+
+float3 nwbMeshTransformPosition(float3 position, const NwbMeshInstanceData instance){
+    return nwbRotateVectorByQuaternion(position * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
+}
+
+float3 nwbMeshTransformDirection(float3 direction, const NwbMeshInstanceData instance){
+    return nwbSafeNormalize(
+        nwbRotateVectorByQuaternion(direction * instance.scale.xyz, instance.rotation),
+        float3(0.0, 0.0, 1.0)
+    );
+}
+
+uint nwbMeshLoadMeshletPrimitiveIndex(const uint primitiveIndex){
+    const uint byteOffset = primitiveIndex;
+    const uint word = g_NwbMeshletPrimitiveIndices.Load(byteOffset & ~3u);
+    return (word >> ((byteOffset & 3u) << 3u)) & 0xffu;
+}
+
+NwbMeshletLocalVertexRef nwbMeshLoadMeshletLocalVertexRef(const NwbMeshletDesc meshlet, const uint localVertexIndex){
+    return g_NwbMeshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
+}
+
+NwbMeshletDeformedPositionRef nwbMeshLoadMeshletPositionRef(
+    const NwbMeshletDesc meshlet,
+    const uint localDeformedPosition
+){
+    return g_NwbMeshletPositionRefs[meshlet.positionOffset + localDeformedPosition];
+}
+
+NwbMeshletShadingAttributeRef nwbMeshLoadMeshletAttributeRef(
+    const NwbMeshletDesc meshlet,
+    const uint localAttribute
+){
+    return g_NwbMeshletAttributeRefs[meshlet.attributeOffset + localAttribute];
+}
+
+NwbMeshSourceVertex nwbMeshLoadSourceVertex(
+    const NwbMeshletDesc meshlet,
+    const uint localVertexIndex,
+    const float3 objectPosition,
+    const float3 worldPosition,
+    const float4 clipPosition
+){
+    const NwbMeshletLocalVertexRef localVertexRef = nwbMeshLoadMeshletLocalVertexRef(meshlet, localVertexIndex);
+    const NwbMeshletShadingAttributeRef attributeRef = nwbMeshLoadMeshletAttributeRef(
+        meshlet,
+        nwbMeshletLocalAttribute(localVertexRef)
+    );
+
+    NwbMeshSourceVertex sourceVertex;
+    sourceVertex.position = objectPosition;
+    sourceVertex.worldPosition = worldPosition;
+    sourceVertex.clipPosition = clipPosition;
+    sourceVertex.normal = nwbMeshLoadHalf4(g_NwbMeshNormals[attributeRef.normal]).xyz;
+    sourceVertex.tangent = nwbMeshLoadHalf4(g_NwbMeshTangents[attributeRef.tangent]);
+    sourceVertex.uv0 = nwbMeshLoadUv0(g_NwbMeshUv0[attributeRef.uv0]);
+    sourceVertex.color = nwbMeshLoadHalf4(g_NwbMeshColors[attributeRef.color]);
+    return sourceVertex;
+}
+
+NwbMeshInstanceData nwbMeshLoadInstance(){
+    return g_NwbMeshInstances[nwbMeshInstanceIndex()];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

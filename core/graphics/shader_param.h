@@ -17,7 +17,7 @@
 #if defined(__cplusplus)
 #include <cstddef>
 #else
-#include <core/common/common.h>
+#include <core/common/module.h>
 #endif
 
 

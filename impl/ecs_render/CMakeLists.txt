@@ -6,28 +6,29 @@ target_link_libraries(nwb_ecs_render_components INTERFACE nwb_assets)
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_targets.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_deferred.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_draw_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_mesh.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_lighting.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_material.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_shader.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/ecs_render.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_avboit.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_avboit_private.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_mesh_view_private.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_system_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit_targets.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/draw.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/draw_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/lighting.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit.h"
+    "${CMAKE_CURRENT_LIST_DIR}/system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_view_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/private.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components
     nwb_ecs
     nwb_ecs_mesh
+    nwb_ecs_mesh_runtime
     nwb_graphics
     nwb_assets_material
 )

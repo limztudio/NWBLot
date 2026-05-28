@@ -1,25 +1,25 @@
 nwb_declare_static_library(nwb_frame)
 target_sources(nwb_frame PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/frame.h"
-    "${CMAKE_CURRENT_LIST_DIR}/frame_input_helpers.h"
-    "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/input_helpers.h"
+    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
 )
 
 if(WIN32)
     target_sources(nwb_frame PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/frame_win.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32.cpp"
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_sources(nwb_frame PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/frame_linux.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/frame_linux_platform.h"
-        "${CMAKE_CURRENT_LIST_DIR}/frame_linux_x11.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/linux_platform.h"
+        "${CMAKE_CURRENT_LIST_DIR}/linux_x11.cpp"
     )
     target_link_libraries(nwb_frame PRIVATE nwb::x11)
 
     if(TARGET nwb::wayland)
         target_sources(nwb_frame PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/frame_linux_wayland.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/linux_wayland.cpp"
         )
         target_link_libraries(nwb_frame PRIVATE nwb::wayland)
         target_compile_definitions(nwb_frame PRIVATE NWB_WITH_WAYLAND=1)

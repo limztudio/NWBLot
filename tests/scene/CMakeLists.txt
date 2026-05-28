@@ -1,6 +1,6 @@
 nwb_declare_executable(nwb_scene_tests)
 target_sources(nwb_scene_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/scene_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
 )
 target_link_libraries(nwb_scene_tests PRIVATE
     nwb_ecs_camera

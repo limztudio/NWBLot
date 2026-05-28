@@ -1,9 +1,9 @@
 nwb_declare_executable(nwb_resource_cooker)
 target_sources(nwb_resource_cooker PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/resource_cooker.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/resource_cooker_command_line.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/resource_cooker.h"
+    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/module.h"
 )
 target_link_libraries(nwb_resource_cooker PRIVATE
     nwb_assets

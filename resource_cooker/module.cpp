@@ -1,0 +1,60 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "module.h"
+
+#include <core/common/log.h>
+#include <core/assets/auto_registration.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+int ResourceCookerMain(int argc, char** argv){
+    try{
+        NWB::Core::Alloc::GlobalArena cookArena("resource_cook");
+
+        NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry(cookArena);
+        NWB::Core::Assets::RegisterAutoCollectedAssetCookers(assetCookerRegistry, cookArena);
+
+        CookOptions options(cookArena);
+        NWB::Core::Assets::AssetString errorMessage{cookArena};
+        const CommandLineParseResult::Enum parseResult = ParseCommandLine(argc, argv, cookArena, options, errorMessage);
+        if(parseResult != CommandLineParseResult::Success){
+            if(!errorMessage.empty())
+                NWB_LOGGER_WARNING(NWB_TEXT("Failed to parse command line: {}"), StringConvert(errorMessage));
+            PrintUsage(cookArena);
+            return parseResult == CommandLineParseResult::Help ? 0 : -1;
+        }
+
+        const char* requestedAssetType = options.assetType.empty() ? "auto" : options.assetType.c_str();
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("Resource cooker: starting cook type='{}' configuration='{}' roots={} output='{}'"),
+            StringConvert(requestedAssetType),
+            StringConvert(options.configuration.c_str()),
+            options.assetRoots.size(),
+            StringConvert(options.outputDirectory.c_str())
+        );
+
+        if(!assetCookerRegistry.cook(options)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Resource cooker: asset cook failed"));
+            return -1;
+        }
+
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Resource cooker: asset cook succeeded"));
+        return 0;
+    }
+    catch(const GeneralException& e){
+        NWB_LOGGER_FATAL(NWB_TEXT("Unhandled exception: {}"), StringConvert(e.what()));
+        return -1;
+    }
+    catch(...){
+        NWB_LOGGER_FATAL(NWB_TEXT("Unhandled exception"));
+        return -1;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

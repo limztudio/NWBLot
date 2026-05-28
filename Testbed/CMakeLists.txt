@@ -1,8 +1,8 @@
 nwb_declare_executable(testbed)
 target_sources(testbed PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/project_testbed_entry.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/project_testbed_runtime.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/project_testbed.h"
+    "${CMAKE_CURRENT_LIST_DIR}/entry.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/project.h"
 )
 set_target_properties(testbed PROPERTIES
     DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"

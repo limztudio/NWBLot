@@ -15,13 +15,13 @@
 
 #include <core/common/command_line.h>
 #include <logger/client/logger.h>
-#include <core/common/common.h>
-#include <core/frame/frame.h>
-#include <core/assets/asset_registry.h>
-#include <core/assets/asset_manager.h>
-#include <core/assets/asset_auto_registration.h>
+#include <core/common/module.h>
+#include <core/frame/module.h>
+#include <core/assets/registry.h>
+#include <core/assets/manager.h>
+#include <core/assets/auto_registration.h>
 #include <core/graphics/shader_archive.h>
-#include <core/filesystem/filesystem.h>
+#include <core/filesystem/module.h>
 #include <core/filesystem/volume_naming.h>
 
 #include "project_entry.h"

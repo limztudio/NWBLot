@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh/shader/authoring.slangi"
+#include "mesh/authoring.slangi"
 #include "project/shaders/bxdf_surface.bind"
 #include "bxdf.slangi"
 #include "bxdf_mesh_vertex.slangi"

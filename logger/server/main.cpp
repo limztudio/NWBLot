@@ -11,8 +11,8 @@
 #include <CLI.hpp>
 
 #include <core/common/command_line.h>
-#include <core/common/common.h>
-#include "server.h"
+#include <core/common/module.h>
+#include "module.h"
 #include "frame.h"
 
 
@@ -75,6 +75,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
 
     return MainLogic(logPort, inst);
 }
+
 
 #include <core/common/application_entry.h>
 

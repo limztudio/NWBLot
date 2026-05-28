@@ -1,0 +1,287 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "backend.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace VulkanDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SubmittedOwnersContext{
+    TrackedCommandBuffer* const* owners = nullptr;
+    usize count = 0;
+};
+
+static constexpr usize s_SubmittedOwnerLookupThreshold = 8u;
+
+using SubmittedOwnerLookup = HashSet<
+    TrackedCommandBuffer*,
+    Hasher<TrackedCommandBuffer*>,
+    EqualTo<TrackedCommandBuffer*>,
+    Alloc::ScratchArena
+>;
+
+struct SubmittedOwnerLookupContext{
+    const SubmittedOwnerLookup* owners = nullptr;
+};
+
+static bool IsSubmittedOwner(TrackedCommandBuffer* owner, const void* context){
+    const auto& submitted = *static_cast<const SubmittedOwnersContext*>(context);
+    for(usize i = 0; i < submitted.count; ++i){
+        if(submitted.owners[i] == owner)
+            return true;
+    }
+    return false;
+}
+
+static bool IsSubmittedOwnerInLookup(TrackedCommandBuffer* owner, const void* context){
+    const auto& submitted = *static_cast<const SubmittedOwnerLookupContext*>(context);
+    return owner && submitted.owners && submitted.owners->find(owner) != submitted.owners->end();
+}
+
+static bool IsMatchingOwner(TrackedCommandBuffer* owner, const void* context){
+    return owner == static_cast<TrackedCommandBuffer*>(const_cast<void*>(context));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLimit, bool isScratchBuffer)
+    : m_device(pParent)
+    , m_defaultChunkSize(defaultChunkSize)
+    , m_memoryLimit(memoryLimit)
+    , m_isScratchBuffer(isScratchBuffer)
+    , m_chunkPool(m_device.m_context.objectArena)
+    , m_activeChunks{
+        BufferChunkList(m_device.m_context.objectArena),
+        BufferChunkList(m_device.m_context.objectArena),
+        BufferChunkList(m_device.m_context.objectArena)
+    }
+{}
+UploadManager::~UploadManager(){
+    m_chunkPool.clear();
+    for(auto& chunks : m_activeChunks)
+        chunks.clear();
+}
+
+void UploadManager::trimChunkPoolLocked(const u64* completedVersions){
+    if(m_memoryLimit == 0)
+        return;
+
+    auto it = m_chunkPool.begin();
+    while(m_chunkPoolBytes > m_memoryLimit && it != m_chunkPool.end()){
+        BufferChunkPtr& chunk = *it;
+        if(!chunk){
+            it = m_chunkPool.erase(it);
+            continue;
+        }
+
+        const u32 chunkQueueIndex = static_cast<u32>(chunk->queueID);
+        if(chunkQueueIndex >= static_cast<u32>(CommandQueue::kCount) || chunk->version > completedVersions[chunkQueueIndex]){
+            ++it;
+            continue;
+        }
+
+        if(m_chunkPoolBytes >= chunk->size)
+            m_chunkPoolBytes -= chunk->size;
+        else
+            m_chunkPoolBytes = 0;
+        it = m_chunkPool.erase(it);
+    }
+}
+
+UploadManager::BufferChunkList::iterator UploadManager::recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, const u64 version, const bool resetAllocated){
+    BufferChunkPtr& chunk = *it;
+    chunk->owner = nullptr;
+    if(resetAllocated)
+        chunk->allocated = 0;
+    chunk->version = version;
+
+    if(m_chunkPoolBytes > UINT64_MAX - chunk->size)
+        m_chunkPoolBytes = UINT64_MAX;
+    else
+        m_chunkPoolBytes += chunk->size;
+
+    m_chunkPool.push_back(Move(chunk));
+    return activeChunks.erase(it);
+}
+
+void UploadManager::recycleMatchingActiveChunks(
+    const u32 queueIndex,
+    const u64 version,
+    const bool resetAllocated,
+    const u64* completedVersions,
+    const ChunkRecyclePredicate predicate,
+    const void* predicateContext
+){
+    ScopedLock lock(m_mutex);
+    auto& activeChunks = m_activeChunks[queueIndex];
+
+    auto it = activeChunks.begin();
+    while(it != activeChunks.end()){
+        BufferChunkPtr& chunk = *it;
+        if(!chunk){
+            it = activeChunks.erase(it);
+            continue;
+        }
+        if(!predicate(chunk->owner, predicateContext)){
+            ++it;
+            continue;
+        }
+
+        it = recycleActiveChunkLocked(activeChunks, it, version, resetAllocated);
+    }
+
+    trimChunkPoolLocked(completedVersions);
+}
+
+bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, TrackedCommandBuffer* owner, CommandQueue::Enum queueID, u64 completedVersion, u32 alignment){
+    if(!pBuffer || !pOffset || !owner)
+        return false;
+    const u32 queueIndex = static_cast<u32>(queueID);
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
+        return false;
+
+    ScopedLock lock(m_mutex);
+    auto& activeChunks = m_activeChunks[queueIndex];
+
+    const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
+        u64 alignedOffset = 0;
+        if(!AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment), alignedOffset))
+            return false;
+        if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
+            return false;
+
+        Buffer* buffer = checked_cast<Buffer*>(chunk.buffer.get());
+        *pBuffer = buffer;
+        *pOffset = alignedOffset;
+        if(pCpuVA)
+            *pCpuVA = static_cast<u8*>(buffer->m_mappedMemory) + alignedOffset;
+
+        chunk.allocated = alignedOffset + size;
+        return true;
+    };
+
+    for(auto it = activeChunks.rbegin(); it != activeChunks.rend(); ++it){
+        if((*it)->owner == owner && trySuballocateFromChunk(**it))
+            return true;
+    }
+
+    for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
+        BufferChunkPtr& pooledChunk = *it;
+        if(pooledChunk->queueID == queueID && pooledChunk->size >= size && pooledChunk->version <= completedVersion){
+            if(m_chunkPoolBytes >= pooledChunk->size)
+                m_chunkPoolBytes -= pooledChunk->size;
+            else
+                m_chunkPoolBytes = 0;
+            activeChunks.push_back(Move(pooledChunk));
+            BufferChunkPtr& currentChunk = activeChunks.back();
+            m_chunkPool.erase(it);
+            currentChunk->owner = owner;
+            currentChunk->allocated = 0;
+            currentChunk->version = completedVersion;
+
+            return trySuballocateFromChunk(*currentChunk);
+        }
+    }
+
+    auto chunkSize = Max<u64>(size, m_defaultChunkSize);
+
+    BufferDesc bufferDesc;
+    bufferDesc.byteSize = chunkSize;
+    bufferDesc.cpuAccess = CpuAccessMode::Write;
+    bufferDesc.isVolatile = false;
+    bufferDesc.debugName = m_isScratchBuffer ? "ScratchBuffer" : "UploadBuffer";
+
+    BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
+    if(!bufferHandle)
+        return false;
+
+    activeChunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), owner, queueID, chunkSize));
+    BufferChunkPtr& currentChunk = activeChunks.back();
+    currentChunk->version = completedVersion;
+
+    return trySuballocateFromChunk(*currentChunk);
+}
+
+void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount){
+    const u32 queueIndex = static_cast<u32>(queueID);
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !submittedOwners || submittedOwnerCount == 0)
+        return;
+
+    u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
+        completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
+
+    if(submittedOwnerCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
+        Alloc::ScratchArena scratchArena;
+        VulkanDetail::SubmittedOwnerLookup submittedOwnerLookup(
+            0,
+            Hasher<TrackedCommandBuffer*>(),
+            EqualTo<TrackedCommandBuffer*>(),
+            scratchArena
+        );
+        submittedOwnerLookup.reserve(submittedOwnerCount);
+        for(usize i = 0u; i < submittedOwnerCount; ++i){
+            if(submittedOwners[i])
+                submittedOwnerLookup.insert(submittedOwners[i]);
+        }
+
+        const VulkanDetail::SubmittedOwnerLookupContext submittedLookupContext{ &submittedOwnerLookup };
+        recycleMatchingActiveChunks(
+            queueIndex,
+            submittedVersion,
+            false,
+            completedVersions,
+            VulkanDetail::IsSubmittedOwnerInLookup,
+            &submittedLookupContext
+        );
+        return;
+    }
+
+    const VulkanDetail::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
+    recycleMatchingActiveChunks(queueIndex, submittedVersion, false, completedVersions, VulkanDetail::IsSubmittedOwner, &submittedContext);
+}
+
+void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion){
+    const u32 queueIndex = static_cast<u32>(queueID);
+    if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !owner)
+        return;
+
+    u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
+    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
+        completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
+    completedVersions[queueIndex] = Max(completedVersions[queueIndex], reusableVersion);
+
+    recycleMatchingActiveChunks(queueIndex, reusableVersion, true, completedVersions, VulkanDetail::IsMatchingOwner, owner);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

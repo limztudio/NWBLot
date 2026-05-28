@@ -2,9 +2,9 @@ nwb_declare_executable(nwb_logserver)
 target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/server.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame.h"
-    "${CMAKE_CURRENT_LIST_DIR}/server.h"
+    "${CMAKE_CURRENT_LIST_DIR}/module.h"
 )
 nwb_target_sources_standalone_runtime(nwb_logserver)
 if(WIN32)

@@ -5,16 +5,16 @@
 #include <loader/project_entry.h>
 
 #include <core/common/log.h>
-#include <core/ecs/ecs.h>
+#include <core/ecs/module.h>
 #include <core/mesh/frame_math.h>
-#include <core/graphics/graphics.h>
-#include <impl/assets_mesh/mesh_asset.h>
-#include <impl/assets_material/material_asset.h>
-#include <impl/ecs_camera/camera.h>
-#include <impl/ecs_mesh/ecs_mesh.h>
-#include <impl/ecs_lighting/lighting.h>
-#include <impl/ecs_render/ecs_render.h>
-#include <impl/ecs_scene/scene.h>
+#include <core/graphics/module.h>
+#include <impl/assets_mesh/asset.h>
+#include <impl/assets_material/asset.h>
+#include <impl/ecs_camera/system.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_lighting/system.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_scene/system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

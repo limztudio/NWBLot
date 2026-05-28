@@ -1,0 +1,92 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_PAYLOAD_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_PAYLOAD_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbMeshPosition{
+    float x;
+    float y;
+    float z;
+};
+
+struct NwbMeshUv0{
+    float x;
+    float y;
+};
+
+struct NwbMeshHalf4{
+    uint xy;
+    uint zw;
+};
+
+struct NwbMeshletDeformedPositionRef{
+    uint position;
+    uint skin;
+};
+
+struct NwbMeshletShadingAttributeRef{
+    uint normal;
+    uint tangent;
+    uint uv0;
+    uint color;
+};
+
+struct NwbMeshletLocalVertexRef{
+    uint packed;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbMeshLoadPosition(const NwbMeshPosition value){
+    return float3(value.x, value.y, value.z);
+}
+
+NwbMeshPosition nwbMeshStorePosition(const float3 value){
+    NwbMeshPosition storedValue;
+    storedValue.x = value.x;
+    storedValue.y = value.y;
+    storedValue.z = value.z;
+    return storedValue;
+}
+
+float2 nwbMeshLoadUv0(const NwbMeshUv0 value){
+    return float2(value.x, value.y);
+}
+
+float4 nwbMeshLoadHalf4(const NwbMeshHalf4 value){
+    return float4(
+        nwbUnpackHalf2x16(value.xy),
+        nwbUnpackHalf2x16(value.zw)
+    );
+}
+
+NwbMeshHalf4 nwbMeshStoreHalf4(const float4 value){
+    NwbMeshHalf4 packedValue;
+    packedValue.xy = nwbPackHalf2x16(value.xy);
+    packedValue.zw = nwbPackHalf2x16(value.zw);
+    return packedValue;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

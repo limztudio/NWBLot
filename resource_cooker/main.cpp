@@ -2,10 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "resource_cooker.h"
+#include "module.h"
 
 #include <core/common/application_entry.h>
-#include <core/common/common.h>
+#include <core/common/module.h>
 #include <logger/client/logger.h>
 
 

@@ -4,7 +4,7 @@
 
 #include <impl/ecs_camera/components.h>
 
-#include <core/common/common.h>
+#include <core/common/module.h>
 
 #include <tests/test_context.h>
 

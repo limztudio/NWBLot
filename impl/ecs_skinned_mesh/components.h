@@ -8,9 +8,9 @@
 #include "../global.h"
 
 #include <core/alloc/general.h>
-#include <core/assets/asset_ref.h>
+#include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
-#include <impl/skinned_mesh/skinned_mesh_joint_types.h>
+#include <impl/skinned_mesh/joint_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +35,8 @@ namespace RuntimeMeshDirtyFlag{
         AttributesDirty = 1u << 1u,
         SkinnedMeshInputDirty = 1u << 2u,
         GpuUploadDirty = 1u << 3u,
-        All = TopologyDirty | AttributesDirty | SkinnedMeshInputDirty | GpuUploadDirty,
+        MeshletBoundsDirty = 1u << 4u,
+        All = TopologyDirty | AttributesDirty | SkinnedMeshInputDirty | GpuUploadDirty | MeshletBoundsDirty,
     };
 };
 using RuntimeMeshDirtyFlags = u8;

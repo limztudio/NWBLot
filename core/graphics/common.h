@@ -7,8 +7,8 @@
 
 #include <core/global.h>
 
-#include <core/common/common.h>
-#include <core/alloc/alloc.h>
+#include <core/common/module.h>
+#include <core/alloc/module.h>
 
 #include "basic.h"
 #include "shader_param.h"

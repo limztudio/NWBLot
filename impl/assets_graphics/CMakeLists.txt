@@ -8,8 +8,8 @@ target_link_libraries(nwb_assets_graphics INTERFACE
 if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_graphics_cook)
     target_sources(nwb_assets_graphics_cook PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/graphics_asset_cooker.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/graphics_asset_cooker.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cooker.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cooker.h"
     )
     target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets)
     target_link_libraries(nwb_assets_graphics_cook PRIVATE

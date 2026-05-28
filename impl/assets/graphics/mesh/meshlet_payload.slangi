@@ -1,0 +1,155 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_MESHLET_PAYLOAD_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_MESHLET_PAYLOAD_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "payload.slangi"
+
+#ifndef NWB_MESH_SHADER_GROUP_SIZE_X
+#define NWB_MESH_SHADER_GROUP_SIZE_X 128
+#endif
+
+#define NWB_MESH_SHADER_MAX_VERTICES 64
+#define NWB_MESH_SHADER_MAX_TRIANGLES 96
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static const uint NWB_MESHLET_BOUNDS_STRIDE = 24u;
+static const uint NWB_MESHLET_CONE_FLAG_ENABLED = 1u;
+static const uint NWB_MESHLET_COUNT_MASK = 0xffu;
+static const uint NWB_MESHLET_PRIMITIVE_COUNT_SHIFT = 8u;
+static const uint NWB_MESHLET_POSITION_COUNT_SHIFT = 16u;
+static const uint NWB_MESHLET_ATTRIBUTE_COUNT_SHIFT = 24u;
+static const uint NWB_MESHLET_CONE_AXIS_X_SHIFT = 0u;
+static const uint NWB_MESHLET_CONE_AXIS_Y_SHIFT = 8u;
+static const uint NWB_MESHLET_CONE_CUTOFF_SHIFT = 16u;
+static const uint NWB_MESHLET_CONE_FLAG_SHIFT = 24u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbMeshletDesc{
+    uint localVertexOffset;
+    uint positionOffset;
+    uint attributeOffset;
+    uint primitiveOffset;
+    uint counts;
+};
+
+struct NwbMeshletBounds{
+    float4 sphere;
+    uint conePacked;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbMeshletVertexCount(const NwbMeshletDesc meshlet){
+    return meshlet.counts & NWB_MESHLET_COUNT_MASK;
+}
+
+uint nwbMeshletPrimitiveCount(const NwbMeshletDesc meshlet){
+    return (meshlet.counts >> NWB_MESHLET_PRIMITIVE_COUNT_SHIFT) & NWB_MESHLET_COUNT_MASK;
+}
+
+uint nwbMeshletPositionCount(const NwbMeshletDesc meshlet){
+    return (meshlet.counts >> NWB_MESHLET_POSITION_COUNT_SHIFT) & NWB_MESHLET_COUNT_MASK;
+}
+
+uint nwbMeshletAttributeCount(const NwbMeshletDesc meshlet){
+    return meshlet.counts >> NWB_MESHLET_ATTRIBUTE_COUNT_SHIFT;
+}
+
+uint nwbMeshletBoundsByteOffset(const uint meshletIndex){
+    return meshletIndex * NWB_MESHLET_BOUNDS_STRIDE;
+}
+
+uint nwbMeshletLocalDeformedPosition(const NwbMeshletLocalVertexRef localVertexRef){
+    return localVertexRef.packed & 0xffffu;
+}
+
+uint nwbMeshletLocalAttribute(const NwbMeshletLocalVertexRef localVertexRef){
+    return localVertexRef.packed >> 16u;
+}
+
+uint nwbMeshPackUnorm8(const float value){
+    return uint(saturate(value) * 255.0 + 0.5);
+}
+
+uint nwbMeshPackConeOct16(float3 axis){
+    const float length = abs(axis.x) + abs(axis.y) + abs(axis.z);
+    if(!nwbFiniteFloat(length) || length <= 0.000001)
+        return 0x8080u;
+
+    axis /= length;
+    if(axis.z < 0.0){
+        const float foldedX = (1.0 - abs(axis.y)) * (axis.x < 0.0 ? -1.0 : 1.0);
+        const float foldedY = (1.0 - abs(axis.x)) * (axis.y < 0.0 ? -1.0 : 1.0);
+        axis.x = foldedX;
+        axis.y = foldedY;
+    }
+
+    return
+        (nwbMeshPackUnorm8(axis.x * 0.5 + 0.5) << NWB_MESHLET_CONE_AXIS_X_SHIFT)
+        | (nwbMeshPackUnorm8(axis.y * 0.5 + 0.5) << NWB_MESHLET_CONE_AXIS_Y_SHIFT)
+    ;
+}
+
+uint nwbMeshPackCone(const float3 axis, const float cutoff){
+    if(cutoff <= 0.0)
+        return 0u;
+
+    const uint packedCutoff = nwbMeshPackUnorm8(cutoff);
+    if(packedCutoff == 0u)
+        return 0u;
+
+    return
+        nwbMeshPackConeOct16(axis)
+        | (packedCutoff << NWB_MESHLET_CONE_CUTOFF_SHIFT)
+        | (NWB_MESHLET_CONE_FLAG_ENABLED << NWB_MESHLET_CONE_FLAG_SHIFT)
+    ;
+}
+
+float nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
+    return float((value >> bitShift) & 0xffu) / 255.0;
+}
+
+float3 nwbMeshUnpackConeAxis(const uint conePacked){
+    const float2 oct = float2(
+        nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_X_SHIFT),
+        nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_Y_SHIFT)
+    ) * 2.0 - 1.0;
+    float3 axis = float3(oct.x, oct.y, 1.0 - abs(oct.x) - abs(oct.y));
+    if(axis.z < 0.0){
+        const float2 signValue = float2(axis.x < 0.0 ? -1.0 : 1.0, axis.y < 0.0 ? -1.0 : 1.0);
+        axis.xy = (1.0 - abs(axis.yx)) * signValue;
+    }
+
+    return nwbSafeNormalize(axis, float3(0.0, 0.0, 1.0));
+}
+
+float nwbMeshUnpackConeCutoff(const uint conePacked){
+    return ((conePacked >> NWB_MESHLET_CONE_FLAG_SHIFT) & NWB_MESHLET_CONE_FLAG_ENABLED) != 0u
+        ? nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_CUTOFF_SHIFT)
+        : -1.0
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

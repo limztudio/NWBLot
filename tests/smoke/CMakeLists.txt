@@ -29,7 +29,7 @@ if(Python3_Interpreter_FOUND)
             nwb_common
             nwb_alloc
             nwb_loader
-            nwb_scene
+            nwb_ecs_scene
             nwb_ecs_mesh
             nwb_ecs_render
             ${ARGN}

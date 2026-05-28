@@ -20,7 +20,7 @@
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/loader.h>
-#include <core/scene/module.h>
+#include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 
 
@@ -223,7 +223,7 @@ inline usize NextGrowingCapacity(const usize currentCapacity, const usize requir
 }
 
 inline InstanceGpuData BuildInstanceGpuData(
-    const NWB::Core::Scene::TransformComponent* transform,
+    const NWB::Impl::Scene::TransformComponent* transform,
     const u32 materialTypedByteOffset,
     const u32 materialTypedByteCount
 ){
@@ -241,16 +241,16 @@ inline InstanceGpuData BuildInstanceGpuData(
 
 inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     SceneShadingGpuData state;
-    const NWB::Core::Scene::SceneViewBasis defaultBasis = NWB::Core::Scene::BuildDefaultSceneViewBasis();
+    const NWB::Impl::Scene::SceneViewBasis defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
 
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
     }
     else
         StoreFloat(VectorSetW(LoadFloat(defaultBasis.positionDepthBias), 1.0f), &state.cameraPosition);
 
-    const NWB::Core::Scene::SceneDirectionalLight light = NWB::Core::Scene::ResolveSceneDirectionalLight(world, defaultBasis);
+    const NWB::Impl::Scene::SceneDirectionalLight light = NWB::Impl::Scene::ResolveSceneDirectionalLight(world, defaultBasis);
     state.directionalLightDirection = light.direction;
     state.directionalLightColorIntensity = light.colorIntensity;
 

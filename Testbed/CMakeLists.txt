@@ -13,7 +13,7 @@ target_link_libraries(testbed PRIVATE
     nwb_common
     nwb_alloc
     nwb_loader
-    nwb_scene
+    nwb_ecs_scene
     nwb_ecs_mesh
     nwb_ecs_skinned_mesh
     nwb_ecs_skinned_mesh_render

@@ -226,7 +226,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             return false;
 #endif
 
-        const NWB::Core::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Core::Scene::TransformComponent>(entity);
+        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))

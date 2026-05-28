@@ -10,7 +10,7 @@
 #include <global/simplemath.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/skinned_asset.h>
-#include <core/scene/module.h>
+#include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_ui/module.h>
 
@@ -87,7 +87,7 @@ static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_
 }
 
 static void ResolveFlyCameraAnglesFromTransform(
-    const NWB::Core::Scene::TransformComponent& transform,
+    const NWB::Impl::Scene::TransformComponent& transform,
     f32& outYawRadians,
     f32& outPitchRadians){
     const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
@@ -104,7 +104,7 @@ static void ResolveFlyCameraAnglesFromTransform(
 }
 
 static void ApplyFlyCameraInput(
-    NWB::Core::Scene::TransformComponent& transform,
+    NWB::Impl::Scene::TransformComponent& transform,
     f32& yawRadians,
     f32& pitchRadians,
     const f32 rightAxis,
@@ -171,7 +171,7 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 mouseDeltaY,
     const f32 delta
 ){
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world);
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
     if(!cameraView.valid())
         return;
 
@@ -198,7 +198,7 @@ static void ApplyFlyCameraInputToMainCamera(
     material.virtualPath = Name(s_SkinnedMeshMaterialPath);
 
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
     transform.position = Float4(0.0f, 0.0f, 0.0f);
     transform.scale = Float4(1.0f, 1.0f, 1.0f);
 
@@ -277,14 +277,14 @@ void ProjectTestbed::destroyWorld(){
 
 bool ProjectTestbed::onStartup(){
     auto activeCameraEntity = m_world->createEntity();
-    auto& activeCamera = activeCameraEntity.addComponent<NWB::Core::Scene::ActiveCameraComponent>();
+    auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
     const Float4 cameraPosition(
         0.0f,
         __hidden_runtime::s_CharacterCameraTargetY,
         -__hidden_runtime::s_CameraStartDepth
     );
-    activeCamera.camera = NWB::Core::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
-    NWB::Core::Scene::CreateDirectionalLightEntity(
+    activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
+    NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,
         __hidden_runtime::s_DefaultDirectionalLightYaw,

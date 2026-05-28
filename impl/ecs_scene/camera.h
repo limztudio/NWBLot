@@ -15,19 +15,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_BEGIN
+NWB_IMPL_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct ActiveCameraComponent{
-    ECS::EntityID camera = ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID camera = Core::ECS::ENTITY_ID_INVALID;
 };
 
 static_assert(IsStandardLayout_V<ActiveCameraComponent>, "ActiveCameraComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<ActiveCameraComponent>, "ActiveCameraComponent must stay cheap to move in dense ECS storage");
-static_assert(sizeof(ActiveCameraComponent) == sizeof(ECS::EntityID), "ActiveCameraComponent must only contain the active camera entity reference");
+static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "ActiveCameraComponent must only contain the active camera entity reference");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -189,7 +189,7 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
 
 
 struct SceneCameraView{
-    ECS::EntityID entity = ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     TransformComponent* transform = nullptr;
     CameraComponent* camera = nullptr;
     CameraProjectionData projectionData;
@@ -209,14 +209,14 @@ struct SceneCameraView{
 };
 
 
-[[nodiscard]] SceneCameraView ResolveSceneCameraView(ECS::World& world, f32 fallbackAspectRatio = 1.0f);
-[[nodiscard]] ECS::EntityID CreateSceneCameraEntity(ECS::World& world, const Float4& position);
+[[nodiscard]] SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, f32 fallbackAspectRatio = 1.0f);
+[[nodiscard]] Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_END
+NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

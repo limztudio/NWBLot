@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_BEGIN
+NWB_IMPL_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,8 +51,8 @@ SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& ba
     return light;
 }
 
-ECS::EntityID CreateDirectionalLightEntity(
-    ECS::World& world,
+Core::ECS::EntityID CreateDirectionalLightEntity(
+    Core::ECS::World& world,
     const f32 pitchRadians,
     const f32 yawRadians,
     const f32 rollRadians,
@@ -109,7 +109,7 @@ bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const Li
     return true;
 }
 
-SceneDirectionalLight ResolveSceneDirectionalLight(ECS::World& world, const SceneViewBasis& defaultBasis){
+SceneDirectionalLight ResolveSceneDirectionalLight(Core::ECS::World& world, const SceneViewBasis& defaultBasis){
     const auto lightView = world.view<TransformComponent, LightComponent>();
     for(auto it = lightView.begin(); it != lightView.end(); ++it){
         auto&& [entity, transform, light] = *it;
@@ -127,7 +127,7 @@ SceneDirectionalLight ResolveSceneDirectionalLight(ECS::World& world, const Scen
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_END
+NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

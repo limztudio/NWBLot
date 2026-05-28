@@ -15,7 +15,7 @@
 #include <core/mesh/classification.h>
 #include <impl/ecs_skinned_mesh/components.h>
 #include <impl/ecs_mesh/module.h>
-#include <core/scene/module.h>
+#include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/components.h>
 #include <impl/assets_mesh/meshlet_ref_encoding.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
@@ -68,12 +68,12 @@ static void TestLightComponents(TestContext& context){
     TestWorld testWorld;
 
     auto directionalEntity = testWorld.world.createEntity();
-    auto& directionalTransform = directionalEntity.addComponent<NWB::Core::Scene::TransformComponent>();
-    auto& directionalLight = directionalEntity.addComponent<NWB::Core::Scene::LightComponent>();
+    auto& directionalTransform = directionalEntity.addComponent<NWB::Impl::Scene::TransformComponent>();
+    auto& directionalLight = directionalEntity.addComponent<NWB::Impl::Scene::LightComponent>();
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::Scene::TransformComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Core::Scene::LightComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.type == NWB::Core::Scene::LightType::Directional);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Impl::Scene::TransformComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalEntity.hasComponent<NWB::Impl::Scene::LightComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.type == NWB::Impl::Scene::LightType::Directional);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.color().x == 1.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.color().y == 1.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalLight.color().z == 1.0f);
@@ -82,17 +82,17 @@ static void TestLightComponents(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, directionalTransform.rotation.w == 1.0f);
 
     auto pointEntity = testWorld.world.createEntity();
-    auto& pointTransform = pointEntity.addComponent<NWB::Core::Scene::TransformComponent>();
-    auto& pointLight = pointEntity.addComponent<NWB::Core::Scene::LightComponent>();
+    auto& pointTransform = pointEntity.addComponent<NWB::Impl::Scene::TransformComponent>();
+    auto& pointLight = pointEntity.addComponent<NWB::Impl::Scene::LightComponent>();
     pointTransform.position = Float4(1.0f, 2.0f, 3.0f);
-    pointLight.type = NWB::Core::Scene::LightType::Point;
+    pointLight.type = NWB::Impl::Scene::LightType::Point;
     pointLight.setColor(Float4(1.0f, 0.75f, 0.5f));
     pointLight.setIntensity(4.0f);
     pointLight.range = 12.0f;
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::Scene::TransformComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Core::Scene::LightComponent>());
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.type == NWB::Core::Scene::LightType::Point);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Impl::Scene::TransformComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointEntity.hasComponent<NWB::Impl::Scene::LightComponent>());
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.type == NWB::Impl::Scene::LightType::Point);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.color().x == 1.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.color().y == 0.75f);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, pointLight.color().z == 0.5f);
@@ -101,29 +101,29 @@ static void TestLightComponents(TestContext& context){
 
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        (reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Core::Scene::LightComponent)) == 0
+        (reinterpret_cast<usize>(&directionalLight) % alignof(NWB::Impl::Scene::LightComponent)) == 0
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, (reinterpret_cast<usize>(&pointLight) % alignof(NWB::Core::Scene::LightComponent)) == 0);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, (reinterpret_cast<usize>(&pointLight) % alignof(NWB::Impl::Scene::LightComponent)) == 0);
 
     const NWB::Core::ECS::EntityID pointEntityId = pointEntity.id();
     usize lightViewCount = 0;
     usize directionalLightCount = 0;
     usize pointLightCount = 0;
     testWorld.world.view<
-        NWB::Core::Scene::TransformComponent,
-        NWB::Core::Scene::LightComponent
+        NWB::Impl::Scene::TransformComponent,
+        NWB::Impl::Scene::LightComponent
     >().each(
         [&context, &lightViewCount, &directionalLightCount, &pointLightCount, pointEntityId](
             NWB::Core::ECS::EntityID entityId,
-            NWB::Core::Scene::TransformComponent& viewTransform,
-            NWB::Core::Scene::LightComponent& viewLight
+            NWB::Impl::Scene::TransformComponent& viewTransform,
+            NWB::Impl::Scene::LightComponent& viewLight
         ){
             ++lightViewCount;
-            if(viewLight.type == NWB::Core::Scene::LightType::Directional){
+            if(viewLight.type == NWB::Impl::Scene::LightType::Directional){
                 ++directionalLightCount;
                 NWB_ECS_GRAPHICS_TEST_CHECK(context, viewLight.intensity() > 0.0f);
             }
-            else if(viewLight.type == NWB::Core::Scene::LightType::Point){
+            else if(viewLight.type == NWB::Impl::Scene::LightType::Point){
                 ++pointLightCount;
                 NWB_ECS_GRAPHICS_TEST_CHECK(context, entityId == pointEntityId);
                 NWB_ECS_GRAPHICS_TEST_CHECK(context, viewTransform.position.x == 1.0f);

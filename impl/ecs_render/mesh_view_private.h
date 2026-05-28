@@ -8,7 +8,7 @@
 #include "system.h"
 
 #include <core/ecs/world.h>
-#include <core/scene/module.h>
+#include <impl/ecs_scene/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -151,23 +151,23 @@ inline void BuildMeshViewFrustumVectors(
 
 inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     MeshViewGpuData state;
-    NWB::Core::Scene::SceneViewBasis viewBasis = NWB::Core::Scene::BuildDefaultSceneViewBasis();
-    NWB::Core::Scene::CameraComponent defaultCamera;
-    NWB::Core::Scene::CameraProjectionData projectionData;
+    NWB::Impl::Scene::SceneViewBasis viewBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
+    NWB::Impl::Scene::CameraComponent defaultCamera;
+    NWB::Impl::Scene::CameraProjectionData projectionData;
     f32 nearPlane = defaultCamera.nearPlane();
     f32 farPlane = defaultCamera.farPlane();
 
-    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
-        viewBasis = NWB::Core::Scene::BuildSceneViewBasis(*cameraView.transform);
+        viewBasis = NWB::Impl::Scene::BuildSceneViewBasis(*cameraView.transform);
         projectionData = cameraView.projectionData;
         nearPlane = cameraView.camera->nearPlane();
         farPlane = cameraView.camera->farPlane();
     }
-    else if(!NWB::Core::Scene::TryBuildCameraProjectionData(defaultCamera, fallbackAspectRatio, projectionData)){
+    else if(!NWB::Impl::Scene::TryBuildCameraProjectionData(defaultCamera, fallbackAspectRatio, projectionData)){
         projectionData.aspectRatio = 1.0f;
         projectionData.tanHalfVerticalFov = 1.0f;
-        projectionData.projectionParams = NWB::Core::Scene::BuildDefaultCameraProjectionParams(fallbackAspectRatio);
+        projectionData.projectionParams = NWB::Impl::Scene::BuildDefaultCameraProjectionParams(fallbackAspectRatio);
     }
 
     const SIMDVector positionDepthBias = LoadFloat(viewBasis.positionDepthBias);

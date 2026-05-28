@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_BEGIN
+NWB_IMPL_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,8 +78,8 @@ static_assert(alignof(SceneDirectionalLight) >= alignof(Float4), "SceneDirection
 
 
 [[nodiscard]] SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis);
-ECS::EntityID CreateDirectionalLightEntity(
-    ECS::World& world,
+Core::ECS::EntityID CreateDirectionalLightEntity(
+    Core::ECS::World& world,
     f32 pitchRadians,
     f32 yawRadians,
     f32 rollRadians,
@@ -87,13 +87,13 @@ ECS::EntityID CreateDirectionalLightEntity(
     f32 intensity
 );
 [[nodiscard]] bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const LightComponent& light, SceneDirectionalLight& outLight);
-[[nodiscard]] SceneDirectionalLight ResolveSceneDirectionalLight(ECS::World& world, const SceneViewBasis& defaultBasis);
+[[nodiscard]] SceneDirectionalLight ResolveSceneDirectionalLight(Core::ECS::World& world, const SceneViewBasis& defaultBasis);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_END
+NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

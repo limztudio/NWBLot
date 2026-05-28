@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_BEGIN
+NWB_IMPL_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,7 +46,7 @@ namespace __hidden_camera{
 }
 
 [[nodiscard]] bool TryBuildSceneCameraView(
-    const ECS::EntityID entity,
+    const Core::ECS::EntityID entity,
     TransformComponent& transform,
     CameraComponent& camera,
     const f32 fallbackAspectRatio,
@@ -71,7 +71,7 @@ namespace __hidden_camera{
     return true;
 }
 
-[[nodiscard]] ECS::EntityID ResolveActiveCamera(ECS::World& world){
+[[nodiscard]] Core::ECS::EntityID ResolveActiveCamera(Core::ECS::World& world){
     const auto activeCameraView = world.view<ActiveCameraComponent>();
     for(auto it = activeCameraView.begin(); it != activeCameraView.end(); ++it){
         auto&& [entity, activeCamera] = *it;
@@ -79,7 +79,7 @@ namespace __hidden_camera{
         return activeCamera.camera;
     }
 
-    return ECS::ENTITY_ID_INVALID;
+    return Core::ECS::ENTITY_ID_INVALID;
 }
 
 
@@ -92,7 +92,7 @@ namespace __hidden_camera{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ECS::EntityID CreateSceneCameraEntity(ECS::World& world, const Float4& position){
+Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float4& position){
     auto cameraEntity = world.createEntity();
     auto& transform = cameraEntity.addComponent<TransformComponent>();
     transform.position = position;
@@ -103,8 +103,8 @@ ECS::EntityID CreateSceneCameraEntity(ECS::World& world, const Float4& position)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneCameraView ResolveSceneCameraView(ECS::World& world, const f32 fallbackAspectRatio){
-    const ECS::EntityID activeCamera = __hidden_camera::ResolveActiveCamera(world);
+SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio){
+    const Core::ECS::EntityID activeCamera = __hidden_camera::ResolveActiveCamera(world);
     SceneCameraView fallbackCamera;
     SceneCameraView requestedCamera;
 
@@ -133,7 +133,7 @@ SceneCameraView ResolveSceneCameraView(ECS::World& world, const f32 fallbackAspe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_SCENE_END
+NWB_IMPL_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -3,10 +3,9 @@
 
 
 #include "mesh/authoring.slangi"
-#include "engine/graphics/bxdf_surface.bind"
+#include "project/shaders/bxdf_surface.bind"
 #include "bxdf.slangi"
 #include "bxdf_mesh_vertex.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -31,3 +31,5 @@
   - Linux uses the same CMake + Ninja + Clang flow and `dbg` / `opt` / `fin` build configurations as Windows.
   - `slangc` is required when `NWB_BUILD_RESOURCE_COOKER` is enabled.
   - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.
+  - fin skinned-cone benchmark verification: build `nwb_skinned_cone_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinned_cone_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinned_cone_culling_benchmark --output-on-failure`.
+  - Project code should request a clean shutdown through `ProjectRuntimeContext::requestQuit`; the frame loop stops before submitting another graphics frame after that request.

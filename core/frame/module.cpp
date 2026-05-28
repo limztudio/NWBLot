@@ -86,6 +86,9 @@ bool Frame::update(f32 delta){
         }
     }
 
+    if(quitRequested())
+        return true;
+
     if(!m_graphics.runFrame()){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics frame update failed"));
         return false;

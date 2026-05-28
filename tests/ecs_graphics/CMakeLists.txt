@@ -1,6 +1,7 @@
 nwb_declare_executable(nwb_ecs_graphics_tests)
 target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../meshlet_ref_test_data.h"
 )
 target_link_libraries(nwb_ecs_graphics_tests PRIVATE
     nwb_ecs_skinned_mesh

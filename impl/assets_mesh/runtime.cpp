@@ -51,19 +51,7 @@ bool Mesh::validatePayload()const{
     Core::Alloc::ScratchArena scratchArena;
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
-    if(
-        m_positionStream.empty()
-        || m_normalStream.empty()
-        || m_tangentStream.empty()
-        || m_uv0Stream.empty()
-        || m_colorStream.empty()
-        || m_meshlets.empty()
-        || m_meshletBounds.empty()
-        || m_meshletPositionRefDeltas.empty()
-        || m_meshletAttributeRefDeltas.empty()
-        || m_meshletLocalVertexRefs.empty()
-        || m_meshletPrimitiveIndices.empty()
-    ){
+    if(hasIncompleteGeometryPayload()){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload")
             , meshPathText
         );
@@ -99,17 +87,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    m_positionStream.clear();
-    m_normalStream.clear();
-    m_tangentStream.clear();
-    m_uv0Stream.clear();
-    m_colorStream.clear();
-    m_meshlets.clear();
-    m_meshletBounds.clear();
-    m_meshletPositionRefDeltas.clear();
-    m_meshletAttributeRefDeltas.clear();
-    m_meshletLocalVertexRefs.clear();
-    m_meshletPrimitiveIndices.clear();
+    clearGeometryPayload();
 
     const tchar* const loadFailureContext = NWB_TEXT("Mesh::loadBinary");
     usize cursor = 0;

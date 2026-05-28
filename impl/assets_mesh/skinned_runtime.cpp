@@ -60,20 +60,7 @@ bool SkinnedMesh::validatePayload()const{
         return false;
     }
 
-    if(
-        m_positionStream.empty()
-        || m_normalStream.empty()
-        || m_tangentStream.empty()
-        || m_uv0Stream.empty()
-        || m_colorStream.empty()
-        || m_skin.empty()
-        || m_meshlets.empty()
-        || m_meshletBounds.empty()
-        || m_meshletPositionRefDeltas.empty()
-        || m_meshletAttributeRefDeltas.empty()
-        || m_meshletLocalVertexRefs.empty()
-        || m_meshletPrimitiveIndices.empty()
-    ){
+    if(hasIncompleteGeometryPayload() || m_skin.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh::validatePayload failed: mesh '{}' has incomplete payload")
             , meshPathText
         );
@@ -154,19 +141,9 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    m_positionStream.clear();
-    m_normalStream.clear();
-    m_tangentStream.clear();
-    m_uv0Stream.clear();
-    m_colorStream.clear();
+    clearGeometryPayload();
     m_skin.clear();
     m_inverseBindMatrices.clear();
-    m_meshlets.clear();
-    m_meshletBounds.clear();
-    m_meshletPositionRefDeltas.clear();
-    m_meshletAttributeRefDeltas.clear();
-    m_meshletLocalVertexRefs.clear();
-    m_meshletPrimitiveIndices.clear();
     m_meshClass = Core::Mesh::MeshClass::Invalid;
     m_skeletonJointCount = 0u;
 

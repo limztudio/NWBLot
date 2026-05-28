@@ -26,21 +26,6 @@ struct SourceMeshStreams{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseSourceVertexRefValue(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const tchar* metaKind,
-    const AStringView label,
-    u32& outValue
-){
-    const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(value, outValue);
-    if(failure == MetadataU32ValueFailure::None)
-        return true;
-
-    LogMetadataU32ValueFailure(nwbFilePath, metaKind, label, failure);
-    return false;
-}
-
 static bool ParseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -95,7 +80,7 @@ static bool ParseSourceVertexRefs(
             componentLabel.append(label.data(), label.size());
             componentLabel += '.';
             componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
-            if(!ParseSourceVertexRefValue(nwbFilePath, components[componentIndex], metaKind, componentLabel, *componentValues[componentIndex]))
+            if(!ParseMetadataU32Value(nwbFilePath, components[componentIndex], metaKind, componentLabel, *componentValues[componentIndex]))
                 return false;
         }
         outVertexRefs.push_back(ref);

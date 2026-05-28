@@ -27,9 +27,7 @@ class Mesh;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RuntimeMeshDesc{
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
-    Name meshKey = NAME_NONE;
+struct RuntimeMeshBuffers{
     Core::BufferHandle positionBuffer;
     Core::BufferHandle normalBuffer;
     Core::BufferHandle tangentBuffer;
@@ -41,16 +39,10 @@ struct RuntimeMeshDesc{
     Core::BufferHandle meshletAttributeRefDeltaBuffer;
     Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
-    u32 meshletCount = 0u;
-    u64 version = 0u;
-    bool dynamicMeshletBoundsFresh = false;
-    bool dynamicMeshletConesFresh = false;
 
-    [[nodiscard]] bool valid()const noexcept{
+    [[nodiscard]] bool buffersValid()const noexcept{
         return
-            entity.valid()
-            && meshKey != NAME_NONE
-            && positionBuffer != nullptr
+            positionBuffer != nullptr
             && normalBuffer != nullptr
             && tangentBuffer != nullptr
             && uv0Buffer != nullptr
@@ -61,6 +53,23 @@ struct RuntimeMeshDesc{
             && meshletAttributeRefDeltaBuffer != nullptr
             && meshletLocalVertexRefBuffer != nullptr
             && meshletPrimitiveIndexBuffer != nullptr
+        ;
+    }
+};
+
+struct RuntimeMeshDesc : public RuntimeMeshBuffers{
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    Name meshKey = NAME_NONE;
+    u32 meshletCount = 0u;
+    u64 version = 0u;
+    bool dynamicMeshletBoundsFresh = false;
+    bool dynamicMeshletConesFresh = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            entity.valid()
+            && meshKey != NAME_NONE
+            && buffersValid()
             && meshletCount > 0u
         ;
     }

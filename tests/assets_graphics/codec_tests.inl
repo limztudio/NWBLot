@@ -333,22 +333,12 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
     auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
     auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
-    for(usize vertexIndex = 0u; vertexIndex < positions.size(); ++vertexIndex){
-        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        meshletLocalVertexRefs.push_back(NWB::Impl::MeshletLocalVertexRef{
-            static_cast<u16>(vertexIndex),
-            static_cast<u16>(vertexIndex),
-        });
-    }
+    NWB::Tests::AppendSequentialMeshletRefs(
+        positions.size(),
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        meshletLocalVertexRefs
+    );
 
     auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
     for(const u32 index : MakeQuadTriangleIndices())
@@ -424,22 +414,12 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
     auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
     auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
-    for(usize vertexIndex = 0u; vertexIndex < positions.size(); ++vertexIndex){
-        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        meshletLocalVertexRefs.push_back(NWB::Impl::MeshletLocalVertexRef{
-            static_cast<u16>(vertexIndex),
-            static_cast<u16>(vertexIndex),
-        });
-    }
+    NWB::Tests::AppendSequentialMeshletRefs(
+        positions.size(),
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        meshletLocalVertexRefs
+    );
 
     auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
     for(const u32 index : MakeTriangleIndices())

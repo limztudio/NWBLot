@@ -98,19 +98,8 @@ private:
         bool operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const;
     };
 
-    struct MeshResources{
+    struct MeshResources : public RuntimeMeshBuffers{
         Name meshName = NAME_NONE;
-        Core::BufferHandle positionBuffer;
-        Core::BufferHandle normalBuffer;
-        Core::BufferHandle tangentBuffer;
-        Core::BufferHandle uv0Buffer;
-        Core::BufferHandle colorBuffer;
-        Core::BufferHandle meshletDescBuffer;
-        Core::BufferHandle meshletBoundsBuffer;
-        Core::BufferHandle meshletPositionRefDeltaBuffer;
-        Core::BufferHandle meshletAttributeRefDeltaBuffer;
-        Core::BufferHandle meshletLocalVertexRefBuffer;
-        Core::BufferHandle meshletPrimitiveIndexBuffer;
         Core::BufferHandle emulationVertexBuffer;
         Core::BindingSetHandle meshBindingSet;
         Core::BindingSetHandle computeBindingSet;
@@ -124,17 +113,7 @@ private:
         [[nodiscard]] bool valid()const noexcept{
             return
                 meshName != NAME_NONE
-                && positionBuffer != nullptr
-                && normalBuffer != nullptr
-                && tangentBuffer != nullptr
-                && uv0Buffer != nullptr
-                && colorBuffer != nullptr
-                && meshletDescBuffer != nullptr
-                && meshletBoundsBuffer != nullptr
-                && meshletPositionRefDeltaBuffer != nullptr
-                && meshletAttributeRefDeltaBuffer != nullptr
-                && meshletLocalVertexRefBuffer != nullptr
-                && meshletPrimitiveIndexBuffer != nullptr
+                && buffersValid()
                 && meshletCount > 0
                 && meshletPrimitiveIndexCount > 0
             ;

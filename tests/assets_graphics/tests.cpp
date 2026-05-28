@@ -12,6 +12,7 @@
 #include <impl/assets_shader/cook.h>
 
 #include <tests/capturing_logger.h>
+#include <tests/meshlet_ref_test_data.h>
 #include <tests/test_context.h>
 
 #include <core/alloc/scratch.h>

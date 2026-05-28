@@ -9,6 +9,7 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_codec_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_cooker_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/shader_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/../meshlet_ref_test_data.h"
 )
 target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1)
 target_link_libraries(nwb_assets_graphics_tests PRIVATE

@@ -7,6 +7,7 @@
 
 #include <tests/capturing_logger.h>
 #include <tests/ecs_test_world.h>
+#include <tests/meshlet_ref_test_data.h>
 #include <tests/test_context.h>
 
 #include <core/common/module.h>
@@ -242,21 +243,13 @@ static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
     });
     Vector<NWB::Impl::MeshletPositionStreamRef> meshletPositionStreamRefs;
     Vector<NWB::Impl::MeshletAttributeStreamRef> meshletAttributeStreamRefs;
+    NWB::Tests::AppendSequentialMeshletRefs(
+        instance.restPositions.size(),
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        instance.meshletLocalVertexRefs
+    );
     for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
-        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-            static_cast<u32>(vertexIndex),
-        });
-        instance.meshletLocalVertexRefs.push_back(NWB::Impl::MeshletLocalVertexRef{
-            static_cast<u16>(vertexIndex),
-            static_cast<u16>(vertexIndex),
-        });
         instance.attributeSkins.push_back(static_cast<u32>(vertexIndex));
     }
     for(const u32 index : MakeTriangleIndices())

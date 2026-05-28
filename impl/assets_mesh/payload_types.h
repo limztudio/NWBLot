@@ -18,8 +18,8 @@ NWB_IMPL_BEGIN
 
 
 inline constexpr u32 s_MeshMissingStreamIndex = Limit<u32>::s_Max;
-inline constexpr u32 s_MeshMaxMeshletVertices = 64u;
-inline constexpr u32 s_MeshMaxMeshletTriangles = 96u;
+inline constexpr u32 s_MeshMaxMeshletVertices = 96u;
+inline constexpr u32 s_MeshMaxMeshletTriangles = 126u;
 inline constexpr u32 s_MeshletConeFlagEnabled = 1u << 0u;
 
 struct MeshletDesc{

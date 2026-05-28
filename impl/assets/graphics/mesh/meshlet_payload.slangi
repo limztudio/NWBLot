@@ -15,8 +15,8 @@
 #define NWB_MESH_SHADER_GROUP_SIZE_X 128
 #endif
 
-#define NWB_MESH_SHADER_MAX_VERTICES 64
-#define NWB_MESH_SHADER_MAX_TRIANGLES 96
+#define NWB_MESH_SHADER_MAX_VERTICES 96
+#define NWB_MESH_SHADER_MAX_TRIANGLES 126
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

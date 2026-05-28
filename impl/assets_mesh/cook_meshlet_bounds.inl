@@ -36,13 +36,18 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     }
 
     SIMDVector areaWeightedNormal = VectorZero();
+    u32 validFaceNormalCount = 0u;
     ForEachMeshletFaceNormalVector(entry, meshlet, [&](const SIMDVector faceNormal){
+        if(!Core::Mesh::FrameValidDirection(faceNormal))
+            return;
+
         areaWeightedNormal = VectorAdd(areaWeightedNormal, faceNormal);
+        ++validFaceNormalCount;
     });
 
     const SIMDVector coneAxis = NormalizeMeshletDirectionOrZero(areaWeightedNormal);
     f32 coneCutoff = -1.0f;
-    if(Core::Mesh::FrameValidDirection(coneAxis)){
+    if(validFaceNormalCount == MeshletPrimitiveCount(meshlet) && Core::Mesh::FrameValidDirection(coneAxis)){
         coneCutoff = 1.0f;
         ForEachMeshletFaceNormalVector(entry, meshlet, [&](const SIMDVector meshletFaceNormal){
             const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);

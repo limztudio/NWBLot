@@ -40,6 +40,7 @@ groupshared float g_NwbSkinnedMeshBoundsRadiusSq[NWB_SKINNED_MESH_BOUNDS_GROUP_S
 groupshared float3 g_NwbSkinnedMeshBoundsAreaNormal[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared float g_NwbSkinnedMeshBoundsConeCutoff[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared uint g_NwbSkinnedMeshBoundsValidPositionCount[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
+groupshared uint g_NwbSkinnedMeshBoundsValidFaceNormalCount[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared float3 g_NwbSkinnedMeshBoundsCenter;
 groupshared float3 g_NwbSkinnedMeshBoundsConeAxis;
 
@@ -112,7 +113,7 @@ bool nwbSkinnedMeshBoundsFaceNormal(
     }
 
     outFaceNormal = cross(p1 - p0, p2 - p0);
-    return nwbFiniteFloat3(outFaceNormal);
+    return nwbValidFrameDirection(outFaceNormal);
 }
 
 void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, const uint conePacked){
@@ -165,6 +166,15 @@ void nwbSkinnedMeshBoundsReduceAreaNormal(const uint groupThreadIndex){
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
             g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex] += g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+void nwbSkinnedMeshBoundsReduceValidFaceNormalCount(const uint groupThreadIndex){
+    GroupMemoryBarrierWithGroupSync();
+    for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
+        if(groupThreadIndex < stride)
+            g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex] += g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex + stride];
         GroupMemoryBarrierWithGroupSync();
     }
 }
@@ -243,13 +253,18 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshBoundsReduceRadius(groupThreadIndex);
 
     float3 localAreaNormal = float3(0.0);
+    uint localValidFaceNormalCount = 0u;
     for(uint localPrimitiveIndex = groupThreadIndex; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 faceNormal = float3(0.0);
-        if(nwbSkinnedMeshBoundsFaceNormal(meshlet, decodeInfo, localPrimitiveIndex, faceNormal))
+        if(nwbSkinnedMeshBoundsFaceNormal(meshlet, decodeInfo, localPrimitiveIndex, faceNormal)){
             localAreaNormal += faceNormal;
+            ++localValidFaceNormalCount;
+        }
     }
     g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex] = localAreaNormal;
+    g_NwbSkinnedMeshBoundsValidFaceNormalCount[groupThreadIndex] = localValidFaceNormalCount;
     nwbSkinnedMeshBoundsReduceAreaNormal(groupThreadIndex);
+    nwbSkinnedMeshBoundsReduceValidFaceNormalCount(groupThreadIndex);
 
     if(groupThreadIndex == 0u)
         g_NwbSkinnedMeshBoundsConeAxis = nwbSafeNormalize(g_NwbSkinnedMeshBoundsAreaNormal[0u], float3(0.0));
@@ -273,7 +288,11 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     const float radius = sqrt(g_NwbSkinnedMeshBoundsRadiusSq[0u]);
     const float coneCutoff = g_NwbSkinnedMeshBoundsConeCutoff[0u];
-    const uint conePacked = nwbValidFrameDirection(g_NwbSkinnedMeshBoundsConeAxis) && coneCutoff > 0.0
+    const bool coneValid = g_NwbSkinnedMeshBoundsValidFaceNormalCount[0u] == primitiveCount
+        && nwbValidFrameDirection(g_NwbSkinnedMeshBoundsConeAxis)
+        && coneCutoff > 0.0
+    ;
+    const uint conePacked = coneValid
         ? nwbMeshPackCone(g_NwbSkinnedMeshBoundsConeAxis, coneCutoff)
         : 0u
     ;

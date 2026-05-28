@@ -226,6 +226,14 @@ uint nwbMeshPackUnorm8(const float value){
     return uint(saturate(value) * 255.0 + 0.5);
 }
 
+uint nwbMeshPackConeCutoffUnorm8(const float value){
+    return uint(saturate(value) * 255.0);
+}
+
+float nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
+    return float((value >> bitShift) & 0xffu) / 255.0;
+}
+
 uint nwbMeshPackConeOct16(float3 axis){
     const float length = abs(axis.x) + abs(axis.y) + abs(axis.z);
     if(!nwbFiniteFloat(length) || length <= 0.000001)
@@ -245,26 +253,7 @@ uint nwbMeshPackConeOct16(float3 axis){
     ;
 }
 
-uint nwbMeshPackCone(const float3 axis, const float cutoff){
-    if(cutoff <= 0.0)
-        return 0u;
-
-    const uint packedCutoff = nwbMeshPackUnorm8(cutoff);
-    if(packedCutoff == 0u)
-        return 0u;
-
-    return
-        nwbMeshPackConeOct16(axis)
-        | (packedCutoff << NWB_MESHLET_CONE_CUTOFF_SHIFT)
-        | (NWB_MESHLET_CONE_FLAG_ENABLED << NWB_MESHLET_CONE_FLAG_SHIFT)
-    ;
-}
-
-float nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
-    return float((value >> bitShift) & 0xffu) / 255.0;
-}
-
-float3 nwbMeshUnpackConeAxis(const uint conePacked){
+float3 nwbMeshUnpackConeOct16Axis(const uint conePacked){
     const float2 oct = float2(
         nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_X_SHIFT),
         nwbMeshUnpackUnorm8(conePacked, NWB_MESHLET_CONE_AXIS_Y_SHIFT)
@@ -276,6 +265,37 @@ float3 nwbMeshUnpackConeAxis(const uint conePacked){
     }
 
     return nwbSafeNormalize(axis, float3(0.0, 0.0, 1.0));
+}
+
+float nwbMeshConservativePackedConeCutoff(const float3 axis, const float cutoff, const uint packedAxis){
+    const float3 unpackedAxis = nwbMeshUnpackConeOct16Axis(packedAxis);
+    const float axisDot = clamp(dot(nwbSafeNormalize(axis, unpackedAxis), unpackedAxis), -1.0, 1.0);
+    const float safeCutoff = saturate(cutoff);
+    const float sinTheta = sqrt(max(0.0, 1.0 - safeCutoff * safeCutoff));
+    const float sinAxisError = sqrt(max(0.0, 1.0 - axisDot * axisDot));
+    return safeCutoff * axisDot - sinTheta * sinAxisError;
+}
+
+uint nwbMeshPackCone(const float3 axis, const float cutoff){
+    if(cutoff <= 0.0)
+        return 0u;
+
+    const uint packedAxis = nwbMeshPackConeOct16(axis);
+    const uint packedCutoff = nwbMeshPackConeCutoffUnorm8(
+        nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis)
+    );
+    if(packedCutoff == 0u)
+        return 0u;
+
+    return
+        packedAxis
+        | (packedCutoff << NWB_MESHLET_CONE_CUTOFF_SHIFT)
+        | (NWB_MESHLET_CONE_FLAG_ENABLED << NWB_MESHLET_CONE_FLAG_SHIFT)
+    ;
+}
+
+float3 nwbMeshUnpackConeAxis(const uint conePacked){
+    return nwbMeshUnpackConeOct16Axis(conePacked);
 }
 
 float nwbMeshUnpackConeCutoff(const uint conePacked){

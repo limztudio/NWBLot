@@ -125,6 +125,10 @@ namespace MeshletRefDeltaWidth{
     return static_cast<u32>(Saturate(value) * 255.0f + 0.5f);
 }
 
+[[nodiscard]] inline u32 PackMeshletConeCutoffUnorm8(const f32 value){
+    return static_cast<u32>(Saturate(value) * 255.0f);
+}
+
 [[nodiscard]] inline u32 PackMeshletConeOct16(const SIMDVector axis){
     f32 x = VectorGetX(axis);
     f32 y = VectorGetY(axis);
@@ -150,16 +154,56 @@ namespace MeshletRefDeltaWidth{
     ;
 }
 
+[[nodiscard]] inline f32 UnpackMeshletConeUnorm8(const u32 value, const u32 bitShift){
+    return static_cast<f32>((value >> bitShift) & 0xffu) * (1.0f / 255.0f);
+}
+
+[[nodiscard]] inline SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked){
+    f32 x = UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * 2.0f - 1.0f;
+    f32 y = UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * 2.0f - 1.0f;
+    f32 z = 1.0f - Abs(x) - Abs(y);
+    if(z < 0.0f){
+        const f32 foldedX = (1.0f - Abs(y)) * (x < 0.0f ? -1.0f : 1.0f);
+        const f32 foldedY = (1.0f - Abs(x)) * (y < 0.0f ? -1.0f : 1.0f);
+        x = foldedX;
+        y = foldedY;
+    }
+
+    const f32 lengthSquared = x * x + y * y + z * z;
+    if(!IsFinite(lengthSquared) || lengthSquared <= 0.00000001f)
+        return VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+
+    const f32 invLength = 1.0f / Sqrt(lengthSquared);
+    return VectorSet(x * invLength, y * invLength, z * invLength, 0.0f);
+}
+
+[[nodiscard]] inline f32 ConservativePackedMeshletConeCutoff(const SIMDVector axis, const f32 cutoff, const u32 packedAxis){
+    const SIMDVector unpackedAxis = UnpackMeshletConeOct16Axis(packedAxis);
+    const f32 axisLengthSquared = VectorGetX(Vector3LengthSq(axis));
+    const SIMDVector normalizedAxis = IsFinite(axisLengthSquared) && axisLengthSquared > 0.00000001f
+        ? VectorMultiply(axis, VectorReciprocalSqrt(VectorReplicate(axisLengthSquared)))
+        : unpackedAxis
+    ;
+    const f32 axisDot = Max(-1.0f, Min(1.0f, VectorGetX(Vector3Dot(normalizedAxis, unpackedAxis))));
+    const f32 safeCutoff = Saturate(cutoff);
+    const f32 sinTheta = Sqrt(Max(0.0f, 1.0f - safeCutoff * safeCutoff));
+    const f32 sinAxisError = Sqrt(Max(0.0f, 1.0f - axisDot * axisDot));
+    return safeCutoff * axisDot - sinTheta * sinAxisError;
+}
+
 [[nodiscard]] inline u32 PackMeshletCone(const SIMDVector axis, const f32 cutoff){
     if(cutoff <= 0.0f)
         return 0u;
 
-    const u32 packedCutoff = PackMeshletConeUnorm8(cutoff);
+    const u32 packedAxis = PackMeshletConeOct16(axis);
+    const u32 packedCutoff = PackMeshletConeCutoffUnorm8(
+        ConservativePackedMeshletConeCutoff(axis, cutoff, packedAxis)
+    );
     if(packedCutoff == 0u)
         return 0u;
 
     return
-        PackMeshletConeOct16(axis)
+        packedAxis
         | (packedCutoff << s_MeshletConeCutoffShift)
         | (s_MeshletConeFlagEnabled << s_MeshletConeFlagShift)
     ;

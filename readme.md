@@ -1,9 +1,9 @@
-- target always be x64 (in the future I should consider ARM64 but I would never consider 32bit)
+- Targets are x64 only. ARM64 may be considered later; 32-bit targets are intentionally unsupported.
 
-- config now would be dbg, opt and fin
-  - dbg: not optimized. no inline.
-  - opt: optimized. only primitives are inlined. frame pointer available.
-  - fin: optimized. inlined. frame pointer is omitted. hardly debuggable.
+- Supported build configurations are `dbg`, `opt`, and `fin`.
+  - `dbg`: no optimization and no inlining.
+  - `opt`: optimized, only primitives are inlined, and frame pointers are available.
+  - `fin`: optimized, inlined, frame pointers are omitted, and debugging is intentionally limited.
 
 - CMake is the cross-platform build entry point for this repository.
 - LLVM/Clang is now the required compiler toolchain on every platform.
@@ -31,5 +31,10 @@
   - Linux uses the same CMake + Ninja + Clang flow and `dbg` / `opt` / `fin` build configurations as Windows.
   - `slangc` is required when `NWB_BUILD_RESOURCE_COOKER` is enabled.
   - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.
-  - fin skinned-cone benchmark verification: build `nwb_skinned_cone_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinned_cone_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinned_cone_culling_benchmark --output-on-failure`.
-  - Project code should request a clean shutdown through `ProjectRuntimeContext::requestQuit`; the frame loop stops before submitting another graphics frame after that request.
+  - Full Linux configure: `cmake --preset linux-clang-x64`.
+  - Debug test verification: `cmake --build --preset linux-clang-dbg`, then `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg --output-on-failure`.
+  - fin skinned-cone benchmark verification: configure with `cmake --preset linux-clang-x64`, build `nwb_skinned_cone_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinned_cone_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinned_cone_culling_benchmark --output-on-failure`.
+  - The skinned-cone benchmark CTest entry is `fin`-only and is configured only when `tests/smoke/assets/characters/skinned_cone_female.nwb` is present.
+  - The benchmark CTest is a smoke/regression check. It records GPU timing metrics in the log and allows a small tolerance for near-equal no-culling and culling render times.
+  - Project code should request a clean shutdown through `ProjectRuntimeContext::requestQuit`; do not call platform-specific quit APIs such as `PostQuitMessage` from project or smoke-test code.
+  - When `requestQuit` is raised during project update, the frame loop exits without submitting another graphics frame.

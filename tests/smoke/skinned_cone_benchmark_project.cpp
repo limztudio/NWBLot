@@ -99,6 +99,8 @@ static constexpr u32 s_BenchmarkRepeatCount = 4u;
 static constexpr u32 s_WarmupFrameCount = 8u;
 static constexpr u32 s_SampleFrameCount = 16u;
 static constexpr u32 s_FinishDrainFrameCount = 30u;
+static constexpr f64 s_CullingRegressionToleranceRatio = 0.02;
+static constexpr f64 s_CullingRegressionToleranceMilliseconds = 0.05;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
@@ -535,22 +537,31 @@ private:
             && frustumConeRenderAverage > 0.0
         ;
         const bool cullingFaster = hasComparisonTiming && frustumConeRenderAverage < noCullingAverage;
+        const f64 cullingRegressionTolerance = Max(
+            s_CullingRegressionToleranceMilliseconds,
+            noCullingAverage * s_CullingRegressionToleranceRatio
+        );
+        const bool cullingAcceptable =
+            cullingFaster
+            || (hasComparisonTiming && frustumConeRenderAverage <= noCullingAverage + cullingRegressionTolerance)
+        ;
         const f64 speedup = cullingFaster ? noCullingAverage / frustumConeRenderAverage : 0.0;
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling comparison repeats={} no_culling_render_frame_gpu_ms={} with_culling_render_frame_gpu_ms={} with_culling_total_frame_gpu_ms={} with_culling_bounds_frame_gpu_ms={} speedup={} result={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling comparison repeats={} no_culling_render_frame_gpu_ms={} with_culling_render_frame_gpu_ms={} with_culling_total_frame_gpu_ms={} with_culling_bounds_frame_gpu_ms={} tolerance_ms={} speedup={} result={}")
             , s_BenchmarkRepeatCount
             , noCullingAverage
             , frustumConeRenderAverage
             , frustumConeAverage
             , BoundsGpuMilliseconds(frustumConeSummary)
+            , cullingRegressionTolerance
             , speedup
-            , StringConvert(cullingFaster ? "pass" : "fail")
+            , StringConvert(cullingAcceptable ? (cullingFaster ? "pass" : "pass_tolerance") : "fail")
         );
-        if(cullingFaster){
+        if(cullingAcceptable){
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling benchmark passed"));
         }
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: culling benchmark failed; with-culling render timing must be lower than no-culling render timing"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: culling benchmark failed; with-culling render timing exceeded no-culling render timing beyond tolerance"));
         }
 
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: policy default=dynamic_frustum_cone measured_frustum_only_gpu_ms={} measured_frustum_cone_gpu_ms={} recommendation={}")

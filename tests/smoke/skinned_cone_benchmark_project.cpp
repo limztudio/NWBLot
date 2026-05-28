@@ -10,12 +10,10 @@
 #include <core/graphics/module.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/skinned_asset.h>
-#include <impl/ecs_camera/system.h>
-#include <impl/ecs_lighting/system.h>
+#include <core/scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/timing_names.h>
-#include <impl/ecs_scene/system.h>
 #include <impl/ecs_skinned_mesh/runtime_helpers.h>
 #include <impl/ecs_skinned_mesh_render/module.h>
 #include <impl/ecs_skinned_mesh_render/timing_names.h>
@@ -442,7 +440,7 @@ private:
     }
 
     void configureCamera(const BenchmarkView::Enum view){
-        auto* transform = m_world->tryGetComponent<NWB::Impl::TransformComponent>(m_cameraEntity);
+        auto* transform = m_world->tryGetComponent<NWB::Core::Scene::TransformComponent>(m_cameraEntity);
         if(!transform)
             return;
 
@@ -652,10 +650,10 @@ public:
         }
 
         auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
+        auto& activeCamera = activeCameraEntity.addComponent<NWB::Core::Scene::ActiveCameraComponent>();
+        activeCamera.camera = NWB::Core::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
         m_cameraEntity = activeCamera.camera;
-        NWB::Impl::CreateDirectionalLightEntity(
+        NWB::Core::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
@@ -673,7 +671,7 @@ public:
 
         for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
             auto entity = m_world->createEntity();
-            auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+            auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
             transform.position = Float4(m_staticPreview ? 0.0f : (static_cast<f32>(characterIndex) - 1.0f) * 1.15f, 0.0f, 0.0f, 0.0f);
             transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 

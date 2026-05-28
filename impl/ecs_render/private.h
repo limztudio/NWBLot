@@ -20,9 +20,8 @@
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/loader.h>
-#include <impl/ecs_camera/system.h>
+#include <core/scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_lighting/system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -224,7 +223,7 @@ inline usize NextGrowingCapacity(const usize currentCapacity, const usize requir
 }
 
 inline InstanceGpuData BuildInstanceGpuData(
-    const NWB::Impl::TransformComponent* transform,
+    const NWB::Core::Scene::TransformComponent* transform,
     const u32 materialTypedByteOffset,
     const u32 materialTypedByteCount
 ){
@@ -242,16 +241,16 @@ inline InstanceGpuData BuildInstanceGpuData(
 
 inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){
     SceneShadingGpuData state;
-    const NWB::Impl::SceneViewBasis defaultBasis = NWB::Impl::BuildDefaultSceneViewBasis();
+    const NWB::Core::Scene::SceneViewBasis defaultBasis = NWB::Core::Scene::BuildDefaultSceneViewBasis();
 
-    const NWB::Impl::SceneCameraView cameraView = NWB::Impl::ResolveSceneCameraView(world, fallbackAspectRatio);
+    const NWB::Core::Scene::SceneCameraView cameraView = NWB::Core::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     if(cameraView.valid()){
         StoreFloat(VectorSetW(LoadFloat(cameraView.transform->position), 1.0f), &state.cameraPosition);
     }
     else
         StoreFloat(VectorSetW(LoadFloat(defaultBasis.positionDepthBias), 1.0f), &state.cameraPosition);
 
-    const NWB::Impl::SceneDirectionalLight light = NWB::Impl::ResolveSceneDirectionalLight(world, defaultBasis);
+    const NWB::Core::Scene::SceneDirectionalLight light = NWB::Core::Scene::ResolveSceneDirectionalLight(world, defaultBasis);
     state.directionalLightDirection = light.direction;
     state.directionalLightColorIntensity = light.colorIntensity;
 

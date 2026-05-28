@@ -29,10 +29,8 @@ if(Python3_Interpreter_FOUND)
             nwb_common
             nwb_alloc
             nwb_loader
-            nwb_ecs_camera
+            nwb_scene
             nwb_ecs_mesh
-            nwb_ecs_lighting
-            nwb_ecs_scene
             nwb_ecs_render
             ${ARGN}
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"

@@ -36,8 +36,6 @@ target_link_libraries(nwb_ecs_render PUBLIC
 target_link_libraries(nwb_ecs_render PRIVATE
     nwb_assets_mesh
     nwb_assets_shader_loader
-    nwb_ecs_camera
-    nwb_ecs_lighting
-    nwb_ecs_scene
+    nwb_scene
 )
 

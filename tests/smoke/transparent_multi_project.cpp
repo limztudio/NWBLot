@@ -10,11 +10,9 @@
 #include <core/graphics/module.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_material/asset.h>
-#include <impl/ecs_camera/system.h>
+#include <core/scene/module.h>
 #include <impl/ecs_mesh/module.h>
-#include <impl/ecs_lighting/system.h>
 #include <impl/ecs_render/module.h>
-#include <impl/ecs_scene/system.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +52,7 @@ static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/tran
     material.virtualPath = Name(materialPath);
 
     auto entity = world.createEntity();
-    auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
+    auto& transform = entity.addComponent<NWB::Core::Scene::TransformComponent>();
     transform.position = position;
     transform.scale = scale;
 
@@ -132,12 +130,12 @@ public:
 public:
     virtual bool onStartup()override{
         auto activeCameraEntity = m_world->createEntity();
-        auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::CreateSceneCameraEntity(
+        auto& activeCamera = activeCameraEntity.addComponent<NWB::Core::Scene::ActiveCameraComponent>();
+        activeCamera.camera = NWB::Core::Scene::CreateSceneCameraEntity(
             *m_world,
             Float4(0.0f, s_CameraTargetY, -s_CameraStartDepth)
         );
-        NWB::Impl::CreateDirectionalLightEntity(
+        NWB::Core::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,

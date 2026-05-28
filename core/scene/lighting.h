@@ -5,7 +5,9 @@
 #pragma once
 
 
-#include <impl/global.h>
+#include "view.h"
+
+#include <core/ecs/entity_id.h>
 
 #include <cstddef>
 
@@ -13,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_CORE_SCENE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +67,33 @@ static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_END
+struct alignas(Float4) SceneDirectionalLight{
+    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 0.0f);
+    Float4 colorIntensity = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+};
+
+static_assert(IsStandardLayout_V<SceneDirectionalLight>, "SceneDirectionalLight must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<SceneDirectionalLight>, "SceneDirectionalLight must stay cheap to pass by value");
+static_assert(alignof(SceneDirectionalLight) >= alignof(Float4), "SceneDirectionalLight must keep vectors aligned");
+
+
+[[nodiscard]] SceneDirectionalLight BuildDefaultSceneDirectionalLight(const SceneViewBasis& basis);
+ECS::EntityID CreateDirectionalLightEntity(
+    ECS::World& world,
+    f32 pitchRadians,
+    f32 yawRadians,
+    f32 rollRadians,
+    const Float4& color,
+    f32 intensity
+);
+[[nodiscard]] bool TryBuildSceneDirectionalLight(const TransformComponent& transform, const LightComponent& light, SceneDirectionalLight& outLight);
+[[nodiscard]] SceneDirectionalLight ResolveSceneDirectionalLight(ECS::World& world, const SceneViewBasis& defaultBasis);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_SCENE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

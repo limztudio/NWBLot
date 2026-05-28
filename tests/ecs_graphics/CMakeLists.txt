@@ -5,10 +5,8 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
 target_link_libraries(nwb_ecs_graphics_tests PRIVATE
     nwb_ecs_skinned_mesh
     nwb_ecs_skinned_mesh_render
-    nwb_ecs_camera
+    nwb_scene
     nwb_ecs_mesh
-    nwb_ecs_lighting
-    nwb_ecs_scene
     nwb_ecs_render
     nwb_common
     nwb_alloc

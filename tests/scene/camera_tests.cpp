@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_camera/components.h>
+#include <core/scene/module.h>
 
 #include <core/common/module.h>
 
@@ -27,32 +27,32 @@ using TestContext = NWB::Tests::TestContext;
 
 
 static void TestCameraProjectionHelpers(TestContext& context){
-    NWB::Impl::CameraComponent camera;
+    NWB::Core::Scene::CameraComponent camera;
 
     f32 tanHalfFov = 0.0f;
     NWB_SCENE_CAMERA_TEST_CHECK(
         context,
-        NWB::Impl::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
+        NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
     );
     NWB_SCENE_CAMERA_TEST_CHECK(context, tanHalfFov > 0.0f);
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::CameraClipRangeValid(camera));
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::ResolveCameraAspectRatio(camera, 1.5f) == 1.5f);
+    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Core::Scene::CameraClipRangeValid(camera));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Core::Scene::ResolveCameraAspectRatio(camera, 1.5f) == 1.5f);
 
     camera.setAspectRatio(2.0f);
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::ResolveCameraAspectRatio(camera, 1.5f) == 2.0f);
+    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Core::Scene::ResolveCameraAspectRatio(camera, 1.5f) == 2.0f);
 
     Float4 projectionParams;
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Core::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionParams.x > 0.0f);
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionParams.y > 0.0f);
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionParams.z > 0.0f);
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionParams.w < 0.0f);
 
-    NWB::Impl::CameraProjectionData projectionData;
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
+    NWB::Core::Scene::CameraProjectionData projectionData;
+    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Core::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
     NWB_SCENE_CAMERA_TEST_CHECK(
         context,
-        NWB::Impl::CameraProjectionDataValid(
+        NWB::Core::Scene::CameraProjectionDataValid(
             LoadFloat(projectionData.projectionParams),
             projectionData.aspectRatio,
             projectionData.tanHalfVerticalFov
@@ -66,41 +66,41 @@ static void TestCameraProjectionHelpers(TestContext& context){
     NWB_SCENE_CAMERA_TEST_CHECK(context, projectionData.tanHalfVerticalFov > 0.0f);
 
     camera.setNearPlane(0.0f);
-    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::CameraClipRangeValid(camera));
-    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
-    const NWB::Impl::CameraProjectionData emptyProjectionData{};
+    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Core::Scene::CameraClipRangeValid(camera));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
+    const NWB::Core::Scene::CameraProjectionData emptyProjectionData{};
     NWB_SCENE_CAMERA_TEST_CHECK(
         context,
-        !NWB::Impl::CameraProjectionDataValid(
+        !NWB::Core::Scene::CameraProjectionDataValid(
             LoadFloat(emptyProjectionData.projectionParams),
             emptyProjectionData.aspectRatio,
             emptyProjectionData.tanHalfVerticalFov
         )
     );
 
-    camera = NWB::Impl::CameraComponent{};
+    camera = NWB::Core::Scene::CameraComponent{};
     camera.setNearPlane(2.0f);
     camera.setFarPlane(s_MaxF32);
-    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Impl::CameraClipRangeValid(camera));
-    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, NWB::Core::Scene::CameraClipRangeValid(camera));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
 
-    camera = NWB::Impl::CameraComponent{};
+    camera = NWB::Core::Scene::CameraComponent{};
     camera.setVerticalFovRadians(179.0f * (s_PI / 180.0f));
-    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::TryBuildCameraProjectionParams(camera, s_MaxF32, projectionParams));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionParams(camera, s_MaxF32, projectionParams));
 
     camera.setAspectRatio(s_MaxF32);
-    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Impl::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
+    NWB_SCENE_CAMERA_TEST_CHECK(context, !NWB::Core::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
 
-    camera = NWB::Impl::CameraComponent{};
+    camera = NWB::Core::Scene::CameraComponent{};
     camera.setVerticalFovRadians(180.0f * (s_PI / 180.0f));
     NWB_SCENE_CAMERA_TEST_CHECK(
         context,
-        !NWB::Impl::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
+        !NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
     );
     camera.setVerticalFovRadians(400.0f * (s_PI / 180.0f));
     NWB_SCENE_CAMERA_TEST_CHECK(
         context,
-        !NWB::Impl::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
+        !NWB::Core::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
     );
 }
 

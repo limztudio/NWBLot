@@ -431,8 +431,12 @@ void UiSystem::render(Core::IFramebuffer* framebuffer){
     if(!drawData)
         return;
 
-    const i32 framebufferWidth = static_cast<i32>(drawData->DisplaySize.x * drawData->FramebufferScale.x);
-    const i32 framebufferHeight = static_cast<i32>(drawData->DisplaySize.y * drawData->FramebufferScale.y);
+    const SIMDVector framebufferExtent = VectorMultiply(
+        VectorSet(drawData->DisplaySize.x, drawData->DisplaySize.y, 0.0f, 0.0f),
+        VectorSet(drawData->FramebufferScale.x, drawData->FramebufferScale.y, 0.0f, 0.0f)
+    );
+    const i32 framebufferWidth = static_cast<i32>(VectorGetX(framebufferExtent));
+    const i32 framebufferHeight = static_cast<i32>(VectorGetY(framebufferExtent));
     if(framebufferWidth <= 0 || framebufferHeight <= 0){
         m_frameStarted = false;
         m_frameFinished = false;
@@ -878,10 +882,13 @@ void UiSystem::renderDrawData(Core::ICommandList& commandList, Core::IFramebuffe
     if(drawData.TotalVtxCount <= 0 || drawData.TotalIdxCount <= 0)
         return;
 
-    const f32 left = drawData.DisplayPos.x;
-    const f32 right = drawData.DisplayPos.x + drawData.DisplaySize.x;
-    const f32 top = drawData.DisplayPos.y;
-    const f32 bottom = drawData.DisplayPos.y + drawData.DisplaySize.y;
+    const SIMDVector displayMin = VectorSet(drawData.DisplayPos.x, drawData.DisplayPos.y, 0.0f, 0.0f);
+    const SIMDVector displaySize = VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f);
+    const SIMDVector displayMax = VectorAdd(displayMin, displaySize);
+    const f32 left = VectorGetX(displayMin);
+    const f32 right = VectorGetX(displayMax);
+    const f32 top = VectorGetY(displayMin);
+    const f32 bottom = VectorGetY(displayMax);
 
     UiPushConstants pushConstants;
     pushConstants.scaleTranslate = Float4(
@@ -891,8 +898,12 @@ void UiSystem::renderDrawData(Core::ICommandList& commandList, Core::IFramebuffe
         (top + bottom) / (bottom - top)
     );
 
-    const i32 framebufferWidth = static_cast<i32>(drawData.DisplaySize.x * drawData.FramebufferScale.x);
-    const i32 framebufferHeight = static_cast<i32>(drawData.DisplaySize.y * drawData.FramebufferScale.y);
+    const SIMDVector framebufferExtent = VectorMultiply(
+        displaySize,
+        VectorSet(drawData.FramebufferScale.x, drawData.FramebufferScale.y, 0.0f, 0.0f)
+    );
+    const i32 framebufferWidth = static_cast<i32>(VectorGetX(framebufferExtent));
+    const i32 framebufferHeight = static_cast<i32>(VectorGetY(framebufferExtent));
     const Core::Viewport viewport(0.0f, static_cast<f32>(framebufferWidth), 0.0f, static_cast<f32>(framebufferHeight), 0.0f, 1.0f);
     const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
 
@@ -922,10 +933,17 @@ void UiSystem::renderDrawData(Core::ICommandList& commandList, Core::IFramebuffe
                 continue;
             }
 
-            const f32 clipMinX = (drawCommand.ClipRect.x - clipOffset.x) * clipScale.x;
-            const f32 clipMinY = (drawCommand.ClipRect.y - clipOffset.y) * clipScale.y;
-            const f32 clipMaxX = (drawCommand.ClipRect.z - clipOffset.x) * clipScale.x;
-            const f32 clipMaxY = (drawCommand.ClipRect.w - clipOffset.y) * clipScale.y;
+            const SIMDVector clipRect = VectorMultiply(
+                VectorSubtract(
+                    VectorSet(drawCommand.ClipRect.x, drawCommand.ClipRect.y, drawCommand.ClipRect.z, drawCommand.ClipRect.w),
+                    VectorSet(clipOffset.x, clipOffset.y, clipOffset.x, clipOffset.y)
+                ),
+                VectorSet(clipScale.x, clipScale.y, clipScale.x, clipScale.y)
+            );
+            const f32 clipMinX = VectorGetX(clipRect);
+            const f32 clipMinY = VectorGetY(clipRect);
+            const f32 clipMaxX = VectorGetZ(clipRect);
+            const f32 clipMaxY = VectorGetW(clipRect);
             if(clipMaxX <= clipMinX || clipMaxY <= clipMinY)
                 continue;
 

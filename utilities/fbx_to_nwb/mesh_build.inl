@@ -71,19 +71,22 @@ template<typename VisitTriangle>
             );
         }
 
-        const Vec3 areaNormal = TriangleAreaNormal(positions[0u], positions[1u], positions[2u]);
-        const f64 areaLengthSquared = LengthSquared(areaNormal);
+        const TriangleAreaNormal64 areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
+        const f64 areaLengthSquared = areaNormal64.x * areaNormal64.x + areaNormal64.y * areaNormal64.y + areaNormal64.z * areaNormal64.z;
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= options.triangleAreaLengthSquaredEpsilon)
             return true;
 
+        const Vec3 areaNormal{
+            static_cast<f32>(areaNormal64.x),
+            static_cast<f32>(areaNormal64.y),
+            static_cast<f32>(areaNormal64.z),
+        };
         for(const Vec3& position : positions){
             const PositionKey key = MakePositionKey(position);
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                normal.x += areaNormal.x;
-                normal.y += areaNormal.y;
-                normal.z += areaNormal.z;
+                StoreFloat(VectorAdd(LoadFloat(normal), LoadFloat(areaNormal)), &normal);
             }
         }
         return true;

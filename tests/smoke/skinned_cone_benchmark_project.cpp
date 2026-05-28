@@ -237,8 +237,14 @@ static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const Be
     const f32 angleJitter = staticPreview ? 0.025f : 0.0025f;
     const f32 rollBase = staticPreview ? 0.045f : 0.006f;
     const f32 rollJitter = staticPreview ? 0.008f : 0.0015f;
-    const f32 amount = Sin(timeSeconds * primarySpeed + phase);
-    const f32 secondary = Sin(timeSeconds * secondarySpeed + phase + 0.5f);
+    const SIMDVector waves = VectorSin(VectorSet(
+        timeSeconds * primarySpeed + phase,
+        timeSeconds * secondarySpeed + phase + 0.5f,
+        0.0f,
+        0.0f
+    ));
+    const f32 amount = VectorGetX(waves);
+    const f32 secondary = VectorGetY(waves);
     const f32 angle = amount * (baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter);
 
     SIMDMatrix matrix = MatrixRotationRollPitchYaw(

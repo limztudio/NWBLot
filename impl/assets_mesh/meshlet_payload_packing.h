@@ -169,12 +169,13 @@ namespace MeshletRefDeltaWidth{
         y = foldedY;
     }
 
-    const f32 lengthSquared = x * x + y * y + z * z;
+    const SIMDVector axis = VectorSet(x, y, z, 0.0f);
+    const SIMDVector lengthSquaredVector = Vector3LengthSq(axis);
+    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
     if(!IsFinite(lengthSquared) || lengthSquared <= 0.00000001f)
         return VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 
-    const f32 invLength = 1.0f / Sqrt(lengthSquared);
-    return VectorSet(x * invLength, y * invLength, z * invLength, 0.0f);
+    return VectorMultiply(axis, VectorReciprocalSqrt(lengthSquaredVector));
 }
 
 [[nodiscard]] inline f32 ConservativePackedMeshletConeCutoff(const SIMDVector axis, const f32 cutoff, const u32 packedAxis){
@@ -186,8 +187,13 @@ namespace MeshletRefDeltaWidth{
     ;
     const f32 axisDot = Max(-1.0f, Min(1.0f, VectorGetX(Vector3Dot(normalizedAxis, unpackedAxis))));
     const f32 safeCutoff = Saturate(cutoff);
-    const f32 sinTheta = Sqrt(Max(0.0f, 1.0f - safeCutoff * safeCutoff));
-    const f32 sinAxisError = Sqrt(Max(0.0f, 1.0f - axisDot * axisDot));
+    const SIMDVector cosineTerms = VectorSet(safeCutoff, axisDot, 0.0f, 0.0f);
+    const SIMDVector sineTerms = VectorSqrt(VectorMax(
+        VectorZero(),
+        VectorSubtract(s_SIMDOne, VectorMultiply(cosineTerms, cosineTerms))
+    ));
+    const f32 sinTheta = VectorGetX(sineTerms);
+    const f32 sinAxisError = VectorGetY(sineTerms);
     return safeCutoff * axisDot - sinTheta * sinAxisError;
 }
 

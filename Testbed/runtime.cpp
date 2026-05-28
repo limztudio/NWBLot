@@ -111,9 +111,10 @@ static void ResolveFlyCameraAnglesFromTransform(
         Vector3Rotate(localForward, LoadFloat(transform.rotation)),
         EditorVec3{ 0.0f, 0.0f, 1.0f }
     );
-    const f32 clampedForwardY = Min(Max(forward.y, -1.0f), 1.0f);
-    const f32 yawRadians = ATan2(forward.x, forward.z);
-    const f32 pitchRadians = -ASin(clampedForwardY);
+    const SIMDVector forwardVector = LoadFloat(forward);
+    const SIMDVector clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
+    const f32 yawRadians = VectorGetX(VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector)));
+    const f32 pitchRadians = VectorGetX(VectorNegate(VectorASin(VectorSplatY(clampedForward))));
 
     outYawRadians = IsFinite(yawRadians) ? yawRadians : 0.0f;
     outPitchRadians = IsFinite(pitchRadians) ? ClampPitch(pitchRadians, s_FlyCameraPitchLimitRadians) : 0.0f;
@@ -164,7 +165,10 @@ static void ApplyFlyCameraInput(
         if(!IsFinite(moveScale))
             return;
 
-        const SIMDVector localMove = VectorSet(safeRightAxis * moveScale, 0.0f, safeForwardAxis * moveScale, 0.0f);
+        const SIMDVector localMove = VectorMultiply(
+            VectorSet(safeRightAxis, 0.0f, safeForwardAxis, 0.0f),
+            VectorReplicate(moveScale)
+        );
         const SIMDVector worldMove = Vector3Rotate(localMove, rotation);
         if(!FiniteVector3(worldMove))
             return;

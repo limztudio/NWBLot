@@ -257,20 +257,15 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] Vec3 TriangleAreaNormal(const Vec3& a, const Vec3& b, const Vec3& c){
-    const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(a, b, c);
-    return Vec3{
-        static_cast<f32>(areaNormal.x),
-        static_cast<f32>(areaNormal.y),
-        static_cast<f32>(areaNormal.z),
-    };
-}
-
-[[nodiscard]] f64 LengthSquared(const Vec3& value){
-    return
-        static_cast<f64>(value.x) * static_cast<f64>(value.x)
-        + static_cast<f64>(value.y) * static_cast<f64>(value.y)
-        + static_cast<f64>(value.z) * static_cast<f64>(value.z)
-    ;
+    Vec3 areaNormal;
+    StoreFloat(
+        Vector3Cross(
+            VectorSubtract(LoadFloat(b), LoadFloat(a)),
+            VectorSubtract(LoadFloat(c), LoadFloat(a))
+        ),
+        &areaNormal
+    );
+    return areaNormal;
 }
 
 [[nodiscard]] Vec3 LoadCornerOutputPosition(
@@ -294,9 +289,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     Vec3 outputPosition = ToVec3(position);
-    outputPosition.x = static_cast<f32>(static_cast<f64>(outputPosition.x) * options.scale);
-    outputPosition.y = static_cast<f32>(static_cast<f64>(outputPosition.y) * options.scale);
-    outputPosition.z = static_cast<f32>(static_cast<f64>(outputPosition.z) * options.scale);
+    StoreFloat(VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)), &outputPosition);
     return outputPosition;
 }
 
@@ -327,15 +320,13 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] f32 Dot(const Vec3& lhs, const Vec3& rhs){
-    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
 }
 
 [[nodiscard]] Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    return Vec3{
-        lhs.y * rhs.z - lhs.z * rhs.y,
-        lhs.z * rhs.x - lhs.x * rhs.z,
-        lhs.x * rhs.y - lhs.y * rhs.x,
-    };
+    Vec3 result;
+    StoreFloat(Vector3Cross(LoadFloat(lhs), LoadFloat(rhs)), &result);
+    return result;
 }
 
 [[nodiscard]] bool LoadCornerOutputTangent(
@@ -376,15 +367,18 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] bool IsFiniteVec2(const Vec2& value){
-    return IsFinite(value.x) && IsFinite(value.y);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector2IsNaN(valueVector) && !Vector2IsInfinite(valueVector);
 }
 
 [[nodiscard]] bool IsFiniteVec3(const Vec3& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
 }
 
 [[nodiscard]] bool IsFiniteVec4(const Vec4& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+    const SIMDVector valueVector = LoadFloat(value);
+    return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){

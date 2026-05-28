@@ -213,18 +213,18 @@ bool ParseColorText(const AString& text, Vec4& outColor){
 }
 
 bool Normalize(Vec3& value){
-    const f64 lengthSquared =
-        static_cast<f64>(value.x) * static_cast<f64>(value.x)
-        + static_cast<f64>(value.y) * static_cast<f64>(value.y)
-        + static_cast<f64>(value.z) * static_cast<f64>(value.z);
-    if(!IsFinite(lengthSquared) || lengthSquared <= 0.0)
+    const SIMDVector valueVector = LoadFloat(value);
+    const SIMDVector lengthSquaredVector = Vector3LengthSq(valueVector);
+    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
+    if(!IsFinite(lengthSquared) || lengthSquared <= 0.0f)
         return false;
 
-    const f64 invLength = 1.0 / Sqrt(lengthSquared);
-    value.x = static_cast<f32>(static_cast<f64>(value.x) * invLength);
-    value.y = static_cast<f32>(static_cast<f64>(value.y) * invLength);
-    value.z = static_cast<f32>(static_cast<f64>(value.z) * invLength);
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector normalizedVector = VectorMultiply(valueVector, VectorReciprocalSqrt(lengthSquaredVector));
+    if(Vector3IsNaN(normalizedVector) || Vector3IsInfinite(normalizedVector))
+        return false;
+
+    StoreFloat(normalizedVector, &value);
+    return true;
 }
 
 Path PathFromUtf8(const AString& value){

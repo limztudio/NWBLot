@@ -366,6 +366,8 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
     createdMesh.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
     createdMesh.meshletCount = desc.meshletCount;
     createdMesh.runtimeMesh = true;
+    createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
+    createdMesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
     createdMesh.runtimeMeshVersion = desc.version;
     if(!__hidden_mesh::ResolveBufferElementCount(
         createdMesh.meshletPrimitiveIndexBuffer,

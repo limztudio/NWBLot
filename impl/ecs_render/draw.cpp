@@ -14,6 +14,38 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_draw{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
+
+[[nodiscard]] static bool meshletConeCullScaleSafe(const SIMDVector scale){
+    const f32 x = VectorGetX(scale);
+    const f32 y = VectorGetY(scale);
+    const f32 z = VectorGetZ(scale);
+    if(!IsFinite(x) || !IsFinite(y) || !IsFinite(z))
+        return false;
+    if(x <= 0.0f || y <= 0.0f || z <= 0.0f)
+        return false;
+
+    const f32 minScale = Min<f32>(Min<f32>(x, y), z);
+    const f32 maxScale = Max<f32>(Max<f32>(x, y), z);
+    return Abs(maxScale - minScale) <= Max<f32>(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererSystem::renderMaterialPass(
     Core::ICommandList& commandList,
     Core::IFramebuffer* framebuffer,
@@ -249,6 +281,10 @@ void RendererSystem::gatherMaterialPassDrawItems(
             drawItem.meshKey = mesh.meshName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
+            drawItem.meshletConeCullScaleSafe = transform
+                ? __hidden_draw::meshletConeCullScaleSafe(LoadFloat(transform->scale))
+                : true
+            ;
             drawItems.push_back(drawItem);
             return true;
         };
@@ -327,12 +363,15 @@ bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)co
 u32 RendererSystem::meshDispatchFlags(
     const MeshResources& mesh,
     const MaterialPipelinePass::Enum pass,
-    const bool twoSided
+    const bool twoSided,
+    const bool meshletConeCullScaleSafe
 )const{
     u32 flags = 0u;
-    if(!mesh.runtimeMesh)
+    const bool meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
+    const bool meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;
+    if(meshletBoundsFresh)
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
-    if(!mesh.runtimeMesh && pass == MaterialPipelinePass::Opaque && !twoSided)
+    if(meshletConesFresh && pass == MaterialPipelinePass::Opaque && !twoSided && meshletConeCullScaleSafe)
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletConeCull;
     return flags;
 }
@@ -342,7 +381,12 @@ void RendererSystem::setMaterialPassDrawPushConstants(
     const MaterialPassDrawItem& drawItem,
     const MeshResources& mesh
 ){
-    const u32 dispatchFlags = meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided);
+    const u32 dispatchFlags = meshDispatchFlags(
+        mesh,
+        context.pass,
+        drawItem.pipelineKey.twoSided,
+        drawItem.meshletConeCullScaleSafe
+    );
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
@@ -434,7 +478,12 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
             mesh.meshletCount,
             drawItem.instanceIndex,
             context.viewportState,
-            meshDispatchFlags(mesh, context.pass, drawItem.pipelineKey.twoSided)
+            meshDispatchFlags(
+                mesh,
+                context.pass,
+                drawItem.pipelineKey.twoSided,
+                drawItem.meshletConeCullScaleSafe
+            )
         );
         context.commandList.dispatch(mesh.meshletCount);
 

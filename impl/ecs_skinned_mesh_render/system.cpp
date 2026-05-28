@@ -138,6 +138,7 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
     outMesh.version = instance->editRevision;
+    outMesh.dynamicMeshletBoundsFresh = true;
 #if defined(NWB_DEBUG)
     return outMesh.valid();
 #else

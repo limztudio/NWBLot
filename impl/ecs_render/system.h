@@ -117,6 +117,8 @@ private:
         u32 meshletCount = 0;
         u32 meshletPrimitiveIndexCount = 0;
         bool runtimeMesh = false;
+        bool dynamicMeshletBoundsFresh = false;
+        bool dynamicMeshletConesFresh = false;
         u64 runtimeMeshVersion = 0u;
 
         [[nodiscard]] bool valid()const noexcept{
@@ -169,6 +171,7 @@ private:
         Name meshKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
         u32 instanceIndex = 0;
+        bool meshletConeCullScaleSafe = false;
     };
 
 
@@ -323,7 +326,12 @@ private:
     [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);
     [[nodiscard]] bool meshFrameBindingResourcesReady(const tchar* context)const;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
-    [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided)const;
+    [[nodiscard]] u32 meshDispatchFlags(
+        const MeshResources& mesh,
+        MaterialPipelinePass::Enum pass,
+        bool twoSided,
+        bool meshletConeCullScaleSafe
+    )const;
     void addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
     void addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;
     void addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;

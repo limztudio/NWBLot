@@ -42,6 +42,8 @@ struct RuntimeMeshDesc{
     Core::BufferHandle meshletPrimitiveIndexBuffer;
     u32 meshletCount = 0u;
     u64 version = 0u;
+    bool dynamicMeshletBoundsFresh = false;
+    bool dynamicMeshletConesFresh = false;
 
     [[nodiscard]] bool valid()const noexcept{
         return

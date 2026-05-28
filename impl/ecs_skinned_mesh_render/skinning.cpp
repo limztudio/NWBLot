@@ -29,14 +29,9 @@ namespace __hidden_skinning{
 
 
 static constexpr u32 s_SkinnedMeshGroupSize = 64u;
-static constexpr u32 s_MeshletBoundsGroupSize = 128u;
 
 static u32 SkinningDispatchGroupCount(const u32 workItemCount){
     return DivideUp(workItemCount, s_SkinnedMeshGroupSize);
-}
-
-static u32 MeshletBoundsDispatchGroupCount(const u32 meshletCount){
-    return DivideUp(meshletCount, s_MeshletBoundsGroupSize);
 }
 
 static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){
@@ -331,11 +326,7 @@ bool SkinnedMeshSystem::dispatchMeshletBounds(
     MeshletBoundsPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        __hidden_skinning::MeshletBoundsDispatchGroupCount(pushConstants.meshletCount),
-        1,
-        1
-    );
+    commandList.dispatch(pushConstants.meshletCount, 1, 1);
 
     commandList.setBufferState(instance.meshletBoundsBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();

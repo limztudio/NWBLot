@@ -20,8 +20,8 @@ using MeshPayloadValidation::FiniteVector;
     const Core::Assets::AssetVector<Half4U>& tangents,
     const Core::Assets::AssetVector<Float2U>& uv0,
     const Core::Assets::AssetVector<Half4U>& colors,
-    const Core::Assets::AssetVector<MeshletDeformedPositionRef>& positionRefs,
-    const Core::Assets::AssetVector<MeshletShadingAttributeRef>& attributeRefs,
+    const Core::Assets::AssetVector<u8>& positionRefDeltas,
+    const Core::Assets::AssetVector<u8>& attributeRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
     const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
@@ -34,23 +34,15 @@ using MeshPayloadValidation::FiniteVector;
     if(!ValidateMeshStreams(positions, normals, tangents, uv0, colors, contextText, meshPathText))
         return false;
 
-    if(!ValidateMeshletPositionRefs(
-        positionRefs,
-        positions.size(),
-        skinCount,
-        skinRequired,
-        contextText,
-        meshPathText
-    ))
-        return false;
-
     return ValidateMeshletPayload(
-        positionRefs,
-        attributeRefs,
+        positionRefDeltas,
+        attributeRefDeltas,
         localVertexRefs,
         meshlets,
         meshletBounds,
         meshletPrimitiveIndices,
+        positions.size(),
+        skinCount,
         normals.size(),
         tangents.size(),
         uv0.size(),

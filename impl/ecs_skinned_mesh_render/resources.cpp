@@ -94,8 +94,8 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
 
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
     RuntimeResources& resources = it.value();
-    const u32 positionCount = static_cast<u32>(instance.meshletPositionRefs.size());
-    const u32 attributeCount = static_cast<u32>(instance.meshletAttributeRefs.size());
+    const u32 positionCount = instance.meshletPositionRefCount;
+    const u32 attributeCount = instance.meshletAttributeRefCount;
     const u32 meshletCount = static_cast<u32>(instance.meshlets.size());
     const u32 skinCount = static_cast<u32>(payloadViews.skinInfluenceCount);
     const u32 jointCount = static_cast<u32>(payloadViews.jointPaletteCount);
@@ -167,10 +167,12 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(3, instance.skinnedNormalBuffer.get()));
         skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, instance.restTangentBuffer.get()));
         skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(5, instance.skinnedTangentBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, instance.meshletPositionRefBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(7, instance.attributeSkinBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(8, rebuilt.skinBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, rebuilt.jointPaletteBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, instance.meshletDescBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(7, instance.meshletPositionRefDeltaBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(8, instance.meshletAttributeRefDeltaBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, instance.attributeSkinBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, rebuilt.skinBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(11, rebuilt.jointPaletteBuffer.get()));
         rebuilt.skinningBindingSet = device->createBindingSet(skinningBindingSetDesc, m_skinningBindingLayout);
         if(!rebuilt.skinningBindingSet){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skinning binding set for runtime mesh '{}'"), instance.handle.value);
@@ -181,7 +183,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     Core::BindingSetDesc boundsBindingSetDesc(m_arena);
     boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, instance.skinnedPositionBuffer.get()));
     boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, instance.meshletDescBuffer.get()));
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, instance.meshletPositionRefBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(2, instance.meshletPositionRefDeltaBuffer.get()));
     boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, instance.meshletLocalVertexRefBuffer.get()));
     boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(4, instance.meshletPrimitiveIndexBuffer.get()));
     boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_UAV(5, instance.meshletBoundsBuffer.get()));

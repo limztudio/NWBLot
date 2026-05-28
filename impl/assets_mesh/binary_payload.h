@@ -23,7 +23,7 @@ namespace MeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshMagic = 0x4D534834u; // MSH4
+inline constexpr u32 s_MeshMagic = 0x4D534835u; // MSH5
 
 #pragma pack(push, 1)
 struct MeshHeaderBinary{
@@ -39,8 +39,8 @@ struct MeshHeaderBinary{
     u64 inverseBindMatrixCount = 0;
     u64 meshletCount = 0;
     u64 meshletBoundCount = 0;
-    u64 meshletPositionRefCount = 0;
-    u64 meshletAttributeRefCount = 0;
+    u64 meshletPositionRefDeltaByteCount = 0;
+    u64 meshletAttributeRefDeltaByteCount = 0;
     u64 meshletLocalVertexRefCount = 0;
     u64 meshletPrimitiveIndexCount = 0;
 };

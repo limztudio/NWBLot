@@ -5,6 +5,7 @@
 #include "skinned_asset.h"
 
 #include "binary_payload_io.h"
+#include "meshlet_ref_encoding.h"
 #include "meshlet_payload_packing.h"
 #include "payload_validation.h"
 #include "skinned_binary_payload.h"
@@ -68,8 +69,8 @@ bool SkinnedMesh::validatePayload()const{
         || m_skin.empty()
         || m_meshlets.empty()
         || m_meshletBounds.empty()
-        || m_meshletPositionRefs.empty()
-        || m_meshletAttributeRefs.empty()
+        || m_meshletPositionRefDeltas.empty()
+        || m_meshletAttributeRefDeltas.empty()
         || m_meshletLocalVertexRefs.empty()
         || m_meshletPrimitiveIndices.empty()
     ){
@@ -110,8 +111,8 @@ bool SkinnedMesh::validatePayload()const{
         m_tangentStream,
         m_uv0Stream,
         m_colorStream,
-        m_meshletPositionRefs,
-        m_meshletAttributeRefs,
+        m_meshletPositionRefDeltas,
+        m_meshletAttributeRefDeltas,
         m_meshletLocalVertexRefs,
         m_meshlets,
         m_meshletBounds,
@@ -162,8 +163,8 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
     m_inverseBindMatrices.clear();
     m_meshlets.clear();
     m_meshletBounds.clear();
-    m_meshletPositionRefs.clear();
-    m_meshletAttributeRefs.clear();
+    m_meshletPositionRefDeltas.clear();
+    m_meshletAttributeRefDeltas.clear();
     m_meshletLocalVertexRefs.clear();
     m_meshletPrimitiveIndices.clear();
     m_meshClass = Core::Mesh::MeshClass::Invalid;
@@ -228,8 +229,8 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
         header,
         m_meshlets,
         m_meshletBounds,
-        m_meshletPositionRefs,
-        m_meshletAttributeRefs,
+        m_meshletPositionRefDeltas,
+        m_meshletAttributeRefDeltas,
         m_meshletLocalVertexRefs,
         m_meshletPrimitiveIndices,
         loadFailureContext

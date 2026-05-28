@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_FINAL)
 static void ExpectCookFailure(
     TestContext& context,
     TestArena& testArena,
@@ -32,6 +33,7 @@ static void ExpectCookFailure(
 ){
     ExpectCookFailure(context, testArena, cookSingleMeta, AStringView(metaText.data(), metaText.size()), caseName);
 }
+#endif
 
 static void TestMeshCookerTypedStreams(TestContext& context){
     CookAndCheckMinimalTypedAsset<NWB::Impl::Mesh>(
@@ -65,6 +67,7 @@ static void TestMeshCookerDefaultColors(TestContext& context){
     );
 }
 
+#include "meshlet_ref_acceptance_helpers.inl"
 #include "acceptance_tests.inl"
 
 static void TestMeshCookerValidationFailures(TestContext& context){
@@ -310,8 +313,8 @@ struct SkinnedMeshPayloadEdit{
     NWB::Core::Assets::AssetVector<NWB::Impl::SkinnedMeshJointMatrix> inverseBindMatrices;
     NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc> meshlets;
     NWB::Core::Assets::AssetVector<NWB::Impl::MeshletBounds> meshletBounds;
-    NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDeformedPositionRef> meshletPositionRefs;
-    NWB::Core::Assets::AssetVector<NWB::Impl::MeshletShadingAttributeRef> meshletAttributeRefs;
+    NWB::Core::Assets::AssetVector<u8> meshletPositionRefDeltas;
+    NWB::Core::Assets::AssetVector<u8> meshletAttributeRefDeltas;
     NWB::Core::Assets::AssetVector<NWB::Impl::MeshletLocalVertexRef> meshletLocalVertexRefs;
     NWB::Core::Assets::AssetVector<u8> meshletPrimitiveIndices;
     u32 meshClass = NWB::Core::Mesh::MeshClass::Invalid;
@@ -327,8 +330,8 @@ struct SkinnedMeshPayloadEdit{
         , inverseBindMatrices(MakeAssetVectorFrom(testArena, mesh.inverseBindMatrices()))
         , meshlets(MakeAssetVectorFrom(testArena, mesh.meshlets()))
         , meshletBounds(MakeAssetVectorFrom(testArena, mesh.meshletBounds()))
-        , meshletPositionRefs(MakeAssetVectorFrom(testArena, mesh.meshletPositionRefs()))
-        , meshletAttributeRefs(MakeAssetVectorFrom(testArena, mesh.meshletAttributeRefs()))
+        , meshletPositionRefDeltas(MakeAssetVectorFrom(testArena, mesh.meshletPositionRefDeltas()))
+        , meshletAttributeRefDeltas(MakeAssetVectorFrom(testArena, mesh.meshletAttributeRefDeltas()))
         , meshletLocalVertexRefs(MakeAssetVectorFrom(testArena, mesh.meshletLocalVertexRefs()))
         , meshletPrimitiveIndices(MakeAssetVectorFrom(testArena, mesh.meshletPrimitiveIndices()))
         , meshClass(mesh.meshClass())
@@ -348,8 +351,8 @@ struct SkinnedMeshPayloadEdit{
             Move(inverseBindMatrices),
             Move(meshlets),
             Move(meshletBounds),
-            Move(meshletPositionRefs),
-            Move(meshletAttributeRefs),
+            Move(meshletPositionRefDeltas),
+            Move(meshletAttributeRefDeltas),
             Move(meshletLocalVertexRefs),
             Move(meshletPrimitiveIndices)
         );
@@ -420,20 +423,35 @@ static void TestSkinnedMeshValidationFailures(TestContext& context){
     });
 
     CheckInvalidSkinnedMesh(context, [](SkinnedMeshPayloadEdit& edit){
+        edit.meshlets[0u].encoding |= 3u << NWB::Impl::s_MeshletRefEncodingPositionShift;
+    });
+
+    CheckInvalidSkinnedMesh(context, [](SkinnedMeshPayloadEdit& edit){
+        ++edit.meshlets[0u].positionRefOffset;
+    });
+
+    CheckInvalidSkinnedMesh(context, [](SkinnedMeshPayloadEdit& edit){
+        edit.meshletPositionRefDeltas.push_back(0u);
+    });
+
+    CheckInvalidSkinnedMesh(context, [](SkinnedMeshPayloadEdit& edit){
         edit.meshletLocalVertexRefs[1u].localAttribute = 0u;
     });
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 12u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() >= 15u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("normal 0 is invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("tangent 0 is invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("skin influence 0 is invalid")));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet position ref 3 is out of range")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet 0 has invalid encoded position ref")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("has skin but no skeleton joint count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrix count must match skeleton joint count")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("inverse bind matrices are invalid")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet 0 exceeds meshlet stream bounds")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet 0 primitive 0 has an out-of-range local vertex")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet 0 has invalid bounds")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet 0 has invalid ref encoding width")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet 0 has non-contiguous offsets")));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("meshlet streams contain trailing data")));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("shared across skin identities")));
 #else
     static_cast<void>(context);
@@ -447,11 +465,6 @@ static void TestMeshClassPolicyHelpers(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !MeshClassMatchesSkinPayload(MeshClass::Static, true));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, MeshClassMatchesSkinPayload(MeshClass::Skinned, true));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !MeshClassMatchesSkinPayload(MeshClass::Skinned, false));
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, MeshClassAcceptsSkinPayload(MeshClass::Static, false));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !MeshClassAcceptsSkinPayload(MeshClass::Static, true));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, MeshClassAcceptsSkinPayload(MeshClass::Skinned, false));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, MeshClassAcceptsSkinPayload(MeshClass::Skinned, true));
 }
 
 static void TestFormatBlockDimensions(TestContext& context){

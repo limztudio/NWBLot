@@ -18,7 +18,7 @@ static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823e+38;
 
 [[vk::binding(0, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshBoundsPositions;
 [[vk::binding(1, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshBoundsMeshlets;
-[[vk::binding(2, 0)]] StructuredBuffer<NwbMeshletDeformedPositionRef, Std430DataLayout> g_NwbSkinnedMeshBoundsPositionRefs;
+[[vk::binding(2, 0)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPositionRefDeltas;
 [[vk::binding(3, 0)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbSkinnedMeshBoundsLocalVertexRefs;
 [[vk::binding(4, 0)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPrimitiveIndices;
 [[vk::binding(5, 0)]] RWByteAddressBuffer g_NwbSkinnedMeshBoundsDynamicBounds;
@@ -65,26 +65,47 @@ uint3 nwbSkinnedMeshBoundsLoadPrimitive(const NwbMeshletDesc meshlet, const uint
     );
 }
 
-bool nwbSkinnedMeshBoundsLoadLocalPosition(const NwbMeshletDesc meshlet, const uint localPositionIndex, out float3 outPosition){
-    const NwbMeshletDeformedPositionRef positionRef = g_NwbSkinnedMeshBoundsPositionRefs[meshlet.positionOffset + localPositionIndex];
+bool nwbSkinnedMeshBoundsLoadLocalPosition(
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localPositionIndex,
+    out float3 outPosition
+){
+    const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
+        g_NwbSkinnedMeshBoundsPositionRefDeltas,
+        meshlet,
+        decodeInfo,
+        localPositionIndex,
+        true
+    );
     outPosition = nwbMeshLoadPosition(g_NwbSkinnedMeshBoundsPositions[positionRef.position]);
     return nwbFiniteFloat3(outPosition);
 }
 
-bool nwbSkinnedMeshBoundsLoadLocalVertexPosition(const NwbMeshletDesc meshlet, const uint localVertexIndex, out float3 outPosition){
+bool nwbSkinnedMeshBoundsLoadLocalVertexPosition(
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localVertexIndex,
+    out float3 outPosition
+){
     const NwbMeshletLocalVertexRef localVertexRef = g_NwbSkinnedMeshBoundsLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-    return nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, nwbMeshletLocalDeformedPosition(localVertexRef), outPosition);
+    return nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, decodeInfo, nwbMeshletLocalDeformedPosition(localVertexRef), outPosition);
 }
 
-bool nwbSkinnedMeshBoundsFaceNormal(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex, out float3 outFaceNormal){
+bool nwbSkinnedMeshBoundsFaceNormal(
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localPrimitiveIndex,
+    out float3 outFaceNormal
+){
     const uint3 localVertices = nwbSkinnedMeshBoundsLoadPrimitive(meshlet, localPrimitiveIndex);
     float3 p0 = float3(0.0);
     float3 p1 = float3(0.0);
     float3 p2 = float3(0.0);
     if(
-        !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, localVertices.x, p0)
-        || !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, localVertices.y, p1)
-        || !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, localVertices.z, p2)
+        !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.x, p0)
+        || !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.y, p1)
+        || !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.z, p2)
     ){
         outFaceNormal = float3(0.0);
         return false;
@@ -172,6 +193,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         return;
 
     const NwbMeshletDesc meshlet = g_NwbSkinnedMeshBoundsMeshlets[meshletIndex];
+    const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const uint positionCount = nwbMeshletPositionCount(meshlet);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
     if(positionCount == 0u || primitiveCount == 0u){
@@ -185,7 +207,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     uint localValidPositionCount = 0u;
     for(uint localPositionIndex = groupThreadIndex; localPositionIndex < positionCount; localPositionIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 position = float3(0.0);
-        if(!nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, localPositionIndex, position))
+        if(!nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, decodeInfo, localPositionIndex, position))
             continue;
 
         localMin = min(localMin, position);
@@ -211,7 +233,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     float localRadiusSq = 0.0;
     for(uint localPositionIndex = groupThreadIndex; localPositionIndex < positionCount; localPositionIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 position = float3(0.0);
-        if(!nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, localPositionIndex, position))
+        if(!nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, decodeInfo, localPositionIndex, position))
             continue;
 
         const float3 delta = position - g_NwbSkinnedMeshBoundsCenter;
@@ -223,7 +245,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     float3 localAreaNormal = float3(0.0);
     for(uint localPrimitiveIndex = groupThreadIndex; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 faceNormal = float3(0.0);
-        if(nwbSkinnedMeshBoundsFaceNormal(meshlet, localPrimitiveIndex, faceNormal))
+        if(nwbSkinnedMeshBoundsFaceNormal(meshlet, decodeInfo, localPrimitiveIndex, faceNormal))
             localAreaNormal += faceNormal;
     }
     g_NwbSkinnedMeshBoundsAreaNormal[groupThreadIndex] = localAreaNormal;
@@ -236,7 +258,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     float localConeCutoff = 1.0;
     for(uint localPrimitiveIndex = groupThreadIndex; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 areaFaceNormal = float3(0.0);
-        if(!nwbSkinnedMeshBoundsFaceNormal(meshlet, localPrimitiveIndex, areaFaceNormal))
+        if(!nwbSkinnedMeshBoundsFaceNormal(meshlet, decodeInfo, localPrimitiveIndex, areaFaceNormal))
             continue;
 
         const float3 faceNormal = nwbSafeNormalize(areaFaceNormal, float3(0.0));
@@ -260,3 +282,4 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

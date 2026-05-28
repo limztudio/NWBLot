@@ -28,12 +28,6 @@ namespace __hidden_skinning{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_SkinnedMeshGroupSize = 64u;
-
-static u32 SkinningDispatchGroupCount(const u32 workItemCount){
-    return DivideUp(workItemCount, s_SkinnedMeshGroupSize);
-}
-
 static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){
     if(RuntimeMeshBufferUpload::PayloadByteCount(count, stride, outBytes))
         return true;
@@ -227,7 +221,9 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
         instance,
         Core::ResourceStates::UnorderedAccess
     );
-    commandList.setBufferState(instance.meshletPositionRefBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletDescBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletPositionRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletAttributeRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.attributeSkinBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(resources->skinBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -239,17 +235,13 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     commandList.setComputeState(computeState);
 
     SkinnedMeshPushConstants pushConstants;
-    pushConstants.positionCount = static_cast<u32>(instance.meshletPositionRefs.size());
+    pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
     pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
     pushConstants.skinningMode = resolvedSkinningMode;
-    pushConstants.attributeCount = static_cast<u32>(instance.meshletAttributeRefs.size());
+    pushConstants.attributeCount = instance.meshletAttributeRefCount;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(
-        __hidden_skinning::SkinningDispatchGroupCount(Max(pushConstants.positionCount, pushConstants.attributeCount)),
-        1,
-        1
-    );
+    commandList.dispatch(pushConstants.meshletCount, 1, 1);
 
     __hidden_skinning::SetSkinnedBufferStates(
         commandList,
@@ -312,7 +304,7 @@ bool SkinnedMeshSystem::dispatchMeshletBounds(
 ){
     commandList.setBufferState(instance.skinnedPositionBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletDescBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(instance.meshletPositionRefBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instance.meshletPositionRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletLocalVertexRefBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletPrimitiveIndexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletBoundsBuffer.get(), Core::ResourceStates::UnorderedAccess);

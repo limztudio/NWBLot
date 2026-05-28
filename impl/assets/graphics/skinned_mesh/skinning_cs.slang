@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../mesh/payload.slangi"
+#include "../mesh/meshlet_payload.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,10 +26,12 @@ struct NwbSkinnedMeshJointMatrix{
 [[vk::binding(3, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
 [[vk::binding(4, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
 [[vk::binding(5, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
-[[vk::binding(6, 0)]] StructuredBuffer<NwbMeshletDeformedPositionRef, Std430DataLayout> g_NwbSkinnedMeshPositionRefs;
-[[vk::binding(7, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
-[[vk::binding(8, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
-[[vk::binding(9, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
+[[vk::binding(6, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshMeshlets;
+[[vk::binding(7, 0)]] ByteAddressBuffer g_NwbSkinnedMeshPositionRefDeltas;
+[[vk::binding(8, 0)]] ByteAddressBuffer g_NwbSkinnedMeshAttributeRefDeltas;
+[[vk::binding(9, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
+[[vk::binding(10, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
+[[vk::binding(11, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
 
 struct NwbSkinnedMeshPushConstants{
     uint4 payload0;
@@ -43,7 +45,7 @@ ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbSkinnedMeshPositionCount(){
+uint nwbSkinnedMeshMeshletCount(){
     return g_NwbSkinnedMeshPushConstants.payload0.x;
 }
 
@@ -57,10 +59,6 @@ uint nwbSkinnedMeshJointCount(){
 
 uint nwbSkinnedMeshSkinningMode(){
     return g_NwbSkinnedMeshPushConstants.payload0.w;
-}
-
-uint nwbSkinnedMeshAttributeCount(){
-    return g_NwbSkinnedMeshPushConstants.payload1.x;
 }
 
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){
@@ -216,11 +214,18 @@ void nwbSkinnedMeshApplySkin(const uint skinIndex, inout float3 position, inout 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbSkinnedMeshSkinPosition(uint positionId){
-    if(positionId >= nwbSkinnedMeshPositionCount())
-        return;
-
-    const NwbMeshletDeformedPositionRef positionRef = g_NwbSkinnedMeshPositionRefs[positionId];
+void nwbSkinnedMeshSkinPosition(
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localPositionIndex
+){
+    const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
+        g_NwbSkinnedMeshPositionRefDeltas,
+        meshlet,
+        decodeInfo,
+        localPositionIndex,
+        true
+    );
     float3 position = nwbMeshLoadPosition(g_NwbSkinnedMeshRestPositions[positionRef.position]);
     float3 normal = float3(0.0, 0.0, 1.0);
     float4 tangent = float4(1.0, 0.0, 0.0, 1.0);
@@ -229,12 +234,21 @@ void nwbSkinnedMeshSkinPosition(uint positionId){
     if(!nwbFiniteFloat3(position))
         position = preSkinPosition;
 
-    g_NwbSkinnedMeshSkinnedPositions[positionId] = nwbMeshStorePosition(position);
+    g_NwbSkinnedMeshSkinnedPositions[positionRef.position] = nwbMeshStorePosition(position);
 }
 
-void nwbSkinnedMeshSkinAttribute(uint attributeId){
-    if(attributeId >= nwbSkinnedMeshAttributeCount())
-        return;
+void nwbSkinnedMeshSkinAttribute(
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localAttributeIndex
+){
+    const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(
+        g_NwbSkinnedMeshAttributeRefDeltas,
+        meshlet,
+        decodeInfo,
+        localAttributeIndex
+    );
+    const uint attributeId = attributeRef.normal;
 
     float3 position = float3(0.0);
     float3 normal = nwbMeshLoadHalf4(g_NwbSkinnedMeshRestNormals[attributeId]).xyz;
@@ -256,9 +270,18 @@ void nwbSkinnedMeshSkinAttribute(uint attributeId){
     g_NwbSkinnedMeshSkinnedTangents[attributeId] = nwbMeshStoreHalf4(tangent);
 }
 
-void nwbSkinnedMeshMain(uint workItemId){
-    nwbSkinnedMeshSkinPosition(workItemId);
-    nwbSkinnedMeshSkinAttribute(workItemId);
+void nwbSkinnedMeshMain(const uint meshletIndex, const uint groupThreadIndex){
+    if(meshletIndex >= nwbSkinnedMeshMeshletCount())
+        return;
+
+    const NwbMeshletDesc meshlet = g_NwbSkinnedMeshMeshlets[meshletIndex];
+    const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
+    const uint positionCount = nwbMeshletPositionCount(meshlet);
+    const uint attributeCount = nwbMeshletAttributeCount(meshlet);
+    for(uint localPositionIndex = groupThreadIndex; localPositionIndex < positionCount; localPositionIndex += 64u)
+        nwbSkinnedMeshSkinPosition(meshlet, decodeInfo, localPositionIndex);
+    for(uint localAttributeIndex = groupThreadIndex; localAttributeIndex < attributeCount; localAttributeIndex += 64u)
+        nwbSkinnedMeshSkinAttribute(meshlet, decodeInfo, localAttributeIndex);
 }
 
 
@@ -266,8 +289,8 @@ void nwbSkinnedMeshMain(uint workItemId){
 
 
 [numthreads(64, 1, 1)]
-void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    nwbSkinnedMeshMain(dispatchThreadID.x);
+void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
+    nwbSkinnedMeshMain(groupID.x, groupThreadID.x);
 }
 
 

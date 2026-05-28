@@ -32,6 +32,17 @@ static const uint NWB_MESHLET_CONE_AXIS_X_SHIFT = 0u;
 static const uint NWB_MESHLET_CONE_AXIS_Y_SHIFT = 8u;
 static const uint NWB_MESHLET_CONE_CUTOFF_SHIFT = 16u;
 static const uint NWB_MESHLET_CONE_FLAG_SHIFT = 24u;
+static const uint NWB_MESH_MISSING_STREAM_INDEX = 0xffffffffu;
+static const uint NWB_MESHLET_REF_WIDTH_U8 = 0u;
+static const uint NWB_MESHLET_REF_WIDTH_U16 = 1u;
+static const uint NWB_MESHLET_REF_WIDTH_U32 = 2u;
+static const uint NWB_MESHLET_REF_ENCODING_WIDTH_MASK = 0x3u;
+static const uint NWB_MESHLET_REF_ENCODING_POSITION_SHIFT = 0u;
+static const uint NWB_MESHLET_REF_ENCODING_SKIN_SHIFT = 2u;
+static const uint NWB_MESHLET_REF_ENCODING_NORMAL_SHIFT = 4u;
+static const uint NWB_MESHLET_REF_ENCODING_TANGENT_SHIFT = 6u;
+static const uint NWB_MESHLET_REF_ENCODING_UV0_SHIFT = 8u;
+static const uint NWB_MESHLET_REF_ENCODING_COLOR_SHIFT = 10u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,15 +50,37 @@ static const uint NWB_MESHLET_CONE_FLAG_SHIFT = 24u;
 
 struct NwbMeshletDesc{
     uint localVertexOffset;
-    uint positionOffset;
-    uint attributeOffset;
     uint primitiveOffset;
+    uint positionRefOffset;
+    uint attributeRefOffset;
     uint counts;
+    uint positionBase;
+    uint skinBase;
+    uint normalBase;
+    uint tangentBase;
+    uint uv0Base;
+    uint colorBase;
+    uint encoding;
 };
 
 struct NwbMeshletBounds{
     float4 sphere;
     uint conePacked;
+};
+
+struct NwbMeshletRefDecodeInfo{
+    uint positionWidth;
+    uint skinWidth;
+    uint normalWidth;
+    uint tangentWidth;
+    uint uv0Width;
+    uint colorWidth;
+    uint positionByteOffset;
+    uint skinByteOffset;
+    uint normalByteOffset;
+    uint tangentByteOffset;
+    uint uv0ByteOffset;
+    uint colorByteOffset;
 };
 
 
@@ -68,6 +101,113 @@ uint nwbMeshletPositionCount(const NwbMeshletDesc meshlet){
 
 uint nwbMeshletAttributeCount(const NwbMeshletDesc meshlet){
     return meshlet.counts >> NWB_MESHLET_ATTRIBUTE_COUNT_SHIFT;
+}
+
+uint nwbMeshletRefEncodingWidth(const uint encoding, const uint shift){
+    return (encoding >> shift) & NWB_MESHLET_REF_ENCODING_WIDTH_MASK;
+}
+
+uint nwbMeshletRefDeltaByteWidth(const uint width){
+    return width == NWB_MESHLET_REF_WIDTH_U8
+        ? 1u
+        : width == NWB_MESHLET_REF_WIDTH_U16
+            ? 2u
+            : 4u
+    ;
+}
+
+uint nwbMeshletDecodeRefByte(ByteAddressBuffer buffer, const uint byteOffset){
+    const uint word = buffer.Load(byteOffset & ~3u);
+    return (word >> ((byteOffset & 3u) << 3u)) & 0xffu;
+}
+
+uint nwbMeshletDecodeRefDelta(ByteAddressBuffer buffer, const uint byteOffset, const uint width){
+    uint delta = nwbMeshletDecodeRefByte(buffer, byteOffset);
+    if(width == NWB_MESHLET_REF_WIDTH_U8)
+        return delta;
+
+    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 1u) << 8u;
+    if(width == NWB_MESHLET_REF_WIDTH_U16)
+        return delta;
+
+    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 2u) << 16u;
+    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 3u) << 24u;
+    return delta;
+}
+
+uint nwbMeshletDecodeRefDelta(
+    ByteAddressBuffer buffer,
+    const uint channelByteOffset,
+    const uint localIndex,
+    const uint width
+){
+    return nwbMeshletDecodeRefDelta(
+        buffer,
+        channelByteOffset + localIndex * nwbMeshletRefDeltaByteWidth(width),
+        width
+    );
+}
+
+NwbMeshletRefDecodeInfo nwbMeshletBuildRefDecodeInfo(const NwbMeshletDesc meshlet){
+    const uint positionCount = nwbMeshletPositionCount(meshlet);
+    const uint attributeCount = nwbMeshletAttributeCount(meshlet);
+
+    NwbMeshletRefDecodeInfo info;
+    info.positionWidth = nwbMeshletRefEncodingWidth(meshlet.encoding, NWB_MESHLET_REF_ENCODING_POSITION_SHIFT);
+    info.skinWidth = nwbMeshletRefEncodingWidth(meshlet.encoding, NWB_MESHLET_REF_ENCODING_SKIN_SHIFT);
+    info.normalWidth = nwbMeshletRefEncodingWidth(meshlet.encoding, NWB_MESHLET_REF_ENCODING_NORMAL_SHIFT);
+    info.tangentWidth = nwbMeshletRefEncodingWidth(meshlet.encoding, NWB_MESHLET_REF_ENCODING_TANGENT_SHIFT);
+    info.uv0Width = nwbMeshletRefEncodingWidth(meshlet.encoding, NWB_MESHLET_REF_ENCODING_UV0_SHIFT);
+    info.colorWidth = nwbMeshletRefEncodingWidth(meshlet.encoding, NWB_MESHLET_REF_ENCODING_COLOR_SHIFT);
+    info.positionByteOffset = meshlet.positionRefOffset;
+    info.skinByteOffset = info.positionByteOffset + positionCount * nwbMeshletRefDeltaByteWidth(info.positionWidth);
+    info.normalByteOffset = meshlet.attributeRefOffset;
+    info.tangentByteOffset = info.normalByteOffset + attributeCount * nwbMeshletRefDeltaByteWidth(info.normalWidth);
+    info.uv0ByteOffset = info.tangentByteOffset + attributeCount * nwbMeshletRefDeltaByteWidth(info.tangentWidth);
+    info.colorByteOffset = info.uv0ByteOffset + attributeCount * nwbMeshletRefDeltaByteWidth(info.uv0Width);
+    return info;
+}
+
+NwbMeshletPositionStreamRef nwbMeshletDecodePositionRef(
+    ByteAddressBuffer buffer,
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localPositionIndex,
+    const bool skinRequired
+){
+    const uint positionDelta = nwbMeshletDecodeRefDelta(
+        buffer,
+        decodeInfo.positionByteOffset,
+        localPositionIndex,
+        decodeInfo.positionWidth
+    );
+    NwbMeshletPositionStreamRef ref;
+    ref.position = meshlet.positionBase + positionDelta;
+    ref.skin = NWB_MESH_MISSING_STREAM_INDEX;
+    if(!skinRequired)
+        return ref;
+
+    ref.skin = meshlet.skinBase + nwbMeshletDecodeRefDelta(
+        buffer,
+        decodeInfo.skinByteOffset,
+        localPositionIndex,
+        decodeInfo.skinWidth
+    );
+    return ref;
+}
+
+NwbMeshletAttributeStreamRef nwbMeshletDecodeAttributeRef(
+    ByteAddressBuffer buffer,
+    const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
+    const uint localAttributeIndex
+){
+    NwbMeshletAttributeStreamRef ref;
+    ref.normal = meshlet.normalBase + nwbMeshletDecodeRefDelta(buffer, decodeInfo.normalByteOffset, localAttributeIndex, decodeInfo.normalWidth);
+    ref.tangent = meshlet.tangentBase + nwbMeshletDecodeRefDelta(buffer, decodeInfo.tangentByteOffset, localAttributeIndex, decodeInfo.tangentWidth);
+    ref.uv0 = meshlet.uv0Base + nwbMeshletDecodeRefDelta(buffer, decodeInfo.uv0ByteOffset, localAttributeIndex, decodeInfo.uv0Width);
+    ref.color = meshlet.colorBase + nwbMeshletDecodeRefDelta(buffer, decodeInfo.colorByteOffset, localAttributeIndex, decodeInfo.colorWidth);
+    return ref;
 }
 
 uint nwbMeshletBoundsByteOffset(const uint meshletIndex){
@@ -153,3 +293,4 @@ float nwbMeshUnpackConeCutoff(const uint conePacked){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

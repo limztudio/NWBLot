@@ -13,6 +13,7 @@
 #include "skinned_validation.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
+#include "meshlet_ref_encoding.h"
 #include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
@@ -37,6 +38,8 @@ namespace __hidden_cook{
 
 
 #include "cook_metadata.inl"
+#include "cook_stream_reorder.inl"
+#include "cook_ref_encoding.inl"
 
 static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
@@ -114,6 +117,12 @@ static bool ParseMeshMeta(
 }
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
+    Core::Alloc::ScratchArena scratchArena;
+    if(!ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
+        return false;
+    if(!EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
+        return false;
+
     outMesh = Mesh(meshEntry.positions.get_allocator().arena(), meshEntry.virtualPath);
     outMesh.setPayload(
         Move(meshEntry.positions),
@@ -123,8 +132,8 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
         Move(meshEntry.colors),
         Move(meshEntry.meshlets),
         Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletPositionRefs),
-        Move(meshEntry.meshletAttributeRefs),
+        Move(meshEntry.meshletPositionRefDeltas),
+        Move(meshEntry.meshletAttributeRefDeltas),
         Move(meshEntry.meshletLocalVertexRefs),
         Move(meshEntry.meshletPrimitiveIndices)
     );
@@ -319,6 +328,12 @@ static bool ParseSkinnedMeshMeta(
 }
 
 static bool BuildSkinnedMeshAsset(SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
+    Core::Alloc::ScratchArena scratchArena;
+    if(!ReorderSkinnedMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
+        return false;
+    if(!EncodeMeshletRefs(meshEntry, true, s_SkinnedMeshMetaKind))
+        return false;
+
     outMesh = SkinnedMesh(meshEntry.positions.get_allocator().arena(), meshEntry.virtualPath);
 
     outMesh.setMeshClass(meshEntry.meshClass);
@@ -333,8 +348,8 @@ static bool BuildSkinnedMeshAsset(SkinnedMeshCookEntry& meshEntry, SkinnedMesh& 
         Move(meshEntry.inverseBindMatrices),
         Move(meshEntry.meshlets),
         Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletPositionRefs),
-        Move(meshEntry.meshletAttributeRefs),
+        Move(meshEntry.meshletPositionRefDeltas),
+        Move(meshEntry.meshletAttributeRefDeltas),
         Move(meshEntry.meshletLocalVertexRefs),
         Move(meshEntry.meshletPrimitiveIndices)
     );

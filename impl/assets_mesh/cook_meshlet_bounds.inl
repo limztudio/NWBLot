@@ -21,7 +21,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     SIMDVector minBounds = VectorReplicate(Limit<f32>::s_Max);
     SIMDVector maxBounds = VectorReplicate(-Limit<f32>::s_Max);
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
-        const MeshletDeformedPositionRef& ref = entry.meshletPositionRefs[meshlet.positionOffset + localPositionIndex];
+        const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
         const SIMDVector position = LoadMeshletPositionVector(entry, ref);
         minBounds = VectorMin(minBounds, position);
         maxBounds = VectorMax(maxBounds, position);
@@ -30,7 +30,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     const SIMDVector center = VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), 0.5f), 0.0f);
     SIMDVector radiusSquared = VectorZero();
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
-        const MeshletDeformedPositionRef& ref = entry.meshletPositionRefs[meshlet.positionOffset + localPositionIndex];
+        const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
         const SIMDVector delta = VectorSubtract(LoadMeshletPositionVector(entry, ref), center);
         radiusSquared = VectorMax(radiusSquared, Vector3LengthSq(delta));
     }

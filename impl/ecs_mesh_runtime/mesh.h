@@ -36,8 +36,8 @@ struct RuntimeMeshDesc{
     Core::BufferHandle colorBuffer;
     Core::BufferHandle meshletDescBuffer;
     Core::BufferHandle meshletBoundsBuffer;
-    Core::BufferHandle meshletPositionRefBuffer;
-    Core::BufferHandle meshletAttributeRefBuffer;
+    Core::BufferHandle meshletPositionRefDeltaBuffer;
+    Core::BufferHandle meshletAttributeRefDeltaBuffer;
     Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
     u32 meshletCount = 0u;
@@ -56,8 +56,8 @@ struct RuntimeMeshDesc{
             && colorBuffer != nullptr
             && meshletDescBuffer != nullptr
             && meshletBoundsBuffer != nullptr
-            && meshletPositionRefBuffer != nullptr
-            && meshletAttributeRefBuffer != nullptr
+            && meshletPositionRefDeltaBuffer != nullptr
+            && meshletAttributeRefDeltaBuffer != nullptr
             && meshletLocalVertexRefBuffer != nullptr
             && meshletPrimitiveIndexBuffer != nullptr
             && meshletCount > 0u

@@ -5,7 +5,7 @@
 template<typename PositionRefVectorT>
 [[nodiscard]] static bool FindMeshletPositionRef(
     const PositionRefVectorT& refs,
-    const MeshletDeformedPositionRef& ref,
+    const MeshletPositionStreamRef& ref,
     u16& outLocalPosition
 ){
     outLocalPosition = 0u;
@@ -24,13 +24,13 @@ template<typename AttributeRefVectorT, typename AttributeSkinVectorT>
 [[nodiscard]] static bool FindMeshletAttributeRef(
     const AttributeRefVectorT& refs,
     const AttributeSkinVectorT& skins,
-    const MeshletShadingAttributeRef& ref,
+    const MeshletAttributeStreamRef& ref,
     const u32 skin,
     u16& outLocalAttribute
 ){
     outLocalAttribute = 0u;
     for(usize localIndex = 0u; localIndex < refs.size(); ++localIndex){
-        const MeshletShadingAttributeRef& existing = refs[localIndex];
+        const MeshletAttributeStreamRef& existing = refs[localIndex];
         if(
             existing.normal != ref.normal
             || existing.tangent != ref.tangent
@@ -76,8 +76,8 @@ template<
 
     for(const u32 vertexRefIndex : sourceVertexRefs){
         const MeshVertexRef& source = entry.vertexRefs[vertexRefIndex];
-        const MeshletDeformedPositionRef positionRef{ source.position, source.skin };
-        const MeshletShadingAttributeRef attributeRef{ source.normal, source.tangent, source.uv0, source.color };
+        const MeshletPositionStreamRef positionRef{ source.position, source.skin };
+        const MeshletAttributeStreamRef attributeRef{ source.normal, source.tangent, source.uv0, source.color };
 
         u16 localPosition = 0u;
         if(!FindMeshletPositionRef(outPositionRefs, positionRef, localPosition)){

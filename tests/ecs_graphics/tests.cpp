@@ -16,6 +16,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_lighting/system.h>
 #include <impl/ecs_render/components.h>
+#include <impl/assets_mesh/meshlet_ref_encoding.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_asset.h>
 #include <impl/assets_mesh/asset.h>
@@ -233,17 +234,20 @@ static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
         0u,
         NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u),
     });
+    instance.meshlets.back().skinBase = 0u;
     instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{
         Float4U(0.0f, 0.0f, 0.0f, 2.0f),
         NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f),
         0u,
     });
+    Vector<NWB::Impl::MeshletPositionStreamRef> meshletPositionStreamRefs;
+    Vector<NWB::Impl::MeshletAttributeStreamRef> meshletAttributeStreamRefs;
     for(usize vertexIndex = 0u; vertexIndex < instance.restPositions.size(); ++vertexIndex){
-        instance.meshletPositionRefs.push_back(NWB::Impl::MeshletDeformedPositionRef{
+        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
         });
-        instance.meshletAttributeRefs.push_back(NWB::Impl::MeshletShadingAttributeRef{
+        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
@@ -257,6 +261,19 @@ static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
     }
     for(const u32 index : MakeTriangleIndices())
         instance.meshletPrimitiveIndices.push_back(static_cast<u8>(index));
+    const bool meshletRefsEncoded = NWB::Impl::EncodeMeshletRefDeltas(
+        instance.meshlets,
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        instance.meshletPositionRefDeltas,
+        instance.meshletAttributeRefDeltas,
+        true,
+        [](const usize, const tchar*){ return false; }
+    );
+    NWB_ASSERT(meshletRefsEncoded);
+    static_cast<void>(meshletRefsEncoded);
+    instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());
+    instance.meshletAttributeRefCount = static_cast<u32>(meshletAttributeStreamRefs.size());
 
     return instance;
 }

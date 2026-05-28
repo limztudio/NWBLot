@@ -25,6 +25,21 @@ inline constexpr u32 s_MeshletConeAxisXShift = 0u;
 inline constexpr u32 s_MeshletConeAxisYShift = 8u;
 inline constexpr u32 s_MeshletConeCutoffShift = 16u;
 inline constexpr u32 s_MeshletConeFlagShift = 24u;
+inline constexpr u32 s_MeshletRefEncodingWidthMask = 0x3u;
+inline constexpr u32 s_MeshletRefEncodingPositionShift = 0u;
+inline constexpr u32 s_MeshletRefEncodingSkinShift = 2u;
+inline constexpr u32 s_MeshletRefEncodingNormalShift = 4u;
+inline constexpr u32 s_MeshletRefEncodingTangentShift = 6u;
+inline constexpr u32 s_MeshletRefEncodingUv0Shift = 8u;
+inline constexpr u32 s_MeshletRefEncodingColorShift = 10u;
+
+namespace MeshletRefDeltaWidth{
+    enum Enum : u32{
+        U8,
+        U16,
+        U32,
+    };
+};
 
 [[nodiscard]] inline constexpr u32 PackMeshletCounts(
     const u32 vertexCount,
@@ -53,6 +68,57 @@ inline constexpr u32 s_MeshletConeFlagShift = 24u;
 
 [[nodiscard]] inline constexpr u32 MeshletAttributeCount(const MeshletDesc& meshlet){
     return meshlet.counts >> s_MeshletAttributeCountShift;
+}
+
+[[nodiscard]] inline constexpr MeshletRefDeltaWidth::Enum MeshletRefDeltaWidthForMaxDelta(const u32 maxDelta){
+    return maxDelta <= static_cast<u32>(Limit<u8>::s_Max)
+        ? MeshletRefDeltaWidth::U8
+        : maxDelta <= static_cast<u32>(Limit<u16>::s_Max)
+            ? MeshletRefDeltaWidth::U16
+            : MeshletRefDeltaWidth::U32
+    ;
+}
+
+[[nodiscard]] inline constexpr u32 PackMeshletRefEncodingWidth(
+    const MeshletRefDeltaWidth::Enum width,
+    const u32 shift
+){
+    return (static_cast<u32>(width) & s_MeshletRefEncodingWidthMask) << shift;
+}
+
+[[nodiscard]] inline constexpr u32 PackMeshletRefEncoding(
+    const MeshletRefDeltaWidth::Enum positionWidth,
+    const MeshletRefDeltaWidth::Enum skinWidth,
+    const MeshletRefDeltaWidth::Enum normalWidth,
+    const MeshletRefDeltaWidth::Enum tangentWidth,
+    const MeshletRefDeltaWidth::Enum uv0Width,
+    const MeshletRefDeltaWidth::Enum colorWidth
+){
+    return
+        PackMeshletRefEncodingWidth(positionWidth, s_MeshletRefEncodingPositionShift)
+        | PackMeshletRefEncodingWidth(skinWidth, s_MeshletRefEncodingSkinShift)
+        | PackMeshletRefEncodingWidth(normalWidth, s_MeshletRefEncodingNormalShift)
+        | PackMeshletRefEncodingWidth(tangentWidth, s_MeshletRefEncodingTangentShift)
+        | PackMeshletRefEncodingWidth(uv0Width, s_MeshletRefEncodingUv0Shift)
+        | PackMeshletRefEncodingWidth(colorWidth, s_MeshletRefEncodingColorShift)
+    ;
+}
+
+[[nodiscard]] inline constexpr MeshletRefDeltaWidth::Enum MeshletRefEncodingWidth(
+    const u32 encoding,
+    const u32 shift
+){
+    return static_cast<MeshletRefDeltaWidth::Enum>((encoding >> shift) & s_MeshletRefEncodingWidthMask);
+}
+
+[[nodiscard]] inline constexpr bool MeshletRefDeltaFitsWidth(
+    const u32 delta,
+    const MeshletRefDeltaWidth::Enum width
+){
+    return width == MeshletRefDeltaWidth::U32
+        || (width == MeshletRefDeltaWidth::U16 && delta <= static_cast<u32>(Limit<u16>::s_Max))
+        || (width == MeshletRefDeltaWidth::U8 && delta <= static_cast<u32>(Limit<u8>::s_Max))
+    ;
 }
 
 [[nodiscard]] inline u32 PackMeshletConeUnorm8(const f32 value){

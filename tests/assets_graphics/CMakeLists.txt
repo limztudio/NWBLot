@@ -5,6 +5,8 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/codec_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/material_cook_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/material_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_acceptance_helpers.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_codec_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_cooker_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/shader_tests.inl"
 )

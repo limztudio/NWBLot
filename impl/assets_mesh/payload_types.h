@@ -24,14 +24,21 @@ inline constexpr u32 s_MeshletConeFlagEnabled = 1u << 0u;
 
 struct MeshletDesc{
     u32 localVertexOffset = 0u;
-    u32 positionOffset = 0u;
-    u32 attributeOffset = 0u;
     u32 primitiveOffset = 0u;
+    u32 positionRefOffset = 0u;
+    u32 attributeRefOffset = 0u;
     u32 counts = 0u;
+    u32 positionBase = 0u;
+    u32 skinBase = s_MeshMissingStreamIndex;
+    u32 normalBase = 0u;
+    u32 tangentBase = 0u;
+    u32 uv0Base = 0u;
+    u32 colorBase = 0u;
+    u32 encoding = 0u;
 };
 static_assert(IsStandardLayout_V<MeshletDesc>, "MeshletDesc must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshletDesc>, "MeshletDesc must stay binary-serializable");
-static_assert(sizeof(MeshletDesc) == sizeof(u32) * 5u, "MeshletDesc layout drifted");
+static_assert(sizeof(MeshletDesc) == sizeof(u32) * 12u, "MeshletDesc layout drifted");
 
 struct MeshletBounds{
     Float4U sphere;
@@ -42,23 +49,23 @@ static_assert(IsStandardLayout_V<MeshletBounds>, "MeshletBounds must stay binary
 static_assert(IsTriviallyCopyable_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
 static_assert(sizeof(MeshletBounds) == sizeof(f32) * 6u, "MeshletBounds layout drifted");
 
-struct MeshletDeformedPositionRef{
+struct MeshletPositionStreamRef{
     u32 position = s_MeshMissingStreamIndex;
     u32 skin = s_MeshMissingStreamIndex;
 };
-static_assert(IsStandardLayout_V<MeshletDeformedPositionRef>, "MeshletDeformedPositionRef must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<MeshletDeformedPositionRef>, "MeshletDeformedPositionRef must stay binary-serializable");
-static_assert(sizeof(MeshletDeformedPositionRef) == sizeof(u32) * 2u, "MeshletDeformedPositionRef layout drifted");
+static_assert(IsStandardLayout_V<MeshletPositionStreamRef>, "MeshletPositionStreamRef must stay standard-layout");
+static_assert(IsTriviallyCopyable_V<MeshletPositionStreamRef>, "MeshletPositionStreamRef must stay trivially copyable");
+static_assert(sizeof(MeshletPositionStreamRef) == sizeof(u32) * 2u, "MeshletPositionStreamRef layout drifted");
 
-struct MeshletShadingAttributeRef{
+struct MeshletAttributeStreamRef{
     u32 normal = s_MeshMissingStreamIndex;
     u32 tangent = s_MeshMissingStreamIndex;
     u32 uv0 = s_MeshMissingStreamIndex;
     u32 color = s_MeshMissingStreamIndex;
 };
-static_assert(IsStandardLayout_V<MeshletShadingAttributeRef>, "MeshletShadingAttributeRef must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<MeshletShadingAttributeRef>, "MeshletShadingAttributeRef must stay binary-serializable");
-static_assert(sizeof(MeshletShadingAttributeRef) == sizeof(u32) * 4u, "MeshletShadingAttributeRef layout drifted");
+static_assert(IsStandardLayout_V<MeshletAttributeStreamRef>, "MeshletAttributeStreamRef must stay standard-layout");
+static_assert(IsTriviallyCopyable_V<MeshletAttributeStreamRef>, "MeshletAttributeStreamRef must stay trivially copyable");
+static_assert(sizeof(MeshletAttributeStreamRef) == sizeof(u32) * 4u, "MeshletAttributeStreamRef layout drifted");
 
 struct MeshletLocalVertexRef{
     u16 localDeformedPosition = 0u;

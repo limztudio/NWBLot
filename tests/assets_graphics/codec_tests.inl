@@ -74,16 +74,29 @@ static void CheckMinimalRuntimeMeshletPayload(
 ){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshlets().size() == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletBounds().size() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPositionRefs().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletAttributeRefs().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletLocalVertexRefs().size() == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 3u);
 
     const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
+    const bool skinRequired = NWB::Core::Mesh::MeshClassUsesSkinning(loadedMesh.meshClass());
+    usize expectedPositionRefBytes = 0u;
+    usize expectedAttributeRefBytes = 0u;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletVertexCount(meshlet) == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPrimitiveCount(meshlet) == 1u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletPositionCount(meshlet) == 3u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletAttributeCount(meshlet) == 3u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletEncodedPositionRefByteCount(meshlet, skinRequired, expectedPositionRefBytes));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletEncodedAttributeRefByteCount(meshlet, expectedAttributeRefBytes));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPositionRefDeltas().size() == expectedPositionRefBytes);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletAttributeRefDeltas().size() == expectedAttributeRefBytes);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.positionBase == 0u);
+    const u32 expectedSkinBase = skinRequired ? 0u : NWB::Impl::s_MeshMissingStreamIndex;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.skinBase == expectedSkinBase);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.normalBase == 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.tangentBase == 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.uv0Base == 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.colorBase == 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.encoding == 0u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletBounds()[0u].sphere.w > 0.0f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
 }
@@ -313,18 +326,19 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
 
     auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
     meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(4u, 2u, 4u, 4u) });
+    meshlets.back().skinBase = 0u;
     auto meshletBounds = MakeAssetVector<NWB::Impl::MeshletBounds>(testArena);
     meshletBounds.push_back(MakeTestMeshletBounds());
 
-    auto meshletPositionRefs = MakeAssetVector<NWB::Impl::MeshletDeformedPositionRef>(testArena);
-    auto meshletAttributeRefs = MakeAssetVector<NWB::Impl::MeshletShadingAttributeRef>(testArena);
+    auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
+    auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
     for(usize vertexIndex = 0u; vertexIndex < positions.size(); ++vertexIndex){
-        meshletPositionRefs.push_back(NWB::Impl::MeshletDeformedPositionRef{
+        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
         });
-        meshletAttributeRefs.push_back(NWB::Impl::MeshletShadingAttributeRef{
+        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
@@ -340,6 +354,19 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
     for(const u32 index : MakeQuadTriangleIndices())
         meshletPrimitiveIndices.push_back(static_cast<u8>(index));
 
+    auto meshletPositionRefDeltas = MakeAssetVector<u8>(testArena);
+    auto meshletAttributeRefDeltas = MakeAssetVector<u8>(testArena);
+    const bool meshletRefsEncoded = EncodeTestMeshletRefs(
+        meshlets,
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        meshletPositionRefDeltas,
+        meshletAttributeRefDeltas,
+        true
+    );
+    NWB_ASSERT(meshletRefsEncoded);
+    static_cast<void>(meshletRefsEncoded);
+
     mesh.setMeshClass(NWB::Core::Mesh::MeshClass::Skinned);
     mesh.setSkeletonJointCount(1u);
     mesh.setPayload(
@@ -352,8 +379,8 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
         Move(inverseBindMatrices),
         Move(meshlets),
         Move(meshletBounds),
-        Move(meshletPositionRefs),
-        Move(meshletAttributeRefs),
+        Move(meshletPositionRefDeltas),
+        Move(meshletAttributeRefDeltas),
         Move(meshletLocalVertexRefs),
         Move(meshletPrimitiveIndices)
     );
@@ -390,18 +417,19 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
 
     auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
     meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u) });
+    meshlets.back().skinBase = 0u;
     auto meshletBounds = MakeAssetVector<NWB::Impl::MeshletBounds>(testArena);
     meshletBounds.push_back(MakeTestMeshletBounds());
 
-    auto meshletPositionRefs = MakeAssetVector<NWB::Impl::MeshletDeformedPositionRef>(testArena);
-    auto meshletAttributeRefs = MakeAssetVector<NWB::Impl::MeshletShadingAttributeRef>(testArena);
+    auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
+    auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
     for(usize vertexIndex = 0u; vertexIndex < positions.size(); ++vertexIndex){
-        meshletPositionRefs.push_back(NWB::Impl::MeshletDeformedPositionRef{
+        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
         });
-        meshletAttributeRefs.push_back(NWB::Impl::MeshletShadingAttributeRef{
+        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
             static_cast<u32>(vertexIndex),
@@ -417,6 +445,19 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
     for(const u32 index : MakeTriangleIndices())
         meshletPrimitiveIndices.push_back(static_cast<u8>(index));
 
+    auto meshletPositionRefDeltas = MakeAssetVector<u8>(testArena);
+    auto meshletAttributeRefDeltas = MakeAssetVector<u8>(testArena);
+    const bool meshletRefsEncoded = EncodeTestMeshletRefs(
+        meshlets,
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        meshletPositionRefDeltas,
+        meshletAttributeRefDeltas,
+        true
+    );
+    NWB_ASSERT(meshletRefsEncoded);
+    static_cast<void>(meshletRefsEncoded);
+
     mesh.setMeshClass(NWB::Core::Mesh::MeshClass::Skinned);
     mesh.setSkeletonJointCount(1u);
     mesh.setPayload(
@@ -429,8 +470,8 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
         Move(inverseBindMatrices),
         Move(meshlets),
         Move(meshletBounds),
-        Move(meshletPositionRefs),
-        Move(meshletAttributeRefs),
+        Move(meshletPositionRefDeltas),
+        Move(meshletAttributeRefDeltas),
         Move(meshletLocalVertexRefs),
         Move(meshletPrimitiveIndices)
     );
@@ -466,15 +507,15 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     auto meshletBounds = MakeAssetVector<NWB::Impl::MeshletBounds>(testArena);
     meshletBounds.push_back(MakeTestMeshletBounds());
 
-    auto meshletPositionRefs = MakeAssetVector<NWB::Impl::MeshletDeformedPositionRef>(testArena);
-    auto meshletAttributeRefs = MakeAssetVector<NWB::Impl::MeshletShadingAttributeRef>(testArena);
+    auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
+    auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
     for(usize vertexIndex = 0u; vertexIndex < positions.size(); ++vertexIndex){
-        meshletPositionRefs.push_back(NWB::Impl::MeshletDeformedPositionRef{
+        meshletPositionStreamRefs.push_back(NWB::Impl::MeshletPositionStreamRef{
             static_cast<u32>(vertexIndex),
             NWB::Impl::s_MeshMissingStreamIndex,
         });
-        meshletAttributeRefs.push_back(NWB::Impl::MeshletShadingAttributeRef{
+        meshletAttributeStreamRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{
             static_cast<u32>(vertexIndex),
             0u,
             static_cast<u32>(vertexIndex),
@@ -491,6 +532,19 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     meshletPrimitiveIndices.push_back(1u);
     meshletPrimitiveIndices.push_back(2u);
 
+    auto meshletPositionRefDeltas = MakeAssetVector<u8>(testArena);
+    auto meshletAttributeRefDeltas = MakeAssetVector<u8>(testArena);
+    const bool meshletRefsEncoded = EncodeTestMeshletRefs(
+        meshlets,
+        meshletPositionStreamRefs,
+        meshletAttributeStreamRefs,
+        meshletPositionRefDeltas,
+        meshletAttributeRefDeltas,
+        false
+    );
+    NWB_ASSERT(meshletRefsEncoded);
+    static_cast<void>(meshletRefsEncoded);
+
     mesh.setPayload(
         Move(positions),
         Move(normals),
@@ -499,8 +553,8 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
         Move(colors),
         Move(meshlets),
         Move(meshletBounds),
-        Move(meshletPositionRefs),
-        Move(meshletAttributeRefs),
+        Move(meshletPositionRefDeltas),
+        Move(meshletAttributeRefDeltas),
         Move(meshletLocalVertexRefs),
         Move(meshletPrimitiveIndices)
     );

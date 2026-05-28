@@ -71,8 +71,8 @@ struct NwbMeshInstanceData{
 [[vk::binding(4, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbMeshColors;
 [[vk::binding(5, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbMeshlets;
 [[vk::binding(6, 0)]] ByteAddressBuffer g_NwbMeshletBounds;
-[[vk::binding(7, 0)]] StructuredBuffer<NwbMeshletDeformedPositionRef, Std430DataLayout> g_NwbMeshletPositionRefs;
-[[vk::binding(8, 0)]] StructuredBuffer<NwbMeshletShadingAttributeRef, Std430DataLayout> g_NwbMeshletAttributeRefs;
+[[vk::binding(7, 0)]] ByteAddressBuffer g_NwbMeshletPositionRefDeltas;
+[[vk::binding(8, 0)]] ByteAddressBuffer g_NwbMeshletAttributeRefDeltas;
 [[vk::binding(9, 0)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbMeshletLocalVertexRefs;
 [[vk::binding(10, 0)]] ByteAddressBuffer g_NwbMeshletPrimitiveIndices;
 [[vk::binding(11, 0)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
@@ -138,30 +138,34 @@ NwbMeshletLocalVertexRef nwbMeshLoadMeshletLocalVertexRef(const NwbMeshletDesc m
     return g_NwbMeshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
 }
 
-NwbMeshletDeformedPositionRef nwbMeshLoadMeshletPositionRef(
+NwbMeshletPositionStreamRef nwbMeshLoadMeshletPositionRef(
     const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
     const uint localDeformedPosition
 ){
-    return g_NwbMeshletPositionRefs[meshlet.positionOffset + localDeformedPosition];
+    return nwbMeshletDecodePositionRef(g_NwbMeshletPositionRefDeltas, meshlet, decodeInfo, localDeformedPosition, false);
 }
 
-NwbMeshletShadingAttributeRef nwbMeshLoadMeshletAttributeRef(
+NwbMeshletAttributeStreamRef nwbMeshLoadMeshletAttributeRef(
     const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
     const uint localAttribute
 ){
-    return g_NwbMeshletAttributeRefs[meshlet.attributeOffset + localAttribute];
+    return nwbMeshletDecodeAttributeRef(g_NwbMeshletAttributeRefDeltas, meshlet, decodeInfo, localAttribute);
 }
 
 NwbMeshSourceVertex nwbMeshLoadSourceVertex(
     const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
     const uint localVertexIndex,
     const float3 objectPosition,
     const float3 worldPosition,
     const float4 clipPosition
 ){
     const NwbMeshletLocalVertexRef localVertexRef = nwbMeshLoadMeshletLocalVertexRef(meshlet, localVertexIndex);
-    const NwbMeshletShadingAttributeRef attributeRef = nwbMeshLoadMeshletAttributeRef(
+    const NwbMeshletAttributeStreamRef attributeRef = nwbMeshLoadMeshletAttributeRef(
         meshlet,
+        decodeInfo,
         nwbMeshletLocalAttribute(localVertexRef)
     );
 

@@ -3,7 +3,7 @@
 
 
 [[nodiscard]] static bool MeshletPositionRefInRange(
-    const MeshletDeformedPositionRef& ref,
+    const MeshletPositionStreamRef& ref,
     const usize positionCount,
     const usize skinCount,
     const bool skinRequired
@@ -12,7 +12,7 @@
 }
 
 [[nodiscard]] static bool MeshletAttributeRefInRange(
-    const MeshletShadingAttributeRef& ref,
+    const MeshletAttributeStreamRef& ref,
     const usize normalCount,
     const usize tangentCount,
     const usize uv0Count,

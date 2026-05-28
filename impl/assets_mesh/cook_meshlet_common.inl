@@ -5,7 +5,7 @@
 template<typename CookEntryT>
 [[nodiscard]] static SIMDVector LoadMeshletPositionVector(
     const CookEntryT& entry,
-    const MeshletDeformedPositionRef& ref
+    const MeshletPositionStreamRef& ref
 ){
     return VectorSetW(LoadFloat(entry.positions[ref.position]), 0.0f);
 }
@@ -17,8 +17,8 @@ template<typename CookEntryT>
     const u32 localVertexIndex
 ){
     const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-    const usize positionRefIndex = meshlet.positionOffset + localVertexRef.localDeformedPosition;
-    const MeshletDeformedPositionRef& positionRef = entry.meshletPositionRefs[positionRefIndex];
+    const usize positionRefIndex = meshlet.positionRefOffset + localVertexRef.localDeformedPosition;
+    const MeshletPositionStreamRef& positionRef = entry.meshletPositionStreamRefs[positionRefIndex];
     return LoadMeshletPositionVector(entry, positionRef);
 }
 

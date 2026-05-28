@@ -31,12 +31,12 @@ struct NwbMeshHalf4{
     uint zw;
 };
 
-struct NwbMeshletDeformedPositionRef{
+struct NwbMeshletPositionStreamRef{
     uint position;
     uint skin;
 };
 
-struct NwbMeshletShadingAttributeRef{
+struct NwbMeshletAttributeStreamRef{
     uint normal;
     uint tangent;
     uint uv0;

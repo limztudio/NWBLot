@@ -271,21 +271,23 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
         NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDeformedPositionRef>(
+    uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
         m_graphics,
         meshPath,
-        createdMesh.meshletPositionRefBuffer,
-        AStringView(":meshlet_position_refs"),
-        mesh.meshletPositionRefs(),
-        NWB_TEXT("meshlet position ref")
+        createdMesh.meshletPositionRefDeltaBuffer,
+        AStringView(":meshlet_position_ref_deltas"),
+        mesh.meshletPositionRefDeltas(),
+        NWB_TEXT("meshlet position ref delta"),
+        true
     ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<MeshletShadingAttributeRef>(
+    uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
         m_graphics,
         meshPath,
-        createdMesh.meshletAttributeRefBuffer,
-        AStringView(":meshlet_attribute_refs"),
-        mesh.meshletAttributeRefs(),
-        NWB_TEXT("meshlet attribute ref")
+        createdMesh.meshletAttributeRefDeltaBuffer,
+        AStringView(":meshlet_attribute_ref_deltas"),
+        mesh.meshletAttributeRefDeltas(),
+        NWB_TEXT("meshlet attribute ref delta"),
+        true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
         m_graphics,
@@ -360,8 +362,8 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
     createdMesh.colorBuffer = desc.colorBuffer;
     createdMesh.meshletDescBuffer = desc.meshletDescBuffer;
     createdMesh.meshletBoundsBuffer = desc.meshletBoundsBuffer;
-    createdMesh.meshletPositionRefBuffer = desc.meshletPositionRefBuffer;
-    createdMesh.meshletAttributeRefBuffer = desc.meshletAttributeRefBuffer;
+    createdMesh.meshletPositionRefDeltaBuffer = desc.meshletPositionRefDeltaBuffer;
+    createdMesh.meshletAttributeRefDeltaBuffer = desc.meshletAttributeRefDeltaBuffer;
     createdMesh.meshletLocalVertexRefBuffer = desc.meshletLocalVertexRefBuffer;
     createdMesh.meshletPrimitiveIndexBuffer = desc.meshletPrimitiveIndexBuffer;
     createdMesh.meshletCount = desc.meshletCount;

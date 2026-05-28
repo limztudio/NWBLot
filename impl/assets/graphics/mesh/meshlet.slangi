@@ -34,6 +34,7 @@ uint3 nwbMeshLoadMeshletPrimitive(const uint primitiveBase){
 
 void nwbMeshBuildMeshletPositions(
     const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
     const NwbMeshInstanceData instance,
     const uint groupThreadIndex
 ){
@@ -43,7 +44,7 @@ void nwbMeshBuildMeshletPositions(
         localPositionIndex < positionCount;
         localPositionIndex += NWB_MESH_SHADER_GROUP_SIZE_X
     ){
-        const NwbMeshletDeformedPositionRef positionRef = nwbMeshLoadMeshletPositionRef(meshlet, localPositionIndex);
+        const NwbMeshletPositionStreamRef positionRef = nwbMeshLoadMeshletPositionRef(meshlet, decodeInfo, localPositionIndex);
         const float3 objectPosition = nwbMeshLoadPosition(g_NwbMeshPositions[positionRef.position]);
         const float3 worldPosition = nwbMeshTransformPosition(objectPosition, instance);
         g_NwbMeshletSourcePositions[localPositionIndex] = objectPosition;
@@ -57,6 +58,7 @@ void nwbMeshBuildMeshletPositions(
 NwbMeshGeneratedVertex nwbMeshBuildMeshletVertex(
     const uint meshletIndex,
     const NwbMeshletDesc meshlet,
+    const NwbMeshletRefDecodeInfo decodeInfo,
     const uint localVertexIndex,
     const NwbMeshInstanceData instance
 ){
@@ -67,6 +69,7 @@ NwbMeshGeneratedVertex nwbMeshBuildMeshletVertex(
         localVertexIndex,
         nwbMeshLoadSourceVertex(
             meshlet,
+            decodeInfo,
             localVertexIndex,
             g_NwbMeshletSourcePositions[localPositionIndex],
             g_NwbMeshletWorldPositions[localPositionIndex],

@@ -11,14 +11,14 @@ static bool BuildMeshlets(
 ){
     entry.meshlets.clear();
     entry.meshletBounds.clear();
-    entry.meshletPositionRefs.clear();
-    entry.meshletAttributeRefs.clear();
+    entry.meshletPositionStreamRefs.clear();
+    entry.meshletAttributeStreamRefs.clear();
     entry.meshletLocalVertexRefs.clear();
     entry.meshletPrimitiveIndices.clear();
     entry.meshlets.reserve((indices.size() / 3u + s_MeshMaxMeshletTriangles - 1u) / s_MeshMaxMeshletTriangles);
     entry.meshletBounds.reserve(entry.meshlets.capacity());
-    entry.meshletPositionRefs.reserve(indices.size());
-    entry.meshletAttributeRefs.reserve(indices.size());
+    entry.meshletPositionStreamRefs.reserve(indices.size());
+    entry.meshletAttributeStreamRefs.reserve(indices.size());
     entry.meshletLocalVertexRefs.reserve(indices.size());
     entry.meshletPrimitiveIndices.reserve(indices.size());
 
@@ -28,8 +28,8 @@ static bool BuildMeshlets(
 
     MeshletDesc current;
     Core::Assets::AssetVector<u32> localSourceVertexRefs(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<MeshletDeformedPositionRef> localPositionRefs(entry.positions.get_allocator().arena());
-    Core::Assets::AssetVector<MeshletShadingAttributeRef> localAttributeRefs(entry.positions.get_allocator().arena());
+    Core::Assets::AssetVector<MeshletPositionStreamRef> localPositionRefs(entry.positions.get_allocator().arena());
+    Core::Assets::AssetVector<MeshletAttributeStreamRef> localAttributeRefs(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<u32> localAttributeSkins(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<MeshletLocalVertexRef> localVertexRefs(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<u32> localTriangleIndices(entry.positions.get_allocator().arena());
@@ -72,8 +72,8 @@ static bool BuildMeshlets(
             return false;
 
         current.localVertexOffset = static_cast<u32>(entry.meshletLocalVertexRefs.size());
-        current.positionOffset = static_cast<u32>(entry.meshletPositionRefs.size());
-        current.attributeOffset = static_cast<u32>(entry.meshletAttributeRefs.size());
+        current.positionRefOffset = static_cast<u32>(entry.meshletPositionStreamRefs.size());
+        current.attributeRefOffset = static_cast<u32>(entry.meshletAttributeStreamRefs.size());
         current.counts = PackMeshletCounts(
             static_cast<u32>(localVertexRefs.size()),
             primitiveCount,
@@ -81,9 +81,9 @@ static bool BuildMeshlets(
             static_cast<u32>(localAttributeRefs.size())
         );
 
-        entry.meshletPositionRefs.insert(entry.meshletPositionRefs.end(), localPositionRefs.begin(), localPositionRefs.end());
-        entry.meshletAttributeRefs.insert(
-            entry.meshletAttributeRefs.end(),
+        entry.meshletPositionStreamRefs.insert(entry.meshletPositionStreamRefs.end(), localPositionRefs.begin(), localPositionRefs.end());
+        entry.meshletAttributeStreamRefs.insert(
+            entry.meshletAttributeStreamRefs.end(),
             localAttributeRefs.begin(),
             localAttributeRefs.end()
         );

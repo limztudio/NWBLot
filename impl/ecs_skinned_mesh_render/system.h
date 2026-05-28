@@ -54,7 +54,7 @@ class SkinnedMeshSystem final
 {
 private:
     struct SkinnedMeshPushConstants{
-        u32 positionCount = 0;
+        u32 meshletCount = 0;
         u32 skinCount = 0;
         u32 jointCount = 0;
         u32 skinningMode = SkinnedMeshSkinningMode::LinearBlend;

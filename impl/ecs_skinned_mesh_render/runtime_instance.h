@@ -29,8 +29,7 @@ struct SkinnedMeshRuntimeMeshInstance{
     using JointVector = Vector<SkinnedMeshJointMatrix, Core::Alloc::GlobalArena>;
     using MeshletVector = Vector<MeshletDesc, Core::Alloc::GlobalArena>;
     using MeshletBoundsVector = Vector<MeshletBounds, Core::Alloc::GlobalArena>;
-    using MeshletPositionRefVector = Vector<MeshletDeformedPositionRef, Core::Alloc::GlobalArena>;
-    using MeshletAttributeRefVector = Vector<MeshletShadingAttributeRef, Core::Alloc::GlobalArena>;
+    using MeshletRefDeltaVector = Vector<u8, Core::Alloc::GlobalArena>;
     using MeshletLocalVertexRefVector = Vector<MeshletLocalVertexRef, Core::Alloc::GlobalArena>;
     using MeshletPrimitiveIndexVector = Vector<u8, Core::Alloc::GlobalArena>;
     using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
@@ -46,8 +45,8 @@ struct SkinnedMeshRuntimeMeshInstance{
     Half4Vector colors;
     MeshletVector meshlets;
     MeshletBoundsVector meshletBounds;
-    MeshletPositionRefVector meshletPositionRefs;
-    MeshletAttributeRefVector meshletAttributeRefs;
+    MeshletRefDeltaVector meshletPositionRefDeltas;
+    MeshletRefDeltaVector meshletAttributeRefDeltas;
     MeshletLocalVertexRefVector meshletLocalVertexRefs;
     MeshletPrimitiveIndexVector meshletPrimitiveIndices;
     AttributeSkinVector attributeSkins;
@@ -64,11 +63,13 @@ struct SkinnedMeshRuntimeMeshInstance{
     Core::BufferHandle colorBuffer;
     Core::BufferHandle meshletDescBuffer;
     Core::BufferHandle meshletBoundsBuffer;
-    Core::BufferHandle meshletPositionRefBuffer;
-    Core::BufferHandle meshletAttributeRefBuffer;
+    Core::BufferHandle meshletPositionRefDeltaBuffer;
+    Core::BufferHandle meshletAttributeRefDeltaBuffer;
     Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
     Core::BufferHandle attributeSkinBuffer;
+    u32 meshletPositionRefCount = 0u;
+    u32 meshletAttributeRefCount = 0u;
     u32 editRevision = 0;
     RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
 
@@ -80,8 +81,8 @@ struct SkinnedMeshRuntimeMeshInstance{
         , colors(arena)
         , meshlets(arena)
         , meshletBounds(arena)
-        , meshletPositionRefs(arena)
-        , meshletAttributeRefs(arena)
+        , meshletPositionRefDeltas(arena)
+        , meshletAttributeRefDeltas(arena)
         , meshletLocalVertexRefs(arena)
         , meshletPrimitiveIndices(arena)
         , attributeSkins(arena)
@@ -103,11 +104,13 @@ struct SkinnedMeshRuntimeMeshInstance{
             && !skin.empty()
             && !meshlets.empty()
             && meshletBounds.size() == meshlets.size()
-            && !meshletPositionRefs.empty()
-            && !meshletAttributeRefs.empty()
+            && !meshletPositionRefDeltas.empty()
+            && !meshletAttributeRefDeltas.empty()
             && !meshletLocalVertexRefs.empty()
             && !meshletPrimitiveIndices.empty()
-            && attributeSkins.size() == meshletAttributeRefs.size()
+            && meshletPositionRefCount > 0u
+            && meshletAttributeRefCount > 0u
+            && attributeSkins.size() == meshletAttributeRefCount
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && restPositionBuffer != nullptr
             && restNormalBuffer != nullptr
@@ -119,8 +122,8 @@ struct SkinnedMeshRuntimeMeshInstance{
             && colorBuffer != nullptr
             && meshletDescBuffer != nullptr
             && meshletBoundsBuffer != nullptr
-            && meshletPositionRefBuffer != nullptr
-            && meshletAttributeRefBuffer != nullptr
+            && meshletPositionRefDeltaBuffer != nullptr
+            && meshletAttributeRefDeltaBuffer != nullptr
             && meshletLocalVertexRefBuffer != nullptr
             && meshletPrimitiveIndexBuffer != nullptr
             && attributeSkinBuffer != nullptr

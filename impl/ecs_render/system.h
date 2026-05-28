@@ -107,8 +107,8 @@ private:
         Core::BufferHandle colorBuffer;
         Core::BufferHandle meshletDescBuffer;
         Core::BufferHandle meshletBoundsBuffer;
-        Core::BufferHandle meshletPositionRefBuffer;
-        Core::BufferHandle meshletAttributeRefBuffer;
+        Core::BufferHandle meshletPositionRefDeltaBuffer;
+        Core::BufferHandle meshletAttributeRefDeltaBuffer;
         Core::BufferHandle meshletLocalVertexRefBuffer;
         Core::BufferHandle meshletPrimitiveIndexBuffer;
         Core::BufferHandle emulationVertexBuffer;
@@ -131,8 +131,8 @@ private:
                 && colorBuffer != nullptr
                 && meshletDescBuffer != nullptr
                 && meshletBoundsBuffer != nullptr
-                && meshletPositionRefBuffer != nullptr
-                && meshletAttributeRefBuffer != nullptr
+                && meshletPositionRefDeltaBuffer != nullptr
+                && meshletAttributeRefDeltaBuffer != nullptr
                 && meshletLocalVertexRefBuffer != nullptr
                 && meshletPrimitiveIndexBuffer != nullptr
                 && meshletCount > 0
@@ -346,8 +346,8 @@ private:
         handler(s_MeshColorBindingSlot, false);
         handler(s_MeshletDescBindingSlot, false);
         handler(s_MeshletBoundsBindingSlot, true);
-        handler(s_MeshletPositionRefBindingSlot, false);
-        handler(s_MeshletAttributeRefBindingSlot, false);
+        handler(s_MeshletPositionRefBindingSlot, true);
+        handler(s_MeshletAttributeRefBindingSlot, true);
         handler(s_MeshletLocalVertexRefBindingSlot, false);
         handler(s_MeshletPrimitiveIndexBindingSlot, true);
     }
@@ -360,8 +360,8 @@ private:
         case s_MeshColorBindingSlot: return mesh.colorBuffer;
         case s_MeshletDescBindingSlot: return mesh.meshletDescBuffer;
         case s_MeshletBoundsBindingSlot: return mesh.meshletBoundsBuffer;
-        case s_MeshletPositionRefBindingSlot: return mesh.meshletPositionRefBuffer;
-        case s_MeshletAttributeRefBindingSlot: return mesh.meshletAttributeRefBuffer;
+        case s_MeshletPositionRefBindingSlot: return mesh.meshletPositionRefDeltaBuffer;
+        case s_MeshletAttributeRefBindingSlot: return mesh.meshletAttributeRefDeltaBuffer;
         case s_MeshletLocalVertexRefBindingSlot: return mesh.meshletLocalVertexRefBuffer;
         case s_MeshletPrimitiveIndexBindingSlot: return mesh.meshletPrimitiveIndexBuffer;
         default:

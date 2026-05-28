@@ -4,6 +4,7 @@
 
 #include <impl/assets_mesh/skinned_asset.h>
 #include <impl/assets_mesh/asset.h>
+#include <impl/assets_mesh/meshlet_ref_encoding.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_graphics/cooker.h>
 #include <impl/assets_material/cook.h>
@@ -255,6 +256,7 @@ static constexpr AStringView s_DefaultColorMeshMeta =
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
 
+#if defined(NWB_FINAL)
 static constexpr AStringView s_TriangleNormalField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS;
 static constexpr AStringView s_TriangleTangentField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS;
 static constexpr AStringView s_TriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS;
@@ -279,11 +281,13 @@ static constexpr AStringView s_EmptyTangentListField = R"(asset.tangents = [];
 static constexpr AStringView s_EmptyTangentMapField = R"(asset.tangents = {};
 
 )";
+#endif
 
 static void AppendTestMeta(AString& inOutMeta, const AStringView text){
     inOutMeta.append(text.data(), text.size());
 }
 
+#if defined(NWB_FINAL)
 static AString BuildTriangleMeta(
     const AStringView assetHeader,
     const AStringView normalField,
@@ -320,6 +324,7 @@ static AString BuildSkinnedTriangleMeta(
 ){
     return BuildTriangleMeta("skinned_mesh asset;\n\n", normalField, tangentField, vertexRefsField, NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN);
 }
+#endif
 
 static constexpr AStringView s_MinimalMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
@@ -1645,6 +1650,7 @@ static bool FindShaderArchiveSourceChecksum(
 }
 
 #include "shader_tests.inl"
+#include "meshlet_ref_codec_tests.inl"
 #include "codec_tests.inl"
 
 #include "material_tests.inl"
@@ -1659,6 +1665,8 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMinimalSkinnedMeshCodecRoundTrip(context);
     __hidden_tests::TestSkinnedMeshCodecRejectsMalformedCounts(context);
     __hidden_tests::TestSkinnedMeshCodecRejectsMalformedDependentCounts(context);
+    __hidden_tests::TestMeshletRefEncodingWidthRules(context);
+    __hidden_tests::TestMeshletRefEncodingRoundTrip(context);
     __hidden_tests::TestShaderArchiveVariantLookupIsExact(context);
     __hidden_tests::TestSpirvEntryPointLookup(context);
     __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias(context);

@@ -73,10 +73,6 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
     return MeshClassUsesSkinning(meshClass) == hasSkin;
 }
 
-[[nodiscard]] inline bool MeshClassAcceptsSkinPayload(const u32 meshClass, const bool hasPayload){
-    return MeshClassUsesSkinning(meshClass) || !hasPayload;
-}
-
 [[nodiscard]] inline AStringView MeshClassText(const u32 meshClass){
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);
     if(info)

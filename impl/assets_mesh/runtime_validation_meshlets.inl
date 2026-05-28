@@ -2,42 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidateMeshletPositionRefs(
-    const Core::Assets::AssetVector<MeshletDeformedPositionRef>& positionRefs,
-    const usize positionCount,
-    const usize skinCount,
-    const bool skinRequired,
-    const tchar* contextText,
-    const TStringView meshPathText
-){
-    if(!CountFitsU32(positionRefs.size()) || (skinRequired && !CountFitsU32(skinCount))){
-        return FailMeshPayloadValidation(
-            contextText,
-            meshPathText,
-            NWB_TEXT("exceeds u32 stream count limits")
-        );
-    }
-
-    for(usize positionRefIndex = 0u; positionRefIndex < positionRefs.size(); ++positionRefIndex){
-        const MeshletDeformedPositionRef& ref = positionRefs[positionRefIndex];
-        if(MeshletPositionRefInRange(ref, positionCount, skinCount, skinRequired))
-            continue;
-
-        return FailMeshPayloadIndexedValidation(
-            contextText,
-            meshPathText,
-            NWB_TEXT("meshlet position ref"),
-            positionRefIndex,
-            NWB_TEXT("is out of range")
-        );
-    }
-
-    return true;
-}
-
 [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
-    const Core::Assets::AssetVector<MeshletDeformedPositionRef>& positionRefs,
-    const Core::Assets::AssetVector<MeshletShadingAttributeRef>& attributeRefs,
+    const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
     const tchar* contextText,
@@ -45,12 +11,36 @@
 ){
     Core::Alloc::ScratchArena scratchArena;
     Vector<u32, Core::Alloc::ScratchArena> attributeSkins{scratchArena};
-    return ResolveMeshletAttributeSkins(
+    usize attributeRefCount = 0u;
+    for(const MeshletDesc& meshlet : meshlets)
+        attributeRefCount += MeshletAttributeCount(meshlet);
+
+    return ResolveMeshletAttributeSkinsFromLocalVertices(
         meshlets,
-        positionRefs,
         localVertexRefs,
-        attributeRefs.size(),
+        attributeRefCount,
         attributeSkins,
+        [&](const usize meshletIndex, const MeshletDesc& meshlet, const usize, const u32 localPositionIndex, u32& outSkin){
+            MeshletPositionStreamRef positionRef;
+            if(!DecodeMeshletPositionRef(
+                positionRefDeltas.data(),
+                positionRefDeltas.size(),
+                meshlet,
+                localPositionIndex,
+                true,
+                positionRef
+            )){
+                return FailMeshletPayloadValidation(
+                    contextText,
+                    meshPathText,
+                    meshletIndex,
+                    NWB_TEXT("has invalid encoded position ref")
+                );
+            }
+
+            outSkin = positionRef.skin;
+            return true;
+        },
         [&](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(previousSkin);
             static_cast<void>(skinIndex);
@@ -75,12 +65,14 @@
 }
 
 [[nodiscard]] static bool ValidateMeshletPayload(
-    const Core::Assets::AssetVector<MeshletDeformedPositionRef>& positionRefs,
-    const Core::Assets::AssetVector<MeshletShadingAttributeRef>& attributeRefs,
+    const Core::Assets::AssetVector<u8>& positionRefDeltas,
+    const Core::Assets::AssetVector<u8>& attributeRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
     const Core::Assets::AssetVector<MeshletBounds>& meshletBounds,
     const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
+    const usize positionCount,
+    const usize skinCount,
     const usize normalCount,
     const usize tangentCount,
     const usize uv0Count,
@@ -96,16 +88,27 @@
             NWB_TEXT("has incomplete meshlet payload")
         );
     }
+    if(
+        !CountFitsU32(positionRefDeltas.size())
+        || !CountFitsU32(attributeRefDeltas.size())
+        || (skinRequired && !CountFitsU32(skinCount))
+    ){
+        return FailMeshPayloadValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("exceeds u32 stream count limits")
+        );
+    }
 
     usize expectedLocalVertexRefCount = 0u;
-    usize expectedPositionRefCount = 0u;
-    usize expectedAttributeRefCount = 0u;
+    usize expectedPositionRefByteCount = 0u;
+    usize expectedAttributeRefByteCount = 0u;
     usize expectedPrimitiveIndexCount = 0u;
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         const MeshletDesc& meshlet = meshlets[meshletIndex];
         const u32 vertexCount = MeshletVertexCount(meshlet);
         const u32 primitiveCount = MeshletPrimitiveCount(meshlet);
-        const u32 positionCount = MeshletPositionCount(meshlet);
+        const u32 encodedPositionCount = MeshletPositionCount(meshlet);
         const u32 attributeCount = MeshletAttributeCount(meshlet);
         if(vertexCount == 0u || vertexCount > s_MeshMaxMeshletVertices){
             return FailMeshletPayloadValidation(
@@ -123,7 +126,7 @@
                 NWB_TEXT("has invalid primitive count")
             );
         }
-        if(positionCount == 0u || positionCount > s_MeshMaxMeshletVertices){
+        if(encodedPositionCount == 0u || encodedPositionCount > s_MeshMaxMeshletVertices){
             return FailMeshletPayloadValidation(
                 contextText,
                 meshPathText,
@@ -141,9 +144,9 @@
         }
         if(
             meshlet.localVertexOffset != expectedLocalVertexRefCount
-            || meshlet.positionOffset != expectedPositionRefCount
-            || meshlet.attributeOffset != expectedAttributeRefCount
             || meshlet.primitiveOffset != expectedPrimitiveIndexCount
+            || meshlet.positionRefOffset != expectedPositionRefByteCount
+            || meshlet.attributeRefOffset != expectedAttributeRefByteCount
         ){
             return FailMeshletPayloadValidation(
                 contextText,
@@ -153,14 +156,39 @@
             );
         }
 
+        usize encodedPositionBytes = 0u;
+        usize encodedAttributeBytes = 0u;
+        if(
+            !MeshletEncodedPositionRefByteCount(meshlet, skinRequired, encodedPositionBytes)
+            || !MeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes)
+        ){
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid ref encoding width")
+            );
+        }
+        if(
+            encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount
+            || encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount
+        ){
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("encoded ref byte counts overflow")
+            );
+        }
+
         expectedLocalVertexRefCount += vertexCount;
-        expectedPositionRefCount += positionCount;
-        expectedAttributeRefCount += attributeCount;
+        expectedPositionRefByteCount += encodedPositionBytes;
+        expectedAttributeRefByteCount += encodedAttributeBytes;
         expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * 3u;
         if(
             expectedLocalVertexRefCount > localVertexRefs.size()
-            || expectedPositionRefCount > positionRefs.size()
-            || expectedAttributeRefCount > attributeRefs.size()
+            || expectedPositionRefByteCount > positionRefDeltas.size()
+            || expectedAttributeRefByteCount > attributeRefDeltas.size()
             || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()
         ){
             return FailMeshletPayloadValidation(
@@ -198,21 +226,53 @@
             );
         }
 
-        for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
-            const MeshletShadingAttributeRef& ref = attributeRefs[meshlet.attributeOffset + localAttributeIndex];
-            if(MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount))
+        for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
+            MeshletPositionStreamRef ref;
+            if(
+                DecodeMeshletPositionRef(
+                    positionRefDeltas.data(),
+                    positionRefDeltas.size(),
+                    meshlet,
+                    localPositionIndex,
+                    skinRequired,
+                    ref
+                )
+                && MeshletPositionRefInRange(ref, positionCount, skinCount, skinRequired)
+            )
                 continue;
 
             return FailMeshletPayloadValidation(
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid local attribute")
+                NWB_TEXT("has invalid encoded position ref")
+            );
+        }
+
+        for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
+            MeshletAttributeStreamRef ref;
+            if(
+                DecodeMeshletAttributeRef(
+                    attributeRefDeltas.data(),
+                    attributeRefDeltas.size(),
+                    meshlet,
+                    localAttributeIndex,
+                    ref
+                )
+                && MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount)
+            )
+                continue;
+
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid encoded attribute ref")
             );
         }
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
             const MeshletLocalVertexRef& ref = localVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-            if(ref.localDeformedPosition < positionCount && ref.localAttribute < attributeCount)
+            if(ref.localDeformedPosition < encodedPositionCount && ref.localAttribute < attributeCount)
                 continue;
 
             return FailMeshletPayloadValidation(
@@ -241,8 +301,8 @@
 
     if(
         expectedLocalVertexRefCount != localVertexRefs.size()
-        || expectedPositionRefCount != positionRefs.size()
-        || expectedAttributeRefCount != attributeRefs.size()
+        || expectedPositionRefByteCount != positionRefDeltas.size()
+        || expectedAttributeRefByteCount != attributeRefDeltas.size()
         || expectedPrimitiveIndexCount != meshletPrimitiveIndices.size()
     ){
         return FailMeshPayloadValidation(
@@ -255,8 +315,7 @@
     if(
         skinRequired
         && !ValidateMeshletAttributeSkinSharing(
-            positionRefs,
-            attributeRefs,
+            positionRefDeltas,
             localVertexRefs,
             meshlets,
             contextText,
@@ -270,4 +329,3 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

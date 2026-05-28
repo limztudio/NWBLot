@@ -132,8 +132,8 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     outMesh.colorBuffer = instance->colorBuffer;
     outMesh.meshletDescBuffer = instance->meshletDescBuffer;
     outMesh.meshletBoundsBuffer = instance->meshletBoundsBuffer;
-    outMesh.meshletPositionRefBuffer = instance->meshletPositionRefBuffer;
-    outMesh.meshletAttributeRefBuffer = instance->meshletAttributeRefBuffer;
+    outMesh.meshletPositionRefDeltaBuffer = instance->meshletPositionRefDeltaBuffer;
+    outMesh.meshletAttributeRefDeltaBuffer = instance->meshletAttributeRefDeltaBuffer;
     outMesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
     outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());

@@ -98,9 +98,11 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(5, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(7, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(8, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(7, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(11, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SkinnedMeshPushConstants)));
 
         m_skinningBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -132,7 +134,7 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(2, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(4, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_UAV(5, 1));

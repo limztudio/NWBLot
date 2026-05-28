@@ -53,8 +53,8 @@ template<typename CookEntryT>
         + MeshletCookVectorBytes(entry.colors)
         + MeshletCookVectorBytes(entry.meshlets)
         + MeshletCookVectorBytes(entry.meshletBounds)
-        + MeshletCookVectorBytes(entry.meshletPositionRefs)
-        + MeshletCookVectorBytes(entry.meshletAttributeRefs)
+        + MeshletCookVectorBytes(entry.meshletPositionStreamRefs)
+        + MeshletCookVectorBytes(entry.meshletAttributeStreamRefs)
         + MeshletCookVectorBytes(entry.meshletLocalVertexRefs)
         + MeshletCookVectorBytes(entry.meshletPrimitiveIndices)
     ;

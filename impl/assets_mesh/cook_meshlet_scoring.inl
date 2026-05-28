@@ -1,0 +1,236 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename VertexRefVectorT>
+[[nodiscard]] static bool FindMeshletLocalVertex(
+    const VertexRefVectorT& localVertexRefs,
+    const u32 vertexRefIndex,
+    u8& outLocalVertex
+){
+    outLocalVertex = 0u;
+    for(usize localIndex = 0u; localIndex < localVertexRefs.size(); ++localIndex){
+        if(localVertexRefs[localIndex] != vertexRefIndex)
+            continue;
+
+        outLocalVertex = static_cast<u8>(localIndex);
+        return true;
+    }
+
+    return false;
+}
+
+template<typename VertexRefVectorT>
+[[nodiscard]] static u32 CountMeshletMissingVertices(
+    const VertexRefVectorT& localVertexRefs,
+    const MeshletTriangleData& triangle,
+    u32& outSharedVertexCount
+){
+    u32 missingVertexCount = 0u;
+    outSharedVertexCount = 0u;
+    for(usize cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
+        const u32 vertexRefIndex = triangle.vertexRefs[cornerIndex];
+        bool repeatedInTriangle = false;
+        for(usize previousCornerIndex = 0u; previousCornerIndex < cornerIndex; ++previousCornerIndex){
+            if(triangle.vertexRefs[previousCornerIndex] == vertexRefIndex){
+                repeatedInTriangle = true;
+                break;
+            }
+        }
+        if(repeatedInTriangle)
+            continue;
+
+        u8 localVertex = 0u;
+        if(FindMeshletLocalVertex(localVertexRefs, vertexRefIndex, localVertex))
+            ++outSharedVertexCount;
+        else
+            ++missingVertexCount;
+    }
+
+    return missingVertexCount;
+}
+
+static void ResetMeshletScoreState(MeshletScoreState& state){
+    state.minBounds = VectorReplicate(Limit<f32>::s_Max);
+    state.maxBounds = VectorReplicate(-Limit<f32>::s_Max);
+    state.centroidSum = VectorZero();
+    state.normalSum = VectorZero();
+    state.normalAxis = VectorZero();
+    state.primitiveCount = 0u;
+    state.radius = 0.0f;
+    state.coneCutoff = -1.0f;
+    state.hasGeometry = false;
+    state.coneEnabled = false;
+}
+
+[[nodiscard]] static f32 ComputeMeshletScoreBoundsRadius(const SIMDVector minBounds, const SIMDVector maxBounds){
+    const SIMDVector extent = VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f);
+    return VectorGetX(Vector3Length(extent));
+}
+
+template<typename CookEntryT>
+static void AccumulateMeshletScoreBounds(
+    const CookEntryT& entry,
+    const MeshletTriangleData& triangle,
+    SIMDVector& minBounds,
+    SIMDVector& maxBounds,
+    bool& hasGeometry
+){
+    for(const u32 vertexRefIndex : triangle.vertexRefs){
+        const SIMDVector position = LoadMeshletSourceVertexPositionVector(entry, vertexRefIndex);
+        if(!hasGeometry){
+            minBounds = position;
+            maxBounds = position;
+            hasGeometry = true;
+        }else{
+            minBounds = VectorMin(minBounds, position);
+            maxBounds = VectorMax(maxBounds, position);
+        }
+    }
+}
+
+template<typename CookEntryT>
+[[nodiscard]] static f32 PredictMeshletScoreRadius(
+    const CookEntryT& entry,
+    const MeshletScoreState& state,
+    const MeshletTriangleData& triangle
+){
+    SIMDVector minBounds = state.minBounds;
+    SIMDVector maxBounds = state.maxBounds;
+    bool hasGeometry = state.hasGeometry;
+    AccumulateMeshletScoreBounds(entry, triangle, minBounds, maxBounds, hasGeometry);
+
+    return ComputeMeshletScoreBoundsRadius(minBounds, maxBounds);
+}
+
+[[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const MeshletTriangleData& triangle){
+    if(state.primitiveCount == 0u)
+        return 0.0f;
+
+    const SIMDVector meshletCentroid = VectorScale(state.centroidSum, 1.0f / static_cast<f32>(state.primitiveCount));
+    return VectorGetX(Vector3Length(VectorSubtract(LoadFloat(triangle.centroid), meshletCentroid)));
+}
+
+[[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const MeshletTriangleData& triangle){
+    const SIMDVector candidateNormal = NormalizeMeshletDirectionOrZero(LoadFloat(triangle.areaNormal));
+    if(!Core::Mesh::FrameValidDirection(state.normalAxis) || !Core::Mesh::FrameValidDirection(candidateNormal))
+        return 0.0f;
+
+    return VectorGetX(Vector3Dot(state.normalAxis, candidateNormal));
+}
+
+static void UpdateMeshletScoreConeCutoff(
+    const SIMDVector axis,
+    const MeshletTriangleData& triangle,
+    bool& hasNormal,
+    f32& coneCutoff
+){
+    const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(LoadFloat(triangle.areaNormal));
+    if(!Core::Mesh::FrameValidDirection(faceNormal))
+        return;
+
+    hasNormal = true;
+    coneCutoff = Min(coneCutoff, VectorGetX(Vector3Dot(axis, faceNormal)));
+}
+
+template<typename TriangleIndexVectorT>
+[[nodiscard]] static f32 ComputeMeshletScoreConeCutoff(
+    const MeshletTrianglePrecompute& trianglePrecompute,
+    const TriangleIndexVectorT& triangleIndices,
+    const SIMDVector axis,
+    const u32 extraTriangleIndex,
+    const bool hasExtraTriangle,
+    bool& outConeEnabled
+){
+    outConeEnabled = false;
+    if(!Core::Mesh::FrameValidDirection(axis))
+        return -1.0f;
+
+    bool hasNormal = false;
+    f32 coneCutoff = 1.0f;
+    for(const u32 triangleIndex : triangleIndices)
+        UpdateMeshletScoreConeCutoff(axis, trianglePrecompute.triangles[triangleIndex], hasNormal, coneCutoff);
+    if(hasExtraTriangle)
+        UpdateMeshletScoreConeCutoff(axis, trianglePrecompute.triangles[extraTriangleIndex], hasNormal, coneCutoff);
+
+    if(!hasNormal || coneCutoff <= 0.0f)
+        return -1.0f;
+
+    outConeEnabled = true;
+    return coneCutoff;
+}
+
+template<typename TriangleIndexVectorT>
+[[nodiscard]] static f32 PredictMeshletScoreConeWidening(
+    const MeshletTrianglePrecompute& trianglePrecompute,
+    const TriangleIndexVectorT& triangleIndices,
+    const MeshletScoreState& state,
+    const u32 triangleIndex
+){
+    if(!state.coneEnabled)
+        return 0.0f;
+
+    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
+    const SIMDVector predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, LoadFloat(triangle.areaNormal)));
+    bool predictedConeEnabled = false;
+    const f32 predictedConeCutoff = ComputeMeshletScoreConeCutoff(
+        trianglePrecompute,
+        triangleIndices,
+        predictedAxis,
+        triangleIndex,
+        true,
+        predictedConeEnabled
+    );
+    if(!predictedConeEnabled)
+        return 1.0f;
+
+    return Max(0.0f, state.coneCutoff - predictedConeCutoff);
+}
+
+template<typename CookEntryT, typename TriangleIndexVectorT>
+[[nodiscard]] static f32 ScoreMeshletCandidate(
+    const CookEntryT& entry,
+    const MeshletTrianglePrecompute& trianglePrecompute,
+    const TriangleIndexVectorT& triangleIndices,
+    const MeshletScoreState& state,
+    const u32 triangleIndex,
+    const u32 sharedVertexCount,
+    const u32 missingVertexCount,
+    const bool disconnected
+){
+    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
+    const f32 predictedRadius = PredictMeshletScoreRadius(entry, state, triangle);
+    const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
+    const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangle);
+    const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangle);
+    const f32 coneWidening = PredictMeshletScoreConeWidening(trianglePrecompute, triangleIndices, state, triangleIndex);
+    return s_MeshletScoreSharedVertexWeight * static_cast<f32>(sharedVertexCount)
+        - s_MeshletScoreNewVertexWeight * static_cast<f32>(missingVertexCount)
+        - s_MeshletScoreRadiusWeight * predictedRadiusGrowth
+        - s_MeshletScoreCentroidWeight * centroidDistance
+        + s_MeshletScoreNormalWeight * normalCoherence
+        - s_MeshletScoreConePenaltyWeight * coneWidening
+        - (disconnected ? s_MeshletScoreDisconnectedPenalty : 0.0f)
+    ;
+}
+
+[[nodiscard]] static bool FindNextUnvisitedMeshletTriangle(
+    const MeshletTrianglePrecompute& trianglePrecompute,
+    const usize searchOffset,
+    u32& outTriangleIndex
+){
+    outTriangleIndex = 0u;
+    for(usize triangleIndex = searchOffset; triangleIndex < trianglePrecompute.triangles.size(); ++triangleIndex){
+        if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
+            continue;
+
+        outTriangleIndex = static_cast<u32>(triangleIndex);
+        return true;
+    }
+
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

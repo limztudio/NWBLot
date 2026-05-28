@@ -45,6 +45,15 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.inl"
         "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_common.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_metrics.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_precompute.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_bounds.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_scoring.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_candidates.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_frontier.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_refs.inl"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_build.inl"
         "${CMAKE_CURRENT_LIST_DIR}/cook_source.inl"
     )
     target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_mesh nwb_metascript nwb_skinned_mesh_types)

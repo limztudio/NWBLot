@@ -1681,6 +1681,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMeshAcceptanceTwoSidedPlane(context);
     __hidden_tests::TestSkinnedMeshAcceptanceBendingStrip(context);
     __hidden_tests::TestMeshAcceptanceLargeManyMeshlets(context);
+    __hidden_tests::TestMeshAcceptanceQualityBuilderChecks(context);
     __hidden_tests::TestMaterialBindDiscoveryValidation(context);
     __hidden_tests::TestMeshCookerValidationFailures(context);
     __hidden_tests::TestSkinnedMeshCookerMinimalAsset(context);

@@ -26,6 +26,16 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const bool meshletCulled = nwbMeshletCulled(meshletIndex, instance);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    if(meshletCulled){
+        for(
+            uint localPrimitiveIndex = groupThreadID.x;
+            localPrimitiveIndex < primitiveCount;
+            localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+        )
+            nwbMeshStoreCulledPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
+        return;
+    }
+
     nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
 
     for(
@@ -34,11 +44,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
     ){
         const uint primitiveBase = nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex);
-        if(meshletCulled){
-            nwbMeshStoreCulledPrimitive(primitiveBase);
-            continue;
-        }
-
         const uint3 localVertexIndices = nwbMeshLoadMeshletPrimitive(primitiveBase);
         NwbMeshGeneratedVertex generatedVertices[3];
         for(uint corner = 0u; corner < 3u; ++corner){

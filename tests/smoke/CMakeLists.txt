@@ -105,13 +105,9 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_transparent_multi_asset_inputs)
     endif()
 
-    set(_nwb_default_skinned_cone_benchmark_fbx "$ENV{NWB_SKINNED_CONE_BENCHMARK_FBX}")
-    if(_nwb_default_skinned_cone_benchmark_fbx STREQUAL "")
-        set(_nwb_default_skinned_cone_benchmark_fbx "C:/Users/ltw94/Downloads/FBX Model/Medical worker.Fbx")
-    endif()
-    set(NWB_SKINNED_CONE_BENCHMARK_FBX "${_nwb_default_skinned_cone_benchmark_fbx}" CACHE FILEPATH "External FBX used by the skinned cone culling benchmark")
+    set(_nwb_skinned_cone_female_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/skinned_cone_female.nwb")
 
-    if(TARGET nwb_fbx_to_nwb AND EXISTS "${NWB_SKINNED_CONE_BENCHMARK_FBX}")
+    if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinned_cone_female_nwb}")
         set(_nwb_skinned_cone_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_runtime/$<CONFIG>")
 
         nwb_declare_executable(nwb_skinned_cone_benchmark)
@@ -131,33 +127,29 @@ if(Python3_Interpreter_FOUND)
             "${PROJECT_SOURCE_DIR}/Testbed/assets/*"
         )
 
-        set(_nwb_skinned_cone_generated_asset_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_generated/$<CONFIG>/assets")
-        set(_nwb_skinned_cone_medical_worker_nwb "${_nwb_skinned_cone_generated_asset_root}/characters/medical_worker.nwb")
+        set(_nwb_skinned_cone_asset_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_assets/$<CONFIG>/assets")
+        set(_nwb_skinned_cone_cooked_female_nwb "${_nwb_skinned_cone_asset_root}/characters/skinned_cone_female.nwb")
         set(_nwb_skinned_cone_asset_stamp "${_nwb_skinned_cone_runtime_root}/res/.nwb_skinned_cone_benchmark_assets_$<CONFIG>.stamp")
         add_custom_command(
-            OUTPUT "${_nwb_skinned_cone_asset_stamp}"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinned_cone_generated_asset_root}/characters"
-            COMMAND "$<TARGET_FILE:nwb_fbx_to_nwb>"
-                "${NWB_SKINNED_CONE_BENCHMARK_FBX}"
-                --output "${_nwb_skinned_cone_medical_worker_nwb}"
-                --asset-type skinned_mesh
-                --normal-mode imported
-                --yes
-                --force
+            OUTPUT
+                "${_nwb_skinned_cone_asset_stamp}"
+                "${_nwb_skinned_cone_cooked_female_nwb}"
+            COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_nwb_skinned_cone_asset_root}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinned_cone_asset_root}/characters"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_nwb_skinned_cone_female_nwb}" "${_nwb_skinned_cone_cooked_female_nwb}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinned_cone_runtime_root}/res"
             COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
                 --asset-root "Testbed/assets"
-                --asset-root "${_nwb_skinned_cone_generated_asset_root}"
+                --asset-root "${_nwb_skinned_cone_asset_root}"
                 --output-directory "${_nwb_skinned_cone_runtime_root}/res"
                 --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinned_cone_asset_stamp}"
             DEPENDS
-                nwb_fbx_to_nwb
                 nwb_resource_cooker
-                "${NWB_SKINNED_CONE_BENCHMARK_FBX}"
+                "${_nwb_skinned_cone_female_nwb}"
                 ${_nwb_skinned_cone_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB skinned cone benchmark assets for $<CONFIG>..."
@@ -175,21 +167,23 @@ if(Python3_Interpreter_FOUND)
                 "--executable" "$<TARGET_FILE:nwb_skinned_cone_benchmark>"
                 "--working-directory" "${_nwb_skinned_cone_runtime_root}"
                 "--timeout" "240"
-                "--expect-log-message" "SkinnedConeBenchmark: completed"
+                "--expect-log-message" "SkinnedConeBenchmark: culling benchmark passed"
         )
         set_tests_properties(nwb_skinned_cone_culling_benchmark PROPERTIES
+            CONFIGURATIONS fin
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
             TIMEOUT 300
         )
 
         unset(_nwb_skinned_cone_asset_stamp)
-        unset(_nwb_skinned_cone_medical_worker_nwb)
-        unset(_nwb_skinned_cone_generated_asset_root)
+        unset(_nwb_skinned_cone_cooked_female_nwb)
+        unset(_nwb_skinned_cone_asset_root)
+        unset(_nwb_skinned_cone_female_nwb)
         unset(_nwb_skinned_cone_runtime_root)
         unset(_nwb_skinned_cone_asset_inputs)
     else()
-        message(STATUS "Skipping skinned cone culling benchmark; set NWB_SKINNED_CONE_BENCHMARK_FBX to an existing FBX file to enable it.")
+        message(STATUS "Skipping skinned cone culling benchmark; missing tests/smoke/assets/characters/skinned_cone_female.nwb.")
     endif()
-    unset(_nwb_default_skinned_cone_benchmark_fbx)
+    unset(_nwb_skinned_cone_female_nwb)
 endif()

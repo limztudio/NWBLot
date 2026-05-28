@@ -16,10 +16,11 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/timing_names.h>
 #include <impl/ecs_scene/system.h>
+#include <impl/ecs_skinned_mesh/runtime_helpers.h>
 #include <impl/ecs_skinned_mesh_render/module.h>
 #include <impl/ecs_skinned_mesh_render/timing_names.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(_WIN32)
 #include <windows.h>
 #endif
 
@@ -74,19 +75,49 @@ struct BenchmarkAccumulation{
     u32 rasterSamples = 0u;
 };
 
+struct BenchmarkTimingSummary{
+    f64 cpuFrameSeconds = 0.0;
+    f64 skinningSeconds = 0.0;
+    f64 boundsSeconds = 0.0;
+    f64 meshDispatchSeconds = 0.0;
+    f64 rasterSeconds = 0.0;
+    u32 frameCount = 0u;
+    u32 skinningSamples = 0u;
+    u32 boundsSamples = 0u;
+    u32 meshDispatchSamples = 0u;
+    u32 rasterSamples = 0u;
+
+    [[nodiscard]] bool hasRenderTiming()const{
+        return frameCount != 0u && meshDispatchSamples != 0u;
+    }
+
+    [[nodiscard]] bool hasBoundsTiming()const{
+        return frameCount != 0u && boundsSamples != 0u;
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_CharacterCount = 3u;
+static constexpr u32 s_CharacterCount = 64u;
+static constexpr u32 s_BenchmarkRepeatCount = 4u;
 static constexpr u32 s_WarmupFrameCount = 8u;
 static constexpr u32 s_SampleFrameCount = 16u;
-static constexpr u32 s_FinishDrainFrameCount = 3u;
+static constexpr u32 s_FinishDrainFrameCount = 30u;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
-static constexpr AStringView s_MedicalWorkerMeshPath = "project/characters/medical_worker";
-static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/materials/mat_skinned_uv";
+static constexpr f32 s_FrontCameraDistance = 3.2f;
+static constexpr f32 s_BackCameraDistance = 3.2f;
+static constexpr f32 s_CloseCameraDistance = 1.65f;
+static constexpr f32 s_FarCameraDistance = 5.6f;
+static constexpr f32 s_CameraHeight = 1.1f;
+static constexpr u32 s_AnimatedJointModulo = 16u;
+static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
+static constexpr AStringView s_BenchmarkSkinnedMeshPath = "project/characters/skinned_cone_female";
+static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/materials/mat_skinned_solid";
+static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNED_CONE_STATIC_PREVIEW";
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
     { BenchmarkMode::NoCulling, BenchmarkView::Front },
@@ -131,6 +162,44 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return count != 0u ? seconds / static_cast<f64>(count) : 0.0;
 }
 
+[[nodiscard]] static f64 AverageMilliseconds(const f64 seconds, const u32 count){
+    return AverageSeconds(seconds, count) * 1000.0;
+}
+
+[[nodiscard]] static f64 RenderGpuMilliseconds(const BenchmarkTimingSummary& summary){
+    return AverageMilliseconds(summary.meshDispatchSeconds + summary.rasterSeconds, summary.frameCount);
+}
+
+[[nodiscard]] static f64 BoundsGpuMilliseconds(const BenchmarkTimingSummary& summary){
+    return AverageMilliseconds(summary.boundsSeconds, summary.frameCount);
+}
+
+[[nodiscard]] static f64 CullingGpuMilliseconds(const BenchmarkTimingSummary& summary){
+    return BoundsGpuMilliseconds(summary) + RenderGpuMilliseconds(summary);
+}
+
+[[nodiscard]] static u32 RandomJointSeed(const u32 jointIndex, const u32 characterIndex){
+    u32 seed = jointIndex * 747796405u + characterIndex * 2891336453u + 277803737u;
+    seed = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
+    return (seed >> 22u) ^ seed;
+}
+
+[[nodiscard]] static bool ShouldAnimateJoint(const u32 jointIndex, const u32 characterIndex, const bool staticPreview){
+    const u32 modulo = staticPreview ? s_StaticPreviewAnimatedJointModulo : s_AnimatedJointModulo;
+    return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
+}
+
+[[nodiscard]] static bool StaticPreviewEnabled(){
+#if defined(_WIN32)
+    char value[8] = {};
+    const DWORD valueSize = GetEnvironmentVariableA(s_StaticPreviewEnv, value, sizeof(value));
+    return valueSize != 0u && value[0] != '0';
+#else
+    const char* value = NWB_GETENV(s_StaticPreviewEnv);
+    return value && value[0] != '\0' && value[0] != '0';
+#endif
+}
+
 static void AccumulateGpuStats(const NWB::Core::GpuTimingStats& stats, f64& seconds, u32& samples){
     if(!stats.valid())
         return;
@@ -148,6 +217,19 @@ static void AccumulateGpuScope(
     AccumulateGpuStats(gpuTiming.stats(scopeName), seconds, samples);
 }
 
+static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const BenchmarkAccumulation& accum){
+    summary.cpuFrameSeconds += accum.cpuFrameSeconds;
+    summary.skinningSeconds += accum.skinningSeconds;
+    summary.boundsSeconds += accum.boundsSeconds;
+    summary.meshDispatchSeconds += accum.meshDispatchSeconds;
+    summary.rasterSeconds += accum.rasterSeconds;
+    summary.frameCount += accum.frameCount;
+    summary.skinningSamples += accum.skinningSamples;
+    summary.boundsSamples += accum.boundsSamples;
+    summary.meshDispatchSamples += accum.meshDispatchSamples;
+    summary.rasterSamples += accum.rasterSamples;
+}
+
 static void RequestQuit(){
 #if defined(NWB_PLATFORM_WINDOWS)
     PostQuitMessage(0);
@@ -155,22 +237,36 @@ static void RequestQuit(){
 }
 
 [[nodiscard]] static NWB::Impl::SkinnedMeshJointMatrix BuildAnimatedJointMatrix(
+    const NWB::Impl::SkinnedMeshJointMatrix& bindJoint,
     const u32 jointIndex,
     const u32 characterIndex,
-    const f32 timeSeconds
+    const f32 timeSeconds,
+    const bool staticPreview
 ){
-    const f32 phase = static_cast<f32>((jointIndex * 37u + characterIndex * 53u) & 255u) * 0.0245436926f;
-    const f32 frequency = 0.7f + static_cast<f32>((jointIndex * 17u + 11u) % 29u) * 0.031f;
-    const f32 amount = Sin(timeSeconds * frequency + phase);
-    const f32 angle = amount * (0.08f + static_cast<f32>((jointIndex * 13u + characterIndex * 7u) % 19u) * 0.006f);
+    if(!ShouldAnimateJoint(jointIndex, characterIndex, staticPreview))
+        return bindJoint;
 
-    SIMDMatrix matrix = MatrixRotationRollPitchYaw(angle * 0.35f, angle, angle * 0.21f);
-    matrix.v[3] = VectorSet(
-        Sin(timeSeconds * (frequency + 0.23f) + phase) * 0.012f,
-        Sin(timeSeconds * (frequency + 0.37f) + phase * 0.5f) * 0.008f,
-        Sin(timeSeconds * (frequency + 0.19f) + phase * 0.75f) * 0.012f,
-        1.0f
+    const u32 seed = RandomJointSeed(jointIndex, characterIndex);
+    const f32 seedPhase = static_cast<f32>(seed & 255u) * 0.0245436926f;
+    const f32 phase = staticPreview ? seedPhase : static_cast<f32>(characterIndex) * 1.04719758f;
+    const f32 primarySpeed = staticPreview ? 1.15f : 0.34f;
+    const f32 secondarySpeed = staticPreview ? 0.83f : 0.21f;
+    const f32 baseAngle = staticPreview ? 0.20f : 0.024f;
+    const f32 angleJitter = staticPreview ? 0.025f : 0.0025f;
+    const f32 rollBase = staticPreview ? 0.045f : 0.006f;
+    const f32 rollJitter = staticPreview ? 0.008f : 0.0015f;
+    const f32 amount = Sin(timeSeconds * primarySpeed + phase);
+    const f32 secondary = Sin(timeSeconds * secondarySpeed + phase + 0.5f);
+    const f32 angle = amount * (baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter);
+
+    SIMDMatrix matrix = MatrixRotationRollPitchYaw(
+        angle * (0.18f + static_cast<f32>((seed >> 3u) & 3u) * 0.035f),
+        angle * (0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
+        secondary * (rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter)
     );
+    matrix = NWB::Impl::SkinnedMeshRuntime::MultiplyJointMatrices(LoadFloat(bindJoint), matrix);
+    if(!NWB::Impl::SkinnedMeshRuntime::IsInvertibleAffineJointMatrix(matrix))
+        return bindJoint;
 
     NWB::Impl::SkinnedMeshJointMatrix stored{};
     StoreFloat(matrix, &stored);
@@ -310,17 +406,46 @@ private:
         m_world.owner().reset();
     }
 
-    [[nodiscard]] u32 loadSkeletonJointCount()const{
+    [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::SkinnedMesh::AssetTypeName(), Name(s_MedicalWorkerMeshPath), loadedAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::SkinnedMesh::AssetTypeName(), Name(s_BenchmarkSkinnedMeshPath), loadedAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to load benchmark skinned mesh"));
-            return 0u;
+            return false;
         }
-        if(!loadedAsset || loadedAsset->assetType() != NWB::Impl::SkinnedMesh::AssetTypeName())
-            return 0u;
+        if(!loadedAsset || loadedAsset->assetType() != NWB::Impl::SkinnedMesh::AssetTypeName()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh loaded with an unexpected asset type"));
+            return false;
+        }
 
         const auto* mesh = static_cast<const NWB::Impl::SkinnedMesh*>(loadedAsset.get());
-        return mesh->skeletonJointCount();
+        if(mesh->skeletonJointCount() == 0u || mesh->inverseBindMatrices().size() != mesh->skeletonJointCount()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh has invalid skeleton bind data"));
+            return false;
+        }
+
+        m_bindJoints.clear();
+        m_bindJoints.reserve(mesh->inverseBindMatrices().size());
+        for(const NWB::Impl::SkinnedMeshJointMatrix& inverseBind : mesh->inverseBindMatrices()){
+            SIMDVector determinant = VectorZero();
+            const SIMDMatrix bindJoint = MatrixInverse(&determinant, LoadFloat(inverseBind));
+            if(!NWB::Impl::SkinnedMeshRuntime::IsInvertibleAffineJointMatrix(bindJoint)){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh inverse bind matrix produced an invalid bind pose"));
+                return false;
+            }
+
+            NWB::Impl::SkinnedMeshJointMatrix storedBind{};
+            StoreFloat(bindJoint, &storedBind);
+            m_bindJoints.push_back(storedBind);
+        }
+        return !m_bindJoints.empty();
+    }
+
+    void initializePose(NWB::Impl::SkinnedMeshSkeletonPoseComponent& pose)const{
+        pose.parentJoints.resize(m_bindJoints.size(), NWB::Impl::s_SkinnedMeshSkeletonRootParent);
+        pose.localJoints.clear();
+        pose.localJoints.reserve(m_bindJoints.size());
+        for(usize jointIndex = 0u; jointIndex < m_bindJoints.size(); ++jointIndex)
+            pose.localJoints.push_back(m_bindJoints[jointIndex]);
     }
 
     void configureCamera(const BenchmarkView::Enum view){
@@ -330,20 +455,20 @@ private:
 
         switch(view){
         case BenchmarkView::Back:
-            transform->position = Float4(0.0f, 1.1f, 4.0f, 0.0f);
+            transform->position = Float4(0.0f, s_CameraHeight, s_BackCameraDistance, 0.0f);
             StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), &transform->rotation);
             return;
         case BenchmarkView::Close:
-            transform->position = Float4(0.0f, 1.1f, -2.0f, 0.0f);
+            transform->position = Float4(0.0f, s_CameraHeight, -s_CloseCameraDistance, 0.0f);
             transform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
             return;
         case BenchmarkView::Far:
-            transform->position = Float4(0.0f, 1.1f, -7.0f, 0.0f);
+            transform->position = Float4(0.0f, s_CameraHeight, -s_FarCameraDistance, 0.0f);
             transform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
             return;
         case BenchmarkView::Front:
         default:
-            transform->position = Float4(0.0f, 1.1f, -4.0f, 0.0f);
+            transform->position = Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f);
             transform->rotation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
             return;
         }
@@ -353,7 +478,9 @@ private:
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         m_runtimeMeshProvider.setMode(benchmarkCase.mode);
         configureCamera(benchmarkCase.view);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: begin mode={} view={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: begin repeat={}/{} mode={} view={}")
+            , m_repeatIndex + 1u
+            , s_BenchmarkRepeatCount
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
             , StringConvert(BenchmarkViewName(benchmarkCase.view))
         );
@@ -362,7 +489,9 @@ private:
     void finishCase(){
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         const BenchmarkAccumulation& accum = m_accumulations[m_caseIndex];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: result mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} mesh_samples={} raster_samples={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: result repeat={}/{} mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} mesh_samples={} raster_samples={}")
+            , m_repeatIndex + 1u
+            , s_BenchmarkRepeatCount
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
             , StringConvert(BenchmarkViewName(benchmarkCase.view))
             , accum.frameCount
@@ -379,28 +508,54 @@ private:
     }
 
     void finishBenchmark(){
-        f64 frustumOnlyGpuSeconds = 0.0;
-        f64 frustumConeGpuSeconds = 0.0;
-        u32 frustumOnlySamples = 0u;
-        u32 frustumConeSamples = 0u;
+        BenchmarkTimingSummary noCullingSummary;
+        BenchmarkTimingSummary frustumOnlySummary;
+        BenchmarkTimingSummary frustumConeSummary;
 
         for(usize i = 0u; i < s_BenchmarkCaseCount; ++i){
             const BenchmarkCase& benchmarkCase = s_BenchmarkCases[i];
             const BenchmarkAccumulation& accum = m_accumulations[i];
-            const f64 gpuSeconds = accum.meshDispatchSeconds + accum.rasterSeconds;
-            const u32 gpuSamples = accum.meshDispatchSamples + accum.rasterSamples;
-            if(benchmarkCase.mode == BenchmarkMode::FrustumOnly){
-                frustumOnlyGpuSeconds += gpuSeconds;
-                frustumOnlySamples += gpuSamples;
+            if(benchmarkCase.mode == BenchmarkMode::NoCulling){
+                AccumulateBenchmarkSummary(noCullingSummary, accum);
+            }
+            else if(benchmarkCase.mode == BenchmarkMode::FrustumOnly){
+                AccumulateBenchmarkSummary(frustumOnlySummary, accum);
             }
             else if(benchmarkCase.mode == BenchmarkMode::FrustumCone){
-                frustumConeGpuSeconds += gpuSeconds;
-                frustumConeSamples += gpuSamples;
+                AccumulateBenchmarkSummary(frustumConeSummary, accum);
             }
         }
 
-        const f64 frustumOnlyAverage = AverageSeconds(frustumOnlyGpuSeconds, frustumOnlySamples) * 1000.0;
-        const f64 frustumConeAverage = AverageSeconds(frustumConeGpuSeconds, frustumConeSamples) * 1000.0;
+        const f64 noCullingAverage = RenderGpuMilliseconds(noCullingSummary);
+        const f64 frustumOnlyAverage = CullingGpuMilliseconds(frustumOnlySummary);
+        const f64 frustumConeAverage = CullingGpuMilliseconds(frustumConeSummary);
+        const f64 frustumConeRenderAverage = RenderGpuMilliseconds(frustumConeSummary);
+        const bool hasComparisonTiming =
+            noCullingSummary.hasRenderTiming()
+            && frustumConeSummary.hasRenderTiming()
+            && frustumConeSummary.hasBoundsTiming()
+            && noCullingAverage > 0.0
+            && frustumConeRenderAverage > 0.0
+        ;
+        const bool cullingFaster = hasComparisonTiming && frustumConeRenderAverage < noCullingAverage;
+        const f64 speedup = cullingFaster ? noCullingAverage / frustumConeRenderAverage : 0.0;
+
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling comparison repeats={} no_culling_render_frame_gpu_ms={} with_culling_render_frame_gpu_ms={} with_culling_total_frame_gpu_ms={} with_culling_bounds_frame_gpu_ms={} speedup={} result={}")
+            , s_BenchmarkRepeatCount
+            , noCullingAverage
+            , frustumConeRenderAverage
+            , frustumConeAverage
+            , BoundsGpuMilliseconds(frustumConeSummary)
+            , speedup
+            , StringConvert(cullingFaster ? "pass" : "fail")
+        );
+        if(cullingFaster){
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling benchmark passed"));
+        }
+        else{
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: culling benchmark failed; with-culling render timing must be lower than no-culling render timing"));
+        }
+
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: policy default=dynamic_frustum_cone measured_frustum_only_gpu_ms={} measured_frustum_cone_gpu_ms={} recommendation={}")
             , frustumOnlyAverage
             , frustumConeAverage
@@ -441,10 +596,15 @@ private:
         m_caseRenderedFrames = 0u;
 
         if(m_caseIndex >= s_BenchmarkCaseCount){
-            finishBenchmark();
-            m_finished = true;
-            m_finishDrainFrames = s_FinishDrainFrameCount;
-            return;
+            ++m_repeatIndex;
+            if(m_repeatIndex >= s_BenchmarkRepeatCount){
+                finishBenchmark();
+                m_finished = true;
+                m_finishDrainFrames = s_FinishDrainFrameCount;
+                return;
+            }
+
+            m_caseIndex = 0u;
         }
 
         configureCase();
@@ -458,7 +618,13 @@ private:
                 continue;
 
             for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size(); ++jointIndex)
-                pose->localJoints[jointIndex] = BuildAnimatedJointMatrix(jointIndex, static_cast<u32>(entityIndex), timeSeconds);
+                pose->localJoints[jointIndex] = BuildAnimatedJointMatrix(
+                    m_bindJoints[jointIndex],
+                    jointIndex,
+                    static_cast<u32>(entityIndex),
+                    timeSeconds,
+                    m_staticPreview
+                );
         }
     }
 
@@ -468,6 +634,8 @@ public:
         : m_context(context)
         , m_world(createWorldOrDie(context))
         , m_entities(context.objectArena)
+        , m_bindJoints(context.objectArena)
+        , m_staticPreview(StaticPreviewEnabled())
     {}
 
     virtual ~SkinnedConeBenchmarkProject()override{
@@ -477,8 +645,7 @@ public:
 
 public:
     virtual bool onStartup()override{
-        const u32 skeletonJointCount = loadSkeletonJointCount();
-        if(skeletonJointCount == 0u){
+        if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh has no skeleton joints"));
             RequestQuit();
             return true;
@@ -493,7 +660,7 @@ public:
 
         auto activeCameraEntity = m_world->createEntity();
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::ActiveCameraComponent>();
-        activeCamera.camera = NWB::Impl::CreateSceneCameraEntity(*m_world, Float4(0.0f, 1.1f, -4.0f, 0.0f));
+        activeCamera.camera = NWB::Impl::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
         m_cameraEntity = activeCamera.camera;
         NWB::Impl::CreateDirectionalLightEntity(
             *m_world,
@@ -505,31 +672,38 @@ public:
         );
 
         BenchmarkMeshRef mesh;
-        mesh.virtualPath = Name(s_MedicalWorkerMeshPath);
+        mesh.virtualPath = Name(s_BenchmarkSkinnedMeshPath);
         BenchmarkMaterialRef material;
         material.virtualPath = Name(s_SkinnedBenchmarkMaterialPath);
-        m_entities.reserve(s_CharacterCount);
+        const u32 characterCount = m_staticPreview ? 1u : s_CharacterCount;
+        m_entities.reserve(characterCount);
 
-        for(u32 characterIndex = 0u; characterIndex < s_CharacterCount; ++characterIndex){
+        for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
             auto entity = m_world->createEntity();
             auto& transform = entity.addComponent<NWB::Impl::TransformComponent>();
-            transform.position = Float4((static_cast<f32>(characterIndex) - 1.0f) * 1.15f, 0.0f, 0.0f, 0.0f);
+            transform.position = Float4(m_staticPreview ? 0.0f : (static_cast<f32>(characterIndex) - 1.0f) * 1.15f, 0.0f, 0.0f, 0.0f);
             transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 
             auto& skinnedMesh = entity.addComponent<NWB::Impl::SkinnedMeshComponent>();
             skinnedMesh.skinnedMesh = mesh;
 
             auto& pose = entity.addComponent<NWB::Impl::SkinnedMeshSkeletonPoseComponent>(m_context.objectArena);
-            pose.parentJoints.resize(skeletonJointCount, NWB::Impl::s_SkinnedMeshSkeletonRootParent);
-            pose.localJoints.resize(skeletonJointCount, NWB::Impl::MakeIdentitySkinnedMeshJointMatrix());
+            initializePose(pose);
 
             auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
             renderer.material = material;
             m_entities.push_back(entity.id());
         }
 
-        configureCase();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: spawned {} characters with {} joints each"), s_CharacterCount, skeletonJointCount);
+        if(m_staticPreview){
+            m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
+            configureCamera(BenchmarkView::Front);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: static preview enabled; close the window manually when done"));
+        }
+        else{
+            configureCase();
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
         return true;
     }
 
@@ -552,12 +726,20 @@ public:
             return true;
         }
 
+        const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
+        if(m_staticPreview){
+            m_totalTimeSeconds += static_cast<f64>(safeDelta);
+            animatePoses();
+            m_world->tick(safeDelta);
+            ++m_caseRenderedFrames;
+            return true;
+        }
+
         collectPreviousFrame(delta);
         advanceCaseOrFinish();
         if(m_finished)
             return true;
 
-        const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
         m_totalTimeSeconds += static_cast<f64>(safeDelta);
         animatePoses();
         m_world->tick(safeDelta);
@@ -571,14 +753,17 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     BenchmarkRuntimeMeshProvider m_runtimeMeshProvider;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_entities;
+    Vector<NWB::Impl::SkinnedMeshJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
     NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     BenchmarkAccumulation m_accumulations[s_BenchmarkCaseCount] = {};
     f64 m_totalTimeSeconds = 0.0;
     u32 m_caseRenderedFrames = 0u;
     u32 m_finishDrainFrames = 0u;
+    u32 m_repeatIndex = 0u;
     usize m_caseIndex = 0u;
     bool m_finished = false;
     bool m_quitRequested = false;
+    bool m_staticPreview = false;
 };
 
 

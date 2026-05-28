@@ -24,6 +24,7 @@ namespace SkinnedMeshRuntime{
 
 
 static constexpr f32 s_Epsilon = 0.000001f;
+static constexpr f32 s_JointDeterminantEpsilon = 0.000000000001f;
 static constexpr f32 s_RigidJointEpsilon = 0.001f;
 
 
@@ -91,7 +92,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
         return false;
 
     const f32 determinant = JointLinearDeterminant(matrix);
-    return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
+    return IsFinite(determinant) && Abs(determinant) > s_JointDeterminantEpsilon;
 }
 
 [[nodiscard]] inline bool ResolveSkinningJointMatrix(

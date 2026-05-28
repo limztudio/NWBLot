@@ -57,6 +57,7 @@ struct ProjectFrameClientSize{
 
 struct ProjectRuntimeContext{
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
+    using RequestQuitCallback = Function<void()>;
 
     Core::Graphics& graphics;
     Core::InputDispatcher& input;
@@ -65,6 +66,7 @@ struct ProjectRuntimeContext{
     Core::Alloc::JobSystem& jobSystem;
     Core::Assets::AssetManager& assetManager;
     ShaderPathResolveCallback shaderPathResolver;
+    RequestQuitCallback requestQuit;
 };
 
 

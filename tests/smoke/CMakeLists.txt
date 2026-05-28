@@ -161,6 +161,7 @@ if(Python3_Interpreter_FOUND)
 
         add_test(
             NAME nwb_skinned_cone_culling_benchmark
+            CONFIGURATIONS fin
             COMMAND
                 "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/runtime_log_smoke.py"
@@ -170,7 +171,6 @@ if(Python3_Interpreter_FOUND)
                 "--expect-log-message" "SkinnedConeBenchmark: culling benchmark passed"
         )
         set_tests_properties(nwb_skinned_cone_culling_benchmark PROPERTIES
-            CONFIGURATIONS fin
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
             TIMEOUT 300

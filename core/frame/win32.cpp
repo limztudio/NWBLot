@@ -477,7 +477,11 @@ bool Frame::showFrame(){
     return true;
 }
 bool Frame::mainLoop(){
-    return Common::RunWin32TimedFrameLoop(
+    if(quitRequested())
+        return true;
+
+    bool gracefulQuit = false;
+    const bool loopResult = Common::RunWin32TimedFrameLoop(
         [&](){ return data<Common::WinFrame>().isActive(); },
         [&](){
             RECT rect = {};
@@ -494,8 +498,17 @@ bool Frame::mainLoop(){
 #endif
             }
         },
-        [&](const f32 timeDifference){ return update(timeDifference); }
+        [&](const f32 timeDifference){
+            if(!update(timeDifference))
+                return false;
+            if(quitRequested()){
+                gracefulQuit = true;
+                return false;
+            }
+            return true;
+        }
     );
+    return loopResult || gracefulQuit;
 }
 
 void Frame::setupPlatform(void* inst){

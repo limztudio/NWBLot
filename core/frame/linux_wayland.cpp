@@ -904,6 +904,9 @@ bool RunWaylandFrame(Frame& frame){
     Timer lateTime(TimerNow());
 
     for(;;){
+        if(frame.quitRequested())
+            return true;
+
         bool windowVisible = context->visible && frameData.width() > 0 && frameData.height() > 0;
         bool windowIsInFocus = frameData.isActive();
 
@@ -935,7 +938,9 @@ bool RunWaylandFrame(Frame& frame){
         lateTime = currentTime;
 
         if(!frame.update(delta))
-            break;
+            return false;
+        if(frame.quitRequested())
+            return true;
     }
 
     return false;

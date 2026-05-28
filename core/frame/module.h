@@ -46,6 +46,7 @@ public:
     bool init();
     bool showFrame();
     bool mainLoop();
+    void requestQuit();
 
 public:
     template<typename T>
@@ -84,6 +85,7 @@ public:
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
+    [[nodiscard]] inline bool quitRequested()const{ return m_quitRequested; }
     [[nodiscard]] const tchar* syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
 
@@ -111,6 +113,7 @@ private:
 
     ProjectUpdateCallback m_projectUpdateCallback = nullptr;
     void* m_projectUpdateUserData = nullptr;
+    bool m_quitRequested = false;
 };
 
 

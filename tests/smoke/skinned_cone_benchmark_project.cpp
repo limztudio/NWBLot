@@ -20,10 +20,6 @@
 #include <impl/ecs_skinned_mesh_render/module.h>
 #include <impl/ecs_skinned_mesh_render/timing_names.h>
 
-#if defined(_WIN32)
-#include <windows.h>
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -190,14 +186,8 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 }
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
-#if defined(_WIN32)
-    char value[8] = {};
-    const DWORD valueSize = GetEnvironmentVariableA(s_StaticPreviewEnv, value, sizeof(value));
-    return valueSize != 0u && value[0] != '0';
-#else
     const char* value = NWB_GETENV(s_StaticPreviewEnv);
     return value && value[0] != '\0' && value[0] != '0';
-#endif
 }
 
 static void AccumulateGpuStats(const NWB::Core::GpuTimingStats& stats, f64& seconds, u32& samples){
@@ -228,12 +218,6 @@ static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const Be
     summary.boundsSamples += accum.boundsSamples;
     summary.meshDispatchSamples += accum.meshDispatchSamples;
     summary.rasterSamples += accum.rasterSamples;
-}
-
-static void RequestQuit(){
-#if defined(NWB_PLATFORM_WINDOWS)
-    PostQuitMessage(0);
-#endif
 }
 
 [[nodiscard]] static NWB::Impl::SkinnedMeshJointMatrix BuildAnimatedJointMatrix(
@@ -404,6 +388,15 @@ private:
 
         m_world->clear();
         m_world.owner().reset();
+    }
+
+    void requestQuit(){
+        if(m_quitRequested)
+            return;
+
+        m_quitRequested = true;
+        if(m_context.requestQuit)
+            m_context.requestQuit();
     }
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
@@ -647,14 +640,14 @@ public:
     virtual bool onStartup()override{
         if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh has no skeleton joints"));
-            RequestQuit();
+            requestQuit();
             return true;
         }
         auto* meshSystem = m_world->getSystem<NWB::Impl::MeshSystem>();
         auto* skinnedMeshSystem = m_world->getSystem<NWB::Impl::SkinnedMeshSystem>();
         if(!meshSystem || !skinnedMeshSystem || !m_runtimeMeshProvider.install(*meshSystem, *skinnedMeshSystem)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to install benchmark runtime mesh provider"));
-            RequestQuit();
+            requestQuit();
             return true;
         }
 
@@ -719,10 +712,7 @@ public:
                 return true;
             }
 
-            if(!m_quitRequested){
-                m_quitRequested = true;
-                RequestQuit();
-            }
+            requestQuit();
             return true;
         }
 

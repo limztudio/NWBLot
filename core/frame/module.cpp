@@ -75,6 +75,9 @@ bool Frame::startup(){
 void Frame::cleanup(){
     m_graphics.destroy();
 }
+void Frame::requestQuit(){
+    m_quitRequested = true;
+}
 bool Frame::update(f32 delta){
     if(m_projectUpdateCallback){
         if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){

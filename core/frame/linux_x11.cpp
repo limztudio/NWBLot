@@ -484,6 +484,9 @@ bool RunX11Frame(Frame& frame){
     Timer lateTime(TimerNow());
 
     for(;;){
+        if(frame.quitRequested())
+            return true;
+
         while(XPending(GetX11Display(frameData)) > 0){
             XEvent event = {};
             XNextEvent(GetX11Display(frameData), &event);
@@ -508,7 +511,9 @@ bool RunX11Frame(Frame& frame){
         lateTime = currentTime;
 
         if(!frame.update(delta))
-            break;
+            return false;
+        if(frame.quitRequested())
+            return true;
 
         if(!windowVisible || !windowIsInFocus)
             SleepMS(10);

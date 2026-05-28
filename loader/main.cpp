@@ -241,6 +241,7 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
                 frame.projectJobSystem(),
                 assetManager,
                 {},
+                {},
             };
             context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
                 return NWB::Core::ShaderArchive::findVirtualPath(
@@ -250,6 +251,9 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
                     stageName,
                     outVirtualPath
                 );
+            };
+            context.requestQuit = [&frame](){
+                frame.requestQuit();
             };
 
             auto callbacks = NWB::CreateProjectEntryCallbacks(context);

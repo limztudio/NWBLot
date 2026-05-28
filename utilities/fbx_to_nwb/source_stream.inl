@@ -256,18 +256,6 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
 }
 
-[[nodiscard]] Vec3 TriangleAreaNormal(const Vec3& a, const Vec3& b, const Vec3& c){
-    Vec3 areaNormal;
-    StoreFloat(
-        Vector3Cross(
-            VectorSubtract(LoadFloat(b), LoadFloat(a)),
-            VectorSubtract(LoadFloat(c), LoadFloat(a))
-        ),
-        &areaNormal
-    );
-    return areaNormal;
-}
-
 [[nodiscard]] Vec3 LoadCornerOutputPosition(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
@@ -289,7 +277,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     Vec3 outputPosition = ToVec3(position);
-    StoreFloat(VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)), &outputPosition);
+    const f32 scale = static_cast<f32>(options.scale);
+    outputPosition.x *= scale;
+    outputPosition.y *= scale;
+    outputPosition.z *= scale;
     return outputPosition;
 }
 
@@ -317,16 +308,6 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     if(!Normalize(outputNormal))
         outputNormal = Vec3{ 0.0f, 0.0f, 1.0f };
     return outputNormal;
-}
-
-[[nodiscard]] f32 Dot(const Vec3& lhs, const Vec3& rhs){
-    return VectorGetX(Vector3Dot(LoadFloat(lhs), LoadFloat(rhs)));
-}
-
-[[nodiscard]] Vec3 Cross(const Vec3& lhs, const Vec3& rhs){
-    Vec3 result;
-    StoreFloat(Vector3Cross(LoadFloat(lhs), LoadFloat(rhs)), &result);
-    return result;
 }
 
 [[nodiscard]] bool LoadCornerOutputTangent(
@@ -357,8 +338,11 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const Vec3 tangentSpaceBitangent = Cross(normal, outputTangent);
-            sign = Dot(tangentSpaceBitangent, outputBitangent) < 0.0f ? -1.0f : 1.0f;
+            const SIMDVector normalVector = LoadFloat(normal);
+            const SIMDVector tangentVector = LoadFloat(outputTangent);
+            const SIMDVector bitangentVector = LoadFloat(outputBitangent);
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(normalVector, tangentVector);
+            sign = VectorGetX(Vector3Dot(tangentSpaceBitangent, bitangentVector)) < 0.0f ? -1.0f : 1.0f;
         }
     }
 
@@ -367,18 +351,15 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] bool IsFiniteVec2(const Vec2& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector2IsNaN(valueVector) && !Vector2IsInfinite(valueVector);
+    return IsFinite(value.x) && IsFinite(value.y);
 }
 
 [[nodiscard]] bool IsFiniteVec3(const Vec3& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector3IsNaN(valueVector) && !Vector3IsInfinite(valueVector);
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
 [[nodiscard]] bool IsFiniteVec4(const Vec4& value){
-    const SIMDVector valueVector = LoadFloat(value);
-    return !Vector4IsNaN(valueVector) && !Vector4IsInfinite(valueVector);
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){

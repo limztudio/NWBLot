@@ -29,20 +29,6 @@ namespace __hidden_runtime{
 using TestbedSkinnedMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedMesh>;
 using TestbedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
-struct EditorVec3 : public Float4{
-    constexpr EditorVec3()noexcept
-        : Float4(0.0f, 0.0f, 0.0f)
-    {}
-    constexpr EditorVec3(const f32 xValue, const f32 yValue, const f32 zValue)noexcept
-        : Float4(xValue, yValue, zValue)
-    {}
-};
-static_assert(IsStandardLayout_V<EditorVec3>, "EditorVec3 must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<EditorVec3>, "EditorVec3 must stay cheap to pass by value");
-static_assert(alignof(EditorVec3) >= alignof(Float4), "EditorVec3 must stay SIMD-aligned");
-static_assert(sizeof(EditorVec3) == sizeof(Float4), "EditorVec3 must stay one aligned float3 wide");
-
-
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraMoveEpsilon = 0.000001f;
 static constexpr f32 s_FlyCameraMoveSpeed = 2.5f;
@@ -87,7 +73,7 @@ static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_
     return uiSystem && uiSystem->wantsMouseCapture();
 }
 
-[[nodiscard]] static EditorVec3 NormalizeVec3(SIMDVector valueVector, const EditorVec3& fallback){
+[[nodiscard]] static SIMDVector NormalizeVec3Vector(SIMDVector valueVector, const SIMDVector fallback){
     const SIMDVector lengthSqVector = Vector3LengthSq(valueVector);
     const f32 lengthSq = VectorGetX(lengthSqVector);
     if(!IsFinite(lengthSq) || lengthSq <= 0.000001f)
@@ -97,9 +83,7 @@ static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_
     if(!FiniteVector3(normalizedVector))
         return fallback;
 
-    EditorVec3 normalized;
-    StoreFloat(normalizedVector, &normalized);
-    return normalized;
+    return normalizedVector;
 }
 
 static void ResolveFlyCameraAnglesFromTransform(
@@ -107,11 +91,10 @@ static void ResolveFlyCameraAnglesFromTransform(
     f32& outYawRadians,
     f32& outPitchRadians){
     const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    const EditorVec3 forward = NormalizeVec3(
+    const SIMDVector forwardVector = NormalizeVec3Vector(
         Vector3Rotate(localForward, LoadFloat(transform.rotation)),
-        EditorVec3{ 0.0f, 0.0f, 1.0f }
+        localForward
     );
-    const SIMDVector forwardVector = LoadFloat(forward);
     const SIMDVector clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
     const f32 yawRadians = VectorGetX(VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector)));
     const f32 pitchRadians = VectorGetX(VectorNegate(VectorASin(VectorSplatY(clampedForward))));

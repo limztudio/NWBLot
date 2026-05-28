@@ -77,7 +77,10 @@ static void AccumulateMeshletScoreBounds(
     bool& hasGeometry
 ){
     for(const u32 vertexRefIndex : triangle.vertexRefs){
-        const SIMDVector position = LoadMeshletSourceVertexPositionVector(entry, vertexRefIndex);
+        const SIMDVector position = VectorSetW(
+            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, vertexRefIndex)),
+            0.0f
+        );
         if(!hasGeometry){
             minBounds = position;
             maxBounds = position;
@@ -103,16 +106,16 @@ template<typename CookEntryT>
     return ComputeMeshletScoreBoundsRadius(minBounds, maxBounds);
 }
 
-[[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const MeshletTriangleData& triangle){
+[[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVector triangleCentroid){
     if(state.primitiveCount == 0u)
         return 0.0f;
 
     const SIMDVector meshletCentroid = VectorScale(state.centroidSum, 1.0f / static_cast<f32>(state.primitiveCount));
-    return VectorGetX(Vector3Length(VectorSubtract(LoadFloat(triangle.centroid), meshletCentroid)));
+    return VectorGetX(Vector3Length(VectorSubtract(triangleCentroid, meshletCentroid)));
 }
 
-[[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const MeshletTriangleData& triangle){
-    const SIMDVector candidateNormal = NormalizeMeshletDirectionOrZero(LoadFloat(triangle.areaNormal));
+[[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVector triangleAreaNormal){
+    const SIMDVector candidateNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!Core::Mesh::FrameValidDirection(state.normalAxis) || !Core::Mesh::FrameValidDirection(candidateNormal))
         return 0.0f;
 
@@ -121,11 +124,11 @@ template<typename CookEntryT>
 
 static void UpdateMeshletScoreConeCutoff(
     const SIMDVector axis,
-    const MeshletTriangleData& triangle,
+    const SIMDVector triangleAreaNormal,
     bool& hasNormal,
     f32& coneCutoff
 ){
-    const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(LoadFloat(triangle.areaNormal));
+    const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(triangleAreaNormal);
     if(!Core::Mesh::FrameValidDirection(faceNormal))
         return;
 
@@ -148,10 +151,14 @@ template<typename TriangleIndexVectorT>
 
     bool hasNormal = false;
     f32 coneCutoff = 1.0f;
-    for(const u32 triangleIndex : triangleIndices)
-        UpdateMeshletScoreConeCutoff(axis, trianglePrecompute.triangles[triangleIndex], hasNormal, coneCutoff);
-    if(hasExtraTriangle)
-        UpdateMeshletScoreConeCutoff(axis, trianglePrecompute.triangles[extraTriangleIndex], hasNormal, coneCutoff);
+    for(const u32 triangleIndex : triangleIndices){
+        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[triangleIndex].areaNormal);
+        UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
+    }
+    if(hasExtraTriangle){
+        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[extraTriangleIndex].areaNormal);
+        UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
+    }
 
     if(!hasNormal || coneCutoff <= 0.0f)
         return -1.0f;
@@ -165,13 +172,13 @@ template<typename TriangleIndexVectorT>
     const MeshletTrianglePrecompute& trianglePrecompute,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& state,
-    const u32 triangleIndex
+    const u32 triangleIndex,
+    const SIMDVector triangleAreaNormal
 ){
     if(!state.coneEnabled)
         return 0.0f;
 
-    const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    const SIMDVector predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, LoadFloat(triangle.areaNormal)));
+    const SIMDVector predictedAxis = NormalizeMeshletDirectionOrZero(VectorAdd(state.normalSum, triangleAreaNormal));
     bool predictedConeEnabled = false;
     const f32 predictedConeCutoff = ComputeMeshletScoreConeCutoff(
         trianglePrecompute,
@@ -199,11 +206,19 @@ template<typename CookEntryT, typename TriangleIndexVectorT>
     const bool disconnected
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
+    const SIMDVector triangleCentroid = LoadFloat(triangle.centroid);
+    const SIMDVector triangleAreaNormal = LoadFloat(triangle.areaNormal);
     const f32 predictedRadius = PredictMeshletScoreRadius(entry, state, triangle);
     const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
-    const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangle);
-    const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangle);
-    const f32 coneWidening = PredictMeshletScoreConeWidening(trianglePrecompute, triangleIndices, state, triangleIndex);
+    const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleCentroid);
+    const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleAreaNormal);
+    const f32 coneWidening = PredictMeshletScoreConeWidening(
+        trianglePrecompute,
+        triangleIndices,
+        state,
+        triangleIndex,
+        triangleAreaNormal
+    );
     return s_MeshletScoreSharedVertexWeight * static_cast<f32>(sharedVertexCount)
         - s_MeshletScoreNewVertexWeight * static_cast<f32>(missingVertexCount)
         - s_MeshletScoreRadiusWeight * predictedRadiusGrowth

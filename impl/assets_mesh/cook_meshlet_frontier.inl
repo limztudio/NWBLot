@@ -85,9 +85,11 @@ static void AddMeshletTriangleToScoreState(
     MeshletScoreState& state
 ){
     AccumulateMeshletScoreBounds(entry, triangle, state.minBounds, state.maxBounds, state.hasGeometry);
+    const SIMDVector triangleCentroid = LoadFloat(triangle.centroid);
+    const SIMDVector triangleAreaNormal = LoadFloat(triangle.areaNormal);
     state.radius = ComputeMeshletScoreBoundsRadius(state.minBounds, state.maxBounds);
-    state.centroidSum = VectorAdd(state.centroidSum, LoadFloat(triangle.centroid));
-    state.normalSum = VectorAdd(state.normalSum, LoadFloat(triangle.areaNormal));
+    state.centroidSum = VectorAdd(state.centroidSum, triangleCentroid);
+    state.normalSum = VectorAdd(state.normalSum, triangleAreaNormal);
     state.normalAxis = NormalizeMeshletDirectionOrZero(state.normalSum);
     ++state.primitiveCount;
     state.coneCutoff = ComputeMeshletScoreConeCutoff(

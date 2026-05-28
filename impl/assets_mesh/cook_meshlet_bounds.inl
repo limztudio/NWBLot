@@ -9,9 +9,18 @@ static void ForEachMeshletFaceNormalVector(const CookEntryT& entry, const Meshle
         const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
         const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
         const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
-        const SIMDVector p0 = LoadMeshletLocalPositionVector(entry, meshlet, localVertex0);
-        const SIMDVector p1 = LoadMeshletLocalPositionVector(entry, meshlet, localVertex1);
-        const SIMDVector p2 = LoadMeshletLocalPositionVector(entry, meshlet, localVertex2);
+        const SIMDVector p0 = VectorSetW(
+            LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex0)),
+            0.0f
+        );
+        const SIMDVector p1 = VectorSetW(
+            LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex1)),
+            0.0f
+        );
+        const SIMDVector p2 = VectorSetW(
+            LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex2)),
+            0.0f
+        );
         callback(BuildMeshletFaceNormal(p0, p1, p2));
     }
 }
@@ -22,7 +31,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     SIMDVector maxBounds = VectorReplicate(-Limit<f32>::s_Max);
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
-        const SIMDVector position = LoadMeshletPositionVector(entry, ref);
+        const SIMDVector position = VectorSetW(LoadFloat(MeshletPositionStreamValue(entry, ref)), 0.0f);
         minBounds = VectorMin(minBounds, position);
         maxBounds = VectorMax(maxBounds, position);
     }
@@ -31,7 +40,8 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     SIMDVector radiusSquared = VectorZero();
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
-        const SIMDVector delta = VectorSubtract(LoadMeshletPositionVector(entry, ref), center);
+        const SIMDVector position = VectorSetW(LoadFloat(MeshletPositionStreamValue(entry, ref)), 0.0f);
+        const SIMDVector delta = VectorSubtract(position, center);
         radiusSquared = VectorMax(radiusSquared, Vector3LengthSq(delta));
     }
 

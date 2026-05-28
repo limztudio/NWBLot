@@ -3,12 +3,6 @@
 
 
 template<typename CookEntryT>
-[[nodiscard]] static SIMDVector LoadMeshletSourceVertexPositionVector(const CookEntryT& entry, const u32 vertexRefIndex){
-    const MeshVertexRef& vertexRef = entry.vertexRefs[vertexRefIndex];
-    return VectorSetW(LoadFloat(entry.positions[vertexRef.position]), 0.0f);
-}
-
-template<typename CookEntryT>
 [[nodiscard]] static bool PrecomputeMeshletTriangleData(
     const Path& nwbFilePath,
     const tchar* metaKind,
@@ -55,9 +49,18 @@ template<typename CookEntryT>
         triangle.vertexRefs[1] = indices[indexOffset + 1u];
         triangle.vertexRefs[2] = indices[indexOffset + 2u];
 
-        const SIMDVector p0 = LoadMeshletSourceVertexPositionVector(entry, triangle.vertexRefs[0]);
-        const SIMDVector p1 = LoadMeshletSourceVertexPositionVector(entry, triangle.vertexRefs[1]);
-        const SIMDVector p2 = LoadMeshletSourceVertexPositionVector(entry, triangle.vertexRefs[2]);
+        const SIMDVector p0 = VectorSetW(
+            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[0])),
+            0.0f
+        );
+        const SIMDVector p1 = VectorSetW(
+            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[1])),
+            0.0f
+        );
+        const SIMDVector p2 = VectorSetW(
+            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[2])),
+            0.0f
+        );
         const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
         const SIMDVector areaNormal = BuildMeshletFaceNormal(p0, p1, p2);
         StoreFloat(VectorSetW(centroid, 0.0f), &triangle.centroid);

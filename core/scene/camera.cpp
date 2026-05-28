@@ -26,16 +26,19 @@ namespace __hidden_camera{
     return !Vector3IsNaN(value) && !Vector3IsInfinite(value);
 }
 
-[[nodiscard]] bool SceneCameraTransformValid(const TransformComponent& transform){
+[[nodiscard]] bool SceneCameraTransformValid(
+    const SIMDVector position,
+    const SIMDVector rotation,
+    const SIMDVector scale
+){
     constexpr f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
-    const SIMDVector rotation = LoadFloat(transform.rotation);
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
     return
-        SceneFloat3FiniteVector(LoadFloat(transform.position))
+        SceneFloat3FiniteVector(position)
         && !QuaternionIsNaN(rotation)
         && !QuaternionIsInfinite(rotation)
-        && SceneFloat3FiniteVector(LoadFloat(transform.scale))
+        && SceneFloat3FiniteVector(scale)
         && IsFinite(rotationLengthSquared)
         && rotationLengthSquared >= 1.0f - s_CameraRotationUnitLengthSquaredTolerance
         && rotationLengthSquared <= 1.0f + s_CameraRotationUnitLengthSquaredTolerance
@@ -50,7 +53,11 @@ namespace __hidden_camera{
     SceneCameraView& outCameraView
 ){
     outCameraView = SceneCameraView{};
-    if(!SceneCameraTransformValid(transform))
+    if(!SceneCameraTransformValid(
+        LoadFloat(transform.position),
+        LoadFloat(transform.rotation),
+        LoadFloat(transform.scale)
+    ))
         return false;
 
     CameraProjectionData projectionData;

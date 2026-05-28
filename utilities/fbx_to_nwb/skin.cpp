@@ -68,10 +68,17 @@ MeshJointMatrix ToMeshJointMatrix(const ufbx_matrix& matrix){
 
 bool NearlyEqualJointMatrix(const MeshJointMatrix& lhs, const MeshJointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
-    const SIMDVector epsilon = VectorReplicate(s_Epsilon);
     for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-        if(!Vector4NearEqual(LoadFloat(lhs.columns[columnIndex]), LoadFloat(rhs.columns[columnIndex]), epsilon))
+        const Vec4& lhsColumn = lhs.columns[columnIndex];
+        const Vec4& rhsColumn = rhs.columns[columnIndex];
+        if(
+            Abs(lhsColumn.x - rhsColumn.x) > s_Epsilon
+            || Abs(lhsColumn.y - rhsColumn.y) > s_Epsilon
+            || Abs(lhsColumn.z - rhsColumn.z) > s_Epsilon
+            || Abs(lhsColumn.w - rhsColumn.w) > s_Epsilon
+        ){
             return false;
+        }
     }
     return true;
 }

@@ -3,15 +3,15 @@
 
 
 template<typename CookEntryT>
-[[nodiscard]] static SIMDVector LoadMeshletPositionVector(
+[[nodiscard]] static const Float3U& MeshletPositionStreamValue(
     const CookEntryT& entry,
     const MeshletPositionStreamRef& ref
 ){
-    return VectorSetW(LoadFloat(entry.positions[ref.position]), 0.0f);
+    return entry.positions[ref.position];
 }
 
 template<typename CookEntryT>
-[[nodiscard]] static SIMDVector LoadMeshletLocalPositionVector(
+[[nodiscard]] static const Float3U& MeshletLocalPositionStreamValue(
     const CookEntryT& entry,
     const MeshletDesc& meshlet,
     const u32 localVertexIndex
@@ -19,7 +19,16 @@ template<typename CookEntryT>
     const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
     const usize positionRefIndex = meshlet.positionRefOffset + localVertexRef.localDeformedPosition;
     const MeshletPositionStreamRef& positionRef = entry.meshletPositionStreamRefs[positionRefIndex];
-    return LoadMeshletPositionVector(entry, positionRef);
+    return MeshletPositionStreamValue(entry, positionRef);
+}
+
+template<typename CookEntryT>
+[[nodiscard]] static const Float3U& MeshletSourceVertexPositionStreamValue(
+    const CookEntryT& entry,
+    const u32 vertexRefIndex
+){
+    const MeshVertexRef& vertexRef = entry.vertexRefs[vertexRefIndex];
+    return entry.positions[vertexRef.position];
 }
 
 [[nodiscard]] static SIMDVector BuildMeshletFaceNormal(

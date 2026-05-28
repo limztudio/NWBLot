@@ -86,7 +86,9 @@ template<typename VisitTriangle>
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                StoreFloat(VectorAdd(LoadFloat(normal), LoadFloat(areaNormal)), &normal);
+                normal.x += areaNormal.x;
+                normal.y += areaNormal.y;
+                normal.z += areaNormal.z;
             }
         }
         return true;
@@ -218,11 +220,16 @@ bool AppendInstanceMesh(
             return true;
 
         if(normalMode == NormalMode::Regenerate){
-            Vec3 faceNormal = TriangleAreaNormal(
+            const TriangleAreaNormal64 faceNormal64 = BuildTriangleAreaNormal64(
                 triangleCorners[0u].position,
                 triangleCorners[1u].position,
                 triangleCorners[2u].position
             );
+            Vec3 faceNormal{
+                static_cast<f32>(faceNormal64.x),
+                static_cast<f32>(faceNormal64.y),
+                static_cast<f32>(faceNormal64.z),
+            };
             if(!Normalize(faceNormal)){
                 outError = "failed to regenerate mesh face normal";
                 return false;

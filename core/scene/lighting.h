@@ -41,14 +41,14 @@ struct alignas(Float4) LightComponent{
     LightType::Enum type = LightType::Directional;
 
     [[nodiscard]] Float4 color()const{
-        Float4 result;
-        StoreFloat(VectorSetW(LoadFloat(colorIntensity), 0.0f), &result);
-        return result;
+        return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z, 0.0f);
     }
     [[nodiscard]] f32 intensity()const{ return colorIntensity.w; }
 
     void setColor(const Float4& value){
-        StoreFloat(VectorSetW(LoadFloat(value), colorIntensity.w), &colorIntensity);
+        colorIntensity.x = value.x;
+        colorIntensity.y = value.y;
+        colorIntensity.z = value.z;
     }
     void setIntensity(const f32 value){ colorIntensity.w = value; }
 };

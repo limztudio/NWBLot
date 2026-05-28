@@ -23,6 +23,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_view_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components

@@ -13,6 +13,7 @@ target_sources(nwb_ecs_skinned_mesh_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/skin_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
 )
 target_link_libraries(nwb_ecs_skinned_mesh_render PUBLIC
     nwb_ecs_skinned_mesh

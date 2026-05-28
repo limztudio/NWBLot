@@ -51,6 +51,9 @@ static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::E
     return renderer && renderer->visible;
 }
 
+static constexpr bool s_RuntimeSkinnedMeshletFrustumCullingEnabled = true;
+static constexpr bool s_RuntimeSkinnedMeshletConeCullingEnabled = true; // Locked runtime policy; benchmarks override through a test provider only.
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -138,8 +141,8 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
     outMesh.version = instance->editRevision;
-    outMesh.dynamicMeshletBoundsFresh = true;
-    outMesh.dynamicMeshletConesFresh = true;
+    outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinnedMeshletFrustumCullingEnabled;
+    outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinnedMeshletConeCullingEnabled;
 #if defined(NWB_DEBUG)
     return outMesh.valid();
 #else

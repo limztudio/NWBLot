@@ -75,6 +75,9 @@ Updated: 2026-05-22
   - `const Foo* foo =`
   - `    world.tryGetComponent<Foo>(entity)`
   - `;`
+- For scoped RAII guards that immediately wrap one operation, keep the guard construction on one line and put one blank line before the guarded operation:
+  - Correct: `Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), ScopeName(), m_graphics.getDevice(), commandList);`
+  - Then a blank line, then the measured `commandList.dispatch(...)` or `commandList.draw(...)`.
 - Prefer single-line `return` statements when the returned expression is short and readable:
   - Correct: `return value.valid() && value.visible;`
   - Wrong:

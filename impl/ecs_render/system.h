@@ -316,7 +316,6 @@ public:
     virtual void invalidateResources()override;
     virtual void render(Core::IFramebuffer* framebuffer)override;
 
-
 private:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);

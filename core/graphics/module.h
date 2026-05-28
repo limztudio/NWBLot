@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "backend.h"
+#include "gpu_timing.h"
 #include "render_pass.h"
 
 
@@ -121,6 +122,8 @@ public:
     [[nodiscard]] const tchar* getRendererString()const{ return m_backend->getRendererString(); }
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return m_backend->getGraphicsAPI(); }
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
+    [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
+    [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
     void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
     void reportLiveObjects()const{ m_backend->reportLiveObjects(); }
@@ -177,6 +180,7 @@ private:
     Alloc::JobSystem& m_jobSystem;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
+    GpuTimingRecorder m_gpuTiming;
 
 private:
     BackendPtr m_backend;

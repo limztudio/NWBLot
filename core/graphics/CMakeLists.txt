@@ -28,6 +28,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/basic.h"
     "${CMAKE_CURRENT_LIST_DIR}/common.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend.h"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"

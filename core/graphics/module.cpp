@@ -320,6 +320,7 @@ Graphics::Graphics(
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
+    , m_gpuTiming(m_allocator.getObjectArena())
     , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool, backendFactory))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
@@ -450,6 +451,7 @@ void Graphics::destroy(){
 
     invalidateRenderPassResources();
     m_renderPasses.clear();
+    m_gpuTiming.clear();
 
     m_swapChainFramebuffers.clear();
     m_backend->destroy();
@@ -577,6 +579,8 @@ void Graphics::animate(f64 elapsedTime){
 
 void Graphics::render(){
     IFramebuffer* framebuffer = getCurrentFramebuffer();
+    if(IDevice* device = getDevice())
+        m_gpuTiming.collect(*device);
 
     for(auto* renderPass : m_renderPasses)
         renderPass->render(framebuffer);

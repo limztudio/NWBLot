@@ -6,6 +6,7 @@
 
 #include "runtime_cache.h"
 #include "skin_payload.h"
+#include "timing_names.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -241,7 +242,11 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     pushConstants.skinningMode = resolvedSkinningMode;
     pushConstants.attributeCount = instance.meshletAttributeRefCount;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(pushConstants.meshletCount, 1, 1);
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::Skinning(), m_graphics.getDevice(), commandList);
+
+        commandList.dispatch(pushConstants.meshletCount, 1, 1);
+    }
 
     __hidden_skinning::SetSkinnedBufferStates(
         commandList,
@@ -318,7 +323,11 @@ bool SkinnedMeshSystem::dispatchMeshletBounds(
     MeshletBoundsPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-    commandList.dispatch(pushConstants.meshletCount, 1, 1);
+    {
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::MeshletBounds(), m_graphics.getDevice(), commandList);
+
+        commandList.dispatch(pushConstants.meshletCount, 1, 1);
+    }
 
     commandList.setBufferState(instance.meshletBoundsBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();

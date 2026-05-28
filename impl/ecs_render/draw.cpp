@@ -3,6 +3,7 @@
 
 
 #include "private.h"
+#include "timing_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -369,6 +370,7 @@ u32 RendererSystem::meshDispatchFlags(
     u32 flags = 0u;
     const bool meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
     const bool meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;
+    // Runtime mesh providers own dynamic culling policy; the renderer only consumes the published freshness flags.
     if(meshletBoundsFresh)
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
     if(meshletConesFresh && pass == MaterialPipelinePass::Opaque && !twoSided && meshletConeCullScaleSafe)
@@ -433,7 +435,11 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         context.commandList.setMeshletState(meshletState);
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
-        context.commandList.dispatchMesh(mesh.meshletCount);
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::MeshDispatch(), m_graphics.getDevice(), context.commandList);
+
+            context.commandList.dispatchMesh(mesh.meshletCount);
+        }
     });
 }
 
@@ -451,7 +457,6 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 #endif
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
 #if defined(NWB_DEBUG)
         if(!materialPassDrawResourcesReady(mesh) || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
@@ -485,7 +490,11 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
                 drawItem.meshletConeCullScaleSafe
             )
         );
-        context.commandList.dispatch(mesh.meshletCount);
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::MeshDispatch(), m_graphics.getDevice(), context.commandList);
+
+            context.commandList.dispatch(mesh.meshletCount);
+        }
 
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
 
@@ -516,7 +525,11 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
-        context.commandList.draw(drawArgs);
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::Raster(), m_graphics.getDevice(), context.commandList);
+
+            context.commandList.draw(drawArgs);
+        }
     });
 }
 

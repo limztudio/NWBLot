@@ -11,11 +11,11 @@
     const TStringView meshPathText
 ){
     if(!CountFitsU32(positionRefs.size()) || (skinRequired && !CountFitsU32(skinCount))){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' exceeds u32 stream count limits")
-            , contextText
-            , meshPathText
+        return FailMeshPayloadValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("exceeds u32 stream count limits")
         );
-        return false;
     }
 
     for(usize positionRefIndex = 0u; positionRefIndex < positionRefs.size(); ++positionRefIndex){
@@ -23,12 +23,13 @@
         if(MeshletPositionRefInRange(ref, positionCount, skinCount, skinRequired))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet position ref {} is out of range")
-            , contextText
-            , meshPathText
-            , positionRefIndex
+        return FailMeshPayloadIndexedValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("meshlet position ref"),
+            positionRefIndex,
+            NWB_TEXT("is out of range")
         );
-        return false;
     }
 
     return true;
@@ -53,21 +54,22 @@
         [&](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(previousSkin);
             static_cast<void>(skinIndex);
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has attribute ref {} shared across skin identities")
-                , contextText
-                , meshPathText
-                , meshletIndex
-                , attributeIndex
+            return FailMeshletAttributePayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                attributeIndex,
+                NWB_TEXT("shared across skin identities")
             );
-            return false;
         },
         [&](const usize attributeIndex){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet attribute ref {} is unreferenced")
-                , contextText
-                , meshPathText
-                , attributeIndex
+            return FailMeshPayloadIndexedValidation(
+                contextText,
+                meshPathText,
+                NWB_TEXT("meshlet attribute ref"),
+                attributeIndex,
+                NWB_TEXT("is unreferenced")
             );
-            return false;
         }
     );
 }
@@ -88,11 +90,11 @@
     const TStringView meshPathText
 ){
     if(meshlets.empty() || meshletBounds.size() != meshlets.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' has incomplete meshlet payload")
-            , contextText
-            , meshPathText
+        return FailMeshPayloadValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("has incomplete meshlet payload")
         );
-        return false;
     }
 
     usize expectedLocalVertexRefCount = 0u;
@@ -106,36 +108,36 @@
         const u32 positionCount = MeshletPositionCount(meshlet);
         const u32 attributeCount = MeshletAttributeCount(meshlet);
         if(vertexCount == 0u || vertexCount > s_MeshMaxMeshletVertices){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid vertex count")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid vertex count")
             );
-            return false;
         }
         if(primitiveCount == 0u || primitiveCount > s_MeshMaxMeshletTriangles){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid primitive count")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid primitive count")
             );
-            return false;
         }
         if(positionCount == 0u || positionCount > s_MeshMaxMeshletVertices){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid deformed position count")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid deformed position count")
             );
-            return false;
         }
         if(attributeCount == 0u || attributeCount > s_MeshMaxMeshletVertices){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid attribute count")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid attribute count")
             );
-            return false;
         }
         if(
             meshlet.localVertexOffset != expectedLocalVertexRefCount
@@ -143,12 +145,12 @@
             || meshlet.attributeOffset != expectedAttributeRefCount
             || meshlet.primitiveOffset != expectedPrimitiveIndexCount
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has non-contiguous offsets")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has non-contiguous offsets")
             );
-            return false;
         }
 
         expectedLocalVertexRefCount += vertexCount;
@@ -161,39 +163,39 @@
             || expectedAttributeRefCount > attributeRefs.size()
             || expectedPrimitiveIndexCount > meshletPrimitiveIndices.size()
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} exceeds meshlet stream bounds")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("exceeds meshlet stream bounds")
             );
-            return false;
         }
 
         const MeshletBounds& bounds = meshletBounds[meshletIndex];
         const SIMDVector sphere = LoadFloat(bounds.sphere);
         if(!FiniteVector(sphere, 0xFu) || VectorGetW(sphere) < 0.0f){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid bounds")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid bounds")
             );
-            return false;
         }
         if(MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid cone flags")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid cone flags")
             );
-            return false;
         }
         if(MeshletConeEnabled(bounds) && MeshletConePackedCutoff(bounds) == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid cone cutoff")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid cone cutoff")
             );
-            return false;
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
@@ -201,24 +203,24 @@
             if(MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount))
                 continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has invalid local attribute")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("has invalid local attribute")
             );
-            return false;
         }
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
             const MeshletLocalVertexRef& ref = localVertexRefs[meshlet.localVertexOffset + localVertexIndex];
             if(ref.localDeformedPosition < positionCount && ref.localAttribute < attributeCount)
                 continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} local vertex ref is out of range")
-                , contextText
-                , meshPathText
-                , meshletIndex
+            return FailMeshletPayloadValidation(
+                contextText,
+                meshPathText,
+                meshletIndex,
+                NWB_TEXT("local vertex ref is out of range")
             );
-            return false;
         }
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
             const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
@@ -226,13 +228,13 @@
                 if(meshletPrimitiveIndices[primitiveOffset + corner] < vertexCount)
                     continue;
 
-                NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} has an out-of-range local vertex")
-                    , contextText
-                    , meshPathText
-                    , meshletIndex
-                    , primitiveIndex
+                return FailMeshletPrimitivePayloadValidation(
+                    contextText,
+                    meshPathText,
+                    meshletIndex,
+                    primitiveIndex,
+                    NWB_TEXT("has an out-of-range local vertex")
                 );
-                return false;
             }
         }
     }
@@ -243,11 +245,11 @@
         || expectedAttributeRefCount != attributeRefs.size()
         || expectedPrimitiveIndexCount != meshletPrimitiveIndices.size()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet streams contain trailing data")
-            , contextText
-            , meshPathText
+        return FailMeshPayloadValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("meshlet streams contain trailing data")
         );
-        return false;
     }
 
     if(

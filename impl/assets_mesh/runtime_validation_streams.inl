@@ -30,67 +30,72 @@
         || !CountFitsU32(uv0.size())
         || !CountFitsU32(colors.size())
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' exceeds u32 stream count limits")
-            , contextText
-            , meshPathText
+        return FailMeshPayloadValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("exceeds u32 stream count limits")
         );
-        return false;
     }
 
     for(usize i = 0u; i < positions.size(); ++i){
         if(FiniteVector(VectorSetW(LoadFloat(positions[i]), 0.0f), 0x7u))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' position {} contains non-finite data")
-            , contextText
-            , meshPathText
-            , i
+        return FailMeshPayloadIndexedValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("position"),
+            i,
+            NWB_TEXT("contains non-finite data")
         );
-        return false;
     }
     for(usize i = 0u; i < normals.size(); ++i){
         if(ValidDirectionVector(VectorSetW(LoadFloat(LoadHalf4U(normals[i])), 0.0f)))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' normal {} is invalid")
-            , contextText
-            , meshPathText
-            , i
+        return FailMeshPayloadIndexedValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("normal"),
+            i,
+            NWB_TEXT("is invalid")
         );
-        return false;
     }
     for(usize i = 0u; i < tangents.size(); ++i){
         if(ValidTangentVector(LoadFloat(LoadHalf4U(tangents[i]))))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' tangent {} is invalid")
-            , contextText
-            , meshPathText
-            , i
+        return FailMeshPayloadIndexedValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("tangent"),
+            i,
+            NWB_TEXT("is invalid")
         );
-        return false;
     }
     for(usize i = 0u; i < uv0.size(); ++i){
         if(FiniteVector(VectorSetW(VectorSetZ(LoadFloat(uv0[i]), 0.0f), 0.0f), 0x3u))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' uv0 {} contains non-finite data")
-            , contextText
-            , meshPathText
-            , i
+        return FailMeshPayloadIndexedValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("uv0"),
+            i,
+            NWB_TEXT("contains non-finite data")
         );
-        return false;
     }
     for(usize i = 0u; i < colors.size(); ++i){
         if(FiniteVector(LoadFloat(LoadHalf4U(colors[i])), 0xFu))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' color {} contains non-finite data")
-            , contextText
-            , meshPathText
-            , i
+        return FailMeshPayloadIndexedValidation(
+            contextText,
+            meshPathText,
+            NWB_TEXT("color"),
+            i,
+            NWB_TEXT("contains non-finite data")
         );
-        return false;
     }
 
     return true;

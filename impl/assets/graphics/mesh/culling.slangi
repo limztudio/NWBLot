@@ -110,18 +110,17 @@ bool nwbMeshScissorCullEnabled(){
     return nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL);
 }
 
+bool nwbMeshClipAxisAllOutside(const float3 value, const float3 minValue, const float3 maxValue){
+    return all(value < minValue) || all(value > maxValue);
+}
+
 bool nwbMeshAllOutsideClipPlane(const float4 a, const float4 b, const float4 c){
-    if(a.x < -a.w && b.x < -b.w && c.x < -c.w)
+    const float3 w = float3(a.w, b.w, c.w);
+    if(nwbMeshClipAxisAllOutside(float3(a.x, b.x, c.x), -w, w))
         return true;
-    if(a.x > a.w && b.x > b.w && c.x > c.w)
+    if(nwbMeshClipAxisAllOutside(float3(a.y, b.y, c.y), -w, w))
         return true;
-    if(a.y < -a.w && b.y < -b.w && c.y < -c.w)
-        return true;
-    if(a.y > a.w && b.y > b.w && c.y > c.w)
-        return true;
-    if(a.z < 0.0 && b.z < 0.0 && c.z < 0.0)
-        return true;
-    if(a.z > a.w && b.z > b.w && c.z > c.w)
+    if(nwbMeshClipAxisAllOutside(float3(a.z, b.z, c.z), float3(0.0), w))
         return true;
 
     return false;

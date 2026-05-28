@@ -27,7 +27,7 @@ That shape is allowed because the engine depends on the abstract asset/material 
 
 ## Asset Payload Ownership
 
-Shader asset binary payload helpers, including SPIR-V bytecode payload validation, are owned by `impl/assets_shader/shader_binary_payload.h`.
+Shader asset binary payload helpers, including SPIR-V bytecode payload validation, are owned by the shader asset implementation domain at `impl/assets_shader/binary_payload.h`.
 
 Runtime SPIR-V entry-point parsing is owned by `core/graphics/spirv_entry_point.*` because it maps SPIR-V execution models to engine `ShaderType` values for runtime shader setup. Do not move shader payload helpers into `core/graphics` only because runtime parsing also needs SPIR-V constants, and do not make core graphics depend on `impl/assets_shader` for runtime parsing.
 

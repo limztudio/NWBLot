@@ -27,7 +27,6 @@ private:
 
 
 private:
-    static constexpr u32 s_GraphicsPersistentArenaSize = 64 * 1024 * 1024;
     static constexpr u32 s_ReservedCoresForMainThread = 1;
 
 
@@ -97,7 +96,6 @@ private:
 private:
     Common::FrameData m_data;
 
-    Alloc::PersistentArena m_graphicsPersistentArena;
     Alloc::GlobalArena m_graphicsObjectArena;
     FrameString m_appliedWindowTitle;
     GraphicsAllocator m_graphicsAllocator;

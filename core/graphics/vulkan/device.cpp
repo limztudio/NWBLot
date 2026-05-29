@@ -163,64 +163,6 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static SystemMemoryAllocationScope::Enum ConvertAllocationScope(VkSystemAllocationScope scope){
-    switch(scope){
-    case VK_SYSTEM_ALLOCATION_SCOPE_COMMAND:
-        return SystemMemoryAllocationScope::Command;
-    case VK_SYSTEM_ALLOCATION_SCOPE_OBJECT:
-        return SystemMemoryAllocationScope::Object;
-    case VK_SYSTEM_ALLOCATION_SCOPE_CACHE:
-        return SystemMemoryAllocationScope::Cache;
-    case VK_SYSTEM_ALLOCATION_SCOPE_DEVICE:
-        return SystemMemoryAllocationScope::Device;
-    case VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE:
-        return SystemMemoryAllocationScope::Instance;
-    default:
-        return SystemMemoryAllocationScope::Object;
-    }
-}
-
-static void* VulkanSystemAllocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope){
-    auto* allocator = static_cast<SystemMemoryAllocator*>(pUserData);
-    if(!allocator || !allocator->allocate)
-        return nullptr;
-
-    return allocator->allocate(
-        allocator->userData,
-        static_cast<usize>(size),
-        static_cast<usize>(alignment),
-        ConvertAllocationScope(allocationScope)
-    );
-}
-
-static void* VulkanSystemReallocation(void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope){
-    auto* allocator = static_cast<SystemMemoryAllocator*>(pUserData);
-    if(!allocator || !allocator->reallocate)
-        return nullptr;
-
-    return allocator->reallocate(
-        allocator->userData,
-        pOriginal,
-        static_cast<usize>(size),
-        static_cast<usize>(alignment),
-        ConvertAllocationScope(allocationScope)
-    );
-}
-
-static void VulkanSystemFree(void* pUserData, void* pMemory){
-    auto* allocator = static_cast<SystemMemoryAllocator*>(pUserData);
-    if(!allocator || !allocator->deallocate)
-        return;
-
-    allocator->deallocate(allocator->userData, pMemory);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -242,17 +184,6 @@ Device::Device(const DeviceDesc& desc)
     VkResult res = VK_SUCCESS;
 
     m_context.descriptorHeapManager = &m_descriptorHeapManager;
-
-    if(!desc.allocationCallbacks && desc.systemMemoryAllocator && desc.systemMemoryAllocator->valid()){
-        m_allocationCallbacksStorage = {};
-        m_allocationCallbacksStorage.pUserData = const_cast<SystemMemoryAllocator*>(desc.systemMemoryAllocator);
-        m_allocationCallbacksStorage.pfnAllocation = VulkanDetail::VulkanSystemAllocation;
-        m_allocationCallbacksStorage.pfnReallocation = VulkanDetail::VulkanSystemReallocation;
-        m_allocationCallbacksStorage.pfnFree = VulkanDetail::VulkanSystemFree;
-        m_allocationCallbacksStorage.pfnInternalAllocation = nullptr;
-        m_allocationCallbacksStorage.pfnInternalFree = nullptr;
-        m_context.allocationCallbacks = &m_allocationCallbacksStorage;
-    }
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);

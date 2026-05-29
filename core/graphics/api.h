@@ -199,54 +199,19 @@ using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// System memory allocator callbacks
-
-
-namespace SystemMemoryAllocationScope{
-    enum Enum : u8{
-        Command,
-        Object,
-        Cache,
-        Device,
-        Instance,
-    };
-};
-
-typedef void* (*SystemMemoryAllocateFunction)(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
-typedef void* (*SystemMemoryReallocateFunction)(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
-typedef void (*SystemMemoryFreeFunction)(void* userData, void* memory);
-
-struct SystemMemoryAllocator{
-    void* userData = nullptr;
-    SystemMemoryAllocateFunction allocate = nullptr;
-    SystemMemoryReallocateFunction reallocate = nullptr;
-    SystemMemoryFreeFunction deallocate = nullptr;
-
-    [[nodiscard]] bool valid()const noexcept{
-        return allocate != nullptr && reallocate != nullptr && deallocate != nullptr;
-    }
-};
+// Graphics allocator
 
 
 class GraphicsAllocator : NoCopy{
 public:
-    GraphicsAllocator(Alloc::PersistentArena& persistentArena, Alloc::GlobalArena& objectArena);
+    explicit GraphicsAllocator(Alloc::GlobalArena& objectArena);
 
 
 public:
-    [[nodiscard]] const SystemMemoryAllocator& getSystemMemoryAllocator()const noexcept{ return m_systemMemoryAllocator; }
     [[nodiscard]] Alloc::GlobalArena& getObjectArena()noexcept{ return m_objectArena; }
 
 
 private:
-    static void* allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
-    static void* reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope);
-    static void freePersistentSystemMemory(void* userData, void* memory);
-
-
-private:
-    Alloc::PersistentArena& m_persistentArena;
-    SystemMemoryAllocator m_systemMemoryAllocator;
     Alloc::GlobalArena& m_objectArena;
 };
 

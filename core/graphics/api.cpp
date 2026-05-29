@@ -6,10 +6,6 @@
 
 #include "backend_selection.h"
 
-#include <core/common/log.h>
-#include <global/sync.h>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -19,41 +15,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void* GraphicsAllocator::allocatePersistentSystemMemory(void* userData, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
-    static_cast<void>(scope);
-    if(!userData)
-        return nullptr;
-
-    auto* arena = static_cast<Alloc::PersistentArena*>(userData);
-    return arena->allocate(alignment, size);
-}
-
-void* GraphicsAllocator::reallocatePersistentSystemMemory(void* userData, void* original, usize size, usize alignment, SystemMemoryAllocationScope::Enum scope){
-    static_cast<void>(scope);
-    if(!userData)
-        return nullptr;
-
-    auto* arena = static_cast<Alloc::PersistentArena*>(userData);
-    return arena->reallocate(original, alignment, size);
-}
-
-void GraphicsAllocator::freePersistentSystemMemory(void* userData, void* memory){
-    if(!userData || !memory)
-        return;
-
-    auto* arena = static_cast<Alloc::PersistentArena*>(userData);
-    arena->deallocate(memory, 1, 0);
-}
-
-GraphicsAllocator::GraphicsAllocator(Alloc::PersistentArena& persistentArena, Alloc::GlobalArena& objectArena)
-    : m_persistentArena(persistentArena)
-    , m_systemMemoryAllocator{
-        &m_persistentArena
-        , &GraphicsAllocator::allocatePersistentSystemMemory
-        , &GraphicsAllocator::reallocatePersistentSystemMemory
-        , &GraphicsAllocator::freePersistentSystemMemory
-    }
-    , m_objectArena(objectArena)
+GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)
+    : m_objectArena(objectArena)
 {}
 
 

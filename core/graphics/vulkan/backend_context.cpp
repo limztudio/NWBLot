@@ -1843,7 +1843,6 @@ bool BackendContext::createDevice(){
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.vulkanLibraryName = m_deviceParams.backendLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
-    deviceDesc.systemMemoryAllocator = &m_allocator.getSystemMemoryAllocator();
 
     m_rhiDevice = CreateDevice(deviceDesc);
     if(!m_rhiDevice){

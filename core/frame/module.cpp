@@ -41,10 +41,9 @@ u32 Frame::queryProjectWorkerThreadCount(){
 
 
 Frame::Frame(void* inst, u16 width, u16 height)
-    : m_graphicsPersistentArena(s_GraphicsPersistentArenaSize)
-    , m_graphicsObjectArena("NWB::Core::Frame::GraphicsObjectArena")
+    : m_graphicsObjectArena("NWB::Core::Frame::GraphicsObjectArena")
     , m_appliedWindowTitle(m_graphicsObjectArena)
-    , m_graphicsAllocator(m_graphicsPersistentArena, m_graphicsObjectArena)
+    , m_graphicsAllocator(m_graphicsObjectArena)
     , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
     , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_projectObjectArena("NWB::Core::Frame::ProjectObjectArena")

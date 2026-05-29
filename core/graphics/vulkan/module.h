@@ -51,8 +51,6 @@ struct DeviceDesc{
     VkQueue computeQueue = VK_NULL_HANDLE;
     i32 computeQueueIndex = -1;
 
-    const SystemMemoryAllocator* systemMemoryAllocator = nullptr;
-
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;
 

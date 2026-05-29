@@ -2298,8 +2298,6 @@ private:
     bool m_aftermathEnabled = false;
     AftermathCrashDumpHelper m_aftermathCrashDumpHelper;
 
-    VkAllocationCallbacks m_allocationCallbacksStorage{};
-
     VulkanContext m_context;
     VulkanAllocator m_allocator;
     DescriptorHeapManager m_descriptorHeapManager;

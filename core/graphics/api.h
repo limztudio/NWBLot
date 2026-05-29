@@ -146,6 +146,9 @@ void HashCombine(usize& seed, const T& v){
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr u32 s_MaxRenderTargets = 8;
 inline constexpr u32 s_MaxViewports = 16;
 inline constexpr u32 s_MaxVertexAttributes = 16;

@@ -269,15 +269,6 @@ static bool CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     return true;
 }
 
-static GlobalUniquePtr<GraphicsBackend::Backend> CreateBackend(
-    const DeviceCreationParameters& deviceParams,
-    SwapChainRuntimeState& swapChainState,
-    GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool
-){
-    return MakeGlobalUnique<GraphicsBackend::Backend>(allocator.getObjectArena(), deviceParams, swapChainState, allocator, threadPool);
-}
-
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
     return
         combo.inputType == CooperativeVectorDataType::Float16
@@ -318,7 +309,7 @@ Graphics::Graphics(
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena())
-    , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool))
+    , m_backend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -337,7 +328,7 @@ bool Graphics::init(const Common::FrameData& data){
     m_swapChainState.backBufferHeight = data.height();
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 
-    Backend& backend = *m_backend;
+    Backend& backend = m_backend;
     backend.setPlatformFrameParam(data.frameParam());
 
     if(!m_instanceCreated){
@@ -368,7 +359,7 @@ bool Graphics::createHeadlessDevice(){
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
-    Backend& backend = *m_backend;
+    Backend& backend = m_backend;
     if(!m_instanceCreated){
         if(!backend.createInstance())
             return false;
@@ -390,7 +381,7 @@ bool Graphics::createInstance(const InstanceParameters& params){
         return false;
     }
 
-    if(!m_backend->createInstance())
+    if(!m_backend.createInstance())
         return false;
 
     m_instanceCreated = true;
@@ -434,7 +425,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
         m_swapChainState.backBufferHeight = height;
         m_swapChainState.vsyncEnabled = m_requestedVSync;
 
-        m_backend->resizeSwapChain();
+        m_backend.resizeSwapChain();
         backBufferResized();
     }
 
@@ -451,7 +442,7 @@ void Graphics::destroy(){
     m_gpuTiming.clear();
 
     m_swapChainFramebuffers.clear();
-    m_backend->destroy();
+    m_backend.destroy();
     m_instanceCreated = false;
 }
 
@@ -632,10 +623,10 @@ bool Graphics::animateRenderPresent(){
                 &Graphics::BackBufferResizingCallback,
                 &Graphics::BackBufferResizedCallback,
             };
-            if(m_backend->beginFrame(resizeCallbacks)){
+            if(m_backend.beginFrame(resizeCallbacks)){
                 render();
 
-                if(!m_backend->present())
+                if(!m_backend.present())
                     return false;
 
                 m_hasPresentedFrame = true;

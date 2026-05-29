@@ -140,10 +140,10 @@ public:
         return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
     }
 
-    Texture* getCurrentBackBuffer();
-    Texture* getBackBuffer(u32 index);
-    u32 getCurrentBackBufferIndex(){ return m_swapChainIndex; }
-    u32 getBackBufferCount(){ return static_cast<u32>(m_swapChainImages.size()); }
+    Texture* getCurrentBackBuffer()const;
+    Texture* getBackBuffer(u32 index)const;
+    u32 getCurrentBackBufferIndex()const{ return m_swapChainIndex; }
+    u32 getBackBufferCount()const{ return static_cast<u32>(m_swapChainImages.size()); }
 
     void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
     bool createInstance();

@@ -451,11 +451,11 @@ bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, c
     outStagingBuffer = nullptr;
     outStagingOffset = 0;
 
-    UploadManager* uploadMgr = m_device.m_uploadManager.get();
+    UploadManager& uploadMgr = m_device.m_uploadManager;
     void* cpuVA = nullptr;
 
     const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
-    if(!uploadMgr->suballocateBuffer(static_cast<u64>(dataSize), &outStagingBuffer, &outStagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
+    if(!uploadMgr.suballocateBuffer(static_cast<u64>(dataSize), &outStagingBuffer, &outStagingOffset, &cpuVA, m_currentCmdBuf.get(), m_desc.queueType, completedUploadVersion)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
         return false;

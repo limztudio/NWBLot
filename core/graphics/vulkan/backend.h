@@ -822,6 +822,7 @@ public:
 
 
 public:
+    void clear();
     bool suballocateBuffer(
         u64 size,
         Buffer** pBuffer,
@@ -2039,7 +2040,7 @@ private:
 private:
     CommandListParameters m_desc;
     TrackedCommandBufferPtr m_currentCmdBuf;
-    GlobalUniquePtr<StateTracker> m_stateTracker;
+    StateTracker m_stateTracker;
     bool m_enableAutomaticBarriers = true;
     bool m_renderPassActive = false;
     Framebuffer* m_renderPassFramebuffer = nullptr;
@@ -2184,7 +2185,7 @@ public:
     [[nodiscard]] u64 queueGetCompletedInstance(CommandQueue::Enum queue);
 
 public:
-    [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)const;
+    [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
 
 
 private:
@@ -2304,10 +2305,10 @@ private:
     DescriptorHeapManager m_descriptorHeapManager;
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;
-    GlobalUniquePtr<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
+    Optional<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
 
-    GlobalUniquePtr<UploadManager> m_uploadManager;
-    GlobalUniquePtr<UploadManager> m_scratchManager;
+    UploadManager m_uploadManager;
+    UploadManager m_scratchManager;
 };
 
 

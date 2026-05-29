@@ -79,6 +79,10 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     }
 {}
 UploadManager::~UploadManager(){
+    clear();
+}
+
+void UploadManager::clear(){
     m_chunkPool.clear();
     for(auto& chunks : m_activeChunks)
         chunks.clear();

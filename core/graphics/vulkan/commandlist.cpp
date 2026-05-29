@@ -19,7 +19,7 @@ NWB_VULKAN_BEGIN
 CommandList::CommandList(Device& device, const CommandListParameters& params)
     : RefCounter<GraphicsResource>(device.m_context.threadPool)
     , m_desc(params)
-    , m_stateTracker(MakeGlobalUnique<StateTracker>(device.m_context.objectArena, device.m_context))
+    , m_stateTracker(device.m_context)
     , m_device(device)
     , m_context(device.m_context)
     , m_aftermathMarkerTracker(device.m_context.objectArena)
@@ -41,16 +41,11 @@ void CommandList::discardUnsubmittedUploadChunks(){
     if(!m_currentCmdBuf)
         return;
 
-    if(!m_device.m_uploadManager && !m_device.m_scratchManager)
-        return;
-
     TrackedCommandBuffer* owner = m_currentCmdBuf.get();
     const u64 reusableVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
 
-    if(m_device.m_uploadManager)
-        m_device.m_uploadManager->discardChunks(m_desc.queueType, owner, reusableVersion);
-    if(m_device.m_scratchManager)
-        m_device.m_scratchManager->discardChunks(m_desc.queueType, owner, reusableVersion);
+    m_device.m_uploadManager.discardChunks(m_desc.queueType, owner, reusableVersion);
+    m_device.m_scratchManager.discardChunks(m_desc.queueType, owner, reusableVersion);
 }
 
 void CommandList::open(){
@@ -85,7 +80,7 @@ void CommandList::open(){
         return;
     }
 
-    m_stateTracker->reset();
+    m_stateTracker.reset();
 }
 
 void CommandList::close(){
@@ -95,7 +90,7 @@ void CommandList::close(){
     }
 
     endActiveRenderPass();
-    m_stateTracker->appendKeepInitialStateBarriers(m_pendingImageBarriers, m_pendingBufferBarriers);
+    m_stateTracker.appendKeepInitialStateBarriers(m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
 
     const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
@@ -115,7 +110,7 @@ void CommandList::clearState(){
     if(m_currentCmdBuf && m_renderPassActive)
         endActiveRenderPass();
 
-    m_stateTracker->reset();
+    m_stateTracker.reset();
 
     m_currentGraphicsState = {};
     m_currentComputeState = {};

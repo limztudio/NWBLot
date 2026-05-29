@@ -236,6 +236,8 @@ Device::Device(const DeviceDesc& desc)
     , m_descriptorHeapManager(m_context, m_allocator)
     , m_pipelineCacheDirectory(desc.pipelineCacheDirectory)
     , m_pipelineCacheVolumeName(m_context.objectArena)
+    , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
+    , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true)
 {
     VkResult res = VK_SUCCESS;
 
@@ -510,42 +512,20 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
-        auto& arena = m_context.objectArena;
-        auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
-        m_queues[static_cast<u32>(CommandQueue::Graphics)] = GlobalUniquePtr<Queue>(q, GlobalUniquePtr<Queue>::deleter_type(arena));
+        m_queues[static_cast<u32>(CommandQueue::Graphics)].emplace(m_context, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
-        auto& arena = m_context.objectArena;
-        auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
-        m_queues[static_cast<u32>(CommandQueue::Compute)] = GlobalUniquePtr<Queue>(q, GlobalUniquePtr<Queue>::deleter_type(arena));
+        m_queues[static_cast<u32>(CommandQueue::Compute)].emplace(m_context, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
     }
     if(desc.transferQueue && desc.transferQueueIndex >= 0){
-        auto& arena = m_context.objectArena;
-        auto* mem = arena.allocate<Queue>(1);
-        auto* q = new(mem) Queue(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
-        m_queues[static_cast<u32>(CommandQueue::Copy)] = GlobalUniquePtr<Queue>(q, GlobalUniquePtr<Queue>::deleter_type(arena));
-    }
-
-    {
-        auto& arena = m_context.objectArena;
-        auto* mem = arena.allocate<UploadManager>(1);
-        auto* p = new(mem) UploadManager(*this, s_DefaultUploadChunkSize, 0, false);
-        m_uploadManager = GlobalUniquePtr<UploadManager>(p, GlobalUniquePtr<UploadManager>::deleter_type(arena));
-    }
-    {
-        auto& arena = m_context.objectArena;
-        auto* mem = arena.allocate<UploadManager>(1);
-        auto* p = new(mem) UploadManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true);
-        m_scratchManager = GlobalUniquePtr<UploadManager>(p, GlobalUniquePtr<UploadManager>::deleter_type(arena));
+        m_queues[static_cast<u32>(CommandQueue::Copy)].emplace(m_context, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
     }
 }
 Device::~Device(){
     waitForIdle();
 
-    m_uploadManager.reset();
-    m_scratchManager.reset();
+    m_uploadManager.clear();
+    m_scratchManager.clear();
 
     m_descriptorHeapManager.shutdown();
 
@@ -671,10 +651,10 @@ void Device::savePipelineCacheData(){
     );
 }
 
-Queue* Device::getQueue(CommandQueue::Enum queueType)const{
+Queue* Device::getQueue(CommandQueue::Enum queueType){
     auto index = static_cast<u32>(queueType);
     if(index < static_cast<u32>(CommandQueue::kCount))
-        return m_queues[index].get();
+        return m_queues[index] ? &*m_queues[index] : nullptr;
     return nullptr;
 }
 
@@ -708,10 +688,8 @@ u64 Device::executeCommandLists(CommandList* const* pCommandLists, usize numComm
 
     if(!submittedOwners.empty()){
         if(submittedWork){
-            if(m_uploadManager)
-                m_uploadManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
-            if(m_scratchManager)
-                m_scratchManager->submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+            m_uploadManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+            m_scratchManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
         }
         else{
             const auto ownerStillRecorded = [&](TrackedCommandBuffer* owner) -> bool {
@@ -729,10 +707,8 @@ u64 Device::executeCommandLists(CommandList* const* pCommandLists, usize numComm
             for(TrackedCommandBuffer* owner : submittedOwners){
                 if(ownerStillRecorded(owner))
                     continue;
-                if(m_uploadManager)
-                    m_uploadManager->discardChunks(executionQueue, owner, reusableVersion);
-                if(m_scratchManager)
-                    m_scratchManager->discardChunks(executionQueue, owner, reusableVersion);
+                m_uploadManager.discardChunks(executionQueue, owner, reusableVersion);
+                m_scratchManager.discardChunks(executionQueue, owner, reusableVersion);
             }
         }
     }
@@ -804,9 +780,9 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void*, usize){
     case Feature::VirtualResources:
         return false;
     case Feature::ComputeQueue:
-        return m_queues[static_cast<u32>(CommandQueue::Compute)] != nullptr;
+        return m_queues[static_cast<u32>(CommandQueue::Compute)].has_value();
     case Feature::CopyQueue:
-        return m_queues[static_cast<u32>(CommandQueue::Copy)] != nullptr;
+        return m_queues[static_cast<u32>(CommandQueue::Copy)].has_value();
     case Feature::ConstantBufferRanges:
         return true;
     default:

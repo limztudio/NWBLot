@@ -366,13 +366,13 @@ bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
     return false;
 }
 
-Texture* BackendContext::getCurrentBackBuffer(){
+Texture* BackendContext::getCurrentBackBuffer()const{
     if(m_swapChainIndex < m_swapChainImages.size())
         return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
     return nullptr;
 }
 
-Texture* BackendContext::getBackBuffer(u32 index){
+Texture* BackendContext::getBackBuffer(u32 index)const{
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
     return nullptr;

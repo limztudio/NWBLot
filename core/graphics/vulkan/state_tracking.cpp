@@ -240,7 +240,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         return;
 
     Texture& texture = *textureResource;
-    if(m_stateTracker->isPermanentTexture(texture))
+    if(m_stateTracker.isPermanentTexture(texture))
         return;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
@@ -251,7 +251,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     bool firstSubresource = true;
     bool needsBarrier = false;
     bool usePerSubresourceBarriers = false;
-    const bool uavBarrierEnabled = stateBits == ResourceStates::UnorderedAccess && m_stateTracker->isUavBarrierEnabledForTexture(texture);
+    const bool uavBarrierEnabled = stateBits == ResourceStates::UnorderedAccess && m_stateTracker.isUavBarrierEnabledForTexture(texture);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
@@ -260,7 +260,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-            if(!m_stateTracker->getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState))
+            if(!m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState))
                 return;
 
             if(firstSubresource){
@@ -320,7 +320,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
             stateBits
         );
 
-        m_stateTracker->beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
+        m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
 
         if(!m_enableAutomaticBarriers){
             m_pendingImageBarriers.push_back(barrier);
@@ -335,7 +335,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         return;
     }
 
-    m_stateTracker->beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
+    m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
 
     if(!m_enableAutomaticBarriers)
         return;
@@ -357,17 +357,17 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
 
     Buffer& buffer = *bufferResource;
-    if(m_stateTracker->isPermanentBuffer(buffer))
+    if(m_stateTracker.isPermanentBuffer(buffer))
         return;
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
-    if(!m_stateTracker->getTransientBufferState(buffer, oldState))
+    if(!m_stateTracker.getTransientBufferState(buffer, oldState))
         return;
 
     const bool needsUavBarrier =
         oldState == ResourceStates::UnorderedAccess
         && stateBits == ResourceStates::UnorderedAccess
-        && m_stateTracker->isUavBarrierEnabledForBuffer(buffer)
+        && m_stateTracker.isUavBarrierEnabledForBuffer(buffer)
     ;
 
     if(oldState == stateBits && !needsUavBarrier)
@@ -382,7 +382,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
-    m_stateTracker->beginTrackingTransientBuffer(buffer, stateBits);
+    m_stateTracker.beginTrackingTransientBuffer(buffer, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingBufferBarriers.push_back(barrier);
@@ -410,7 +410,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         return;
 
     setTextureState(texture, s_AllSubresources, stateBits);
-    m_stateTracker->setPermanentTextureState(*texture, stateBits);
+    m_stateTracker.setPermanentTextureState(*texture, stateBits);
 }
 
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
@@ -418,7 +418,7 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
         return;
 
     setBufferState(buffer, stateBits);
-    m_stateTracker->setPermanentBufferState(*buffer, stateBits);
+    m_stateTracker.setPermanentBufferState(*buffer, stateBits);
 }
 
 
@@ -648,29 +648,29 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
 void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers){
     if(!texture)
         return;
-    m_stateTracker->setEnableUavBarriersForTexture(*texture, enableBarriers);
+    m_stateTracker.setEnableUavBarriersForTexture(*texture, enableBarriers);
 }
 
 void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
-    m_stateTracker->setEnableUavBarriersForBuffer(*buffer, enableBarriers);
+    m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
 }
 
 void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    m_stateTracker->beginTrackingTexture(texture, subresources, stateBits);
+    m_stateTracker.beginTrackingTexture(texture, subresources, stateBits);
 }
 
 void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
-    m_stateTracker->beginTrackingBuffer(buffer, stateBits);
+    m_stateTracker.beginTrackingBuffer(buffer, stateBits);
 }
 
 ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel){
-    return m_stateTracker->getTextureState(texture, arraySlice, mipLevel);
+    return m_stateTracker.getTextureState(texture, arraySlice, mipLevel);
 }
 
 ResourceStates::Mask CommandList::getBufferState(Buffer* buffer){
-    return m_stateTracker->getBufferState(buffer);
+    return m_stateTracker.getBufferState(buffer);
 }
 
 

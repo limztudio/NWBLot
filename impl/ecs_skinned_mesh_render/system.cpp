@@ -4,7 +4,6 @@
 
 #include "system.h"
 
-#include "runtime_cache.h"
 #include "resource_names.h"
 
 #include <core/common/log.h>
@@ -79,7 +78,7 @@ SkinnedMeshSystem::SkinnedMeshSystem(
     , m_assetManager(assetManager)
     , m_runtimeMeshRegistry(runtimeMeshRegistry)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_runtimeMeshCache(Core::MakeGlobalUnique<SkinnedMeshRuntimeMeshCache>(arena, arena, graphics, assetManager))
+    , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {
     writeAccess<SkinnedMeshComponent>();
@@ -96,7 +95,7 @@ SkinnedMeshSystem::~SkinnedMeshSystem(){
 
 void SkinnedMeshSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(delta);
-    m_runtimeMeshCache->update(world);
+    m_runtimeMeshCache.update(world);
     pruneRuntimeResources();
 }
 
@@ -109,7 +108,7 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     if(!renderer || !renderer->runtimeMesh.valid())
         return false;
 
-    const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(renderer->runtimeMesh);
+    const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer->runtimeMesh);
     if(!instance || instance->entity != entity)
         return false;
     if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
@@ -203,7 +202,7 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
             if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !renderer.runtimeMesh.valid())
                 return;
 
-            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(renderer.runtimeMesh);
+            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer.runtimeMesh);
             if(!instance)
                 return;
 #if defined(NWB_DEBUG)
@@ -245,7 +244,7 @@ void SkinnedMeshSystem::pruneRuntimeResources(){
 
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
         const RuntimeResources& resources = it.value();
-        const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache->findInstance(resources.handle);
+        const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(resources.handle);
         if(instance && instance->valid() && instance->editRevision == resources.editRevision){
             ++it;
             continue;
@@ -257,7 +256,7 @@ void SkinnedMeshSystem::pruneRuntimeResources(){
 
 void SkinnedMeshSystem::invalidateResources(){
     m_runtimeResources.clear();
-    m_runtimeMeshCache->clear();
+    m_runtimeMeshCache.clear();
 
     m_skinningBindingLayout.reset();
     m_skinningComputeShader.reset();

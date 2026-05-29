@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "runtime_cache.h"
+
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
 #include <impl/ecs_mesh_runtime/mesh.h>
@@ -39,7 +41,6 @@ NWB_IMPL_BEGIN
 
 
 class Shader;
-class SkinnedMeshRuntimeMeshCache;
 struct SkinnedMeshRuntimeMeshInstance;
 struct SkinnedMeshSkinInfluenceGpu;
 
@@ -156,7 +157,7 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     IRuntimeMeshRegistry& m_runtimeMeshRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
-    Core::GlobalUniquePtr<SkinnedMeshRuntimeMeshCache> m_runtimeMeshCache;
+    SkinnedMeshRuntimeMeshCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
     Core::BindingLayoutHandle m_skinningBindingLayout;

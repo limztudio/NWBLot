@@ -101,12 +101,54 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         CheckGeneratedMaterialBindBinaryConstants(context, halfGeneratedSourceView, halfMaterial);
     }
 
+    Path compactRoot;
+    Path compactOutputDirectory;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, CookMaterialBindMaterialIntegrationWithMeshSource(
+        s_CompactIntegerMaterialBindSource,
+        s_CompactIntegerMaterialMeta,
+        s_CompactIntegerMaterialBindShaderProbeSource,
+        "material_bind_compact_integer_material_integration",
+        testArena,
+        compactRoot,
+        compactOutputDirectory
+    ));
+
+    const Path compactGeneratedIncludePath =
+        compactRoot / "cache" / "tests" / "material_bind_includes"
+        / "project" / "material_interfaces" / "test_surface.bind"
+    ;
+    NWB::Impl::ShaderCook::CookString compactGeneratedSource(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(compactGeneratedIncludePath, compactGeneratedSource));
+    const AStringView compactGeneratedSourceView(compactGeneratedSource.data(), compactGeneratedSource.size());
+    CheckGeneratedCompactIntegerMaterialBindSource(context, compactGeneratedSourceView);
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedCompactAsset;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedMaterial(
+        context,
+        testArena,
+        compactOutputDirectory,
+        Name("project/materials/test_material"),
+        loadedCompactAsset
+    ));
+    if(loadedCompactAsset){
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedCompactAsset->assetType() == NWB::Impl::Material::AssetTypeName());
+        const NWB::Impl::Material& compactMaterial = static_cast<const NWB::Impl::Material&>(*loadedCompactAsset);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(
+            context,
+            compactMaterial.materialInterface() == Name("project/material_interfaces/test_surface")
+        );
+        CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(context, compactMaterial);
+        CheckGeneratedMaterialBindBinaryConstants(context, compactGeneratedSourceView, compactMaterial);
+    }
+
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 
     ErrorCode errorCode;
     static_cast<void>(RemoveAllIfExists(root, errorCode));
     errorCode.clear();
     static_cast<void>(RemoveAllIfExists(halfRoot, errorCode));
+    errorCode.clear();
+    static_cast<void>(RemoveAllIfExists(compactRoot, errorCode));
 
 #if defined(NWB_FINAL)
     Path invalidRoot;

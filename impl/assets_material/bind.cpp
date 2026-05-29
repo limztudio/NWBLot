@@ -182,11 +182,15 @@ static bool ParseMaterialParameterTypeText(
     };
 
     return
-        tryMatch(AStringView("float"), MaterialParameterValueType::Float)
+        tryMatch(AStringView("bool"), MaterialParameterValueType::Bool)
+        || tryMatch(AStringView("char"), MaterialParameterValueType::Char)
+        || tryMatch(AStringView("uchar"), MaterialParameterValueType::UChar)
+        || tryMatch(AStringView("short"), MaterialParameterValueType::Short)
+        || tryMatch(AStringView("ushort"), MaterialParameterValueType::UShort)
         || tryMatch(AStringView("int"), MaterialParameterValueType::Int)
         || tryMatch(AStringView("uint"), MaterialParameterValueType::UInt)
-        || tryMatch(AStringView("bool"), MaterialParameterValueType::Bool)
         || tryMatch(AStringView("half"), MaterialParameterValueType::Half)
+        || tryMatch(AStringView("float"), MaterialParameterValueType::Float)
     ;
 }
 
@@ -693,24 +697,81 @@ static bool ParseMaterialParameterF32Token(const char* begin, const char* end, f
     return true;
 }
 
+static bool ParseMaterialParameterSignedToken(
+    const char* begin,
+    const char* end,
+    const i64 minValue,
+    const i64 maxValue,
+    const u32 storageMask,
+    u32& outValue
+){
+    i64 parsed = 0;
+    if(!ParseI64FromChars(begin, end, parsed))
+        return false;
+    if(parsed < minValue || parsed > maxValue)
+        return false;
+
+    outValue = static_cast<u32>(static_cast<u64>(parsed) & storageMask);
+    return true;
+}
+
+static bool ParseMaterialParameterUnsignedToken(
+    const char* begin,
+    const char* end,
+    const u64 maxValue,
+    u32& outValue
+){
+    u64 parsed = 0u;
+    if(!ParseU64FromChars(begin, end, parsed) || parsed > maxValue)
+        return false;
+
+    outValue = static_cast<u32>(parsed);
+    return true;
+}
+
 static bool ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type, u32& outValue){
     AStringView numericToken = token;
     if(type == MaterialParameterValueType::Float || type == MaterialParameterValueType::Half)
         numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
-    else if(type == MaterialParameterValueType::UInt)
+    else if(
+        type == MaterialParameterValueType::UChar
+        || type == MaterialParameterValueType::UShort
+        || type == MaterialParameterValueType::UInt
+    )
         numericToken = StripMaterialNumericSuffix(token, 'u', 'U');
 
     const char* begin = numericToken.data();
     const char* end = begin + numericToken.size();
 
     switch(type){
-    case MaterialParameterValueType::Float:{
-        f32 converted = 0.f;
-        if(!ParseMaterialParameterF32Token(begin, end, converted))
-            return false;
-        NWB_MEMCPY(&outValue, sizeof(outValue), &converted, sizeof(converted));
-        return true;
-    }
+    case MaterialParameterValueType::Bool:
+        return ParseMaterialBoolToken(token, outValue);
+    case MaterialParameterValueType::Char:
+        return ParseMaterialParameterSignedToken(begin, end, -128, 127, 0xffu, outValue);
+    case MaterialParameterValueType::UChar:
+        return ParseMaterialParameterUnsignedToken(begin, end, static_cast<u64>(Limit<u8>::s_Max), outValue);
+    case MaterialParameterValueType::Short:
+        return ParseMaterialParameterSignedToken(
+            begin,
+            end,
+            static_cast<i64>(Limit<i16>::s_Min),
+            static_cast<i64>(Limit<i16>::s_Max),
+            0xffffu,
+            outValue
+        );
+    case MaterialParameterValueType::UShort:
+        return ParseMaterialParameterUnsignedToken(begin, end, static_cast<u64>(Limit<u16>::s_Max), outValue);
+    case MaterialParameterValueType::Int:
+        return ParseMaterialParameterSignedToken(
+            begin,
+            end,
+            static_cast<i64>(Limit<i32>::s_Min),
+            static_cast<i64>(Limit<i32>::s_Max),
+            Limit<u32>::s_Max,
+            outValue
+        );
+    case MaterialParameterValueType::UInt:
+        return ParseMaterialParameterUnsignedToken(begin, end, static_cast<u64>(Limit<u32>::s_Max), outValue);
     case MaterialParameterValueType::Half:{
         f32 converted = 0.f;
         if(!ParseMaterialParameterF32Token(begin, end, converted))
@@ -719,29 +780,41 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
         outValue = static_cast<u32>(ConvertFloatToHalf(converted));
         return true;
     }
-    case MaterialParameterValueType::Int:{
-        i64 parsed = 0;
-        if(!ParseI64FromChars(begin, end, parsed))
+    case MaterialParameterValueType::Float:{
+        f32 converted = 0.f;
+        if(!ParseMaterialParameterF32Token(begin, end, converted))
             return false;
-        if(parsed < static_cast<i64>(Limit<i32>::s_Min) || parsed > static_cast<i64>(Limit<i32>::s_Max))
-            return false;
-
-        outValue = static_cast<u32>(static_cast<i32>(parsed));
+        NWB_MEMCPY(&outValue, sizeof(outValue), &converted, sizeof(converted));
         return true;
     }
-    case MaterialParameterValueType::UInt:{
-        u64 parsed = 0u;
-        if(!ParseU64FromChars(begin, end, parsed) || parsed > static_cast<u64>(Limit<u32>::s_Max))
-            return false;
-
-        outValue = static_cast<u32>(parsed);
-        return true;
-    }
-    case MaterialParameterValueType::Bool:
-        return ParseMaterialBoolToken(token, outValue);
     default:
         return false;
     }
+}
+
+static bool StoreMaterialTypedValueBytes(
+    MaterialTypedValueData& outParameter,
+    const usize byteOffset,
+    const void* bytes,
+    const usize byteSize
+){
+    if(byteOffset > sizeof(outParameter.data) || byteSize > sizeof(outParameter.data) - byteOffset)
+        return false;
+
+    u8* outBytes = reinterpret_cast<u8*>(&outParameter.data);
+    NWB_MEMCPY(outBytes + byteOffset, sizeof(outParameter.data) - byteOffset, bytes, byteSize);
+    return true;
+}
+
+template<typename ValueType>
+static bool StoreMaterialTypedValueScalar(
+    MaterialTypedValueData& outParameter,
+    const u32 componentIndex,
+    const u32 value
+){
+    const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
+    const ValueType typedValue = static_cast<ValueType>(value);
+    return StoreMaterialTypedValueBytes(outParameter, byteOffset, &typedValue, sizeof(typedValue));
 }
 
 static bool StoreMaterialTypedValueComponent(
@@ -753,19 +826,21 @@ static bool StoreMaterialTypedValueComponent(
     if(componentIndex >= 4u)
         return false;
 
-    if(valueType == MaterialParameterValueType::Half){
-        const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(Half);
-        if(byteOffset > sizeof(outParameter.data) || sizeof(Half) > sizeof(outParameter.data) - byteOffset)
-            return false;
-
-        const Half halfValue = static_cast<Half>(value);
-        u8* bytes = reinterpret_cast<u8*>(&outParameter.data);
-        NWB_MEMCPY(bytes + byteOffset, sizeof(outParameter.data) - byteOffset, &halfValue, sizeof(halfValue));
+    switch(valueType){
+    case MaterialParameterValueType::Bool:
+        return StoreMaterialTypedValueScalar<u8>(outParameter, componentIndex, value != 0u ? 1u : 0u);
+    case MaterialParameterValueType::Char:
+    case MaterialParameterValueType::UChar:
+        return StoreMaterialTypedValueScalar<u8>(outParameter, componentIndex, value);
+    case MaterialParameterValueType::Short:
+    case MaterialParameterValueType::UShort:
+        return StoreMaterialTypedValueScalar<u16>(outParameter, componentIndex, value);
+    case MaterialParameterValueType::Half:
+        return StoreMaterialTypedValueScalar<Half>(outParameter, componentIndex, value);
+    default:
+        outParameter.data.raw[componentIndex] = value;
         return true;
     }
-
-    outParameter.data.raw[componentIndex] = value;
-    return true;
 }
 
 static bool BuildMaterialTypedValueData(

@@ -645,49 +645,55 @@ static bool RegisterGeneratedMaterialBindSymbol(
 }
 
 static AStringView MaterialBindFieldLookupFunctionName(const MaterialLayoutFieldType::Enum fieldType){
-    static constexpr AStringView s_FloatLookupNames[] = {
+    static constexpr AStringView s_LookupNames[] = {
+        "nwbMaterialLoadBool",
+        "nwbMaterialLoadBool2",
+        "nwbMaterialLoadBool3",
+        "nwbMaterialLoadBool4",
+        "nwbMaterialLoadChar",
+        "nwbMaterialLoadChar2",
+        "nwbMaterialLoadChar3",
+        "nwbMaterialLoadChar4",
+        "nwbMaterialLoadUChar",
+        "nwbMaterialLoadUChar2",
+        "nwbMaterialLoadUChar3",
+        "nwbMaterialLoadUChar4",
+        "nwbMaterialLoadShort",
+        "nwbMaterialLoadShort2",
+        "nwbMaterialLoadShort3",
+        "nwbMaterialLoadShort4",
+        "nwbMaterialLoadUShort",
+        "nwbMaterialLoadUShort2",
+        "nwbMaterialLoadUShort3",
+        "nwbMaterialLoadUShort4",
+        "nwbMaterialLoadInt",
+        "nwbMaterialLoadInt2",
+        "nwbMaterialLoadInt3",
+        "nwbMaterialLoadInt4",
+        "nwbMaterialLoadUInt",
+        "nwbMaterialLoadUInt2",
+        "nwbMaterialLoadUInt3",
+        "nwbMaterialLoadUInt4",
+        "nwbMaterialLoadHalf",
+        "nwbMaterialLoadHalf2",
+        "nwbMaterialLoadHalf3",
+        "nwbMaterialLoadHalf4",
         "nwbMaterialLoadFloat",
         "nwbMaterialLoadFloat2",
         "nwbMaterialLoadFloat3",
         "nwbMaterialLoadFloat4"
     };
-    static constexpr AStringView s_IntLookupNames[] = {
-        "nwbMaterialLoadInt",
-        "nwbMaterialLoadInt2",
-        "nwbMaterialLoadInt3",
-        "nwbMaterialLoadInt4"
-    };
-    static constexpr AStringView s_UIntLookupNames[] = {
-        "nwbMaterialLoadUInt",
-        "nwbMaterialLoadUInt2",
-        "nwbMaterialLoadUInt3",
-        "nwbMaterialLoadUInt4"
-    };
-    static constexpr AStringView s_BoolLookupNames[] = {
-        "nwbMaterialLoadBool",
-        "nwbMaterialLoadBool2",
-        "nwbMaterialLoadBool3",
-        "nwbMaterialLoadBool4"
-    };
-    static constexpr AStringView s_HalfLookupNames[] = {
-        "nwbMaterialLoadHalf",
-        "nwbMaterialLoadHalf2",
-        "nwbMaterialLoadHalf3",
-        "nwbMaterialLoadHalf4"
-    };
+    static_assert(
+        (sizeof(s_LookupNames) / sizeof(s_LookupNames[0]))
+        == static_cast<usize>(
+            static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u
+        )
+    );
 
-    const u32 componentCount = MaterialLayoutFieldComponentCount(fieldType);
-    if(componentCount == 0u || componentCount > 4u)
+    if(!IsValidMaterialLayoutFieldType(fieldType))
         return AStringView();
 
-    switch(MaterialLayoutFieldValueType(fieldType)){
-    case MaterialParameterValueType::Float: return s_FloatLookupNames[componentCount - 1u];
-    case MaterialParameterValueType::Int: return s_IntLookupNames[componentCount - 1u];
-    case MaterialParameterValueType::UInt: return s_UIntLookupNames[componentCount - 1u];
-    case MaterialParameterValueType::Bool: return s_BoolLookupNames[componentCount - 1u];
-    case MaterialParameterValueType::Half: return s_HalfLookupNames[componentCount - 1u];
-    default: return AStringView();
-    }
+    return s_LookupNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
 }
 
 static bool AppendMaterialBindConstantPrefix(

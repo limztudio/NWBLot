@@ -106,7 +106,7 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 60u;"
+        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 48u;"
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
@@ -122,7 +122,7 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
         generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE = 56u;"
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE = 44u;"
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "struct NwbTestSurfaceMaterial"));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
@@ -201,6 +201,33 @@ static void CheckGeneratedMixedHalfMaterialBindSource(TestContext& context, cons
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
 }
 
+static void CheckGeneratedCompactIntegerMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
+    const AStringView expectedSnippets[] = {
+        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 20u;",
+        "bool4 enabled;",
+        "char4 signed_bytes;",
+        "uchar4 bytes;",
+        "short2 signed_words;",
+        "ushort2 words;",
+        "static const bool4 NWB_MATERIAL_BIND_SURFACE_ENABLED_DEFAULT = bool4(true, false, true, false);",
+        "static const char4 NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_DEFAULT = char4(-1, 0, 1, 127);",
+        "static const uchar4 NWB_MATERIAL_BIND_SURFACE_BYTES_DEFAULT = uchar4(0u, 1u, 254u, 255u);",
+        "static const short2 NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_DEFAULT = short2(-32768, 32767);",
+        "static const ushort2 NWB_MATERIAL_BIND_SURFACE_WORDS_DEFAULT = ushort2(0u, 65535u);",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET = 0u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET = 4u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET = 8u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET = 12u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET = 16u;",
+        "nwbMaterialLoadBool4(instance, NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET)",
+        "nwbMaterialLoadChar4(instance, NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET)",
+        "nwbMaterialLoadUChar4(instance, NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET)",
+        "nwbMaterialLoadShort2(instance, NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET)",
+        "nwbMaterialLoadUShort2(instance, NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET)",
+    };
+    CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
+}
+
 static const NWB::Impl::MaterialTypedLayoutBlock* FindMaterialTypedLayoutBlock(
     const NWB::Impl::Material& material,
     const AStringView blockName
@@ -272,20 +299,32 @@ static void CheckMaterialTypedLayoutFields(
         );
 }
 
-static f32 LoadMaterialTypedLayoutDefaultFloat(const NWB::Impl::MaterialTypedLayoutField& field, const u32 componentIndex){
-    f32 value = 0.f;
-    NWB_MEMCPY(&value, sizeof(value), &field.defaultValue.raw[componentIndex], sizeof(field.defaultValue.raw[componentIndex]));
-    return value;
-}
-
-static f32 LoadMaterialTypedLayoutDefaultHalf(const NWB::Impl::MaterialTypedLayoutField& field, const u32 componentIndex){
-    Half value = 0u;
-    const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(Half);
+template<typename ValueType>
+static ValueType LoadMaterialTypedLayoutDefaultPOD(
+    const NWB::Impl::MaterialTypedLayoutField& field,
+    const u32 componentIndex
+){
+    ValueType value = {};
+    const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
     if(byteOffset <= sizeof(field.defaultValue) && sizeof(value) <= sizeof(field.defaultValue) - byteOffset){
         const u8* bytes = reinterpret_cast<const u8*>(&field.defaultValue);
         NWB_MEMCPY(&value, sizeof(value), bytes + byteOffset, sizeof(value));
     }
-    return ConvertHalfToFloat(value);
+    return value;
+}
+
+template<typename ValueType, usize ExpectedDefaultCount>
+static void CheckMaterialTypedLayoutDefaultPODValues(
+    TestContext& context,
+    const NWB::Impl::MaterialTypedLayoutField& field,
+    const ValueType (&expectedDefaults)[ExpectedDefaultCount]
+){
+    for(usize componentIndex = 0u; componentIndex < ExpectedDefaultCount; ++componentIndex){
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(
+            context,
+            LoadMaterialTypedLayoutDefaultPOD<ValueType>(field, static_cast<u32>(componentIndex)) == expectedDefaults[componentIndex]
+        );
+    }
 }
 
 template<usize ExpectedDefaultCount>
@@ -312,7 +351,8 @@ static void CheckMaterialTypedLayoutHalfField(
     for(usize componentIndex = 0u; componentIndex < ExpectedDefaultCount; ++componentIndex){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(
             context,
-            LoadMaterialTypedLayoutDefaultHalf(*field, static_cast<u32>(componentIndex)) == expectedDefaults[componentIndex]
+            ConvertHalfToFloat(LoadMaterialTypedLayoutDefaultPOD<Half>(*field, static_cast<u32>(componentIndex)))
+            == expectedDefaults[componentIndex]
         );
     }
 }
@@ -368,41 +408,27 @@ static void CheckMaterialTypedBlockHalfRawValues(
     }
 }
 
-struct ExpectedTypedBlockFloatValue{
+template<typename ValueType>
+struct ExpectedTypedBlockValue{
     AStringView blockName;
     u32 byteOffset = 0u;
-    f32 value = 0.f;
+    ValueType value = {};
 };
 
-template<usize ExpectedValueCount>
-static void CheckMaterialTypedBlockFloatValues(
+using ExpectedTypedBlockFloatValue = ExpectedTypedBlockValue<f32>;
+using ExpectedTypedBlockU32Value = ExpectedTypedBlockValue<u32>;
+using ExpectedTypedBlockU8Value = ExpectedTypedBlockValue<u8>;
+using ExpectedTypedBlockI16Value = ExpectedTypedBlockValue<i16>;
+using ExpectedTypedBlockU16Value = ExpectedTypedBlockValue<u16>;
+
+template<typename ValueType, usize ExpectedValueCount>
+static void CheckMaterialTypedBlockValues(
     TestContext& context,
     const NWB::Impl::Material& material,
-    const ExpectedTypedBlockFloatValue (&expectedValues)[ExpectedValueCount]
+    const ExpectedTypedBlockValue<ValueType> (&expectedValues)[ExpectedValueCount]
 ){
-    f32 loadedValue = 0.f;
-    for(const ExpectedTypedBlockFloatValue& expectedValue : expectedValues){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
-            LoadMaterialTypedBlockPOD(material, expectedValue.blockName, expectedValue.byteOffset, loadedValue)
-            && loadedValue == expectedValue.value
-        );
-    }
-}
-
-struct ExpectedTypedBlockU32Value{
-    AStringView blockName;
-    u32 byteOffset = 0u;
-    u32 value = 0u;
-};
-
-template<usize ExpectedValueCount>
-static void CheckMaterialTypedBlockU32Values(
-    TestContext& context,
-    const NWB::Impl::Material& material,
-    const ExpectedTypedBlockU32Value (&expectedValues)[ExpectedValueCount]
-){
-    u32 loadedValue = 0u;
-    for(const ExpectedTypedBlockU32Value& expectedValue : expectedValues){
+    ValueType loadedValue = {};
+    for(const ExpectedTypedBlockValue<ValueType>& expectedValue : expectedValues){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context,
             LoadMaterialTypedBlockPOD(material, expectedValue.blockName, expectedValue.byteOffset, loadedValue)
             && loadedValue == expectedValue.value
@@ -436,8 +462,10 @@ static void CheckMinimalMaterialTypedLayout(
             NWB::Impl::MaterialLayoutFieldType::Float,
             0u
         );
-        if(fadeAlpha)
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*fadeAlpha, 0u) == 1.0f);
+        if(fadeAlpha){
+            const f32 fadeAlphaDefaults[] = { 1.0f };
+            CheckMaterialTypedLayoutDefaultPODValues(context, *fadeAlpha, fadeAlphaDefaults);
+        }
     }
 
     const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
@@ -445,7 +473,7 @@ static void CheckMinimalMaterialTypedLayout(
     if(surfaceBlock){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->fieldCount == 5u);
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->byteSize == 56u);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->byteSize == 44u);
 
         const NWB::Impl::MaterialTypedLayoutField* baseColor = CheckMaterialTypedLayoutField(
             context,
@@ -456,8 +484,8 @@ static void CheckMinimalMaterialTypedLayout(
             0u
         );
         if(baseColor){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*baseColor, 0u) == 1.0f);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*baseColor, 3u) == 1.0f);
+            const f32 baseColorDefaults[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+            CheckMaterialTypedLayoutDefaultPODValues(context, *baseColor, baseColorDefaults);
         }
 
         const NWB::Impl::MaterialTypedLayoutField* roughness = CheckMaterialTypedLayoutField(
@@ -468,8 +496,10 @@ static void CheckMinimalMaterialTypedLayout(
             NWB::Impl::MaterialLayoutFieldType::Float,
             16u
         );
-        if(roughness)
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadMaterialTypedLayoutDefaultFloat(*roughness, 0u) == 0.5f);
+        if(roughness){
+            const f32 roughnessDefaults[] = { 0.5f };
+            CheckMaterialTypedLayoutDefaultPODValues(context, *roughness, roughnessDefaults);
+        }
 
         const NWB::Impl::MaterialTypedLayoutField* layerIds = CheckMaterialTypedLayoutField(
             context,
@@ -480,8 +510,8 @@ static void CheckMinimalMaterialTypedLayout(
             20u
         );
         if(layerIds){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds->defaultValue.x == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, layerIds->defaultValue.y == 2u);
+            const u32 layerIdDefaults[] = { 1u, 2u };
+            CheckMaterialTypedLayoutDefaultPODValues(context, *layerIds, layerIdDefaults);
         }
 
         const NWB::Impl::MaterialTypedLayoutField* featureMask = CheckMaterialTypedLayoutField(
@@ -493,9 +523,8 @@ static void CheckMinimalMaterialTypedLayout(
             28u
         );
         if(featureMask){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->defaultValue.x == expectedFeatureMaskX);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->defaultValue.y == expectedFeatureMaskY);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, featureMask->defaultValue.z == expectedFeatureMaskZ);
+            const u32 featureMaskDefaults[] = { expectedFeatureMaskX, expectedFeatureMaskY, expectedFeatureMaskZ };
+            CheckMaterialTypedLayoutDefaultPODValues(context, *featureMask, featureMaskDefaults);
         }
 
         const NWB::Impl::MaterialTypedLayoutField* channelEnabled = CheckMaterialTypedLayoutField(
@@ -507,10 +536,8 @@ static void CheckMinimalMaterialTypedLayout(
             40u
         );
         if(channelEnabled){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.x == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.y == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.z == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, channelEnabled->defaultValue.w == 0u);
+            const u8 channelEnabledDefaults[] = { 1u, 0u, 1u, 0u };
+            CheckMaterialTypedLayoutDefaultPODValues(context, *channelEnabled, channelEnabledDefaults);
         }
     }
 }
@@ -522,7 +549,7 @@ static void CheckMinimalMaterialTypedBlockBytes(
     const u32 expectedFeatureMaskY = 5u,
     const u32 expectedFeatureMaskZ = 6u
 ){
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedBlockBytes().size() == 60u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedBlockBytes().size() == 48u);
 
     const ExpectedTypedBlockFloatValue expectedFloatValues[] = {
         { "runtime", 0u, 0.75f },
@@ -532,7 +559,7 @@ static void CheckMinimalMaterialTypedBlockBytes(
         { "surface", 12u, 1.0f },
         { "surface", 16u, 0.25f },
     };
-    CheckMaterialTypedBlockFloatValues(context, material, expectedFloatValues);
+    CheckMaterialTypedBlockValues(context, material, expectedFloatValues);
 
     const ExpectedTypedBlockU32Value expectedU32Values[] = {
         { "surface", 20u, 1u },
@@ -540,12 +567,16 @@ static void CheckMinimalMaterialTypedBlockBytes(
         { "surface", 28u, expectedFeatureMaskX },
         { "surface", 32u, expectedFeatureMaskY },
         { "surface", 36u, expectedFeatureMaskZ },
-        { "surface", 40u, 1u },
-        { "surface", 44u, 0u },
-        { "surface", 48u, 1u },
-        { "surface", 52u, 0u },
     };
-    CheckMaterialTypedBlockU32Values(context, material, expectedU32Values);
+    CheckMaterialTypedBlockValues(context, material, expectedU32Values);
+
+    const ExpectedTypedBlockU8Value expectedU8Values[] = {
+        { "surface", 40u, 1u },
+        { "surface", 41u, 0u },
+        { "surface", 42u, 1u },
+        { "surface", 43u, 0u },
+    };
+    CheckMaterialTypedBlockValues(context, material, expectedU8Values);
 }
 
 static void CheckHalfMaterialTypedLayoutAndBlockBytes(TestContext& context, const NWB::Impl::Material& material){
@@ -665,12 +696,85 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(TestContext& context,
     const ExpectedTypedBlockFloatValue expectedFloatValues[] = {
         { "surface", 4u, 0.75f },
     };
-    CheckMaterialTypedBlockFloatValues(context, material, expectedFloatValues);
+    CheckMaterialTypedBlockValues(context, material, expectedFloatValues);
 
     const ExpectedTypedBlockU32Value expectedU32Values[] = {
         { "surface", 16u, 42u },
     };
-    CheckMaterialTypedBlockU32Values(context, material, expectedU32Values);
+    CheckMaterialTypedBlockValues(context, material, expectedU32Values);
+}
+
+static void CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(TestContext& context, const NWB::Impl::Material& material){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedLayoutHash() != 0u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedLayoutBlocks().size() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedLayoutFields().size() == 5u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, material.typedBlockBytes().size() == 20u);
+
+    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock != nullptr);
+    if(!surfaceBlock)
+        return;
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->fieldCount == 5u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceBlock->byteSize == 20u);
+
+    const ExpectedMaterialLayoutField expectedFields[] = {
+        { "enabled", NWB::Impl::MaterialLayoutFieldType::Bool4, 0u },
+        { "signed_bytes", NWB::Impl::MaterialLayoutFieldType::Char4, 4u },
+        { "bytes", NWB::Impl::MaterialLayoutFieldType::UChar4, 8u },
+        { "signed_words", NWB::Impl::MaterialLayoutFieldType::Short2, 12u },
+        { "words", NWB::Impl::MaterialLayoutFieldType::UShort2, 16u },
+    };
+    CheckMaterialTypedLayoutFields(context, material, *surfaceBlock, expectedFields);
+
+    const NWB::Impl::MaterialTypedLayoutField* enabled = FindMaterialTypedLayoutField(material, *surfaceBlock, "enabled");
+    if(enabled){
+        const u8 enabledDefaults[] = { 1u, 0u, 1u, 0u };
+        CheckMaterialTypedLayoutDefaultPODValues(context, *enabled, enabledDefaults);
+    }
+
+    const NWB::Impl::MaterialTypedLayoutField* signedBytes =
+        FindMaterialTypedLayoutField(material, *surfaceBlock, "signed_bytes");
+    if(signedBytes){
+        const u8 signedByteDefaults[] = { 0xffu, 0u, 1u, 127u };
+        CheckMaterialTypedLayoutDefaultPODValues(context, *signedBytes, signedByteDefaults);
+    }
+
+    const NWB::Impl::MaterialTypedLayoutField* signedWords =
+        FindMaterialTypedLayoutField(material, *surfaceBlock, "signed_words");
+    if(signedWords){
+        const u16 signedWordDefaults[] = { 0x8000u, 0x7fffu };
+        CheckMaterialTypedLayoutDefaultPODValues(context, *signedWords, signedWordDefaults);
+    }
+
+    const ExpectedTypedBlockU8Value expectedU8Values[] = {
+        { "surface", 0u, 0u },
+        { "surface", 1u, 1u },
+        { "surface", 2u, 0u },
+        { "surface", 3u, 1u },
+        { "surface", 4u, 0x80u },
+        { "surface", 5u, 0xfeu },
+        { "surface", 6u, 2u },
+        { "surface", 7u, 64u },
+        { "surface", 8u, 3u },
+        { "surface", 9u, 4u },
+        { "surface", 10u, 5u },
+        { "surface", 11u, 6u },
+    };
+    CheckMaterialTypedBlockValues(context, material, expectedU8Values);
+
+    const ExpectedTypedBlockI16Value expectedI16Values[] = {
+        { "surface", 12u, -1234 },
+        { "surface", 14u, 2345 },
+    };
+    CheckMaterialTypedBlockValues(context, material, expectedI16Values);
+
+    const ExpectedTypedBlockU16Value expectedU16Values[] = {
+        { "surface", 16u, 7u },
+        { "surface", 18u, 65534u },
+    };
+    CheckMaterialTypedBlockValues(context, material, expectedU16Values);
 }
 
 static void CheckGeneratedMaterialBindBinaryConstants(
@@ -855,6 +959,54 @@ static void TestMaterialBindHalfTypedLayoutValues(TestContext& context){
     ErrorCode errorCode;
     static_cast<void>(RemoveAllIfExists(bindRoot, errorCode));
     static_cast<void>(RemoveAllIfExists(mixedBindRoot, errorCode));
+}
+
+static void TestMaterialBindCompactIntegerTypedLayoutValues(TestContext& context){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Impl::Material material(testArena.arena);
+    const bool built = BuildMaterialFromBindAndMeta(
+        s_CompactIntegerMaterialBindSource,
+        s_CompactIntegerMaterialMeta,
+        "material_bind_compact_integer_typed_layout_values",
+        testArena,
+        material,
+        scratchArena
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, built);
+    if(built)
+        CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(context, material);
+
+    Path bindRoot;
+    NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
+    const bool parsed = ParseMaterialBindFromText(
+        s_CompactIntegerMaterialBindSource,
+        "material_bind_compact_integer_generated_text",
+        bindEntry,
+        bindRoot,
+        scratchArena
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, parsed);
+    if(parsed){
+        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+
+        NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::BuildMaterialBindIncludeSource(
+            testArena.arena,
+            bindEntry,
+            generatedSource,
+            scratchArena
+        ));
+        CheckGeneratedCompactIntegerMaterialBindSource(context, AStringView(generatedSource.data(), generatedSource.size()));
+    }
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+
+    ErrorCode errorCode;
+    static_cast<void>(RemoveAllIfExists(bindRoot, errorCode));
 }
 
 static void TestMaterialMetadataInterfaceAndBlockParameters(TestContext& context){

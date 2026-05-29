@@ -400,11 +400,11 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     const bool materialBindConstantsValid =
         materialLayoutHash.x != 0u
         && materialInterfaceHash0.x != 0u
-        && NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 60u
+        && NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 48u
         && NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_OFFSET == 0u
         && NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_SIZE == 4u
         && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET == 4u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 56u;
+        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 44u;
     const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
     const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
@@ -451,6 +451,48 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
         float(surface.base_color.y),
         float(surface.base_color.z),
         float(surface.base_color.w)
+    );
+    generatedVertex.worldPosition = float4(worldPosition, 1.0);
+    return generatedVertex;
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_CompactIntegerMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
+#include "project/material_interfaces/test_surface.bind"
+
+NwbMeshGeneratedVertex nwbMeshBuildVertex(
+    uint triangleIndex,
+    uint corner,
+    NwbMeshSourceVertex source,
+    const NwbMeshInstanceData instance
+){
+    NwbMeshGeneratedVertex generatedVertex;
+    const bool materialBindConstantsValid =
+        NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET == 4u
+        && NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET == 8u
+        && NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET == 12u
+        && NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET == 16u;
+    const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
+    generatedVertex.normal = nwbMeshTransformDirection(source.normal, instance);
+    generatedVertex.padding0 = materialBindConstantsValid
+        ? float(surface.signed_bytes.x) + float(surface.bytes.y) + float(surface.signed_words.x)
+        : -1.0
+    ;
+    generatedVertex.tangent = float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w);
+    generatedVertex.uv0 = source.uv0;
+    generatedVertex.padding1 = float2(float(surface.words.x), surface.enabled.y ? 1.0 : 0.0);
+    generatedVertex.color = float4(
+        surface.enabled.x ? 1.0 : 0.0,
+        float(surface.bytes.z) / 255.0,
+        float(surface.signed_words.y) / 32767.0,
+        1.0
     );
     generatedVertex.worldPosition = float4(worldPosition, 1.0);
     return generatedVertex;
@@ -586,6 +628,28 @@ asset.parameters = {
         "tint": "half3(1.0, 0.5, 0.25)",
         "flags": "uint(42u)",
         "tail": "half(0.875)",
+    },
+};
+
+)NWB_META";
+
+static constexpr AStringView s_CompactIntegerMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface";
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "enabled": "bool4(false, true, false, true)",
+        "signed_bytes": "char4(-128, -2, 2, 64)",
+        "bytes": "uchar4(3u, 4u, 5u, 6u)",
+        "signed_words": "short2(-1234, 2345)",
+        "words": "ushort2(7u, 65534u)",
     },
 };
 
@@ -844,6 +908,28 @@ struct NwbTestSurfaceMaterial{
 
     [default("half(0.125)")]
     half tail;
+};
+
+NwbTestSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_CompactIntegerMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbTestSurfaceMaterial{
+    [default("bool4(true, false, true, false)")]
+    bool4 enabled;
+
+    [default("char4(-1, 0, 1, 127)")]
+    char4 signed_bytes;
+
+    [default("uchar4(0u, 1u, 254u, 255u)")]
+    uchar4 bytes;
+
+    [default("short2(-32768, 32767)")]
+    short2 signed_words;
+
+    [default("ushort2(0u, 65535u)")]
+    ushort2 words;
 };
 
 NwbTestSurfaceMaterial surface;
@@ -1677,6 +1763,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMaterialCodecTypedLayoutBoundary(context);
     __hidden_tests::TestMaterialBindSchemaValidation(context);
     __hidden_tests::TestMaterialBindHalfTypedLayoutValues(context);
+    __hidden_tests::TestMaterialBindCompactIntegerTypedLayoutValues(context);
     __hidden_tests::TestMaterialBindGeneratedSlangText(context);
     __hidden_tests::TestMaterialBindCookIntegration(context);
     __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration(context);

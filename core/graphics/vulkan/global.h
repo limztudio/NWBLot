@@ -8,8 +8,6 @@
 #include <core/global.h>
 #include <core/alloc/module.h>
 
-#include <core/graphics/common.h>
-
 #if defined(NWB_PLATFORM_WINDOWS)
 #ifndef VK_USE_PLATFORM_WIN32_KHR
 #define VK_USE_PLATFORM_WIN32_KHR
@@ -35,28 +33,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_VULKAN_BEGIN NWB_CORE_BEGIN namespace Vulkan{
+#define NWB_VULKAN_BEGIN NWB_CORE_BEGIN namespace GraphicsBackend{
 #define NWB_VULKAN_END }; NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace ObjectTypes{
-    inline constexpr ObjectType NWB_VK_Device = 0x00030101;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,14 +50,13 @@ NWB_VULKAN_BEGIN
 inline constexpr u32 s_MinimumVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 3, 0));
 inline constexpr u32 s_AppVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
 inline constexpr u32 s_EngineVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
-inline constexpr const char* s_AppName = "NWBLot";
+inline constexpr const char* s_AppName = "NWB";
 
 // Device memory and upload defaults.
 inline constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024; // 64 MB
 inline constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
 inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
 inline constexpr u64 s_LargeBufferThreshold = 16 * 1024 * 1024; // 16 MB
-inline constexpr u32 s_DefaultUploadSuballocationAlignment = s_ConstantBufferOffsetSizeAlignment;
 inline constexpr u64 s_BufferAlignmentBytes = 4;
 
 // Queue and swap chain defaults.
@@ -119,8 +96,6 @@ inline constexpr usize s_TlasInstanceGrainSize = 256;
 
 // Ray tracing helper defaults.
 inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;
-inline constexpr u32 s_DefaultTlasBufferSizeMultiplier = 2;
-inline constexpr u64 s_AccelerationStructureAlignment = s_ConstantBufferOffsetSizeAlignment;
 inline constexpr u32 s_RayTracingHitGroupShaderStageCount = 3;
 inline constexpr u32 s_TrianglesPerPrimitive = 3;
 inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;

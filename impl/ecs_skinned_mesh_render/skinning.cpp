@@ -69,7 +69,7 @@ static bool ResolveRestBufferBytes(
 }
 
 static void SetRestBufferStates(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     SkinnedMeshRuntimeMeshInstance& instance,
     const Core::ResourceStates::Mask state
 ){
@@ -79,7 +79,7 @@ static void SetRestBufferStates(
 }
 
 static void SetSkinnedBufferStates(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     SkinnedMeshRuntimeMeshInstance& instance,
     const Core::ResourceStates::Mask state
 ){
@@ -99,7 +99,7 @@ static void SetSkinnedBufferStates(
 
 
 bool SkinnedMeshSystem::dispatchRuntimeMesh(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     SkinnedMeshRuntimeMeshInstance& instance,
     const SkinnedMeshJointPaletteComponent* jointPalette,
     const SkinnedMeshSkeletonPoseComponent* skeletonPose
@@ -267,7 +267,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     return true;
 }
 
-bool SkinnedMeshSystem::copyRestToSkinned(Core::ICommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance){
+bool SkinnedMeshSystem::copyRestToSkinned(Core::CommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance){
     usize positionBytes = 0;
     usize normalBytes = 0;
     usize tangentBytes = 0;
@@ -303,7 +303,7 @@ bool SkinnedMeshSystem::copyRestToSkinned(Core::ICommandList& commandList, Skinn
 }
 
 bool SkinnedMeshSystem::dispatchMeshletBounds(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     SkinnedMeshRuntimeMeshInstance& instance,
     const RuntimeResources& resources
 ){

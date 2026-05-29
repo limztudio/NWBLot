@@ -417,7 +417,7 @@ void UiSystem::finishFrame(){
     m_frameFinished = true;
 }
 
-void UiSystem::render(Core::IFramebuffer* framebuffer){
+void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
@@ -446,7 +446,7 @@ void UiSystem::render(Core::IFramebuffer* framebuffer){
     if(!ensureRenderResources(framebuffer))
         return;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create command list"));
@@ -461,7 +461,7 @@ void UiSystem::render(Core::IFramebuffer* framebuffer){
     commandList->endRenderPass();
     commandList->close();
     if(success){
-        Core::ICommandList* commandLists[] = { commandList.get() };
+        Core::CommandList* commandLists[] = { commandList.get() };
         device->executeCommandLists(commandLists, 1);
         m_frameStarted = false;
         m_frameFinished = false;
@@ -524,11 +524,11 @@ bool UiSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     return io.WantCaptureMouse;
 }
 
-bool UiSystem::ensureRenderResources(Core::IFramebuffer* framebuffer){
+bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     if(!m_bindingLayout){
         static_assert(sizeof(UiPushConstants) <= Core::s_MaxPushConstantSize, "Ui push constants must fit the portable push constant budget");
 
@@ -663,7 +663,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     }
 #endif
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     if(!m_vertexBuffer || m_vertexBufferCapacity < vertexCount){
         const usize capacity = __hidden_ui::NextCapacity(
             m_vertexBufferCapacity,
@@ -713,7 +713,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     return true;
 }
 
-bool UiSystem::processTextureRequests(Core::ICommandList& commandList, ImDrawData& drawData){
+bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData){
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
         return true;
@@ -746,7 +746,7 @@ bool UiSystem::processTextureRequests(Core::ICommandList& commandList, ImDrawDat
     return true;
 }
 
-bool UiSystem::createOrRefreshTexture(Core::ICommandList& commandList, ImTextureData& textureData){
+bool UiSystem::createOrRefreshTexture(Core::CommandList& commandList, ImTextureData& textureData){
     UiTextureResource* resource = static_cast<UiTextureResource*>(textureData.BackendUserData);
     const void* uploadPixels = nullptr;
     usize uploadRowPitch = 0u;
@@ -842,14 +842,14 @@ UiSystem::UiTextureResource* UiSystem::textureResourceFromId(const ImTextureID t
     return nullptr;
 }
 
-Core::IBindingSet* UiSystem::bindingSetForTexture(const ImTextureID textureId)const{
+Core::BindingSet* UiSystem::bindingSetForTexture(const ImTextureID textureId)const{
     UiTextureResource* resource = textureResourceFromId(textureId);
     if(!resource)
         resource = fallbackTextureResource();
     return resource ? resource->bindingSet.get() : nullptr;
 }
 
-bool UiSystem::uploadDrawBuffers(Core::ICommandList& commandList, ImDrawData& drawData){
+bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& drawData){
     const usize vertexCount = static_cast<usize>(drawData.TotalVtxCount);
     const usize indexCount = static_cast<usize>(drawData.TotalIdxCount);
     if(vertexCount == 0 || indexCount == 0)
@@ -878,7 +878,7 @@ bool UiSystem::uploadDrawBuffers(Core::ICommandList& commandList, ImDrawData& dr
     return true;
 }
 
-void UiSystem::renderDrawData(Core::ICommandList& commandList, Core::IFramebuffer* framebuffer, ImDrawData& drawData){
+void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer* framebuffer, ImDrawData& drawData){
     if(drawData.TotalVtxCount <= 0 || drawData.TotalIdxCount <= 0)
         return;
 
@@ -954,7 +954,7 @@ void UiSystem::renderDrawData(Core::ICommandList& commandList, Core::IFramebuffe
             if(scissorMaxX <= scissorMinX || scissorMaxY <= scissorMinY)
                 continue;
 
-            Core::IBindingSet* bindingSet = bindingSetForTexture(drawCommand.GetTexID());
+            Core::BindingSet* bindingSet = bindingSetForTexture(drawCommand.GetTexID());
             if(!bindingSet)
                 continue;
 

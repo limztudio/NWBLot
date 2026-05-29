@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 MeshletPipeline::MeshletPipeline(const VulkanContext& context)
-    : RefCounter<IMeshletPipeline>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_context(context)
 {}
 MeshletPipeline::~MeshletPipeline(){
@@ -139,7 +139,7 @@ void CommandList::setMeshletState(const MeshletState& state){
     m_currentRayTracingState = {};
     m_currentMeshletState = state;
 
-    auto* pipeline = checked_cast<MeshletPipeline*>(state.pipeline);
+    auto* pipeline = state.pipeline;
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
@@ -152,11 +152,13 @@ void CommandList::setMeshletState(const MeshletState& state){
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
+#if defined(NWB_DEBUG)
     if(!m_renderPassActive || !m_currentMeshletState.pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch mesh tasks: no meshlet pipeline and active render pass are bound"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch mesh tasks: no meshlet pipeline and active render pass are bound"));
         return;
     }
+#endif
     if(!vkCmdDrawMeshTasksEXT){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader dispatch requested, but vkCmdDrawMeshTasksEXT is unavailable."));
         return;

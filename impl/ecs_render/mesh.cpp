@@ -463,7 +463,7 @@ bool RendererSystem::createMeshBindingSet(MeshResources& mesh){
     Core::BindingSetDesc bindingSetDesc(m_arena);
     addMeshDrawBindingItems(bindingSetDesc, mesh);
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
     if(!mesh.meshBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
@@ -511,7 +511,7 @@ bool RendererSystem::createComputeBindingSet(MeshResources& mesh){
     addMeshDrawBindingItems(bindingSetDesc, mesh);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, mesh.emulationVertexBuffer.get()));
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);
     if(!mesh.computeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for mesh '{}'")

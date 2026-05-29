@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererSystem::createDeferredLightingResources(){
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
 
     if(!m_sceneShadingBuffer){
         Core::BufferDesc sceneShadingBufferDesc;
@@ -85,7 +85,7 @@ bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& target
         .addBindingLayout(m_deferredLightingBindingLayout)
     ;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     m_deferredLightingPipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!m_deferredLightingPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
@@ -95,7 +95,7 @@ bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& target
     return true;
 }
 
-bool RendererSystem::updateSceneShadingBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
+bool RendererSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
     if(!m_sceneShadingBuffer)
         return false;
 
@@ -109,7 +109,7 @@ bool RendererSystem::updateSceneShadingBuffer(Core::ICommandList& commandList, c
     return true;
 }
 
-bool RendererSystem::renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets){
+bool RendererSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.lightingBindingSet || !targets.opaqueLightingFramebuffer)
         return false;
     if(!m_deferredLightingPipeline)

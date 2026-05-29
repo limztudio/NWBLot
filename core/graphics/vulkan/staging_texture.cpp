@@ -259,23 +259,20 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){
-    if(!tex){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture is null"));
+void* Device::mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("map staging texture"), NWB_TEXT("texture is null"), tex))
         return nullptr;
-    }
 
-    auto* staging = checked_cast<StagingTexture*>(tex);
+    auto* staging = tex;
+#if defined(NWB_DEBUG)
     if(staging->m_cpuAccess == CpuAccessMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without CPU access"));
         return nullptr;
     }
+#endif
     TextureSlice resolvedSlice;
-    if(!VulkanDetail::IsTextureSliceInBounds(staging->m_desc, slice, staging->m_formatLayout, &resolvedSlice)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
+    if(!VulkanDetail::DebugResolveTextureSlice(staging->m_desc, slice, staging->m_formatLayout, NWB_TEXT("map staging texture"), NWB_TEXT("slice is outside the texture"), resolvedSlice))
         return nullptr;
-    }
 
     if(!staging->m_mappedMemory){
         const VkResult res = m_allocator.mapStagingTextureMemory(*staging, &staging->m_mappedMemory);
@@ -314,11 +311,11 @@ void* Device::mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice,
     return static_cast<u8*>(staging->m_mappedMemory) + offset;
 }
 
-void Device::unmapStagingTexture(IStagingTexture* tex){
+void Device::unmapStagingTexture(StagingTexture* tex){
     if(!tex)
         return;
 
-    auto* staging = checked_cast<StagingTexture*>(tex);
+    auto* staging = tex;
     if(staging->m_mappedMemory && !staging->m_persistentlyMapped){
         staging->m_allocator.unmapStagingTextureMemory(*staging);
         staging->m_mappedMemory = nullptr;

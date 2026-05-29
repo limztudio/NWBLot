@@ -23,7 +23,7 @@ namespace __hidden_avboit_resources{
 template<typename BuildItemsFunc>
 static bool CreateBindingLayout(
     Core::GraphicsArena& arena,
-    Core::IDevice& device,
+    Core::Device& device,
     Core::BindingLayoutHandle& layout,
     const Core::ShaderType::Mask visibility,
     const tchar* failureMessage,
@@ -45,7 +45,7 @@ static bool CreateBindingLayout(
 }
 
 static bool CreateComputePipeline(
-    Core::IDevice& device,
+    Core::Device& device,
     Core::ComputePipelineHandle& pipeline,
     const Core::ShaderHandle& shader,
     const Core::BindingLayoutHandle& bindingLayout,
@@ -78,7 +78,7 @@ static bool CreateComputePipeline(
 
 
 bool RendererSystem::createAvboitResources(){
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
 
     if(!ECSRenderDetail::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT")))
         return false;
@@ -217,7 +217,7 @@ bool RendererSystem::createAvboitPipelines(){
     if(!createAvboitResources())
         return false;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
 
     return
         __hidden_avboit_resources::CreateComputePipeline(

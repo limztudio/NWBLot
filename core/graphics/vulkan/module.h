@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <core/graphics/api.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,18 +19,25 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IDevice : public Core::IDevice{
-    using Core::IDevice::IDevice;
+inline constexpr u32 s_DefaultUploadSuballocationAlignment = s_ConstantBufferOffsetSizeAlignment;
+inline constexpr u64 s_AccelerationStructureAlignment = s_ConstantBufferOffsetSizeAlignment;
 
-
-public:
-    // Additional Vulkan-specific public methods
-    virtual VkSemaphore getQueueSemaphore(CommandQueue::Enum queue) = 0;
-    virtual void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value) = 0;
-    virtual void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value) = 0;
-    virtual u64 queueGetCompletedInstance(CommandQueue::Enum queue) = 0;
+namespace ObjectTypes{
+    inline constexpr ObjectType VK_Queue                               = 0x00030004;
+    inline constexpr ObjectType VK_DeviceMemory                        = 0x00030006;
+    inline constexpr ObjectType VK_Buffer                              = 0x00030007;
+    inline constexpr ObjectType VK_Image                               = 0x00030008;
+    inline constexpr ObjectType VK_ImageView                           = 0x00030009;
+    inline constexpr ObjectType VK_AccelerationStructureKHR            = 0x0003000a;
+    inline constexpr ObjectType VK_Pipeline                            = 0x00030013;
 };
-typedef RefCountPtr<IDevice, ArenaRefDeleter<IDevice>> DeviceHandle;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Device;
+typedef RefCountPtr<Device, ArenaRefDeleter<Device>> DeviceHandle;
 
 struct DeviceDesc{
     VkInstance instance = VK_NULL_HANDLE;

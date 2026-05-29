@@ -34,10 +34,10 @@ static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = 96u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::IDevice& device);
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& device);
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device);
-[[nodiscard]] Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device);
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device);
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device);
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device);
+[[nodiscard]] Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device);
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState();
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState();
 [[nodiscard]] bool MaterialPipelinePassUsesRendererAvboit(MaterialPipelinePass::Enum pass);

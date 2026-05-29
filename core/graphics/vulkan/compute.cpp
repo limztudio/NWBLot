@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 ComputePipeline::ComputePipeline(const VulkanContext& context)
-    : RefCounter<IComputePipeline>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_context(context)
 {}
 ComputePipeline::~ComputePipeline(){
@@ -44,7 +44,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
         return nullptr;
     }
 
-    auto* cs = checked_cast<Shader*>(desc.CS.get());
+    auto* cs = desc.CS.get();
 
     auto shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
@@ -96,7 +96,7 @@ void CommandList::setComputeState(const ComputeState& state){
     m_currentRayTracingState = {};
     m_currentComputeState = state;
 
-    auto* pipeline = checked_cast<ComputePipeline*>(state.pipeline);
+    auto* pipeline = state.pipeline;
     if(pipeline)
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
 
@@ -107,6 +107,7 @@ void CommandList::setComputeState(const ComputeState& state){
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
+#if defined(NWB_DEBUG)
     if(!m_currentComputeState.pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute: no compute pipeline is bound"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: no compute pipeline is bound"));
@@ -125,11 +126,13 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: group counts exceed device limits"));
         return;
     }
+#endif
 
     vkCmdDispatch(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
+#if defined(NWB_DEBUG)
     if(!m_currentComputeState.pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));
@@ -137,7 +140,8 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
     }
     if(!validateIndirectBuffer(m_currentComputeState.indirectParams, offsetBytes, sizeof(DispatchIndirectArguments), 1, NWB_TEXT("dispatchIndirect")))
         return;
-    auto* buffer = checked_cast<Buffer*>(m_currentComputeState.indirectParams);
+#endif
+    auto* buffer = m_currentComputeState.indirectParams;
     vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
     retainResource(m_currentComputeState.indirectParams);
 }

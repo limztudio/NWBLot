@@ -95,9 +95,9 @@ static Core::BufferHandle CreateU32Buffer(
 
 static void AddDepthSamplerBindings(
     Core::BindingSetDesc& bindingSetDesc,
-    Core::ITexture* depth,
+    Core::Texture* depth,
     const Core::Format::Enum depthFormat,
-    Core::ISampler* sampler
+    Core::Sampler* sampler
 ){
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         0,
@@ -110,7 +110,7 @@ static void AddDepthSamplerBindings(
 }
 
 static bool CreateBindingSet(
-    Core::IDevice& device,
+    Core::Device& device,
     Core::BindingSetHandle& outBindingSet,
     const Core::BindingSetDesc& desc,
     const Core::BindingLayoutHandle& layout,
@@ -141,7 +141,7 @@ bool RendererSystem::createAvboitFrameTargets(
     const Core::Format::Enum accumExtinctionFormat,
     const Core::Format::Enum transmittanceFormat
 ){
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;

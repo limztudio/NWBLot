@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "common.h"
+#include "api.h"
+
+#include "backend_selection.h"
 
 #include <core/common/log.h>
 #include <global/sync.h>
@@ -53,6 +55,55 @@ GraphicsAllocator::GraphicsAllocator(Alloc::PersistentArena& persistentArena, Al
     }
     , m_objectArena(objectArena)
 {}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GraphicsPipelineDesc::~GraphicsPipelineDesc() = default;
+GraphicsPipelineDesc& GraphicsPipelineDesc::setInputLayout(const InputLayoutHandle& value){ inputLayout = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value){ VS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value){ HS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value){ HS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value){ DS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value){ DS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value){ GS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+
+ComputePipelineDesc::~ComputePipelineDesc() = default;
+ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& value){ CS = value; return *this; }
+ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+
+MeshletPipelineDesc::~MeshletPipelineDesc() = default;
+MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value){ AS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value){ AS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value){ MS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+
+RayTracingPipelineShaderDesc::RayTracingPipelineShaderDesc(GraphicsArena& arena)
+    : exportName(arena)
+{}
+RayTracingPipelineShaderDesc::~RayTracingPipelineShaderDesc() = default;
+RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setShader(const ShaderHandle& value){ shader = value; return *this; }
+RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
+
+RayTracingPipelineHitGroupDesc::RayTracingPipelineHitGroupDesc(GraphicsArena& arena)
+    : exportName(arena)
+{}
+RayTracingPipelineHitGroupDesc::~RayTracingPipelineHitGroupDesc() = default;
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setIntersectionShader(const ShaderHandle& value){ intersectionShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
+
+RayTracingPipelineDesc::~RayTracingPipelineDesc() = default;
+RayTracingPipelineDesc& RayTracingPipelineDesc::addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
+RayTracingPipelineDesc& RayTracingPipelineDesc::addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
+RayTracingPipelineDesc& RayTracingPipelineDesc::addBindingLayout(const BindingLayoutHandle& value){ globalBindingLayouts.push_back(value); return *this; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -332,13 +383,26 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
     return ret;
 }
 
+BindingSetItem BindingSetItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
+    const bool isVolatile = buffer && buffer->getDescription().isVolatile;
+
+    BindingSetItem result = Base(
+        slot,
+        isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
+        buffer,
+        Format::UNKNOWN,
+        TextureDimension::Unknown);
+    result.range = range;
+    return result;
+}
+
 
 bool BlendState::RenderTarget::usesConstantColor()const{
     return
-        srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::OneMinusConstantColor
-        || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::OneMinusConstantColor
-        || srcBlendAlpha == BlendFactor::ConstantColor || srcBlendAlpha == BlendFactor::OneMinusConstantColor
-        || destBlendAlpha == BlendFactor::ConstantColor || destBlendAlpha == BlendFactor::OneMinusConstantColor
+        srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::InvConstantColor
+        || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::InvConstantColor
+        || srcBlendAlpha == BlendFactor::ConstantColor || srcBlendAlpha == BlendFactor::InvConstantColor
+        || destBlendAlpha == BlendFactor::ConstantColor || destBlendAlpha == BlendFactor::InvConstantColor
         ;
 }
 
@@ -351,6 +415,38 @@ bool BlendState::usesConstantColor(u32 numTargets)const{
 
     return false;
 }
+
+
+namespace __hidden_graphics_api{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
+    const TextureDesc& textureDesc = attachment.texture->getDescription();
+    const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
+    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+        outWidth = 0;
+        outHeight = 0;
+        outArraySize = 0;
+        return false;
+    }
+
+    outWidth = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
+    outHeight = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
+    outArraySize = subresources.numArraySlices;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
@@ -373,34 +469,21 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     }
 }
 
-static bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
-    const TextureDesc& textureDesc = attachment.texture->getDescription();
-    TextureSubresourceSet const subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
-    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
-        outWidth = 0;
-        outHeight = 0;
-        outArraySize = 0;
-        return false;
-    }
-
-    outWidth = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
-    outHeight = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
-    outArraySize = subresources.numArraySlices;
-    return true;
-}
-
 FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
     : FramebufferInfo(desc)
 {
     if(desc.depthAttachment.valid()){
-        if(!ResolveFramebufferAttachmentExtent(desc.depthAttachment, width, height, arraySize))
+        if(!__hidden_graphics_api::ResolveFramebufferAttachmentExtent(desc.depthAttachment, width, height, arraySize))
             return;
     }
     else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
-        if(!ResolveFramebufferAttachmentExtent(desc.colorAttachments[0], width, height, arraySize))
+        if(!__hidden_graphics_api::ResolveFramebufferAttachmentExtent(desc.colorAttachments[0], width, height, arraySize))
             return;
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
@@ -453,18 +536,6 @@ usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum ty
 }
 
 
-void ICommandList::setResourceStatesForFramebuffer(IFramebuffer& framebuffer){
-    const FramebufferDesc& desc = framebuffer.getDescription();
-
-    for(const auto& attachment : desc.colorAttachments)
-        setTextureState(attachment.texture, attachment.subresources, ResourceStates::RenderTarget);
-
-    if(desc.depthAttachment.valid())
-        setTextureState(desc.depthAttachment.texture, desc.depthAttachment.subresources, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite);
-
-    if(desc.shadingRateAttachment.valid())
-        setTextureState(desc.shadingRateAttachment.texture, desc.shadingRateAttachment.subresources, ResourceStates::ShadingRateSurface);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

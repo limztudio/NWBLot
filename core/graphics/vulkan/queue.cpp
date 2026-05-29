@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 queueFamilyIndex)
-    : RefCounter<IResource>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_referencedResources(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedAccelStructHandles(context.objectArena)
@@ -190,7 +190,7 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     m_signalSemaphoreValues.push_back(value);
 }
 
-u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
+u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     ScopedLock lock(m_mutex);
     if(outSubmitted)
         *outSubmitted = false;
@@ -220,7 +220,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
     }
     if(hasCommands){
         for(usize i = 0; i < numCmd; ++i){
-            auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
+            auto* cmdList = ppCmd[i];
             if(cmdList && cmdList->m_currentCmdBuf && cmdList->m_desc.queueType != m_queueID){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list queue type does not match the execution queue"));
                 clearPendingSemaphores();
@@ -237,7 +237,7 @@ u64 Queue::submit(ICommandList* const* ppCmd, usize numCmd, bool* outSubmitted){
         cmdBufInfos.reserve(numCmd);
 
         for(usize i = 0; i < numCmd; ++i){
-            auto* cmdList = checked_cast<CommandList*>(ppCmd[i]);
+            auto* cmdList = ppCmd[i];
             if(!cmdList || !cmdList->m_currentCmdBuf)
                 continue;
 
@@ -344,40 +344,6 @@ void Queue::updateLastFinishedID(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(res));
 }
 
-bool Queue::pollCommandList(u64 commandListID){
-    ScopedLock lock(m_mutex);
-
-    updateLastFinishedID();
-    return commandListID <= m_lastFinishedID;
-}
-
-bool Queue::waitCommandList(u64 commandListID, u64 timeout){
-    if(commandListID == 0)
-        return true;
-
-    if(!m_trackingSemaphore)
-        return false;
-
-    auto waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreWaitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO);
-    waitInfo.semaphoreCount = 1;
-    waitInfo.pSemaphores = &m_trackingSemaphore;
-    waitInfo.pValues = &commandListID;
-
-    const VkResult res = vkWaitSemaphores(m_context.device, &waitInfo, timeout);
-    if(res == VK_ERROR_DEVICE_LOST){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device was lost while waiting for command list."));
-        return false;
-    }
-    else if(res == VK_SUCCESS){
-        ScopedLock lock(m_mutex);
-        if(commandListID > m_lastFinishedID)
-            m_lastFinishedID = commandListID;
-        return true;
-    }
-
-    return false;
-}
-
 void Queue::waitForIdle(){
     ScopedLock lock(m_mutex);
 
@@ -411,11 +377,6 @@ void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-VkSemaphore Device::getQueueSemaphore(CommandQueue::Enum queue){
-    Queue* q = getQueue(queue);
-    return q ? q->m_trackingSemaphore : VK_NULL_HANDLE;
-}
 
 void Device::queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value){
     Queue* q = getQueue(waitQueue);
@@ -451,13 +412,13 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTilesMapping* tileMappings, u32 numTileMappings){
+void Queue::updateTextureTileMappings(Texture* textureResource, const TextureTilesMapping* tileMappings, u32 numTileMappings){
     VkResult res = VK_SUCCESS;
 
     if(!textureResource || !tileMappings || numTileMappings == 0)
         return;
 
-    auto* texture = checked_cast<Texture*>(textureResource);
+    auto* texture = textureResource;
     Alloc::ThreadPool& workerPool = m_context.threadPool;
     const bool useParallelPool = workerPool.isParallelEnabled();
     const usize mappingCount = static_cast<usize>(numTileMappings);
@@ -582,7 +543,7 @@ void Queue::updateTextureTileMappings(ITexture* textureResource, const TextureTi
         if(mapping.heap && !mapping.byteOffsets)
             return;
 
-        Heap* heap = mapping.heap ? checked_cast<Heap*>(mapping.heap) : nullptr;
+        Heap* heap = mapping.heap ? mapping.heap : nullptr;
         VkDeviceMemory deviceMemory = heap ? heap->m_memory : VK_NULL_HANDLE;
         const VkDeviceSize heapMemoryOffset = heap ? heap->m_memoryOffset : 0;
 

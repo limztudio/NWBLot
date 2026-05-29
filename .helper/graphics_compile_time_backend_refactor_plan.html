@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NWBLot Graphics Compile-Time Backend Refactor Plan</title>
+    <style>
+        :root{
+            color-scheme: light;
+            --page-bg: #f6f7f9;
+            --panel-bg: #ffffff;
+            --ink: #151922;
+            --muted: #5e6878;
+            --line: #d9dee7;
+            --accent: #1f6feb;
+            --accent-soft: #e8f1ff;
+            --warn: #9a5b00;
+            --warn-soft: #fff3d8;
+            --ok: #177245;
+            --ok-soft: #e6f6ee;
+            --code-bg: #101724;
+            --code-ink: #e8eef8;
+        }
+
+        *{
+            box-sizing: border-box;
+        }
+
+        body{
+            margin: 0;
+            background: var(--page-bg);
+            color: var(--ink);
+            font-family: "Segoe UI", Arial, sans-serif;
+            line-height: 1.55;
+        }
+
+        main{
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 40px 28px 56px;
+        }
+
+        header{
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 24px;
+            margin-bottom: 28px;
+        }
+
+        h1{
+            margin: 0 0 10px;
+            font-size: 34px;
+            line-height: 1.16;
+            letter-spacing: 0;
+        }
+
+        h2{
+            margin: 0 0 14px;
+            font-size: 22px;
+            line-height: 1.25;
+            letter-spacing: 0;
+        }
+
+        h3{
+            margin: 0 0 8px;
+            font-size: 17px;
+            letter-spacing: 0;
+        }
+
+        p{
+            margin: 0 0 12px;
+        }
+
+        ul,
+        ol{
+            margin: 0;
+            padding-left: 22px;
+        }
+
+        li{
+            margin: 6px 0;
+        }
+
+        code{
+            border-radius: 4px;
+            background: #eef1f5;
+            padding: 1px 5px;
+            font-family: Consolas, "Cascadia Mono", monospace;
+            font-size: 0.94em;
+        }
+
+        pre{
+            overflow-x: auto;
+            margin: 14px 0 0;
+            border-radius: 8px;
+            background: var(--code-bg);
+            color: var(--code-ink);
+            padding: 16px;
+            font-family: Consolas, "Cascadia Mono", monospace;
+            font-size: 13px;
+            line-height: 1.45;
+        }
+
+        pre code{
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+
+        .lede{
+            max-width: 900px;
+            color: var(--muted);
+            font-size: 17px;
+        }
+
+        .meta{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .tag{
+            display: inline-flex;
+            align-items: center;
+            min-height: 28px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel-bg);
+            color: var(--muted);
+            padding: 3px 9px;
+            font-size: 13px;
+        }
+
+        .grid{
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 18px;
+        }
+
+        .section{
+            grid-column: span 12;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--panel-bg);
+            padding: 22px;
+        }
+
+        .half{
+            grid-column: span 6;
+        }
+
+        .third{
+            grid-column: span 4;
+        }
+
+        .callout{
+            border-left: 4px solid var(--accent);
+            background: var(--accent-soft);
+            padding: 14px 16px;
+            margin-top: 12px;
+        }
+
+        .warning{
+            border-left-color: var(--warn);
+            background: var(--warn-soft);
+        }
+
+        .success{
+            border-left-color: var(--ok);
+            background: var(--ok-soft);
+        }
+
+        .flow{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .flow div{
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fbfcfe;
+            min-height: 86px;
+            padding: 12px;
+        }
+
+        .phase{
+            border-top: 1px solid var(--line);
+            padding-top: 16px;
+            margin-top: 16px;
+        }
+
+        .phase:first-of-type{
+            border-top: 0;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .label{
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        table{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+
+        th,
+        td{
+            border-bottom: 1px solid var(--line);
+            padding: 10px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th{
+            color: var(--muted);
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 820px){
+            main{
+                padding: 26px 16px 42px;
+            }
+
+            h1{
+                font-size: 28px;
+            }
+
+            .half,
+            .third{
+                grid-column: span 12;
+            }
+
+            .flow{
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <header>
+            <h1>Graphics Compile-Time Backend Refactor Plan</h1>
+            <p class="lede">
+                Convert the graphics layer from runtime virtual backend interfaces to a compile-time selected backend contract. The goal is to remove the extra virtual dispatch between <code>Core::Graphics</code> and the actual graphics API while preserving a clean path for future Vulkan, Metal, and other backend implementations.
+            </p>
+            <div class="meta">
+                <span class="tag">Status: proposal</span>
+                <span class="tag">Scope: full graphics abstraction refactor</span>
+                <span class="tag">Updated: 2026-05-29</span>
+                <span class="tag">Primary hotspot: command recording</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <section class="section">
+                <h2>Decision</h2>
+                <p>
+                    Refactor the graphics layer as an all-or-nothing architecture change. Do not keep the pure virtual <code>I*</code> interfaces as the final abstraction surface. Select the graphics backend at compile time, expose concrete backend types through stable core aliases, and use concepts/static assertions to enforce the backend contract.
+                </p>
+                <div class="callout">
+                    <strong>Key rule:</strong> concepts validate the backend shape, but selected concrete types carry the abstraction. The optimizer only gets the real benefit when call sites see concrete types.
+                </div>
+            </section>
+
+            <section class="section half">
+                <h2>Current Shape</h2>
+                <div class="flow">
+                    <div>
+                        <span class="label">1</span>
+                        Frontend calls <code>Core::Graphics</code>
+                    </div>
+                    <div>
+                        <span class="label">2</span>
+                        <code>Graphics</code> reaches <code>IDevice*</code> or <code>ICommandList*</code>
+                    </div>
+                    <div>
+                        <span class="label">3</span>
+                        Pure virtual interface dispatch
+                    </div>
+                    <div>
+                        <span class="label">4</span>
+                        Vulkan backend implementation
+                    </div>
+                    <div>
+                        <span class="label">5</span>
+                        Vulkan API call
+                    </div>
+                </div>
+                <p class="callout warning">
+                    The main overhead concern is the hot <code>ICommandList</code> surface: state setting, push constants, draw, dispatch, mesh dispatch, barriers, and related command recording operations.
+                </p>
+            </section>
+
+            <section class="section half">
+                <h2>Target Shape</h2>
+                <div class="flow">
+                    <div>
+                        <span class="label">1</span>
+                        Frontend calls <code>Core::Graphics</code>
+                    </div>
+                    <div>
+                        <span class="label">2</span>
+                        <code>Graphics</code> stores selected concrete backend
+                    </div>
+                    <div>
+                        <span class="label">3</span>
+                        Core aliases expose concrete backend types
+                    </div>
+                    <div>
+                        <span class="label">4</span>
+                        Backend command/resource method
+                    </div>
+                    <div>
+                        <span class="label">5</span>
+                        Graphics API call
+                    </div>
+                </div>
+                <p class="callout success">
+                    Runtime backend polymorphism disappears from the primitive command path. Future backend support comes from implementing the same compile-time contract and selecting it in the build.
+                </p>
+            </section>
+
+            <section class="section">
+                <h2>End State</h2>
+                <ul>
+                    <li><code>core/graphics/common.h</code> contains backend-neutral data: enums, flags, descriptors, state structs, constants, hashing helpers, and shared non-virtual utilities.</li>
+                    <li>Runtime pure virtual graphics interfaces are removed from the public graphics hot path: <code>IDevice</code>, <code>ICommandList</code>, resource interfaces, pipeline interfaces, binding interfaces, and shader table interfaces do not remain as final API contracts.</li>
+                    <li>Selected backend aliases define public graphics object and handle types, for example <code>Core::Device</code>, <code>Core::CommandList</code>, <code>Core::BufferHandle</code>, and <code>Core::TextureHandle</code>.</li>
+                    <li><code>Core::Graphics</code> owns a concrete backend selected at compile time, not an <code>IGraphicsBackend</code> pointer.</li>
+                    <li>Backend method compatibility is enforced with C++ concepts and <code>static_assert</code> checks.</li>
+                    <li>Vulkan classes stop being implementations of shared pure virtual interfaces. They become concrete backend contract implementations.</li>
+                    <li>Metal later supplies <code>Metal::Device</code>, <code>Metal::CommandList</code>, and resource types satisfying the same contract.</li>
+                </ul>
+            </section>
+
+            <section class="section half">
+                <h2>Backend Type Selection</h2>
+                <p>
+                    Add one narrow backend-selection header that maps the active build configuration to the selected concrete types. Most engine code should include stable core graphics headers and consume aliases instead of touching backend namespaces directly.
+                </p>
+                <pre><code>#if defined(NWB_GRAPHICS_API_VULKAN)
+#include "vulkan/backend.h"
+
+NWB_CORE_BEGIN
+
+namespace GraphicsBackend{
+    using Backend = Vulkan::BackendContext;
+    using Device = Vulkan::Device;
+    using CommandList = Vulkan::CommandList;
+    using Buffer = Vulkan::Buffer;
+    using Texture = Vulkan::Texture;
+};
+
+NWB_CORE_END
+#endif</code></pre>
+            </section>
+
+            <section class="section half">
+                <h2>Contract Validation</h2>
+                <p>
+                    Concepts should live near the shared graphics contract. Their purpose is to catch backend drift at compile time with useful errors. They are not the runtime abstraction layer.
+                </p>
+                <pre><code>template&lt;typename T&gt;
+concept GraphicsCommandListApi = requires(
+    T&amp; commandList,
+    const GraphicsState&amp; graphicsState,
+    const DrawArguments&amp; drawArgs
+){
+    commandList.open();
+    commandList.close();
+    commandList.setGraphicsState(graphicsState);
+    commandList.draw(drawArgs);
+    commandList.dispatch(1, 1, 1);
+    commandList.dispatchMesh(1, 1, 1);
+};
+
+static_assert(GraphicsCommandListApi&lt;GraphicsBackend::CommandList&gt;);</code></pre>
+            </section>
+
+            <section class="section">
+                <h2>Migration Phases</h2>
+
+                <div class="phase">
+                    <h3>Phase 1: Prepare the Shared Contract</h3>
+                    <ul>
+                        <li>Split <code>common.h</code> responsibilities into shared graphics data and backend-selected type aliases.</li>
+                        <li>Add a backend-selection header, for example <code>core/graphics/backend_types.h</code>.</li>
+                        <li>Add concept headers for device, command list, resources, pipelines, binding sets, descriptor tables, and ray tracing shader tables.</li>
+                        <li>Keep current behavior compiling while the contract headers are introduced.</li>
+                        <li>Update Visual Studio source lists for every new header/source file.</li>
+                    </ul>
+                </div>
+
+                <div class="phase">
+                    <h3>Phase 2: Convert Resource Ownership and Handles</h3>
+                    <ul>
+                        <li>Replace interface handles such as <code>RefCountPtr&lt;ITexture&gt;</code> with selected concrete handles such as <code>RefCountPtr&lt;GraphicsBackend::Texture&gt;</code>.</li>
+                        <li>Make concrete backend resource ref-counting non-virtual where possible.</li>
+                        <li>Preserve existing arena deleter and lifetime behavior.</li>
+                        <li>Convert resources in dependency order: heap, buffer, texture, staging texture, sampler, shader, framebuffer, binding layout, binding set, descriptor table, pipelines, acceleration structures.</li>
+                    </ul>
+                </div>
+
+                <div class="phase">
+                    <h3>Phase 3: Convert Device and Backend Context</h3>
+                    <ul>
+                        <li>Change <code>Graphics</code> ownership from <code>IGraphicsBackend</code> to selected <code>GraphicsBackend::Backend</code>.</li>
+                        <li>Change <code>Graphics::getDevice()</code> to return the selected concrete device type.</li>
+                        <li>Move backend factory selection from runtime factory function to compile-time backend construction.</li>
+                        <li>Remove virtual lifecycle dispatch for backend initialization, swapchain management, presentation, and live-object reporting.</li>
+                    </ul>
+                </div>
+
+                <div class="phase">
+                    <h3>Phase 4: Convert Command Lists</h3>
+                    <ul>
+                        <li>Convert all command-list creation and submission signatures to concrete selected types.</li>
+                        <li>Remove virtual dispatch from command recording calls: barriers, clears, copies, uploads, state setting, push constants, draw, dispatch, mesh dispatch, ray tracing dispatch, and GPU marker calls.</li>
+                        <li>Keep command-list resource retention semantics intact, especially binding-set and shader-table retention until GPU completion.</li>
+                        <li>Assert the command-list concept once the Vulkan command list is fully converted.</li>
+                    </ul>
+                </div>
+
+                <div class="phase">
+                    <h3>Phase 5: Remove Interface Remnants</h3>
+                    <ul>
+                        <li>Delete final <code>I*</code> graphics object interfaces that no longer define the public contract.</li>
+                        <li>Remove <code>virtual</code> and <code>override</code> from Vulkan classes where inheritance is no longer needed.</li>
+                        <li>Remove bridge casts and helper functions that existed only to cross the old virtual boundary.</li>
+                        <li>Rename remaining objects if needed so the final API no longer suggests runtime interface polymorphism.</li>
+                    </ul>
+                </div>
+
+                <div class="phase">
+                    <h3>Phase 6: Validation and Performance Pass</h3>
+                    <ul>
+                        <li>Build all supported configurations.</li>
+                        <li>Run graphics, scene, mesh rendering, resource upload, ray tracing, and Vulkan feature tests.</li>
+                        <li>Capture command-recording CPU profiles before and after the refactor.</li>
+                        <li>Verify symbols or compiler output for direct calls in hot command-list paths where practical.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section class="section half">
+                <h2>Non-Goals</h2>
+                <ul>
+                    <li>Do not add a new runtime plugin-style graphics backend system.</li>
+                    <li>Do not preserve virtual <code>I*</code> interfaces as compatibility aliases in the final shape.</li>
+                    <li>Do not reintroduce material-facing <code>VS + PS</code> fallback paths while touching renderer submission code.</li>
+                    <li>Do not move project-owned BxDF/material policy into engine asset paths as part of this refactor.</li>
+                    <li>Do not change shader authoring language support. Shader source remains Slang-only.</li>
+                </ul>
+            </section>
+
+            <section class="section half">
+                <h2>Required Invariants</h2>
+                <ul>
+                    <li><code>Graphics</code> still owns a required backend for its lifetime.</li>
+                    <li><code>getDevice()</code> remains an invariant path, not a nullable per-frame defensive check path.</li>
+                    <li>Graphics pipeline cache keys still include framebuffer/render-target compatibility.</li>
+                    <li>Vulkan command buffers still retain GPU-visible binding resources until GPU completion.</li>
+                    <li>GPU marker labels and shader entry-point text preserve exact spelling/case.</li>
+                </ul>
+            </section>
+
+            <section class="section">
+                <h2>Risk Register</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Risk</th>
+                            <th>Impact</th>
+                            <th>Mitigation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Large compile break across graphics consumers</td>
+                            <td>High</td>
+                            <td>Refactor in dependency order and keep each phase buildable before moving to the next.</td>
+                        </tr>
+                        <tr>
+                            <td>Resource lifetime regression after removing interface handles</td>
+                            <td>High</td>
+                            <td>Convert ownership types first, then command-list retention, then remove old interfaces.</td>
+                        </tr>
+                        <tr>
+                            <td>Backend-specific types leak into unrelated core domains</td>
+                            <td>Medium</td>
+                            <td>Require code outside backend folders to consume selected core aliases, not <code>Vulkan::</code> names directly.</td>
+                        </tr>
+                        <tr>
+                            <td>Concept checks become too broad or unreadable</td>
+                            <td>Medium</td>
+                            <td>Split concepts by responsibility: device creation, command recording, resources, binding, ray tracing.</td>
+                        </tr>
+                        <tr>
+                            <td>Performance win hidden by Vulkan loader dispatch</td>
+                            <td>Medium</td>
+                            <td>Measure command-recording CPU cost, inlining, and state-cache paths, not only raw Vulkan call cost.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="section half">
+                <h2>Open Design Decisions</h2>
+                <ul>
+                    <li>Exact file split: whether <code>common.h</code> keeps all data structs or delegates to smaller focused headers.</li>
+                    <li>Exact backend selection macro names and build-system ownership.</li>
+                    <li>Whether backend type aliases live directly in <code>NWB::Core</code> or under <code>NWB::Core::GraphicsBackend</code> with public convenience aliases.</li>
+                    <li>How much of the backend lifecycle context should be named <code>Backend</code>, <code>BackendContext</code>, or <code>GraphicsBackend</code>.</li>
+                </ul>
+            </section>
+
+            <section class="section half">
+                <h2>Done Means</h2>
+                <ul>
+                    <li>No hot graphics command path calls through <code>ICommandList</code> or equivalent pure virtual interfaces.</li>
+                    <li>No device/resource/pipeline public handle depends on runtime backend polymorphism.</li>
+                    <li>Vulkan satisfies the compile-time backend concepts.</li>
+                    <li>Renderer behavior and asset contracts are unchanged.</li>
+                    <li>Graphics tests and representative render scenes pass.</li>
+                    <li>Command-recording profile shows the expected reduction in engine-side dispatch overhead.</li>
+                </ul>
+            </section>
+        </div>
+    </main>
+</body>
+</html>

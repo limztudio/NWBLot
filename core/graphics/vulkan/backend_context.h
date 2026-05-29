@@ -7,8 +7,6 @@
 
 #include "backend.h"
 
-#include "../backend.h"
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,7 +40,7 @@ namespace DeviceExtensionFeature{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class BackendContext final : public IGraphicsBackend{
+class BackendContext final{
 private:
     using ExtensionStringSet = HashSet<GraphicsString, Hasher<GraphicsString>, EqualTo<GraphicsString>, GraphicsArena>;
     using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, Hasher<GraphicsString>, EqualTo<GraphicsString>, GraphicsArena>;
@@ -124,10 +122,9 @@ public:
 
 
 public:
-    [[nodiscard]] virtual IDevice* getDevice()const override{ return m_rhiDevice.get(); }
-    [[nodiscard]] virtual GraphicsAPI::Enum getGraphicsAPI()const override{ return GraphicsAPI::VULKAN; }
-    [[nodiscard]] virtual const tchar* getRendererString()const override{ return m_rendererString.c_str(); }
-    virtual bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)override;
+    [[nodiscard]] Device* getDevice()const{ return m_rhiDevice.get(); }
+    [[nodiscard]] const tchar* getRendererString()const{ return m_rendererString.c_str(); }
+    bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(const char* extensionName)const{
@@ -143,19 +140,20 @@ public:
         return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
     }
 
-    virtual ITexture* getCurrentBackBuffer()override;
-    virtual ITexture* getBackBuffer(u32 index)override;
-    virtual u32 getCurrentBackBufferIndex()override{ return m_swapChainIndex; }
-    virtual u32 getBackBufferCount()override{ return static_cast<u32>(m_swapChainImages.size()); }
+    Texture* getCurrentBackBuffer();
+    Texture* getBackBuffer(u32 index);
+    u32 getCurrentBackBufferIndex(){ return m_swapChainIndex; }
+    u32 getBackBufferCount(){ return static_cast<u32>(m_swapChainImages.size()); }
 
-    virtual void setPlatformFrameParam(const Common::FrameParam& frameParam)override{ m_platformFrameParam = frameParam; }
-    virtual bool createInstance()override;
-    virtual bool createDevice()override;
-    virtual bool createSwapChain()override;
-    virtual void destroy()override;
-    virtual void resizeSwapChain()override;
-    virtual bool beginFrame(const BackBufferResizeCallbacks& callbacks)override;
-    virtual bool present()override;
+    void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
+    bool createInstance();
+    bool createDevice();
+    bool createSwapChain();
+    void destroy();
+    void resizeSwapChain();
+    bool beginFrame(const BackBufferResizeCallbacks& callbacks);
+    bool present();
+    void reportLiveObjects()const{}
 
 private:
     void initDefaultExtensions();

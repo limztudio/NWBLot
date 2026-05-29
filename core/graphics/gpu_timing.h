@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "common.h"
+#include "api.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +29,7 @@ struct GpuTimingStats{
 
 struct GpuTimingScope{
     GpuTimingAccumulator* accumulator = nullptr;
-    ITimerQuery* query = nullptr;
+    TimerQuery* query = nullptr;
     u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] bool valid()const{ return accumulator != nullptr && query != nullptr && index != Limit<u32>::s_Max; }
@@ -62,68 +62,15 @@ public:
             m_lastStats = GpuTimingStats{};
     }
 
-    void collect(IDevice& device){
-        m_lastStats = GpuTimingStats{};
-        if(!m_enabled)
-            return;
-
-        for(QueryRecord& record : m_queries){
-            if(!record.pending || !record.query)
-                continue;
-            if(!device.pollTimerQuery(record.query.get()))
-                continue;
-
-            m_lastStats.seconds += device.getTimerQueryTime(record.query.get());
-            ++m_lastStats.sampleCount;
-            device.resetTimerQuery(record.query.get());
-            record.pending = false;
-        }
-    }
-
-    [[nodiscard]] GpuTimingScope beginQuery(IDevice& device, ICommandList& commandList){
-        if(!m_enabled)
-            return {};
-
-        const u32 index = acquireQuery(device);
-        if(index == Limit<u32>::s_Max)
-            return {};
-
-        QueryRecord& record = m_queries[index];
-        device.resetTimerQuery(record.query.get());
-        commandList.beginTimerQuery(record.query.get());
-        return GpuTimingScope{ this, record.query.get(), index };
-    }
-
-    void endQuery(ICommandList& commandList, const GpuTimingScope& scope){
-        if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
-            return;
-
-        QueryRecord& record = m_queries[scope.index];
-        if(record.query.get() != scope.query)
-            return;
-
-        commandList.endTimerQuery(record.query.get());
-        record.pending = true;
-    }
+    void collect(Device& device);
+    [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList);
+    void endQuery(CommandList& commandList, const GpuTimingScope& scope);
 
     [[nodiscard]] const GpuTimingStats& lastStats()const{ return m_lastStats; }
 
 
 private:
-    [[nodiscard]] u32 acquireQuery(IDevice& device){
-        for(usize i = 0u; i < m_queries.size(); ++i){
-            if(!m_queries[i].pending)
-                return static_cast<u32>(i);
-        }
-
-        QueryRecord record;
-        record.query = device.createTimerQuery();
-        if(!record.query)
-            return Limit<u32>::s_Max;
-
-        m_queries.push_back(Move(record));
-        return static_cast<u32>(m_queries.size() - 1u);
-    }
+    [[nodiscard]] u32 acquireQuery(Device& device);
 
 
 private:
@@ -165,7 +112,7 @@ public:
         m_emptyStats = GpuTimingStats{};
     }
 
-    void collect(IDevice& device){
+    void collect(Device& device){
         if(!m_enabled)
             return;
 
@@ -183,7 +130,7 @@ public:
 
 
 private:
-    [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, IDevice* device, ICommandList& commandList){
+    [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device* device, CommandList& commandList){
         if(!m_enabled || !scopeName || !device)
             return {};
 
@@ -194,7 +141,7 @@ private:
         return accumulator->beginQuery(*device, commandList);
     }
 
-    void endScope(ICommandList& commandList, const GpuTimingScope& scope){
+    void endScope(CommandList& commandList, const GpuTimingScope& scope){
         if(!scope.valid())
             return;
 
@@ -236,8 +183,8 @@ public:
     GpuTimingMeasure(
         GpuTimingRecorder& recorder,
         const Name& scopeName,
-        IDevice* device,
-        ICommandList& commandList
+        Device* device,
+        CommandList& commandList
     )
         : m_recorder(recorder)
         , m_commandList(commandList)
@@ -250,7 +197,7 @@ public:
 
 private:
     GpuTimingRecorder& m_recorder;
-    ICommandList& m_commandList;
+    CommandList& m_commandList;
     GpuTimingScope m_scope;
 };
 

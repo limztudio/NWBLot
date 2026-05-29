@@ -5,8 +5,9 @@
 #pragma once
 
 
-#include "common.h"
-#include "backend.h"
+#include "api.h"
+#include "backend_selection.h"
+
 #include "gpu_timing.h"
 #include "render_pass.h"
 
@@ -22,8 +23,9 @@ NWB_CORE_BEGIN
 
 class Graphics{
 private:
-    using BackendOwner = GlobalUniquePtr<IGraphicsBackend>;
-    using BackendPtr = NotNullUniquePtr<IGraphicsBackend, BackendOwner::deleter_type>;
+    using Backend = GraphicsBackend::Backend;
+    using BackendOwner = GlobalUniquePtr<Backend>;
+    using BackendPtr = NotNullUniquePtr<Backend, BackendOwner::deleter_type>;
 
 
 public:
@@ -95,8 +97,7 @@ public:
     Graphics(
         GraphicsAllocator& allocator,
         Alloc::ThreadPool& threadPool,
-        Alloc::JobSystem& jobSystem,
-        GraphicsBackendFactory backendFactory = nullptr
+        Alloc::JobSystem& jobSystem
     );
     ~Graphics();
 
@@ -112,7 +113,7 @@ public:
     void destroy();
 
 public:
-    [[nodiscard]] IDevice* getDevice()const noexcept{ return m_backend->getDevice(); }
+    [[nodiscard]] GraphicsBackend::Device* getDevice()const noexcept{ return m_backend->getDevice(); }
     [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){ return m_backend->enumerateAdapters(outAdapters); }
 
     void addRenderPassToFront(IRenderPass& pass);
@@ -120,7 +121,7 @@ public:
     void removeRenderPass(IRenderPass& pass);
 
     [[nodiscard]] const tchar* getRendererString()const{ return m_backend->getRendererString(); }
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return m_backend->getGraphicsAPI(); }
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const{ return GraphicsBackend::s_Api; }
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
@@ -134,12 +135,12 @@ public:
     void setWindowTitle(NotNull<const tchar*> title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
-    [[nodiscard]] ITexture* getCurrentBackBuffer()const{ return m_backend->getCurrentBackBuffer(); }
-    [[nodiscard]] ITexture* getBackBuffer(u32 index)const{ return m_backend->getBackBuffer(index); }
+    [[nodiscard]] Texture* getCurrentBackBuffer()const{ return m_backend->getCurrentBackBuffer(); }
+    [[nodiscard]] Texture* getBackBuffer(u32 index)const{ return m_backend->getBackBuffer(index); }
     [[nodiscard]] u32 getCurrentBackBufferIndex()const{ return m_backend->getCurrentBackBufferIndex(); }
     [[nodiscard]] u32 getBackBufferCount()const{ return m_backend->getBackBufferCount(); }
-    [[nodiscard]] IFramebuffer* getCurrentFramebuffer()const{ return getFramebuffer(getCurrentBackBufferIndex()); }
-    [[nodiscard]] IFramebuffer* getFramebuffer(u32 index)const;
+    [[nodiscard]] Framebuffer* getCurrentFramebuffer()const{ return getFramebuffer(getCurrentBackBufferIndex()); }
+    [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const;
 
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const{ return getDevice()->createBuffer(desc); }
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const{ return getDevice()->createTexture(desc); }
@@ -158,7 +159,6 @@ public:
 
     void waitJob(JobHandle handle)const;
     void waitAllJobs()const{ m_jobSystem.waitAll(); }
-
 
     void backBufferResizing();
     void backBufferResized();

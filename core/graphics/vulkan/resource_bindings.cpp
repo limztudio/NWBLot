@@ -481,7 +481,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
 
     if(bindingLayouts.size() == 1){
-        auto* layout = checked_cast<BindingLayout*>(bindingLayouts[0].get());
+        auto* layout = bindingLayouts[0].get();
         if(!layout){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout is invalid"), operationName);
             return false;
@@ -497,7 +497,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     usize descriptorSetLayoutCount = 0;
 
     for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
-        auto* layout = checked_cast<BindingLayout*>(bindingLayouts[i].get());
+        auto* layout = bindingLayouts[i].get();
         if(!layout){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
             return false;
@@ -518,7 +518,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
     descriptorSetLayouts.reserve(descriptorSetLayoutCount);
     for(const auto& bindingLayout : bindingLayouts){
-        auto* layout = checked_cast<BindingLayout*>(bindingLayout.get());
+        auto* layout = bindingLayout.get();
         NWB_ASSERT(layout != nullptr);
         for(const auto& descriptorSetLayout : layout->m_descriptorSetLayouts)
             descriptorSetLayouts.push_back(descriptorSetLayout);
@@ -575,12 +575,12 @@ bool Device::configurePipelineBindings(
 
 
 void Device::appendPipelineShaderStage(
-    IShader* shader,
+    Shader* shader,
     const VkShaderStageFlagBits stage,
     PipelineSpecializationInfoVector& specializationInfos,
     PipelineShaderStageVector& shaderStages
 )const{
-    auto* s = checked_cast<Shader*>(shader);
+    auto* s = shader;
     auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;
     stageInfo.module = s->m_shaderModule;
@@ -623,7 +623,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
 
     bool hasAnyDescriptors = false;
     for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
-        auto* layout = checked_cast<BindingLayout*>(bindingLayouts[i].get());
+        auto* layout = bindingLayouts[i].get();
         if(!layout)
             continue;
         if(layout->isBindlessLayout() || !layout->isDescriptorHeapCompatible())
@@ -631,7 +631,7 @@ bool DescriptorHeapManager::tryEnablePipeline(
 
         const u32 descriptorSetIndex = getDescriptorSetIndex(*layout, i);
         for(u32 j = 0; j < i; ++j){
-            auto* prevLayout = checked_cast<BindingLayout*>(bindingLayouts[j].get());
+            auto* prevLayout = bindingLayouts[j].get();
             if(!prevLayout)
                 continue;
             if(getDescriptorSetIndex(*prevLayout, j) == descriptorSetIndex)
@@ -1114,7 +1114,7 @@ void DescriptorHeapManager::shutdownHeap(HeapStorage& heap){
 
 
 BindingLayout::BindingLayout(const VulkanContext& context)
-    : RefCounter<IBindingLayout>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_descriptorSetLayouts(context.objectArena)
     , m_descriptorHeapBindings(context.objectArena)
@@ -1144,7 +1144,7 @@ BindingLayout::~BindingLayout(){
 
 
 DescriptorTable::DescriptorTable(const VulkanContext& context)
-    : RefCounter<IDescriptorTable>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_descriptorSets(context.objectArena)
     , m_writtenItems(context.objectArena)
     , m_context(context)
@@ -1161,7 +1161,7 @@ DescriptorTable::~DescriptorTable(){
 
 
 BindingSet::BindingSet(const VulkanContext& context)
-    : RefCounter<IBindingSet>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_descriptorSets(context.objectArena)
     , m_descriptorHeapPushIndices(context.objectArena)
@@ -1418,7 +1418,7 @@ DescriptorTableHandle Device::createDescriptorTable(const BindingLayoutHandle& l
 
     Alloc::ScratchArena scratchArena;
 
-    auto* layout = checked_cast<BindingLayout*>(layoutResource.get());
+    auto* layout = layoutResource.get();
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor table: binding layout is invalid"));
         return nullptr;
@@ -1503,10 +1503,10 @@ DescriptorTableHandle Device::createDescriptorTable(const BindingLayoutHandle& l
     return DescriptorTableHandle(table, DescriptorTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newSize, bool keepContents){
+void Device::resizeDescriptorTable(DescriptorTable* m_descriptorTable, u32 newSize, bool keepContents){
     VkResult res = VK_SUCCESS;
 
-    auto* table = checked_cast<DescriptorTable*>(m_descriptorTable);
+    auto* table = m_descriptorTable;
     if(!table)
         return;
 
@@ -1669,8 +1669,8 @@ void Device::resizeDescriptorTable(IDescriptorTable* m_descriptorTable, u32 newS
         return;
 }
 
-bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const BindingSetItem& item){
-    auto* table = checked_cast<DescriptorTable*>(m_descriptorTable);
+bool Device::writeDescriptorTable(DescriptorTable* m_descriptorTable, const BindingSetItem& item){
+    auto* table = m_descriptorTable;
     if(!table){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write descriptor table: descriptor table is invalid"));
         return false;
@@ -1830,7 +1830,7 @@ bool Device::writeDescriptorTable(IDescriptorTable* m_descriptorTable, const Bin
 
 
 BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const BindingLayoutHandle& layoutResource){
-    auto* layout = checked_cast<BindingLayout*>(layoutResource.get());
+    auto* layout = layoutResource.get();
     if(!layout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding set: binding layout is invalid"));
         return nullptr;
@@ -1847,7 +1847,7 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
     }
 
     bindingSet->m_descriptorTable = RefCountPtr<DescriptorTable, ArenaRefDeleter<DescriptorTable>>(
-        checked_cast<DescriptorTable*>(tableHandle.get()),
+        tableHandle.get(),
         ArenaRefDeleter<DescriptorTable>(&m_context.objectArena)
     );
     if(!bindingSet->m_descriptorTable){
@@ -2072,7 +2072,7 @@ void CommandList::bindPipelineBindingSets(
         if(!bindings[i])
             continue;
 
-        auto* bindingSet = checked_cast<BindingSet*>(bindings[i]);
+        auto* bindingSet = bindings[i];
         if(bindingSet->m_descriptorSets.empty())
             continue;
 
@@ -2112,7 +2112,7 @@ void CommandList::bindDescriptorHeapState(
         if(range.bindingSetIndex >= bindings.size())
             continue;
 
-        auto* bindingSet = checked_cast<BindingSet*>(bindings[range.bindingSetIndex]);
+        auto* bindingSet = bindings[range.bindingSetIndex];
         if(!bindingSet)
             continue;
         if(bindingSet->m_descriptorHeapPushIndices.size() < range.pushWordCount)

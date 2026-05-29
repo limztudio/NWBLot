@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/graphics/common.h>
+#include <core/graphics/api.h>
 #include <core/mesh/classification.h>
 #include <impl/assets_mesh/payload_types.h>
 #include <impl/assets_mesh/skinned_types.h>

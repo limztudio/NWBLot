@@ -64,7 +64,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         return false;
     }
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(*device);
     const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
     const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
@@ -307,7 +307,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
 }
 
 bool RendererSystem::createDeferredCompositeResources(){
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
 
     if(!m_deferredCompositeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
@@ -342,7 +342,7 @@ bool RendererSystem::createDeferredCompositeResources(){
     return true;
 }
 
-bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer){
+bool RendererSystem::createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer){
     if(!presentationFramebuffer)
         return false;
 
@@ -361,7 +361,7 @@ bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* present
         .addBindingLayout(m_deferredCompositeBindingLayout)
     ;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     m_deferredCompositePipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!m_deferredCompositePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite pipeline"));
@@ -371,7 +371,7 @@ bool RendererSystem::createDeferredCompositePipeline(Core::IFramebuffer* present
     return true;
 }
 
-void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets){
+void RendererSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo)
         commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
@@ -413,7 +413,7 @@ void RendererSystem::clearDeferredTargets(Core::ICommandList& commandList, Defer
     }
 }
 
-bool RendererSystem::renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer){
+bool RendererSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer){
     if(!presentationFramebuffer)
         return false;
     if(!targets.compositeBindingSet)

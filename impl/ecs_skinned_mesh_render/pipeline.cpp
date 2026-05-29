@@ -36,7 +36,7 @@ static const Name& MeshletBoundsComputeShaderName(){
 }
 
 static bool EnsureComputePipeline(
-    Core::IDevice& device,
+    Core::Device& device,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     SkinnedMeshSystem::ShaderPathResolveCallback& shaderPathResolver,
@@ -86,7 +86,7 @@ static bool EnsureComputePipeline(
 
 
 bool SkinnedMeshSystem::ensureSkinningPipeline(){
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
 
     if(!m_skinningBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
@@ -127,7 +127,7 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
 }
 
 bool SkinnedMeshSystem::ensureBoundsPipeline(){
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
 
     if(!m_boundsBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);

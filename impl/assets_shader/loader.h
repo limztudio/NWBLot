@@ -113,7 +113,7 @@ template<typename ShaderPathResolver>
     shaderDesc.setShaderType(shaderType);
     shaderDesc.setDebugName(debugName);
 
-    Core::IDevice* device = graphics.getDevice();
+    auto* device = graphics.getDevice();
     outShader = device->createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
     if(!outShader){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'")

@@ -10,7 +10,7 @@
 #include <core/alloc/general.h>
 #include <core/assets/global.h>
 #include <core/ecs/system.h>
-#include <core/graphics/common.h>
+#include <core/graphics/api.h>
 #include <core/graphics/render_pass.h>
 #include <core/input/module.h>
 
@@ -61,7 +61,7 @@ public:
 
 public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
-    virtual void render(Core::IFramebuffer* framebuffer)override;
+    virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void backBufferResizing()override;
 
 public:
@@ -95,20 +95,20 @@ private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
     void finishFrame();
-    [[nodiscard]] bool ensureRenderResources(Core::IFramebuffer* framebuffer);
+    [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
     [[nodiscard]] bool ensureInputLayout();
     [[nodiscard]] bool ensureBuffers(usize vertexCount, usize indexCount);
-    [[nodiscard]] bool processTextureRequests(Core::ICommandList& commandList, ImDrawData& drawData);
-    [[nodiscard]] bool createOrRefreshTexture(Core::ICommandList& commandList, ImTextureData& textureData);
+    [[nodiscard]] bool processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData);
+    [[nodiscard]] bool createOrRefreshTexture(Core::CommandList& commandList, ImTextureData& textureData);
     void destroyTexture(ImTextureData& textureData);
     [[nodiscard]] UiTextureResource* textureResourceFromId(ImTextureID textureId)const;
     [[nodiscard]] UiTextureResource* fallbackTextureResource()const{
         return m_textures.empty() ? nullptr : m_textures.front().get();
     }
-    [[nodiscard]] Core::IBindingSet* bindingSetForTexture(ImTextureID textureId)const;
-    [[nodiscard]] bool uploadDrawBuffers(Core::ICommandList& commandList, ImDrawData& drawData);
-    void renderDrawData(Core::ICommandList& commandList, Core::IFramebuffer* framebuffer, ImDrawData& drawData);
+    [[nodiscard]] Core::BindingSet* bindingSetForTexture(ImTextureID textureId)const;
+    [[nodiscard]] bool uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& drawData);
+    void renderDrawData(Core::CommandList& commandList, Core::Framebuffer* framebuffer, ImDrawData& drawData);
 
 private:
     Core::Alloc::GlobalArena& m_arena;

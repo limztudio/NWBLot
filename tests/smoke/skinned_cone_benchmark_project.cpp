@@ -18,6 +18,8 @@
 #include <impl/ecs_skinned_mesh_render/module.h>
 #include <impl/ecs_skinned_mesh_render/timing_names.h>
 
+#include <cstdlib>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -185,9 +187,24 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
 }
 
-[[nodiscard]] static bool StaticPreviewEnabled(){
-    const char* value = NWB_GETENV(s_StaticPreviewEnv);
+[[nodiscard]] static bool EnvironmentFlagEnabled(const char* name){
+#if defined(_MSC_VER)
+    char* value = nullptr;
+    size_t valueSize = 0;
+    if(::_dupenv_s(&value, &valueSize, name) != 0 || !value)
+        return false;
+
+    const bool enabled = value[0] != '\0' && value[0] != '0';
+    ::free(value);
+    return enabled;
+#else
+    const char* value = NWB_GETENV(name);
     return value && value[0] != '\0' && value[0] != '0';
+#endif
+}
+
+[[nodiscard]] static bool StaticPreviewEnabled(){
+    return EnvironmentFlagEnabled(s_StaticPreviewEnv);
 }
 
 static void AccumulateGpuStats(const NWB::Core::GpuTimingStats& stats, f64& seconds, u32& samples){

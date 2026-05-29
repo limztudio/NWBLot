@@ -24,7 +24,7 @@ bool RendererSystem::createMeshShaderResources(){
     addMeshFrameBindingLayoutItems(bindingLayoutDesc);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
     if(!m_meshBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding layout"));
@@ -43,7 +43,7 @@ bool RendererSystem::createComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
-        Core::IDevice* device = m_graphics.getDevice();
+        auto* device = m_graphics.getDevice();
         m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_computeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
@@ -71,7 +71,7 @@ bool RendererSystem::createComputeEmulationResources(){
         ECSRenderDetail::SetEmulatedVertexAttribute(attributes[4], Core::Format::RGBA32_FLOAT, 16u, "COLOR");
         ECSRenderDetail::SetEmulatedVertexAttribute(attributes[5], Core::Format::RGBA32_FLOAT, 20u, "POSITION1");
 
-        Core::IDevice* device = m_graphics.getDevice();
+        auto* device = m_graphics.getDevice();
         m_emulationInputLayout = device->createInputLayout(attributes, 6, m_emulationVertexShader.get());
         if(!m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
@@ -88,7 +88,7 @@ bool RendererSystem::createEmulationViewResources(){
         return false;
     }
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     if(!m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
@@ -192,7 +192,7 @@ bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
     return true;
 }
 
-bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const f32 fallbackAspectRatio){
+bool RendererSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
     if(!m_meshViewBuffer){
         Core::BufferDesc meshViewBufferDesc;
         meshViewBufferDesc
@@ -221,7 +221,7 @@ bool RendererSystem::updateMeshViewBuffer(Core::ICommandList& commandList, const
     return true;
 }
 
-bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData){
+bool RendererSystem::uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
     if(!reserveInstanceBufferCapacity(instanceData.size()))
@@ -247,7 +247,7 @@ bool RendererSystem::uploadInstanceBuffer(Core::ICommandList& commandList, const
 }
 
 bool RendererSystem::uploadMaterialTypedBuffer(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
 #if defined(NWB_DEBUG)

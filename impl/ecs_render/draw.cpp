@@ -48,11 +48,11 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
 
 void RendererSystem::renderMaterialPass(
-    Core::ICommandList& commandList,
-    Core::IFramebuffer* framebuffer,
+    Core::CommandList& commandList,
+    Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
-    Core::IBindingSet* passBindingSet,
+    Core::BindingSet* passBindingSet,
     const AvboitFrameTargets* avboitTargets
 ){
     if(!framebuffer)
@@ -109,7 +109,7 @@ void RendererSystem::renderMaterialPass(
 }
 
 void RendererSystem::gatherMaterialPassDrawItems(
-    Core::IFramebuffer* framebuffer,
+    Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
     MaterialPassDrawItemVector& meshDrawItems,
@@ -341,7 +341,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 }
 
 void RendererSystem::setMaterialPassCommonBufferStates(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     const MeshResources& mesh
 ){
     forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){

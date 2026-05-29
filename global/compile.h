@@ -180,10 +180,7 @@
 #define NWB_VWSNPRINTF(dest, destSize, format, args) vswprintf_s(dest, destSize, format, args)
 #define NWB_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
 #else
-
-NWB_BEGIN
 namespace CompileDetail{
-
 template<typename DestT, typename SrcT>
 inline DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize){
     if(srcSize == 0u)
@@ -276,25 +273,23 @@ inline int BoundedCat(CharT* dest, const std::size_t destSize, const CharT* src)
 inline int BoundedStrError(char* dest, const std::size_t destSize, const int errorNum){
     return BoundedCopy(dest, destSize, std::strerror(errorNum));
 }
-
-} // namespace CompileDetail
-NWB_END
+};
 
 #define NWB_STRNLEN(src, count) strnlen(src, count)
 #define NWB_WSTRNLEN(src, count) wcsnlen(src, count)
-#define NWB_MEMCPY(dest, destSize, src, srcSize) ::NWB::CompileDetail::CheckedMemcpy(dest, destSize, src, srcSize)
-#define NWB_WMEMCPY(dest, destSize, src, srcSize) ::NWB::CompileDetail::CheckedWmemcpy(dest, destSize, src, srcSize)
-#define NWB_STRCPY(dest, destSize, src) ::NWB::CompileDetail::BoundedCopy(dest, destSize, src)
-#define NWB_WSTRCPY(dest, destSize, src) ::NWB::CompileDetail::BoundedCopy(dest, destSize, src)
-#define NWB_STRNCPY(dest, destSize, src, count) ::NWB::CompileDetail::BoundedNCopy(dest, destSize, src, count)
-#define NWB_WSTRNCPY(dest, destSize, src, count) ::NWB::CompileDetail::BoundedNCopy(dest, destSize, src, count)
-#define NWB_STRCAT(dest, destSize, src) ::NWB::CompileDetail::BoundedCat(dest, destSize, src)
-#define NWB_WSTRCAT(dest, destSize, src) ::NWB::CompileDetail::BoundedCat(dest, destSize, src)
+#define NWB_MEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedMemcpy(dest, destSize, src, srcSize)
+#define NWB_WMEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedWmemcpy(dest, destSize, src, srcSize)
+#define NWB_STRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
+#define NWB_WSTRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
+#define NWB_STRNCPY(dest, destSize, src, count) ::CompileDetail::BoundedNCopy(dest, destSize, src, count)
+#define NWB_WSTRNCPY(dest, destSize, src, count) ::CompileDetail::BoundedNCopy(dest, destSize, src, count)
+#define NWB_STRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
+#define NWB_WSTRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
 #define NWB_SPRINTF(format, formatSize, ...) snprintf(format, formatSize, __VA_ARGS__)
 #define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, formatSize, __VA_ARGS__)
 #define NWB_VSNPRINTF(dest, destSize, format, args) vsnprintf(dest, destSize, format, args)
 #define NWB_VWSNPRINTF(dest, destSize, format, args) vswprintf(dest, destSize, format, args)
-#define NWB_STRERROR(dest, destSize, errorNum) ::NWB::CompileDetail::BoundedStrError(dest, destSize, errorNum)
+#define NWB_STRERROR(dest, destSize, errorNum) ::CompileDetail::BoundedStrError(dest, destSize, errorNum)
 #endif
 
 #if defined(UNICODE) || defined(_UNICODE)

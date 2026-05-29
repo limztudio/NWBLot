@@ -10,7 +10,7 @@
 #include <core/alloc/scratch.h>
 #include <core/assets/global.h>
 #include <core/ecs/system.h>
-#include <core/graphics/common.h>
+#include <core/graphics/api.h>
 #include <core/graphics/render_pass.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_mesh_runtime/mesh.h>
@@ -222,10 +222,10 @@ public:
 
 private:
     struct MaterialPassDrawContext{
-        Core::ICommandList& commandList;
-        Core::IFramebuffer* framebuffer = nullptr;
+        Core::CommandList& commandList;
+        Core::Framebuffer* framebuffer = nullptr;
         MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-        Core::IBindingSet* passBindingSet = nullptr;
+        Core::BindingSet* passBindingSet = nullptr;
         const AvboitFrameTargets* avboitTargets = nullptr;
         const Core::ViewportState& viewportState;
     };
@@ -293,7 +293,7 @@ public:
 
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
-    virtual void render(Core::IFramebuffer* framebuffer)override;
+    virtual void render(Core::Framebuffer* framebuffer)override;
 
 private:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
@@ -373,7 +373,7 @@ private:
 
 private:
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
-    [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::IFramebuffer* framebuffer, MaterialPipelineResources*& outResources);
+    [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
 
@@ -381,17 +381,17 @@ private:
     [[nodiscard]] bool createMeshShaderResources();
     [[nodiscard]] bool createComputeEmulationResources();
     [[nodiscard]] bool createEmulationViewResources();
-    [[nodiscard]] bool updateMeshViewBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
+    [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     void renderMaterialPass(
-        Core::ICommandList& commandList,
-        Core::IFramebuffer* framebuffer,
+        Core::CommandList& commandList,
+        Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         bool transparent,
-        Core::IBindingSet* passBindingSet,
+        Core::BindingSet* passBindingSet,
         const AvboitFrameTargets* avboitTargets
     );
     void gatherMaterialPassDrawItems(
-        Core::IFramebuffer* framebuffer,
+        Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         bool transparent,
         MaterialPassDrawItemVector& meshDrawItems,
@@ -399,7 +399,7 @@ private:
         InstanceGpuDataVector& instanceData,
         MaterialTypedByteDataVector& materialTypedBytes
     );
-    void setMaterialPassCommonBufferStates(Core::ICommandList& commandList, const MeshResources& mesh);
+    void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);
     void setMaterialPassDrawPushConstants(
         const MaterialPassDrawContext& context,
         const MaterialPassDrawItem& drawItem,
@@ -411,9 +411,9 @@ private:
 private:
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);
-    [[nodiscard]] bool uploadInstanceBuffer(Core::ICommandList& commandList, const InstanceGpuDataVector& instanceData);
+    [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialTypedBuffer(
-        Core::ICommandList& commandList,
+        Core::CommandList& commandList,
         const MaterialTypedByteDataVector& materialTypedBytes
     );
     [[nodiscard]] bool findMaterialPassDrawItemResources(
@@ -434,19 +434,19 @@ private:
     }
 
 private:
-    [[nodiscard]] bool updateSceneShadingBuffer(Core::ICommandList& commandList, f32 fallbackAspectRatio);
+    [[nodiscard]] bool updateSceneShadingBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline(DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderDeferredLighting(Core::ICommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
 private:
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();
-    [[nodiscard]] bool createDeferredCompositePipeline(Core::IFramebuffer* presentationFramebuffer);
+    [[nodiscard]] bool createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearDeferredTargets(Core::ICommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderDeferredComposite(Core::ICommandList& commandList, DeferredFrameTargets& targets, Core::IFramebuffer* presentationFramebuffer);
+    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
 
 private:
     [[nodiscard]] bool createAvboitResources();
@@ -458,10 +458,10 @@ private:
         Core::Format::Enum accumExtinctionFormat,
         Core::Format::Enum transmittanceFormat
     );
-    void clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets);
-    void renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets);
-    void dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets);
-    void dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets);
+    void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
+    void renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets);
+    void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets);
 
 
 private:

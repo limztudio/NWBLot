@@ -123,7 +123,7 @@ void RendererSystem::invalidateResources(){
     m_materialTypedBufferCapacity = 0u;
 }
 
-void RendererSystem::render(Core::IFramebuffer* framebuffer){
+void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
@@ -133,7 +133,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
         return;
     DeferredFrameTargets& deferredTargets = m_deferredTargets;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
@@ -207,7 +207,7 @@ void RendererSystem::render(Core::IFramebuffer* framebuffer){
     }
 
     commandList->close();
-    Core::ICommandList* commandLists[] = { commandList.get() };
+    Core::CommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1);
 }
 

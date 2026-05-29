@@ -172,7 +172,7 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
             return false;
 
-        Buffer* buffer = checked_cast<Buffer*>(chunk.buffer.get());
+        Buffer* buffer = chunk.buffer.get();
         *pBuffer = buffer;
         *pOffset = alignedOffset;
         if(pCpuVA)

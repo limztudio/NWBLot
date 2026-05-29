@@ -107,7 +107,7 @@ inline constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferr
 
 template<usize N>
 inline Core::Format::Enum SelectSupportedFormat(
-    Core::IDevice& device,
+    Core::Device& device,
     const Core::Format::Enum (&candidates)[N],
     const Core::FormatSupport::Mask requiredSupport
 ){
@@ -120,7 +120,7 @@ inline Core::Format::Enum SelectSupportedFormat(
 }
 
 inline bool CreateClampSampler(
-    Core::IDevice& device,
+    Core::Device& device,
     Core::SamplerHandle& sampler,
     const bool linearFiltering,
     const tchar* failureMessage
@@ -141,11 +141,11 @@ inline bool CreateClampSampler(
     return false;
 }
 
-inline bool CreatePointClampSampler(Core::IDevice& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
+inline bool CreatePointClampSampler(Core::Device& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
     return CreateClampSampler(device, sampler, false, failureMessage);
 }
 
-inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
+inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
     };
@@ -154,7 +154,7 @@ inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::IDevice& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-inline Core::Format::Enum SelectGBufferVectorFormat(Core::IDevice& device){
+inline Core::Format::Enum SelectGBufferVectorFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
     };
@@ -163,7 +163,7 @@ inline Core::Format::Enum SelectGBufferVectorFormat(Core::IDevice& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-inline Core::Format::Enum SelectGBufferDepthFormat(Core::IDevice& device){
+inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::D32,
         Core::Format::D24S8,
@@ -302,7 +302,7 @@ inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
 }
 
 inline void SetShaderDrivenPushConstants(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
     const Core::ViewportState& viewportState,
@@ -313,7 +313,7 @@ inline void SetShaderDrivenPushConstants(
 }
 
 inline void SetTransparentDrawPushConstants(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
     const Core::ViewportState& viewportState,

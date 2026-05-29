@@ -154,7 +154,7 @@ bool LoadShaderArchiveRecords(
 
 void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 #if defined(NWB_DEBUG)
-    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable Vulkan validation layer");
+    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer");
 #else
     static_cast<void>(app);
     static_cast<void>(options);

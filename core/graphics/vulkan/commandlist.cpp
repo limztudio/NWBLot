@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
-    : RefCounter<ICommandList>(device.m_context.threadPool)
+    : RefCounter<GraphicsResource>(device.m_context.threadPool)
     , m_desc(params)
     , m_stateTracker(MakeGlobalUnique<StateTracker>(device.m_context.objectArena, device.m_context))
     , m_device(device)
@@ -128,28 +128,25 @@ void CommandList::clearState(){
     m_pendingBufferBarriers.clear();
 }
 
-void CommandList::retainResource(IResource* resource){
+void CommandList::retainResource(GraphicsResource* resource){
     if(resource)
-        m_currentCmdBuf->m_referencedResources.emplace_back(resource, ArenaRefDeleter<IResource>(&m_context.objectArena));
+        m_currentCmdBuf->m_referencedResources.emplace_back(resource, ArenaRefDeleter<GraphicsResource>(&m_context.objectArena));
 }
 
-void CommandList::retainStagingBuffer(IBuffer* buffer){
-    if(buffer)
-        m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(buffer, ArenaRefDeleter<IBuffer>(&m_context.objectArena));
+void CommandList::retainStagingBuffer(Buffer& buffer){
+    m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
 }
 
-IDevice* CommandList::getDevice(){
+Device* CommandList::getDevice(){
     return &m_device;
 }
 
-bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: No indirect buffer bound for {}"), commandName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: No indirect buffer bound"));
+bool CommandList::validateIndirectBuffer(Buffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
+#if defined(NWB_DEBUG)
+    if(!VulkanDetail::DebugValidateNotNull(commandName, NWB_TEXT("no indirect buffer is bound"), bufferResource))
         return false;
-    }
 
-    auto* buffer = checked_cast<Buffer*>(bufferResource);
+    auto* buffer = bufferResource;
     if(!buffer->m_desc.isDrawIndirectArgs){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: buffer was not created with indirect-argument usage"), commandName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: buffer was not created with indirect-argument usage"));
@@ -162,13 +159,18 @@ bool CommandList::validateIndirectBuffer(IBuffer* bufferResource, u64 offsetByte
     }
 
     const u64 totalBytes = commandSizeBytes * commandCount;
-    if(!VulkanDetail::IsBufferRangeInBounds(buffer->m_desc, offsetBytes, totalBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute {}: indirect argument range is outside the buffer"), commandName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to execute indirect command: indirect argument range is outside the buffer"));
+    if(!VulkanDetail::DebugValidateBufferRange(buffer->m_desc, offsetBytes, totalBytes, commandName, NWB_TEXT("indirect argument")))
         return false;
-    }
 
     return true;
+#else
+    static_cast<void>(bufferResource);
+    static_cast<void>(offsetBytes);
+    static_cast<void>(commandSizeBytes);
+    static_cast<void>(commandCount);
+    static_cast<void>(commandName);
+    return true;
+#endif
 }
 
 bool CommandList::prepareDrawIndirect(
@@ -183,6 +185,7 @@ bool CommandList::prepareDrawIndirect(
     outIndirectBuffer = nullptr;
     if(drawCount == 0)
         return false;
+#if defined(NWB_DEBUG)
     if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
@@ -200,87 +203,17 @@ bool CommandList::prepareDrawIndirect(
     }
     if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, commandSizeBytes, drawCount, commandName))
         return false;
+#else
+    static_cast<void>(offsetBytes);
+    static_cast<void>(commandSizeBytes);
+    static_cast<void>(operationLabel);
+    static_cast<void>(commandName);
+    static_cast<void>(indexMode);
+#endif
 
-    outIndirectBuffer = checked_cast<Buffer*>(m_currentGraphicsState.indirectParams);
+    outIndirectBuffer = m_currentGraphicsState.indirectParams;
     return true;
 }
-
-void CommandList::copyTextureToBuffer(IBuffer* destResource, u64 destOffsetBytes, u32 destRowPitch, ITexture* srcResource, const TextureSlice& srcSlice){
-    auto* dest = checked_cast<Buffer*>(destResource);
-    auto* src = checked_cast<Texture*>(srcResource);
-    if(!dest || !src){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: resource is invalid"));
-        return;
-    }
-
-    TextureSlice resolvedSrc;
-    if(!VulkanDetail::IsTextureSliceInBounds(src->m_desc, srcSlice, src->m_formatLayout, &resolvedSrc)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source slice is outside the texture"));
-        return;
-    }
-    if(src->m_desc.sampleCount != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: source texture must be single-sampled"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: source texture must be single-sampled"));
-        return;
-    }
-
-    VkImageAspectFlags aspectMask = 0;
-    if(!VulkanDetail::GetBufferImageCopyAspectMask(src->m_aspectMask, NWB_TEXT("copy texture to buffer"), aspectMask)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: combined depth/stencil buffer-image copies are not supported"));
-        return;
-    }
-
-    const VkExtent3D srcExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
-    VulkanDetail::BufferImageCopyLayout copyLayout;
-    if(
-        !VulkanDetail::BuildBufferImageCopyLayout(
-            srcExtent,
-            src->m_formatLayout,
-            static_cast<u64>(destRowPitch),
-            0,
-            VulkanDetail::BufferImageCopyRequiredSize::TouchedBytes,
-            VulkanDetail::BufferImageCopyPitchFields::OmitImplicit,
-            NWB_TEXT("copy texture to buffer"),
-            copyLayout
-        )
-    ){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: invalid buffer-image copy layout"));
-        return;
-    }
-
-    const BufferDesc& destDesc = dest->getDescription();
-    if(destOffsetBytes > destDesc.byteSize || copyLayout.requiredSize > destDesc.byteSize - destOffsetBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination offset {} size {} is outside buffer size {}")
-            , destOffsetBytes
-            , copyLayout.requiredSize
-            , destDesc.byteSize
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy texture to buffer: destination range is outside the buffer"));
-        return;
-    }
-
-    VkBufferImageCopy region{};
-    region.bufferOffset = destOffsetBytes;
-    region.bufferRowLength = copyLayout.bufferRowLength;
-    region.bufferImageHeight = copyLayout.bufferImageHeight;
-    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspectMask, resolvedSrc.mipLevel, resolvedSrc.arraySlice);
-    region.imageOffset = { static_cast<int32_t>(resolvedSrc.x), static_cast<int32_t>(resolvedSrc.y), static_cast<int32_t>(resolvedSrc.z) };
-    region.imageExtent = { resolvedSrc.width, resolvedSrc.height, resolvedSrc.depth };
-
-    setTextureState(srcResource, TextureSubresourceSet(resolvedSrc.mipLevel, 1u, resolvedSrc.arraySlice, 1u), ResourceStates::CopySource);
-    setBufferState(destResource, ResourceStates::CopyDest);
-
-    vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_buffer, 1, &region);
-
-    retainResource(srcResource);
-    retainResource(destResource);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_VULKAN_END
 

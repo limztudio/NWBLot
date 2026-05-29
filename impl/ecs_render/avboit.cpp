@@ -35,18 +35,18 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
     return target;
 }
 
-static void SetTextureCopyDestIfValid(Core::ICommandList& commandList, const Core::TextureHandle& texture){
+static void SetTextureCopyDestIfValid(Core::CommandList& commandList, const Core::TextureHandle& texture){
     if(texture)
         commandList.setTextureState(texture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 }
 
-static void SetBufferCopyDestIfValid(Core::ICommandList& commandList, const Core::BufferHandle& buffer){
+static void SetBufferCopyDestIfValid(Core::CommandList& commandList, const Core::BufferHandle& buffer){
     if(buffer)
         commandList.setBufferState(buffer.get(), Core::ResourceStates::CopyDest);
 }
 
 static void ClearTextureFloatIfValid(
-    Core::ICommandList& commandList,
+    Core::CommandList& commandList,
     const Core::TextureHandle& texture,
     const Core::Color& value
 ){
@@ -54,15 +54,15 @@ static void ClearTextureFloatIfValid(
         commandList.clearTextureFloat(texture.get(), ECSRenderDetail::s_FramebufferSubresources, value);
 }
 
-static void ClearBufferUIntIfValid(Core::ICommandList& commandList, const Core::BufferHandle& buffer, const u32 value){
+static void ClearBufferUIntIfValid(Core::CommandList& commandList, const Core::BufferHandle& buffer, const u32 value){
     if(buffer)
         commandList.clearBufferUInt(buffer.get(), value);
 }
 
 static void DispatchAvboitCompute(
-    Core::ICommandList& commandList,
-    Core::IComputePipeline* pipeline,
-    Core::IBindingSet* bindingSet,
+    Core::CommandList& commandList,
+    Core::ComputePipeline* pipeline,
+    Core::BindingSet* bindingSet,
     const RendererSystem::AvboitFrameTargets& targets,
     const u32 groupCountX
 ){
@@ -92,7 +92,7 @@ static void DispatchAvboitCompute(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::IDevice& device){
+Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,
         Core::Format::RGBA8_UNORM,
@@ -102,7 +102,7 @@ Core::Format::Enum SelectRendererAvboitAccumColorFormat(Core::IDevice& device){
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& device){
+Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::R16_FLOAT,
         Core::Format::R32_FLOAT,
@@ -115,7 +115,7 @@ Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::IDevice& devi
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device){
+Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::R16_FLOAT,
     };
@@ -128,7 +128,7 @@ Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::IDevice& device
     return ECSRenderDetail::SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::IDevice& device){
+Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::R8_UNORM,
         Core::Format::RGBA8_UNORM,
@@ -194,7 +194,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSyste
     return pushConstants;
 }
 
-void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitFrameTargets& targets){
+void RendererSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
     __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.lowRasterTarget);
     __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.accumColor);
     __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.accumExtinction);
@@ -219,7 +219,7 @@ void RendererSystem::clearAvboitTargets(Core::ICommandList& commandList, AvboitF
     __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.transmittanceTexture, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
-void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, DeferredFrameTargets& targets){
+void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
@@ -261,7 +261,7 @@ void RendererSystem::renderAvboitPasses(Core::ICommandList& commandList, Deferre
     commandList.endRenderPass();
 }
 
-void RendererSystem::dispatchAvboitDepthWarp(Core::ICommandList& commandList, AvboitFrameTargets& targets){
+void RendererSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
         m_avboitDepthWarpPipeline.get(),
@@ -271,7 +271,7 @@ void RendererSystem::dispatchAvboitDepthWarp(Core::ICommandList& commandList, Av
     );
 }
 
-void RendererSystem::dispatchAvboitIntegration(Core::ICommandList& commandList, AvboitFrameTargets& targets){
+void RendererSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     __hidden_avboit::DispatchAvboitCompute(
         commandList,

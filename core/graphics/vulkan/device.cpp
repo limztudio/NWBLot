@@ -228,7 +228,7 @@ static void VulkanSystemFree(void* pUserData, void* pMemory){
 
 
 Device::Device(const DeviceDesc& desc)
-    : RefCounter<IDevice>(desc.threadPool)
+    : RefCounter<GraphicsResource>(desc.threadPool)
     , m_aftermathEnabled(desc.aftermathEnabled)
     , m_aftermathCrashDumpHelper(desc.allocator.getObjectArena())
     , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
@@ -684,7 +684,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
+u64 Device::executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
     Queue* queue = getQueue(executionQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
@@ -698,9 +698,8 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
         for(usize i = 0; i < numCommandLists; ++i){
             if(!pCommandLists[i])
                 continue;
-            auto* cmdList = checked_cast<CommandList*>(pCommandLists[i]);
-            if(cmdList && cmdList->m_currentCmdBuf)
-                submittedOwners.push_back(cmdList->m_currentCmdBuf.get());
+            if(pCommandLists[i] && pCommandLists[i]->m_currentCmdBuf)
+                submittedOwners.push_back(pCommandLists[i]->m_currentCmdBuf.get());
         }
     }
 
@@ -719,7 +718,7 @@ u64 Device::executeCommandLists(ICommandList* const* pCommandLists, usize numCom
                 if(!owner || !pCommandLists)
                     return false;
                 for(usize i = 0; i < numCommandLists; ++i){
-                    auto* cmdList = checked_cast<CommandList*>(pCommandLists[i]);
+                    auto* cmdList = pCommandLists[i];
                     if(cmdList && cmdList->m_currentCmdBuf.get() == owner)
                         return true;
                 }
@@ -862,7 +861,7 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 
 
 Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<IHeap>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_allocator(allocator)
 {}
 Heap::~Heap(){

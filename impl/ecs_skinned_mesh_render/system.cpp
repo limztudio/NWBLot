@@ -171,10 +171,10 @@ bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 versi
     return found;
 }
 
-void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
+void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList;
     bool commandListOpen = false;
     bool commandListFailed = false;
@@ -234,7 +234,7 @@ void SkinnedMeshSystem::render(Core::IFramebuffer* framebuffer){
     commandList->close();
 
     if(submittedWork){
-        Core::ICommandList* commandLists[] = { commandList.get() };
+        Core::CommandList* commandLists[] = { commandList.get() };
         device->executeCommandLists(commandLists, 1);
     }
 }

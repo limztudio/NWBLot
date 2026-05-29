@@ -10,7 +10,7 @@
 #include <core/common/module.h>
 #include <core/alloc/module.h>
 
-#include "basic.h"
+#include "resource_base.h"
 #include "shader_param.h"
 
 
@@ -18,6 +18,111 @@
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace GraphicsAPI{
+    enum Enum : u8;
+};
+
+namespace GraphicsBackend{
+    class BackendContext;
+    using Backend = BackendContext;
+    class Device;
+    class Heap;
+    class Texture;
+    class StagingTexture;
+    class SamplerFeedbackTexture;
+    class Buffer;
+    class Shader;
+    class ShaderLibrary;
+    class Sampler;
+    class InputLayout;
+    class Framebuffer;
+    class AccelStruct;
+    class OpacityMicromap;
+    class BindingLayout;
+    class BindingSet;
+    class DescriptorTable;
+    class GraphicsPipeline;
+    class ComputePipeline;
+    class MeshletPipeline;
+    class EventQuery;
+    class TimerQuery;
+    class ShaderTable;
+    class RayTracingPipeline;
+    class CommandList;
+
+    using RayTracingOpacityMicromap = OpacityMicromap;
+    using RayTracingAccelStruct = AccelStruct;
+    using RayTracingShaderTable = ShaderTable;
+
+#define NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Type) \
+    u32 RefCountAddReference(Type* value)noexcept; \
+    u32 RefCountRelease(Type* value)noexcept; \
+    void DestroyArenaReference(Alloc::GlobalArena* arena, Type* value)noexcept;
+
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Device)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Heap)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Texture)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(StagingTexture)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(SamplerFeedbackTexture)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Buffer)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Shader)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ShaderLibrary)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Sampler)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(InputLayout)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Framebuffer)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(AccelStruct)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(OpacityMicromap)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(BindingLayout)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(BindingSet)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(DescriptorTable)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(GraphicsPipeline)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ComputePipeline)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(MeshletPipeline)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(EventQuery)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(TimerQuery)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ShaderTable)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(RayTracingPipeline)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(CommandList)
+
+#undef NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS
+
+    template<typename T>
+    using Handle = RefCountPtr<T, ArenaRefDeleter<T>>;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using Device = GraphicsBackend::Device;
+using Heap = GraphicsBackend::Heap;
+using Texture = GraphicsBackend::Texture;
+using StagingTexture = GraphicsBackend::StagingTexture;
+using SamplerFeedbackTexture = GraphicsBackend::SamplerFeedbackTexture;
+using InputLayout = GraphicsBackend::InputLayout;
+using Buffer = GraphicsBackend::Buffer;
+using Shader = GraphicsBackend::Shader;
+using ShaderLibrary = GraphicsBackend::ShaderLibrary;
+using Sampler = GraphicsBackend::Sampler;
+using Framebuffer = GraphicsBackend::Framebuffer;
+using RayTracingOpacityMicromap = GraphicsBackend::RayTracingOpacityMicromap;
+using RayTracingAccelStruct = GraphicsBackend::RayTracingAccelStruct;
+using BindingLayout = GraphicsBackend::BindingLayout;
+using BindingSet = GraphicsBackend::BindingSet;
+using DescriptorTable = GraphicsBackend::DescriptorTable;
+using GraphicsPipeline = GraphicsBackend::GraphicsPipeline;
+using ComputePipeline = GraphicsBackend::ComputePipeline;
+using MeshletPipeline = GraphicsBackend::MeshletPipeline;
+using EventQuery = GraphicsBackend::EventQuery;
+using TimerQuery = GraphicsBackend::TimerQuery;
+using RayTracingShaderTable = GraphicsBackend::RayTracingShaderTable;
+using RayTracingPipeline = GraphicsBackend::RayTracingPipeline;
+using CommandList = GraphicsBackend::CommandList;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,9 +146,6 @@ void HashCombine(usize& seed, const T& v){
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 inline constexpr u32 s_MaxRenderTargets = 8;
 inline constexpr u32 s_MaxViewports = 16;
 inline constexpr u32 s_MaxVertexAttributes = 16;
@@ -55,14 +157,10 @@ inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
 inline constexpr u32 s_MaxAftermathEventStrings = 128;
 
-inline constexpr u32 s_VulkanBindingOffsetShaderResource = 0;
-inline constexpr u32 s_VulkanBindingOffsetSampler = 128;
-inline constexpr u32 s_VulkanBindingOffsetConstantBuffer = 256;
-inline constexpr u32 s_VulkanBindingOffsetUnorderedAccess = 384;
-
-inline constexpr usize s_CommandListUploadChunkSize = 64 * 1024;
-inline constexpr usize s_CommandListScratchChunkSize = 64 * 1024;
-inline constexpr usize s_CommandListScratchMaxMemory = 1024 * 1024 * 1024;
+inline constexpr u32 s_BindingOffsetShaderResource = 0;
+inline constexpr u32 s_BindingOffsetSampler = 128;
+inline constexpr u32 s_BindingOffsetConstantBuffer = 256;
+inline constexpr u32 s_BindingOffsetUnorderedAccess = 384;
 
 inline constexpr i32 s_WindowPositionAuto = -1;
 inline constexpr u32 s_BackBufferWidth = 1280;
@@ -84,6 +182,10 @@ template<typename T>
 using GraphicsDeque = Deque<T, GraphicsArena>;
 template<typename T, typename V>
 using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #define NWB_DEFINE_GRAPHICS_MASK_OPERATORS(MaskType) \
     constexpr MaskType operator|(MaskType lhs, MaskType rhs)noexcept{ return static_cast<MaskType>(static_cast<u32>(lhs) | static_cast<u32>(rhs)); } \
@@ -124,9 +226,6 @@ struct SystemMemoryAllocator{
         return allocate != nullptr && reallocate != nullptr && deallocate != nullptr;
     }
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class GraphicsAllocator : NoCopy{
@@ -219,9 +318,9 @@ struct Viewport{
 };
 inline bool operator==(const Viewport& lhs, const Viewport& rhs)noexcept{
     return
-    (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
-    && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
-    && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
+        (lhs.minX == rhs.minX) && (lhs.maxX == rhs.maxX)
+        && (lhs.minY == rhs.minY) && (lhs.maxY == rhs.maxY)
+        && (lhs.minZ == rhs.minZ) && (lhs.maxZ == rhs.maxZ)
     ;
 }
 inline bool operator!=(const Viewport& lhs, const Viewport& rhs)noexcept{ return !(lhs == rhs); }
@@ -264,12 +363,6 @@ inline bool operator==(const Rect& lhs, const Rect& rhs)noexcept{
 }
 inline bool operator!=(const Rect& lhs, const Rect& rhs)noexcept{ return !(lhs == rhs); }
 
-
-namespace GraphicsAPI{
-    enum Enum : u8{
-        VULKAN,
-    };
-};
 
 namespace Format{
     enum Enum : u8{
@@ -469,14 +562,7 @@ struct HeapDesc{
     Name debugName;
 };
 
-class IHeap : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const HeapDesc& getDescription()const = 0;
-};
-typedef RefCountPtr<IHeap, ArenaRefDeleter<IHeap>> HeapHandle;
+typedef GraphicsBackend::Handle<Heap> HeapHandle;
 
 struct MemoryRequirements{
     u64 size = 0;
@@ -547,27 +633,6 @@ namespace ResourceStates{
 typedef u32 MipLevel;
 typedef u32 ArraySlice;
 
-namespace SharedResourceFlags{
-    enum Mask : u32{
-        None                = 0,
-
-        // D3D11: adds D3D11_RESOURCE_MISC_SHARED
-        // D3D12: adds D3D12_HEAP_FLAG_SHARED
-        // Vulkan: adds vk::ExternalMemoryImageCreateInfo and vk::ExportMemoryAllocateInfo/vk::ExternalMemoryBufferCreateInfo
-        Shared              = 1 << 0,
-
-        // D3D11: adds (D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX | D3D11_RESOURCE_MISC_SHARED_NTHANDLE)
-        // D3D12, Vulkan: ignored
-        Shared_NTHandle     = 1 << 1,
-
-        // D3D12: adds D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER and D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER
-        // D3D11, Vulkan: ignored
-        Shared_CrossAdapter = 1 << 2,
-    };
-
-    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
-};
-
 struct TextureDesc{
     u32 width = 1;
     u32 height = 1;
@@ -586,11 +651,8 @@ struct TextureDesc{
     bool isTypeless = false;
     bool isShadingRateSurface = false;
 
-    SharedResourceFlags::Mask sharedResourceFlags = SharedResourceFlags::None;
-
     // Indicates that the texture is created with no backing memory,
     // and memory is bound to the texture later using bindTextureMemory.
-    // On DX12, the texture resource is created at the time of memory binding.
     bool isVirtual = false;
     bool isTiled = false;
 
@@ -620,7 +682,6 @@ struct TextureDesc{
     constexpr TextureDesc& setUseClearValue(bool v)noexcept{ useClearValue = v; return *this; }
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
     constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
-    constexpr TextureDesc& setSharedResourceFlags(SharedResourceFlags::Mask v)noexcept{ sharedResourceFlags = v; return *this; }
 };
 
 struct TextureSlice{
@@ -701,26 +762,9 @@ inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourc
 
 inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
 
-class ITexture : public IResource{
-    using IResource::IResource;
+typedef GraphicsBackend::Handle<Texture> TextureHandle;
 
-
-public:
-    [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
-
-    // Similar to getNativeObject, returns a native view for a specified set of subresources. Returns nullptr if unavailable.
-    virtual Object getNativeView(ObjectType objectType, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown, bool isReadOnlyDSV = false) = 0;
-};
-typedef RefCountPtr<ITexture, ArenaRefDeleter<ITexture>> TextureHandle;
-
-class IStagingTexture : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const TextureDesc& getDescription()const = 0;
-};
-typedef RefCountPtr<IStagingTexture, ArenaRefDeleter<IStagingTexture>> StagingTextureHandle;
+typedef GraphicsBackend::Handle<StagingTexture> StagingTextureHandle;
 
 struct TiledTextureCoordinate{
     u16 mipLevel = 0;
@@ -741,7 +785,7 @@ struct TextureTilesMapping{
     TiledTextureRegion* tiledTextureRegions = nullptr;
     u64* byteOffsets = nullptr;
     u32 numTextureRegions = 0;
-    IHeap* heap = nullptr;
+    Heap* heap = nullptr;
 };
 
 struct PackedMipDesc{
@@ -780,16 +824,7 @@ struct SamplerFeedbackTextureDesc{
     bool keepInitialState = false;
 };
 
-class ISamplerFeedbackTexture : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const SamplerFeedbackTextureDesc& getDescription()const = 0;
-
-    virtual TextureHandle getPairedTexture() = 0;
-};
-typedef RefCountPtr<ISamplerFeedbackTexture, ArenaRefDeleter<ISamplerFeedbackTexture>> SamplerFeedbackTextureHandle;
+typedef GraphicsBackend::Handle<SamplerFeedbackTexture> SamplerFeedbackTextureHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -814,15 +849,7 @@ struct VertexAttributeDesc{
     constexpr VertexAttributeDesc& setIsInstanced(bool value){ isInstanced = value; return *this; }
 };
 
-class IInputLayout : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const VertexAttributeDesc* getAttributeDescription(u32 index)const = 0;
-    [[nodiscard]] virtual u32 getNumAttributes()const = 0;
-};
-typedef RefCountPtr<IInputLayout, ArenaRefDeleter<IInputLayout>> InputLayoutHandle;
+typedef GraphicsBackend::Handle<InputLayout> InputLayoutHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -832,7 +859,7 @@ typedef RefCountPtr<IInputLayout, ArenaRefDeleter<IInputLayout>> InputLayoutHand
 struct BufferDesc{
     u64 byteSize = 0;
     u32 structStride = 0; // if non-zero it's structured
-    u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on Vulkan
+    u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on backends that keep per-version state
     Format::Enum format = Format::UNKNOWN; // for typed buffer views
     Name debugName;
     bool canHaveUAVs = false;
@@ -859,8 +886,6 @@ struct BufferDesc{
     bool keepInitialState = false;
 
     CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
-
-    SharedResourceFlags::Mask sharedResourceFlags = SharedResourceFlags::None;
 
     constexpr BufferDesc& setByteSize(u64 value){ byteSize = value; return *this; }
     constexpr BufferDesc& setStructStride(u32 value){ structStride = value; return *this; }
@@ -911,15 +936,7 @@ struct BufferRange{
 
 inline constexpr BufferRange s_EntireBuffer = BufferRange(0, static_cast<u64>(-1));
 
-class IBuffer : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const BufferDesc& getDescription()const = 0;
-    [[nodiscard]] virtual GpuVirtualAddress getGpuVirtualAddress()const = 0;
-};
-typedef RefCountPtr<IBuffer, ArenaRefDeleter<IBuffer>> BufferHandle;
+typedef GraphicsBackend::Handle<Buffer> BufferHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1105,31 +1122,14 @@ struct ShaderSpecialization{
     }
 };
 
-class IShader : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const ShaderDesc& getDescription()const = 0;
-
-    virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
-};
-typedef RefCountPtr<IShader, ArenaRefDeleter<IShader>> ShaderHandle;
+typedef GraphicsBackend::Handle<Shader> ShaderHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Shader Library
 
 
-class IShaderLibrary : public IResource{
-    using IResource::IResource;
-
-
-public:
-    virtual void getBytecode(const void** ppBytecode, usize* pSize)const = 0;
-    virtual ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType) = 0;
-};
-typedef RefCountPtr<IShaderLibrary, ArenaRefDeleter<IShaderLibrary>> ShaderLibraryHandle;
+typedef GraphicsBackend::Handle<ShaderLibrary> ShaderLibraryHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1155,15 +1155,6 @@ namespace BlendFactor{
         InvSrc1Color = 17,
         Src1Alpha = 18,
         InvSrc1Alpha = 19,
-
-        // Vulkan names
-        OneMinusSrcColor = InvSrcColor,
-        OneMinusSrcAlpha = InvSrcAlpha,
-        OneMinusDstAlpha = InvDstAlpha,
-        OneMinusDstColor = InvDstColor,
-        OneMinusConstantColor = InvConstantColor,
-        OneMinusSrc1Color = InvSrc1Color,
-        OneMinusSrc1Alpha = InvSrc1Alpha,
     };
 };
 
@@ -1262,10 +1253,6 @@ namespace RasterFillMode{
     enum Enum : u8{
         Solid,
         Wireframe,
-
-        // Vulkan names
-        Fill = Solid,
-        Line = Wireframe,
     };
 };
 
@@ -1445,13 +1432,6 @@ namespace SamplerAddressMode{
         Border,
         Mirror,
         MirrorOnce,
-
-        // Vulkan names
-        ClampToEdge = Clamp,
-        Repeat = Wrap,
-        ClampToBorder = Border,
-        MirroredRepeat = Mirror,
-        MirrorClampToEdge = MirrorOnce,
     };
 };
 
@@ -1491,14 +1471,7 @@ struct SamplerDesc{
     constexpr SamplerDesc& setReductionType(SamplerReductionType::Enum type){ reductionType = type; return *this; }
 };
 
-class ISampler : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const SamplerDesc& getDescription()const = 0;
-};
-typedef RefCountPtr<ISampler, ArenaRefDeleter<ISampler>> SamplerHandle;
+typedef GraphicsBackend::Handle<Sampler> SamplerHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1506,12 +1479,12 @@ typedef RefCountPtr<ISampler, ArenaRefDeleter<ISampler>> SamplerHandle;
 
 
 struct FramebufferAttachment{
-    ITexture* texture = nullptr;
+    Texture* texture = nullptr;
     TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, 1);
     Format::Enum format = Format::UNKNOWN;
     bool isReadOnly = false;
 
-    constexpr FramebufferAttachment& setTexture(ITexture* t){ texture = t; return *this; }
+    constexpr FramebufferAttachment& setTexture(Texture* t){ texture = t; return *this; }
     constexpr FramebufferAttachment& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr FramebufferAttachment& setArraySlice(ArraySlice index){ subresources.baseArraySlice = index; subresources.numArraySlices = 1; return *this; }
     constexpr FramebufferAttachment& setArraySliceRange(ArraySlice index, ArraySlice count){ subresources.baseArraySlice = index; subresources.numArraySlices = count; return *this; }
@@ -1528,14 +1501,14 @@ struct FramebufferDesc{
     FramebufferAttachment shadingRateAttachment;
 
     constexpr FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
-    constexpr FramebufferDesc& addColorAttachment(ITexture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
-    constexpr FramebufferDesc& addColorAttachment(ITexture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(Texture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
+    constexpr FramebufferDesc& addColorAttachment(Texture* texture, TextureSubresourceSet subresources){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture).setSubresources(subresources)); return *this; }
     constexpr FramebufferDesc& setDepthAttachment(const FramebufferAttachment& d){ depthAttachment = d; return *this; }
-    constexpr FramebufferDesc& setDepthAttachment(ITexture* texture){ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
-    constexpr FramebufferDesc& setDepthAttachment(ITexture* texture, TextureSubresourceSet subresources){ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(Texture* texture){ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    constexpr FramebufferDesc& setDepthAttachment(Texture* texture, TextureSubresourceSet subresources){ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
     constexpr FramebufferDesc& setShadingRateAttachment(const FramebufferAttachment& d){ shadingRateAttachment = d; return *this; }
-    constexpr FramebufferDesc& setShadingRateAttachment(ITexture* texture){ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
-    constexpr FramebufferDesc& setShadingRateAttachment(ITexture* texture, TextureSubresourceSet subresources){ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(Texture* texture){ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(Texture* texture, TextureSubresourceSet subresources){ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
 };
 
 struct FramebufferInfo{
@@ -1584,15 +1557,7 @@ struct FramebufferInfoEx : FramebufferInfo{
     [[nodiscard]] constexpr Viewport getViewport(f32 minZ = 0.f, f32 maxZ = 1.f)const{ return Viewport(0, static_cast<f32>(width), 0, static_cast<f32>(height), minZ, maxZ); }
 };
 
-class IFramebuffer : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const FramebufferDesc& getDescription()const = 0;
-    [[nodiscard]] virtual const FramebufferInfoEx& getFramebufferInfo()const = 0;
-};
-typedef RefCountPtr<IFramebuffer, ArenaRefDeleter<IFramebuffer>> FramebufferHandle;
+typedef GraphicsBackend::Handle<Framebuffer> FramebufferHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1639,11 +1604,11 @@ struct RayTracingOpacityMicromapDesc{
     // Base pointer for raw OMM input data.
     // Individual OMMs must be 1B aligned, though natural alignment is recommended.
     // It's also recommended to try to organize OMMs together that are expected to be used spatially close together.
-    IBuffer* inputBuffer = nullptr;
+    Buffer* inputBuffer = nullptr;
     u64 inputBufferOffset = 0;
 
-    // One NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_DESC entry per OMM.
-    IBuffer* perOmmDescs = nullptr;
+    // One entry per OMM matching the VkMicromapTriangleEXT layout.
+    Buffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
 
     explicit RayTracingOpacityMicromapDesc(GraphicsArena& arena)
@@ -1654,29 +1619,18 @@ struct RayTracingOpacityMicromapDesc{
     constexpr RayTracingOpacityMicromapDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setFlags(RayTracingOpacityMicromapBuildFlags::Mask value){ flags = value; return *this; }
     RayTracingOpacityMicromapDesc& setCounts(const GraphicsVector<RayTracingOpacityMicromapUsageCount>& value){ counts = value; return *this; }
-    constexpr RayTracingOpacityMicromapDesc& setInputBuffer(IBuffer* value){ inputBuffer = value; return *this; }
+    constexpr RayTracingOpacityMicromapDesc& setInputBuffer(Buffer* value){ inputBuffer = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setInputBufferOffset(u64 value){ inputBufferOffset = value; return *this; }
-    constexpr RayTracingOpacityMicromapDesc& setPerOmmDescs(IBuffer* value){ perOmmDescs = value; return *this; }
+    constexpr RayTracingOpacityMicromapDesc& setPerOmmDescs(Buffer* value){ perOmmDescs = value; return *this; }
     constexpr RayTracingOpacityMicromapDesc& setPerOmmDescsOffset(u64 value){ perOmmDescsOffset = value; return *this; }
 };
 
-class IRayTracingOpacityMicromap : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const RayTracingOpacityMicromapDesc& getDescription()const = 0;
-    [[nodiscard]] virtual bool isCompacted()const = 0;
-    [[nodiscard]] virtual u64 getDeviceAddress()const = 0;
-};
-typedef RefCountPtr<IRayTracingOpacityMicromap, ArenaRefDeleter<IRayTracingOpacityMicromap>> RayTracingOpacityMicromapHandle;
+typedef GraphicsBackend::Handle<RayTracingOpacityMicromap> RayTracingOpacityMicromapHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Ray Tracing AccelStruct
 
-
-class IRayTracingAccelStruct;
 
 using AffineTransform = Float4[3];
 
@@ -1718,8 +1672,8 @@ struct RayTracingGeometryAABB{
 };
 
 struct RayTracingGeometryTriangles{
-    IBuffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry
-    IBuffer* vertexBuffer = nullptr;  // structs are IBuffer* for easier debugging
+    Buffer* indexBuffer = nullptr;   // make sure the first 2 fields in all Geometry
+    Buffer* vertexBuffer = nullptr;  // structs are Buffer* for easier debugging
     Format::Enum indexFormat = Format::UNKNOWN;
     Format::Enum vertexFormat = Format::UNKNOWN;
     u64 indexOffset = 0;
@@ -1728,15 +1682,15 @@ struct RayTracingGeometryTriangles{
     u32 vertexCount = 0;
     u32 vertexStride = 0;
 
-    IRayTracingOpacityMicromap* opacityMicromap = nullptr;
-    IBuffer* ommIndexBuffer = nullptr;
+    RayTracingOpacityMicromap* opacityMicromap = nullptr;
+    Buffer* ommIndexBuffer = nullptr;
     u64 ommIndexBufferOffset = 0;
     Format::Enum ommIndexFormat = Format::UNKNOWN;
     const RayTracingOpacityMicromapUsageCount* pOmmUsageCounts = nullptr;
     u32 numOmmUsageCounts = 0;
 
-    constexpr RayTracingGeometryTriangles& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
-    constexpr RayTracingGeometryTriangles& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setIndexBuffer(Buffer* value){ indexBuffer = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setVertexBuffer(Buffer* value){ vertexBuffer = value; return *this; }
     constexpr RayTracingGeometryTriangles& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
     constexpr RayTracingGeometryTriangles& setVertexFormat(Format::Enum value){ vertexFormat = value; return *this; }
     constexpr RayTracingGeometryTriangles& setIndexOffset(u64 value){ indexOffset = value; return *this; }
@@ -1744,8 +1698,8 @@ struct RayTracingGeometryTriangles{
     constexpr RayTracingGeometryTriangles& setIndexCount(u32 value){ indexCount = value; return *this; }
     constexpr RayTracingGeometryTriangles& setVertexCount(u32 value){ vertexCount = value; return *this; }
     constexpr RayTracingGeometryTriangles& setVertexStride(u32 value){ vertexStride = value; return *this; }
-    constexpr RayTracingGeometryTriangles& setOpacityMicromap(IRayTracingOpacityMicromap* value){ opacityMicromap = value; return *this; }
-    constexpr RayTracingGeometryTriangles& setOmmIndexBuffer(IBuffer* value){ ommIndexBuffer = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setOpacityMicromap(RayTracingOpacityMicromap* value){ opacityMicromap = value; return *this; }
+    constexpr RayTracingGeometryTriangles& setOmmIndexBuffer(Buffer* value){ ommIndexBuffer = value; return *this; }
     constexpr RayTracingGeometryTriangles& setOmmIndexBufferOffset(u64 value){ ommIndexBufferOffset = value; return *this; }
     constexpr RayTracingGeometryTriangles& setOmmIndexFormat(Format::Enum value){ ommIndexFormat = value; return *this; }
     constexpr RayTracingGeometryTriangles& setPOmmUsageCounts(const RayTracingOpacityMicromapUsageCount* value){ pOmmUsageCounts = value; return *this; }
@@ -1753,21 +1707,21 @@ struct RayTracingGeometryTriangles{
 };
 
 struct RayTracingGeometryAABBs{
-    IBuffer* buffer = nullptr;
-    IBuffer* unused = nullptr;
+    Buffer* buffer = nullptr;
+    Buffer* unused = nullptr;
     u64 offset = 0;
     u32 count = 0;
     u32 stride = 0;
 
-    constexpr RayTracingGeometryAABBs& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    constexpr RayTracingGeometryAABBs& setBuffer(Buffer* value){ buffer = value; return *this; }
     constexpr RayTracingGeometryAABBs& setOffset(u64 value){ offset = value; return *this; }
     constexpr RayTracingGeometryAABBs& setCount(u32 value){ count = value; return *this; }
     constexpr RayTracingGeometryAABBs& setStride(u32 value){ stride = value; return *this; }
 };
 
 struct RayTracingGeometrySpheres{
-    IBuffer* indexBuffer = nullptr;
-    IBuffer* vertexBuffer = nullptr;
+    Buffer* indexBuffer = nullptr;
+    Buffer* vertexBuffer = nullptr;
     Format::Enum indexFormat = Format::UNKNOWN;
     Format::Enum vertexPositionFormat = Format::UNKNOWN;
     Format::Enum vertexRadiusFormat = Format::UNKNOWN;
@@ -1780,8 +1734,8 @@ struct RayTracingGeometrySpheres{
     u32 vertexPositionStride = 0;
     u32 vertexRadiusStride = 0;
 
-    constexpr RayTracingGeometrySpheres& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
-    constexpr RayTracingGeometrySpheres& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    constexpr RayTracingGeometrySpheres& setIndexBuffer(Buffer* value){ indexBuffer = value; return *this; }
+    constexpr RayTracingGeometrySpheres& setVertexBuffer(Buffer* value){ vertexBuffer = value; return *this; }
     constexpr RayTracingGeometrySpheres& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
     constexpr RayTracingGeometrySpheres& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
     constexpr RayTracingGeometrySpheres& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
@@ -1810,8 +1764,8 @@ namespace RayTracingGeometryLssEndcapMode{
 };
 
 struct RayTracingGeometryLss{
-    IBuffer* indexBuffer = nullptr;
-    IBuffer* vertexBuffer = nullptr;
+    Buffer* indexBuffer = nullptr;
+    Buffer* vertexBuffer = nullptr;
     Format::Enum indexFormat = Format::UNKNOWN;
     Format::Enum vertexPositionFormat = Format::UNKNOWN;
     Format::Enum vertexRadiusFormat = Format::UNKNOWN;
@@ -1827,8 +1781,8 @@ struct RayTracingGeometryLss{
     RayTracingGeometryLssPrimitiveFormat::Enum primitiveFormat = RayTracingGeometryLssPrimitiveFormat::List;
     RayTracingGeometryLssEndcapMode::Enum endcapMode = RayTracingGeometryLssEndcapMode::None;
 
-    constexpr RayTracingGeometryLss& setIndexBuffer(IBuffer* value){ indexBuffer = value; return *this; }
-    constexpr RayTracingGeometryLss& setVertexBuffer(IBuffer* value){ vertexBuffer = value; return *this; }
+    constexpr RayTracingGeometryLss& setIndexBuffer(Buffer* value){ indexBuffer = value; return *this; }
+    constexpr RayTracingGeometryLss& setVertexBuffer(Buffer* value){ vertexBuffer = value; return *this; }
     constexpr RayTracingGeometryLss& setIndexFormat(Format::Enum value){ indexFormat = value; return *this; }
     constexpr RayTracingGeometryLss& setVertexPositionFormat(Format::Enum value){ vertexPositionFormat = value; return *this; }
     constexpr RayTracingGeometryLss& setVertexRadiusFormat(Format::Enum value){ vertexRadiusFormat = value; return *this; }
@@ -1892,8 +1846,8 @@ struct RayTracingInstanceDesc{
     u32 instanceContributionToHitGroupIndex : 24;
     RayTracingInstanceFlags::Mask flags : 8;
     union{
-        IRayTracingAccelStruct* bottomLevelAS; // for buildTopLevelAccelStruct
-        u64 blasDeviceAddress;       // for buildTopLevelAccelStructFromBuffer - use IAccelStruct::getDeviceAddress()
+        RayTracingAccelStruct* bottomLevelAS; // for buildTopLevelAccelStruct
+        u64 blasDeviceAddress;       // for buildTopLevelAccelStructFromBuffer - use RayTracingAccelStruct::getDeviceAddress()
     };
 
     RayTracingInstanceDesc()
@@ -1911,7 +1865,7 @@ struct RayTracingInstanceDesc{
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value){ instanceMask = value; return *this; }
     RayTracingInstanceDesc& setTransform(const AffineTransform& value){ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value){ flags = value; return *this; }
-    constexpr RayTracingInstanceDesc& setBLAS(IRayTracingAccelStruct* value){ bottomLevelAS = value; return *this; }
+    constexpr RayTracingInstanceDesc& setBLAS(RayTracingAccelStruct* value){ bottomLevelAS = value; return *this; }
 };
 static_assert(sizeof(RayTracingInstanceDesc) == 64, "sizeof(InstanceDesc) is supposed to be 64 bytes");
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(RayTracingInstanceDesc));
@@ -1927,9 +1881,8 @@ namespace RayTracingAccelStructBuildFlags{
         MinimizeMemory = 0x10,
         PerformUpdate = 0x20,
 
-        // Removes the errors or warnings that NVRHI validation layer issues when a TLAS
-        // includes an instance that points at a NULL BLAS or has a zero instance mask.
-        // Only affects the validation layer, doesn't translate to Vk/DX12 AS build flags.
+        // Allows a TLAS to include an instance that points at a null BLAS or has a zero instance mask.
+        // Only affects local validation; it does not translate to backend AS build flags.
         AllowEmptyInstances = 0x80,
     };
 
@@ -1963,16 +1916,7 @@ struct RayTracingAccelStructDesc{
 // Ray Tracing AccelStruct
 
 
-class IRayTracingAccelStruct : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const RayTracingAccelStructDesc& getDescription()const = 0;
-    [[nodiscard]] virtual bool isCompacted()const = 0;
-    [[nodiscard]] virtual u64 getDeviceAddress()const = 0;
-};
-typedef RefCountPtr<IRayTracingAccelStruct, ArenaRefDeleter<IRayTracingAccelStruct>> RayTracingAccelStructHandle;
+typedef GraphicsBackend::Handle<RayTracingAccelStruct> RayTracingAccelStructHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2037,7 +1981,7 @@ struct RayTracingClusterOperationMoveParams{
 };
 
 struct RayTracingClusterOperationClasBuildParams{
-    // See D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC for accepted formats and how they are interpreted
+    // Vertex format accepted by the backend cluster acceleration structure implementation.
     Format::Enum vertexFormat = Format::RGB32_FLOAT;
 
     // Index of the last geometry in a single CLAS
@@ -2089,19 +2033,19 @@ struct RayTracingClusterOperationDesc{
     u64 scratchSizeInBytes = 0;                             // Size of scratch resource returned by getClusterOperationSizeInfo() scratchSizeInBytes
 
     // Input Resources
-    IBuffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
+    Buffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
     u64 inIndirectArgCountOffsetInBytes = 0;                // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
-    IBuffer* inIndirectArgsBuffer = nullptr;                // Buffer of descriptor array of format IndirectTriangleClasArgs, IndirectTriangleTemplateArgs, IndirectInstantiateTemplateArgs
+    Buffer* inIndirectArgsBuffer = nullptr;                // Buffer of descriptor array of format IndirectTriangleClasArgs, IndirectTriangleTemplateArgs, IndirectInstantiateTemplateArgs
     u64 inIndirectArgsOffsetInBytes = 0;                    // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
 
     // In/Out Resources
-    IBuffer* inOutAddressesBuffer = nullptr;                // Array of addresseses of CLAS, CLAS Templates, or BLAS
+    Buffer* inOutAddressesBuffer = nullptr;                // Array of addresseses of CLAS, CLAS Templates, or BLAS
     u64 inOutAddressesOffsetInBytes = 0;                    // Offset (in bytes) to where the addresses array starts in inOutAddressesBuffer
 
     // Output Resources
-    IBuffer* outSizesBuffer = nullptr;                      // Sizes (in bytes) of CLAS, CLAS Templates, or BLAS
+    Buffer* outSizesBuffer = nullptr;                      // Sizes (in bytes) of CLAS, CLAS Templates, or BLAS
     u64 outSizesOffsetInBytes = 0;                          // Offset (in bytes) to where the output sizes array starts in outSizesBuffer
-    IBuffer* outAccelerationStructuresBuffer = nullptr;     // Destination buffer for CLAS, CLAS Template, or BLAS data. Size must be calculated with getOperationSizeInfo or with the outSizesBuffer result of OperationMode::GetSizes
+    Buffer* outAccelerationStructuresBuffer = nullptr;     // Destination buffer for CLAS, CLAS Template, or BLAS data. Size must be calculated with getOperationSizeInfo or with the outSizesBuffer result of OperationMode::GetSizes
     u64 outAccelerationStructuresOffsetInBytes = 0;         // Offset (in bytes) to where the output acceleration structures starts in outAccelerationStructuresBuffer
 };
 
@@ -2185,42 +2129,32 @@ inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rh
 inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){ return !(lhs == rhs); }
 static_assert(sizeof(BindingLayoutItem) == 8, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
-struct VulkanBindingOffsets{
-    u32 shaderResource = s_VulkanBindingOffsetShaderResource;
-    u32 sampler = s_VulkanBindingOffsetSampler;
-    u32 constantBuffer = s_VulkanBindingOffsetConstantBuffer;
-    u32 unorderedAccess = s_VulkanBindingOffsetUnorderedAccess;
+struct BindingOffsets{
+    u32 shaderResource = s_BindingOffsetShaderResource;
+    u32 sampler = s_BindingOffsetSampler;
+    u32 constantBuffer = s_BindingOffsetConstantBuffer;
+    u32 unorderedAccess = s_BindingOffsetUnorderedAccess;
 
-    constexpr VulkanBindingOffsets& setShaderResourceOffset(u32 value){ shaderResource = value; return *this; }
-    constexpr VulkanBindingOffsets& setSamplerOffset(u32 value){ sampler = value; return *this; }
-    constexpr VulkanBindingOffsets& setConstantBufferOffset(u32 value){ constantBuffer = value; return *this; }
-    constexpr VulkanBindingOffsets& setUnorderedAccessViewOffset(u32 value){ unorderedAccess = value; return *this; }
+    constexpr BindingOffsets& setShaderResourceOffset(u32 value){ shaderResource = value; return *this; }
+    constexpr BindingOffsets& setSamplerOffset(u32 value){ sampler = value; return *this; }
+    constexpr BindingOffsets& setConstantBufferOffset(u32 value){ constantBuffer = value; return *this; }
+    constexpr BindingOffsets& setUnorderedAccessViewOffset(u32 value){ unorderedAccess = value; return *this; }
 };
 
 struct BindingLayoutDesc{
     ShaderType::Mask visibility = ShaderType::None;
 
-    // On DX11, the registerSpace is ignored, and all bindings are placed in the same space.
-    // On DX12, it controls the register space of the bindings.
-    // On Vulkan, DXC maps register spaces to descriptor sets by default, so this can be used to
-    // determine the descriptor set index for the binding layout.
-    // In order to use this behavior, you must set `registerSpaceIsDescriptorSet` to true. See below.
+    // DXC maps HLSL register spaces to SPIR-V descriptor sets, so this can be used as the descriptor set index.
+    // Set `registerSpaceIsDescriptorSet` to enable that mapping explicitly.
     u32 registerSpace = 0;
 
     // This flag controls the behavior for pipelines that use multiple binding layouts.
-    // It must be set to the same value for _all_ of the binding layouts in a pipeline.
-    // - When it's set to `false`, the `registerSpace` parameter only affects the DX12 implementation,
-    //   and the validation layer will report an error when non-zero `registerSpace` is used with other APIs.
-    // - When it's set to `true` the parameter also affects the Vulkan implementation, allowing any
-    //   layout to occupy any register space or descriptor set, regardless of their order in the pipeline.
-    //   However, a consequence of DXC mapping the descriptor set index to register space is that you may
-    //   not have more than one `BindingLayout` using the same `registerSpace` value in the same pipeline.
-    // - When it's set to different values for the layouts in a pipeline, the validation layer will report
-    //   an error.
+    // When true, the layout uses `registerSpace` as its SPIR-V descriptor set index. Layouts in the same
+    // pipeline must not reuse a descriptor set index.
     bool registerSpaceIsDescriptorSet = false;
 
     GraphicsVector<BindingLayoutItem> bindings;
-    VulkanBindingOffsets bindingOffsets;
+    BindingOffsets bindingOffsets;
 
     explicit BindingLayoutDesc(GraphicsArena& arena)
         : bindings(arena)
@@ -2232,17 +2166,11 @@ struct BindingLayoutDesc{
     // Shortcut for .setRegisterSpace(value).setRegisterSpaceIsDescriptorSet(true)
     constexpr BindingLayoutDesc& setRegisterSpaceAndDescriptorSet(u32 value){ registerSpace = value; registerSpaceIsDescriptorSet = true; return *this; }
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
-    constexpr BindingLayoutDesc& setBindingOffsets(const VulkanBindingOffsets& value){ bindingOffsets = value; return *this; }
+    constexpr BindingLayoutDesc& setBindingOffsets(const BindingOffsets& value){ bindingOffsets = value; return *this; }
 };
 
-// BindlessDescriptorType bridges the DX12 and Vulkan in supporting HLSL ResourceDescriptorHeap and SamplerDescriptorHeap
-// For DX12:
-// - MutableSrvUavCbv, MutableCounters will enable D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED for the Root Signature
-// - MutableSampler will enable D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED for the Root Signature
-// - The BindingLayout will be ignored in terms of setting a descriptor set. DescriptorIndexing should use GetDescriptorIndexInHeap()
-// For Vulkan:
-// - The type corresponds to the SPIRV bindings which map to ResourceDescriptorHeap and SamplerDescriptorHeap
-// - The shader needs to be compiled with the same descriptor set index as is passed into setState
+// BindlessDescriptorType describes the SPIR-V bindings DXC emits for HLSL ResourceDescriptorHeap and SamplerDescriptorHeap.
+// The shader must be compiled with the same descriptor set index that is passed into setState.
 // https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#resourcedescriptorheaps-samplerdescriptorheaps
 namespace BindlessLayoutType{
     enum Enum : u8{
@@ -2262,9 +2190,9 @@ namespace BindlessLayoutType{
 
 // Bindless layouts allow applications to attach a descriptor table to an unbounded
 // resource array in the shader. The size of the array is not known ahead of time.
-// The same table can be bound to multiple register spaces on DX12, in order to
-// access different types of resources stored in the table through different arrays.
-// The `registerSpaces` vector specifies which spaces will the table be bound to,
+// The same table can be bound to multiple HLSL register spaces in order to access
+// different types of resources stored in the table through different arrays.
+// The `registerSpaces` vector specifies which spaces the table will be bound to,
 // with the table type (SRV or UAV) derived from the resource type assigned to each space.
 struct BindlessLayoutDesc{
     ShaderType::Mask visibility = ShaderType::None;
@@ -2281,15 +2209,7 @@ struct BindlessLayoutDesc{
     constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value){ layoutType = value; return *this; }
 };
 
-class IBindingLayout : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const BindingLayoutDesc* getDescription()const = 0;    // returns nullptr for bindless layouts
-    [[nodiscard]] virtual const BindlessLayoutDesc* getBindlessDesc()const = 0;  // returns nullptr for regular layouts
-};
-typedef RefCountPtr<IBindingLayout, ArenaRefDeleter<IBindingLayout>> BindingLayoutHandle;
+typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2297,15 +2217,13 @@ typedef RefCountPtr<IBindingLayout, ArenaRefDeleter<IBindingLayout>> BindingLayo
 
 
 struct BindingSetItem{
-    IResource* resourceHandle;
+    void* resourceHandle;
 
     u32 slot;
 
     // Specifies the index in a binding array.
     // Must be less than the 'size' property of the matching BindingLayoutItem.
-    // - DX11/12: Effective binding slot index is calculated as (slot + arrayElement), i.e. arrays are flattened
-    // - Vulkan: Descriptor arrays are used.
-    // This behavior matches the behavior of HLSL resource array declarations when compiled with DXC.
+    // Specifies the index into the descriptor array generated for an HLSL resource array.
     u32 arrayElement;
 
     ResourceType::Enum type          : 8;
@@ -2333,7 +2251,7 @@ struct BindingSetItem{
     constexpr BindingSetItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr BindingSetItem& setRange(BufferRange value){ range = value; return *this; }
 
-    static BindingSetItem Base(u32 slot, ResourceType::Enum type, IResource* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
+    static BindingSetItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
         BindingSetItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -2351,60 +2269,49 @@ struct BindingSetItem{
     static BindingSetItem None(u32 slot = 0){
         return Base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static BindingSetItem Texture_SRV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static BindingSetItem Texture_SRV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
         BindingSetItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static BindingSetItem Texture_UAV(u32 slot, ITexture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static BindingSetItem Texture_UAV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
         BindingSetItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static BindingSetItem TypedBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static BindingSetItem TypedBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem TypedBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static BindingSetItem TypedBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem ConstantBuffer(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
-        bool isVolatile = buffer && buffer->getDescription().isVolatile;
-
-        BindingSetItem result = Base(
-            slot,
-            isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
-            buffer,
-            Format::UNKNOWN,
-            TextureDimension::Unknown);
-        result.range = range;
-        return result;
-    }
-    static BindingSetItem Sampler(u32 slot, ISampler* sampler){
+    static BindingSetItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer);
+    static BindingSetItem Sampler(u32 slot, Sampler* sampler){
         return Base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static BindingSetItem RayTracingAccelStruct(u32 slot, IRayTracingAccelStruct* as){
+    static BindingSetItem RayTracingAccelStruct(u32 slot, RayTracingAccelStruct* as){
         return Base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static BindingSetItem StructuredBuffer_SRV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static BindingSetItem StructuredBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem StructuredBuffer_UAV(u32 slot, IBuffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static BindingSetItem StructuredBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
         BindingSetItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem RawBuffer_SRV(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
+    static BindingSetItem RawBuffer_SRV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
         BindingSetItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem RawBuffer_UAV(u32 slot, IBuffer* buffer, BufferRange range = s_EntireBuffer){
+    static BindingSetItem RawBuffer_UAV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
         BindingSetItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
@@ -2415,7 +2322,7 @@ struct BindingSetItem{
         result.range.byteSize = byteSize;
         return result;
     }
-    static BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, ISamplerFeedbackTexture* texture){
+    static BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, SamplerFeedbackTexture* texture){
         BindingSetItem result = Base(slot, ResourceType::SamplerFeedbackTexture_UAV, texture, Format::UNKNOWN, TextureDimension::Unknown);
         result.subresources = s_AllSubresources;
         return result;
@@ -2439,9 +2346,9 @@ static_assert(sizeof(BindingSetItem) == 40, "sizeof(BindingSetItem) is supposed 
 struct BindingSetDesc{
     GraphicsVector<BindingSetItem> bindings;
 
-    // Enables automatic liveness tracking of this binding set by nvrhi command lists.
-    // By setting trackLiveness to false, you take the responsibility of not releasing it
-    // until all rendering commands using the binding set are finished.
+    // Enables automatic liveness tracking of this binding set by command lists.
+    // When disabled, the caller must keep the binding set and referenced resources alive
+    // until all commands using the binding set have finished.
     bool trackLiveness = true;
 
     explicit BindingSetDesc(GraphicsArena& arena)
@@ -2464,28 +2371,13 @@ inline bool operator==(const BindingSetDesc& lhs, const BindingSetDesc& rhs){
 }
 inline bool operator!=(const BindingSetDesc& lhs, const BindingSetDesc& rhs){ return !(lhs == rhs); }
 
-class IBindingSet : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const BindingSetDesc* getDescription()const = 0;  // returns nullptr for descriptor tables
-    [[nodiscard]] virtual IBindingLayout* getLayout()const = 0;
-};
-typedef RefCountPtr<IBindingSet, ArenaRefDeleter<IBindingSet>> BindingSetHandle;
+typedef GraphicsBackend::Handle<BindingSet> BindingSetHandle;
 
 // Descriptor tables are bare, without extra mappings, state, or liveness tracking.
 // Unlike binding sets, descriptor tables are mutable - moreover, modification is the only way to populate them.
 // They can be grown or shrunk, and they are not tied to any binding layout.
 // All tracking is off, so applications should use descriptor tables with great care.
-// IDescriptorTable is derived from IBindingSet to allow mixing them in the binding arrays.
-class IDescriptorTable : public IBindingSet{
-    using IBindingSet::IBindingSet;
-public:
-    [[nodiscard]] virtual u32 getCapacity()const = 0;
-    [[nodiscard]] virtual u32 getFirstDescriptorIndexInHeap()const = 0;
-};
-typedef RefCountPtr<IDescriptorTable, ArenaRefDeleter<IDescriptorTable>> DescriptorTableHandle;
+typedef GraphicsBackend::Handle<DescriptorTable> DescriptorTableHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2597,49 +2489,38 @@ struct GraphicsPipelineDesc{
 
     BindingLayoutVector bindingLayouts;
 
+    ~GraphicsPipelineDesc();
+
     constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
     constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value){ patchControlPoints = value; return *this; }
-    GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value){ inputLayout = value; return *this; }
-    GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value){ VS = value; return *this; }
-    GraphicsPipelineDesc& setHullShader(const ShaderHandle& value){ HS = value; return *this; }
-    GraphicsPipelineDesc& setTessellationControlShader(const ShaderHandle& value){ HS = value; return *this; }
-    GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value){ DS = value; return *this; }
-    GraphicsPipelineDesc& setTessellationEvaluationShader(const ShaderHandle& value){ DS = value; return *this; }
-    GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value){ GS = value; return *this; }
-    GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
-    GraphicsPipelineDesc& setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
+    GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value);
+    GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setHullShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setTessellationControlShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setTessellationEvaluationShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value);
+    GraphicsPipelineDesc& setFragmentShader(const ShaderHandle& value);
     constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
     constexpr GraphicsPipelineDesc& setVariableRateShadingState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
-    GraphicsPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+    GraphicsPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
-class IGraphicsPipeline : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const GraphicsPipelineDesc& getDescription()const = 0;
-    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
-};
-typedef RefCountPtr<IGraphicsPipeline, ArenaRefDeleter<IGraphicsPipeline>> GraphicsPipelineHandle;
+typedef GraphicsBackend::Handle<GraphicsPipeline> GraphicsPipelineHandle;
 
 struct ComputePipelineDesc{
     ShaderHandle CS;
 
     BindingLayoutVector bindingLayouts;
 
-    ComputePipelineDesc& setComputeShader(const ShaderHandle& value){ CS = value; return *this; }
-    ComputePipelineDesc& addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+    ~ComputePipelineDesc();
+
+    ComputePipelineDesc& setComputeShader(const ShaderHandle& value);
+    ComputePipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
-class IComputePipeline : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const ComputePipelineDesc& getDescription()const = 0;
-};
-typedef RefCountPtr<IComputePipeline, ArenaRefDeleter<IComputePipeline>> ComputePipelineHandle;
+typedef GraphicsBackend::Handle<ComputePipeline> ComputePipelineHandle;
 
 struct MeshletPipelineDesc{
     PrimitiveType::Enum primType = PrimitiveType::TriangleList;
@@ -2652,43 +2533,34 @@ struct MeshletPipelineDesc{
 
     BindingLayoutVector bindingLayouts;
 
+    ~MeshletPipelineDesc();
+
     constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
-    MeshletPipelineDesc& setTaskShader(const ShaderHandle& value){ AS = value; return *this; }
-    MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value){ AS = value; return *this; }
-    MeshletPipelineDesc& setMeshShader(const ShaderHandle& value){ MS = value; return *this; }
-    MeshletPipelineDesc& setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
-    MeshletPipelineDesc& setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
+    MeshletPipelineDesc& setTaskShader(const ShaderHandle& value);
+    MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value);
+    MeshletPipelineDesc& setMeshShader(const ShaderHandle& value);
+    MeshletPipelineDesc& setPixelShader(const ShaderHandle& value);
+    MeshletPipelineDesc& setFragmentShader(const ShaderHandle& value);
     constexpr MeshletPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
-    MeshletPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
+    MeshletPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
-class IMeshletPipeline : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const MeshletPipelineDesc& getDescription()const = 0;
-    [[nodiscard]] virtual const FramebufferInfo& getFramebufferInfo()const = 0;
-};
-typedef RefCountPtr<IMeshletPipeline, ArenaRefDeleter<IMeshletPipeline>> MeshletPipelineHandle;
+typedef GraphicsBackend::Handle<MeshletPipeline> MeshletPipelineHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Draw and Dispatch
 
 
-class IEventQuery : public IResource{ using IResource::IResource; };
-typedef RefCountPtr<IEventQuery, ArenaRefDeleter<IEventQuery>> EventQueryHandle;
-
-class ITimerQuery : public IResource{ using IResource::IResource; };
-typedef RefCountPtr<ITimerQuery, ArenaRefDeleter<ITimerQuery>> TimerQueryHandle;
+typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
+typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
 struct VertexBufferBinding{
-    IBuffer* buffer = nullptr;
+    Buffer* buffer = nullptr;
     u64 offset = 0;
     u32 slot = 0;
 
-    constexpr VertexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    constexpr VertexBufferBinding& setBuffer(Buffer* value){ buffer = value; return *this; }
     constexpr VertexBufferBinding& setSlot(u32 value){ slot = value; return *this; }
     constexpr VertexBufferBinding& setOffset(u64 value){ offset = value; return *this; }
 };
@@ -2698,11 +2570,11 @@ inline bool operator==(const VertexBufferBinding& lhs, const VertexBufferBinding
 inline bool operator!=(const VertexBufferBinding& lhs, const VertexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
 struct IndexBufferBinding{
-    IBuffer* buffer = nullptr;
+    Buffer* buffer = nullptr;
     u32 offset = 0;
     Format::Enum format = Format::UNKNOWN;
 
-    constexpr IndexBufferBinding& setBuffer(IBuffer* value){ buffer = value; return *this; }
+    constexpr IndexBufferBinding& setBuffer(Buffer* value){ buffer = value; return *this; }
     constexpr IndexBufferBinding& setFormat(Format::Enum value){ format = value; return *this; }
     constexpr IndexBufferBinding& setOffset(u32 value){ offset = value; return *this; }
 };
@@ -2711,11 +2583,11 @@ inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& 
 }
 inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
-typedef FixedVector<IBindingSet*, s_MaxBindingLayouts> BindingSetVector;
+typedef FixedVector<BindingSet*, s_MaxBindingLayouts> BindingSetVector;
 
 struct GraphicsState{
-    IGraphicsPipeline* pipeline = nullptr;
-    IFramebuffer* framebuffer = nullptr;
+    GraphicsPipeline* pipeline = nullptr;
+    Framebuffer* framebuffer = nullptr;
     ViewportState viewport;
     VariableRateShadingState shadingRateState;
     Color blendConstantColor{};
@@ -2726,18 +2598,18 @@ struct GraphicsState{
     FixedVector<VertexBufferBinding, s_MaxVertexAttributes> vertexBuffers;
     IndexBufferBinding indexBuffer;
 
-    IBuffer* indirectParams = nullptr;
+    Buffer* indirectParams = nullptr;
 
-    constexpr GraphicsState& setPipeline(IGraphicsPipeline* value){ pipeline = value; return *this; }
-    constexpr GraphicsState& setFramebuffer(IFramebuffer* value){ framebuffer = value; return *this; }
+    constexpr GraphicsState& setPipeline(GraphicsPipeline* value){ pipeline = value; return *this; }
+    constexpr GraphicsState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }
     constexpr GraphicsState& setViewport(const ViewportState& value){ viewport = value; return *this; }
     constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
     constexpr GraphicsState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
-    GraphicsState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
+    GraphicsState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
     GraphicsState& addVertexBuffer(const VertexBufferBinding& value){ vertexBuffers.push_back(value); return *this; }
     constexpr GraphicsState& setIndexBuffer(const IndexBufferBinding& value){ indexBuffer = value; return *this; }
-    constexpr GraphicsState& setIndirectParams(IBuffer* value){ indirectParams = value; return *this; }
+    constexpr GraphicsState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
 };
 
 struct DrawArguments{
@@ -2781,15 +2653,15 @@ struct DrawIndexedIndirectArguments{
 };
 
 struct ComputeState{
-    IComputePipeline* pipeline = nullptr;
+    ComputePipeline* pipeline = nullptr;
 
     BindingSetVector bindings;
 
-    IBuffer* indirectParams = nullptr;
+    Buffer* indirectParams = nullptr;
 
-    constexpr ComputeState& setPipeline(IComputePipeline* value){ pipeline = value; return *this; }
-    ComputeState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
-    constexpr ComputeState& setIndirectParams(IBuffer* value){ indirectParams = value; return *this; }
+    constexpr ComputeState& setPipeline(ComputePipeline* value){ pipeline = value; return *this; }
+    ComputeState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
+    constexpr ComputeState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
 };
 
 struct DispatchIndirectArguments{
@@ -2805,22 +2677,22 @@ struct DispatchIndirectArguments{
 };
 
 struct MeshletState{
-    IMeshletPipeline* pipeline = nullptr;
-    IFramebuffer* framebuffer = nullptr;
+    MeshletPipeline* pipeline = nullptr;
+    Framebuffer* framebuffer = nullptr;
     ViewportState viewport;
     Color blendConstantColor{};
     u8 dynamicStencilRefValue = 0;
 
     BindingSetVector bindings;
 
-    IBuffer* indirectParams = nullptr;
+    Buffer* indirectParams = nullptr;
 
-    constexpr MeshletState& setPipeline(IMeshletPipeline* value){ pipeline = value; return *this; }
-    constexpr MeshletState& setFramebuffer(IFramebuffer* value){ framebuffer = value; return *this; }
+    constexpr MeshletState& setPipeline(MeshletPipeline* value){ pipeline = value; return *this; }
+    constexpr MeshletState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }
     constexpr MeshletState& setViewport(const ViewportState& value){ viewport = value; return *this; }
     constexpr MeshletState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
-    MeshletState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
-    constexpr MeshletState& setIndirectParams(IBuffer* value){ indirectParams = value; return *this; }
+    MeshletState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
+    constexpr MeshletState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
     constexpr MeshletState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
 };
 
@@ -2834,12 +2706,11 @@ struct RayTracingPipelineShaderDesc{
     BindingLayoutHandle bindingLayout;
     GraphicsString exportName;
 
-    explicit RayTracingPipelineShaderDesc(GraphicsArena& arena)
-        : exportName(arena)
-    {}
+    explicit RayTracingPipelineShaderDesc(GraphicsArena& arena);
+    ~RayTracingPipelineShaderDesc();
 
-    RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value){ shader = value; return *this; }
-    RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
+    RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value);
+    RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value);
     RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
 };
 
@@ -2851,14 +2722,13 @@ struct RayTracingPipelineHitGroupDesc{
     GraphicsString exportName;
     bool isProceduralPrimitive = false;
 
-    explicit RayTracingPipelineHitGroupDesc(GraphicsArena& arena)
-        : exportName(arena)
-    {}
+    explicit RayTracingPipelineHitGroupDesc(GraphicsArena& arena);
+    ~RayTracingPipelineHitGroupDesc();
 
-    RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value){ intersectionShader = value; return *this; }
-    RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
+    RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value);
+    RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value);
+    RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value);
+    RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value);
     RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
@@ -2879,10 +2749,11 @@ struct RayTracingPipelineDesc{
         : shaders(arena)
         , hitGroups(arena)
     {}
+    ~RayTracingPipelineDesc();
 
-    RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
-    RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
-    RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value){ globalBindingLayouts.push_back(value); return *this; }
+    RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value);
+    RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value);
+    RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value);
     constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value){ maxPayloadSize = value; return *this; }
     constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value){ maxAttributeSize = value; return *this; }
     constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value){ maxRecursionDepth = value; return *this; }
@@ -2892,41 +2763,16 @@ struct RayTracingPipelineDesc{
     constexpr RayTracingPipelineDesc& setAllowLinearSweptSpheres(bool value){ allowLinearSweptSpheres = value; return *this; }
 };
 
-class IRayTracingPipeline;
-
-class IRayTracingShaderTable : public IResource{
-    using IResource::IResource;
-
-
-public:
-    virtual void setRayGenerationShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addMissShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addHitGroup(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual u32 addCallableShader(AStringView exportName, IBindingSet* bindings = nullptr) = 0;
-    virtual void clearMissShaders() = 0;
-    virtual void clearHitShaders() = 0;
-    virtual void clearCallableShaders() = 0;
-    virtual IRayTracingPipeline* getPipeline() = 0;
-};
-typedef RefCountPtr<IRayTracingShaderTable, ArenaRefDeleter<IRayTracingShaderTable>> RayTracingShaderTableHandle;
-
-class IRayTracingPipeline : public IResource{
-    using IResource::IResource;
-
-
-public:
-    [[nodiscard]] virtual const RayTracingPipelineDesc& getDescription()const = 0;
-    virtual RayTracingShaderTableHandle createShaderTable() = 0;
-};
-typedef RefCountPtr<IRayTracingPipeline, ArenaRefDeleter<IRayTracingPipeline>> RayTracingPipelineHandle;
+typedef GraphicsBackend::Handle<RayTracingShaderTable> RayTracingShaderTableHandle;
+typedef GraphicsBackend::Handle<RayTracingPipeline> RayTracingPipelineHandle;
 
 struct RayTracingState{
-    IRayTracingShaderTable* shaderTable = nullptr;
+    RayTracingShaderTable* shaderTable = nullptr;
 
     BindingSetVector bindings;
 
-    constexpr RayTracingState& setShaderTable(IRayTracingShaderTable* value){ shaderTable = value; return *this; }
-    RayTracingState& addBindingSet(IBindingSet* value){ bindings.push_back(value); return *this; }
+    constexpr RayTracingState& setShaderTable(RayTracingShaderTable* value){ shaderTable = value; return *this; }
+    RayTracingState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
 };
 
 struct RayTracingDispatchRaysArguments{
@@ -2976,8 +2822,7 @@ namespace CooperativeVectorMatrixLayout{
 };
 
 // Describes a combination of input and output data types for matrix multiplication with Cooperative Vectors.
-// - DX12: Maps from D3D12_COOPERATIVE_VECTOR_PROPERTIES_MUL.
-// - Vulkan: Maps from VkCooperativeVectorPropertiesNV.
+// Maps from VkCooperativeVectorPropertiesNV.
 struct CooperativeVectorMatMulFormatCombo{
     CooperativeVectorDataType::Enum inputType;
     CooperativeVectorDataType::Enum inputInterpretation;
@@ -2991,14 +2836,10 @@ struct CooperativeVectorDeviceFeatures{
     // Format combinations supported by the device for matrix multiplication with Cooperative Vectors.
     GraphicsVector<CooperativeVectorMatMulFormatCombo> matMulFormats;
 
-    // - DX12: True if FLOAT16 is supported as accumulation format for both outer product accumulation
-    //         and vector accumulation.
-    // - Vulkan: True if cooperativeVectorTrainingFloat16Accumulation is supported.
+    // True if cooperativeVectorTrainingFloat16Accumulation is supported.
     bool trainingFloat16 = false;
 
-    // - DX12: True if FLOAT32 is supported as accumulation format for both outer product accumulation
-    //         and vector accumulation.
-    // - Vulkan: True if cooperativeVectorTrainingFloat32Accumulation is supported.
+    // True if cooperativeVectorTrainingFloat32Accumulation is supported.
     bool trainingFloat32 = false;
 
     explicit CooperativeVectorDeviceFeatures(GraphicsArena& arena)
@@ -3008,7 +2849,7 @@ struct CooperativeVectorDeviceFeatures{
 
 struct CooperativeVectorMatrixLayoutDesc{
     // Buffer where the matrix is stored.
-    IBuffer* buffer = nullptr;
+    Buffer* buffer = nullptr;
 
     // Offset in bytes from the start of the buffer where the matrix starts.
     u64 offset = 0;
@@ -3029,7 +2870,7 @@ struct CooperativeVectorMatrixLayoutDesc{
 };
 
 // Describes a single matrix layout conversion operation.
-// Used by ICommandList::convertCoopVecMatrices(...)
+// Used by CommandList::convertCoopVecMatrices(...)
 struct CooperativeVectorConvertMatrixLayoutDesc{
     CooperativeVectorMatrixLayoutDesc src;
     CooperativeVectorMatrixLayoutDesc dst;
@@ -3099,488 +2940,21 @@ struct WaveLaneCountMinMaxFeatureInfo{
     u32 maxWaveLaneCount;
 };
 
-class IDevice;
-
 struct CommandListParameters{
-    // A command list with enableImmediateExecution = true maps to the immediate context on DX11.
-    // Two immediate command lists cannot be open at the same time, which is checked by the validation layer.
-    bool enableImmediateExecution = true;
-
-    // Minimum size of memory chunks created to upload data to the device on DX12.
-    usize uploadChunkSize = s_CommandListUploadChunkSize;
-
-    // Minimum size of memory chunks created for AS build scratch buffers.
-    usize scratchChunkSize = s_CommandListScratchChunkSize;
-
-    // Maximum total memory size used for all AS build scratch buffers owned by this command list.
-    usize scratchMaxMemory = s_CommandListScratchMaxMemory;
-
     // Type of the queue that this command list is to be executed on.
     // COPY and COMPUTE queues have limited subsets of methods available.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
 
-    CommandListParameters& setEnableImmediateExecution(bool value){ enableImmediateExecution = value; return *this; }
-    CommandListParameters& setUploadChunkSize(usize value){ uploadChunkSize = value; return *this; }
-    CommandListParameters& setScratchChunkSize(usize value){ scratchChunkSize = value; return *this; }
-    CommandListParameters& setScratchMaxMemory(usize value){ scratchMaxMemory = value; return *this; }
     CommandListParameters& setQueueType(CommandQueue::Enum value){ queueType = value; return *this; }
 };
 
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// ICommandList
+// Command List
 
-
-// Represents a sequence of GPU operations.
-// - DX11: All command list objects map to the single immediate context. Only one command list may be in the open
-//   state at any given time, and all command lists must have CommandListParameters::enableImmediateExecution = true.
-// - DX12: One command list object may contain multiple instances of ID3D12GraphicsCommandList* and
-//   ID3D12CommandAllocator objects, reusing older ones as they finish executing on the GPU. A command list object
-//   also contains the upload manager (for suballocating memory from the upload heap on operations such as
-//   writeBuffer) and the DXR scratch manager (for suballocating memory for acceleration structure builds).
-//   The upload and scratch managers' memory is reused when possible, but it is only freed when the command list
-//   object is destroyed. Thus, it might be a good idea to use a dedicated NVRHI command list for uploading large
-//   amounts of data and to destroy it when uploading is finished.
-// - Vulkan: The command list objects don't own the VkCommandBuffer-s but request available ones from the queue
-//   instead. The upload and scratch buffers behave the same way they do on DX12.
-class ICommandList : public IResource{
-    using IResource::IResource;
-
-
-public:
-    // Prepares the command list for recording a new sequence of commands.
-    // All other methods of ICommandList must only be used when the command list is open.
-    // - DX11: The immediate command list may always stay in the open state, although that prohibits other
-    //   command lists from opening.
-    // - DX12, Vulkan: Creates or reuses the command list or buffer object and the command allocator (DX12),
-    //   starts tracking the resources being referenced in the command list.
-    virtual void open() = 0;
-
-    // Finalizes the command list and prepares it for execution.
-    // Use IDevice::executeCommandLists(...) to execute it.
-    // Re-opening the command list without execution is allowed but not well-tested.
-    virtual void close() = 0;
-
-    // Resets the NVRHI state cache associated with the command list, clears some of the underlying API state.
-    // This method is mostly useful when switching from recording commands to the open command list using
-    // non-NVRHI code - see getNativeObject(...) - to recording further commands using NVRHI.
-    virtual void clearState() = 0;
-
-    // Ends the currently active graphics render pass, if one is active.
-    // This is useful when a texture rendered earlier in the command list must be transitioned
-    // for sampling, storage, copy, or another non-attachment use before another graphics pass.
-    virtual void endRenderPass() = 0;
-
-    // Clears some or all subresources of the given color texture using the provided color.
-    // - DX11/12: The clear operation uses either an RTV or a UAV, depending on the texture usage flags
-    //   (isRenderTarget and isUAV).
-    // - Vulkan: vkCmdClearColorImage is always used with the Float32 color fields set.
-    // At least one of the 'isRenderTarget' and 'isUAV' flags must be set, and the format of the texture
-    // must be of a color type.
-    virtual void clearTextureFloat(ITexture* t, TextureSubresourceSet subresources, const Color& clearColor) = 0;
-
-    // Clears some or all subresources of the given depth-stencil texture using the provided depth and/or stencil
-    // values. The texture must have the isRenderTarget flag set, and its format must be of a depth-stencil type.
-    virtual void clearDepthStencilTexture(ITexture* t, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil) = 0;
-
-    // Clears some or all subresources of the given color texture using the provided integer value.
-    // - DX11/12: If the texture has the isUAV flag set, the clear is performed using ClearUnorderedAccessViewUint.
-    //   Otherwise, the clear value is converted to a float, and the texture is cleared as an RTV with all 4
-    //   color components using the same value.
-    // - Vulkan: vkCmdClearColorImage is always used with the UInt32 and Int32 color fields set.
-    virtual void clearTextureUInt(ITexture* t, TextureSubresourceSet subresources, u32 clearColor) = 0;
-
-    // Copies a single 2D or 3D region of texture data from texture 'src' into texture 'dst'.
-    // The region's dimensions must be compatible between the two textures, meaning that for simple color textures
-    // they must be equal, and for reinterpret copies between compressed and uncompressed textures, they must differ
-    // by a factor equal to the block size. The function does not resize textures, only 1:1 pixel copies are
-    // supported.
-    virtual void copyTexture(ITexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice) = 0;
-
-    // Copies a single 2D or 3D region of texture data from regular texture 'src' into staging texture 'dst'.
-    virtual void copyTexture(IStagingTexture* dest, const TextureSlice& destSlice, ITexture* src, const TextureSlice& srcSlice) = 0;
-
-    // Copies a single 2D or 3D region of texture data from staging texture 'src' into regular texture 'dst'.
-    virtual void copyTexture(ITexture* dest, const TextureSlice& destSlice, IStagingTexture* src, const TextureSlice& srcSlice) = 0;
-
-    // Uploads the contents of an entire 2D or 3D mip level of a single array slice of the texture from CPU memory.
-    // The data in CPU memory must be in the same pixel format as the texture. Pixels in every row must be tightly
-    // packed, rows are packed with a stride of 'rowPitch' which must not be 0 unless the texture has a height of 1,
-    // and depth slices are packed with a stride of 'depthPitch' which also must not be 0 if the texture is 3D.
-    // - DX11: Maps directly to UpdateSubresource.
-    // - DX12, Vulkan: A region of the automatic upload buffer is suballocated, data is copied there, and then
-    //   copied on the GPU into the destination texture using CopyTextureRegion (DX12) or vkCmdCopyBufferToImage (VK).
-    //   The upload buffer region can only be reused when this command list instance finishes executing on the GPU.
-    // For more advanced uploading operations, such as updating only a region in the texture, use staging texture
-    // objects and copyTexture(...).
-    virtual void writeTexture(ITexture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0) = 0;
-
-    // Performs a resolve operation to combine samples from some or all subresources of a multisample texture 'src'
-    // into matching subresources of a non-multisample texture 'dest'. Both textures' formats must be of color type.
-    // - DX11/12: Maps to a sequence of ResolveSubresource calls, one per subresource.
-    // - Vulkan: Maps to a single vkCmdResolveImage call.
-    virtual void resolveTexture(ITexture* dest, const TextureSubresourceSet& dstSubresources, ITexture* src, const TextureSubresourceSet& srcSubresources) = 0;
-
-    // Uploads 'dataSize' bytes of data from CPU memory into the GPU buffer 'b' at offset 'destOffsetBytes'.
-    // - DX11: If the buffer's 'cpuAccess' mode is set to Write, maps the buffer and uploads the data that way.
-    //   Otherwise, uses UpdateSubresource.
-    // - DX12: If the buffer's 'isVolatile' flag is set, a region of the automatic upload buffer is suballocated,
-    //   and the data is copied there. Subsequent uses of the buffer will directly refer to that location in the
-    //   upload buffer, until the next call to writeBuffer(...) or until the command list is closed. A volatile
-    //   buffer can not be used until writeBuffer(...) is called on it every time after the command list is opened.
-    //   If the 'isVolatile' flag is not set, a region of the automatic upload buffer is suballocated, the data
-    //   is copied there, and then copied into the real GPU buffer object using CopyBufferRegion.
-    // - Vulkan: Similar behavior to DX12, except that each volatile buffer actually has its own Vulkan resource.
-    //   The size of such resource is determined by the 'maxVersions' field of the BufferDesc. When writeBuffer(...)
-    //   is called on a volatile buffer, a region of that buffer object (a single version) is suballocated, data
-    //   is copied there, and subsequent uses of the buffer in the same command list will refer to that version.
-    //   For non-volatile buffers, writes of 64 kB or smaller use vkCmdUpdateBuffer. Larger writes suballocate
-    //   a portion of the automatic upload buffer and copy the data to the real GPU buffer through that and
-    //   vkCmdCopyBuffer.
-    virtual void writeBuffer(IBuffer* b, const void* data, usize dataSize, u64 destOffsetBytes = 0) = 0;
-
-    // Fills the entire buffer using the provided uint32 value.
-    // - DX11/12: Maps to ClearUnorderedAccessViewUint.
-    // - Vulkan: Maps to vkCmdFillBuffer.
-    virtual void clearBufferUInt(IBuffer* b, u32 clearValue) = 0;
-
-    // Copies 'dataSizeBytes' of data from buffer 'src' at offset 'srcOffsetBytes' into buffer 'dest' at offset
-    // 'destOffsetBytes'. The source and destination regions must be within the sizes of the respective buffers.
-    // - DX11: Maps to CopySubresourceRegion.
-    // - DX12: Maps to CopyBufferRegion.
-    // - Vulkan: Maps to vkCmdCopyBuffer.
-    virtual void copyBuffer(IBuffer* dest, u64 destOffsetBytes, IBuffer* src, u64 srcOffsetBytes, u64 dataSizeBytes) = 0;
-
-    // Clears the entire sampler feedback texture.
-    // - DX12: Maps to ClearUnorderedAccessViewUint.
-    // - DX11, Vulkan: Unsupported.
-    virtual void clearSamplerFeedbackTexture(ISamplerFeedbackTexture* texture) = 0;
-
-    // Decodes the sampler feedback texture into an application-usable format, storing data into the provided buffer.
-    // The 'format' parameter should be Format::R8_UINT.
-    // - DX12: Maps to ResolveSubresourceRegion.
-    //   See https://microsoft.github.io/DirectX-Specs/d3d/SamplerFeedback.html
-    // - DX11, Vulkan: Unsupported.
-    virtual void decodeSamplerFeedbackTexture(IBuffer* buffer, ISamplerFeedbackTexture* texture, Format::Enum format) = 0;
-
-    // Transitions the sampler feedback texture into the requested state, placing a barrier if necessary.
-    // The barrier is appended into the pending barrier list and not issued immediately,
-    // instead waiting for any rendering, compute or transfer operation.
-    // Use commitBarriers() to issue the barriers explicitly.
-    // Like the other sampler feedback functions, only supported on DX12.
-    virtual void setSamplerFeedbackTextureState(ISamplerFeedbackTexture* texture, ResourceStates::Mask stateBits) = 0;
-
-    // Writes the provided data into the push constants block for the currently set pipeline.
-    // A graphics, compute, ray tracing or meshlet state must be set using the corresponding call
-    // (setGraphicsState etc.) before using setPushConstants. Changing the state invalidates push constants.
-    // - DX11: Push constants for all pipelines and command lists use a single buffer associated with the
-    //   NVRHI context. This function maps to UpdateSubresource on that buffer.
-    // - DX12: Push constants map to root constants in the PSO/root signature. This function maps to
-    //   SetGraphicsRoot32BitConstants for graphics or meshlet pipelines, and SetComputeRoot32BitConstants for
-    //   compute or ray tracing pipelines.
-    // - Vulkan: Push constants are just Vulkan push constants. This function maps to vkCmdPushConstants.
-    // Note that NVRHI only supports one push constants binding in all layouts used in a pipeline.
-    virtual void setPushConstants(const void* data, usize byteSize) = 0;
-
-    // Sets the specified graphics state on the command list.
-    // The state includes the pipeline (or individual shaders on DX11) and all resources bound to it,
-    // from input buffers to render targets. See the members of GraphicsState for more information.
-    // State is cached by NVRHI, so if some parts of it are not modified by the setGraphicsState(...) call,
-    // the corresponding changes won't be made on the underlying graphics API. When combining command list
-    // operations made through NVRHI and through direct access to the command list, state caching may lead to
-    // incomplete or incorrect state being set on the underlying API because of cache mismatch with the actual
-    // state. To avoid these issues, call clearState() when switching from direct command list access to NVRHI.
-    virtual void setGraphicsState(const GraphicsState& state) = 0;
-
-    // Draws non-indexed primitivies using the current graphics state.
-    // setGraphicsState(...) must be called between opening the command list or using other types of pipelines
-    // and calling draw(...) or any of its siblings. If the pipeline uses push constants, those must be set
-    // using setPushConstants(...) between setGraphicsState(...) and draw(...). If the pipeline uses volatile
-    // constant buffers, their contents must be written using writeBuffer(...) between open(...) and draw(...),
-    // which may be before or after setGraphicsState(...).
-    // - DX11/12: Maps to DrawInstanced.
-    // - Vulkan: Maps to vkCmdDraw.
-    virtual void draw(const DrawArguments& args) = 0;
-
-    // Draws indexed primitivies using the current graphics state.
-    // See the comment to draw(...) for state information.
-    // - DX11/12: Maps to DrawIndexedInstanced.
-    // - Vulkan: Maps to vkCmdDrawIndexed.
-    virtual void drawIndexed(const DrawArguments& args) = 0;
-
-    // Draws one or multiple sets of non-indexed primitives using the parameters provided in the indirect buffer
-    // specified in the prior call to setGraphicsState(...). The memory layout in the buffer is the same for all
-    // graphics APIs and is described by the DrawIndirectArguments structure. If drawCount is more than 1,
-    // multiple sets of primitives are drawn, and the parameter structures for them are tightly packed in the
-    // indirect parameter buffer one after another.
-    // See the comment to draw(...) for state information.
-    // - DX11: Maps to multiple calls to DrawInstancedIndirect.
-    // - DX12: Maps to ExecuteIndirect with a predefined signature.
-    // - Vulkan: Maps to vkCmdDrawIndirect.
-    virtual void drawIndirect(u32 offsetBytes, u32 drawCount = 1) = 0;
-
-    // Draws one or multiple sets of indexed primitives using the parameters provided in the indirect buffer
-    // specified in the prior call to setGraphicsState(...). The memory layout in the buffer is the same for all
-    // graphics APIs and is described by the DrawIndexedIndirectArguments structure. If drawCount is more than 1,
-    // multiple sets of primitives are drawn, and the parameter structures for them are tightly packed in the
-    // indirect parameter buffer one after another.
-    // See the comment to draw(...) for state information.
-    // - DX11: Maps to multiple calls to DrawIndexedInstancedIndirect.
-    // - DX12: Maps to ExecuteIndirect with a predefined signature.
-    // - Vulkan: Maps to vkCmdDrawIndexedIndirect.
-    virtual void drawIndexedIndirect(u32 offsetBytes, u32 drawCount = 1) = 0;
-
-    // Sets the specified compute state on the command list.
-    // The state includes the pipeline (or individual shaders on DX11) and all resources bound to it.
-    // See the members of ComputeState for more information.
-    // See the comment to setGraphicsState(...) for information on state caching.
-    virtual void setComputeState(const ComputeState& state) = 0;
-
-    // Launches a compute kernel using the current compute state.
-    // See the comment to draw(...) for information on state setting, push constants, and volatile constant buffers,
-    // replacing graphics with compute.
-    // - DX11/12: Maps to Dispatch.
-    // - Vulkan: Maps to vkCmdDispatch.
-    virtual void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1) = 0;
-
-    // Launches a compute kernel using the parameters provided in the indirect buffer specified in the prior
-    // call to setComputeState(...). The memory layout in the buffer is the same for all graphics APIs and is
-    // described by the DispatchIndirectArguments structure.
-    // See the comment to dispatch(...) for state information.
-    // - DX11: Maps to DispatchIndirect.
-    // - DX12: Maps to ExecuteIndirect with a predefined signature.
-    // - Vulkan: Maps to vkCmdDispatchIndirect.
-    virtual void dispatchIndirect(u32 offsetBytes) = 0;
-
-    // Sets the specified meshlet rendering state on the command list.
-    // The state includes the pipeline and all resources bound to it.
-    // Not supported on DX11.
-    // Meshlet support on DX12 and Vulkan can be queried using IDevice::queryFeatureSupport(Feature::Meshlets).
-    // See the members of MeshletState for more information.
-    // See the comment to setGraphicsState(...) for information on state caching.
-    virtual void setMeshletState(const MeshletState& state) = 0;
-
-    // Draws meshlet primitives using the current meshlet state.
-    // See the comment to draw(...) for information on state setting, push constants, and volatile constant buffers,
-    // replacing graphics with meshlets.
-    // - DX11: Not supported.
-    // - DX12: Maps to DispatchMesh.
-    // - Vulkan: Maps to vkCmdDispatchMesh.
-    virtual void dispatchMesh(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1) = 0;
-
-    // Sets the specified ray tracing state on the command list.
-    // The state includes the shader table, which references the pipeline, and all bound resources.
-    // Not supported on DX11.
-    // See the members of RayTracingState for more information.
-    // See the comment to setGraphicsState(...) for information on state caching.
-    virtual void setRayTracingState(const RayTracingState& state) = 0;
-
-    // Launches a grid of ray generation shader threads using the current ray tracing state.
-    // The ray generation shader to use is specified by the shader table, which currently supports only one
-    // ray generation shader. There may be multiple shaders of all other ray tracing types in the shader table.
-    // See the comment to draw(...) for information on state setting, push constants, and volatile constant buffers,
-    // replacing graphics with ray tracing.
-    // - DX11: Not supported.
-    // - DX12: Maps to DispatchRays.
-    // - Vulkan: Maps to vkCmdTraceRaysKHR.
-    virtual void dispatchRays(const RayTracingDispatchRaysArguments& args) = 0;
-
-    // Launches an opacity micromap (OMM) build kernel.
-    // A temporary memory region for the build is suballocated using the scratch buffer manager attached to the
-    // command list. The size of this memory region is determined automatically inside this function.
-    // - DX11: Not supported.
-    // - DX12: Maps to NvAPI_D3D12_BuildRaytracingOpacityMicromapArray and requires NVAPI.
-    // - Vulkan: Maps to vkCmdBuildMicromapsEXT.
-    virtual void buildOpacityMicromap(IRayTracingOpacityMicromap* omm, const RayTracingOpacityMicromapDesc& desc) = 0;
-
-    // Builds or updates a bottom-level ray tracing acceleration structure (BLAS).
-    // A temporary memory region for the build is suballocated using the scratch buffer manager attached to the
-    // command list. The size of this memory region is determined automatically inside this function.
-    // The type of operation to perform is specified by the buildFlags parameter.
-    // When building a new BLAS, the amount of memory allocated for it must be sufficient to build the BLAS
-    // for the provided geometry. Usually this is achieved by passing the same geometry descriptors to this function
-    // and to IDevice::createAccelStruct(...).
-    // When updating a BLAS, the geometries and primitive counts must match the BLAS that was previously built,
-    // and the BLAS must have been built with the AllowUpdate flag.
-    // If compaction is enabled when building the BLAS, the BLAS cannot be rebuilt or updated later, it can only
-    // be compacted.
-    // - DX11: Not supported.
-    // - DX12: Maps to BuildRaytracingAccelerationStructure, or NvAPI_D3D12_BuildRaytracingAccelerationStructureEx
-    //   if Opacity Micromaps or Line-Swept Sphere geometries are supported by the device.
-    // - Vulkan: Maps to vkCmdBuildAccelerationStructuresKHR.
-    // If NVRHI is built with RTXMU enabled, all BLAS builds, updates and compactions are handled by RTXMU.
-    // Note that RTXMU currently doesn't support OMM or LSS.
-    virtual void buildBottomLevelAccelStruct(IRayTracingAccelStruct* as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None) = 0;
-
-    // Compacts all bottom-level ray tracing acceleration structures (BLASes) that are currently available
-    // for compaction. This process is handled by the RTXMU library. If NVRHI is built without RTXMU,
-    // this function has no effect.
-    virtual void compactBottomLevelAccelStructs() = 0;
-
-    // Builds or updates a top-level ray tracing acceleration structure (TLAS).
-    // A temporary memory region for the build is suballocated using the scratch buffer manager attached to the
-    // command list. The size of this memory region is determined automatically inside this function.
-    // The type of operation to perform is specified by the buildFlags parameter.
-    // When building a new TLAS, the amount of memory allocated for it must be sufficient to build the TLAS
-    // for the provided geometry. Usually this is achieved by making sure that the instance count does not exceed
-    // that provided to IDevice::createAccelStruct(...).
-    // When updating a TLAS, the instance counts and types must match the TLAS that was previously built,
-    // and the TLAS must have been built with the AllowUpdate flag.
-    // - DX11: Not supported.
-    // - DX12: Maps to BuildRaytracingAccelerationStructure.
-    // - Vulkan: Maps to vkCmdBuildAccelerationStructuresKHR.
-    virtual void buildTopLevelAccelStruct(IRayTracingAccelStruct* as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None) = 0;
-
-    // Performs one of the supported operations on clustered ray tracing acceleration structures (CLAS).
-    // See the comments to RayTracingClusterOperationDesc for more information.
-    // - DX11: Not supported.
-    // - DX12: Maps to NvAPI_D3D12_RaytracingExecuteMultiIndirectClusterOperation and requires NVAPI.
-    // - Vulkan: Not supported.
-    virtual void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc) = 0;
-
-    // Builds or updates a top-level ray tracing acceleration structure (TLAS) using instance data provided
-    // through a buffer on the GPU. The buffer must be pre-filled with RayTracingInstanceDesc structures using a
-    // copy operation or a shader. No validation on the buffer contents is performed by NVRHI, and no state
-    // or liveness tracking is done for the referenced BLAS'es.
-    // See the comment to buildTopLevelAccelStruct(...) for more information.
-    // - DX11: Not supported.
-    // - DX12: Maps to BuildRaytracingAccelerationStructure.
-    // - Vulkan: Maps to vkCmdBuildAccelerationStructuresKHR.
-    virtual void buildTopLevelAccelStructFromBuffer(IRayTracingAccelStruct* as, IBuffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None) = 0;
-
-    // Converts one or several CoopVec compatible matrices between layouts in GPU memory.
-    // Source and destination buffers must be different.
-    // - DX11: Not supported.
-    // - DX12: Maps to ConvertLinearAlgebraMatrix.
-    // - Vulkan: Maps to vkCmdConvertCooperativeVectorMatrixNV.
-    virtual void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs) = 0;
-
-    // Starts measuring GPU execution time using the provided timer query at this point in the command list.
-    // Use endTimerQuery(...) to stop measusing time, and IDevice::getTimerQueryTime(...) to get the results later.
-    // The same timer query cannot be used multiple times within the same command list, or in different
-    // command lists until it is resolved.
-    // - DX11: Maps to Begin and End calls on two ID3D11Query objects.
-    // - DX12: Maps to EndQuery.
-    // - Vulkan: Maps to vkCmdResetQueryPool and vkCmdWriteTimestamp.
-    virtual void beginTimerQuery(ITimerQuery* query) = 0;
-
-    // Stops measuring GPU execution time using the provided timer query at this point in the command list.
-    // beginTimerQuery(...) must have been used on the same timer query in this command list previously.
-    // - DX11: Maps to End calls on two ID3D11Query objects.
-    // - DX12: Maps to EndQuery and ResolveQueryData.
-    // - Vulkan: Maps to vkCmdWriteTimestamp.
-    virtual void endTimerQuery(ITimerQuery* query) = 0;
-
-    // Places a debug marker denoting the beginning of a range of commands in the command list.
-    // Use endMarker() to denote the end of the range. Ranges may be nested, i.e. calling beginMarker(...)
-    // multiple times, followed by multiple endMarker(), is allowed.
-    // - DX11: Maps to ID3DUserDefinedAnnotation::BeginEvent.
-    // - DX12: Maps to PIXBeginEvent.
-    // - Vulkan: Maps to cmdBeginDebugUtilsLabelEXT or cmdDebugMarkerBeginEXT.
-    // If Nsight Aftermath integration is enabled, also calls GFSDK_Aftermath_SetEventMarker on DX11 and DX12.
-    virtual void beginMarker(const AStringView name) = 0;
-
-    // Places a debug marker denoting the end of a range of commands in the command list.
-    // - DX11: Maps to ID3DUserDefinedAnnotation::EndEvent.
-    // - DX12: Maps to PIXEndEvent.
-    // - Vulkan: Maps to cmdEndDebugUtilsLabelEXT or cmdDebugMarkerEndEXT.
-    virtual void endMarker() = 0;
-
-    // Enables or disables the automatic barrier placement on set[...]State, copy, write, and clear operations.
-    // By default, automatic barriers are enabled, but can be optionally disabled to improve CPU performance
-    // and/or specific barrier placement. When automatic barriers are disabled, it is application's responsibility
-    // to set correct states for all used resources.
-    virtual void setEnableAutomaticBarriers(bool enable) = 0;
-
-    // Sets the necessary resource states for all non-permanent resources used in the binding set.
-    virtual void setResourceStatesForBindingSet(IBindingSet* bindingSet) = 0;
-
-    // Sets the necessary resource states for all targets of the framebuffer.
-    void setResourceStatesForFramebuffer(IFramebuffer& framebuffer);
-
-    // Enables or disables the placement of UAV barriers for the given texture (DX12/VK) or all resources (DX11)
-    // between draw or dispatch calls. Disabling UAV barriers may improve performance in cases when the same
-    // resource is used by multiple draws or dispatches, but they don't depend on each other's results.
-    // Note that this only affects barriers between multiple uses of the same texture as a UAV, and the
-    // transition barrier when the texture is first used as a UAV will still be placed.
-    // - DX11: Maps to NvAPI_D3D11_BeginUAVOverlap (once - see source code) and requires NVAPI.
-    // - DX12, Vulkan: Does not map to any specific API calls, affects NVRHI automatic barriers.
-    virtual void setEnableUavBarriersForTexture(ITexture* texture, bool enableBarriers) = 0;
-
-    // Enables or disables the placement of UAV barriers for the given buffer (DX12/VK) or all resources (DX11)
-    // between draw or dispatch calls.
-    // See the comment to setEnableUavBarriersForTexture(...) for more information.
-    virtual void setEnableUavBarriersForBuffer(IBuffer* buffer, bool enableBarriers) = 0;
-
-    // Informs the command list state tracker of the current state of a texture or some of its subresources.
-    // This function must be called after opening the command list and before the first use of any textures
-    // that do not have the keepInitialState flag set, and that were not transitioned to a permanent state
-    // previously using setPermanentTextureState(...).
-    virtual void beginTrackingTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits) = 0;
-
-    // Informs the command list state tracker of the current state of a buffer.
-    // See the comment to beginTrackingTextureState(...) for more information.
-    virtual void beginTrackingBufferState(IBuffer* buffer, ResourceStates::Mask stateBits) = 0;
-
-    // Places the neccessary barriers to make sure that the texture or some of its subresources are in the given
-    // state. If the texture or subresources are already in that state, no action is performed.
-    // If the texture was previously transitioned to a permanent state, the new state must be compatible
-    // with that permanent state, and no action is performed.
-    // The barriers are not immediately submitted to the underlying graphics API, but are placed to the pending
-    // list instead. Call commitBarriers() to submit them to the grahics API explicitly or set graphics
-    // or other type of state.
-    // Has no effect on DX11.
-    virtual void setTextureState(ITexture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits) = 0;
-
-    // Places the neccessary barriers to make sure that the buffer is in the given state.
-    // See the comment to setTextureState(...) for more information.
-    // Has no effect on DX11.
-    virtual void setBufferState(IBuffer* buffer, ResourceStates::Mask stateBits) = 0;
-
-    // Places the neccessary barriers to make sure that the underlying buffer for the acceleration structure is
-    // in the given state. See the comment to setTextureState(...) for more information.
-    // Has no effect on DX11.
-    virtual void setAccelStructState(IRayTracingAccelStruct* as, ResourceStates::Mask stateBits) = 0;
-
-    // Places the neccessary barriers to make sure that the entire texture is in the given state, and marks that
-    // state as the texture's permanent state. Once a texture is transitioned into a permanent state, its state
-    // can not be modified. This can improve performance by excluding the texture from automatic state tracking
-    // in the future.
-    // The barriers are not immediately submitted to the underlying graphics API, but are placed to the pending
-    // list instead. Call commitBarriers() to submit them to the grahics API explicitly or set graphics
-    // or other type of state.
-    // Note that the permanent state transitions affect all command lists, and are only applied when the command
-    // list that sets them is executed. If the command list is closed but not executed, the permanent states
-    // will be abandoned.
-    // Has no effect on DX11.
-    virtual void setPermanentTextureState(ITexture* texture, ResourceStates::Mask stateBits) = 0;
-
-    // Places the neccessary barriers to make sure that the buffer is in the given state, and marks that state
-    // as the buffer's permanent state. See the comment to setPermanentTextureState(...) for more information.
-    // Has no effect on DX11.
-    virtual void setPermanentBufferState(IBuffer* buffer, ResourceStates::Mask stateBits) = 0;
-
-    // Flushes the barriers from the pending list into the graphics API command list.
-    // Has no effect on DX11.
-    virtual void commitBarriers() = 0;
-
-    // Returns the current tracked state of a texture subresource.
-    // If the state is not known to the command list, returns ResourceStates::Unknown. Using the texture in this
-    // state is not allowed.
-    // On DX11, always returns ResourceStates::Common.
-    virtual ResourceStates::Mask getTextureSubresourceState(ITexture* texture, ArraySlice arraySlice, MipLevel mipLevel) = 0;
-
-    // Returns the current tracked state of a buffer.
-    // See the comment to getTextureSubresourceState(...) for more information.
-    virtual ResourceStates::Mask getBufferState(IBuffer* buffer) = 0;
-
-    // Returns the owning device, does NOT call AddRef on it.
-    virtual IDevice* getDevice() = 0;
-
-    // Returns the CommandListParameters structure that was used to create the command list.
-    virtual const CommandListParameters& getDescription() = 0;
-};
-typedef RefCountPtr<ICommandList, ArenaRefDeleter<ICommandList>> CommandListHandle;
+// Represents a sequence of GPU operations submitted through a backend queue.
+typedef GraphicsBackend::Handle<CommandList> CommandListHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3618,9 +2992,9 @@ private:
     GraphicsHashMap<usize, GraphicsString> m_eventStrings;
 };
 
-// AftermathCrashDumpHelper tracks all IDevice-level constructs needed when generating a crash dump.
+// AftermathCrashDumpHelper tracks all Device-level constructs needed when generating a crash dump.
 // It provides two services: resolving a marker hash to the original string, and getting shader bytecode.
-// There should be one AftermathCrashDumpHelper per IDevice.
+// There should be one AftermathCrashDumpHelper per Device.
 // All command lists will register their AftermathMarkerTrackers with the AftermathCrashDumpHelper.
 class AftermathCrashDumpHelper{
 public:
@@ -3651,115 +3025,7 @@ private:
 // Device
 
 
-class IDevice : public IResource
-{
-    using IResource::IResource;
-
-
-public:
-    virtual HeapHandle createHeap(const HeapDesc& d) = 0;
-
-    virtual TextureHandle createTexture(const TextureDesc& d) = 0;
-    virtual MemoryRequirements getTextureMemoryRequirements(ITexture* texture) = 0;
-    virtual bool bindTextureMemory(ITexture* texture, IHeap* heap, u64 offset) = 0;
-
-    virtual TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc) = 0;
-
-    virtual StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess) = 0;
-    virtual void* mapStagingTexture(IStagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum cpuAccess, usize* outRowPitch) = 0;
-    virtual void unmapStagingTexture(IStagingTexture* tex) = 0;
-
-    virtual void getTextureTiling(ITexture* texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings) = 0;
-    virtual void updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue = CommandQueue::Graphics) = 0;
-
-    virtual SamplerFeedbackTextureHandle createSamplerFeedbackTexture(ITexture* pairedTexture, const SamplerFeedbackTextureDesc& desc) = 0;
-    virtual SamplerFeedbackTextureHandle createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, ITexture* pairedTexture) = 0;
-
-    virtual BufferHandle createBuffer(const BufferDesc& d) = 0;
-    virtual void* mapBuffer(IBuffer* buffer, CpuAccessMode::Enum cpuAccess) = 0;
-    virtual void unmapBuffer(IBuffer* buffer) = 0;
-    virtual MemoryRequirements getBufferMemoryRequirements(IBuffer* buffer) = 0;
-    virtual bool bindBufferMemory(IBuffer* buffer, IHeap* heap, u64 offset) = 0;
-
-    virtual BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc) = 0;
-
-    virtual ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize) = 0;
-    virtual ShaderHandle createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants) = 0;
-    virtual ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize) = 0;
-
-    virtual SamplerHandle createSampler(const SamplerDesc& d) = 0;
-
-    // Note: vertexShader is only necessary on D3D11, otherwise it may be null
-    virtual InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader* vertexShader) = 0;
-
-    // Event queries
-    virtual EventQueryHandle createEventQuery() = 0;
-    virtual void setEventQuery(IEventQuery* query, CommandQueue::Enum queue) = 0;
-    virtual bool pollEventQuery(IEventQuery* query) = 0;
-    virtual void waitEventQuery(IEventQuery* query) = 0;
-
-    // Timer queries - see also begin/endTimerQuery in ICommandList
-    virtual TimerQueryHandle createTimerQuery() = 0;
-    virtual bool pollTimerQuery(ITimerQuery* query) = 0;
-    // returns time in seconds
-    virtual f32 getTimerQueryTime(ITimerQuery* query) = 0;
-    virtual void resetTimerQuery(ITimerQuery* query) = 0;
-
-    // Returns the API kind that the RHI backend is running on top of.
-    virtual GraphicsAPI::Enum getGraphicsAPI() = 0;
-
-    virtual FramebufferHandle createFramebuffer(const FramebufferDesc& desc) = 0;
-
-    virtual GraphicsPipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo) = 0;
-
-    virtual ComputePipelineHandle createComputePipeline(const ComputePipelineDesc& desc) = 0;
-
-    virtual MeshletPipelineHandle createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo) = 0;
-
-    virtual RayTracingPipelineHandle createRayTracingPipeline(const RayTracingPipelineDesc& desc) = 0;
-
-    virtual BindingLayoutHandle createBindingLayout(const BindingLayoutDesc& desc) = 0;
-    virtual BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc) = 0;
-
-    virtual BindingSetHandle createBindingSet(const BindingSetDesc& desc, const BindingLayoutHandle& layout) = 0;
-    virtual DescriptorTableHandle createDescriptorTable(const BindingLayoutHandle& layout) = 0;
-
-    virtual void resizeDescriptorTable(IDescriptorTable* descriptorTable, u32 newSize, bool keepContents = true) = 0;
-    virtual bool writeDescriptorTable(IDescriptorTable* descriptorTable, const BindingSetItem& item) = 0;
-
-    virtual RayTracingOpacityMicromapHandle createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc) = 0;
-    virtual RayTracingAccelStructHandle createAccelStruct(const RayTracingAccelStructDesc& desc) = 0;
-    virtual MemoryRequirements getAccelStructMemoryRequirements(IRayTracingAccelStruct* as) = 0;
-    virtual RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params) = 0;
-    virtual bool bindAccelStructMemory(IRayTracingAccelStruct* as, IHeap* heap, u64 offset) = 0;
-
-    virtual CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters()) = 0;
-    virtual u64 executeCommandLists(ICommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue = CommandQueue::Graphics) = 0;
-    virtual void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance) = 0;
-    // returns true if the wait completes successfully, false if detecting a problem (e.g. device removal)
-    virtual bool waitForIdle() = 0;
-
-    // Releases the resources that were referenced in the command lists that have finished executing.
-    // IMPORTANT: Call this method at least once per frame.
-    virtual void runGarbageCollection() = 0;
-
-    virtual bool queryFeatureSupport(Feature::Enum feature, void* pInfo = nullptr, usize infoSize = 0) = 0;
-
-    virtual FormatSupport::Mask queryFormatSupport(Format::Enum format) = 0;
-
-    // Returns a list of supported CoopVec matrix multiplication formats and accumulation capabilities.
-    virtual CooperativeVectorDeviceFeatures queryCoopVecFeatures() = 0;
-
-    // Calculates and returns the on-device size for a CoopVec matrix of the given dimensions, type and layout.
-    virtual usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns) = 0;
-
-    virtual Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue) = 0;
-
-    virtual bool isAftermathEnabled() = 0;
-    virtual AftermathCrashDumpHelper& getAftermathCrashDumpHelper() = 0;
-
-};
-typedef RefCountPtr<IDevice, ArenaRefDeleter<IDevice>> DeviceHandle;
+typedef GraphicsBackend::Handle<Device> DeviceHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3798,18 +3064,18 @@ struct InstanceParameters{
     bool logBufferLifetime = false;
     bool enablePerMonitorDPI = false;
 
-    GraphicsString vulkanLibraryName;
-    GraphicsVector<GraphicsString> requiredVulkanInstanceExtensions;
-    GraphicsVector<GraphicsString> requiredVulkanLayers;
-    GraphicsVector<GraphicsString> optionalVulkanInstanceExtensions;
-    GraphicsVector<GraphicsString> optionalVulkanLayers;
+    GraphicsString backendLibraryName;
+    GraphicsVector<GraphicsString> requiredBackendInstanceExtensions;
+    GraphicsVector<GraphicsString> requiredBackendLayers;
+    GraphicsVector<GraphicsString> optionalBackendInstanceExtensions;
+    GraphicsVector<GraphicsString> optionalBackendLayers;
 
     explicit InstanceParameters(GraphicsArena& arena)
-        : vulkanLibraryName(arena)
-        , requiredVulkanInstanceExtensions(arena)
-        , requiredVulkanLayers(arena)
-        , optionalVulkanInstanceExtensions(arena)
-        , optionalVulkanLayers(arena)
+        : backendLibraryName(arena)
+        , requiredBackendInstanceExtensions(arena)
+        , requiredBackendLayers(arena)
+        , optionalBackendInstanceExtensions(arena)
+        , optionalBackendLayers(arena)
     {}
 };
 
@@ -3834,17 +3100,17 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 
-    GraphicsVector<GraphicsString> requiredVulkanDeviceExtensions;
-    GraphicsVector<GraphicsString> optionalVulkanDeviceExtensions;
-    GraphicsVector<usize> ignoredVulkanValidationMessageLocations;
+    GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
+    GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
+    GraphicsVector<usize> ignoredValidationMessageLocations;
 
     Path pipelineCacheDirectory;
 
     explicit DeviceCreationParameters(GraphicsArena& arena)
         : InstanceParameters(arena)
-        , requiredVulkanDeviceExtensions(arena)
-        , optionalVulkanDeviceExtensions(arena)
-        , ignoredVulkanValidationMessageLocations(arena)
+        , requiredBackendDeviceExtensions(arena)
+        , optionalBackendDeviceExtensions(arena)
+        , ignoredValidationMessageLocations(arena)
     {}
 };
 
@@ -3855,10 +3121,20 @@ struct SwapChainRuntimeState{
     bool vsyncEnabled = false;
 };
 
+struct BackBufferResizeCallbacks{
+    void* userData = nullptr;
+    void (*beforeResize)(void*) = nullptr;
+    void (*afterResize)(void*) = nullptr;
+};
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #undef NWB_DEFINE_GRAPHICS_MASK_OPERATORS
 
@@ -3980,9 +3256,6 @@ struct hash<NWB::Core::VariableRateShadingState>{
         return static_cast<size_t>(hash);
     }
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

@@ -91,6 +91,7 @@ void ClearTextureTilingOutputs(u32* numTiles, PackedMipDesc* desc, TileShape* ti
 void CommandList::setPushConstants(const void* data, usize byteSize){
     if(byteSize == 0)
         return;
+#if defined(NWB_DEBUG)
     if(!data){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
@@ -101,38 +102,52 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
         return;
     }
+#endif
 
     const u32 pushConstantByteSize = static_cast<u32>(byteSize);
+#if defined(NWB_DEBUG)
     if(!VulkanDetail::ValidatePushConstantByteSize(m_context, pushConstantByteSize, NWB_TEXT("set push constants")))
         return;
+#endif
 
     VkPipelineLayout layout = VK_NULL_HANDLE;
+#if defined(NWB_DEBUG)
     u32 pipelinePushConstantByteSize = 0;
+#endif
 
     if(m_currentGraphicsState.pipeline){
-        auto* gp = checked_cast<GraphicsPipeline*>(m_currentGraphicsState.pipeline);
+        auto* gp = m_currentGraphicsState.pipeline;
         layout = gp->m_pipelineLayout;
+#if defined(NWB_DEBUG)
         pipelinePushConstantByteSize = gp->m_pushConstantByteSize;
+#endif
     }
     else if(m_currentComputeState.pipeline){
-        auto* cp = checked_cast<ComputePipeline*>(m_currentComputeState.pipeline);
+        auto* cp = m_currentComputeState.pipeline;
         layout = cp->m_pipelineLayout;
+#if defined(NWB_DEBUG)
         pipelinePushConstantByteSize = cp->m_pushConstantByteSize;
+#endif
     }
     else if(m_currentMeshletState.pipeline){
-        auto* mp = checked_cast<MeshletPipeline*>(m_currentMeshletState.pipeline);
+        auto* mp = m_currentMeshletState.pipeline;
         layout = mp->m_pipelineLayout;
+#if defined(NWB_DEBUG)
         pipelinePushConstantByteSize = mp->m_pushConstantByteSize;
+#endif
     }
     else if(m_currentRayTracingState.shaderTable){
         auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
         if(rtp){
-            auto* rtpImpl = checked_cast<RayTracingPipeline*>(rtp);
+            auto* rtpImpl = rtp;
             layout = rtpImpl->m_pipelineLayout;
+#if defined(NWB_DEBUG)
             pipelinePushConstantByteSize = rtpImpl->m_pushConstantByteSize;
+#endif
         }
     }
 
+#if defined(NWB_DEBUG)
     if(layout == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
@@ -151,6 +166,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds active pipeline push constant range"));
         return;
     }
+#endif
 
     vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
 }
@@ -171,11 +187,11 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(!VulkanDetail::BuildClusterOperationInputInfo(opDesc.params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("execute cluster operation")))
         return;
 
-    auto* indirectArgCountBuffer = opDesc.inIndirectArgCountBuffer ? checked_cast<Buffer*>(opDesc.inIndirectArgCountBuffer) : nullptr;
-    auto* indirectArgsBuffer = opDesc.inIndirectArgsBuffer ? checked_cast<Buffer*>(opDesc.inIndirectArgsBuffer) : nullptr;
-    auto* inOutAddressesBuffer = opDesc.inOutAddressesBuffer ? checked_cast<Buffer*>(opDesc.inOutAddressesBuffer) : nullptr;
-    auto* outSizesBuffer = opDesc.outSizesBuffer ? checked_cast<Buffer*>(opDesc.outSizesBuffer) : nullptr;
-    auto* outAccelerationStructuresBuffer = opDesc.outAccelerationStructuresBuffer ? checked_cast<Buffer*>(opDesc.outAccelerationStructuresBuffer) : nullptr;
+    auto* indirectArgCountBuffer = opDesc.inIndirectArgCountBuffer ? opDesc.inIndirectArgCountBuffer : nullptr;
+    auto* indirectArgsBuffer = opDesc.inIndirectArgsBuffer ? opDesc.inIndirectArgsBuffer : nullptr;
+    auto* inOutAddressesBuffer = opDesc.inOutAddressesBuffer ? opDesc.inOutAddressesBuffer : nullptr;
+    auto* outSizesBuffer = opDesc.outSizesBuffer ? opDesc.outSizesBuffer : nullptr;
+    auto* outAccelerationStructuresBuffer = opDesc.outAccelerationStructuresBuffer ? opDesc.outAccelerationStructuresBuffer : nullptr;
 
     if(indirectArgCountBuffer && opDesc.inIndirectArgCountOffsetInBytes >= indirectArgCountBuffer->getDescription().byteSize){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster operation indirect-arg-count offset is out of range."));
@@ -239,7 +255,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             return;
         }
 
-        scratchBuffer = checked_cast<Buffer*>(scratchBufferHandle.get());
+        scratchBuffer = scratchBufferHandle.get();
     }
 
     auto commandsInfo = VulkanDetail::MakeVkStruct<VkClusterAccelerationStructureCommandsInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV);
@@ -304,8 +320,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer)
             continue;
 
-        auto* srcBuffer = checked_cast<Buffer*>(convertDesc.src.buffer);
-        auto* dstBuffer = checked_cast<Buffer*>(convertDesc.dst.buffer);
+        auto* srcBuffer = convertDesc.src.buffer;
+        auto* dstBuffer = convertDesc.dst.buffer;
         if(!srcBuffer || !dstBuffer){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Skipping cooperative vector matrix conversion: buffer is invalid"));
             continue;
@@ -336,9 +352,9 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
         auto vkDesc = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
         vkDesc.srcSize = convertDesc.src.size;
-        vkDesc.srcData.deviceAddress = checked_cast<Buffer*>(convertDesc.src.buffer)->m_deviceAddress + convertDesc.src.offset;
+        vkDesc.srcData.deviceAddress = convertDesc.src.buffer->m_deviceAddress + convertDesc.src.offset;
         vkDesc.pDstSize = &dstSizes[i];
-        vkDesc.dstData.deviceAddress = checked_cast<Buffer*>(convertDesc.dst.buffer)->m_deviceAddress + convertDesc.dst.offset;
+        vkDesc.dstData.deviceAddress = convertDesc.dst.buffer->m_deviceAddress + convertDesc.dst.offset;
         vkDesc.srcComponentType = VulkanDetail::ConvertCoopVecDataType(convertDesc.src.type);
         vkDesc.dstComponentType = VulkanDetail::ConvertCoopVecDataType(convertDesc.dst.type);
         vkDesc.numRows = convertDesc.numRows;
@@ -384,7 +400,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 // Texture Tiling
 
 
-void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
+void Device::getTextureTiling(Texture* textureResource, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings){
     if(!textureResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is null"));
         __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
@@ -396,7 +412,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
         return;
     }
 
-    auto* texture = checked_cast<Texture*>(textureResource);
+    auto* texture = textureResource;
     if(!texture->m_desc.isTiled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: texture is not tiled"));
         __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);
@@ -535,7 +551,7 @@ void Device::getTextureTiling(ITexture* textureResource, u32* numTiles, PackedMi
     }
 }
 
-void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue){
+void Device::updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue){
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: texture is null"));
         return;
@@ -544,7 +560,7 @@ void Device::updateTextureTileMappings(ITexture* texture, const TextureTilesMapp
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: virtual/tiled resources are not supported by this backend"));
         return;
     }
-    if(!checked_cast<Texture*>(texture)->m_desc.isTiled){
+    if(!texture->m_desc.isTiled){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: texture is not tiled"));
         return;
     }

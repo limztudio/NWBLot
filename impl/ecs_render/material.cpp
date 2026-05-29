@@ -99,7 +99,7 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
 bool RendererSystem::createRendererPipeline(
     const MaterialSurfaceInfo& materialInfo,
     const MaterialPipelineKey& pipelineKey,
-    Core::IFramebuffer* framebuffer,
+    Core::Framebuffer* framebuffer,
     MaterialPipelineResources*& outResources
 ){
     outResources = nullptr;
@@ -178,7 +178,7 @@ bool RendererSystem::createRendererPipeline(
         break;
     }
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, materialInfo.twoSided);
 
     auto tryBuildMeshPipeline = [&]() -> bool{

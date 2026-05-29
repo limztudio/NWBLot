@@ -14,10 +14,45 @@
 
 
 template<typename T>
-concept RefCountClass = IsClass_V<T> && requires(T& obj){
+concept RefCountOperations = requires(T& obj){
     { obj.addReference() }->SameAs<u32>;
     { obj.release() }->SameAs<u32>;
 };
+
+template<typename T>
+concept RefCountClass = IsClass_V<T>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RefCountPtrDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T>
+u32 RefCountAddReference(T* p)noexcept{
+    static_assert(RefCountOperations<T>, "RefCountPtr target must provide addReference() and release().");
+    return p->addReference();
+}
+
+template<typename T>
+u32 RefCountRelease(T* p)noexcept{
+    static_assert(RefCountOperations<T>, "RefCountPtr target must provide addReference() and release().");
+    return p->release();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct AdoptRefT{ explicit AdoptRefT() = default; };
 inline constexpr AdoptRefT AdoptRef{};
@@ -235,8 +270,10 @@ public:
 
 protected:
     static void internalAddRef(pointer p)noexcept{
-        if(p)
-            p->addReference();
+        if(p){
+            using RefCountPtrDetail::RefCountAddReference;
+            RefCountAddReference(p);
+        }
     }
     u32 internalRelease(pointer& target)noexcept{
         u32 newCount = 0;
@@ -244,7 +281,8 @@ protected:
             pointer p = target;
             target = nullptr;
 
-            newCount = p->release();
+            using RefCountPtrDetail::RefCountRelease;
+            newCount = RefCountRelease(p);
             if(!newCount)
                 get_deleter()(p);
         }

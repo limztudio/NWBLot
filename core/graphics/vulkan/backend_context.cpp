@@ -16,31 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-GlobalUniquePtr<IGraphicsBackend> CreateDefaultGraphicsBackend(
-    const DeviceCreationParameters& params,
-    SwapChainRuntimeState& swapChainState,
-    GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool
-){
-    return MakeGlobalUnique<Vulkan::BackendContext>(allocator.getObjectArena(), params, swapChainState, allocator, threadPool);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_CORE_END
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_VULKAN_BEGIN
 
 
@@ -384,20 +359,20 @@ BackendContext::BackendContext(
 
 
 bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
-    for(const auto& ignored : m_deviceParams.ignoredVulkanValidationMessageLocations){
+    for(const auto& ignored : m_deviceParams.ignoredValidationMessageLocations){
         if(ignored == location)
             return true;
     }
     return false;
 }
 
-ITexture* BackendContext::getCurrentBackBuffer(){
+Texture* BackendContext::getCurrentBackBuffer(){
     if(m_swapChainIndex < m_swapChainImages.size())
         return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
     return nullptr;
 }
 
-ITexture* BackendContext::getBackBuffer(u32 index){
+Texture* BackendContext::getBackBuffer(u32 index){
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
     return nullptr;
@@ -552,14 +527,14 @@ bool BackendContext::createVulkanInstance(){
     }
 #endif
 
-    for(const auto& name : m_deviceParams.requiredVulkanInstanceExtensions)
+    for(const auto& name : m_deviceParams.requiredBackendInstanceExtensions)
         m_enabledExtensions.instance.insert(name);
-    for(const auto& name : m_deviceParams.optionalVulkanInstanceExtensions)
+    for(const auto& name : m_deviceParams.optionalBackendInstanceExtensions)
         m_optionalExtensions.instance.insert(name);
 
-    for(const auto& name : m_deviceParams.requiredVulkanLayers)
+    for(const auto& name : m_deviceParams.requiredBackendLayers)
         m_enabledExtensions.layers.insert(name);
-    for(const auto& name : m_deviceParams.optionalVulkanLayers)
+    for(const auto& name : m_deviceParams.optionalBackendLayers)
         m_optionalExtensions.layers.insert(name);
 
     decltype(m_enabledExtensions.instance) requiredExtensions(m_enabledExtensions.instance);
@@ -1737,7 +1712,7 @@ bool BackendContext::createVulkanSwapChain(){
             m_swapChain = VK_NULL_HANDLE;
             return false;
         }
-        checked_cast<Texture*>(sci.rhiHandle.get())->m_keepInitialStateKnown = false;
+        sci.rhiHandle->m_keepInitialStateKnown = false;
         m_swapChainImages.push_back(Move(sci));
     }
 
@@ -1808,9 +1783,9 @@ bool BackendContext::createDevice(){
             it.value() = feature;
     };
 
-    for(const auto& name : m_deviceParams.requiredVulkanDeviceExtensions)
+    for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions)
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
-    for(const auto& name : m_deviceParams.optionalVulkanDeviceExtensions)
+    for(const auto& name : m_deviceParams.optionalBackendDeviceExtensions)
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
     if(m_deviceParams.enableDebugRuntime && m_deviceParams.enableAftermath)
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
@@ -1866,7 +1841,7 @@ bool BackendContext::createDevice(){
     deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
     deviceDesc.aftermathEnabled = m_deviceParams.enableDebugRuntime && m_deviceParams.enableAftermath && aftermathCheckpointsEnabled;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
-    deviceDesc.vulkanLibraryName = m_deviceParams.vulkanLibraryName;
+    deviceDesc.vulkanLibraryName = m_deviceParams.backendLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
     deviceDesc.systemMemoryAllocator = &m_allocator.getSystemMemoryAllocator();
 

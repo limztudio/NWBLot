@@ -25,11 +25,11 @@ namespace VulkanDetail{
 static_assert(sizeof(AffineTransform) == sizeof(VkTransformMatrixKHR), "AffineTransform must match VkTransformMatrixKHR");
 
 
-VkDeviceAddress GetBufferDeviceAddress(IBuffer* bufferResource, u64 offset){
+VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
     if(!bufferResource)
         return 0;
 
-    auto* buffer = checked_cast<Buffer*>(bufferResource);
+    auto* buffer = bufferResource;
     return buffer->m_deviceAddress + offset;
 }
 
@@ -218,8 +218,8 @@ bool BuildOpacityMicromapUsageCounts(const GraphicsVector<RayTracingOpacityMicro
     return true;
 }
 
-bool ValidateAccelStructBuildInputRange(IBuffer* bufferResource, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
-    auto* buffer = checked_cast<Buffer*>(bufferResource);
+bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
+    auto* buffer = bufferResource;
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
         return false;
@@ -239,7 +239,7 @@ bool ValidateAccelStructBuildInputRange(IBuffer* bufferResource, u64 offset, u64
 }
 
 bool ValidateStridedBuildInputRange(
-    IBuffer* buffer,
+    Buffer* buffer,
     u64 offset,
     u32 elementCount,
     u64 stride,
@@ -774,7 +774,7 @@ bool BuildClusterOperationInputInfo(
 
 
 AccelStruct::AccelStruct(const VulkanContext& context)
-    : RefCounter<IRayTracingAccelStruct>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_context(context)
 {}
@@ -803,7 +803,7 @@ Object AccelStruct::getNativeHandle(ObjectType objectType){
 
 
 OpacityMicromap::OpacityMicromap(const VulkanContext& context)
-    : RefCounter<IRayTracingOpacityMicromap>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_context(context)
 {}
@@ -820,7 +820,7 @@ OpacityMicromap::~OpacityMicromap(){
 
 
 RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
-    : RefCounter<IRayTracingPipeline>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_shaderGroupHandles(context.objectArena)
     , m_context(context)
@@ -940,7 +940,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     }
 
     auto createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
-    createInfo.buffer = checked_cast<Buffer*>(as->m_buffer.get())->m_buffer;
+    createInfo.buffer = as->m_buffer->m_buffer;
     createInfo.offset = 0;
     createInfo.size = bufferDesc.byteSize;
     createInfo.type = asType;
@@ -1011,7 +1011,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
         return nullptr;
     }
 
-    auto* buffer = checked_cast<Buffer*>(om->m_dataBuffer.get());
+    auto* buffer = om->m_dataBuffer.get();
 
     auto createInfo = VulkanDetail::MakeVkStruct<VkMicromapCreateInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT);
     createInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
@@ -1029,10 +1029,10 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-MemoryRequirements Device::getAccelStructMemoryRequirements(IRayTracingAccelStruct* accelStructResource){
+MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruct* accelStructResource){
     MemoryRequirements requirements = {};
 
-    auto* as = checked_cast<AccelStruct*>(accelStructResource);
+    auto* as = accelStructResource;
     if(as->m_buffer){
         requirements.size = as->m_buffer->getDescription().byteSize;
         requirements.alignment = s_AccelerationStructureAlignment; // AS alignment requirement
@@ -1063,7 +1063,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     return info;
 }
 
-bool Device::bindAccelStructMemory(IRayTracingAccelStruct* accelStructResource, IHeap* heap, u64 offset){
+bool Device::bindAccelStructMemory(RayTracingAccelStruct* accelStructResource, Heap* heap, u64 offset){
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: acceleration structure is null"));
         return false;
@@ -1073,7 +1073,7 @@ bool Device::bindAccelStructMemory(IRayTracingAccelStruct* accelStructResource, 
         return false;
     }
 
-    auto* as = checked_cast<AccelStruct*>(accelStructResource);
+    auto* as = accelStructResource;
     if(as->m_buffer){
         if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
             return false;
@@ -1158,7 +1158,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         if(!shaderDesc.shader)
             continue;
 
-        auto* s = checked_cast<Shader*>(shaderDesc.shader.get());
+        auto* s = shaderDesc.shader.get();
 
         auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
         stageInfo.module = s->m_shaderModule;
@@ -1199,7 +1199,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         group.intersectionShader = VK_SHADER_UNUSED_KHR;
 
         if(hitGroup.closestHitShader){
-            auto* s = checked_cast<Shader*>(hitGroup.closestHitShader.get());
+            auto* s = hitGroup.closestHitShader.get();
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
@@ -1209,7 +1209,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stages.push_back(stageInfo);
         }
         if(hitGroup.anyHitShader){
-            auto* s = checked_cast<Shader*>(hitGroup.anyHitShader.get());
+            auto* s = hitGroup.anyHitShader.get();
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
@@ -1219,7 +1219,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stages.push_back(stageInfo);
         }
         if(hitGroup.intersectionShader){
-            auto* s = checked_cast<Shader*>(hitGroup.intersectionShader.get());
+            auto* s = hitGroup.intersectionShader.get();
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
@@ -1312,7 +1312,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
 
 ShaderTable::ShaderTable(const VulkanContext& context, Device& device)
-    : RefCounter<IRayTracingShaderTable>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_context(context)
     , m_device(device)
 {}
@@ -1450,7 +1450,7 @@ void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
     outBuffer = m_device.createBuffer(bufferDesc);
 }
 
-void ShaderTable::setRayGenerationShader(const AStringView exportName, IBindingSet* /*bindings*/){
+void ShaderTable::setRayGenerationShader(const AStringView exportName, BindingSet* /*bindings*/){
     if(!m_pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: shader table has no pipeline"));
         return;
@@ -1494,15 +1494,15 @@ void ShaderTable::setRayGenerationShader(const AStringView exportName, IBindingS
     m_device.unmapBuffer(m_raygenBuffer.get());
 }
 
-u32 ShaderTable::addMissShader(const AStringView exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addMissShader(const AStringView exportName, BindingSet* /*bindings*/){
     return appendShaderRecord(exportName, m_missBuffer, m_missOffset, m_missCount, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("Miss shader"));
 }
 
-u32 ShaderTable::addHitGroup(const AStringView exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addHitGroup(const AStringView exportName, BindingSet* /*bindings*/){
     return appendShaderRecord(exportName, m_hitBuffer, m_hitOffset, m_hitCount, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("Hit group"));
 }
 
-u32 ShaderTable::addCallableShader(const AStringView exportName, IBindingSet* /*bindings*/){
+u32 ShaderTable::addCallableShader(const AStringView exportName, BindingSet* /*bindings*/){
     return appendShaderRecord(exportName, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("Callable shader"));
 }
 
@@ -1512,7 +1512,7 @@ void ShaderTable::clearCallableShaders(){ m_callableCount = 0; m_callableBuffer 
 
 Object ShaderTable::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Buffer && m_raygenBuffer){
-        auto* buf = checked_cast<Buffer*>(m_raygenBuffer.get());
+        auto* buf = m_raygenBuffer.get();
         return Object(buf->m_buffer);
     }
     return Object{nullptr};
@@ -1534,7 +1534,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     if(!state.shaderTable)
         return;
 
-    auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
+    auto* sbt = state.shaderTable;
     if(!sbt)
         return;
 
@@ -1578,8 +1578,7 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
 }
 
 bool CommandList::buildTopLevelAccelStructFromInstanceData(
-    IRayTracingAccelStruct* asInterface,
-    AccelStruct* as,
+    RayTracingAccelStruct& as,
     const VkDeviceAddress instanceDataAddress,
     const usize numInstances,
     const RayTracingAccelStructBuildFlags::Mask buildFlags,
@@ -1598,7 +1597,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
         VulkanDetail::AccelStructCompactionMode::Disabled
     );
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-    buildInfo.dstAccelerationStructure = as->m_accelStruct;
+    buildInfo.dstAccelerationStructure = as.m_accelStruct;
     buildInfo.geometryCount = 1;
     buildInfo.pGeometries = &geometry;
 
@@ -1606,7 +1605,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &primitiveCount, &sizeInfo);
 
-    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    auto* asBuffer = as.m_buffer.get();
     if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration structure storage is too small"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure storage is too small"));
@@ -1621,7 +1620,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
     vkCmdBuildAccelerationStructuresKHR(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo, &pRangeInfo);
 
-    retainResource(asInterface);
+    retainResource(&as);
     return true;
 }
 
@@ -1629,7 +1628,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
+void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
         return;
@@ -1648,7 +1647,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(accelStructResource);
+    auto* as = accelStructResource;
     if(!as || as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
         return;
@@ -1797,7 +1796,7 @@ void CommandList::buildBottomLevelAccelStruct(IRayTracingAccelStruct* accelStruc
     auto sizeInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
     vkGetAccelerationStructureBuildSizesKHR(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, blasScratch.primitiveCounts.data(), &sizeInfo);
 
-    auto* asBuffer = checked_cast<Buffer*>(as->m_buffer.get());
+    auto* asBuffer = as->m_buffer.get();
     if(!asBuffer || asBuffer->m_desc.byteSize < sizeInfo.accelerationStructureSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is too small"));
@@ -1901,7 +1900,7 @@ void CommandList::compactBottomLevelAccelStructs(){
             continue;
 
         auto createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
-        createInfo.buffer = checked_cast<Buffer*>(compactBuffer.get())->m_buffer;
+        createInfo.buffer = compactBuffer->m_buffer;
         createInfo.size = compactedSize;
         createInfo.type = as->m_desc.isTopLevel
             ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
@@ -1992,8 +1991,8 @@ void CommandList::compactBottomLevelAccelStructs(){
 }
 
 void CommandList::buildTopLevelAccelStructFromBuffer(
-    IRayTracingAccelStruct* accelStructResource,
-    IBuffer* instanceBuffer,
+    RayTracingAccelStruct* accelStructResource,
+    Buffer* instanceBuffer,
     u64 instanceBufferOffset,
     usize numInstances,
     RayTracingAccelStructBuildFlags::Mask buildFlags
@@ -2016,13 +2015,13 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(accelStructResource);
+    auto* as = accelStructResource;
     if(!as || !as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
         return;
     }
 
-    auto* instanceBufferImpl = checked_cast<Buffer*>(instanceBuffer);
+    auto* instanceBufferImpl = instanceBuffer;
     if(!instanceBufferImpl){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: instance buffer is invalid"));
         return;
@@ -2039,13 +2038,13 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
     }
 
     const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer, instanceBufferOffset);
-    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
+    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS from buffer")))
         return;
 
     retainResource(instanceBuffer);
 }
 
-void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
+void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
         return;
@@ -2064,13 +2063,13 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructRe
     if(!m_context.extensions.KHR_acceleration_structure)
         return;
 
-    auto* as = checked_cast<AccelStruct*>(accelStructResource);
+    auto* as = accelStructResource;
     if(!as || !as->m_desc.isTopLevel){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
         return;
     }
     for(usize i = 0; i < numInstances; ++i){
-        auto* blas = checked_cast<AccelStruct*>(pInstances[i].bottomLevelAS);
+        auto* blas = pInstances[i].bottomLevelAS;
         if(!blas || blas->m_desc.isTopLevel || blas->m_deviceAddress == 0){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
             return;
@@ -2117,7 +2116,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructRe
         if(inst.flags & RayTracingInstanceFlags::ForceNonOpaque)
             vkInst.flags |= VK_GEOMETRY_INSTANCE_FORCE_NO_OPAQUE_BIT_KHR;
 
-        auto* blas = checked_cast<AccelStruct*>(inst.bottomLevelAS);
+        auto* blas = inst.bottomLevelAS;
         vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
     };
 
@@ -2132,7 +2131,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructRe
     m_device.unmapBuffer(instanceBuffer.get());
 
     const VkDeviceAddress instanceDataAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer.get());
-    if(!buildTopLevelAccelStructFromInstanceData(accelStructResource, as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
+    if(!buildTopLevelAccelStructFromInstanceData(*as, instanceDataAddress, numInstances, buildFlags, NWB_TEXT("build TLAS")))
         return;
 
     if(as->m_desc.trackLiveness){
@@ -2143,7 +2142,7 @@ void CommandList::buildTopLevelAccelStruct(IRayTracingAccelStruct* accelStructRe
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));
 }
 
-void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
+void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
     if(!m_context.extensions.EXT_opacity_micromap)
         return;
 
@@ -2152,7 +2151,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicrom
         return;
     }
 
-    auto* omm = checked_cast<OpacityMicromap*>(opacityMicromapResource);
+    auto* omm = opacityMicromapResource;
     if(!omm){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap is invalid"));
         return;
@@ -2172,7 +2171,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicrom
         triangleDescBytes += countBytes;
     }
 
-    auto* inputBuffer = checked_cast<Buffer*>(ommDesc.inputBuffer);
+    auto* inputBuffer = ommDesc.inputBuffer;
     if(!inputBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: input buffer is invalid"));
         return;
@@ -2182,7 +2181,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicrom
         return;
     }
 
-    auto* perOmmDescs = checked_cast<Buffer*>(ommDesc.perOmmDescs);
+    auto* perOmmDescs = ommDesc.perOmmDescs;
     if(!perOmmDescs){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor buffer is invalid"));
         return;
@@ -2237,7 +2236,7 @@ void CommandList::buildOpacityMicromap(IRayTracingOpacityMicromap* opacityMicrom
     auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
 
-    auto* dataBuffer = checked_cast<Buffer*>(omm->m_dataBuffer.get());
+    auto* dataBuffer = omm->m_dataBuffer.get();
     if(!dataBuffer || dataBuffer->m_desc.byteSize < buildSize.micromapSize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: micromap storage is too small"));
         return;
@@ -2274,7 +2273,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(!state.shaderTable)
         return;
 
-    auto* sbt = checked_cast<ShaderTable*>(state.shaderTable);
+    auto* sbt = state.shaderTable;
     if(!sbt->m_pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch rays: shader table has no ray tracing pipeline"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch rays: shader table has no ray tracing pipeline"));

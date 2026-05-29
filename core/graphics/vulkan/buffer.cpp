@@ -48,7 +48,7 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
 
 
 Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<IBuffer>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_versionTracking(context.objectArena)
     , m_bufferViews(context.objectArena)
     , m_context(context)
@@ -70,9 +70,8 @@ Buffer::~Buffer(){
                 m_buffer = VK_NULL_HANDLE;
             }
         }
-        else{
+        else
             m_allocator.destroyBuffer(*this);
-        }
     }
 }
 
@@ -254,29 +253,29 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
+void* Device::mapBuffer(Buffer* bufferResource, CpuAccessMode::Enum){
     VkResult res = VK_SUCCESS;
 
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer is null"));
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("map buffer"), NWB_TEXT("buffer is null"), bufferResource))
         return nullptr;
-    }
 
-    auto* buffer = static_cast<Buffer*>(bufferResource);
-    if(!buffer->m_desc.isVolatile && buffer->m_desc.cpuAccess == CpuAccessMode::None){
+    Buffer& buffer = *bufferResource;
+#if defined(NWB_DEBUG)
+    if(!buffer.m_desc.isVolatile && buffer.m_desc.cpuAccess == CpuAccessMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
         return nullptr;
     }
-    if(buffer->m_allocation == nullptr){
+    if(buffer.m_allocation == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no bound memory"));
         return nullptr;
     }
+#endif
 
     auto invalidateReadRange = [&]() -> bool{
-        if(buffer->m_desc.cpuAccess != CpuAccessMode::Read)
+        if(buffer.m_desc.cpuAccess != CpuAccessMode::Read)
             return true;
 
-        res = m_allocator.invalidateBufferMemory(*buffer);
+        res = m_allocator.invalidateBufferMemory(buffer);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
             return false;
@@ -284,50 +283,48 @@ void* Device::mapBuffer(IBuffer* bufferResource, CpuAccessMode::Enum){
         return true;
     };
 
-    if(buffer->m_mappedMemory){
+    if(buffer.m_mappedMemory){
         if(!invalidateReadRange())
             return nullptr;
-        return buffer->m_mappedMemory;
+        return buffer.m_mappedMemory;
     }
 
     void* data = nullptr;
-    res = m_allocator.mapBufferMemory(*buffer, &data);
+    res = m_allocator.mapBufferMemory(buffer, &data);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
         return nullptr;
     }
 
-    buffer->m_mappedMemory = data;
+    buffer.m_mappedMemory = data;
     if(!invalidateReadRange()){
-        m_allocator.unmapBufferMemory(*buffer);
-        buffer->m_mappedMemory = nullptr;
+        m_allocator.unmapBufferMemory(buffer);
+        buffer.m_mappedMemory = nullptr;
         return nullptr;
     }
     return data;
 }
 
-void Device::unmapBuffer(IBuffer* bufferResource){
-    if(!bufferResource)
+void Device::unmapBuffer(Buffer* bufferResource){
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("unmap buffer"), NWB_TEXT("buffer is null"), bufferResource))
         return;
 
-    auto* buffer = static_cast<Buffer*>(bufferResource);
+    Buffer& buffer = *bufferResource;
 
-    if(buffer->m_mappedMemory && !buffer->m_persistentlyMapped){
-        buffer->m_allocator.unmapBufferMemory(*buffer);
-        buffer->m_mappedMemory = nullptr;
+    if(buffer.m_mappedMemory && !buffer.m_persistentlyMapped){
+        buffer.m_allocator.unmapBufferMemory(buffer);
+        buffer.m_mappedMemory = nullptr;
     }
 }
 
-MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* bufferResource){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is null"));
+MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("get buffer memory requirements"), NWB_TEXT("buffer is null"), bufferResource))
         return {};
-    }
 
-    auto* buffer = static_cast<Buffer*>(bufferResource);
+    Buffer& buffer = *bufferResource;
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(m_context.device, buffer.m_buffer, &memRequirements);
 
     MemoryRequirements result;
     result.size = memRequirements.size;
@@ -335,21 +332,19 @@ MemoryRequirements Device::getBufferMemoryRequirements(IBuffer* bufferResource){
     return result;
 }
 
+#if defined(NWB_DEBUG)
 bool Device::validateHeapMemoryBinding(
-    IHeap* heap,
+    const Heap& heap,
     const VkMemoryRequirements& memoryRequirements,
     const u64 offset,
     const tchar* operationName,
-    const tchar* resourceName,
-    Heap*& outHeap
+    const tchar* resourceName
 )const{
-    outHeap = checked_cast<Heap*>(heap);
-
-    if(!outHeap || outHeap->m_allocation == nullptr){
+    if(heap.m_allocation == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
         return false;
     }
-    if(outHeap->m_memoryTypeIndex >= 32u || (memoryRequirements.memoryTypeBits & (1u << outHeap->m_memoryTypeIndex)) == 0){
+    if(heap.m_memoryTypeIndex >= 32u || (memoryRequirements.memoryTypeBits & (1u << heap.m_memoryTypeIndex)) == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"), operationName, resourceName);
         return false;
     }
@@ -362,40 +357,47 @@ bool Device::validateHeapMemoryBinding(
         );
         return false;
     }
-    if(offset > outHeap->m_desc.capacity || static_cast<u64>(memoryRequirements.size) > outHeap->m_desc.capacity - offset){
+    if(offset > heap.m_desc.capacity || static_cast<u64>(memoryRequirements.size) > heap.m_desc.capacity - offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} size {} exceeds heap capacity {}")
             , operationName
             , offset
             , static_cast<u64>(memoryRequirements.size)
-            , outHeap->m_desc.capacity
+            , heap.m_desc.capacity
         );
         return false;
     }
 
     return true;
 }
+#endif
 
-bool Device::bindBufferMemory(IBuffer* bufferResource, IHeap* heap, u64 offset){
+bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
     VkResult res = VK_SUCCESS;
 
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is null"));
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer is null"), bufferResource))
         return false;
-    }
 
-    auto* buffer = static_cast<Buffer*>(bufferResource);
-    if(!buffer->m_desc.isVirtual){
+    Buffer& buffer = *bufferResource;
+#if defined(NWB_DEBUG)
+    if(!buffer.m_desc.isVirtual){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer was not created as virtual"));
         return false;
     }
+#endif
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, buffer->m_buffer, &memRequirements);
-    Heap* vkHeap = nullptr;
-    if(!validateHeapMemoryBinding(heap, memRequirements, offset, NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer"), vkHeap))
+    vkGetBufferMemoryRequirements(m_context.device, buffer.m_buffer, &memRequirements);
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("bind buffer memory"), NWB_TEXT("heap is invalid"), heap))
         return false;
+#if defined(NWB_DEBUG)
+    Heap& memoryHeap = *heap;
+    if(!validateHeapMemoryBinding(memoryHeap, memRequirements, offset, NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer")))
+        return false;
+#else
+    Heap& memoryHeap = *heap;
+#endif
 
-    res = m_allocator.bindHeapBufferMemory(*buffer, *vkHeap, offset);
+    res = m_allocator.bindHeapBufferMemory(buffer, memoryHeap, offset);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
         return false;
@@ -403,8 +405,8 @@ bool Device::bindBufferMemory(IBuffer* bufferResource, IHeap* heap, u64 offset){
     if(m_context.extensions.buffer_device_address){
         VkBufferDeviceAddressInfo addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = buffer->m_buffer;
-        buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+        addressInfo.buffer = buffer.m_buffer;
+        buffer.m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
     return true;
@@ -463,21 +465,17 @@ bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, c
     return true;
 }
 
-void CommandList::writeBuffer(IBuffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
-    if(!bufferResource || !data || dataSize == 0)
+void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
+    if(dataSize == 0)
         return;
 
-    auto* buffer = checked_cast<Buffer*>(bufferResource);
-    const BufferDesc& desc = buffer->getDescription();
-    if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write buffer: destination offset {} size {} is outside buffer size {}")
-            , destOffsetBytes
-            , static_cast<u64>(dataSize)
-            , desc.byteSize
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write buffer: destination range is outside the buffer"));
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write buffer"), NWB_TEXT("buffer or data is null"), bufferResource, data))
         return;
-    }
+
+    Buffer& buffer = *bufferResource;
+    const BufferDesc& desc = buffer.getDescription();
+    if(!VulkanDetail::DebugValidateBufferRange(desc, destOffsetBytes, static_cast<u64>(dataSize), NWB_TEXT("write buffer"), NWB_TEXT("destination")))
+        return;
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
@@ -491,64 +489,56 @@ void CommandList::writeBuffer(IBuffer* bufferResource, const void* data, usize d
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
 
-    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer->m_buffer, 1, &region);
+    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
 
     retainResource(bufferResource);
-    retainStagingBuffer(stagingBuffer);
+    retainStagingBuffer(*stagingBuffer);
 }
 
-void CommandList::clearBufferUInt(IBuffer* bufferResource, u32 clearValue){
-    auto* buffer = checked_cast<Buffer*>(bufferResource);
-    if(!buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer is null"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer is null"));
+void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear buffer"), NWB_TEXT("buffer is null"), bufferResource))
         return;
-    }
-    if((buffer->m_desc.byteSize & 3u) != 0){
+
+    Buffer& buffer = *bufferResource;
+#if defined(NWB_DEBUG)
+    if((buffer.m_desc.byteSize & 3u) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
         return;
     }
+#endif
 
     setBufferState(bufferResource, ResourceStates::CopyDest);
-    vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, 0, VK_WHOLE_SIZE, clearValue);
+    vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
     retainResource(bufferResource);
 }
 
-void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer* srcResource, u64 srcOffsetBytes, u64 dataSizeBytes){
-    if(!destResource || !srcResource || dataSizeBytes == 0)
+void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* srcResource, u64 srcOffsetBytes, u64 dataSizeBytes){
+    if(dataSizeBytes == 0)
         return;
 
-    auto* dest = checked_cast<Buffer*>(destResource);
-    auto* src = checked_cast<Buffer*>(srcResource);
-    const BufferDesc& destDesc = dest->getDescription();
-    const BufferDesc& srcDesc = src->getDescription();
-
-    if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: destination offset {} size {} is outside buffer size {}")
-            , destOffsetBytes
-            , dataSizeBytes
-            , destDesc.byteSize
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: destination range is outside the buffer"));
+    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy buffer"), NWB_TEXT("resource is invalid"), destResource, srcResource))
         return;
-    }
 
-    if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: source offset {} size {} is outside buffer size {}")
-            , srcOffsetBytes
-            , dataSizeBytes
-            , srcDesc.byteSize
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source range is outside the buffer"));
+    Buffer& dest = *destResource;
+    Buffer& src = *srcResource;
+
+    const BufferDesc& destDesc = dest.getDescription();
+    const BufferDesc& srcDesc = src.getDescription();
+
+    if(!VulkanDetail::DebugValidateBufferRange(destDesc, destOffsetBytes, dataSizeBytes, NWB_TEXT("copy buffer"), NWB_TEXT("destination")))
         return;
-    }
 
-    if(dest->m_buffer == src->m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
+    if(!VulkanDetail::DebugValidateBufferRange(srcDesc, srcOffsetBytes, dataSizeBytes, NWB_TEXT("copy buffer"), NWB_TEXT("source")))
+        return;
+
+#if defined(NWB_DEBUG)
+    if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
         return;
     }
+#endif
 
     setBufferState(srcResource, ResourceStates::CopySource);
     setBufferState(destResource, ResourceStates::CopyDest);
@@ -558,7 +548,7 @@ void CommandList::copyBuffer(IBuffer* destResource, u64 destOffsetBytes, IBuffer
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
 
-    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src->m_buffer, dest->m_buffer, 1, &region);
+    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1, &region);
 
     retainResource(srcResource);
     retainResource(destResource);

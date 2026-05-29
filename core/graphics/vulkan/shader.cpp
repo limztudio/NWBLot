@@ -123,7 +123,7 @@ inline bool ResolveShaderEntryPoint(
 
 
 Sampler::Sampler(const VulkanContext& context)
-    : RefCounter<ISampler>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_context(context)
 {}
 Sampler::~Sampler(){
@@ -138,7 +138,7 @@ Sampler::~Sampler(){
 
 
 Shader::Shader(const VulkanContext& context)
-    : RefCounter<IShader>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
     , m_bytecode(context.objectArena)
     , m_entryPointName(context.objectArena)
@@ -167,7 +167,7 @@ VkSpecializationInfo Shader::makeSpecializationInfo()const{
 
 
 ShaderLibrary::ShaderLibrary(const VulkanContext& context)
-    : RefCounter<IShaderLibrary>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_bytecode(context.objectArena)
     , m_shaders(0, ShaderLibraryKeyHasher(), EqualTo<ShaderLibraryKey>(), context.objectArena)
     , m_context(context)
@@ -271,7 +271,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-ShaderHandle Device::createShaderSpecialization(IShader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
+ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
     if(!baseShader){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: base shader is null"));
         return nullptr;
@@ -352,7 +352,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
 
 
 InputLayout::InputLayout(const VulkanContext& context)
-    : RefCounter<IInputLayout>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_attributes(context.objectArena)
     , m_bindings(context.objectArena)
     , m_vkAttributes(context.objectArena)
@@ -363,7 +363,7 @@ InputLayout::InputLayout(const VulkanContext& context)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, IShader*){
+InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*){
     if(attributeCount > 0 && !d){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
         return nullptr;
@@ -526,7 +526,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
 
 
 Framebuffer::Framebuffer(const VulkanContext& context)
-    : RefCounter<IFramebuffer>(context.threadPool)
+    : RefCounter<GraphicsResource>(context.threadPool)
     , m_resources(context.objectArena)
     , m_context(context)
 {}

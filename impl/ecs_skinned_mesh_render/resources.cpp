@@ -125,7 +125,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     rebuilt.skinCount = skinCount;
     rebuilt.jointCount = jointCount;
 
-    Core::IDevice* device = m_graphics.getDevice();
+    auto* device = m_graphics.getDevice();
     if(hasActiveSkin){
         const Name skinBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "skinned_mesh_skin");
         const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "skinned_mesh_joints");

@@ -269,15 +269,13 @@ static bool CopyInstanceParameters(DeviceCreationParameters& dst, const Instance
     return true;
 }
 
-static GlobalUniquePtr<IGraphicsBackend> CreateBackend(
+static GlobalUniquePtr<GraphicsBackend::Backend> CreateBackend(
     const DeviceCreationParameters& deviceParams,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
-    Alloc::ThreadPool& threadPool,
-    GraphicsBackendFactory backendFactory
+    Alloc::ThreadPool& threadPool
 ){
-    const GraphicsBackendFactory createBackend = backendFactory ? backendFactory : &CreateDefaultGraphicsBackend;
-    return createBackend(deviceParams, swapChainState, allocator, threadPool);
+    return MakeGlobalUnique<GraphicsBackend::Backend>(allocator.getObjectArena(), deviceParams, swapChainState, allocator, threadPool);
 }
 
 constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& combo){
@@ -313,15 +311,14 @@ void Graphics::BackBufferResizedCallback(void* userData){
 Graphics::Graphics(
     GraphicsAllocator& allocator,
     Alloc::ThreadPool& threadPool,
-    Alloc::JobSystem& jobSystem,
-    GraphicsBackendFactory backendFactory
+    Alloc::JobSystem& jobSystem
 )
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena())
-    , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool, backendFactory))
+    , m_backend(__hidden_graphics::CreateBackend(m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -340,7 +337,7 @@ bool Graphics::init(const Common::FrameData& data){
     m_swapChainState.backBufferHeight = data.height();
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
 
-    IGraphicsBackend& backend = *m_backend;
+    Backend& backend = *m_backend;
     backend.setPlatformFrameParam(data.frameParam());
 
     if(!m_instanceCreated){
@@ -371,7 +368,7 @@ bool Graphics::createHeadlessDevice(){
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
-    IGraphicsBackend& backend = *m_backend;
+    Backend& backend = *m_backend;
     if(!m_instanceCreated){
         if(!backend.createInstance())
             return false;
@@ -429,7 +426,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
     if(
         static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width)
         || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
-        || (m_swapChainState.vsyncEnabled != m_requestedVSync && getGraphicsAPI() == GraphicsAPI::VULKAN)
+        || (m_swapChainState.vsyncEnabled != m_requestedVSync && GraphicsBackend::s_ResizeSwapChainOnVSyncChange)
     ){
         backBufferResizing();
 
@@ -446,7 +443,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 
 void Graphics::destroy(){
     waitAllJobs();
-    if(IDevice* device = getDevice())
+    if(auto* device = getDevice())
         device->waitForIdle();
 
     invalidateRenderPassResources();
@@ -480,7 +477,7 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     waitAllJobs();
-    if(IDevice* device = getDevice())
+    if(auto* device = getDevice())
         device->waitForIdle();
 
     pass.invalidateResources();
@@ -510,7 +507,7 @@ void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callba
     notifyPointerScaleChanged();
 }
 
-IFramebuffer* Graphics::getFramebuffer(u32 index)const{
+Framebuffer* Graphics::getFramebuffer(u32 index)const{
     if(index < m_swapChainFramebuffers.size())
         return m_swapChainFramebuffers[index].get();
     return nullptr;
@@ -518,7 +515,7 @@ IFramebuffer* Graphics::getFramebuffer(u32 index)const{
 
 void Graphics::backBufferResizing(){
     waitAllJobs();
-    if(IDevice* device = getDevice())
+    if(auto* device = getDevice())
         device->waitForIdle();
 
     invalidateRenderPassResources();
@@ -578,8 +575,8 @@ void Graphics::animate(f64 elapsedTime){
 }
 
 void Graphics::render(){
-    IFramebuffer* framebuffer = getCurrentFramebuffer();
-    if(IDevice* device = getDevice())
+    Framebuffer* framebuffer = getCurrentFramebuffer();
+    if(auto* device = getDevice())
         m_gpuTiming.collect(*device);
 
     for(auto* renderPass : m_renderPasses)
@@ -648,7 +645,7 @@ bool Graphics::animateRenderPresent(){
 
     YieldThread();
 
-    if(IDevice* device = getDevice())
+    if(auto* device = getDevice())
         device->runGarbageCollection();
 
     updateAverageFrameTime(elapsedTime);
@@ -659,7 +656,7 @@ bool Graphics::animateRenderPresent(){
 }
 
 BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
-    IDevice* device = getDevice();
+    auto* device = getDevice();
     if(!__hidden_graphics::ValidateBufferSetupUpload(desc))
         return {};
 
@@ -683,14 +680,14 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     commandList->open();
     commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
     commandList->close();
-    ICommandList* commandLists[] = { commandList.get() };
+    CommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1, desc.queue);
 
     return buffer;
 }
 
 TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
-    IDevice* device = getDevice();
+    auto* device = getDevice();
     if(!__hidden_graphics::ValidateTextureSetupUpload(desc))
         return {};
 
@@ -714,7 +711,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     commandList->open();
     commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
     commandList->close();
-    ICommandList* commandLists[] = { commandList.get() };
+    CommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1, desc.queue);
 
     return texture;
@@ -836,7 +833,7 @@ Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshReso
 Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
     CoopVectorSupport output;
 
-    IDevice* device = getDevice();
+    auto* device = getDevice();
 
     output.inferencingSupported = device->queryFeatureSupport(Feature::CooperativeVectorInferencing);
     output.trainingSupported = device->queryFeatureSupport(Feature::CooperativeVectorTraining);
@@ -856,12 +853,12 @@ Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
 }
 
 CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
-    IDevice* device = getDevice();
+    auto* device = getDevice();
     return device->queryCoopVecFeatures();
 }
 
 usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
-    IDevice* device = getDevice();
+    auto* device = getDevice();
     return device->getCoopVecMatrixSize(type, layout, rows, columns);
 }
 

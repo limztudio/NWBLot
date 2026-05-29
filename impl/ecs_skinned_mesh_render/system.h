@@ -119,7 +119,7 @@ public:
 
 public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
-    virtual void render(Core::IFramebuffer* framebuffer)override;
+    virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
 
     virtual bool resolveRuntimeMesh(Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh)override;
@@ -129,14 +129,14 @@ private:
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool dispatchRuntimeMesh(
-        Core::ICommandList& commandList,
+        Core::CommandList& commandList,
         SkinnedMeshRuntimeMeshInstance& instance,
         const SkinnedMeshJointPaletteComponent* jointPalette,
         const SkinnedMeshSkeletonPoseComponent* skeletonPose
     );
-    [[nodiscard]] bool copyRestToSkinned(Core::ICommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance);
+    [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance);
     [[nodiscard]] bool dispatchMeshletBounds(
-        Core::ICommandList& commandList,
+        Core::CommandList& commandList,
         SkinnedMeshRuntimeMeshInstance& instance,
         const RuntimeResources& resources
     );

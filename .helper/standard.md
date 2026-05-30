@@ -1,7 +1,7 @@
 # NWBLot Inferred Code Standard
 
 Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_parties/`).
-Updated: 2026-05-22
+Updated: 2026-05-31
 
 ## 1. File and module structure
 - Use lowercase `snake_case` filenames for C++ source and headers.
@@ -258,6 +258,7 @@ Updated: 2026-05-22
   - Wrong: `inline ErrorCode FileExists(const Path& path)noexcept{ ... }` — discards the bool result; callers cannot distinguish "file not found" from "no error".
 - Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
 - For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
+- For standalone command-line utilities that own logger setup, initialize `NWB::Log::ClientStandalone` in the entry point and route non-interactive status, validation, failure, and listing output through `NWB_LOGGER_*` macros. Keep direct stream output only for interactive prompts, CLI help/error routing, terminal pause prompts, and logger-initialization fallback messages.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
 - Do not add inline/local wrappers that only rename one operation or one function call, such as `return VectorAdd(...)`, `return LoadFoo(...)`, or `return SomeHelper(...)`.
@@ -315,6 +316,7 @@ Updated: 2026-05-22
 - Use early returns for invalid states and failed preconditions.
 - Check external API results immediately (for Vulkan, check `VkResult` after each call).
 - Log through logger macros (`NWB_LOGGER_INFO`, `NWB_LOGGER_WARNING`, `NWB_LOGGER_ERROR`, `NWB_LOGGER_FATAL`).
+- When a `bool` helper only used an `AString& outError` to report the immediate failure reason, prefer logging at the failure detection site and returning `false`. Keep output parameters for produced data, not for diagnostic-only strings that the caller just forwards to a logger.
 - Use assertions (`NWB_ASSERT`, `NWB_ASSERT_MSG`) for invariant checking.
 - For caches of derived/runtime-created objects, the cache key must include every input that affects the created result.
   - Example: graphics pipeline caches must include framebuffer/render-target compatibility when pipeline creation depends on framebuffer info.

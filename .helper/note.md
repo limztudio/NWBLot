@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-04-19
+Updated: 2026-05-31
 
 ## Important Rules
 
@@ -62,6 +62,7 @@ Updated: 2026-04-19
 56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `NWB_DEBUG` / optimization-mode checks.
 57. `Graphics` owns a required backend for its full object lifetime through `NotNullUniquePtr`; lifecycle `destroy()` tears down backend runtime state, not the backend object itself.
 58. ECS infrastructure that owns persistent containers must be constructed with an explicit caller-owned arena. Do not add module-local default arenas or default constructors that hide allocator ownership.
+59. `utilities/fbx_to_nwb` owns a standalone logger at entry, links `nwb_logclient`, routes non-interactive status/error/list output through `NWB_LOGGER_*`, and keeps prompts/help/pause/logger-init fallback on direct console streams. Its validation/build/write helpers should log failures in-place instead of propagating diagnostic-only `AString& outError` parameters.
 
 ## Scheduler Architecture
 

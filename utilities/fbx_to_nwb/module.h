@@ -148,13 +148,13 @@ bool ParseNormalizedMeshClassText(AStringView value, u32& outMeshClass);
 bool MeshClassUsesSkinning(u32 meshClass);
 bool IsNormalizedSkinnedMeshClass(AStringView value);
 bool IsSkinnedMeshClass(const AString& value);
-bool ValidateMeshClassText(AString& inOutValue, AString& outError);
+bool ValidateMeshClassText(AString& inOutValue);
 AStringView NormalModeText(NormalMode::Enum normalMode);
 AString NormalModeOptionsText();
 AString NormalModeErrorText();
 bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode);
 bool ParseNormalizedNormalModeText(AStringView value, NormalMode::Enum& outNormalMode);
-bool ValidateNormalModeText(AString& inOutValue, AString& outError);
+bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
 bool ParseColorText(const AString& text, Vec4& outColor);
 bool Normalize(Vec3& value);
@@ -162,14 +162,13 @@ Path PathFromUtf8(const AString& value);
 AString PathToUtf8(const Path& path);
 Path DefaultOutputPath(const AString& inputPath);
 
-bool LoadScene(const ImportOptions& options, SceneHandle& outScene, AString& outError);
+bool LoadScene(const ImportOptions& options, SceneHandle& outScene);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
 void PrintMeshInstances(const UtilityVector<MeshInstance>& instances);
 bool SelectMeshInstances(
     const UtilityVector<MeshInstance>& instances,
     const AString& selector,
-    UtilityVector<usize>& outSelection,
-    AString& outError
+    UtilityVector<usize>& outSelection
 );
 bool BuildMesh(
     const UtilityVector<MeshInstance>& instances,
@@ -181,8 +180,7 @@ bool BuildMesh(
     UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
-    SourceTangentReport& outTangentReport,
-    AString& outError
+    SourceTangentReport& outTangentReport
 );
 
 bool WriteNwbMesh(
@@ -190,8 +188,7 @@ bool WriteNwbMesh(
     const SourceMeshStreams& mesh,
     const u32 skeletonJointCount,
     const UtilityVector<MeshJointMatrix>& inverseBindMatrices,
-    const AString& meshClassText,
-    AString& outError
+    const AString& meshClassText
 );
 
 int Run(int argc, char** argv, bool& prompted);

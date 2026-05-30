@@ -6,6 +6,7 @@
 
 #include "skin.h"
 
+#include <core/common/log.h>
 #include <core/mesh/frame_math.h>
 #include <core/mesh/tangent_frame_rebuild.h>
 
@@ -44,8 +45,7 @@ bool BuildMesh(
     UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
-    SourceTangentReport& outTangentReport,
-    AString& outError
+    SourceTangentReport& outTangentReport
 ){
     outMesh = SourceMeshStreams{};
     outSkeletonJointCount = 0u;
@@ -53,25 +53,23 @@ bool BuildMesh(
     outSawVertexColors = false;
     outSawVertexUvs = false;
     outTangentReport = SourceTangentReport{};
-    outError.clear();
 
     usize estimatedTriangleCorners = 0u;
     if(!__hidden_import::EstimateSelectedTriangleCorners(
         instances,
         selection,
-        estimatedTriangleCorners,
-        outError
+        estimatedTriangleCorners
     ))
         return false;
 
     u32 meshClass = 0u;
     if(!ParseMeshClassText(options.meshClass, meshClass)){
-        outError = MeshClassErrorText();
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(MeshClassErrorText()));
         return false;
     }
     NormalMode::Enum normalMode = NormalMode::Imported;
     if(!ParseNormalModeText(options.normalMode, normalMode)){
-        outError = NormalModeErrorText();
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText()));
         return false;
     }
 
@@ -85,7 +83,7 @@ bool BuildMesh(
     FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            outError = "selected mesh index is out of range";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh index is out of range"));
             return false;
         }
         if(
@@ -100,8 +98,7 @@ bool BuildMesh(
                 skinContext,
                 outSawVertexColors,
                 outSawVertexUvs,
-                usedDefaultUvs,
-                outError
+                usedDefaultUvs
             )
         ){
             return false;
@@ -109,17 +106,17 @@ bool BuildMesh(
     }
 
     if(outMesh.indices.empty()){
-        outError = "selected meshes produced no triangles";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
         return false;
     }
     if(normalMode != NormalMode::Imported || !__hidden_import::SourceMeshHasCompleteTangents(outMesh)){
         __hidden_import::DropSourceMeshTangents(outMesh);
-        if(!__hidden_import::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport, outError))
+        if(!__hidden_import::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport))
             return false;
     }
     if(wantsSkinning){
         if(skinContext.joints.empty()){
-            outError = "skinned mesh did not produce any skeleton joints";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
             return false;
         }
         outSkeletonJointCount = static_cast<u32>(skinContext.joints.size());

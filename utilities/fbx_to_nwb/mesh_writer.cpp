@@ -4,6 +4,8 @@
 
 #include "module.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,66 +99,64 @@ void WriteJointMatrix(Stream& out, const MeshJointMatrix& matrix){
     out << "    ]";
 }
 
-bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName, AString& outError){
+bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName){
     if(index < count)
         return true;
 
-    outError = "vertex_ref ";
-    outError += fieldName;
-    outError += " index is out of range";
+    NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: vertex_ref {} index is out of range"), StringConvert(fieldName));
     return false;
 }
 
-bool ValidateSourceMesh(const SourceMeshStreams& mesh, const bool writeSkinnedMesh, AString& outError){
+bool ValidateSourceMesh(const SourceMeshStreams& mesh, const bool writeSkinnedMesh){
     if(mesh.positions.empty() || mesh.normals.empty() || mesh.uv0.empty() || mesh.colors.empty() || mesh.vertexRefs.empty() || mesh.indices.empty()){
-        outError = "mesh payload is incomplete";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh payload is incomplete"));
         return false;
     }
     if(mesh.tangents.empty()){
-        outError = "mesh tangent stream is required";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh tangent stream is required"));
         return false;
     }
     if((mesh.indices.size() % 3u) != 0u){
-        outError = "mesh index stream must contain whole triangles";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh index stream must contain whole triangles"));
         return false;
     }
     if(writeSkinnedMesh && mesh.skin.empty()){
-        outError = "skinned mesh requires a skin stream";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: skinned mesh requires a skin stream"));
         return false;
     }
     if(!writeSkinnedMesh && !mesh.skin.empty()){
-        outError = "static mesh cannot write a skin stream";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: static mesh cannot write a skin stream"));
         return false;
     }
 
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(ref.position, mesh.positions.size(), "position", outError))
+        if(!ValidateStreamIndex(ref.position, mesh.positions.size(), "position"))
             return false;
-        if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), "normal", outError))
+        if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), "normal"))
             return false;
         if(ref.tangent == s_MissingSourceStreamIndex){
-            outError = "mesh vertex_ref tangent is missing";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh vertex_ref tangent is missing"));
             return false;
         }
-        if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), "tangent", outError))
+        if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), "tangent"))
             return false;
-        if(!ValidateStreamIndex(ref.uv0, mesh.uv0.size(), "uv0", outError))
+        if(!ValidateStreamIndex(ref.uv0, mesh.uv0.size(), "uv0"))
             return false;
-        if(!ValidateStreamIndex(ref.color, mesh.colors.size(), "color", outError))
+        if(!ValidateStreamIndex(ref.color, mesh.colors.size(), "color"))
             return false;
         if(writeSkinnedMesh){
-            if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), "skin", outError))
+            if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), "skin"))
                 return false;
         }
         else if(ref.skin != s_MissingSourceStreamIndex){
-            outError = "static mesh vertex_ref cannot contain a skin index";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: static mesh vertex_ref cannot contain a skin index"));
             return false;
         }
     }
 
     for(const u32 index : mesh.indices){
         if(index >= mesh.vertexRefs.size()){
-            outError = "mesh triangle index references an out-of-range vertex_ref";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: mesh triangle index references an out-of-range vertex_ref"));
             return false;
         }
     }
@@ -186,30 +186,28 @@ bool WriteNwbMesh(
     const SourceMeshStreams& mesh,
     const u32 skeletonJointCount,
     const UtilityVector<MeshJointMatrix>& inverseBindMatrices,
-    const AString& meshClassText,
-    AString& outError
+    const AString& meshClassText
 ){
-    outError.clear();
     u32 meshClass = 0u;
     if(!ParseMeshClassText(meshClassText, meshClass)){
-        outError = MeshClassErrorText();
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: {}"), StringConvert(MeshClassErrorText()));
         return false;
     }
     const bool writeSkinnedMesh = MeshClassUsesSkinning(meshClass);
-    if(!__hidden_mesh_writer::ValidateSourceMesh(mesh, writeSkinnedMesh, outError))
+    if(!__hidden_mesh_writer::ValidateSourceMesh(mesh, writeSkinnedMesh))
         return false;
     if(writeSkinnedMesh){
         if(skeletonJointCount == 0u){
-            outError = "skinned mesh requires at least one skeleton joint";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: skinned mesh requires at least one skeleton joint"));
             return false;
         }
         if(inverseBindMatrices.size() != static_cast<usize>(skeletonJointCount)){
-            outError = "skinned mesh inverse bind matrix count must match skeleton_joint_count";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: skinned mesh inverse bind matrix count must match skeleton_joint_count"));
             return false;
         }
     }
     else if(skeletonJointCount != 0u || !inverseBindMatrices.empty()){
-        outError = "static mesh cannot write skeleton/skin payload";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: static mesh cannot write skeleton/skin payload"));
         return false;
     }
 
@@ -217,14 +215,17 @@ bool WriteNwbMesh(
     const Path parentPath = outputPath.parent_path();
     if(!parentPath.empty()){
         if(!EnsureDirectories(parentPath, errorCode)){
-            outError = "failed to create output directory: " + errorCode.message();
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed to create output directory '{}': {}")
+                , PathToString<tchar>(parentPath)
+                , StringConvert(errorCode.message())
+            );
             return false;
         }
     }
 
     BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!file){
-        outError = "failed to open output file";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     file.precision(9);
@@ -316,7 +317,7 @@ bool WriteNwbMesh(
     }
 
     if(!file){
-        outError = "failed while writing output file";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
 

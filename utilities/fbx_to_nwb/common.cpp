@@ -4,6 +4,7 @@
 
 #include "module.h"
 
+#include <core/common/log.h>
 #include <core/mesh/classification.h>
 
 
@@ -62,9 +63,9 @@ AString MeshClassOptionsText(){
 }
 
 AString MeshClassErrorText(){
-    AString error = "Asset type must be ";
-    error += MeshClassOptionsText();
-    return error;
+    AString message = "Asset type must be ";
+    message += MeshClassOptionsText();
+    return message;
 }
 
 bool ParseNormalizedMeshClassText(const AStringView value, u32& outMeshClass){
@@ -100,13 +101,13 @@ bool IsSkinnedMeshClass(const AString& value){
     return IsNormalizedSkinnedMeshClass(normalized);
 }
 
-bool ValidateMeshClassText(AString& inOutValue, AString& outError){
+bool ValidateMeshClassText(AString& inOutValue){
     inOutValue = NormalizeMeshClassText(Move(inOutValue));
     u32 meshClass = NWB::Core::Mesh::MeshClass::Invalid;
     if(ParseNormalizedMeshClassText(inOutValue, meshClass))
         return true;
 
-    outError = MeshClassErrorText();
+    NWB_LOGGER_WARNING(NWB_TEXT("{}"), StringConvert(MeshClassErrorText()));
     return false;
 }
 
@@ -138,9 +139,9 @@ AString NormalModeOptionsText(){
 }
 
 AString NormalModeErrorText(){
-    AString error = "normal mode must be ";
-    error += NormalModeOptionsText();
-    return error;
+    AString message = "normal mode must be ";
+    message += NormalModeOptionsText();
+    return message;
 }
 
 bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
@@ -166,13 +167,13 @@ bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode){
     return ParseNormalizedNormalModeText(normalized, outNormalMode);
 }
 
-bool ValidateNormalModeText(AString& inOutValue, AString& outError){
+bool ValidateNormalModeText(AString& inOutValue){
     inOutValue = NormalizeNormalModeText(Move(inOutValue));
     NormalMode::Enum normalMode = NormalMode::Imported;
     if(ParseNormalizedNormalModeText(inOutValue, normalMode))
         return true;
 
-    outError = NormalModeErrorText();
+    NWB_LOGGER_WARNING(NWB_TEXT("{}"), StringConvert(NormalModeErrorText()));
     return false;
 }
 

@@ -34,16 +34,14 @@ bool BuildClusterJointMap(
     const ImportOptions& options,
     ufbx_skin_deformer* skin,
     ExportContext& context,
-    UtilityVector<u16>& outClusterJoints,
-    AString& outError
+    UtilityVector<u16>& outClusterJoints
 );
 
 bool BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
     u32 logicalVertex,
-    MeshSkinInfluence& outInfluence,
-    AString& outError
+    MeshSkinInfluence& outInfluence
 );
 
 

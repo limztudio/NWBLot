@@ -4,6 +4,8 @@
 
 #include "skin.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -116,16 +118,15 @@ bool FindOrAddJoint(
     ExportContext& context,
     ufbx_skin_cluster* cluster,
     const ufbx_matrix& inverseBind,
-    u16& outJoint,
-    AString& outError
+    u16& outJoint
 ){
     outJoint = 0u;
     if(!cluster || !cluster->bone_node){
-        outError = "skin cluster is missing a bone node";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster is missing a bone node"));
         return false;
     }
     if(!FiniteUfbxMatrix(inverseBind) || Abs(static_cast<f64>(ufbx_matrix_determinant(&inverseBind))) <= 0.00000001){
-        outError = "skin cluster inverse bind matrix is not finite and invertible";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster inverse bind matrix is not finite and invertible"));
         return false;
     }
 
@@ -134,12 +135,13 @@ bool FindOrAddJoint(
     if(foundJoint != context.jointLookup.end()){
         const usize jointIndex = static_cast<usize>(foundJoint.value());
         if(jointIndex >= context.inverseBindMatrices.size()){
-            outError = "internal skeleton joint lookup is out of range";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: internal skeleton joint lookup is out of range"));
             return false;
         }
         if(!NearlyEqualJointMatrix(context.inverseBindMatrices[jointIndex], convertedMatrix)){
-            outError = "selected meshes bind skeleton joint \"" + NodeDisplayName(cluster->bone_node)
-                + "\" with different inverse bind matrices";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices")
+                , StringConvert(NodeDisplayName(cluster->bone_node))
+            );
             return false;
         }
 
@@ -148,7 +150,7 @@ bool FindOrAddJoint(
     }
 
     if(context.joints.size() > static_cast<usize>(Limit<u16>::s_Max)){
-        outError = "skeleton has more than 65536 joints";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skeleton has more than 65536 joints"));
         return false;
     }
 
@@ -164,24 +166,23 @@ bool BuildClusterJointMap(
     const ImportOptions& options,
     ufbx_skin_deformer* skin,
     ExportContext& context,
-    UtilityVector<u16>& outClusterJoints,
-    AString& outError
+    UtilityVector<u16>& outClusterJoints
 ){
     outClusterJoints.clear();
     if(!skin){
-        outError = "skinned mesh requires a skin deformer";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires a skin deformer"));
         return false;
     }
     if(skin->clusters.count == 0u){
-        outError = "skin deformer contains no clusters";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains no clusters"));
         return false;
     }
     if(skin->clusters.count > static_cast<usize>(Limit<u32>::s_Max)){
-        outError = "skin deformer has too many clusters";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer has too many clusters"));
         return false;
     }
     if(skin->clusters.count > Limit<usize>::s_Max - context.joints.size()){
-        outError = "skin deformer cluster count overflows skeleton joint capacity";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer cluster count overflows skeleton joint capacity"));
         return false;
     }
 
@@ -193,13 +194,13 @@ bool BuildClusterJointMap(
     for(usize clusterIndex = 0u; clusterIndex < skin->clusters.count; ++clusterIndex){
         ufbx_skin_cluster* cluster = skin->clusters.data[clusterIndex];
         if(!cluster){
-            outError = "skin deformer contains a null cluster";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer contains a null cluster"));
             return false;
         }
 
         const ufbx_matrix inverseBind = BuildOutputInverseBindMatrix(*cluster, instance, options);
         u16 joint = 0u;
-        if(!FindOrAddJoint(context, cluster, inverseBind, joint, outError))
+        if(!FindOrAddJoint(context, cluster, inverseBind, joint))
             return false;
         outClusterJoints.push_back(joint);
     }
@@ -211,12 +212,11 @@ bool BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
     const u32 logicalVertex,
-    MeshSkinInfluence& outInfluence,
-    AString& outError
+    MeshSkinInfluence& outInfluence
 ){
     outInfluence = MeshSkinInfluence{};
     if(!skin || logicalVertex >= skin->vertices.count){
-        outError = "skin deformer does not contain weights for every logical vertex";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin deformer does not contain weights for every logical vertex"));
         return false;
     }
 
@@ -225,7 +225,7 @@ bool BuildInfluence(
         skinVertex.weight_begin > skin->weights.count
         || skinVertex.num_weights > skin->weights.count - skinVertex.weight_begin
     ){
-        outError = "skin vertex weight range is out of bounds";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin vertex weight range is out of bounds"));
         return false;
     }
 
@@ -238,13 +238,13 @@ bool BuildInfluence(
         const ufbx_skin_weight& weight = skin->weights.data[skinVertex.weight_begin + weightOffset];
         const f64 value = static_cast<f64>(weight.weight);
         if(!IsFinite(value)){
-            outError = "skin contains a non-finite weight";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin contains a non-finite weight"));
             return false;
         }
         if(value <= 0.0)
             continue;
         if(weight.cluster_index >= clusterJoints.size()){
-            outError = "skin weight references an out-of-range cluster";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin weight references an out-of-range cluster"));
             return false;
         }
 
@@ -255,7 +255,7 @@ bool BuildInfluence(
     }
 
     if(!IsFinite(weightSum) || weightSum <= 0.0){
-        outError = "skinned mesh contains a vertex with no positive skin weights";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh contains a vertex with no positive skin weights"));
         return false;
     }
 

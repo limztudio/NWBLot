@@ -6,6 +6,7 @@
 
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
+#include <logger/client/logger.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,6 +19,13 @@ namespace __hidden_main{
 
 
 int Run(const int argc, char** argv){
+    NWB::Log::ClientStandalone logger;
+    if(!logger.init(NWB_TEXT("fbx_to_nwb"))){
+        NWB_CERR << "[fbx_to_nwb] logger.init() failed\n";
+        return -1;
+    }
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+
     bool prompted = false;
     const int result = NWB::FbxToNwb::Run(argc, argv, prompted);
     if(prompted){

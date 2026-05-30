@@ -6,6 +6,8 @@
 
 #include <CLI.hpp>
 
+#include <core/common/log.h>
+
 #include <string>
 
 
@@ -121,7 +123,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
     ErrorCode errorCode;
     const bool exists = FileExists(outputPath, errorCode);
     if(errorCode){
-        NWB_CERR << "Failed to query output path: " << errorCode.message() << "\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(errorCode.message()));
         return false;
     }
     if(!exists)
@@ -129,7 +131,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
     if(options.forceOverwrite)
         return true;
     if(options.acceptDefaults){
-        NWB_CERR << "Output already exists. Pass --force to overwrite: " << PathToUtf8(outputPath) << "\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
         return false;
     }
 
@@ -142,13 +144,13 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
 bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& presence, bool& prompted){
     if(options.inputPath.empty()){
         if(options.acceptDefaults){
-            NWB_CERR << "Input FBX path is required.\n";
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX path is required."));
             return false;
         }
 
         AString input;
         if(!PromptString("Input FBX path", AString(), input, prompted)){
-            NWB_CERR << "Input FBX path is required.\n";
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX path is required."));
             return false;
         }
         options.inputPath = input;
@@ -315,31 +317,28 @@ int Run(int argc, char** argv, bool& prompted){
         return 1;
 
     if(!IsFinite(options.scale) || options.scale <= 0.0){
-        NWB_CERR << "--scale must be a positive finite number.\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("--scale must be a positive finite number."));
         return 1;
     }
     if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0){
-        NWB_CERR << "--triangle-area-length-squared-epsilon must be a finite non-negative number.\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("--triangle-area-length-squared-epsilon must be a finite non-negative number."));
         return 1;
     }
 
     ErrorCode errorCode;
     const bool inputIsRegularFile = IsRegularFile(PathFromUtf8(options.inputPath), errorCode);
     if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_CERR << "Failed to query input FBX path: " << errorCode.message() << "\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
         return 1;
     }
     if(!inputIsRegularFile){
-        NWB_CERR << "Input FBX file was not found: " << options.inputPath << "\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("Input FBX file was not found: {}"), StringConvert(options.inputPath));
         return 1;
     }
 
     SceneHandle scene;
-    AString error;
-    if(!LoadScene(options, scene, error)){
-        NWB_CERR << error << "\n";
+    if(!LoadScene(options, scene))
         return 1;
-    }
 
     if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
         __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, options.includeHidden, prompted);
@@ -350,40 +349,34 @@ int Run(int argc, char** argv, bool& prompted){
         return 0;
     }
     if(instances.empty()){
-        NWB_CERR << "No mesh instances found in FBX";
-        if(!options.includeHidden)
-            NWB_CERR << " (use --include-hidden to include hidden nodes)";
-        NWB_CERR << ".\n";
+        if(options.includeHidden)
+            NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
         return 1;
     }
 
     if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
         return 1;
 
-    if(!ValidateMeshClassText(options.meshClass, error)){
-        NWB_CERR << error << "\n";
+    if(!ValidateMeshClassText(options.meshClass))
         return 1;
-    }
-    if(!ValidateNormalModeText(options.normalMode, error)){
-        NWB_CERR << error << "\n";
+    if(!ValidateNormalModeText(options.normalMode))
         return 1;
-    }
 
     Vec4 defaultColor;
     if(!ParseColorText(options.defaultColorText, defaultColor)){
-        NWB_CERR << "--default-color must contain four finite numbers, for example 1,1,1,1.\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("--default-color must contain four finite numbers, for example 1,1,1,1."));
         return 1;
     }
 
     UtilityVector<usize> selection;
-    if(!SelectMeshInstances(instances, options.meshSelector, selection, error)){
-        NWB_CERR << "Invalid mesh selector: " << error << "\n";
+    if(!SelectMeshInstances(instances, options.meshSelector, selection))
         return 1;
-    }
 
     const Path outputPath = PathFromUtf8(options.outputPath);
     if(outputPath.empty()){
-        NWB_CERR << "Output path is empty.\n";
+        NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
         return 1;
     }
     if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
@@ -405,26 +398,21 @@ int Run(int argc, char** argv, bool& prompted){
         inverseBindMatrices,
         sawVertexColors,
         sawVertexUvs,
-        tangentReport,
-        error
-    )){
-        NWB_CERR << "Failed to build mesh: " << error << "\n";
+        tangentReport
+    ))
         return 1;
-    }
 
     if(!WriteNwbMesh(
         outputPath,
         mesh,
         skeletonJointCount,
         inverseBindMatrices,
-        options.meshClass,
-        error
-    )){
-        NWB_CERR << "Failed to write NWB mesh: " << error << "\n";
+        options.meshClass
+    ))
         return 1;
-    }
 
-    NWB_COUT
+    AStringStream report;
+    report
         << "Wrote " << PathToUtf8(outputPath) << "\n"
         << "  positions: " << mesh.positions.size() << "\n"
         << "  normals: " << mesh.normals.size() << "\n"
@@ -434,14 +422,15 @@ int Run(int argc, char** argv, bool& prompted){
         << "  normal_mode: " << options.normalMode << "\n"
         << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
-    NWB_COUT << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+    report << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
     if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
-        NWB_COUT
+        report
             << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"
             << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
     }
     if(IsNormalizedSkinnedMeshClass(options.meshClass))
-        NWB_COUT << "  skeleton joints: " << skeletonJointCount << "\n";
+        report << "  skeleton joints: " << skeletonJointCount << "\n";
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(report.str()));
 
     return 0;
 }

@@ -208,11 +208,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
 [[nodiscard]] bool EnsureTriangleIndexScratchCapacity(
     const ufbx_mesh& mesh,
-    UtilityVector<u32>& inOutTriangleIndices,
-    AString& outError
+    UtilityVector<u32>& inOutTriangleIndices
 ){
     if(mesh.max_face_triangles > Limit<usize>::s_Max / 3u){
-        outError = "mesh face triangulation scratch size overflows";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
     }
 
@@ -384,8 +383,7 @@ template<typename Value, typename Lookup>
     Lookup& lookup,
     const Value& value,
     const char* streamName,
-    u32& outIndex,
-    AString& outError
+    u32& outIndex
 ){
     auto found = lookup.find(value);
     if(found != lookup.end()){
@@ -394,7 +392,7 @@ template<typename Value, typename Lookup>
     }
 
     if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
-        outError = AString(streamName) + " stream has too many unique values";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), StringConvert(streamName));
         return false;
     }
 
@@ -407,18 +405,17 @@ template<typename Value, typename Lookup>
 [[nodiscard]] bool GenerateSourceMeshTangents(
     SourceMeshStreams& mesh,
     const bool usedDefaultUvs,
-    SourceTangentReport& outTangentReport,
-    AString& outError
+    SourceTangentReport& outTangentReport
 ){
     using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
 
     outTangentReport = SourceTangentReport{};
     if(mesh.vertexRefs.empty() || mesh.indices.empty()){
-        outError = "mesh has no source vertices for tangent generation";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no source vertices for tangent generation"));
         return false;
     }
     if((mesh.indices.size() % 3u) != 0u){
-        outError = "mesh index stream must contain whole triangles for tangent generation";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh index stream must contain whole triangles for tangent generation"));
         return false;
     }
 
@@ -426,7 +423,7 @@ template<typename Value, typename Lookup>
     rebuildVertices.reserve(mesh.vertexRefs.size());
     for(const SourceVertexRef& ref : mesh.vertexRefs){
         if(ref.position >= mesh.positions.size() || ref.normal >= mesh.normals.size() || ref.uv0 >= mesh.uv0.size()){
-            outError = "mesh vertex_ref references an out-of-range stream while generating tangents";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh vertex_ref references an out-of-range stream while generating tangents"));
             return false;
         }
 
@@ -447,7 +444,7 @@ template<typename Value, typename Lookup>
         const u32 i1 = mesh.indices[indexBase + 1u];
         const u32 i2 = mesh.indices[indexBase + 2u];
         if(i0 >= rebuildVertices.size() || i1 >= rebuildVertices.size() || i2 >= rebuildVertices.size()){
-            outError = "mesh index stream references an out-of-range vertex_ref while generating tangents";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh index stream references an out-of-range vertex_ref while generating tangents"));
             return false;
         }
         if(i0 == i1 || i0 == i2 || i1 == i2)
@@ -464,13 +461,13 @@ template<typename Value, typename Lookup>
         rebuildIndices.push_back(i2);
     }
     if(rebuildIndices.empty()){
-        outError = "mesh has no valid triangles for tangent generation";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
         return false;
     }
 
     Core::Mesh::TangentFrameRebuildResult rebuildResult;
     if(!Core::Mesh::RebuildTangentFrames(rebuildVertices, rebuildIndices, &rebuildResult)){
-        outError = "failed to generate source tangent stream";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return false;
     }
 
@@ -489,14 +486,14 @@ template<typename Value, typename Lookup>
             Core::Mesh::FrameFallbackTangent(normal)
         );
         if(!Core::Mesh::FrameValidDirection(tangent)){
-            outError = "failed to resolve generated source tangent";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
             return false;
         }
 
         const f32 handedness = Core::Mesh::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
         StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
-        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent, outError))
+        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))
             return false;
     }
     outTangentReport.degenerateUvTriangleCount = rebuildResult.degenerateUvTriangleCount;
@@ -513,28 +510,27 @@ template<typename Value, typename Lookup>
     SourceMeshBuildContext& context,
     const SourceTriangleCorner& corner,
     const bool wantsSkinning,
-    u32& outVertexRefIndex,
-    AString& outError
+    u32& outVertexRefIndex
 ){
     SourceVertexRef ref;
-    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, "position", ref.position, outError))
+    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, "position", ref.position))
         return false;
-    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, "normal", ref.normal, outError))
+    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, "normal", ref.normal))
         return false;
     if(corner.hasTangent){
-        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, "tangent", ref.tangent, outError))
+        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, "tangent", ref.tangent))
             return false;
     }
-    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, "uv0", ref.uv0, outError))
+    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, "uv0", ref.uv0))
         return false;
-    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, "color", ref.color, outError))
+    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, "color", ref.color))
         return false;
     if(wantsSkinning){
-        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, "skin", ref.skin, outError))
+        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, "skin", ref.skin))
             return false;
     }
 
-    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, "vertex_ref", outVertexRefIndex, outError);
+    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, "vertex_ref", outVertexRefIndex);
 }
 
 

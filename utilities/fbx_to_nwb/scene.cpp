@@ -4,6 +4,8 @@
 
 #include "module.h"
 
+#include <core/common/log.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -124,7 +126,7 @@ SceneHandle::~SceneHandle(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LoadScene(const ImportOptions& options, SceneHandle& outScene, AString& outError){
+bool LoadScene(const ImportOptions& options, SceneHandle& outScene){
     ufbx_load_opts loadOptions = {};
     loadOptions.load_external_files = true;
     loadOptions.ignore_missing_external_files = true;
@@ -146,7 +148,7 @@ bool LoadScene(const ImportOptions& options, SceneHandle& outScene, AString& out
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
-        outError = "failed to load FBX: " + __hidden_scene::FormatUfbxError(error);
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error)));
         return false;
     }
 
@@ -177,24 +179,25 @@ UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool i
 }
 
 void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
+    AStringStream report;
     if(instances.empty()){
-        NWB_COUT << "No mesh instances found.\n";
+        report << "No mesh instances found.\n";
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(report.str()));
         return;
     }
 
-    NWB_COUT << "Mesh instances:\n";
+    report << "Mesh instances:\n";
     for(const MeshInstance& instance : instances)
-        NWB_COUT << "  " << __hidden_scene::MeshDisplayName(instance) << "\n";
+        report << "  " << __hidden_scene::MeshDisplayName(instance) << "\n";
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(report.str()));
 }
 
 bool SelectMeshInstances(
     const UtilityVector<MeshInstance>& instances,
     const AString& selector,
-    UtilityVector<usize>& outSelection,
-    AString& outError
+    UtilityVector<usize>& outSelection
 ){
     outSelection.clear();
-    outError.clear();
 
     const AString normalized = ToLower(Trim(selector));
     if(normalized.empty() || normalized == "all"){
@@ -205,7 +208,7 @@ bool SelectMeshInstances(
     }
     if(normalized == "first"){
         if(instances.empty()){
-            outError = "no mesh instances are available";
+            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), StringConvert(selector));
             return false;
         }
         outSelection.push_back(0u);
@@ -215,7 +218,7 @@ bool SelectMeshInstances(
     usize parsedIndex = 0u;
     if(__hidden_scene::ParseIndexSelector(normalized, parsedIndex)){
         if(parsedIndex >= instances.size()){
-            outError = "mesh index is out of range";
+            NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), StringConvert(selector));
             return false;
         }
         outSelection.push_back(parsedIndex);
@@ -250,7 +253,7 @@ bool SelectMeshInstances(
         return true;
     }
 
-    outError = "mesh selector did not match any node or mesh";
+    NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), StringConvert(selector));
     return false;
 }
 

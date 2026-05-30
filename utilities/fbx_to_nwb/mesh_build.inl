@@ -7,10 +7,9 @@ template<typename VisitTriangle>
     const ufbx_mesh& mesh,
     const bool flipWinding,
     UtilityVector<u32>& inOutTriangleIndices,
-    VisitTriangle&& visitTriangle,
-    AString& outError
+    VisitTriangle&& visitTriangle
 ){
-    if(!EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices, outError))
+    if(!EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
         return false;
     for(usize faceIndex = 0; faceIndex < mesh.num_faces; ++faceIndex){
         const ufbx_face face = mesh.faces.data[faceIndex];
@@ -35,7 +34,7 @@ template<typename VisitTriangle>
 
             for(const u32 cornerIndex : cornerIndices){
                 if(cornerIndex >= mesh.vertex_indices.count){
-                    outError = "mesh corner references an out-of-range logical vertex";
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh corner references an out-of-range logical vertex"));
                     return false;
                 }
             }
@@ -53,8 +52,7 @@ template<typename VisitTriangle>
     const ImportOptions& options,
     const bool wantsSkinning,
     UtilityVector<u32>& inOutTriangleIndices,
-    PositionNormalMap& outNormals,
-    AString& outError
+    PositionNormalMap& outNormals
 ){
     outNormals.clear();
     outNormals.reserve(mesh.num_vertices);
@@ -92,7 +90,7 @@ template<typename VisitTriangle>
             }
         }
         return true;
-    }, outError))
+    }))
         return false;
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it)
@@ -111,21 +109,20 @@ bool AppendInstanceMesh(
     FbxSkinDetail::ExportContext& inOutSkinContext,
     bool& inOutSawVertexColors,
     bool& inOutSawVertexUvs,
-    bool& inOutUsedDefaultUvs,
-    AString& outError
+    bool& inOutUsedDefaultUvs
 ){
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
     if(!mesh || !node){
-        outError = "internal mesh instance is null";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: internal mesh instance is null"));
         return false;
     }
     if(!mesh->vertex_position.exists){
-        outError = "mesh is missing positions";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh is missing positions"));
         return false;
     }
     if(normalMode == NormalMode::Imported && !mesh->vertex_normal.exists){
-        outError = "imported normal mode requires mesh normals after ufbx import";
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: imported normal mode requires mesh normals after ufbx import"));
         return false;
     }
 
@@ -137,16 +134,16 @@ bool AppendInstanceMesh(
     UtilityVector<u16> clusterJoints;
     if(wantsSkinning){
         if(mesh->skin_deformers.count != 1u){
-            outError = "skinned mesh requires exactly one skin deformer per selected mesh";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh"));
             return false;
         }
         skin = mesh->skin_deformers.data[0u];
-        if(!FbxSkinDetail::BuildClusterJointMap(instance, options, skin, inOutSkinContext, clusterJoints, outError))
+        if(!FbxSkinDetail::BuildClusterJointMap(instance, options, skin, inOutSkinContext, clusterJoints))
             return false;
     }
 
     PositionNormalMap smoothNormals;
-    if(normalMode == NormalMode::Smooth && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals, outError))
+    if(normalMode == NormalMode::Smooth && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals))
         return false;
 
     return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[3]){
@@ -163,12 +160,12 @@ bool AppendInstanceMesh(
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(corner.position));
                 if(foundNormal == smoothNormals.end()){
-                    outError = "failed to generate smooth mesh normal";
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
                 Vec3 smoothNormal = foundNormal.value();
                 if(!Normalize(smoothNormal)){
-                    outError = "failed to generate smooth mesh normal";
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
                 corner.normal = smoothNormal;
@@ -204,12 +201,12 @@ bool AppendInstanceMesh(
             }
 
             if(wantsSkinning){
-                if(!FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex, corner.skin, outError))
+                if(!FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex, corner.skin))
                     return false;
             }
 
             if(!IsFiniteSourceTriangleCorner(corner, wantsSkinning)){
-                outError = "mesh contains non-finite vertex data";
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
                 return false;
             }
 
@@ -231,7 +228,7 @@ bool AppendInstanceMesh(
                 static_cast<f32>(faceNormal64.z),
             };
             if(!Normalize(faceNormal)){
-                outError = "failed to regenerate mesh face normal";
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }
             for(SourceTriangleCorner& corner : triangleCorners)
@@ -240,24 +237,23 @@ bool AppendInstanceMesh(
 
         for(const SourceTriangleCorner& corner : triangleCorners){
             u32 vertexRefIndex = 0u;
-            if(!InternSourceCorner(inOutMesh, corner, wantsSkinning, vertexRefIndex, outError))
+            if(!InternSourceCorner(inOutMesh, corner, wantsSkinning, vertexRefIndex))
                 return false;
             inOutMesh.mesh.indices.push_back(vertexRefIndex);
         }
         return true;
-    }, outError);
+    });
 }
 
 bool EstimateSelectedTriangleCorners(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
-    usize& outTriangleCorners,
-    AString& outError
+    usize& outTriangleCorners
 ){
     outTriangleCorners = 0u;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            outError = "selected mesh index is out of range";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh index is out of range"));
             return false;
         }
 
@@ -265,7 +261,7 @@ bool EstimateSelectedTriangleCorners(
         if(!mesh)
             continue;
         if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / 3u){
-            outError = "selected meshes have too many triangle corners";
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return false;
         }
 

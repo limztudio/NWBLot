@@ -17,6 +17,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/material_instance.h>
+#include <impl/ecs_render/private.h>
 #include <impl/assets_mesh/meshlet_ref_encoding.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_asset.h>
@@ -220,6 +221,116 @@ static void TestMaterialInstanceComponentSetters(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[1u] == TestFloatBits(0.5f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[2u] == TestFloatBits(0.25f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[3u] == TestFloatBits(0.125f));
+}
+
+static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
+    NWB::Core::Alloc::ScratchArena scratchArena;
+    using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
+    using MaterialTypedByteContentKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
+    using RangeMap = ::HashMap<
+        MaterialTypedByteContentKey,
+        NWB::Impl::ECSRenderDetail::MaterialTypedByteRange,
+        NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKeyHasher,
+        ::EqualTo<MaterialTypedByteContentKey>,
+        NWB::Core::Alloc::ScratchArena
+    >;
+
+    ByteVector uploadBytes{scratchArena};
+    RangeMap ranges(
+        0,
+        NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
+        ::EqualTo<MaterialTypedByteContentKey>(),
+        scratchArena
+    );
+
+    ByteVector firstBytes{scratchArena};
+    firstBytes.push_back(1u);
+    firstBytes.push_back(2u);
+    firstBytes.push_back(3u);
+    firstBytes.push_back(4u);
+
+    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange firstRange;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+        uploadBytes,
+        ranges,
+        firstBytes,
+        firstRange
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstRange.byteOffset == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, firstRange.byteCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 4u);
+
+    ByteVector duplicateBytes{scratchArena};
+    duplicateBytes.assign(firstBytes.begin(), firstBytes.end());
+    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange duplicateRange;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+        uploadBytes,
+        ranges,
+        duplicateBytes,
+        duplicateRange
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, duplicateRange.byteOffset == firstRange.byteOffset);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, duplicateRange.byteCount == firstRange.byteCount);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 4u);
+
+    ByteVector secondBytes{scratchArena};
+    secondBytes.push_back(1u);
+    secondBytes.push_back(2u);
+    secondBytes.push_back(3u);
+    secondBytes.push_back(5u);
+    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange secondRange;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+        uploadBytes,
+        ranges,
+        secondBytes,
+        secondRange
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondRange.byteOffset == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, secondRange.byteCount == 4u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 8u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == 2u);
+
+    ByteVector emptyBytes{scratchArena};
+    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange emptyRange;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+        uploadBytes,
+        ranges,
+        emptyBytes,
+        emptyRange
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, emptyRange.byteOffset == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, emptyRange.byteCount == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 8u);
+
+    for(u32 instanceIndex = 0u; instanceIndex < 128u; ++instanceIndex){
+        ByteVector overrideBytes{scratchArena};
+        const u8 packedValue = static_cast<u8>(64u + (instanceIndex % 32u));
+        overrideBytes.push_back(packedValue);
+        overrideBytes.push_back(static_cast<u8>(packedValue + 1u));
+        overrideBytes.push_back(static_cast<u8>(packedValue + 2u));
+        overrideBytes.push_back(static_cast<u8>(packedValue + 3u));
+
+        NWB::Impl::ECSRenderDetail::MaterialTypedByteRange stressRange;
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+            uploadBytes,
+            ranges,
+            overrideBytes,
+            stressRange
+        ));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, stressRange.byteCount == 4u);
+    }
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == 34u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 136u);
+
+    ::Vector<NWB::Impl::InstanceGpuData, NWB::Core::Alloc::ScratchArena> instanceData{scratchArena};
+    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRanges instanceRanges;
+    instanceRanges.constantRange = firstRange;
+    instanceRanges.mutableRange = secondRange;
+    instanceData.push_back(NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRanges));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::ValidateMaterialTypedUploadRanges(
+        instanceData,
+        uploadBytes
+    ));
 }
 
 static NWB::Impl::SkinnedMeshJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
@@ -552,6 +663,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("ecs graphics", [](NWB::Tests::TestContext& context)
     __hidden_tests::TestLightComponents(context);
     __hidden_tests::TestMeshSystemResolvesMeshComponent(context);
     __hidden_tests::TestMaterialInstanceComponentSetters(context);
+    __hidden_tests::TestMaterialTypedByteRangeDeduplicatesContent(context);
     __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
     __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
     __hidden_tests::TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(context);

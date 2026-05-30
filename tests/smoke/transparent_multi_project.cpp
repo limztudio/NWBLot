@@ -13,6 +13,7 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/module.h>
+#include <impl/ecs_render/material_instance.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,15 +35,16 @@ static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube";
-static constexpr AStringView s_TransparentOrangeMaterialPath = "project/smoke/transparent_multi/materials/orange";
-static constexpr AStringView s_TransparentGreenMaterialPath = "project/smoke/transparent_multi/materials/green";
-static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/transparent_multi/materials/blue";
+static constexpr AStringView s_BxdfSurfaceMaterialInterface = "project/shaders/bxdf_surface";
+static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
 
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
     NWB::Core::ECS::World& world,
+    NWB::Core::Alloc::GlobalArena& arena,
     const AStringView meshPath,
     const AStringView materialPath,
+    const Float4& colorTint,
     const Float4& position,
     const Float4& scale
 ){
@@ -61,6 +63,18 @@ static constexpr AStringView s_TransparentBlueMaterialPath = "project/smoke/tran
 
     auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
     renderer.material = material;
+
+    const Name materialInterface(s_BxdfSurfaceMaterialInterface);
+    entity.addComponent<NWB::Impl::MaterialInstanceComponent>(arena, materialInterface);
+    if(!NWB::Impl::SetMaterialMutableFloat4(
+        world,
+        entity.id(),
+        materialInterface,
+        "runtime.color_tint",
+        colorTint
+    ))
+        return NWB::Core::ECS::ENTITY_ID_INVALID;
+
     return entity.id();
 }
 
@@ -146,22 +160,28 @@ public:
 
         const auto cubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
+            m_context.objectArena,
             s_CubeMeshPath,
-            s_TransparentOrangeMaterialPath,
+            s_TransparentSharedMaterialPath,
+            Float4(1.0f, 0.42f, 0.20f, 0.42f),
             Float4(-0.68f, s_CameraTargetY, 0.02f),
             Float4(0.62f, 0.62f, 0.62f)
         );
         const auto centerCubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
+            m_context.objectArena,
             s_CubeMeshPath,
-            s_TransparentGreenMaterialPath,
+            s_TransparentSharedMaterialPath,
+            Float4(0.10f, 1.0f, 0.45f, 0.42f),
             Float4(0.0f, s_CameraTargetY, 0.0f),
             Float4(0.78f, 0.78f, 0.78f)
         );
         const auto rightCubeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
+            m_context.objectArena,
             s_CubeMeshPath,
-            s_TransparentBlueMaterialPath,
+            s_TransparentSharedMaterialPath,
+            Float4(0.12f, 0.44f, 1.0f, 0.42f),
             Float4(0.68f, s_CameraTargetY, 0.04f),
             Float4(0.68f, 0.68f, 0.68f)
         );
@@ -170,7 +190,7 @@ public:
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: three transparent static meshes created"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created"));
         return true;
     }
 

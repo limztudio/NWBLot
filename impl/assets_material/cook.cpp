@@ -1099,14 +1099,6 @@ static void AppendMaterialBindFieldAccessor(
     inOutSource += byteOffsetSymbol;
     inOutSource += ");\n";
     inOutSource += "}\n\n";
-    inOutSource += field.type;
-    inOutSource += ' ';
-    inOutSource += functionName;
-    inOutSource += "(){\n";
-    inOutSource += "    return ";
-    inOutSource += functionName;
-    inOutSource += "(nwbMeshLoadInstance());\n";
-    inOutSource += "}\n";
 }
 
 static bool AppendMaterialBindGeneratedInstance(
@@ -1264,14 +1256,6 @@ static bool AppendMaterialBindGeneratedInstance(
     }
     inOutSource += "    return value;\n";
     inOutSource += "}\n\n";
-    inOutSource += bindStruct.name;
-    inOutSource += ' ';
-    inOutSource += blockFunctionName;
-    inOutSource += "(){\n";
-    inOutSource += "    return ";
-    inOutSource += blockFunctionName;
-    inOutSource += "(nwbMeshLoadInstance());\n";
-    inOutSource += "}\n";
 
     return true;
 }

@@ -36,6 +36,10 @@ static void CheckGeneratedSourceHasNoMutableLoads(TestContext& context, const AS
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ContainsText(generatedSourceView, "nwbMaterialLoadMutable"));
 }
 
+static void CheckGeneratedSourceHasNoImplicitInstanceAccessors(TestContext& context, const AStringView generatedSourceView){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ContainsText(generatedSourceView, "nwbMeshLoadInstance()"));
+}
+
 static AString BuildGeneratedUint2ConstantText(const AStringView symbol, const u64 value){
     AString text("static const uint2 ");
     text.append(symbol.data(), symbol.size());
@@ -137,6 +141,7 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
         generatedSourceView,
         "nwbMaterialFind"
     ));
+    CheckGeneratedSourceHasNoImplicitInstanceAccessors(context, generatedSourceView);
 }
 
 static void CheckGeneratedHalfMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
@@ -159,6 +164,7 @@ static void CheckGeneratedHalfMaterialBindSource(TestContext& context, const ASt
     };
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
     CheckGeneratedSourceHasNoMutableLoads(context, generatedSourceView);
+    CheckGeneratedSourceHasNoImplicitInstanceAccessors(context, generatedSourceView);
 }
 
 static void CheckGeneratedMixedHalfMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
@@ -173,6 +179,7 @@ static void CheckGeneratedMixedHalfMaterialBindSource(TestContext& context, cons
     };
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
     CheckGeneratedSourceHasNoMutableLoads(context, generatedSourceView);
+    CheckGeneratedSourceHasNoImplicitInstanceAccessors(context, generatedSourceView);
 }
 
 static void CheckGeneratedCompactIntegerMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
@@ -202,6 +209,7 @@ static void CheckGeneratedCompactIntegerMaterialBindSource(TestContext& context,
     };
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
     CheckGeneratedSourceHasNoMutableLoads(context, generatedSourceView);
+    CheckGeneratedSourceHasNoImplicitInstanceAccessors(context, generatedSourceView);
 }
 
 static const NWB::Impl::MaterialTypedLayoutBlock* FindMaterialTypedLayoutBlock(

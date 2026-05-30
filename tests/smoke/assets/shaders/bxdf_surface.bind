@@ -6,12 +6,16 @@
 struct NwbBxdfSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
+};
 
+[material_mutable]
+struct NwbBxdfRuntimeMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 color_tint;
 };
 
 NwbBxdfSurfaceMaterial surface;
+NwbBxdfRuntimeMaterial runtime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

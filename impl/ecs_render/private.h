@@ -238,6 +238,141 @@ inline usize NextGrowingCapacity(const usize currentCapacity, const usize requir
     return capacity;
 }
 
+struct MaterialTypedByteAppendRange{
+    MaterialTypedByteRange byteRange;
+    usize alignedByteEnd = 0u;
+};
+
+struct MaterialTypedByteContentKey{
+    u64 byteHash = 0u;
+    Vector<u8, Core::Alloc::ScratchArena> bytes;
+
+    explicit MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena)
+        : bytes(arena)
+    {}
+    template<typename MaterialTypedByteVector>
+    MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteVector& typedBytes)
+        : byteHash(ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()))
+        , bytes(arena)
+    {
+        bytes.assign(typedBytes.begin(), typedBytes.end());
+    }
+
+    friend bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs){
+        if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
+            return false;
+        if(lhs.bytes.empty())
+            return true;
+
+        return NWB_MEMCMP(lhs.bytes.data(), rhs.bytes.data(), lhs.bytes.size()) == 0;
+    }
+};
+
+struct MaterialTypedByteContentKeyHasher{
+    usize operator()(const MaterialTypedByteContentKey& key)const{
+        usize seed = Hasher<u64>{}(key.byteHash);
+        Core::CoreDetail::HashCombine(seed, key.bytes.size());
+        return seed;
+    }
+};
+
+[[nodiscard]] inline bool TryBuildMaterialTypedByteAppendRange(
+    const usize currentByteCount,
+    const usize appendByteCount,
+    MaterialTypedByteAppendRange& outAppendRange
+){
+    outAppendRange = {};
+    if(appendByteCount == 0u)
+        return true;
+
+    if(appendByteCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
+        return false;
+    }
+
+    usize alignedByteBegin = 0u;
+    if(!AlignUpChecked(currentByteCount, sizeof(u32), alignedByteBegin)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
+        return false;
+    }
+    if(appendByteCount > Limit<usize>::s_Max - alignedByteBegin){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
+        return false;
+    }
+
+    const usize byteEnd = alignedByteBegin + appendByteCount;
+    usize alignedByteEnd = 0u;
+    if(!AlignUpChecked(byteEnd, sizeof(u32), alignedByteEnd)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
+        return false;
+    }
+    if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
+        return false;
+    }
+
+    outAppendRange.byteRange.byteOffset = static_cast<u32>(alignedByteBegin);
+    outAppendRange.byteRange.byteCount = static_cast<u32>(appendByteCount);
+    outAppendRange.alignedByteEnd = alignedByteEnd;
+    return true;
+}
+
+template<typename DestinationByteVector, typename SourceByteVector>
+[[nodiscard]] inline bool AppendMaterialTypedByteRange(
+    DestinationByteVector& materialTypedBytes,
+    const SourceByteVector& typedBytes,
+    MaterialTypedByteRange& outRange
+){
+    MaterialTypedByteAppendRange appendRange;
+    if(!TryBuildMaterialTypedByteAppendRange(
+        materialTypedBytes.size(),
+        typedBytes.size(),
+        appendRange
+    ))
+        return false;
+
+    outRange = appendRange.byteRange;
+    if(typedBytes.empty())
+        return true;
+
+    const usize requiredTypedByteCapacity = appendRange.alignedByteEnd;
+    if(requiredTypedByteCapacity > materialTypedBytes.capacity())
+        materialTypedBytes.reserve(NextGrowingCapacity(
+            materialTypedBytes.capacity(),
+            requiredTypedByteCapacity
+        ));
+    materialTypedBytes.resize(outRange.byteOffset, 0u);
+    AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
+    materialTypedBytes.resize(appendRange.alignedByteEnd, 0u);
+
+    return true;
+}
+
+template<typename DestinationByteVector, typename SourceByteVector, typename MaterialTypedByteRangeMap>
+[[nodiscard]] inline bool FindOrAppendMaterialTypedByteRange(
+    DestinationByteVector& materialTypedBytes,
+    MaterialTypedByteRangeMap& rangeMap,
+    const SourceByteVector& typedBytes,
+    MaterialTypedByteRange& outRange
+){
+    outRange = {};
+    if(typedBytes.empty())
+        return true;
+
+    MaterialTypedByteContentKey rangeKey(materialTypedBytes.get_allocator().arena(), typedBytes);
+    const auto foundRange = rangeMap.find(rangeKey);
+    if(foundRange != rangeMap.end()){
+        outRange = foundRange.value();
+        return true;
+    }
+
+    if(!AppendMaterialTypedByteRange(materialTypedBytes, typedBytes, outRange))
+        return false;
+
+    rangeMap.emplace(Move(rangeKey), outRange);
+    return true;
+}
+
 [[nodiscard]] inline bool MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range){
     return range.byteCount != 0u || range.byteOffset == 0u;
 }

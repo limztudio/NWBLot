@@ -56,52 +56,6 @@ struct MaterialTypedByteRangeKeyHasher{
     }
 };
 
-struct MaterialTypedByteAppendRange{
-    ECSRenderDetail::MaterialTypedByteRange byteRange;
-    usize alignedByteEnd = 0u;
-};
-
-[[nodiscard]] static bool tryBuildMaterialTypedByteAppendRange(
-    const usize currentByteCount,
-    const usize appendByteCount,
-    MaterialTypedByteAppendRange& outAppendRange
-){
-    outAppendRange = {};
-    if(appendByteCount == 0u)
-        return true;
-
-    if(appendByteCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
-        return false;
-    }
-
-    usize alignedByteBegin = 0u;
-    if(!AlignUpChecked(currentByteCount, sizeof(u32), alignedByteBegin)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
-        return false;
-    }
-    if(appendByteCount > Limit<usize>::s_Max - alignedByteBegin){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
-        return false;
-    }
-
-    const usize byteEnd = alignedByteBegin + appendByteCount;
-    usize alignedByteEnd = 0u;
-    if(!AlignUpChecked(byteEnd, sizeof(u32), alignedByteEnd)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
-        return false;
-    }
-    if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
-        return false;
-    }
-
-    outAppendRange.byteRange.byteOffset = static_cast<u32>(alignedByteBegin);
-    outAppendRange.byteRange.byteCount = static_cast<u32>(appendByteCount);
-    outAppendRange.alignedByteEnd = alignedByteEnd;
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -163,6 +117,7 @@ void RendererSystem::renderMaterialPass(
         return;
     if(!uploadMaterialTypedBuffer(commandList, materialTypedBytes))
         return;
+    recordMaterialTypedUploadStats(instanceData, materialTypedBytes);
 
     if(passBindingSet){
         commandList.setResourceStatesForBindingSet(passBindingSet);
@@ -213,35 +168,22 @@ void RendererSystem::gatherMaterialPassDrawItems(
     );
     constantMaterialTypedRanges.reserve(rendererCapacity);
 
+    using MaterialTypedByteContentRangeMap = HashMap<
+        ECSRenderDetail::MaterialTypedByteContentKey,
+        ECSRenderDetail::MaterialTypedByteRange,
+        ECSRenderDetail::MaterialTypedByteContentKeyHasher,
+        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>,
+        Core::Alloc::ScratchArena
+    >;
+    MaterialTypedByteContentRangeMap mutableMaterialTypedRanges(
+        0,
+        ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
+        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
+        materialTypedBytes.get_allocator().arena()
+    );
+    mutableMaterialTypedRanges.reserve(rendererCapacity);
+
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
-
-    auto appendMaterialTypedByteRange = [&](
-        const auto& typedBytes,
-        ECSRenderDetail::MaterialTypedByteRange& outRange
-    ) -> bool{
-        __hidden_draw::MaterialTypedByteAppendRange appendRange;
-        if(!__hidden_draw::tryBuildMaterialTypedByteAppendRange(
-            materialTypedBytes.size(),
-            typedBytes.size(),
-            appendRange
-        ))
-            return false;
-        outRange = appendRange.byteRange;
-        if(typedBytes.empty())
-            return true;
-
-        const usize requiredTypedByteCapacity = appendRange.alignedByteEnd;
-        if(requiredTypedByteCapacity > materialTypedBytes.capacity())
-            materialTypedBytes.reserve(ECSRenderDetail::NextGrowingCapacity(
-                materialTypedBytes.capacity(),
-                requiredTypedByteCapacity
-            ));
-        materialTypedBytes.resize(outRange.byteOffset, 0u);
-        AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
-        materialTypedBytes.resize(appendRange.alignedByteEnd, 0u);
-
-        return true;
-    };
 
     auto appendConstantMaterialTypedBytes = [&](
         const MaterialSurfaceInfo& materialInfo,
@@ -257,7 +199,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             return true;
         }
 
-        if(!appendMaterialTypedByteRange(materialInfo.constantTypedBytes, outRange))
+        if(!ECSRenderDetail::AppendMaterialTypedByteRange(materialTypedBytes, materialInfo.constantTypedBytes, outRange))
             return false;
 
         constantMaterialTypedRanges.emplace(rangeKey, outRange);
@@ -270,15 +212,16 @@ void RendererSystem::gatherMaterialPassDrawItems(
         ECSRenderDetail::MaterialTypedByteRange& outRange
     ) -> bool{
         const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
-        if(!materialInstance || materialInstance->overrides.empty())
-            return appendMaterialTypedByteRange(materialInfo.mutableDefaultTypedBytes, outRange);
-
-        MaterialTypedByteDataVector mutableTypedBytes{materialTypedBytes.get_allocator().arena()};
-        mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
-        if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes))
+        const MaterialTypedByteVector* mutableTypedBytes = nullptr;
+        if(!resolveMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
             return false;
 
-        return appendMaterialTypedByteRange(mutableTypedBytes, outRange);
+        return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+            materialTypedBytes,
+            mutableMaterialTypedRanges,
+            *mutableTypedBytes,
+            outRange
+        );
     };
 
     auto appendDrawForMesh = [&](

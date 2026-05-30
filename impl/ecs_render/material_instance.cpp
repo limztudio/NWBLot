@@ -199,6 +199,69 @@ bool RendererSystem::applyMaterialInstanceOverrides(
     return true;
 }
 
+bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
+    const Core::ECS::EntityID entity,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialInstanceComponent* materialInstance,
+    const MaterialTypedByteVector*& outMutableTypedBytes
+){
+    outMutableTypedBytes = nullptr;
+    if(!materialInstance || materialInstance->overrides.empty()){
+        outMutableTypedBytes = &materialInfo.mutableDefaultTypedBytes;
+        return true;
+    }
+
+    auto [it, inserted] = m_materialInstanceMutableCache.try_emplace(entity, m_arena);
+    MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
+    if(
+        cacheEntry.valid
+        && cacheEntry.materialName == materialInfo.materialName
+        && cacheEntry.materialInterface == materialInfo.materialInterface
+        && materialInstance->materialInterface == materialInfo.materialInterface
+        && cacheEntry.typedLayoutHash == materialInfo.typedLayoutHash
+        && cacheEntry.revision == materialInstance->revision
+    ){
+        outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
+        return true;
+    }
+
+    cacheEntry.valid = false;
+
+    Core::Alloc::ScratchArena scratchArena;
+    MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
+    mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
+    if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
+        if(inserted)
+            m_materialInstanceMutableCache.erase(it);
+        return false;
+    }
+
+    cacheEntry.materialName = materialInfo.materialName;
+    cacheEntry.materialInterface = materialInfo.materialInterface;
+    cacheEntry.typedLayoutHash = materialInfo.typedLayoutHash;
+    cacheEntry.revision = materialInstance->revision;
+    AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, mutableTypedBytes);
+    cacheEntry.valid = true;
+
+    outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
+    return true;
+}
+
+void RendererSystem::pruneMaterialInstanceMutableCache(){
+    if(m_materialInstanceMutableCache.empty())
+        return;
+
+    for(auto it = m_materialInstanceMutableCache.begin(); it != m_materialInstanceMutableCache.end();){
+        const Core::ECS::EntityID entity = it->first;
+        if(m_world.tryGetComponent<MaterialInstanceComponent>(entity)){
+            ++it;
+            continue;
+        }
+
+        it = m_materialInstanceMutableCache.erase(it);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

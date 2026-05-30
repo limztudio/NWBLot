@@ -165,6 +165,19 @@ private:
         bool meshletConeCullScaleSafe = false;
     };
 
+    struct MaterialInstanceMutableCacheEntry{
+        Name materialName = NAME_NONE;
+        Name materialInterface = NAME_NONE;
+        u64 typedLayoutHash = 0u;
+        u64 revision = 0u;
+        MaterialTypedByteVector mutableTypedBytes;
+        bool valid = false;
+
+        explicit MaterialInstanceMutableCacheEntry(Core::Alloc::GlobalArena& arena)
+            : mutableTypedBytes(arena)
+        {}
+    };
+
 
 private:
     using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
@@ -307,6 +320,9 @@ public:
     virtual void invalidateResources()override;
     virtual void render(Core::Framebuffer* framebuffer)override;
 
+    [[nodiscard]] usize lastMaterialTypedUploadBytes()const noexcept{ return m_lastMaterialTypedUploadBytes; }
+    [[nodiscard]] usize lastMaterialTypedInstanceCount()const noexcept{ return m_lastMaterialTypedInstanceCount; }
+
 private:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
@@ -434,6 +450,18 @@ private:
         const MaterialInstanceComponent& materialInstance,
         MaterialTypedByteDataVector& inOutMutableTypedBytes
     );
+    [[nodiscard]] bool resolveMaterialInstanceMutableTypedBytes(
+        Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        const MaterialInstanceComponent* materialInstance,
+        const MaterialTypedByteVector*& outMutableTypedBytes
+    );
+    void pruneMaterialInstanceMutableCache();
+    void resetMaterialTypedUploadStats()noexcept;
+    void recordMaterialTypedUploadStats(
+        const InstanceGpuDataVector& instanceData,
+        const MaterialTypedByteDataVector& materialTypedBytes
+    )noexcept;
     void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);
     void setMaterialPassDrawPushConstants(
         const MaterialPassDrawContext& context,
@@ -525,6 +553,7 @@ private:
 private:
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_materialSurfaceInfos;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_materialPipelines;
+    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_materialInstanceMutableCache;
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;
 
 private:
@@ -539,6 +568,8 @@ private:
     Core::InputLayoutHandle m_emulationInputLayout;
     usize m_instanceBufferCapacity = 0;
     usize m_materialTypedBufferCapacity = 0;
+    usize m_lastMaterialTypedUploadBytes = 0;
+    usize m_lastMaterialTypedInstanceCount = 0;
 
 private:
     Core::BindingLayoutHandle m_deferredLightingBindingLayout;

@@ -15,8 +15,9 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     NwbMeshSourceVertex source,
     const NwbMeshInstanceData instance
 ){
-    const NwbBxdfSurfaceMaterial material = nwbMaterialBindLoadSurface(instance);
-    const float4 tintedColor = material.base_color * material.color_tint;
+    const NwbBxdfSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbBxdfRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const float4 tintedColor = surface.base_color * runtime.color_tint;
     return nwbMeshBuildGeneratedVertex(
         source.clipPosition,
         nwbMeshTransformDirection(source.normal, instance),

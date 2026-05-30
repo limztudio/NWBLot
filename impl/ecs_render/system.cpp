@@ -54,6 +54,7 @@ RendererSystem::RendererSystem(
     , m_meshMeshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
     , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
     , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
+    , m_materialInstanceMutableCache(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
 {
     readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
@@ -68,6 +69,20 @@ RendererSystem::~RendererSystem(){}
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
+    pruneMaterialInstanceMutableCache();
+}
+
+void RendererSystem::resetMaterialTypedUploadStats()noexcept{
+    m_lastMaterialTypedUploadBytes = 0u;
+    m_lastMaterialTypedInstanceCount = 0u;
+}
+
+void RendererSystem::recordMaterialTypedUploadStats(
+    const InstanceGpuDataVector& instanceData,
+    const MaterialTypedByteDataVector& materialTypedBytes
+)noexcept{
+    m_lastMaterialTypedUploadBytes += materialTypedBytes.size();
+    m_lastMaterialTypedInstanceCount += instanceData.size();
 }
 
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
@@ -84,6 +99,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 void RendererSystem::invalidateResources(){
     m_meshMeshes.clear();
     m_materialPipelines.clear();
+    m_materialInstanceMutableCache.clear();
     m_loggedMaterialPaths.clear();
 
     m_meshBindingLayout.reset();
@@ -122,12 +138,14 @@ void RendererSystem::invalidateResources(){
 
     m_instanceBufferCapacity = 0u;
     m_materialTypedBufferCapacity = 0u;
+    resetMaterialTypedUploadStats();
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
+    resetMaterialTypedUploadStats();
     pruneRuntimeMeshResources();
 
     if(!m_deferredTargets.valid())
@@ -183,6 +201,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && uploadInstanceBuffer(*commandList, instanceData)
         && uploadMaterialTypedBuffer(*commandList, materialTypedBytes)
     ;
+    if(deferredUploadReady)
+        recordMaterialTypedUploadStats(instanceData, materialTypedBytes);
     if(deferredUploadReady){
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,

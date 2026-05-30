@@ -66,15 +66,22 @@ namespace RenderPath{
     };
 };
 
+namespace ECSRenderDetail{
+    struct MaterialTypedInstanceRangeCollector;
+};
+
 struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
 
-    // x/y: material-constant byte range; z/w: material-mutable byte range.
-    UInt4 materialTypedBytes = {};
+    // x: material-constant byte offset; y: material-mutable byte offset.
+    // Instance stride remains 64 bytes because the three Float4 rows keep the struct 16-byte aligned.
+    UInt2U materialTypedByteOffsets = {};
 };
-static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData layout must match the mesh shaders");
+static_assert(sizeof(decltype(InstanceGpuData::materialTypedByteOffsets)) == sizeof(u32) * 2u, "InstanceGpuData uploads only two material typed offsets");
+static_assert(offsetof(InstanceGpuData, materialTypedByteOffsets) == sizeof(f32) * 12u, "InstanceGpuData material typed offsets must follow the transform rows");
+static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData stride must match the mesh shaders; trailing bytes are padding, not material counts");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
 
@@ -318,9 +325,6 @@ public:
     virtual void invalidateResources()override;
     virtual void render(Core::Framebuffer* framebuffer)override;
 
-    [[nodiscard]] usize lastMaterialTypedUploadBytes()const noexcept{ return m_lastMaterialTypedUploadBytes; }
-    [[nodiscard]] usize lastMaterialTypedInstanceCount()const noexcept{ return m_lastMaterialTypedInstanceCount; }
-
 private:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
@@ -429,6 +433,7 @@ private:
         MaterialPassDrawItemVector& meshDrawItems,
         MaterialPassDrawItemVector& computeDrawItems,
         InstanceGpuDataVector& instanceData,
+        ECSRenderDetail::MaterialTypedInstanceRangeCollector& materialTypedRanges,
         MaterialTypedByteDataVector& materialTypedBytes
     );
     struct MaterialInstanceOverrideField{
@@ -455,11 +460,6 @@ private:
         const MaterialTypedByteVector*& outMutableTypedBytes
     );
     void pruneMaterialInstanceMutableCache();
-    void resetMaterialTypedUploadStats()noexcept;
-    void recordMaterialTypedUploadStats(
-        const InstanceGpuDataVector& instanceData,
-        const MaterialTypedByteDataVector& materialTypedBytes
-    )noexcept;
     void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);
     void setMaterialPassDrawPushConstants(
         const MaterialPassDrawContext& context,
@@ -475,6 +475,12 @@ private:
     [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialTypedBuffer(
         Core::CommandList& commandList,
+        const MaterialTypedByteDataVector& materialTypedBytes
+    );
+    [[nodiscard]] bool uploadMaterialPassDrawBuffers(
+        Core::CommandList& commandList,
+        const InstanceGpuDataVector& instanceData,
+        const ECSRenderDetail::MaterialTypedInstanceRangeCollector& materialTypedRanges,
         const MaterialTypedByteDataVector& materialTypedBytes
     );
     [[nodiscard]] bool findMaterialPassDrawItemResources(
@@ -566,8 +572,6 @@ private:
     Core::InputLayoutHandle m_emulationInputLayout;
     usize m_instanceBufferCapacity = 0;
     usize m_materialTypedBufferCapacity = 0;
-    usize m_lastMaterialTypedUploadBytes = 0;
-    usize m_lastMaterialTypedInstanceCount = 0;
 
 private:
     Core::BindingLayoutHandle m_deferredLightingBindingLayout;

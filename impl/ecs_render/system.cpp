@@ -72,19 +72,6 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
     pruneMaterialInstanceMutableCache();
 }
 
-void RendererSystem::resetMaterialTypedUploadStats()noexcept{
-    m_lastMaterialTypedUploadBytes = 0u;
-    m_lastMaterialTypedInstanceCount = 0u;
-}
-
-void RendererSystem::recordMaterialTypedUploadStats(
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes
-)noexcept{
-    m_lastMaterialTypedUploadBytes += materialTypedBytes.size();
-    m_lastMaterialTypedInstanceCount += instanceData.size();
-}
-
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     if(width == 0 || height == 0)
@@ -138,14 +125,12 @@ void RendererSystem::invalidateResources(){
 
     m_instanceBufferCapacity = 0u;
     m_materialTypedBufferCapacity = 0u;
-    resetMaterialTypedUploadStats();
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
-    resetMaterialTypedUploadStats();
     pruneRuntimeMeshResources();
 
     if(!m_deferredTargets.valid())
@@ -166,6 +151,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     MaterialPassDrawItemVector opaqueMeshDrawItems{scratchArena};
     MaterialPassDrawItemVector opaqueComputeDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
+    ECSRenderDetail::MaterialTypedInstanceRangeCollector materialTypedRanges{scratchArena};
     MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
     Core::ViewportState deferredViewportState;
@@ -182,27 +168,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             opaqueMeshDrawItems,
             opaqueComputeDrawItems,
             instanceData,
+            materialTypedRanges,
             materialTypedBytes
         );
     }
 
     const bool hasDeferredDrawItems = !opaqueMeshDrawItems.empty() || !opaqueComputeDrawItems.empty();
-#if defined(NWB_DEBUG)
-    const bool materialTypedUploadRangesReady =
-        !hasDeferredDrawItems
-        || ECSRenderDetail::ValidateMaterialTypedUploadRanges(instanceData, materialTypedBytes)
-    ;
-#else
-    constexpr bool materialTypedUploadRangesReady = true;
-#endif
     const bool deferredUploadReady =
         hasDeferredDrawItems
-        && materialTypedUploadRangesReady
-        && uploadInstanceBuffer(*commandList, instanceData)
-        && uploadMaterialTypedBuffer(*commandList, materialTypedBytes)
+        && uploadMaterialPassDrawBuffers(
+            *commandList,
+            instanceData,
+            materialTypedRanges,
+            materialTypedBytes
+        )
     ;
-    if(deferredUploadReady)
-        recordMaterialTypedUploadStats(instanceData, materialTypedBytes);
     if(deferredUploadReady){
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,

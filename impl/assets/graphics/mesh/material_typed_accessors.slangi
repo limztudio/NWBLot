@@ -30,15 +30,15 @@ typedef vector<ushort, 4> ushort4;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_MATERIAL_TYPED_RANGE_ACCESSOR(STORAGE_NAME, OFFSET_LANE) \
+#define NWB_MATERIAL_TYPED_OFFSET_ACCESSOR(STORAGE_NAME, OFFSET_LANE) \
 uint nwbMaterial##STORAGE_NAME##TypedByteOffset(const NwbMeshInstanceData instance){ \
-    return instance.materialTypedBytes.OFFSET_LANE; \
+    return instance.materialTypedByteOffsets.OFFSET_LANE; \
 }
 
-NWB_MATERIAL_TYPED_RANGE_ACCESSOR(Constant, x)
-NWB_MATERIAL_TYPED_RANGE_ACCESSOR(Mutable, z)
+NWB_MATERIAL_TYPED_OFFSET_ACCESSOR(Constant, x)
+NWB_MATERIAL_TYPED_OFFSET_ACCESSOR(Mutable, y)
 
-#undef NWB_MATERIAL_TYPED_RANGE_ACCESSOR
+#undef NWB_MATERIAL_TYPED_OFFSET_ACCESSOR
 
 uint nwbMaterialLoadRawUIntAtBase(const uint storageByteOffset, const uint byteOffset){
     const uint absoluteByteOffset = storageByteOffset + byteOffset;

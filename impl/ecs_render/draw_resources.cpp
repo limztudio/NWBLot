@@ -4,6 +4,8 @@
 
 #include "private.h"
 
+#include "capacity_private.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -264,6 +266,18 @@ bool RendererSystem::uploadMaterialTypedBuffer(
     commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     return true;
+}
+
+bool RendererSystem::uploadMaterialPassDrawBuffers(
+    Core::CommandList& commandList,
+    const InstanceGpuDataVector& instanceData,
+    const ECSRenderDetail::MaterialTypedInstanceRangeCollector& materialTypedRanges,
+    const MaterialTypedByteDataVector& materialTypedBytes
+){
+    return materialTypedRanges.uploadRangesReady(instanceData.size(), materialTypedBytes)
+        && uploadInstanceBuffer(commandList, instanceData)
+        && uploadMaterialTypedBuffer(commandList, materialTypedBytes)
+    ;
 }
 
 bool RendererSystem::findMaterialPassDrawItemResources(

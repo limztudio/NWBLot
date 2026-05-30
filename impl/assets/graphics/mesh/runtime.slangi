@@ -63,10 +63,9 @@ struct NwbMeshInstanceData{
     float4 scale;
 
     // x: material-constant byte offset into g_NwbMaterialTypedWords
-    // y: material-constant byte count
-    // z: material-mutable byte offset into g_NwbMaterialTypedWords
-    // w: material-mutable byte count
-    uint4 materialTypedBytes;
+    // y: material-mutable byte offset into g_NwbMaterialTypedWords
+    // The StructuredBuffer stride is still 64 bytes; the final 8 bytes are padding.
+    uint2 materialTypedByteOffsets;
 };
 
 [[vk::binding(0, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbMeshPositions;

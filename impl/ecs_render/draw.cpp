@@ -86,6 +86,7 @@ void RendererSystem::renderMaterialPass(
     MaterialPassDrawItemVector meshDrawItems{scratchArena};
     MaterialPassDrawItemVector computeDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
+    ECSRenderDetail::MaterialTypedInstanceRangeCollector materialTypedRanges{scratchArena};
     MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
     Core::ViewportState viewportState;
@@ -98,26 +99,19 @@ void RendererSystem::renderMaterialPass(
         meshDrawItems,
         computeDrawItems,
         instanceData,
+        materialTypedRanges,
         materialTypedBytes
     );
     if(meshDrawItems.empty() && computeDrawItems.empty())
         return;
-#if defined(NWB_DEBUG)
-    if(!ECSRenderDetail::ValidateMaterialTypedUploadRanges(instanceData, materialTypedBytes))
-        return;
-#endif
 
     f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(framebuffer->getFramebufferInfo());
     if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)
         meshViewAspectRatio = ECSRenderDetail::ResolveExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight);
     if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
-
-    if(!uploadInstanceBuffer(commandList, instanceData))
+    if(!uploadMaterialPassDrawBuffers(commandList, instanceData, materialTypedRanges, materialTypedBytes))
         return;
-    if(!uploadMaterialTypedBuffer(commandList, materialTypedBytes))
-        return;
-    recordMaterialTypedUploadStats(instanceData, materialTypedBytes);
 
     if(passBindingSet){
         commandList.setResourceStatesForBindingSet(passBindingSet);
@@ -136,6 +130,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     MaterialPassDrawItemVector& meshDrawItems,
     MaterialPassDrawItemVector& computeDrawItems,
     InstanceGpuDataVector& instanceData,
+    ECSRenderDetail::MaterialTypedInstanceRangeCollector& materialTypedRanges,
     MaterialTypedByteDataVector& materialTypedBytes
 ){
     if(!framebuffer)
@@ -147,6 +142,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     meshDrawItems.reserve(rendererCapacity);
     computeDrawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
+    materialTypedRanges.reserve(rendererCapacity);
     const usize materialTypedByteReserve = rendererCapacity <= Limit<usize>::s_Max / sizeof(u32)
         ? rendererCapacity * sizeof(u32)
         : rendererCapacity
@@ -273,6 +269,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges));
+            materialTypedRanges.push_back(typedRanges);
             return instanceIndex;
         };
 

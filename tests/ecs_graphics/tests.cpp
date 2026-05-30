@@ -322,13 +322,16 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == 34u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 136u);
 
-    ::Vector<NWB::Impl::InstanceGpuData, NWB::Core::Alloc::ScratchArena> instanceData{scratchArena};
-    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRanges instanceRanges;
-    instanceRanges.constantRange = firstRange;
-    instanceRanges.mutableRange = secondRange;
-    instanceData.push_back(NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRanges));
+    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
+    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRanges instanceRange;
+    instanceRange.constantRange = firstRange;
+    instanceRange.mutableRange = secondRange;
+    instanceRanges.push_back(instanceRange);
+    const NWB::Impl::InstanceGpuData gpuData = NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRange);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, gpuData.materialTypedByteOffsets.x == firstRange.byteOffset);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, gpuData.materialTypedByteOffsets.y == secondRange.byteOffset);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::ValidateMaterialTypedUploadRanges(
-        instanceData,
+        instanceRanges,
         uploadBytes
     ));
 }

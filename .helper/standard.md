@@ -13,16 +13,16 @@ Updated: 2026-05-31
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
 - Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.
 - Use UTF-8 encoding for source files.
-- Use Windows-style newlines (`CRLF`) for all source files.
-- Do not commit LF-only or mixed line endings in source files.
+- Use Windows-style newlines (`CRLF`) for all C++ source files and authored asset text files (`.nwb`, `.slang`, `.slangi`, `.bind`).
+- Do not commit LF-only or mixed line endings in those files.
 
 ## 2. Namespace style
 - Use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks in module public files.
 - End wrapped namespaces with corresponding `*_END` macros.
-- Exception: the global math facade headers (`global/simplemath.h`, `global/math.h`, `global/matrix_math.h`, `global/sh_math.h`) intentionally live at global scope.
+- Exception: the global math headers (`global/simplemath.h`, `global/simdmath.h`, and headers under `global/math/`) intentionally live at global scope.
   - Do not wrap those headers with `NWB_BEGIN`/`NWB_END`.
   - Keep their public math entry points in global scope.
-  - Use narrow raw namespaces there only when they are part of the math API shape (for example `SH`).
+  - Use narrow raw namespaces there only when they are part of the math API shape or implementation-detail grouping.
 - Put private/internal helpers in `namespace __hidden_<module>{ ... }`.
   - The `<module>` suffix should match the file or logical module name (e.g., `__hidden_shader_cook`, `__hidden_vulkan_shader`, `__hidden_asset_cooker`).
   - `__hidden_*` namespaces are for translation-unit-local implementation details that should not be called by outside code.
@@ -440,10 +440,11 @@ Updated: 2026-05-31
 - Upgrade to `QueuingMutex`/`SharedQueuingMutex` only after observing contention/fairness issues.
 - Use spin-based locks (`SpinMutex`, `SharedMutex`) only for measured hot-path wins with very short lock hold times.
 
-## 15. Shader Source Style
-- Applies to `.slang` and `.slangi` files under `impl/assets/graphics/` and `Testbed/assets/shaders/`.
+## 15. Shader And Asset Text Style
+- Applies to `.slang`, `.slangi`, and `.bind` files under engine and project asset shader trees, including `impl/assets/graphics/`, `Testbed/assets/shaders/`, and `tests/smoke/assets/shaders/`.
 - Project shader authoring is Slang-only; do not add alternate shader-language source standards, compatibility include trees, compiler paths, or per-asset compiler selectors.
-- Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files.
+- Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files for `.slang`, `.slangi`, and `.bind`.
+- Keep `.nwb` metadata files as declarative metascript text without the source-file banner, but still use UTF-8 and CRLF line endings.
 - After the shader banner separator, keep exactly two blank lines before the first shader directive, define, include, or include guard (`#define`, `#include`, `#ifndef`, etc.). Do not collapse this gap.
 - Stage entry files (`.slang`) put feature defines first when needed, then includes, declarations/resources, helpers, and the entry point, separated by file-scope long separators.
 - Include files (`.slangi`) use uppercase include guards in the form `NWB_<MODULE>_SLANGI`; place the closing `#endif` before the final separator.
@@ -463,11 +464,11 @@ Updated: 2026-05-31
 - For multiline shader `return` expressions, keep `return <expression>` on the first line when readable and put the final `;` on its own line after the split expression.
 - Avoid macro-generated function signatures. Use explicit declarations for shader authoring hooks unless a Slang/preprocessor constraint requires a macro.
 - Use comments sparingly; keep them for non-obvious resource packing, layout, or API constraints.
-- Keep `.nwb` shader metadata small and declarative: `shader asset;`, `asset.stage`, `asset.target_profile`, `asset.entry_point`, and include roots.
+- Keep `.nwb` shader metadata small and declarative: `shader asset;`, `asset.stage`, `asset.target_profile`, `asset.entry_point`, `asset.include_roots`, and `asset.defines`.
 
 ## 16. ECS Component Headers
 - Engine ECS module component definitions belong in that module's `components.h`.
 - Do not add or keep production per-component headers such as `camera_component.h`, `light_component.h`, `scene_component.h`, or `transform_component.h`.
-- Core modules must not own implementation ECS components or world-query helpers. Put scene transform/view-basis components in `impl/ecs_scene`, camera components and active-camera resolution in `impl/ecs_camera`, and light components/resolution in `impl/ecs_lighting`.
+- Core modules must not own implementation ECS components or world-query helpers. Current production scene transform, view-basis, camera, active-camera, and light components/helpers live in `impl/ecs_scene` under `NWB::Impl::Scene` and target `nwb_ecs_scene`.
 - Avoid compatibility aliases that expose implementation ECS component types from `core/*`; they preserve the wrong dependency direction.
 - Test-only fixture components may stay local to the test source file that defines them.

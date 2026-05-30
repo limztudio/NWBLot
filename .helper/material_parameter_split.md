@@ -1,6 +1,6 @@
 # NWBLot Material Parameter Split Specification
 
-Updated: 2026-05-22
+Updated: 2026-05-31
 
 ## Purpose
 
@@ -8,15 +8,15 @@ Material parameter layout must not be decided by an authored shader alone. The l
 
 The design goal is to keep the typed, generated Slang accessor path while also splitting data by update frequency. Shaders should read fields such as `surface.base_color`, but the CPU should only upload the smallest block that actually changed.
 
-This document is a design specification. It does not describe the current runtime ABI.
+This document records the current material bind cook/runtime contract plus the remaining runtime split direction. When exact shader binding slots or binary layout matter, verify against `impl/assets/graphics/mesh/runtime.slangi`, `impl/assets_material/`, and `impl/ecs_render/`.
 
 ## Current Runtime Contract
 
-The current material cook path resolves `asset.interface`, validates `asset.parameters` against the parsed `.bind` schema, serializes typed layout metadata plus packed typed block bytes, and generates Slang accessors that compile only with `NWB_MATERIAL_TYPED_BINDING=1`.
+The current material cook path resolves `asset.interface` to a parsed `.bind` material interface by virtual path, requires a non-empty explicit `asset.shader_variant`, validates block-scoped `asset.parameters` against the parsed `.bind` schema, serializes deterministic typed layout metadata plus packed typed block bytes, and generates Slang accessors that compile only with `NWB_MATERIAL_TYPED_BINDING=1`.
 
-Mesh material shaders read the packed typed payload through the helper surface in `mesh_shader_authoring.slangi`, which owns `[[vk::binding(6, 0)]] g_NwbMaterialTypedWords`. The old shader-side hash lookup helpers and any material binding at slot `5` are removed and should not be reintroduced.
+Mesh material shaders include `mesh/authoring.slangi` and then the generated `.bind` include for the selected interface. The common mesh runtime declares `[[vk::binding(13, 0)]] g_NwbMaterialTypedWords`; bindings 5 and 6 are meshlet descriptor/bounds data, not material typed data. The old shader-side hash lookup helpers and any legacy material binding at slot 5 are removed and should not be reintroduced.
 
-The remaining improvement area is update granularity: all typed block bytes are currently uploaded through one packed material payload even when some fields change rarely and others change every frame.
+The renderer currently splits packed material bytes into material-constant bytes and material-mutable defaults, applies `MaterialInstanceComponent` overrides only to mutable blocks, deduplicates constant ranges by material/layout and mutable ranges by byte content, and uploads one word-aligned typed-material buffer per material pass. The remaining improvement area is finer GPU update granularity, not the authoring or cook-time typed layout contract.
 
 ## Ownership Model
 
@@ -28,9 +28,9 @@ The material interface owns:
 - Field names.
 - Field types.
 - Default values.
-- Update policy.
-- Shader visibility.
-- Packing and generated Slang type names.
+- Block class (`material_constant` or `material_mutable`).
+- Authored struct and instance names used by generated Slang helpers.
+- Packing rules derived and validated by cook.
 
 The material asset owns:
 
@@ -38,7 +38,7 @@ The material asset owns:
 - Stage shader references.
 - Shader variant defines.
 - Concrete values for interface fields.
-- Optional per-material update policy overrides only when the interface explicitly allows them.
+- Explicit render policy such as `transparent` and `two_sided`.
 
 The shader asset owns:
 
@@ -49,10 +49,10 @@ The shader asset owns:
 
 The runtime renderer owns:
 
-- Buffer allocation for each block class.
-- Dirty tracking.
-- Descriptor/binding set updates.
-- Per-instance indices into material block buffers.
+- CPU-side split storage for material-constant bytes and mutable-default bytes.
+- `MaterialInstanceComponent` mutable overrides and revision-based mutable-byte caching.
+- Descriptor/binding set updates for the shared typed material buffer.
+- Per-instance byte offsets into material-constant and material-mutable ranges.
 
 ## Block Classes
 
@@ -72,7 +72,7 @@ Do not store static variant fields in runtime material buffers.
 
 ### Material Constant
 
-Material constant blocks are uploaded when the material is loaded or recooked. They are treated as immutable during normal runtime.
+Material constant blocks are cooked with the material and treated as immutable during normal runtime.
 
 Use for:
 
@@ -84,9 +84,10 @@ Use for:
 
 Recommended storage:
 
-- Dense `StructuredBuffer<BlockData, Std430DataLayout>` arrays.
-- One row per material.
-- Per-material binding table stores the row index.
+- Store constant bytes with material surface info after load.
+- Deduplicate constant byte ranges by material name and typed layout hash during the per-pass typed-material upload.
+- Pass the selected constant byte offset through draw push constants.
+- A future finer-grained path may move this to persistent rows per material/interface.
 
 ### Material Mutable
 
@@ -101,9 +102,10 @@ Use for:
 
 Recommended storage:
 
-- One shader-visible `StructuredBuffer` backed by a CPU upload stream per mutable block type.
-- Dirty tracking per block row, not per whole material.
-- CPU update APIs write a complete block row.
+- Mutable default bytes are stored with the material surface info.
+- Per-instance mutable overrides are represented by `MaterialInstanceComponent`, must target `material_mutable` blocks, and are cached by entity, material, interface, layout hash, and revision.
+- The current renderer deduplicates mutable byte ranges by content before the per-pass typed-material upload.
+- A future finer-grained path may move this to dirty tracking per mutable block row instead of rebuilding the pass upload.
 
 ### Frame Or Pass
 
@@ -118,7 +120,7 @@ Use for:
 
 ## Metadata Shape
 
-The proposed shape adds a material interface asset. The exact asset type name can change during implementation, but the contract should stay separate from one material instance.
+The current implemented interface schema is the `.bind` source form described below. A `.nwb` `material_interface` asset is a possible future spelling for the same contract; do not treat the following conceptual block as accepted current metadata.
 
 ```text
 material_interface asset;
@@ -207,7 +209,7 @@ NwbProjectBxdfSurfaceMaterial surface;
 NwbProjectBxdfRuntimeMaterial runtime;
 ```
 
-The declarations above define the interface schema. They do not directly declare shader globals, descriptor bindings, or runtime storage. Cook parses the `.bind` file, validates the attributes and field types, assigns block classes, then generates the real Slang include containing packed structs, `StructuredBuffer` declarations, binding tables, and accessor helpers.
+The declarations above define the interface schema. They do not directly declare shader globals, descriptor bindings, or runtime storage. Cook parses the `.bind` file, validates the attributes and field types, assigns block classes, then generates Slang-compatible include content containing layout constants, typed structs, and accessor helpers that use the common mesh material accessor surface.
 
 Authored shaders may include the schema path as the stable authoring hook:
 
@@ -215,32 +217,32 @@ Authored shaders may include the schema path as the stable authoring hook:
 #include "project/shaders/bxdf_surface.bind"
 ```
 
-During shader cook, the include resolver maps that `.bind` include to the generated `.slangi` content for the parsed schema. Prefer a virtual include mapping or generated include path remap over editing the shader source on disk. The shader source remains stable, while the Slang compiler sees the generated material ABI.
+During shader cook, the include resolver maps that `.bind` include to generated Slang-compatible content for the parsed schema while preserving the authored include spelling. Prefer a virtual include mapping or generated include path remap over editing the shader source on disk. The shader source remains stable, while the Slang compiler sees the generated material ABI.
 
 The `.bind` file must be a dependency of the generated Slang include and every consuming shader. Changing a field, default, block class, attribute, or instance declaration must invalidate the generated include and the compiled shader bytecode.
 
 ## Authoring-Time Contract
 
-Generated Slang types are cook products, but their schema is not discovered after shader authoring. The material interface asset is the authoring-time schema.
+Generated Slang types are cook products, but their schema is not discovered after shader authoring. The `.bind` material interface source is the authoring-time schema.
 
 The authoring flow is:
 
-1. Create or update a material interface asset.
-2. Run the material-interface generation step, either explicitly from tools or implicitly as an early cook phase.
-3. Write shader code against the generated include for that interface.
-4. Compile the shader only after the generated include is available.
+1. Create or update a `.bind` material interface source.
+2. Run the material-bind generation step as an early cook phase.
+3. Include `mesh/authoring.slangi`, then include the stable `.bind` virtual path for that interface.
+4. Compile the shader only after the generated include content is available.
 
-Shader authors therefore know field names from the interface asset, not from a material instance and not from shader reflection. If the generated include is missing or stale, shader cook must regenerate it before Slang compilation. Editor tooling should also regenerate interface includes on interface save or before shader language-service indexing.
+Shader authors therefore know field names from the interface source, not from a material instance and not from shader reflection. If the generated include is missing or stale, shader cook must regenerate it before Slang compilation. Editor tooling should also regenerate interface includes on interface save or before shader language-service indexing.
 
-The generated include path must be deterministic from the material interface identity. For example, an interface asset at `project/shaders/bxdf_surface` can produce a generated include such as `nwb_generated/material_interfaces/project_bxdf_surface.slangi`. The exact path is implementation-defined, but it must be stable enough for shader source and editor tooling to reference.
+The generated include path must be deterministic from the material interface identity. Current cook output uses the configured cache root plus `material_bind_includes/<interface>.bind`, for example `cache/<config>/material_bind_includes/project/shaders/bxdf_surface.bind`. The exact physical path can vary by cache/configuration, but the virtual include identity must stay stable enough for shader dependency tracking.
 
-If NWBLot does not want authored shader source to include generated paths directly, the shader asset can declare the interface and cook can inject the generated include before compiling the entry point. In that mode the shader still depends on the interface schema; the include is just supplied by the cook pipeline instead of a handwritten `#include`.
+Authored shader source should include the stable `.bind` virtual path directly after `mesh/authoring.slangi`. The cook pipeline supplies the generated content behind that include path instead of mutating the shader source on disk.
 
-A `.bind` include is a third authoring-friendly spelling of the same interface-first model. The authored shader can reference `#include "xxx.bind"`, but shader cook must resolve that request to generated Slang before invoking Slang compilation. The `.bind` text is parsed by NWBLot tooling and should not be forwarded as arbitrary global Slang declarations.
+The authored shader can reference `#include "xxx.bind"`, but shader cook must resolve that request to generated Slang-compatible content before invoking Slang compilation. The `.bind` text is parsed by NWBLot tooling and should not be forwarded as arbitrary global Slang declarations.
 
 There are only three valid models:
 
-- Interface-first typed model: shaders see named fields after interface generation. This is the proposed model.
+- Interface-first typed model: shaders see named fields after interface generation. This is the implemented model.
 - Fixed engine ABI model: shaders see only built-in structs with engine-defined fields.
 - Dynamic lookup model: shaders keep using hashed or indexed lookup helpers and do not see typed fields.
 
@@ -253,40 +255,50 @@ Shader cook generates one Slang include per material interface before compiling 
 Generated include example:
 
 ```slang
-#ifndef NWB_PROJECT_BXDF_MATERIAL_GENERATED_SLANGI
-#define NWB_PROJECT_BXDF_MATERIAL_GENERATED_SLANGI
+#ifndef NWB_GENERATED_MATERIAL_BIND_PROJECT_SHADERS_BXDF_SURFACE_BIND
+#define NWB_GENERATED_MATERIAL_BIND_PROJECT_SHADERS_BXDF_SURFACE_BIND
+
+#ifndef NWB_MATERIAL_TYPED_BINDING
+#error "generated material bind includes require mesh/authoring.slangi"
+#endif
+
+#if NWB_MATERIAL_TYPED_BINDING != 1
+#error "generated material bind accessors require NWB_MATERIAL_TYPED_BINDING=1"
+#endif
 
 struct NwbProjectBxdfSurfaceMaterial{
     float4 base_color;
     float roughness;
     float metallic;
-    float2 padding0;
 };
 
 struct NwbProjectBxdfRuntimeMaterial{
     float4 color_tint;
     float fade_alpha;
-    float3 padding0;
 };
 
-static const uint NWB_PROJECT_BXDF_SURFACE_BASE_COLOR_BYTE_OFFSET = 0u;
-static const uint NWB_PROJECT_BXDF_SURFACE_ROUGHNESS_BYTE_OFFSET = 16u;
-static const uint NWB_PROJECT_BXDF_SURFACE_METALLIC_BYTE_OFFSET = 20u;
-static const uint NWB_PROJECT_BXDF_RUNTIME_COLOR_TINT_BYTE_OFFSET = 32u;
-static const uint NWB_PROJECT_BXDF_RUNTIME_FADE_ALPHA_BYTE_OFFSET = 48u;
+static const uint NWB_MATERIAL_BIND_STORAGE_CONSTANT = 1u;
+static const uint NWB_MATERIAL_BIND_STORAGE_MUTABLE = 2u;
+static const uint NWB_MATERIAL_BIND_SURFACE_STORAGE = 1u;
+static const uint NWB_MATERIAL_BIND_RUNTIME_STORAGE = 2u;
+static const uint NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET = 0u;
+static const uint NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET = 16u;
+static const uint NWB_MATERIAL_BIND_SURFACE_METALLIC_BYTE_OFFSET = 20u;
+static const uint NWB_MATERIAL_BIND_RUNTIME_COLOR_TINT_BYTE_OFFSET = 0u;
+static const uint NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_BYTE_OFFSET = 16u;
 
-NwbProjectBxdfSurfaceMaterial nwbProjectLoadBxdfSurfaceMaterial(const NwbMeshInstanceData instance){
+NwbProjectBxdfSurfaceMaterial nwbMaterialBindLoadSurface(const NwbMeshInstanceData instance){
     NwbProjectBxdfSurfaceMaterial result;
-    result.base_color = nwbMaterialLoadFloat4(instance, NWB_PROJECT_BXDF_SURFACE_BASE_COLOR_BYTE_OFFSET);
-    result.roughness = nwbMaterialLoadFloat(instance, NWB_PROJECT_BXDF_SURFACE_ROUGHNESS_BYTE_OFFSET);
-    result.metallic = nwbMaterialLoadFloat(instance, NWB_PROJECT_BXDF_SURFACE_METALLIC_BYTE_OFFSET);
+    result.base_color = nwbMaterialLoadConstantFloat4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET);
+    result.roughness = nwbMaterialLoadConstantFloat(instance, NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET);
+    result.metallic = nwbMaterialLoadConstantFloat(instance, NWB_MATERIAL_BIND_SURFACE_METALLIC_BYTE_OFFSET);
     return result;
 }
 
-NwbProjectBxdfRuntimeMaterial nwbProjectLoadBxdfRuntimeMaterial(const NwbMeshInstanceData instance){
+NwbProjectBxdfRuntimeMaterial nwbMaterialBindLoadRuntime(const NwbMeshInstanceData instance){
     NwbProjectBxdfRuntimeMaterial result;
-    result.color_tint = nwbMaterialLoadFloat4(instance, NWB_PROJECT_BXDF_RUNTIME_COLOR_TINT_BYTE_OFFSET);
-    result.fade_alpha = nwbMaterialLoadFloat(instance, NWB_PROJECT_BXDF_RUNTIME_FADE_ALPHA_BYTE_OFFSET);
+    result.color_tint = nwbMaterialLoadMutableFloat4(instance, NWB_MATERIAL_BIND_RUNTIME_COLOR_TINT_BYTE_OFFSET);
+    result.fade_alpha = nwbMaterialLoadMutableFloat(instance, NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_BYTE_OFFSET);
     return result;
 }
 
@@ -296,8 +308,8 @@ NwbProjectBxdfRuntimeMaterial nwbProjectLoadBxdfRuntimeMaterial(const NwbMeshIns
 Authored Slang then reads typed fields:
 
 ```slang
-const NwbProjectBxdfSurfaceMaterial surface = nwbProjectLoadBxdfSurfaceMaterial(instance);
-const NwbProjectBxdfRuntimeMaterial runtime = nwbProjectLoadBxdfRuntimeMaterial(instance);
+const NwbProjectBxdfSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+const NwbProjectBxdfRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
 const float4 materialColor = surface.base_color * runtime.color_tint;
 ```
 
@@ -320,30 +332,35 @@ Shader cook must:
 
 Material cook must:
 
-- Resolve `asset.interface` through typed asset references.
-- Resolve `.bind` schema references through the same material interface contract.
+- Resolve `asset.interface` to the parsed `.bind` material interface entry by stable virtual path.
+- Keep the material-interface identity as `Name` metadata because the `.bind` schema is a cook-time interface source, not a runtime asset payload.
 - Parse block-scoped `asset.parameters`.
 - Fill missing values from interface defaults.
 - Pack each block according to the generated layout.
 - Build per-material binding rows that point to block rows.
-- Keep alpha/transparent policy explicit instead of inferring render mode from unrelated dynamic blocks.
+- Keep `transparent` and `two_sided` policy explicit instead of inferring render mode from unrelated dynamic blocks.
 
-Runtime must:
+Runtime currently must:
 
-- Allocate one GPU buffer stream per generated block class and material interface.
-- Track dirty rows per mutable block.
-- Upload complete dirty block rows.
-- Preserve old rows until GPU work that references them has completed.
+- Split material typed bytes by block class into material-constant bytes and mutable-default bytes when material surface info is created.
+- Reject material instance overrides that target material-constant storage or a different material interface.
+- Gather one word-aligned typed-material upload per material pass, deduplicating constant ranges by material/layout and mutable ranges by byte content.
+- Pass the material-constant byte offset through draw push constants and the material-mutable byte offset through the packed instance slot exposed to Slang as `NwbMeshInstanceData.materialMutableByteOffset` (`InstanceGpuData::translation.w` on the CPU side).
 - Keep frame/view/pass values outside material parameter buffers.
 
 ## Migration Plan
 
-1. Add material interface or `.bind` schema parsing and validation in cook.
-2. Generate Slang includes and checksum dependencies before compiling consuming shaders.
-3. Resolve authored `.bind` includes through the shader cook include resolver.
-4. Add runtime binding tables for typed material block indices.
-5. Move project BxDF materials to block-scoped parameters.
-6. Remove shader-authored manual key constants after generated accessors are in use.
+Completed:
+
+- `.bind` schema parsing and validation in cook.
+- Deterministic generated Slang includes and dependency checksum invalidation.
+- Authored `.bind` includes resolved through the shader cook include resolver.
+- Block-scoped material parameters and generated typed accessors.
+- Runtime constant/mutable byte split, per-instance mutable overrides, and typed byte offsets consumed by mesh shaders.
+
+Remaining:
+
+- Finer-grained GPU update streams or dirty-row tracking when the renderer needs to avoid rebuilding the current per-pass typed-material upload.
 
 ## Non-goals
 

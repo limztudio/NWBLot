@@ -32,6 +32,10 @@ static void CheckGeneratedSourceContainsAll(
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, expectedSnippet));
 }
 
+static void CheckGeneratedSourceHasNoMutableLoads(TestContext& context, const AStringView generatedSourceView){
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ContainsText(generatedSourceView, "nwbMaterialLoadMutable"));
+}
+
 static AString BuildGeneratedUint2ConstantText(const AStringView symbol, const u64 value){
     AString text("static const uint2 ");
     text.append(symbol.data(), symbol.size());
@@ -79,99 +83,66 @@ static bool ContainsCanonicalPath(const NWB::Impl::ShaderCook::CookVector<Path>&
     return false;
 }
 
+static void CheckMaterialBindStructBlockClass(
+    TestContext& context,
+    const NWB::Impl::MaterialBindStruct& bindStruct,
+    const NWB::Impl::MaterialBlockClass::Enum expectedBlockClass
+){
+    const bool hasConstantAttribute = bindStruct.findAttribute("material_constant") != nullptr;
+    const bool hasMutableAttribute = bindStruct.findAttribute("material_mutable") != nullptr;
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        hasConstantAttribute == (expectedBlockClass == NWB::Impl::MaterialBlockClass::MaterialConstant)
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        hasMutableAttribute == (expectedBlockClass == NWB::Impl::MaterialBlockClass::MaterialMutable)
+    );
+}
+
 static void CheckGeneratedMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "#ifndef NWB_GENERATED_MATERIAL_BIND_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE_BIND"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint2 NWB_MATERIAL_BIND_INTERFACE_HASH_0 = uint2("
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint2 NWB_MATERIAL_BIND_LAYOUT_HASH = uint2("
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "#if NWB_MATERIAL_TYPED_BINDING != 1"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_BLOCK_COUNT = 2u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_FIELD_COUNT = 6u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 48u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_OFFSET = 0u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_SIZE = 4u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET = 4u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE = 44u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "struct NwbTestSurfaceMaterial"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint2 NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_KEY = uint2("
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const float4 NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_DEFAULT = float4(1.0, 1.0, 1.0, 1.0);"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET = 4u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const uint NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_BYTE_OFFSET = 0u;"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "nwbMaterialLoadFloat4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET)"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "nwbMaterialLoadInt2(instance, NWB_MATERIAL_BIND_SURFACE_LAYER_IDS_BYTE_OFFSET)"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "nwbMaterialLoadUInt3(instance, NWB_MATERIAL_BIND_SURFACE_FEATURE_MASK_BYTE_OFFSET)"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "nwbMaterialLoadBool4(instance, NWB_MATERIAL_BIND_SURFACE_CHANNEL_ENABLED_BYTE_OFFSET)"
-    ));
+    const AStringView expectedSnippets[] = {
+        "#ifndef NWB_GENERATED_MATERIAL_BIND_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE_BIND",
+        "static const uint2 NWB_MATERIAL_BIND_INTERFACE_HASH_0 = uint2(",
+        "static const uint2 NWB_MATERIAL_BIND_LAYOUT_HASH = uint2(",
+        "#if NWB_MATERIAL_TYPED_BINDING != 1",
+        "static const uint NWB_MATERIAL_BIND_BLOCK_COUNT = 2u;",
+        "static const uint NWB_MATERIAL_BIND_FIELD_COUNT = 6u;",
+        "static const uint NWB_MATERIAL_BIND_STORAGE_CONSTANT = 1u;",
+        "static const uint NWB_MATERIAL_BIND_STORAGE_MUTABLE = 2u;",
+        "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 44u;",
+        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 4u;",
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_STORAGE = 2u;",
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_BYTE_OFFSET = 0u;",
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_BYTE_SIZE = 4u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_STORAGE = 1u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET = 0u;",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE = 44u;",
+        "struct NwbTestSurfaceMaterial",
+        "static const uint2 NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_KEY = uint2(",
+        "static const float4 NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_DEFAULT = float4(1.0, 1.0, 1.0, 1.0);",
+        "static const uint NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET = 0u;",
+        "static const uint NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_BYTE_OFFSET = 0u;",
+        "nwbMaterialLoadConstantFloat4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantInt2(instance, NWB_MATERIAL_BIND_SURFACE_LAYER_IDS_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantUInt3(instance, NWB_MATERIAL_BIND_SURFACE_FEATURE_MASK_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantBool4(instance, NWB_MATERIAL_BIND_SURFACE_CHANNEL_ENABLED_BYTE_OFFSET)",
+        "nwbMaterialLoadMutableFloat(instance, NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_BYTE_OFFSET)",
+        "float4 nwbMaterialBindLoadSurfaceBaseColor",
+        "NwbTestSurfaceMaterial nwbMaterialBindLoadSurface",
+        "static const float NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_DEFAULT = float(1.0);",
+    };
+    CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !ContainsText(
         generatedSourceView,
         "nwbMaterialFind"
-    ));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "float4 nwbMaterialBindLoadSurfaceBaseColor"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(generatedSourceView, "NwbTestSurfaceMaterial nwbMaterialBindLoadSurface"));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsText(
-        generatedSourceView,
-        "static const float NWB_MATERIAL_BIND_RUNTIME_FADE_ALPHA_DEFAULT = float(1.0);"
     ));
 }
 
 static void CheckGeneratedHalfMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
     const AStringView expectedSnippets[] = {
-        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 20u;",
+        "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 20u;",
+        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;",
         "static const half NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_DEFAULT = half(0.5);",
         "static const half2 NWB_MATERIAL_BIND_SURFACE_RANGE_DEFAULT = half2(0.0, 1.0);",
         "static const half3 NWB_MATERIAL_BIND_SURFACE_TINT_DEFAULT = half3(0.25, 0.5, 0.75);",
@@ -180,18 +151,20 @@ static void CheckGeneratedHalfMaterialBindSource(TestContext& context, const ASt
         "static const uint NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET = 2u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET = 6u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET = 12u;",
-        "nwbMaterialLoadHalf(instance, NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET)",
-        "nwbMaterialLoadHalf2(instance, NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET)",
-        "nwbMaterialLoadHalf3(instance, NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET)",
-        "nwbMaterialLoadHalf4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantHalf(instance, NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantHalf2(instance, NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantHalf3(instance, NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantHalf4(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET)",
         "half4 nwbMaterialBindLoadSurfaceBaseColor",
     };
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
+    CheckGeneratedSourceHasNoMutableLoads(context, generatedSourceView);
 }
 
 static void CheckGeneratedMixedHalfMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
     const AStringView expectedSnippets[] = {
-        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 24u;",
+        "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 24u;",
+        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET = 0u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_METALLIC_BYTE_OFFSET = 4u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET = 8u;",
@@ -199,11 +172,13 @@ static void CheckGeneratedMixedHalfMaterialBindSource(TestContext& context, cons
         "static const uint NWB_MATERIAL_BIND_SURFACE_TAIL_BYTE_OFFSET = 20u;",
     };
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
+    CheckGeneratedSourceHasNoMutableLoads(context, generatedSourceView);
 }
 
 static void CheckGeneratedCompactIntegerMaterialBindSource(TestContext& context, const AStringView generatedSourceView){
     const AStringView expectedSnippets[] = {
-        "static const uint NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE = 20u;",
+        "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 20u;",
+        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;",
         "bool4 enabled;",
         "char4 signed_bytes;",
         "uchar4 bytes;",
@@ -219,13 +194,14 @@ static void CheckGeneratedCompactIntegerMaterialBindSource(TestContext& context,
         "static const uint NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET = 8u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET = 12u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET = 16u;",
-        "nwbMaterialLoadBool4(instance, NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET)",
-        "nwbMaterialLoadChar4(instance, NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET)",
-        "nwbMaterialLoadUChar4(instance, NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET)",
-        "nwbMaterialLoadShort2(instance, NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET)",
-        "nwbMaterialLoadUShort2(instance, NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantBool4(instance, NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantChar4(instance, NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantUChar4(instance, NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantShort2(instance, NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET)",
+        "nwbMaterialLoadConstantUShort2(instance, NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET)",
     };
     CheckGeneratedSourceContainsAll(context, generatedSourceView, expectedSnippets);
+    CheckGeneratedSourceHasNoMutableLoads(context, generatedSourceView);
 }
 
 static const NWB::Impl::MaterialTypedLayoutBlock* FindMaterialTypedLayoutBlock(
@@ -797,10 +773,23 @@ static void CheckGeneratedMaterialBindBinaryConstants(
         "NWB_MATERIAL_BIND_FIELD_COUNT",
         static_cast<u32>(material.typedLayoutFields().size())
     ));
+    u32 constantByteSize = 0u;
+    u32 mutableByteSize = 0u;
+    for(const NWB::Impl::MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
+        if(block.blockClass == NWB::Impl::MaterialBlockClass::MaterialConstant)
+            constantByteSize += block.byteSize;
+        else if(block.blockClass == NWB::Impl::MaterialBlockClass::MaterialMutable)
+            mutableByteSize += block.byteSize;
+    }
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUintConstant(
         generatedSourceView,
-        "NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE",
-        static_cast<u32>(material.typedBlockBytes().size())
+        "NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE",
+        constantByteSize
+    ));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsGeneratedUintConstant(
+        generatedSourceView,
+        "NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE",
+        mutableByteSize
     ));
 
     const NameHash& materialInterfaceHash = material.materialInterface().hash();
@@ -1230,6 +1219,11 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceStruct != nullptr);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeStruct != nullptr);
         if(surfaceStruct){
+            CheckMaterialBindStructBlockClass(
+                context,
+                *surfaceStruct,
+                NWB::Impl::MaterialBlockClass::MaterialConstant
+            );
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, surfaceStruct->fields.size() == 5u);
 
             const NWB::Impl::MaterialBindField* baseColorField = surfaceStruct->findField("base_color");
@@ -1246,6 +1240,14 @@ static void TestMaterialBindSchemaValidation(TestContext& context){
                     );
                 }
             }
+        }
+        if(runtimeStruct){
+            CheckMaterialBindStructBlockClass(
+                context,
+                *runtimeStruct,
+                NWB::Impl::MaterialBlockClass::MaterialMutable
+            );
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, runtimeStruct->fields.size() == 1u);
         }
 
         const NWB::Impl::MaterialBindInstance* surfaceInstance = entry.findInstance("surface");

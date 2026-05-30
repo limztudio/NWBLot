@@ -50,6 +50,9 @@ using ScratchVector = Vector<T, ScratchArena>;
 
 static constexpr AStringView s_AssetTypeMaterialBind = "material_bind";
 static constexpr AStringView s_AssetVariableMaterialBind = "asset";
+static constexpr AStringView s_MaterialConstantAttribute = "material_constant";
+static constexpr AStringView s_MaterialMutableAttribute = "material_mutable";
+static constexpr AStringView s_DefaultAttribute = "default";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -299,7 +302,7 @@ static bool ValidateMaterialBindStructAttributes(
     bool foundBlockClass = false;
 
     for(const MaterialBindAttribute& attribute : bindStruct.attributes){
-        if(attribute.name != "material_constant" && attribute.name != "material_mutable"){
+        if(attribute.name != s_MaterialConstantAttribute && attribute.name != s_MaterialMutableAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
@@ -340,7 +343,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     bool foundDefault = false;
 
     for(const MaterialBindAttribute& attribute : field.attributes){
-        if(attribute.name != "default"){
+        if(attribute.name != s_DefaultAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
@@ -906,13 +909,13 @@ static bool ParseMaterialBindBlockClass(
 ){
     outBlockClass = MaterialBlockClass::None;
 
-    const MaterialBindAttribute* constantAttribute = bindStruct.findAttribute("material_constant");
+    const MaterialBindAttribute* constantAttribute = bindStruct.findAttribute(s_MaterialConstantAttribute);
     if(constantAttribute){
         outBlockClass = MaterialBlockClass::MaterialConstant;
         return true;
     }
 
-    const MaterialBindAttribute* mutableAttribute = bindStruct.findAttribute("material_mutable");
+    const MaterialBindAttribute* mutableAttribute = bindStruct.findAttribute(s_MaterialMutableAttribute);
     if(mutableAttribute){
         outBlockClass = MaterialBlockClass::MaterialMutable;
         return true;
@@ -1620,7 +1623,7 @@ const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView 
 }
 
 AStringView MaterialBindField::defaultArgument()const{
-    const MaterialBindAttribute* attribute = findAttribute("default");
+    const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_DefaultAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
 }
 

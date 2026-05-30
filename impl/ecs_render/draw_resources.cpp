@@ -250,24 +250,9 @@ bool RendererSystem::uploadMaterialTypedBuffer(
     Core::CommandList& commandList,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
-#if defined(NWB_DEBUG)
-    if(materialTypedBytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is empty"));
+    usize uploadBytes = 0u;
+    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
         return false;
-    }
-    if(!materialTypedBytes.empty() && (materialTypedBytes.size() & (sizeof(u32) - 1u)) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
-        return false;
-    }
-
-    usize uploadBytes = materialTypedBytes.size();
-    if(!AlignUpChecked(uploadBytes, sizeof(u32), uploadBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload size overflows alignment"));
-        return false;
-    }
-#else
-    usize uploadBytes = AlignUp(materialTypedBytes.size(), sizeof(u32));
-#endif
     if(!reserveMaterialTypedBufferCapacity(uploadBytes))
         return false;
 #if defined(NWB_DEBUG)

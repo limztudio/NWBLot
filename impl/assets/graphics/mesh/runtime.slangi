@@ -61,6 +61,11 @@ struct NwbMeshInstanceData{
     float4 rotation;
     float4 translation;
     float4 scale;
+
+    // x: material-constant byte offset into g_NwbMaterialTypedWords
+    // y: material-constant byte count
+    // z: material-mutable byte offset into g_NwbMaterialTypedWords
+    // w: material-mutable byte count
     uint4 materialTypedBytes;
 };
 

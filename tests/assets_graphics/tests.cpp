@@ -400,11 +400,14 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     const bool materialBindConstantsValid =
         materialLayoutHash.x != 0u
         && materialInterfaceHash0.x != 0u
-        && NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 48u
-        && NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_RUNTIME_BLOCK_BYTE_SIZE == 4u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET == 4u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 44u;
+        && NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 44u
+        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 4u
+        && NWB_MATERIAL_BIND_RUNTIME_STORAGE == NWB_MATERIAL_BIND_STORAGE_MUTABLE
+        && NWB_MATERIAL_BIND_RUNTIME_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_RUNTIME_BYTE_SIZE == 4u
+        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 44u;
     const float3 worldPosition = nwbMeshTransformPosition(source.position, instance);
     const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     generatedVertex.position = nwbMeshTransformWorldToClip(worldPosition);
@@ -431,9 +434,11 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 ){
     NwbMeshGeneratedVertex generatedVertex;
     const bool materialBindConstantsValid =
-        NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 20u
+        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
+        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
         && NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET == 0u
         && NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET == 2u
         && NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET == 6u
@@ -469,9 +474,11 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 ){
     NwbMeshGeneratedVertex generatedVertex;
     const bool materialBindConstantsValid =
-        NWB_MATERIAL_BIND_BLOCK_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BLOCK_BYTE_SIZE == 20u
+        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
+        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
+        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
+        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
         && NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET == 0u
         && NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET == 4u
         && NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET == 8u

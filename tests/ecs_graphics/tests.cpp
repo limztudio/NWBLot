@@ -16,7 +16,7 @@
 #include <impl/ecs_skinned_mesh/components.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
-#include <impl/ecs_render/components.h>
+#include <impl/ecs_render/material_instance.h>
 #include <impl/assets_mesh/meshlet_ref_encoding.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_asset.h>
@@ -155,6 +155,71 @@ static void TestMeshSystemResolvesMeshComponent(TestContext& context){
     auto missingMeshEntity = testWorld.world.createEntity();
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !meshSystem.resolveMesh(missingMeshEntity.id(), resolvedMesh));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, !resolvedMesh.valid());
+}
+
+static u32 TestFloatBits(const f32 value){
+    u32 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+static void TestMaterialInstanceComponentSetters(TestContext& context){
+    TestWorld testWorld;
+    const Name materialInterface("project/material_interfaces/test_surface");
+    auto entity = testWorld.world.createEntity();
+    auto& materialInstance = entity.addComponent<NWB::Impl::MaterialInstanceComponent>(
+        NWB::Tests::TestDetail::Arena(),
+        materialInterface
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.materialInterface == materialInterface);
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SetMaterialMutableFloat(
+        testWorld.world,
+        entity.id(),
+        materialInterface,
+        "runtime.fade_alpha",
+        0.5f
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.revision == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[0u].parameterName == Name("runtime.fade_alpha"));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[0u].blockName == Name("runtime"));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[0u].fieldName == Name("fade_alpha"));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        materialInstance.overrides[0u].fieldType == NWB::Impl::MaterialLayoutFieldType::Float
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[0u].value.raw[0u] == TestFloatBits(0.5f));
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SetMaterialMutableFloat(
+        testWorld.world,
+        entity.id(),
+        materialInterface,
+        "runtime.fade_alpha",
+        0.75f
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides.size() == 1u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.revision == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[0u].value.raw[0u] == TestFloatBits(0.75f));
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::SetMaterialMutableFloat4(
+        testWorld.world,
+        entity.id(),
+        materialInterface,
+        "runtime.tint",
+        Float4(1.0f, 0.5f, 0.25f, 0.125f)
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides.size() == 2u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.revision == 3u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].parameterName == Name("runtime.tint"));
+    NWB_ECS_GRAPHICS_TEST_CHECK(
+        context,
+        materialInstance.overrides[1u].fieldType == NWB::Impl::MaterialLayoutFieldType::Float4
+    );
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[0u] == TestFloatBits(1.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[1u] == TestFloatBits(0.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[2u] == TestFloatBits(0.25f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, materialInstance.overrides[1u].value.raw[3u] == TestFloatBits(0.125f));
 }
 
 static NWB::Impl::SkinnedMeshJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
@@ -486,6 +551,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("ecs graphics", [](NWB::Tests::TestContext& context)
     __hidden_tests::TestRuntimeResourceNameBuilderMatchesFormattedSuffix(context);
     __hidden_tests::TestLightComponents(context);
     __hidden_tests::TestMeshSystemResolvesMeshComponent(context);
+    __hidden_tests::TestMaterialInstanceComponentSetters(context);
     __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
     __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
     __hidden_tests::TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(context);

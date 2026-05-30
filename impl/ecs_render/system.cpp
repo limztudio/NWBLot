@@ -60,6 +60,7 @@ RendererSystem::RendererSystem(
     readAccess<NWB::Impl::Scene::TransformComponent>();
     readAccess<NWB::Impl::Scene::CameraComponent>();
     readAccess<RendererComponent>();
+    readAccess<MaterialInstanceComponent>();
 }
 RendererSystem::~RendererSystem(){}
 
@@ -152,10 +153,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-    const Core::FramebufferInfoEx& meshViewFramebufferInfo = deferredTargets.framebuffer->getFramebufferInfo();
-    f32 meshViewAspectRatio = 1.0f;
-    if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
-        meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
+    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     const bool meshViewReady = updateMeshViewBuffer(*commandList, meshViewAspectRatio);
     const bool sceneShadingReady = updateSceneShadingBuffer(*commandList, meshViewAspectRatio);
     if(meshViewReady && sceneShadingReady){
@@ -171,8 +169,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     const bool hasDeferredDrawItems = !opaqueMeshDrawItems.empty() || !opaqueComputeDrawItems.empty();
+#if defined(NWB_DEBUG)
+    const bool materialTypedUploadRangesReady =
+        !hasDeferredDrawItems
+        || ECSRenderDetail::ValidateMaterialTypedUploadRanges(instanceData, materialTypedBytes)
+    ;
+#else
+    constexpr bool materialTypedUploadRangesReady = true;
+#endif
     const bool deferredUploadReady =
         hasDeferredDrawItems
+        && materialTypedUploadRangesReady
         && uploadInstanceBuffer(*commandList, instanceData)
         && uploadMaterialTypedBuffer(*commandList, materialTypedBytes)
     ;

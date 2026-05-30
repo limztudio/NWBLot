@@ -8,6 +8,7 @@
 #include "../global.h"
 
 #include <core/assets/ref.h>
+#include <impl/assets_material/asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,8 +31,26 @@ struct RendererComponent{
     bool visible = true;
 };
 
+struct MaterialInstanceParameter{
+    Name parameterName = NAME_NONE;
+    Name blockName = NAME_NONE;
+    Name fieldName = NAME_NONE;
+    MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
+    UInt4U value = {};
+};
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct MaterialInstanceComponent{
+    using ParameterVector = Vector<MaterialInstanceParameter, Core::Alloc::GlobalArena>;
+
+    Name materialInterface = NAME_NONE;
+    ParameterVector overrides;
+    u64 revision = 0u;
+
+    explicit MaterialInstanceComponent(Core::Alloc::GlobalArena& arena, const Name& interfaceName)
+        : materialInterface(interfaceName)
+        , overrides(arena)
+    {}
+};
 
 
 NWB_IMPL_END

@@ -644,47 +644,55 @@ static bool RegisterGeneratedMaterialBindSymbol(
     return false;
 }
 
-static AStringView MaterialBindFieldLookupFunctionName(const MaterialLayoutFieldType::Enum fieldType){
-    static constexpr AStringView s_LookupNames[] = {
-        "nwbMaterialLoadBool",
-        "nwbMaterialLoadBool2",
-        "nwbMaterialLoadBool3",
-        "nwbMaterialLoadBool4",
-        "nwbMaterialLoadChar",
-        "nwbMaterialLoadChar2",
-        "nwbMaterialLoadChar3",
-        "nwbMaterialLoadChar4",
-        "nwbMaterialLoadUChar",
-        "nwbMaterialLoadUChar2",
-        "nwbMaterialLoadUChar3",
-        "nwbMaterialLoadUChar4",
-        "nwbMaterialLoadShort",
-        "nwbMaterialLoadShort2",
-        "nwbMaterialLoadShort3",
-        "nwbMaterialLoadShort4",
-        "nwbMaterialLoadUShort",
-        "nwbMaterialLoadUShort2",
-        "nwbMaterialLoadUShort3",
-        "nwbMaterialLoadUShort4",
-        "nwbMaterialLoadInt",
-        "nwbMaterialLoadInt2",
-        "nwbMaterialLoadInt3",
-        "nwbMaterialLoadInt4",
-        "nwbMaterialLoadUInt",
-        "nwbMaterialLoadUInt2",
-        "nwbMaterialLoadUInt3",
-        "nwbMaterialLoadUInt4",
-        "nwbMaterialLoadHalf",
-        "nwbMaterialLoadHalf2",
-        "nwbMaterialLoadHalf3",
-        "nwbMaterialLoadHalf4",
-        "nwbMaterialLoadFloat",
-        "nwbMaterialLoadFloat2",
-        "nwbMaterialLoadFloat3",
-        "nwbMaterialLoadFloat4"
+static AStringView MaterialBindFieldLookupFunctionStorageName(const MaterialBlockClass::Enum blockClass){
+    switch(blockClass){
+    case MaterialBlockClass::MaterialConstant: return "Constant";
+    case MaterialBlockClass::MaterialMutable: return "Mutable";
+    default: return AStringView();
+    }
+}
+
+static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutFieldType::Enum fieldType){
+    static constexpr AStringView s_TypeNames[] = {
+        "Bool",
+        "Bool2",
+        "Bool3",
+        "Bool4",
+        "Char",
+        "Char2",
+        "Char3",
+        "Char4",
+        "UChar",
+        "UChar2",
+        "UChar3",
+        "UChar4",
+        "Short",
+        "Short2",
+        "Short3",
+        "Short4",
+        "UShort",
+        "UShort2",
+        "UShort3",
+        "UShort4",
+        "Int",
+        "Int2",
+        "Int3",
+        "Int4",
+        "UInt",
+        "UInt2",
+        "UInt3",
+        "UInt4",
+        "Half",
+        "Half2",
+        "Half3",
+        "Half4",
+        "Float",
+        "Float2",
+        "Float3",
+        "Float4"
     };
     static_assert(
-        (sizeof(s_LookupNames) / sizeof(s_LookupNames[0]))
+        (sizeof(s_TypeNames) / sizeof(s_TypeNames[0]))
         == static_cast<usize>(
             static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u
         )
@@ -693,7 +701,24 @@ static AStringView MaterialBindFieldLookupFunctionName(const MaterialLayoutField
     if(!IsValidMaterialLayoutFieldType(fieldType))
         return AStringView();
 
-    return s_LookupNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
+    return s_TypeNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
+}
+
+static CookString BuildMaterialBindFieldLookupFunctionName(
+    CookArena& arena,
+    const MaterialLayoutFieldType::Enum fieldType,
+    const MaterialBlockClass::Enum blockClass
+){
+    CookString functionName(arena);
+    const AStringView storageName = MaterialBindFieldLookupFunctionStorageName(blockClass);
+    const AStringView typeName = MaterialBindFieldLookupFunctionTypeName(fieldType);
+    if(storageName.empty() || typeName.empty())
+        return functionName;
+
+    functionName += "nwbMaterialLoad";
+    functionName += storageName;
+    functionName += typeName;
+    return functionName;
 }
 
 static bool AppendMaterialBindConstantPrefix(
@@ -783,6 +808,80 @@ static bool ResolveMaterialBindGeneratedLayoutBlock(
     return true;
 }
 
+static u32* MaterialBindStorageByteSizePointer(
+    const MaterialBlockClass::Enum blockClass,
+    u32& inOutConstantByteSize,
+    u32& inOutMutableByteSize
+){
+    switch(blockClass){
+    case MaterialBlockClass::MaterialConstant: return &inOutConstantByteSize;
+    case MaterialBlockClass::MaterialMutable: return &inOutMutableByteSize;
+    default: return nullptr;
+    }
+}
+
+static bool ComputeMaterialBindStorageByteSizes(
+    const AStringView includePath,
+    const MaterialBindTypedLayout& layout,
+    u32& outConstantByteSize,
+    u32& outMutableByteSize
+){
+    outConstantByteSize = 0u;
+    outMutableByteSize = 0u;
+
+    for(const MaterialTypedLayoutBlock& block : layout.typedLayoutBlocks){
+        u32* storageByteSize = MaterialBindStorageByteSizePointer(block.blockClass, outConstantByteSize, outMutableByteSize);
+        if(!storageByteSize){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block has invalid storage class")
+                , StringConvert(includePath)
+            );
+            return false;
+        }
+        if(block.byteSize > Limit<u32>::s_Max - *storageByteSize){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32")
+                , StringConvert(includePath)
+            );
+            return false;
+        }
+
+        *storageByteSize += block.byteSize;
+    }
+
+    return true;
+}
+
+static bool ComputeMaterialBindBlockStorageByteBegin(
+    const AStringView includePath,
+    const MaterialBindTypedLayout& layout,
+    const u32 blockIndex,
+    u32& outByteBegin
+){
+    outByteBegin = 0u;
+    if(blockIndex >= layout.typedLayoutBlocks.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block index is out of range")
+            , StringConvert(includePath)
+        );
+        return false;
+    }
+
+    const MaterialBlockClass::Enum blockClass = layout.typedLayoutBlocks[blockIndex].blockClass;
+    for(u32 currentBlockIndex = 0u; currentBlockIndex < blockIndex; ++currentBlockIndex){
+        const MaterialTypedLayoutBlock& block = layout.typedLayoutBlocks[currentBlockIndex];
+        if(block.blockClass != blockClass)
+            continue;
+        if(block.byteSize > Limit<u32>::s_Max - outByteBegin){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block byte offset exceeds u32")
+                , StringConvert(includePath)
+            );
+            return false;
+        }
+
+        outByteBegin += block.byteSize;
+    }
+
+    return true;
+}
+
 static bool AppendMaterialBindLayoutConstants(
     CookArena& arena,
     const AStringView includePath,
@@ -792,19 +891,10 @@ static bool AppendMaterialBindLayoutConstants(
     ScratchArena& scratchArena,
     CookString& inOutSource
 ){
-    usize totalBlockByteSize = 0u;
-    if(!MaterialBinaryPayload::ComputeMaterialTypedBlockByteSize(layout.typedLayoutBlocks, totalBlockByteSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout byte size exceeds u32")
-            , StringConvert(includePath)
-        );
+    u32 constantByteSize = 0u;
+    u32 mutableByteSize = 0u;
+    if(!ComputeMaterialBindStorageByteSizes(includePath, layout, constantByteSize, mutableByteSize))
         return false;
-    }
-    if(totalBlockByteSize > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout byte size exceeds u32")
-            , StringConvert(includePath)
-        );
-        return false;
-    }
 
     const Name interfaceName(AStringView(entry.virtualPath));
     const NameHash& interfaceHash = interfaceName.hash();
@@ -827,7 +917,10 @@ static bool AppendMaterialBindLayoutConstants(
     const CookString layoutHashSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "LAYOUT_HASH");
     const CookString blockCountSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "BLOCK_COUNT");
     const CookString fieldCountSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "FIELD_COUNT");
-    const CookString blockByteSizeSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "BLOCK_BYTE_SIZE");
+    const CookString storageConstantSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "STORAGE_CONSTANT");
+    const CookString storageMutableSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "STORAGE_MUTABLE");
+    const CookString constantByteSizeSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "CONSTANT_BYTE_SIZE");
+    const CookString mutableByteSizeSymbol = BuildMaterialBindGeneratedSymbol(arena, {}, "MUTABLE_BYTE_SIZE");
 
     if(!AppendMaterialBindU64Constant(includePath, layoutHashSymbol, layout.layoutHash, inOutSymbols, scratchArena, inOutSource))
         return false;
@@ -851,8 +944,35 @@ static bool AppendMaterialBindLayoutConstants(
         return false;
     if(!AppendMaterialBindU32Constant(
         includePath,
-        blockByteSizeSymbol,
-        static_cast<u32>(totalBlockByteSize),
+        storageConstantSymbol,
+        static_cast<u32>(MaterialBlockClass::MaterialConstant),
+        inOutSymbols,
+        scratchArena,
+        inOutSource
+    ))
+        return false;
+    if(!AppendMaterialBindU32Constant(
+        includePath,
+        storageMutableSymbol,
+        static_cast<u32>(MaterialBlockClass::MaterialMutable),
+        inOutSymbols,
+        scratchArena,
+        inOutSource
+    ))
+        return false;
+    if(!AppendMaterialBindU32Constant(
+        includePath,
+        constantByteSizeSymbol,
+        constantByteSize,
+        inOutSymbols,
+        scratchArena,
+        inOutSource
+    ))
+        return false;
+    if(!AppendMaterialBindU32Constant(
+        includePath,
+        mutableByteSizeSymbol,
+        mutableByteSize,
         inOutSymbols,
         scratchArena,
         inOutSource
@@ -870,14 +990,29 @@ static bool AppendMaterialBindLayoutConstants(
         if(!ResolveMaterialBindGeneratedLayoutBlock(includePath, instance, layout, blockEntry, block))
             return false;
 
+        u32 blockStorageByteBegin = 0u;
+        if(!ComputeMaterialBindBlockStorageByteBegin(includePath, layout, blockEntry.blockIndex, blockStorageByteBegin))
+            return false;
+
+        const CookString storageSymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_STORAGE");
         const CookString offsetSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BLOCK_BYTE_OFFSET");
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BYTE_OFFSET");
         const CookString sizeSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BLOCK_BYTE_SIZE");
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_BYTE_SIZE");
+        if(!AppendMaterialBindU32Constant(
+            includePath,
+            storageSymbol,
+            static_cast<u32>(block->blockClass),
+            inOutSymbols,
+            scratchArena,
+            inOutSource
+        ))
+            return false;
         if(!AppendMaterialBindU32Constant(
             includePath,
             offsetSymbol,
-            blockEntry.byteBegin,
+            blockStorageByteBegin,
             inOutSymbols,
             scratchArena,
             inOutSource
@@ -1006,6 +1141,15 @@ static bool AppendMaterialBindGeneratedInstance(
         return false;
     }
 
+    u32 layoutBlockStorageByteBegin = 0u;
+    if(!ComputeMaterialBindBlockStorageByteBegin(
+        includePath,
+        layout,
+        layoutBlockEntry.blockIndex,
+        layoutBlockStorageByteBegin
+    ))
+        return false;
+
     for(u32 fieldOffset = 0u; fieldOffset < layoutBlock->fieldCount; ++fieldOffset){
         const usize layoutFieldIndex = static_cast<usize>(layoutBlock->fieldBegin) + fieldOffset;
         if(layoutFieldIndex >= layout.typedLayoutFields.size()){
@@ -1026,7 +1170,7 @@ static bool AppendMaterialBindGeneratedInstance(
             );
             return false;
         }
-        if(layoutField.offset > Limit<u32>::s_Max - layoutBlockEntry.byteBegin){
+        if(layoutField.offset > Limit<u32>::s_Max - layoutBlockStorageByteBegin){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' byte offset exceeds u32")
                 , StringConvert(includePath)
                 , StringConvert(bindStruct.name)
@@ -1035,7 +1179,11 @@ static bool AppendMaterialBindGeneratedInstance(
             return false;
         }
 
-        const AStringView loadFunctionName = MaterialBindFieldLookupFunctionName(layoutField.fieldType);
+        const CookString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(
+            arena,
+            layoutField.fieldType,
+            layoutBlock->blockClass
+        );
         if(loadFunctionName.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported load type '{}'")
                 , StringConvert(includePath)
@@ -1074,7 +1222,7 @@ static bool AppendMaterialBindGeneratedInstance(
             inOutSource
         ))
             return false;
-        const u32 fieldByteOffset = layoutBlockEntry.byteBegin + layoutField.offset;
+        const u32 fieldByteOffset = layoutBlockStorageByteBegin + layoutField.offset;
         if(!AppendMaterialBindU32Constant(
             includePath,
             byteOffsetSymbol,
@@ -1085,7 +1233,7 @@ static bool AppendMaterialBindGeneratedInstance(
         ))
             return false;
         inOutSource += '\n';
-        AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, loadFunctionName, inOutSource);
+        AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, AStringView(loadFunctionName), inOutSource);
         inOutSource += '\n';
     }
 

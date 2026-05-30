@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "material_instance.h"
 #include "system.h"
 
 

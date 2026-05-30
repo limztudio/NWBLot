@@ -76,9 +76,14 @@ struct SceneShadingGpuData{
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
-struct MaterialTypedByteBlock{
+struct MaterialTypedByteRange{
     u32 byteOffset = 0;
     u32 byteCount = 0;
+};
+
+struct MaterialTypedInstanceRanges{
+    MaterialTypedByteRange constantRange;
+    MaterialTypedByteRange mutableRange;
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
@@ -212,6 +217,17 @@ inline Core::RenderState BuildCompositeRenderState(){
     return renderState;
 }
 
+inline f32 ResolveExtentAspectRatio(const u32 width, const u32 height){
+    if(width != 0u && height != 0u)
+        return static_cast<f32>(width) / static_cast<f32>(height);
+
+    return 1.0f;
+}
+
+inline f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo){
+    return ResolveExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
+}
+
 inline usize NextGrowingCapacity(const usize currentCapacity, const usize requiredCapacity){
     usize capacity = Max<usize>(currentCapacity, 1u);
     while(capacity < requiredCapacity){
@@ -222,14 +238,24 @@ inline usize NextGrowingCapacity(const usize currentCapacity, const usize requir
     return capacity;
 }
 
+[[nodiscard]] inline bool MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range){
+    return range.byteCount != 0u || range.byteOffset == 0u;
+}
+
 inline InstanceGpuData BuildInstanceGpuData(
     const NWB::Impl::Scene::TransformComponent* transform,
-    const u32 materialTypedByteOffset,
-    const u32 materialTypedByteCount
+    const MaterialTypedInstanceRanges& materialTypedRanges
 ){
+#if defined(NWB_DEBUG)
+    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.constantRange));
+    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.mutableRange));
+#endif
+
     InstanceGpuData data;
-    data.materialTypedBytes.x = materialTypedByteOffset;
-    data.materialTypedBytes.y = materialTypedByteCount;
+    data.materialTypedBytes.x = materialTypedRanges.constantRange.byteOffset;
+    data.materialTypedBytes.y = materialTypedRanges.constantRange.byteCount;
+    data.materialTypedBytes.z = materialTypedRanges.mutableRange.byteOffset;
+    data.materialTypedBytes.w = materialTypedRanges.mutableRange.byteCount;
     if(!transform)
         return data;
 
@@ -237,6 +263,89 @@ inline InstanceGpuData BuildInstanceGpuData(
     data.translation = transform->position;
     data.scale = transform->scale;
     return data;
+}
+
+[[nodiscard]] inline MaterialTypedInstanceRanges MaterialTypedRangesFromInstanceData(const InstanceGpuData& instanceData){
+    MaterialTypedInstanceRanges ranges;
+    ranges.constantRange.byteOffset = instanceData.materialTypedBytes.x;
+    ranges.constantRange.byteCount = instanceData.materialTypedBytes.y;
+    ranges.mutableRange.byteOffset = instanceData.materialTypedBytes.z;
+    ranges.mutableRange.byteCount = instanceData.materialTypedBytes.w;
+    return ranges;
+}
+
+template<typename MaterialTypedByteVector>
+[[nodiscard]] inline bool ResolveMaterialTypedUploadByteCount(
+    const MaterialTypedByteVector& materialTypedBytes,
+    usize& outUploadByteCount
+){
+    outUploadByteCount = 0u;
+    if(materialTypedBytes.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is empty"));
+        return false;
+    }
+    if((materialTypedBytes.size() & (sizeof(u32) - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
+        return false;
+    }
+
+    outUploadByteCount = materialTypedBytes.size();
+    if(!AlignUpChecked(outUploadByteCount, sizeof(u32), outUploadByteCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload size overflows alignment"));
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] inline bool ValidateMaterialTypedUploadRange(
+    const MaterialTypedByteRange& range,
+    const usize uploadByteCount,
+    const tchar* rangeName
+){
+    if(range.byteCount == 0u){
+        if(MaterialTypedByteRangeEmptyOffsetValid(range))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"), rangeName);
+        return false;
+    }
+
+    if(((range.byteOffset | range.byteCount) & static_cast<u32>(sizeof(u32) - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"), rangeName);
+        return false;
+    }
+
+    const usize byteOffset = static_cast<usize>(range.byteOffset);
+    if(byteOffset > uploadByteCount || static_cast<usize>(range.byteCount) > uploadByteCount - byteOffset){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"), rangeName);
+        return false;
+    }
+
+    return true;
+}
+
+template<typename InstanceDataVector, typename MaterialTypedByteVector>
+[[nodiscard]] inline bool ValidateMaterialTypedUploadRanges(
+    const InstanceDataVector& instanceData,
+    const MaterialTypedByteVector& materialTypedBytes
+){
+    if(instanceData.empty())
+        return true;
+
+    usize uploadByteCount = 0u;
+    if(!ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadByteCount))
+        return false;
+
+    for(const InstanceGpuData& instance : instanceData){
+        const MaterialTypedInstanceRanges ranges = MaterialTypedRangesFromInstanceData(instance);
+        if(!ValidateMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, NWB_TEXT("constant")))
+            return false;
+        if(!ValidateMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable")))
+            return false;
+    }
+
+    return true;
 }
 
 inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, const f32 fallbackAspectRatio){

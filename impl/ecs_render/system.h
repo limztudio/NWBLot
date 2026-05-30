@@ -70,6 +70,8 @@ struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
+
+    // x/y: material-constant byte range; z/w: material-mutable byte range.
     UInt4 materialTypedBytes = {};
 };
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData layout must match the mesh shaders");
@@ -82,6 +84,8 @@ static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 private:
     using MaterialTypedByteVector = Vector<u8, Core::Alloc::GlobalArena>;
+    using MaterialTypedLayoutBlockVector = Vector<MaterialTypedLayoutBlock, Core::Alloc::GlobalArena>;
+    using MaterialTypedLayoutFieldVector = Vector<MaterialTypedLayoutField, Core::Alloc::GlobalArena>;
 
 
 private:
@@ -122,17 +126,25 @@ private:
 
     struct MaterialSurfaceInfo{
         Name materialName = NAME_NONE;
+        Name materialInterface = NAME_NONE;
         Core::GraphicsString shaderVariant;
         Core::Assets::AssetRef<Shader> pixelShader;
         Core::Assets::AssetRef<Shader> meshShader;
-        MaterialTypedByteVector typedBytes;
+        u64 typedLayoutHash = 0u;
+        MaterialTypedLayoutBlockVector typedLayoutBlocks;
+        MaterialTypedLayoutFieldVector typedLayoutFields;
+        MaterialTypedByteVector constantTypedBytes;
+        MaterialTypedByteVector mutableDefaultTypedBytes;
         bool transparent = false;
         bool twoSided = false;
         bool valid = false;
 
         explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
             : shaderVariant(arena)
-            , typedBytes(arena)
+            , typedLayoutBlocks(arena)
+            , typedLayoutFields(arena)
+            , constantTypedBytes(arena)
+            , mutableDefaultTypedBytes(arena)
         {}
     };
 
@@ -372,6 +384,12 @@ private:
     static constexpr u32 s_MeshGeneratedVertexBindingSlot = 14u;
 
 private:
+    [[nodiscard]] static bool splitMaterialTypedBytesByClass(
+        const Material& material,
+        const Name& materialPath,
+        MaterialTypedByteVector& outConstantTypedBytes,
+        MaterialTypedByteVector& outMutableDefaultTypedBytes
+    );
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
     [[nodiscard]] bool hasTransparentRenderers();
@@ -398,6 +416,23 @@ private:
         MaterialPassDrawItemVector& computeDrawItems,
         InstanceGpuDataVector& instanceData,
         MaterialTypedByteDataVector& materialTypedBytes
+    );
+    struct MaterialInstanceOverrideField{
+        const MaterialTypedLayoutField* field = nullptr;
+        u32 blockByteBegin = 0u;
+        bool mutableBlock = false;
+    };
+    [[nodiscard]] static bool findMaterialInstanceOverrideField(
+        Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        const MaterialInstanceParameter& parameter,
+        MaterialInstanceOverrideField& outField
+    );
+    [[nodiscard]] static bool applyMaterialInstanceOverrides(
+        Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        const MaterialInstanceComponent& materialInstance,
+        MaterialTypedByteDataVector& inOutMutableTypedBytes
     );
     void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);
     void setMaterialPassDrawPushConstants(

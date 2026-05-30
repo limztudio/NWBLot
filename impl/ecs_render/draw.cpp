@@ -37,6 +37,71 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     return Abs(maxScale - minScale) <= Max<f32>(maxScale, 1.0f) * s_MeshletConeCullUniformScaleEpsilon;
 }
 
+struct MaterialTypedByteRangeKey{
+    Name materialName = NAME_NONE;
+    u64 typedLayoutHash = 0u;
+
+    friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs){
+        return lhs.materialName == rhs.materialName
+            && lhs.typedLayoutHash == rhs.typedLayoutHash
+        ;
+    }
+};
+
+struct MaterialTypedByteRangeKeyHasher{
+    usize operator()(const MaterialTypedByteRangeKey& key)const{
+        usize seed = Hasher<Name>{}(key.materialName);
+        Core::CoreDetail::HashCombine(seed, key.typedLayoutHash);
+        return seed;
+    }
+};
+
+struct MaterialTypedByteAppendRange{
+    ECSRenderDetail::MaterialTypedByteRange byteRange;
+    usize alignedByteEnd = 0u;
+};
+
+[[nodiscard]] static bool tryBuildMaterialTypedByteAppendRange(
+    const usize currentByteCount,
+    const usize appendByteCount,
+    MaterialTypedByteAppendRange& outAppendRange
+){
+    outAppendRange = {};
+    if(appendByteCount == 0u)
+        return true;
+
+    if(appendByteCount > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
+        return false;
+    }
+
+    usize alignedByteBegin = 0u;
+    if(!AlignUpChecked(currentByteCount, sizeof(u32), alignedByteBegin)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
+        return false;
+    }
+    if(appendByteCount > Limit<usize>::s_Max - alignedByteBegin){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
+        return false;
+    }
+
+    const usize byteEnd = alignedByteBegin + appendByteCount;
+    usize alignedByteEnd = 0u;
+    if(!AlignUpChecked(byteEnd, sizeof(u32), alignedByteEnd)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
+        return false;
+    }
+    if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
+        return false;
+    }
+
+    outAppendRange.byteRange.byteOffset = static_cast<u32>(alignedByteBegin);
+    outAppendRange.byteRange.byteCount = static_cast<u32>(appendByteCount);
+    outAppendRange.alignedByteEnd = alignedByteEnd;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,13 +148,14 @@ void RendererSystem::renderMaterialPass(
     );
     if(meshDrawItems.empty() && computeDrawItems.empty())
         return;
+#if defined(NWB_DEBUG)
+    if(!ECSRenderDetail::ValidateMaterialTypedUploadRanges(instanceData, materialTypedBytes))
+        return;
+#endif
 
-    const Core::FramebufferInfoEx& meshViewFramebufferInfo = framebuffer->getFramebufferInfo();
-    f32 meshViewAspectRatio = 1.0f;
-    if(meshViewFramebufferInfo.width != 0 && meshViewFramebufferInfo.height != 0)
-        meshViewAspectRatio = static_cast<f32>(meshViewFramebufferInfo.width) / static_cast<f32>(meshViewFramebufferInfo.height);
+    f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(framebuffer->getFramebufferInfo());
     if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)
-        meshViewAspectRatio = static_cast<f32>(avboitTargets->fullWidth) / static_cast<f32>(avboitTargets->fullHeight);
+        meshViewAspectRatio = ECSRenderDetail::ResolveExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight);
     if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
 
@@ -132,88 +198,87 @@ void RendererSystem::gatherMaterialPassDrawItems(
     ;
     materialTypedBytes.reserve(materialTypedByteReserve);
 
-    using MaterialTypedByteBlockMap = HashMap<
-        Name,
-        ECSRenderDetail::MaterialTypedByteBlock,
-        Hasher<Name>,
-        EqualTo<Name>,
+    using MaterialTypedByteRangeMap = HashMap<
+        __hidden_draw::MaterialTypedByteRangeKey,
+        ECSRenderDetail::MaterialTypedByteRange,
+        __hidden_draw::MaterialTypedByteRangeKeyHasher,
+        EqualTo<__hidden_draw::MaterialTypedByteRangeKey>,
         Core::Alloc::ScratchArena
     >;
-    MaterialTypedByteBlockMap materialTypedByteBlocks(
+    MaterialTypedByteRangeMap constantMaterialTypedRanges(
         0,
-        Hasher<Name>(),
-        EqualTo<Name>(),
+        __hidden_draw::MaterialTypedByteRangeKeyHasher(),
+        EqualTo<__hidden_draw::MaterialTypedByteRangeKey>(),
         materialTypedBytes.get_allocator().arena()
     );
-    materialTypedByteBlocks.reserve(rendererCapacity);
+    constantMaterialTypedRanges.reserve(rendererCapacity);
 
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
 
-    auto appendMaterialTypedByteBlock = [&](
-        const MaterialSurfaceInfo& materialInfo,
-        ECSRenderDetail::MaterialTypedByteBlock& outBlock
+    auto appendMaterialTypedByteRange = [&](
+        const auto& typedBytes,
+        ECSRenderDetail::MaterialTypedByteRange& outRange
     ) -> bool{
-        const auto foundBlock = materialTypedByteBlocks.find(materialInfo.materialName);
-        if(foundBlock != materialTypedByteBlocks.end()){
-            outBlock = foundBlock.value();
+        __hidden_draw::MaterialTypedByteAppendRange appendRange;
+        if(!__hidden_draw::tryBuildMaterialTypedByteAppendRange(
+            materialTypedBytes.size(),
+            typedBytes.size(),
+            appendRange
+        ))
+            return false;
+        outRange = appendRange.byteRange;
+        if(typedBytes.empty())
             return true;
-        }
 
-#if defined(NWB_DEBUG)
-        if(materialInfo.typedBytes.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing typed material data")
-                , StringConvert(materialInfo.materialName.c_str())
-            );
-            return false;
-        }
-        if(materialTypedBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset exceeds u32 limits"));
-            return false;
-        }
-        if(materialInfo.typedBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
-            return false;
-        }
-        usize debugAlignedByteBegin = 0u;
-        if(!AlignUpChecked(materialTypedBytes.size(), sizeof(u32), debugAlignedByteBegin)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
-            return false;
-        }
-        usize debugByteEnd = debugAlignedByteBegin;
-        if(materialInfo.typedBytes.size() > Limit<usize>::s_Max - debugByteEnd){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
-            return false;
-        }
-        debugByteEnd += materialInfo.typedBytes.size();
-        usize debugAlignedByteEnd = 0u;
-        if(!AlignUpChecked(debugByteEnd, sizeof(u32), debugAlignedByteEnd)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
-            return false;
-        }
-        if(debugAlignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || debugAlignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
-            return false;
-        }
-#endif
-
-        const usize alignedByteBegin = AlignUp(materialTypedBytes.size(), sizeof(u32));
-        const usize byteEnd = alignedByteBegin + materialInfo.typedBytes.size();
-        const usize alignedByteEnd = AlignUp(byteEnd, sizeof(u32));
-
-        outBlock.byteOffset = static_cast<u32>(alignedByteBegin);
-        outBlock.byteCount = static_cast<u32>(materialInfo.typedBytes.size());
-        const usize requiredTypedByteCapacity = alignedByteEnd;
+        const usize requiredTypedByteCapacity = appendRange.alignedByteEnd;
         if(requiredTypedByteCapacity > materialTypedBytes.capacity())
             materialTypedBytes.reserve(ECSRenderDetail::NextGrowingCapacity(
                 materialTypedBytes.capacity(),
                 requiredTypedByteCapacity
             ));
-        materialTypedBytes.resize(alignedByteBegin, 0u);
-        AppendTriviallyCopyableVector(materialTypedBytes, materialInfo.typedBytes);
-        materialTypedBytes.resize(alignedByteEnd, 0u);
+        materialTypedBytes.resize(outRange.byteOffset, 0u);
+        AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
+        materialTypedBytes.resize(appendRange.alignedByteEnd, 0u);
 
-        materialTypedByteBlocks.emplace(materialInfo.materialName, outBlock);
         return true;
+    };
+
+    auto appendConstantMaterialTypedBytes = [&](
+        const MaterialSurfaceInfo& materialInfo,
+        ECSRenderDetail::MaterialTypedByteRange& outRange
+    ) -> bool{
+        const __hidden_draw::MaterialTypedByteRangeKey rangeKey{
+            materialInfo.materialName,
+            materialInfo.typedLayoutHash
+        };
+        const auto foundRange = constantMaterialTypedRanges.find(rangeKey);
+        if(foundRange != constantMaterialTypedRanges.end()){
+            outRange = foundRange.value();
+            return true;
+        }
+
+        if(!appendMaterialTypedByteRange(materialInfo.constantTypedBytes, outRange))
+            return false;
+
+        constantMaterialTypedRanges.emplace(rangeKey, outRange);
+        return true;
+    };
+
+    auto appendMutableInstanceTypedBytes = [&](
+        const Core::ECS::EntityID entity,
+        const MaterialSurfaceInfo& materialInfo,
+        ECSRenderDetail::MaterialTypedByteRange& outRange
+    ) -> bool{
+        const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
+        if(!materialInstance || materialInstance->overrides.empty())
+            return appendMaterialTypedByteRange(materialInfo.mutableDefaultTypedBytes, outRange);
+
+        MaterialTypedByteDataVector mutableTypedBytes{materialTypedBytes.get_allocator().arena()};
+        mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
+        if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes))
+            return false;
+
+        return appendMaterialTypedByteRange(mutableTypedBytes, outRange);
     };
 
     auto appendDrawForMesh = [&](
@@ -260,16 +325,14 @@ void RendererSystem::gatherMaterialPassDrawItems(
             }
 #endif
 
-            ECSRenderDetail::MaterialTypedByteBlock typedByteBlock;
-            if(!appendMaterialTypedByteBlock(*materialInfo, typedByteBlock))
+            ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+            if(!appendConstantMaterialTypedBytes(*materialInfo, typedRanges.constantRange))
+                return Limit<u32>::s_Max;
+            if(!appendMutableInstanceTypedBytes(entity, *materialInfo, typedRanges.mutableRange))
                 return Limit<u32>::s_Max;
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(
-                transform,
-                typedByteBlock.byteOffset,
-                typedByteBlock.byteCount
-            ));
+            instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges));
             return instanceIndex;
         };
 

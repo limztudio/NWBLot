@@ -1,0 +1,209 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "private.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_material_instance{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool writeMaterialInstanceOverrideBytes(
+    const Core::ECS::EntityID entity,
+    const Name& materialName,
+    const MaterialInstanceParameter& parameter,
+    const MaterialTypedLayoutField& field,
+    const u32 byteOffset,
+    Vector<u8, Core::Alloc::ScratchArena>& inOutMutableTypedBytes
+){
+    const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
+    if(fieldByteSize == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} has invalid field size")
+            , StringConvert(parameter.parameterName.c_str())
+            , entity.id
+        );
+        return false;
+    }
+    if(
+        byteOffset > inOutMutableTypedBytes.size()
+        || static_cast<usize>(fieldByteSize) > inOutMutableTypedBytes.size() - static_cast<usize>(byteOffset)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'")
+            , StringConvert(parameter.parameterName.c_str())
+            , entity.id
+            , StringConvert(materialName.c_str())
+        );
+        return false;
+    }
+
+    const u8* valueBytes = reinterpret_cast<const u8*>(parameter.value.raw);
+    NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes, fieldByteSize);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererSystem::findMaterialInstanceOverrideField(
+    const Core::ECS::EntityID entity,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialInstanceParameter& parameter,
+    MaterialInstanceOverrideField& outField
+){
+    outField = {};
+
+    u32 constantBlockByteBegin = 0u;
+    u32 mutableBlockByteBegin = 0u;
+    for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
+        if(!IsValidMaterialBlockClass(block.blockClass)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has invalid typed material block class")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+
+        const bool mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
+        const u32 blockByteBegin = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
+        u32& blockByteEnd = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
+        if(block.byteSize > Limit<u32>::s_Max - blockByteEnd){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block byte range exceeds u32")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+        blockByteEnd += block.byteSize;
+
+        if(block.blockName != parameter.blockName)
+            continue;
+
+        const usize fieldBegin = static_cast<usize>(block.fieldBegin);
+        const usize fieldCount = static_cast<usize>(block.fieldCount);
+        if(fieldBegin > materialInfo.typedLayoutFields.size() || fieldCount > materialInfo.typedLayoutFields.size() - fieldBegin){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block field range is invalid")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+
+        for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
+            const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];
+            if(field.fieldName != parameter.fieldName)
+                continue;
+
+            outField.field = &field;
+            outField.blockByteBegin = blockByteBegin;
+            outField.mutableBlock = mutableBlock;
+            return true;
+        }
+        break;
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'")
+        , StringConvert(parameter.parameterName.c_str())
+        , entity.id
+        , StringConvert(materialInfo.materialName.c_str())
+    );
+    return false;
+}
+
+bool RendererSystem::applyMaterialInstanceOverrides(
+    const Core::ECS::EntityID entity,
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialInstanceComponent& materialInstance,
+    MaterialTypedByteDataVector& inOutMutableTypedBytes
+){
+    if(!materialInstance.materialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface")
+            , entity.id
+        );
+        return false;
+    }
+    if(materialInstance.materialInterface != materialInfo.materialInterface){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'")
+            , entity.id
+            , StringConvert(materialInstance.materialInterface.c_str())
+            , StringConvert(materialInfo.materialName.c_str())
+            , StringConvert(materialInfo.materialInterface.c_str())
+        );
+        return false;
+    }
+
+    for(const MaterialInstanceParameter& parameter : materialInstance.overrides){
+        if(!parameter.blockName || !parameter.fieldName){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override for entity {} has an invalid parameter name")
+                , entity.id
+            );
+            return false;
+        }
+
+        MaterialInstanceOverrideField resolvedField;
+        if(!findMaterialInstanceOverrideField(entity, materialInfo, parameter, resolvedField))
+            return false;
+
+        const MaterialTypedLayoutField& field = *resolvedField.field;
+        if(!resolvedField.mutableBlock){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage")
+                , StringConvert(parameter.parameterName.c_str())
+                , entity.id
+            );
+            return false;
+        }
+        if(field.fieldType != parameter.fieldType){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} type does not match material '{}'")
+                , StringConvert(parameter.parameterName.c_str())
+                , entity.id
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+
+        if(field.offset > Limit<u32>::s_Max - resolvedField.blockByteBegin){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} byte offset exceeds u32")
+                , StringConvert(parameter.parameterName.c_str())
+                , entity.id
+            );
+            return false;
+        }
+
+        const u32 fieldByteOffset = resolvedField.blockByteBegin + field.offset;
+        if(!__hidden_material_instance::writeMaterialInstanceOverrideBytes(
+            entity,
+            materialInfo.materialName,
+            parameter,
+            field,
+            fieldByteOffset,
+            inOutMutableTypedBytes
+        ))
+            return false;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

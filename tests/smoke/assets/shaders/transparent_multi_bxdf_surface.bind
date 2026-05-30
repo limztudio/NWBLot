@@ -3,20 +3,19 @@
 
 
 [material_constant]
-struct NwbBxdfSurfaceMaterial{
+struct NwbTransparentMultiBxdfSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
 };
 
 [material_mutable]
-struct NwbBxdfRuntimeMaterial{
+struct NwbTransparentMultiBxdfRuntimeMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 color_tint;
 };
 
-NwbBxdfSurfaceMaterial surface;
-NwbBxdfRuntimeMaterial runtime;
+NwbTransparentMultiBxdfSurfaceMaterial surface;
+NwbTransparentMultiBxdfRuntimeMaterial runtime;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

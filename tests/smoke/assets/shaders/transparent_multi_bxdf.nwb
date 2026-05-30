@@ -1,0 +1,6 @@
+include asset;
+
+asset.defines = {
+    "NWB_TRANSPARENT_MULTI_BXDF_COLOR_TRANSFORM": ["0", "1"],
+    "NWB_TRANSPARENT_MULTI_BXDF_VERTEX_TINT": ["0", "1"],
+};

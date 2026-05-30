@@ -81,11 +81,7 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     const auto foundInfo = m_materialSurfaceInfos.find(materialPath);
     if(foundInfo != m_materialSurfaceInfos.end()){
         outInfo = &foundInfo.value();
-#if defined(NWB_DEBUG)
-        return outInfo->valid;
-#else
         return true;
-#endif
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
@@ -110,7 +106,6 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         return false;
     }
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
-    createdInfo.valid = true;
 
     (void)material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
     (void)material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
@@ -165,10 +160,9 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     auto it = result.first;
     outInfo = &it.value();
 #if defined(NWB_DEBUG)
-    return outInfo->valid;
-#else
-    return true;
+    NWB_ASSERT(outInfo);
 #endif
+    return true;
 }
 
 bool RendererSystem::createRendererPipeline(
@@ -185,10 +179,7 @@ bool RendererSystem::createRendererPipeline(
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
 #if defined(NWB_DEBUG)
-    if(!materialInfo.valid || !materialKey){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
-        return false;
-    }
+    NWB_ASSERT(materialKey);
 #endif
 
     auto [it, inserted] = m_materialPipelines.try_emplace(pipelineKey);
@@ -257,10 +248,6 @@ bool RendererSystem::createRendererPipeline(
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, materialInfo.twoSided);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
-        if(!hasMeshShader)
-            return false;
-        if(pass == MaterialPipelinePass::Opaque && !hasPixelShader)
-            return false;
         if(!createMeshShaderResources())
             return false;
         if(!loadShader(resources.meshShader, materialInfo.meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
@@ -303,10 +290,6 @@ bool RendererSystem::createRendererPipeline(
     };
 
     auto tryBuildComputePipeline = [&]() -> bool{
-        if(!hasMeshShader)
-            return false;
-        if(pass == MaterialPipelinePass::Opaque && !hasPixelShader)
-            return false;
         if(!createComputeEmulationResources())
             return false;
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::MeshComputeArchiveStageName();
@@ -385,7 +368,7 @@ bool RendererSystem::createRendererPipeline(
         return failMaterialPipeline();
     }
 
-    if(meshSupported && hasMeshShader){
+    if(meshSupported){
         if(!tryBuildMeshPipeline()){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the required mesh rendering path for material '{}' on a mesh-capable device")
                 , StringConvert(materialKey.c_str())
@@ -416,8 +399,7 @@ bool RendererSystem::hasTransparentRenderers(){
         if(!createMaterialSurfaceInfo(material, materialInfo))
             return false;
 #if defined(NWB_DEBUG)
-        if(!materialInfo || !materialInfo->valid)
-            return false;
+        NWB_ASSERT(materialInfo);
 #endif
         return materialInfo->transparent;
     };

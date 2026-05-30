@@ -211,11 +211,10 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    auto [it, inserted] = m_materialInstanceMutableCache.try_emplace(entity, m_arena);
+    auto it = m_materialInstanceMutableCache.try_emplace(entity, m_arena).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
     if(
-        cacheEntry.valid
-        && cacheEntry.materialName == materialInfo.materialName
+        cacheEntry.materialName == materialInfo.materialName
         && cacheEntry.materialInterface == materialInfo.materialInterface
         && materialInstance->materialInterface == materialInfo.materialInterface
         && cacheEntry.typedLayoutHash == materialInfo.typedLayoutHash
@@ -225,14 +224,11 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    cacheEntry.valid = false;
-
     Core::Alloc::ScratchArena scratchArena;
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
     if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
-        if(inserted)
-            m_materialInstanceMutableCache.erase(it);
+        m_materialInstanceMutableCache.erase(it);
         return false;
     }
 
@@ -241,7 +237,6 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
     cacheEntry.typedLayoutHash = materialInfo.typedLayoutHash;
     cacheEntry.revision = materialInstance->revision;
     AssignTriviallyCopyableVector(cacheEntry.mutableTypedBytes, mutableTypedBytes);
-    cacheEntry.valid = true;
 
     outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
     return true;

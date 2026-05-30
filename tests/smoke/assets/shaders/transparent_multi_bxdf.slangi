@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_BXDF_SLANGI
-#define NWB_BXDF_SLANGI
+#ifndef NWB_TRANSPARENT_MULTI_BXDF_SLANGI
+#define NWB_TRANSPARENT_MULTI_BXDF_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,37 +15,37 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_BXDF_COLOR_TRANSFORM
-#error "NWB_BXDF_COLOR_TRANSFORM must be defined by shader metadata"
+#ifndef NWB_TRANSPARENT_MULTI_BXDF_COLOR_TRANSFORM
+#error "NWB_TRANSPARENT_MULTI_BXDF_COLOR_TRANSFORM must be defined by shader metadata"
 #endif
 
-#ifndef NWB_BXDF_VERTEX_TINT
-#error "NWB_BXDF_VERTEX_TINT must be defined by shader metadata"
+#ifndef NWB_TRANSPARENT_MULTI_BXDF_VERTEX_TINT
+#error "NWB_TRANSPARENT_MULTI_BXDF_VERTEX_TINT must be defined by shader metadata"
 #endif
 
-float3 nwbBxdfApplyColorTransform(float3 color){
-#if NWB_BXDF_COLOR_TRANSFORM == 0
+float3 nwbTransparentMultiBxdfApplyColorTransform(float3 color){
+#if NWB_TRANSPARENT_MULTI_BXDF_COLOR_TRANSFORM == 0
     return color;
-#elif NWB_BXDF_COLOR_TRANSFORM == 1
+#elif NWB_TRANSPARENT_MULTI_BXDF_COLOR_TRANSFORM == 1
     return sqrt(max(color, float3(0.0)));
 #else
     return color;
 #endif
 }
 
-float3 nwbBxdfApplyVertexTint(float3 color){
-#if NWB_BXDF_VERTEX_TINT == 1
+float3 nwbTransparentMultiBxdfApplyVertexTint(float3 color){
+#if NWB_TRANSPARENT_MULTI_BXDF_VERTEX_TINT == 1
     return color * float3(1.0, 0.92, 0.85);
 #else
     return color;
 #endif
 }
 
-float3 nwbBxdfVertexColor(float3 color){
-    return clamp(nwbBxdfApplyVertexTint(nwbBxdfApplyColorTransform(color)), float3(0.0), float3(1.0));
+float3 nwbTransparentMultiBxdfVertexColor(float3 color){
+    return clamp(nwbTransparentMultiBxdfApplyVertexTint(nwbTransparentMultiBxdfApplyColorTransform(color)), float3(0.0), float3(1.0));
 }
 
-float3 nwbBxdfPixelColor(float3 color){
+float3 nwbTransparentMultiBxdfPixelColor(float3 color){
     return color;
 }
 
@@ -57,4 +57,3 @@ float3 nwbBxdfPixelColor(float3 color){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

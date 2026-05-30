@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_BXDF_MESH_VERTEX_SLANGI
-#define NWB_BXDF_MESH_VERTEX_SLANGI
+#ifndef NWB_TRANSPARENT_MULTI_BXDF_MESH_VERTEX_SLANGI
+#define NWB_TRANSPARENT_MULTI_BXDF_MESH_VERTEX_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,15 +15,15 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
     NwbMeshSourceVertex source,
     const NwbMeshInstanceData instance
 ){
-    const NwbBxdfSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const NwbBxdfRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const NwbTransparentMultiBxdfSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbTransparentMultiBxdfRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
     const float4 tintedColor = surface.base_color * runtime.color_tint;
     return nwbMeshBuildGeneratedVertex(
         source.clipPosition,
         nwbMeshTransformDirection(source.normal, instance),
         float4(nwbMeshTransformDirection(source.tangent.xyz, instance), source.tangent.w),
         source.uv0,
-        float4(nwbBxdfVertexColor(tintedColor.rgb), tintedColor.a),
+        float4(nwbTransparentMultiBxdfVertexColor(tintedColor.rgb), tintedColor.a),
         source.worldPosition
     );
 }
@@ -36,4 +36,3 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

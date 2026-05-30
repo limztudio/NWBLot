@@ -178,10 +178,9 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     if(foundMesh != m_meshMeshes.end()){
         outMesh = &foundMesh.value();
 #if defined(NWB_DEBUG)
-        return outMesh->valid();
-#else
-        return true;
+        NWB_ASSERT(outMesh->valid());
 #endif
+        return true;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
@@ -309,8 +308,7 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     if(!uploaded)
         return false;
 #if defined(NWB_DEBUG)
-    if(!createdMesh.valid())
-        return false;
+    NWB_ASSERT(createdMesh.valid());
 #endif
 
     auto result = m_meshMeshes.try_emplace(meshPath, Move(createdMesh));
@@ -318,18 +316,16 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
 
     outMesh = &it.value();
 #if defined(NWB_DEBUG)
-    return outMesh->valid();
-#else
-    return true;
+    NWB_ASSERT(outMesh->valid());
 #endif
+    return true;
 }
 
 bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
     outMesh = nullptr;
 
 #if defined(NWB_DEBUG)
-    if(!desc.valid())
-        return false;
+    NWB_ASSERT(desc.valid());
 #endif
 
     const auto foundMesh = m_meshMeshes.find(desc.meshKey);
@@ -346,10 +342,9 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
         else{
             outMesh = &foundMesh.value();
 #if defined(NWB_DEBUG)
-            return outMesh->valid();
-#else
-            return true;
+            NWB_ASSERT(outMesh->valid());
 #endif
+            return true;
         }
     }
 
@@ -379,8 +374,7 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
     ))
         return false;
 #if defined(NWB_DEBUG)
-    if(!createdMesh.valid())
-        return false;
+    NWB_ASSERT(createdMesh.valid());
 #endif
 
     auto result = m_meshMeshes.try_emplace(desc.meshKey, Move(createdMesh));
@@ -388,10 +382,9 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
 
     outMesh = &it.value();
 #if defined(NWB_DEBUG)
-    return outMesh->valid();
-#else
-    return true;
+    NWB_ASSERT(outMesh->valid());
 #endif
+    return true;
 }
 
 void RendererSystem::pruneRuntimeMeshResources(){

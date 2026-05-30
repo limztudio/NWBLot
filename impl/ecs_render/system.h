@@ -137,7 +137,6 @@ private:
         MaterialTypedByteVector mutableDefaultTypedBytes;
         bool transparent = false;
         bool twoSided = false;
-        bool valid = false;
 
         explicit MaterialSurfaceInfo(Core::Alloc::GlobalArena& arena)
             : shaderVariant(arena)
@@ -171,7 +170,6 @@ private:
         u64 typedLayoutHash = 0u;
         u64 revision = 0u;
         MaterialTypedByteVector mutableTypedBytes;
-        bool valid = false;
 
         explicit MaterialInstanceMutableCacheEntry(Core::Alloc::GlobalArena& arena)
             : mutableTypedBytes(arena)

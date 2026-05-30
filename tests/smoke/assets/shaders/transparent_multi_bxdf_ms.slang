@@ -3,10 +3,9 @@
 
 
 #include "mesh/authoring.slangi"
-#include "project/shaders/bxdf_surface.bind"
-#include "bxdf.slangi"
-#include "bxdf_mesh_vertex.slangi"
+#include "project/shaders/transparent_multi_bxdf_surface.bind"
+#include "transparent_multi_bxdf.slangi"
+#include "transparent_multi_bxdf_mesh_vertex.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -247,9 +247,6 @@ struct MaterialTypedByteContentKey{
     u64 byteHash = 0u;
     Vector<u8, Core::Alloc::ScratchArena> bytes;
 
-    explicit MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena)
-        : bytes(arena)
-    {}
     template<typename MaterialTypedByteVector>
     MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteVector& typedBytes)
         : byteHash(ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()))

@@ -230,8 +230,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         MeshResources& mesh
     ) -> bool{
 #if defined(NWB_DEBUG)
-        if(!mesh.valid())
-            return false;
+        NWB_ASSERT(mesh.valid());
 #endif
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
@@ -240,8 +239,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!createMaterialSurfaceInfo(material, materialInfo))
             return false;
 #if defined(NWB_DEBUG)
-        if(!materialInfo || !materialInfo->valid)
-            return false;
+        NWB_ASSERT(materialInfo);
 #endif
         if(materialInfo->transparent != transparent)
             return false;
@@ -256,8 +254,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
             return false;
 #if defined(NWB_DEBUG)
-        if(!pipelineResources)
-            return false;
+        NWB_ASSERT(pipelineResources);
 #endif
 
         auto appendInstance = [&]() -> u32{
@@ -299,15 +296,14 @@ void RendererSystem::gatherMaterialPassDrawItems(
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
 #if defined(NWB_DEBUG)
-            if(!pipelineResources->meshletPipeline)
-                return false;
+            NWB_ASSERT(pipelineResources->meshletPipeline);
 #endif
             return appendDrawItem(meshDrawItems);
         }
         case RenderPath::ComputeEmulation:{
 #if defined(NWB_DEBUG)
-            if(!pipelineResources->computePipeline || !pipelineResources->emulationPipeline)
-                return false;
+            NWB_ASSERT(pipelineResources->computePipeline);
+            NWB_ASSERT(pipelineResources->emulationPipeline);
 #endif
             return appendDrawItem(computeDrawItems);
         }
@@ -338,11 +334,9 @@ void RendererSystem::gatherMaterialPassDrawItems(
             continue;
 
 #if defined(NWB_DEBUG)
-        if(mesh)
-            appendDrawForMesh(entity, renderer.material, *mesh);
-#else
-        appendDrawForMesh(entity, renderer.material, *mesh);
+        NWB_ASSERT(mesh);
 #endif
+        appendDrawForMesh(entity, renderer.material, *mesh);
     }
 }
 
@@ -422,8 +416,8 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 ){
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
 #if defined(NWB_DEBUG)
-        if(!materialPassDrawResourcesReady(mesh) || !pipelineResources.meshletPipeline)
-            return;
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh));
+        NWB_ASSERT(pipelineResources.meshletPipeline);
 #endif
         if(!createMeshBindingSet(mesh))
             return;
@@ -458,21 +452,22 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
     if(!createEmulationViewResources())
         return;
 #if defined(NWB_DEBUG)
-    if(!m_meshViewBuffer || !m_emulationViewBindingSet)
-        return;
+    NWB_ASSERT(m_meshViewBuffer);
+    NWB_ASSERT(m_emulationViewBindingSet);
 #endif
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
 #if defined(NWB_DEBUG)
-        if(!materialPassDrawResourcesReady(mesh) || !pipelineResources.computePipeline || !pipelineResources.emulationPipeline)
-            return;
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh));
+        NWB_ASSERT(pipelineResources.computePipeline);
+        NWB_ASSERT(pipelineResources.emulationPipeline);
 #endif
         if(!createComputeBindingSet(mesh))
             return;
 #if defined(NWB_DEBUG)
-        if(!mesh.computeBindingSet || !mesh.emulationVertexBuffer)
-            return;
+        NWB_ASSERT(mesh.computeBindingSet);
+        NWB_ASSERT(mesh.emulationVertexBuffer);
 #endif
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);

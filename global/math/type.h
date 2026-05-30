@@ -13,28 +13,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u32 FloatHashBits(f32 value)noexcept{
-    if(value == 0.0f)
-        value = 0.0f;
-
-    u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace MathTypeDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-inline void HashCombineFloat(usize& seed, const f32 value)noexcept{
-    HashCombine(seed, FloatHashBits(value));
-}
 
 template<typename Value, usize Count>
 [[nodiscard]] inline bool EqualArray(const Value& lhs, const Value& rhs)noexcept{
@@ -57,7 +40,7 @@ template<typename Value, usize Count>
 [[nodiscard]] inline usize HashFloatArray(const Value& value)noexcept{
     usize seed = 0u;
     for(usize i = 0u; i < Count; ++i)
-        HashCombineFloat(seed, value.raw[i]);
+        ::HashCombineFloat(seed, value.raw[i]);
     return seed;
 }
 

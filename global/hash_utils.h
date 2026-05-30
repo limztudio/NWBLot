@@ -7,6 +7,7 @@
 
 #include "compile.h"
 #include "text_utils.h"
+#include "type.h"
 #include "type_borrow.h"
 
 
@@ -85,6 +86,19 @@ inline void HashCombineHash(usize& seed, const usize hash){
 template<typename T>
 inline void HashCombine(usize& seed, const T& value){
     HashCombineHash(seed, Hasher<T>{}(value));
+}
+
+[[nodiscard]] inline u32 FloatHashBits(f32 value)noexcept{
+    if(value == 0.0f)
+        value = 0.0f;
+
+    u32 bits = 0u;
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    return bits;
+}
+
+inline void HashCombineFloat(usize& seed, const f32 value)noexcept{
+    HashCombine(seed, FloatHashBits(value));
 }
 
 

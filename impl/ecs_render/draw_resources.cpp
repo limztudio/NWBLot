@@ -227,8 +227,7 @@ bool RendererSystem::uploadInstanceBuffer(Core::CommandList& commandList, const 
     if(!reserveInstanceBufferCapacity(instanceData.size()))
         return false;
 #if defined(NWB_DEBUG)
-    if(!m_instanceBuffer)
-        return false;
+    NWB_ASSERT(m_instanceBuffer);
 #endif
 
 #if defined(NWB_DEBUG)
@@ -256,8 +255,7 @@ bool RendererSystem::uploadMaterialTypedBuffer(
     if(!reserveMaterialTypedBufferCapacity(uploadBytes))
         return false;
 #if defined(NWB_DEBUG)
-    if(!m_materialTypedBuffer)
-        return false;
+    NWB_ASSERT(m_materialTypedBuffer);
 #endif
 
     commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);

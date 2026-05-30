@@ -220,6 +220,66 @@ struct alignas(16) UInt4{
     };
 };
 
+struct alignas(16) Float3Int{
+    union{
+        struct{
+            f32 x;
+            f32 y;
+            f32 z;
+            i32 w;
+        };
+        struct{
+            f32 r;
+            f32 g;
+            f32 b;
+            i32 a;
+        };
+    };
+
+    constexpr Float3Int()noexcept
+        : x(0.0f), y(0.0f), z(0.0f), w(0)
+    {
+    }
+    constexpr Float3Int(const f32 xValue, const f32 yValue, const f32 zValue, const i32 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+};
+static_assert(sizeof(Float3Int) == sizeof(f32) * 4u, "Float3Int must stay a packed 16-byte payload");
+static_assert(alignof(Float3Int) == alignof(Float4), "Float3Int must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<Float3Int>, "Float3Int must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<Float3Int>, "Float3Int must stay binary-serializable");
+
+struct alignas(16) Float3UInt{
+    union{
+        struct{
+            f32 x;
+            f32 y;
+            f32 z;
+            u32 w;
+        };
+        struct{
+            f32 r;
+            f32 g;
+            f32 b;
+            u32 a;
+        };
+    };
+
+    constexpr Float3UInt()noexcept
+        : x(0.0f), y(0.0f), z(0.0f), w(0u)
+    {
+    }
+    constexpr Float3UInt(const f32 xValue, const f32 yValue, const f32 zValue, const u32 wValue)noexcept
+        : x(xValue), y(yValue), z(zValue), w(wValue)
+    {
+    }
+};
+static_assert(sizeof(Float3UInt) == sizeof(f32) * 4u, "Float3UInt must stay a packed 16-byte payload");
+static_assert(alignof(Float3UInt) == alignof(Float4), "Float3UInt must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<Float3UInt>, "Float3UInt must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<Float3UInt>, "Float3UInt must stay binary-serializable");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // unaligned
@@ -469,6 +529,16 @@ struct UInt4U{
 [[nodiscard]] inline bool operator==(const UInt4& lhs, const UInt4& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4, 4u>(lhs, rhs); }
 [[nodiscard]] inline bool operator!=(const UInt4& lhs, const UInt4& rhs)noexcept{ return !(lhs == rhs); }
 
+[[nodiscard]] inline bool operator==(const Float3Int& lhs, const Float3Int& rhs)noexcept{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+[[nodiscard]] inline bool operator!=(const Float3Int& lhs, const Float3Int& rhs)noexcept{ return !(lhs == rhs); }
+
+[[nodiscard]] inline bool operator==(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
+}
+[[nodiscard]] inline bool operator!=(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{ return !(lhs == rhs); }
+
 [[nodiscard]] inline bool operator==(const Float2U& lhs, const Float2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float2U, 2u>(lhs, rhs); }
 [[nodiscard]] inline bool operator!=(const Float2U& lhs, const Float2U& rhs)noexcept{ return !(lhs == rhs); }
 
@@ -548,6 +618,30 @@ struct hash<Int4>{
 template<>
 struct hash<UInt4>{
     usize operator()(const UInt4& value)const noexcept{ return MathTypeDetail::HashArray<UInt4, 4u>(value); }
+};
+
+template<>
+struct hash<Float3Int>{
+    usize operator()(const Float3Int& value)const noexcept{
+        usize seed = 0u;
+        ::HashCombineFloat(seed, value.x);
+        ::HashCombineFloat(seed, value.y);
+        ::HashCombineFloat(seed, value.z);
+        ::HashCombine(seed, value.w);
+        return seed;
+    }
+};
+
+template<>
+struct hash<Float3UInt>{
+    usize operator()(const Float3UInt& value)const noexcept{
+        usize seed = 0u;
+        ::HashCombineFloat(seed, value.x);
+        ::HashCombineFloat(seed, value.y);
+        ::HashCombineFloat(seed, value.z);
+        ::HashCombine(seed, value.w);
+        return seed;
+    }
 };
 
 template<>

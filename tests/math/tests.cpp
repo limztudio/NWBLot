@@ -214,6 +214,26 @@ static void TestHalfFloatBufferConversion(TestContext& context){
     NWB_MATH_TEST_CHECK(context, unpacked[5] == Limit<f32>::s_Infinity);
 }
 
+static void TestFloatIntStorageConversion(TestContext& context){
+    const SIMDVector xyz = VectorSet(1.25f, -2.5f, 3.75f, 99.0f);
+
+    Float3Int signedValue = {};
+    StoreFloatInt(xyz, -17, &signedValue);
+    NWB_MATH_TEST_CHECK(context, signedValue == Float3Int(1.25f, -2.5f, 3.75f, -17));
+
+    const SIMDVector loadedSigned = LoadFloatInt(signedValue);
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(loadedSigned, 1.25f, -2.5f, 3.75f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(loadedSigned), 0.0f));
+
+    Float3UInt unsignedValue = {};
+    StoreFloatInt(xyz, 42u, &unsignedValue);
+    NWB_MATH_TEST_CHECK(context, unsignedValue == Float3UInt(1.25f, -2.5f, 3.75f, 42u));
+
+    const SIMDVector loadedUnsigned = LoadFloatInt(unsignedValue);
+    NWB_MATH_TEST_CHECK(context, NearlyEqual3(loadedUnsigned, 1.25f, -2.5f, 3.75f));
+    NWB_MATH_TEST_CHECK(context, NearlyEqual(VectorGetW(loadedUnsigned), 0.0f));
+}
+
 template<typename Value>
 static void CheckStorageHashMatchesEquality(TestContext& context, const Value& lhs, const Value& same, const Value& different){
     NWB_MATH_TEST_CHECK(context, lhs == same);
@@ -300,6 +320,8 @@ static void TestMathStorageHashAndEquality(TestContext& context){
     CheckStorageHashMatchesEquality(context, Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
     CheckStorageHashMatchesEquality(context, MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 5));
     CheckStorageHashMatchesEquality(context, MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 5u));
+    CheckStorageHashMatchesEquality(context, Float3Int(-0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -4));
+    CheckStorageHashMatchesEquality(context, Float3UInt(-0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 4u));
     CheckStorageHashMatchesEquality(context, Float2U(-0.0f, 1.0f), Float2U(0.0f, 1.0f), Float2U(0.0f, 2.0f));
     CheckStorageHashMatchesEquality(context, Float3U(-0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 2.0f), Float3U(0.0f, 1.0f, 3.0f));
     CheckStorageHashMatchesEquality(context, Float4U(-0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 3.0f), Float4U(0.0f, 1.0f, 2.0f, 4.0f));
@@ -369,6 +391,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("math", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestRefractCriticalAngle(context);
     __hidden_tests::TestHalfFloatScalarConversion(context);
     __hidden_tests::TestHalfFloatBufferConversion(context);
+    __hidden_tests::TestFloatIntStorageConversion(context);
     __hidden_tests::TestMathStorageHashAndEquality(context);
 })
 

@@ -268,6 +268,38 @@ NWB_INLINE void SIMDCALL StoreUInt3Bits(SIMDVector value, u32* out)noexcept{
 }
 #endif
 
+template<typename T>
+NWB_INLINE SIMDVector SIMDCALL LoadFloat3Components(const T& src)noexcept{
+#if defined(NWB_HAS_SCALAR)
+    return MakeF32(src.x, src.y, src.z, 0.0f);
+#elif defined(NWB_HAS_NEON)
+    float32x2_t xy = vld1_f32(&src.x);
+    float32x2_t z0 = vdup_n_f32(0.0f);
+    z0 = vld1_lane_f32(&src.z, z0, 0);
+    return vcombine_f32(xy, z0);
+#elif defined(NWB_HAS_SSE4)
+    __m128 xy = _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(&src.x)));
+    __m128 z = _mm_load_ss(&src.z);
+    return _mm_movelh_ps(xy, z);
+#endif
+}
+
+template<typename T>
+NWB_INLINE void SIMDCALL StoreFloat3Components(SIMDVector src, T* dst)noexcept{
+#if defined(NWB_HAS_SCALAR)
+    dst->x = src.f[0];
+    dst->y = src.f[1];
+    dst->z = src.f[2];
+#elif defined(NWB_HAS_NEON)
+    float32x2_t xy = vget_low_f32(src);
+    vst1_f32(&dst->x, xy);
+    vst1q_lane_f32(&dst->z, src, 2);
+#elif defined(NWB_HAS_SSE4)
+    _mm_store_sd(reinterpret_cast<f64*>(&dst->x), _mm_castps_pd(src));
+    _mm_store_ss(&dst->z, _mm_shuffle_ps(src, src, _MM_SHUFFLE(2, 2, 2, 2)));
+#endif
+}
+
 #if defined(NWB_HAS_SCALAR)
 template<typename T>
 NWB_INLINE void StoreFloat34Scalar(SIMDMatrix src, T* dst)noexcept{
@@ -446,18 +478,13 @@ NWB_INLINE SIMDVector SIMDCALL LoadFloat(const Float2U& src)noexcept{
 #endif
 }
 NWB_INLINE SIMDVector SIMDCALL LoadFloat(const Float3U& src)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, 0.0f);
-#elif defined (NWB_HAS_NEON)
-    float32x2_t x = vld1_f32(src.raw);
-    float32x2_t zero = vdup_n_f32(0);
-    float32x2_t y = vld1_lane_f32(src.raw + 2, zero, 0);
-    return vcombine_f32(x, y);
-#elif defined(NWB_HAS_SSE4)
-    __m128 xy = _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
-    __m128 z = _mm_load_ss(&src.z);
-    return _mm_movelh_ps(xy, z);
-#endif
+    return SIMDConvertDetail::LoadFloat3Components(src);
+}
+NWB_INLINE SIMDVector SIMDCALL LoadFloatInt(const Float3Int& src)noexcept{
+    return SIMDConvertDetail::LoadFloat3Components(src);
+}
+NWB_INLINE SIMDVector SIMDCALL LoadFloatInt(const Float3UInt& src)noexcept{
+    return SIMDConvertDetail::LoadFloat3Components(src);
 }
 NWB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4U& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -730,18 +757,15 @@ NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float2U* dst)noexcept{
 #endif
 }
 NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float3U* dst)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    dst->x = src.f[0];
-    dst->y = src.f[1];
-    dst->z = src.f[2];
-#elif defined (NWB_HAS_NEON)
-    float32x2_t VL = vget_low_f32(src);
-    vst1_f32(dst->raw, VL);
-    vst1q_lane_f32(dst->raw + 2, src, 2);
-#elif defined(NWB_HAS_SSE4)
-    _mm_store_sd(reinterpret_cast<f64*>(dst->raw), _mm_castps_pd(src));
-    *reinterpret_cast<i32*>(&dst->z) = _mm_extract_ps(src, 2);
-#endif
+    SIMDConvertDetail::StoreFloat3Components(src, dst);
+}
+NWB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, i32 w, Float3Int* dst)noexcept{
+    SIMDConvertDetail::StoreFloat3Components(src, dst);
+    dst->w = w;
+}
+NWB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, u32 w, Float3UInt* dst)noexcept{
+    SIMDConvertDetail::StoreFloat3Components(src, dst);
+    dst->w = w;
 }
 NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U* dst)noexcept{
 #if defined(NWB_HAS_SCALAR)

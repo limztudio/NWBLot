@@ -206,14 +206,13 @@ inline InstanceGpuData BuildInstanceGpuData(
 #endif
 
     InstanceGpuData data;
-    data.materialTypedByteOffsets.x = materialTypedRanges.constantRange.byteOffset;
-    data.materialTypedByteOffsets.y = materialTypedRanges.mutableRange.byteOffset;
-    if(!transform)
-        return data;
-
-    data.rotation = transform->rotation;
-    data.translation = transform->position;
-    data.scale = transform->scale;
+    if(transform){
+        data.rotation = transform->rotation;
+        StoreFloatInt(LoadFloat(transform->position), materialTypedRanges.mutableRange.byteOffset, &data.translation);
+        data.scale = transform->scale;
+    }
+    else
+        data.translation.w = materialTypedRanges.mutableRange.byteOffset;
     return data;
 }
 

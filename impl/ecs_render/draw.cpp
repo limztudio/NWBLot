@@ -253,7 +253,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources);
 #endif
 
-        auto appendInstance = [&]() -> u32{
+        auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
 #if defined(NWB_DEBUG)
             if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer instance count exceeds u32 limits"));
@@ -261,7 +261,6 @@ void RendererSystem::gatherMaterialPassDrawItems(
             }
 #endif
 
-            ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
             if(!appendConstantMaterialTypedBytes(*materialInfo, typedRanges.constantRange))
                 return Limit<u32>::s_Max;
             if(!appendMutableInstanceTypedBytes(entity, *materialInfo, typedRanges.mutableRange))
@@ -274,7 +273,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
         };
 
         auto appendDrawItem = [&](MaterialPassDrawItemVector& drawItems) -> bool{
-            const u32 instanceIndex = appendInstance();
+            ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+            const u32 instanceIndex = appendInstance(typedRanges);
             if(instanceIndex == Limit<u32>::s_Max)
                 return false;
 
@@ -282,6 +282,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             drawItem.meshKey = mesh.meshName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
+            drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
             drawItem.meshletConeCullScaleSafe = transform
                 ? __hidden_draw::meshletConeCullScaleSafe(LoadFloat(transform->scale))
                 : true
@@ -375,22 +376,31 @@ u32 RendererSystem::meshDispatchFlags(
     return flags;
 }
 
-void RendererSystem::setMaterialPassDrawPushConstants(
+u32 RendererSystem::materialPassDrawDispatchFlags(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
     const MeshResources& mesh
-){
-    const u32 dispatchFlags = meshDispatchFlags(
+)const{
+    return meshDispatchFlags(
         mesh,
         context.pass,
         drawItem.pipelineKey.twoSided,
         drawItem.meshletConeCullScaleSafe
     );
+}
+
+void RendererSystem::setMaterialPassDrawPushConstants(
+    const MaterialPassDrawContext& context,
+    const MaterialPassDrawItem& drawItem,
+    const MeshResources& mesh
+){
+    const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
         ECSRenderDetail::SetTransparentDrawPushConstants(
             context.commandList,
             mesh.meshletCount,
             drawItem.instanceIndex,
+            drawItem.materialConstantByteOffset,
             context.viewportState,
             *context.avboitTargets,
             dispatchFlags
@@ -402,6 +412,7 @@ void RendererSystem::setMaterialPassDrawPushConstants(
         context.commandList,
         mesh.meshletCount,
         drawItem.instanceIndex,
+        drawItem.materialConstantByteOffset,
         context.viewportState,
         dispatchFlags
     );
@@ -480,13 +491,9 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
             context.commandList,
             mesh.meshletCount,
             drawItem.instanceIndex,
+            drawItem.materialConstantByteOffset,
             context.viewportState,
-            meshDispatchFlags(
-                mesh,
-                context.pass,
-                drawItem.pipelineKey.twoSided,
-                drawItem.meshletConeCullScaleSafe
-            )
+            materialPassDrawDispatchFlags(context, drawItem, mesh)
         );
         {
             Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::MeshDispatch(), m_graphics.getDevice(), context.commandList);
@@ -518,8 +525,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         context.commandList.setGraphicsState(graphicsState);
 
-        if(usesAvboit)
-            setMaterialPassDrawPushConstants(context, drawItem, mesh);
+        setMaterialPassDrawPushConstants(context, drawItem, mesh);
 
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);

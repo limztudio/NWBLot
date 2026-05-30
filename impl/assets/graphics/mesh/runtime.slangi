@@ -59,13 +59,9 @@ NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
 
 struct NwbMeshInstanceData{
     float4 rotation;
-    float4 translation;
+    float3 translation;
+    uint materialMutableByteOffset;
     float4 scale;
-
-    // x: material-constant byte offset into g_NwbMaterialTypedWords
-    // y: material-mutable byte offset into g_NwbMaterialTypedWords
-    // The StructuredBuffer stride is still 64 bytes; the final 8 bytes are padding.
-    uint2 materialTypedByteOffsets;
 };
 
 [[vk::binding(0, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbMeshPositions;
@@ -114,7 +110,15 @@ uint nwbMeshletCount(){
 }
 
 uint nwbMeshInstanceIndex(){
+    return g_NwbMeshPushConstants.dispatch.y;
+}
+
+uint nwbMeshMaterialConstantByteOffset(){
     return g_NwbMeshPushConstants.dispatch.z;
+}
+
+uint nwbMeshDispatchFlags(){
+    return g_NwbMeshPushConstants.dispatch.w;
 }
 
 float4 nwbMeshTransformWorldToClip(float3 worldPosition){
@@ -122,7 +126,7 @@ float4 nwbMeshTransformWorldToClip(float3 worldPosition){
 }
 
 float3 nwbMeshTransformPosition(float3 position, const NwbMeshInstanceData instance){
-    return nwbRotateVectorByQuaternion(position * instance.scale.xyz, instance.rotation) + instance.translation.xyz;
+    return nwbRotateVectorByQuaternion(position * instance.scale.xyz, instance.rotation) + instance.translation;
 }
 
 float3 nwbMeshTransformDirection(float3 direction, const NwbMeshInstanceData instance){

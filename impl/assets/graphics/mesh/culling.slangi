@@ -10,7 +10,7 @@
 
 
 bool nwbMeshDispatchFlagEnabled(uint flag){
-    return (g_NwbMeshPushConstants.dispatch.y & flag) != 0u;
+    return (nwbMeshDispatchFlags() & flag) != 0u;
 }
 
 float nwbMeshMaxAbsScale(const float3 scale){

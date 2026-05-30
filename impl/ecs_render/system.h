@@ -72,16 +72,14 @@ namespace ECSRenderDetail{
 
 struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
-    Float4 translation = Float4(0.f, 0.f, 0.f, 0.f);
+    Float3UInt translation = Float3UInt(0.f, 0.f, 0.f, 0u);
     Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
-
-    // x: material-constant byte offset; y: material-mutable byte offset.
-    // Instance stride remains 64 bytes because the three Float4 rows keep the struct 16-byte aligned.
-    UInt2U materialTypedByteOffsets = {};
 };
-static_assert(sizeof(decltype(InstanceGpuData::materialTypedByteOffsets)) == sizeof(u32) * 2u, "InstanceGpuData uploads only two material typed offsets");
-static_assert(offsetof(InstanceGpuData, materialTypedByteOffsets) == sizeof(f32) * 12u, "InstanceGpuData material typed offsets must follow the transform rows");
-static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 16u, "InstanceGpuData stride must match the mesh shaders; trailing bytes are padding, not material counts");
+static_assert(offsetof(InstanceGpuData, rotation) == 0u, "InstanceGpuData rotation must be first");
+static_assert(offsetof(InstanceGpuData, translation) == sizeof(f32) * 4u, "InstanceGpuData translation must follow rotation");
+static_assert(offsetof(InstanceGpuData, translation) + offsetof(Float3UInt, w) == sizeof(f32) * 7u, "InstanceGpuData mutable offset must pack into translation.w");
+static_assert(offsetof(InstanceGpuData, scale) == sizeof(f32) * 8u, "InstanceGpuData scale must follow translation payload");
+static_assert(sizeof(InstanceGpuData) == sizeof(f32) * 12u, "InstanceGpuData stride must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
 
@@ -168,6 +166,7 @@ private:
         Name meshKey = NAME_NONE;
         MaterialPipelineKey pipelineKey;
         u32 instanceIndex = 0;
+        u32 materialConstantByteOffset = 0u;
         bool meshletConeCullScaleSafe = false;
     };
 
@@ -339,6 +338,11 @@ private:
         MaterialPipelinePass::Enum pass,
         bool twoSided,
         bool meshletConeCullScaleSafe
+    )const;
+    [[nodiscard]] u32 materialPassDrawDispatchFlags(
+        const MaterialPassDrawContext& context,
+        const MaterialPassDrawItem& drawItem,
+        const MeshResources& mesh
     )const;
     void addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const;
     void addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const;

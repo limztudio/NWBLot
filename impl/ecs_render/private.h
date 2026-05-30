@@ -50,9 +50,9 @@ inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::T
 
 struct ShaderDrivenPushConstants{
     u32 meshletCount = 0;
-    u32 dispatchFlags = 0;
     u32 instanceIndex = 0;
-    u32 reserved0 = 0;
+    u32 materialConstantByteOffset = 0;
+    u32 dispatchFlags = 0;
     Float4 viewportRect = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 scissorRect = Float4(0.f, 0.f, 0.f, 0.f);
 };
@@ -78,6 +78,10 @@ struct SceneShadingGpuData{
 };
 
 static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
+static_assert(offsetof(ShaderDrivenPushConstants, meshletCount) == sizeof(u32) * 0u, "ShaderDrivenPushConstants dispatch.x must be meshlet count");
+static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) * 1u, "ShaderDrivenPushConstants dispatch.y must be instance index");
+static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * 2u, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
+static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * 3u, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
 static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparentDrawPushConstantSize, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
@@ -240,13 +244,15 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
 inline ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const u32 dispatchFlags
 ){
     ShaderDrivenPushConstants pushConstants;
     pushConstants.meshletCount = meshletCount;
-    pushConstants.dispatchFlags = dispatchFlags;
     pushConstants.instanceIndex = instanceIndex;
+    pushConstants.materialConstantByteOffset = materialConstantByteOffset;
+    pushConstants.dispatchFlags = dispatchFlags;
 
     if(viewportState.viewports.empty())
         return pushConstants;
@@ -271,12 +277,13 @@ inline ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
 inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const RendererSystem::AvboitFrameTargets& targets,
     const u32 dispatchFlags
 ){
     TransparentDrawPushConstants pushConstants;
-    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState, dispatchFlags);
+    pushConstants.mesh = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, dispatchFlags);
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets);
     return pushConstants;
 }
@@ -285,10 +292,11 @@ inline void SetShaderDrivenPushConstants(
     Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const u32 dispatchFlags
 ){
-    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, viewportState, dispatchFlags);
+    const ShaderDrivenPushConstants pushConstants = BuildShaderDrivenPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, dispatchFlags);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
@@ -296,11 +304,12 @@ inline void SetTransparentDrawPushConstants(
     Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
+    const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
     const RendererSystem::AvboitFrameTargets& targets,
     const u32 dispatchFlags
 ){
-    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, viewportState, targets, dispatchFlags);
+    const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, targets, dispatchFlags);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 

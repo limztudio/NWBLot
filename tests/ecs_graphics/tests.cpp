@@ -328,8 +328,7 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
     instanceRange.mutableRange = secondRange;
     instanceRanges.push_back(instanceRange);
     const NWB::Impl::InstanceGpuData gpuData = NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRange);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, gpuData.materialTypedByteOffsets.x == firstRange.byteOffset);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, gpuData.materialTypedByteOffsets.y == secondRange.byteOffset);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, gpuData.translation.w == secondRange.byteOffset);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::ValidateMaterialTypedUploadRanges(
         instanceRanges,
         uploadBytes

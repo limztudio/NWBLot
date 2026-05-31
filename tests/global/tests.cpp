@@ -361,6 +361,13 @@ static void TestLoggerMacrosBehaveAsSingleStatements(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 1u);
     NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::EssentialInfo);
     NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("macro 42")));
+
+    const AString rawMessage("raw converted warning");
+    NWB_LOGGER_WARNING(StringConvert(rawMessage));
+
+    NWB_GLOBAL_TEST_CHECK(context, logger.messageCount() == 2u);
+    NWB_GLOBAL_TEST_CHECK(context, logger.lastType() == NWB::Core::Common::LogType::Warning);
+    NWB_GLOBAL_TEST_CHECK(context, logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
 }
 
 

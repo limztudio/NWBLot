@@ -42,7 +42,7 @@ static Core::TextureHandle CreateRenderTarget(
     if(texture)
         return texture;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    NWB_LOGGER_ERROR(failureMessage);
     return {};
 }
 
@@ -89,7 +89,7 @@ static Core::BufferHandle CreateU32Buffer(
     if(buffer)
         return buffer;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    NWB_LOGGER_ERROR(failureMessage);
     return {};
 }
 
@@ -120,7 +120,7 @@ static bool CreateBindingSet(
     if(outBindingSet)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    NWB_LOGGER_ERROR(failureMessage);
     return false;
 }
 

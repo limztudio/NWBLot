@@ -430,7 +430,7 @@ int Run(int argc, char** argv, bool& prompted){
     }
     if(IsNormalizedSkinnedMeshClass(options.meshClass))
         report << "  skeleton joints: " << skeletonJointCount << "\n";
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(report.str()));
+    NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
     return 0;
 }

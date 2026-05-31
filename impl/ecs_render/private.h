@@ -137,7 +137,7 @@ inline bool CreateClampSampler(
     if(sampler)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    NWB_LOGGER_ERROR(failureMessage);
     return false;
 }
 

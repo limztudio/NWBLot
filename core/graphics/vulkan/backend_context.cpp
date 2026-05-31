@@ -576,7 +576,7 @@ bool BackendContext::createVulkanInstance(){
         ss << "Vulkan: Enabled instance extensions:";
         for(const auto& ext : m_enabledExtensions.instance)
             ss << "\n    " << ext;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+        NWB_LOGGER_INFO(StringConvert(ss.str()));
     }
 
     decltype(m_enabledExtensions.layers) requiredLayers(m_enabledExtensions.layers);
@@ -616,7 +616,7 @@ bool BackendContext::createVulkanInstance(){
         ss << "Vulkan: Enabled layers:";
         for(const auto& layer : m_enabledExtensions.layers)
             ss << "\n    " << layer;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+        NWB_LOGGER_INFO(StringConvert(ss.str()));
     }
 
     auto instanceExtVec = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
@@ -662,7 +662,7 @@ bool BackendContext::createVulkanInstance(){
            << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
            << "\n    enabled layers: " << m_enabledExtensions.layers.size()
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
 
     VkInstanceCreateInfo createInfo = {};
@@ -1189,7 +1189,7 @@ bool BackendContext::createVulkanDevice(){
         ss << "Vulkan: Enabled device extensions:";
         for(const auto& [name, _] : m_enabledExtensions.device)
             ss << "\n    " << name;
-        NWB_LOGGER_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+        NWB_LOGGER_INFO(StringConvert(ss.str()));
     }
 
     auto requireFeature = [&](const VkBool32 supported, const AStringView featureName)->bool{
@@ -1414,7 +1414,7 @@ bool BackendContext::createVulkanDevice(){
            << " cooperativeVector=" << VulkanDetail::BoolToString(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE)
            << "\n    enabled device extensions: " << m_enabledExtensions.device.size()
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);
@@ -1733,7 +1733,7 @@ bool BackendContext::createVulkanSwapChain(){
            << "\n    mutable format: " << VulkanDetail::BoolToString(m_swapChainMutableFormatSupported)
            << "\n    queue sharing: " << (enableSwapChainSharing ? "concurrent" : "exclusive")
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(ss.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
 
     return true;

@@ -107,7 +107,7 @@ bool ValidateMeshClassText(AString& inOutValue){
     if(ParseNormalizedMeshClassText(inOutValue, meshClass))
         return true;
 
-    NWB_LOGGER_WARNING(NWB_TEXT("{}"), StringConvert(MeshClassErrorText()));
+    NWB_LOGGER_WARNING(StringConvert(MeshClassErrorText()));
     return false;
 }
 
@@ -173,7 +173,7 @@ bool ValidateNormalModeText(AString& inOutValue){
     if(ParseNormalizedNormalModeText(inOutValue, normalMode))
         return true;
 
-    NWB_LOGGER_WARNING(NWB_TEXT("{}"), StringConvert(NormalModeErrorText()));
+    NWB_LOGGER_WARNING(StringConvert(NormalModeErrorText()));
     return false;
 }
 

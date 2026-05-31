@@ -64,6 +64,41 @@ extern ILogger* g_logger;
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...){}
 
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, LogString&& message){
+    logger.enqueue(Move(message), type);
+}
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const LogString& message){
+    logger.enqueue(message, type);
+}
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const char* message){
+    logger.enqueue(StringConvert(logger.arena(), AStringView(message)), type);
+}
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const wchar* message){
+    logger.enqueue(StringConvert(logger.arena(), WStringView(message)), type);
+}
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const AStringView message){
+    logger.enqueue(StringConvert(logger.arena(), message), type);
+}
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const WStringView message){
+    logger.enqueue(StringConvert(logger.arena(), message), type);
+}
+template<typename ArenaT>
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const TString<ArenaT>& message){
+    logger.enqueue(LogString(TStringView(message.data(), message.size()), logger.arena()), type);
+}
+template<typename In>
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const BasicStringDetail::StringConvertArg<In>& message){
+    logger.enqueue(StringConvert(logger.arena(), message.value), type);
+}
+template<typename... ARGS>
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, AFormatString<ARGS...> fmt, ARGS&&... args){
+    logger.enqueue(StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...), type);
+}
+template<typename... ARGS>
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, WFormatString<ARGS...> fmt, ARGS&&... args){
+    logger.enqueue(StringFormat(logger.arena(), fmt, Forward<ARGS>(args)...), type);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -106,14 +141,14 @@ NWB_COMMON_END
     do{                                                                                                                        \
         NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                               \
         auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
-        logger.enqueue(StringFormat(logger.arena(), __VA_ARGS__), ::NWB::Core::Common::LogType::Type);                         \
+        ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
     }while(false)
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Type, BreakMacro, ...)                                                            \
     do{                                                                                                                        \
         NWB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_logger != nullptr);                                               \
         auto& logger = *::NWB::Core::Common::LoggerDetail::g_logger;                                                           \
-        logger.enqueue(StringFormat(logger.arena(), __VA_ARGS__), ::NWB::Core::Common::LogType::Type);                         \
+        ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
         BreakMacro;                                                                                                            \
     }while(false)
 

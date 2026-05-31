@@ -68,7 +68,7 @@ static bool EnsureComputePipeline(
     pipelineDesc.addBindingLayout(bindingLayout);
     pipeline = device.createComputePipeline(pipelineDesc);
     if(!pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}"), pipelineError);
+        NWB_LOGGER_ERROR(pipelineError);
         return false;
     }
 

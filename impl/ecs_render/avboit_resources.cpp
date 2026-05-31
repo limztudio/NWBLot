@@ -40,7 +40,7 @@ static bool CreateBindingLayout(
     if(layout)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    NWB_LOGGER_ERROR(failureMessage);
     return false;
 }
 
@@ -63,7 +63,7 @@ static bool CreateComputePipeline(
     if(pipeline)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{}"), failureMessage);
+    NWB_LOGGER_ERROR(failureMessage);
     return false;
 }
 

@@ -182,14 +182,14 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
     AStringStream report;
     if(instances.empty()){
         report << "No mesh instances found.\n";
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(report.str()));
+        NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
         return;
     }
 
     report << "Mesh instances:\n";
     for(const MeshInstance& instance : instances)
         report << "  " << __hidden_scene::MeshDisplayName(instance) << "\n";
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{}"), StringConvert(report.str()));
+    NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 }
 
 bool SelectMeshInstances(

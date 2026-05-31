@@ -94,7 +94,7 @@ bool RendererSystem::createEmulationViewResources(){
     if(!m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(11, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
 
         m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_emulationViewBindingLayout){
@@ -107,7 +107,7 @@ bool RendererSystem::createEmulationViewResources(){
         return true;
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(11, m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_meshViewBuffer.get()));
 
     m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_emulationViewBindingLayout);
     if(!m_emulationViewBindingSet){

@@ -5,6 +5,8 @@
 #ifndef NWB_GRAPHICS_MESH_VIEW_BUFFER_SLANGI
 #define NWB_GRAPHICS_MESH_VIEW_BUFFER_SLANGI
 
+#include "binding_slots.slangi"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,7 +17,7 @@ struct NwbMeshViewBuffer{
     float4 g_NwbMeshFrustumPlanes[6];
 };
 
-[[vk::binding(12, 0)]]
+[[vk::binding(NWB_MESH_BINDING_VIEW, 0)]]
 ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
 
 #define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip

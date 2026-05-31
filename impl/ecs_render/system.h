@@ -395,15 +395,16 @@ private:
     static constexpr u32 s_MeshUv0BindingSlot = 3u;
     static constexpr u32 s_MeshColorBindingSlot = 4u;
     static constexpr u32 s_MeshletDescBindingSlot = 5u;
-    static constexpr u32 s_MeshletBoundsBindingSlot = 6u;
-    static constexpr u32 s_MeshletPositionRefBindingSlot = 7u;
-    static constexpr u32 s_MeshletAttributeRefBindingSlot = 8u;
-    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = 9u;
-    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = 10u;
-    static constexpr u32 s_MeshInstanceBindingSlot = 11u;
-    static constexpr u32 s_MeshViewBindingSlot = 12u;
-    static constexpr u32 s_MeshMaterialTypedBindingSlot = 13u;
+    static constexpr u32 s_MeshMaterialTypedBindingSlot = 6u;
+    static constexpr u32 s_MeshletBoundsBindingSlot = 7u;
+    static constexpr u32 s_MeshletPositionRefBindingSlot = 8u;
+    static constexpr u32 s_MeshletAttributeRefBindingSlot = 9u;
+    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = 10u;
+    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = 11u;
+    static constexpr u32 s_MeshInstanceBindingSlot = 12u;
+    static constexpr u32 s_MeshViewBindingSlot = 13u;
     static constexpr u32 s_MeshGeneratedVertexBindingSlot = 14u;
+    static_assert(s_MeshMaterialTypedBindingSlot == 6u, "Mesh material typed payload binding must stay at slot 6");
 
 private:
     [[nodiscard]] static bool splitMaterialTypedBytesByClass(

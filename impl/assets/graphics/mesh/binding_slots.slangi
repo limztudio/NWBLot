@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_BINDING_SLOTS_SLANGI
+#define NWB_GRAPHICS_MESH_BINDING_SLOTS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_MESH_BINDING_POSITION 0
+#define NWB_MESH_BINDING_NORMAL 1
+#define NWB_MESH_BINDING_TANGENT 2
+#define NWB_MESH_BINDING_UV0 3
+#define NWB_MESH_BINDING_COLOR 4
+#define NWB_MESH_BINDING_MESHLET_DESC 5
+#define NWB_MESH_BINDING_MATERIAL_TYPED 6
+#define NWB_MESH_BINDING_MESHLET_BOUNDS 7
+#define NWB_MESH_BINDING_MESHLET_POSITION_REFS 8
+#define NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS 9
+#define NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS 10
+#define NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES 11
+#define NWB_MESH_BINDING_INSTANCE 12
+#define NWB_MESH_BINDING_VIEW 13
+#define NWB_MESH_BINDING_GENERATED_VERTEX 14
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

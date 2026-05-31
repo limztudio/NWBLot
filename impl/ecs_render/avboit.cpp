@@ -117,7 +117,7 @@ Core::Format::Enum SelectRendererAvboitAccumExtinctionFormat(Core::Device& devic
 
 Core::Format::Enum SelectRendererAvboitTransmittanceFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
-        Core::Format::R16_FLOAT,
+        NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT,
     };
     constexpr Core::FormatSupport::Mask requiredSupport =
         Core::FormatSupport::Texture
@@ -263,7 +263,7 @@ void RendererSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, Avb
         m_avboitDepthWarpPipeline.get(),
         targets.depthWarpBindingSet.get(),
         targets,
-        1u
+        NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X
     );
 }
 

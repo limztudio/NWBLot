@@ -10,6 +10,7 @@
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/cook.h>
+#include <impl/assets/graphics/mesh/runtime_constants.h>
 
 #include <tests/capturing_logger.h>
 #include <tests/meshlet_ref_test_data.h>
@@ -49,6 +50,8 @@ using AString = NWB::Tests::TestAString;
 
 
 #define NWB_ASSETS_GRAPHICS_TEST_CHECK NWB_TEST_CHECK
+#define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value) #Value
+#define NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(Value) NWB_ASSETS_GRAPHICS_TEST_STRINGIFY_IMPL(Value)
 
 
 struct AssetsGraphicsTestArenaTag{};
@@ -560,12 +563,16 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 )NWB_SLANG";
 #endif
 
-static constexpr AStringView s_MaterialBindPixelShaderProbeSource = R"NWB_SLANG(struct NwbMaterialBindPixelInput{
-    [[vk::location(0)]] float4 color : COLOR0;
+static constexpr AStringView s_MaterialBindPixelShaderProbeSource =
+    "#define NWB_MESH_RASTER_COLOR_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_RASTER_COLOR_LOCATION) "\n"
+    "#define NWB_MESH_COLOR_TARGET_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_COLOR_TARGET_LOCATION) "\n"
+    R"NWB_SLANG(
+struct NwbMaterialBindPixelInput{
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
 };
 
 struct NwbMaterialBindPixelOutput{
-    [[vk::location(0)]] float4 color : SV_Target0;
+    [[vk::location(NWB_MESH_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
 };
 
 NwbMaterialBindPixelOutput main(NwbMaterialBindPixelInput input){

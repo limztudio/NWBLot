@@ -10,7 +10,7 @@
 
 
 [[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Extinction;
-[[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, NWB_AVBOIT_COMPUTE_SET), vk::image_format("r16f")]] RWTexture3D<float> g_Transmittance;
+[[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, NWB_AVBOIT_COMPUTE_SET), vk::image_format(NWB_AVBOIT_TRANSMITTANCE_IMAGE_FORMAT)]] RWTexture3D<float> g_Transmittance;
 [[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
 [[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
 

@@ -68,8 +68,8 @@ template<typename CookEntryT>
         );
         const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
         const SIMDVector areaNormal = BuildMeshletFaceNormal(p0, p1, p2);
-        StoreFloat(VectorSetW(centroid, 0.0f), &triangle.centroid);
-        StoreFloat(VectorSetW(areaNormal, 0.0f), &triangle.areaNormal);
+        triangle.centroid = VectorSetW(centroid, 0.0f);
+        triangle.areaNormal = VectorSetW(areaNormal, 0.0f);
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
         for(const u32 positionIndex : triangle.positions){

@@ -276,10 +276,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     Vec3 outputPosition = ToVec3(position);
-    StoreFloat(
-        VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)),
-        &outputPosition
-    );
+    const f32 scale = static_cast<f32>(options.scale);
+    outputPosition.x *= scale;
+    outputPosition.y *= scale;
+    outputPosition.z *= scale;
     return outputPosition;
 }
 
@@ -337,34 +337,34 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const SIMDVector normalVector = LoadFloat(normal);
-            const SIMDVector tangentVector = LoadFloat(outputTangent);
-            const SIMDVector bitangentVector = LoadFloat(outputBitangent);
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(normalVector, tangentVector);
-            sign = VectorGetX(Vector3Dot(tangentSpaceBitangent, bitangentVector)) < 0.0f ? -1.0f : 1.0f;
+            const Vec3 tangentSpaceBitangent{
+                normal.y * outputTangent.z - normal.z * outputTangent.y,
+                normal.z * outputTangent.x - normal.x * outputTangent.z,
+                normal.x * outputTangent.y - normal.y * outputTangent.x,
+            };
+            const f32 bitangentDot =
+                tangentSpaceBitangent.x * outputBitangent.x
+                + tangentSpaceBitangent.y * outputBitangent.y
+                + tangentSpaceBitangent.z * outputBitangent.z
+            ;
+            sign = bitangentDot < 0.0f ? -1.0f : 1.0f;
         }
     }
 
-    StoreFloat(VectorSetW(LoadFloat(outputTangent), sign), &outTangent);
+    outTangent = Vec4{ outputTangent.x, outputTangent.y, outputTangent.z, sign };
     return true;
 }
 
 [[nodiscard]] bool IsFiniteVec2(const Vec2& value){
-    const SIMDVector vector = LoadFloat(value);
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(vector), VectorIsInfinite(vector));
-    return (VectorMoveMask(invalid) & 0x3u) == 0u;
+    return IsFinite(value.x) && IsFinite(value.y);
 }
 
 [[nodiscard]] bool IsFiniteVec3(const Vec3& value){
-    const SIMDVector vector = LoadFloat(value);
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(vector), VectorIsInfinite(vector));
-    return (VectorMoveMask(invalid) & 0x7u) == 0u;
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
 }
 
 [[nodiscard]] bool IsFiniteVec4(const Vec4& value){
-    const SIMDVector vector = LoadFloat(value);
-    const SIMDVector invalid = VectorOrInt(VectorIsNaN(vector), VectorIsInfinite(vector));
-    return (VectorMoveMask(invalid) & 0xFu) == 0u;
+    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){

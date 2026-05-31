@@ -86,13 +86,13 @@ static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_
     return normalizedVector;
 }
 
-static void ResolveFlyCameraAnglesFromTransform(
-    const NWB::Impl::Scene::TransformComponent& transform,
+static void ResolveFlyCameraAnglesFromRotation(
+    const SIMDVector rotation,
     f32& outYawRadians,
     f32& outPitchRadians){
     const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const SIMDVector forwardVector = NormalizeVec3Vector(
-        Vector3Rotate(localForward, LoadFloat(transform.rotation)),
+        Vector3Rotate(localForward, rotation),
         localForward
     );
     const SIMDVector clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
@@ -177,7 +177,7 @@ static void ApplyFlyCameraInputToMainCamera(
 
     f32 yawRadians = 0.0f;
     f32 pitchRadians = 0.0f;
-    ResolveFlyCameraAnglesFromTransform(*cameraView.transform, yawRadians, pitchRadians);
+    ResolveFlyCameraAnglesFromRotation(LoadFloat(cameraView.transform->rotation), yawRadians, pitchRadians);
     ApplyFlyCameraInput(
         *cameraView.transform,
         yawRadians,

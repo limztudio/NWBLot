@@ -68,19 +68,13 @@ static void ResetMeshletScoreState(MeshletScoreState& state){
     return VectorGetX(Vector3Length(extent));
 }
 
-template<typename CookEntryT>
 static void AccumulateMeshletScoreBounds(
-    const CookEntryT& entry,
-    const MeshletTriangleData& triangle,
+    const SIMDVector (&trianglePositions)[3],
     SIMDVector& minBounds,
     SIMDVector& maxBounds,
     bool& hasGeometry
 ){
-    for(const u32 vertexRefIndex : triangle.vertexRefs){
-        const SIMDVector position = VectorSetW(
-            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, vertexRefIndex)),
-            0.0f
-        );
+    for(const SIMDVector position : trianglePositions){
         if(!hasGeometry){
             minBounds = position;
             maxBounds = position;
@@ -92,16 +86,14 @@ static void AccumulateMeshletScoreBounds(
     }
 }
 
-template<typename CookEntryT>
 [[nodiscard]] static f32 PredictMeshletScoreRadius(
-    const CookEntryT& entry,
     const MeshletScoreState& state,
-    const MeshletTriangleData& triangle
+    const SIMDVector (&trianglePositions)[3]
 ){
     SIMDVector minBounds = state.minBounds;
     SIMDVector maxBounds = state.maxBounds;
     bool hasGeometry = state.hasGeometry;
-    AccumulateMeshletScoreBounds(entry, triangle, minBounds, maxBounds, hasGeometry);
+    AccumulateMeshletScoreBounds(trianglePositions, minBounds, maxBounds, hasGeometry);
 
     return ComputeMeshletScoreBoundsRadius(minBounds, maxBounds);
 }
@@ -152,11 +144,11 @@ template<typename TriangleIndexVectorT>
     bool hasNormal = false;
     f32 coneCutoff = 1.0f;
     for(const u32 triangleIndex : triangleIndices){
-        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[triangleIndex].areaNormal);
+        const SIMDVector triangleAreaNormal = trianglePrecompute.triangles[triangleIndex].areaNormal;
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
     if(hasExtraTriangle){
-        const SIMDVector triangleAreaNormal = LoadFloat(trianglePrecompute.triangles[extraTriangleIndex].areaNormal);
+        const SIMDVector triangleAreaNormal = trianglePrecompute.triangles[extraTriangleIndex].areaNormal;
         UpdateMeshletScoreConeCutoff(axis, triangleAreaNormal, hasNormal, coneCutoff);
     }
 
@@ -206,9 +198,17 @@ template<typename CookEntryT, typename TriangleIndexVectorT>
     const bool disconnected
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    const SIMDVector triangleCentroid = LoadFloat(triangle.centroid);
-    const SIMDVector triangleAreaNormal = LoadFloat(triangle.areaNormal);
-    const f32 predictedRadius = PredictMeshletScoreRadius(entry, state, triangle);
+    SIMDVector trianglePositions[3];
+    for(usize cornerIndex = 0u; cornerIndex < 3u; ++cornerIndex){
+        trianglePositions[cornerIndex] = VectorSetW(
+            LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[cornerIndex])),
+            0.0f
+        );
+    }
+
+    const SIMDVector triangleCentroid = triangle.centroid;
+    const SIMDVector triangleAreaNormal = triangle.areaNormal;
+    const f32 predictedRadius = PredictMeshletScoreRadius(state, trianglePositions);
     const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleCentroid);
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleAreaNormal);

@@ -92,7 +92,7 @@ u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
     }
 
     if(asyncExecutor != nullptr)
-        dispatchAsync(requestId);
+        dispatchAsync(requestId, *asyncExecutor);
 
     return requestId;
 }
@@ -183,16 +183,8 @@ u64 AssetManager::allocateRequestId(){
 }
 
 
-void AssetManager::dispatchAsync(const u64 requestId){
-    IAssetAsyncExecutor* asyncExecutor = nullptr;
-    {
-        ScopedLock lock(m_mutex);
-        asyncExecutor = m_asyncExecutor;
-    }
-    if(asyncExecutor == nullptr)
-        return;
-
-    asyncExecutor->enqueue([this, requestId](){
+void AssetManager::dispatchAsync(const u64 requestId, IAssetAsyncExecutor& asyncExecutor){
+    asyncExecutor.enqueue([this, requestId](){
         processRequest(requestId);
     });
 }

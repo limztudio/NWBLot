@@ -73,13 +73,9 @@ bool NearlyEqualJointMatrix(const MeshJointMatrix& lhs, const MeshJointMatrix& r
     for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
         const Vec4& lhsColumn = lhs.columns[columnIndex];
         const Vec4& rhsColumn = rhs.columns[columnIndex];
-        if(
-            Abs(lhsColumn.x - rhsColumn.x) > s_Epsilon
-            || Abs(lhsColumn.y - rhsColumn.y) > s_Epsilon
-            || Abs(lhsColumn.z - rhsColumn.z) > s_Epsilon
-            || Abs(lhsColumn.w - rhsColumn.w) > s_Epsilon
-        ){
-            return false;
+        for(usize componentIndex = 0u; componentIndex < 4u; ++componentIndex){
+            if(Abs(lhsColumn.raw[componentIndex] - rhsColumn.raw[componentIndex]) > s_Epsilon)
+                return false;
         }
     }
     return true;

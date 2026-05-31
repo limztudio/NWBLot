@@ -86,7 +86,7 @@ public:
 
 private:
     [[nodiscard]] u64 allocateRequestId();
-    void dispatchAsync(u64 requestId);
+    void dispatchAsync(u64 requestId, IAssetAsyncExecutor& asyncExecutor);
     void processRequest(u64 requestId);
 
 

@@ -219,15 +219,15 @@ bool Normalize(Vec3& value){
         return false;
 
     const f32 inverseLength = 1.0f / Sqrt(lengthSquared);
-    const Vec3 normalized{
-        value.x * inverseLength,
-        value.y * inverseLength,
-        value.z * inverseLength,
-    };
-    if(!IsFinite(normalized.x) || !IsFinite(normalized.y) || !IsFinite(normalized.z))
+    if(!IsFinite(inverseLength))
         return false;
 
-    value = normalized;
+    value.x *= inverseLength;
+    value.y *= inverseLength;
+    value.z *= inverseLength;
+    if(!IsFinite(value.x) || !IsFinite(value.y) || !IsFinite(value.z))
+        return false;
+
     return true;
 }
 

@@ -2,29 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CookEntryT, typename CallbackT>
-static void ForEachMeshletFaceNormalVector(const CookEntryT& entry, const MeshletDesc& meshlet, CallbackT callback){
-    for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
-        const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
-        const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
-        const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
-        const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
-        const SIMDVector p0 = VectorSetW(
-            LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex0)),
-            0.0f
-        );
-        const SIMDVector p1 = VectorSetW(
-            LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex1)),
-            0.0f
-        );
-        const SIMDVector p2 = VectorSetW(
-            LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex2)),
-            0.0f
-        );
-        callback(BuildMeshletFaceNormal(p0, p1, p2));
-    }
-}
-
 template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
     SIMDVector minBounds = VectorReplicate(Limit<f32>::s_Max);
@@ -47,7 +24,28 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
 
     SIMDVector areaWeightedNormal = VectorZero();
     u32 validFaceNormalCount = 0u;
-    ForEachMeshletFaceNormalVector(entry, meshlet, [&](const SIMDVector faceNormal){
+    auto visitMeshletFaceNormals = [&](auto&& callback){
+        for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
+            const usize primitiveOffset = meshlet.primitiveOffset + static_cast<usize>(primitiveIndex) * 3u;
+            const u8 localVertex0 = entry.meshletPrimitiveIndices[primitiveOffset + 0u];
+            const u8 localVertex1 = entry.meshletPrimitiveIndices[primitiveOffset + 1u];
+            const u8 localVertex2 = entry.meshletPrimitiveIndices[primitiveOffset + 2u];
+            const SIMDVector p0 = VectorSetW(
+                LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex0)),
+                0.0f
+            );
+            const SIMDVector p1 = VectorSetW(
+                LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex1)),
+                0.0f
+            );
+            const SIMDVector p2 = VectorSetW(
+                LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex2)),
+                0.0f
+            );
+            callback(BuildMeshletFaceNormal(p0, p1, p2));
+        }
+    };
+    visitMeshletFaceNormals([&](const SIMDVector faceNormal){
         if(!Core::Mesh::FrameValidDirection(faceNormal))
             return;
 
@@ -59,7 +57,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     f32 coneCutoff = -1.0f;
     if(validFaceNormalCount == MeshletPrimitiveCount(meshlet) && Core::Mesh::FrameValidDirection(coneAxis)){
         coneCutoff = 1.0f;
-        ForEachMeshletFaceNormalVector(entry, meshlet, [&](const SIMDVector meshletFaceNormal){
+        visitMeshletFaceNormals([&](const SIMDVector meshletFaceNormal){
             const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
             if(Core::Mesh::FrameValidDirection(faceNormal))
                 coneCutoff = Min(coneCutoff, VectorGetX(Vector3Dot(coneAxis, faceNormal)));

@@ -337,11 +337,17 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const SIMDVector normalVector = LoadFloat(normal);
-            const SIMDVector tangentVector = LoadFloat(outputTangent);
-            const SIMDVector bitangentVector = LoadFloat(outputBitangent);
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(normalVector, tangentVector);
-            sign = VectorGetX(Vector3Dot(tangentSpaceBitangent, bitangentVector)) < 0.0f ? -1.0f : 1.0f;
+            const Vec3 tangentSpaceBitangent{
+                normal.y * outputTangent.z - normal.z * outputTangent.y,
+                normal.z * outputTangent.x - normal.x * outputTangent.z,
+                normal.x * outputTangent.y - normal.y * outputTangent.x,
+            };
+            const f32 bitangentDot =
+                tangentSpaceBitangent.x * outputBitangent.x
+                + tangentSpaceBitangent.y * outputBitangent.y
+                + tangentSpaceBitangent.z * outputBitangent.z
+            ;
+            sign = bitangentDot < 0.0f ? -1.0f : 1.0f;
         }
     }
 
@@ -429,9 +435,13 @@ template<typename Value, typename Lookup>
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
+        Float4 rebuildPosition;
+        Float4 rebuildNormal;
+        StoreFloat(VectorSetW(LoadFloat(position), 0.0f), &rebuildPosition);
+        StoreFloat(VectorSetW(LoadFloat(normal), 0.0f), &rebuildNormal);
         rebuildVertices.push_back(RebuildVertex{
-            Float4(position.x, position.y, position.z, 0.0f),
-            Float4(normal.x, normal.y, normal.z, 0.0f),
+            rebuildPosition,
+            rebuildNormal,
             Float4(1.0f, 0.0f, 0.0f, 1.0f),
             mesh.uv0[ref.uv0],
         });

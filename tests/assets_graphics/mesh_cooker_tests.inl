@@ -339,22 +339,11 @@ struct SkinnedMeshPayloadEdit{
     {}
 
     void applyTo(NWB::Impl::SkinnedMesh& mesh){
-        mesh.setMeshClass(meshClass);
-        mesh.setSkeletonJointCount(skeletonJointCount);
-        mesh.setPayload(
-            Move(positions),
-            Move(normals),
-            Move(tangents),
-            Move(uv0),
-            Move(colors),
-            Move(skin),
-            Move(inverseBindMatrices),
-            Move(meshlets),
-            Move(meshletBounds),
-            Move(meshletPositionRefDeltas),
-            Move(meshletAttributeRefDeltas),
-            Move(meshletLocalVertexRefs),
-            Move(meshletPrimitiveIndices)
+        SetSkinnedMeshPayload(
+            mesh, meshClass, skeletonJointCount,
+            positions, normals, tangents, uv0, colors, skin, inverseBindMatrices,
+            meshlets, meshletBounds, meshletPositionRefDeltas, meshletAttributeRefDeltas, meshletLocalVertexRefs,
+            meshletPrimitiveIndices
         );
     }
 };

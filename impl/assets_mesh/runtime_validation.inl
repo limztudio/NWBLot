@@ -53,6 +53,32 @@ using MeshPayloadValidation::FiniteVector;
     );
 }
 
+template<typename MeshGeometryPayloadT>
+[[nodiscard]] static bool ValidateSharedMeshPayload(
+    const MeshGeometryPayloadT& payload,
+    const usize skinCount,
+    const bool skinRequired,
+    const tchar* contextText,
+    const TStringView meshPathText
+){
+    return ValidateSharedMeshPayload(
+        payload.positionStream(),
+        payload.normalStream(),
+        payload.tangentStream(),
+        payload.uv0Stream(),
+        payload.colorStream(),
+        payload.meshletPositionRefDeltas(),
+        payload.meshletAttributeRefDeltas(),
+        payload.meshletLocalVertexRefs(),
+        payload.meshlets(),
+        payload.meshletBounds(),
+        payload.meshletPrimitiveIndices(),
+        skinCount,
+        skinRequired,
+        contextText,
+        meshPathText
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

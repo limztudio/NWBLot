@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include "binary_payload_io.h"
 #include "payload_types.h"
 
 #include <core/assets/module.h>
@@ -95,6 +96,47 @@ protected:
             || m_meshletLocalVertexRefs.empty()
             || m_meshletPrimitiveIndices.empty()
         ;
+    }
+
+    template<typename HeaderT>
+    [[nodiscard]] bool readGeometryAttributeStreams(
+        const Core::Assets::AssetBytes& binary,
+        usize& inOutCursor,
+        const HeaderT& header,
+        const tchar* failureContext
+    ){
+        return MeshAssetBinaryPayload::ReadMeshAttributeStreams(
+            binary,
+            inOutCursor,
+            header,
+            m_positionStream,
+            m_normalStream,
+            m_tangentStream,
+            m_uv0Stream,
+            m_colorStream,
+            failureContext
+        );
+    }
+
+    template<typename HeaderT>
+    [[nodiscard]] bool readGeometryMeshletStreams(
+        const Core::Assets::AssetBytes& binary,
+        usize& inOutCursor,
+        const HeaderT& header,
+        const tchar* failureContext
+    ){
+        return MeshAssetBinaryPayload::ReadMeshletStreams(
+            binary,
+            inOutCursor,
+            header,
+            m_meshlets,
+            m_meshletBounds,
+            m_meshletPositionRefDeltas,
+            m_meshletAttributeRefDeltas,
+            m_meshletLocalVertexRefs,
+            m_meshletPrimitiveIndices,
+            failureContext
+        );
     }
 
     void clearGeometryPayload(){

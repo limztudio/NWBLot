@@ -93,17 +93,7 @@ bool SkinnedMesh::validatePayload()const{
     }
 
     if(!__hidden_skinned_asset::ValidateSharedMeshPayload(
-        m_positionStream,
-        m_normalStream,
-        m_tangentStream,
-        m_uv0Stream,
-        m_colorStream,
-        m_meshletPositionRefDeltas,
-        m_meshletAttributeRefDeltas,
-        m_meshletLocalVertexRefs,
-        m_meshlets,
-        m_meshletBounds,
-        m_meshletPrimitiveIndices,
+        *this,
         m_skin.size(),
         true,
         NWB_TEXT("SkinnedMesh::validatePayload"),
@@ -177,17 +167,7 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!MeshAssetBinaryPayload::ReadMeshAttributeStreams(
-        binary,
-        cursor,
-        header,
-        m_positionStream,
-        m_normalStream,
-        m_tangentStream,
-        m_uv0Stream,
-        m_colorStream,
-        loadFailureContext
-    ))
+    if(!readGeometryAttributeStreams(binary, cursor, header, loadFailureContext))
         return false;
     if(!MeshAssetBinaryPayload::ReadVector(binary, cursor, header.skinCount, m_skin, loadFailureContext, NWB_TEXT("skin")))
         return false;
@@ -200,18 +180,7 @@ bool SkinnedMesh::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_TEXT("inverse bind matrices")
     ))
         return false;
-    if(!MeshAssetBinaryPayload::ReadMeshletStreams(
-        binary,
-        cursor,
-        header,
-        m_meshlets,
-        m_meshletBounds,
-        m_meshletPositionRefDeltas,
-        m_meshletAttributeRefDeltas,
-        m_meshletLocalVertexRefs,
-        m_meshletPrimitiveIndices,
-        loadFailureContext
-    ))
+    if(!readGeometryMeshletStreams(binary, cursor, header, loadFailureContext))
         return false;
     if(!MeshAssetBinaryPayload::ReadComplete(binary, cursor, loadFailureContext))
         return false;

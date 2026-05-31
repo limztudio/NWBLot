@@ -41,32 +41,9 @@ public:
     [[nodiscard]] bool validatePayload()const;
 
 public:
-    void setPayload(
-        Core::Assets::AssetVector<Float3U>&& positions,
-        Core::Assets::AssetVector<Half4U>&& normals,
-        Core::Assets::AssetVector<Half4U>&& tangents,
-        Core::Assets::AssetVector<Float2U>&& uv0,
-        Core::Assets::AssetVector<Half4U>&& colors,
-        Core::Assets::AssetVector<MeshletDesc>&& meshlets,
-        Core::Assets::AssetVector<MeshletBounds>&& meshletBounds,
-        Core::Assets::AssetVector<u8>&& meshletPositionRefDeltas,
-        Core::Assets::AssetVector<u8>&& meshletAttributeRefDeltas,
-        Core::Assets::AssetVector<MeshletLocalVertexRef>&& meshletLocalVertexRefs,
-        Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices
-    ){
-        setGeometryPayload(
-            Move(positions),
-            Move(normals),
-            Move(tangents),
-            Move(uv0),
-            Move(colors),
-            Move(meshlets),
-            Move(meshletBounds),
-            Move(meshletPositionRefDeltas),
-            Move(meshletAttributeRefDeltas),
-            Move(meshletLocalVertexRefs),
-            Move(meshletPrimitiveIndices)
-        );
+    template<typename... GeometryPayloadArgT>
+    void setPayload(GeometryPayloadArgT&&... geometryPayloadArgs){
+        setGeometryPayload(Forward<GeometryPayloadArgT>(geometryPayloadArgs)...);
     }
     [[nodiscard]] u32 meshClass()const{ return Core::Mesh::MeshClass::Static; }
 };

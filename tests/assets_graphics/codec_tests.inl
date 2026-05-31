@@ -294,6 +294,44 @@ static bool FindMaterialBinaryTypedLayoutOffsets(
 
 #endif
 
+using TestPositionStream = NWB::Core::Assets::AssetVector<Float3U>;
+using TestHalf4Stream = NWB::Core::Assets::AssetVector<Half4U>;
+using TestUv0Stream = NWB::Core::Assets::AssetVector<Float2U>;
+using TestSkinStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkinInfluence4>;
+using TestInverseBindMatrixStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkinnedMeshJointMatrix>;
+using TestMeshletStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>;
+using TestMeshletBoundsStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletBounds>;
+using TestMeshletRefDeltaStream = NWB::Core::Assets::AssetVector<u8>;
+using TestMeshletLocalVertexRefStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletLocalVertexRef>;
+using TestMeshletPrimitiveIndexStream = NWB::Core::Assets::AssetVector<u8>;
+
+static void SetSkinnedMeshPayload(
+    NWB::Impl::SkinnedMesh& mesh,
+    const u32 meshClass,
+    const u32 skeletonJointCount,
+    TestPositionStream& positions,
+    TestHalf4Stream& normals,
+    TestHalf4Stream& tangents,
+    TestUv0Stream& uv0,
+    TestHalf4Stream& colors,
+    TestSkinStream& skin,
+    TestInverseBindMatrixStream& inverseBindMatrices,
+    TestMeshletStream& meshlets,
+    TestMeshletBoundsStream& meshletBounds,
+    TestMeshletRefDeltaStream& meshletPositionRefDeltas,
+    TestMeshletRefDeltaStream& meshletAttributeRefDeltas,
+    TestMeshletLocalVertexRefStream& meshletLocalVertexRefs,
+    TestMeshletPrimitiveIndexStream& meshletPrimitiveIndices
+){
+    mesh.setMeshClass(meshClass);
+    mesh.setSkeletonJointCount(skeletonJointCount);
+    mesh.setPayload(
+        Move(positions), Move(normals), Move(tangents), Move(uv0), Move(colors), Move(skin), Move(inverseBindMatrices),
+        Move(meshlets), Move(meshletBounds), Move(meshletPositionRefDeltas), Move(meshletAttributeRefDeltas),
+        Move(meshletLocalVertexRefs), Move(meshletPrimitiveIndices)
+    );
+}
+
 static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
     NWB::Impl::SkinnedMesh mesh(testArena.arena, Name("tests/characters/proxy_skinned_mesh"));
 
@@ -357,22 +395,11 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
     NWB_ASSERT(meshletRefsEncoded);
     static_cast<void>(meshletRefsEncoded);
 
-    mesh.setMeshClass(NWB::Core::Mesh::MeshClass::Skinned);
-    mesh.setSkeletonJointCount(1u);
-    mesh.setPayload(
-        Move(positions),
-        Move(normals),
-        Move(tangents),
-        Move(uv0),
-        Move(colors),
-        Move(skin),
-        Move(inverseBindMatrices),
-        Move(meshlets),
-        Move(meshletBounds),
-        Move(meshletPositionRefDeltas),
-        Move(meshletAttributeRefDeltas),
-        Move(meshletLocalVertexRefs),
-        Move(meshletPrimitiveIndices)
+    SetSkinnedMeshPayload(
+        mesh, NWB::Core::Mesh::MeshClass::Skinned, 1u,
+        positions, normals, tangents, uv0, colors, skin, inverseBindMatrices,
+        meshlets, meshletBounds, meshletPositionRefDeltas, meshletAttributeRefDeltas, meshletLocalVertexRefs,
+        meshletPrimitiveIndices
     );
     return mesh;
 }
@@ -438,22 +465,11 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
     NWB_ASSERT(meshletRefsEncoded);
     static_cast<void>(meshletRefsEncoded);
 
-    mesh.setMeshClass(NWB::Core::Mesh::MeshClass::Skinned);
-    mesh.setSkeletonJointCount(1u);
-    mesh.setPayload(
-        Move(positions),
-        Move(normals),
-        Move(tangents),
-        Move(uv0),
-        Move(colors),
-        Move(skin),
-        Move(inverseBindMatrices),
-        Move(meshlets),
-        Move(meshletBounds),
-        Move(meshletPositionRefDeltas),
-        Move(meshletAttributeRefDeltas),
-        Move(meshletLocalVertexRefs),
-        Move(meshletPrimitiveIndices)
+    SetSkinnedMeshPayload(
+        mesh, NWB::Core::Mesh::MeshClass::Skinned, 1u,
+        positions, normals, tangents, uv0, colors, skin, inverseBindMatrices,
+        meshlets, meshletBounds, meshletPositionRefDeltas, meshletAttributeRefDeltas, meshletLocalVertexRefs,
+        meshletPrimitiveIndices
     );
     return mesh;
 }

@@ -14,11 +14,11 @@
 [[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, 0)]] SamplerState g_DeferredSampler;
 
 struct NwbDeferredCompositePixelInput{
-    [[vk::location(0)]] float2 uv : TEXCOORD0;
+    [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
 };
 
 struct NwbDeferredCompositePixelOutput{
-    [[vk::location(0)]] float4 color : SV_Target0;
+    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
 };
 
 

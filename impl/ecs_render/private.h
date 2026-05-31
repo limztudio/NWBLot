@@ -46,7 +46,7 @@ namespace ECSRenderDetail{
 
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
-inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
+inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * NWB_MESH_EMULATION_VERTEX_FLOAT_COUNT;
 inline constexpr u32 s_MeshDispatchFlagScissorCull = NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL;
 inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL;
 inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL;
@@ -90,6 +90,30 @@ static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) 
 static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparentDrawPushConstantSize, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");
+static_assert(
+    offsetof(EmulatedVertex, position) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_POSITION_FLOAT_OFFSET,
+    "EmulatedVertex position offset must match the mesh emulation shader"
+);
+static_assert(
+    offsetof(EmulatedVertex, normal) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_NORMAL_FLOAT_OFFSET,
+    "EmulatedVertex normal offset must match the mesh emulation shader"
+);
+static_assert(
+    offsetof(EmulatedVertex, tangent) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_TANGENT_FLOAT_OFFSET,
+    "EmulatedVertex tangent offset must match the mesh emulation shader"
+);
+static_assert(
+    offsetof(EmulatedVertex, uv0) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_UV0_FLOAT_OFFSET,
+    "EmulatedVertex uv0 offset must match the mesh emulation shader"
+);
+static_assert(
+    offsetof(EmulatedVertex, color) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_COLOR_FLOAT_OFFSET,
+    "EmulatedVertex color offset must match the mesh emulation shader"
+);
+static_assert(
+    offsetof(EmulatedVertex, worldPosition) == sizeof(f32) * NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_FLOAT_OFFSET,
+    "EmulatedVertex world-position offset must match the mesh emulation shader"
+);
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
 static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * 12u, "SceneShadingGpuData layout must match the shading shaders");
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
@@ -326,7 +350,7 @@ inline void SetEmulatedVertexAttribute(
 ){
     attribute
         .setFormat(format)
-        .setBufferIndex(0)
+        .setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
         .setOffset(sizeof(f32) * offsetFloatCount)
         .setElementStride(s_EmulatedVertexStride)
         .setName(name)

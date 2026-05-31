@@ -4,6 +4,7 @@
 
 #include "binding_slots.h"
 #include "../scene/binding_slots.h"
+#include "../mesh/runtime_constants.h"
 
 #define NWB_SCENE_SHADING_SET NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_SET
 #define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING
@@ -20,15 +21,15 @@
 [[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
 
 struct NwbAvboitAccumulatePixelInput{
-    [[vk::location(0)]] float4 color : COLOR0;
-    [[vk::location(1)]] float3 normal : NORMAL0;
-    [[vk::location(2)]] float4 tangent : TANGENT0;
-    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+    [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0;
+    [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0;
+    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float3 worldPosition : TEXCOORD1;
 };
 
 struct NwbAvboitAccumulatePixelOutput{
-    [[vk::location(0)]] float4 accumColor : SV_Target0;
-    [[vk::location(1)]] float4 accumExtinction : SV_Target1;
+    [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] float4 accumColor : SV_Target0;
+    [[vk::location(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION)]] float4 accumExtinction : SV_Target1;
 };
 
 static float4 inColor;

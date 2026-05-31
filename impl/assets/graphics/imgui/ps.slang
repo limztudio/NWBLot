@@ -12,12 +12,12 @@
 [[vk::binding(NWB_IMGUI_BINDING_SAMPLER, 0)]] SamplerState g_UiSampler;
 
 struct NwbImguiPixelInput{
-    [[vk::location(0)]] float2 uv : TEXCOORD0;
-    [[vk::location(1)]] float4 color : COLOR0;
+    [[vk::location(NWB_IMGUI_RASTER_UV_LOCATION)]] float2 uv : TEXCOORD0;
+    [[vk::location(NWB_IMGUI_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
 };
 
 struct NwbImguiPixelOutput{
-    [[vk::location(0)]] float4 color : SV_Target0;
+    [[vk::location(NWB_IMGUI_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
 };
 
 

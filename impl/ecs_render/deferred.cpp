@@ -189,13 +189,24 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         return false;
     }
 
-    Core::FramebufferDesc framebufferDesc;
-    framebufferDesc
-        .addColorAttachment(createdTargets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .addColorAttachment(createdTargets.normal.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .addColorAttachment(createdTargets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources)
+    Core::FramebufferAttachment gbufferAttachments[NWB_MESH_GBUFFER_TARGET_COUNT] = {};
+    gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION]
+        .setTexture(createdTargets.albedo.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
     ;
+    gbufferAttachments[NWB_MESH_GBUFFER_NORMAL_LOCATION]
+        .setTexture(createdTargets.normal.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
+    ;
+    gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION]
+        .setTexture(createdTargets.worldPosition.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
+    ;
+
+    Core::FramebufferDesc framebufferDesc;
+    for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
+        framebufferDesc.addColorAttachment(attachment);
+    framebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
     createdTargets.framebuffer = device->createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));

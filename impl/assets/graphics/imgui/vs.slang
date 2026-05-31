@@ -2,6 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct NwbImguiPushConstants{
     float4 scaleTranslate;
 };
@@ -10,15 +16,15 @@ struct NwbImguiPushConstants{
 ConstantBuffer<NwbImguiPushConstants> g_NwbImguiPushConstants;
 
 struct NwbImguiVertexInput{
-    [[vk::location(0)]] float2 position : POSITION0;
-    [[vk::location(1)]] float2 uv : TEXCOORD0;
-    [[vk::location(2)]] float4 color : COLOR0;
+    [[vk::location(NWB_IMGUI_VERTEX_POSITION_LOCATION)]] float2 position : POSITION0;
+    [[vk::location(NWB_IMGUI_VERTEX_UV_LOCATION)]] float2 uv : TEXCOORD0;
+    [[vk::location(NWB_IMGUI_VERTEX_COLOR_LOCATION)]] float4 color : COLOR0;
 };
 
 struct NwbImguiVertexOutput{
     float4 position : SV_Position;
-    [[vk::location(0)]] float2 uv : TEXCOORD0;
-    [[vk::location(1)]] float4 color : COLOR0;
+    [[vk::location(NWB_IMGUI_RASTER_UV_LOCATION)]] float2 uv : TEXCOORD0;
+    [[vk::location(NWB_IMGUI_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
 };
 
 

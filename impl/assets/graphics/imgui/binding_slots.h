@@ -20,6 +20,15 @@
 #define NWB_IMGUI_BINDING_TEXTURE 0
 #define NWB_IMGUI_BINDING_SAMPLER 1
 
+#define NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT 3
+#define NWB_IMGUI_VERTEX_BUFFER_INDEX 0
+#define NWB_IMGUI_VERTEX_POSITION_LOCATION 0
+#define NWB_IMGUI_VERTEX_UV_LOCATION 1
+#define NWB_IMGUI_VERTEX_COLOR_LOCATION 2
+#define NWB_IMGUI_RASTER_UV_LOCATION 0
+#define NWB_IMGUI_RASTER_COLOR_LOCATION 1
+#define NWB_IMGUI_COLOR_TARGET_LOCATION 0
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -28,6 +28,9 @@
 #define NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION 2
 #define NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER 3
 
+#define NWB_DEFERRED_FULLSCREEN_UV_LOCATION 0
+#define NWB_DEFERRED_COLOR_TARGET_LOCATION 0
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -211,17 +211,25 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    Core::FramebufferDesc accumulationFramebufferDesc;
-    accumulationFramebufferDesc
-        .addColorAttachment(avboitTargets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .addColorAttachment(avboitTargets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources)
-        .setDepthAttachment(
-            Core::FramebufferAttachment()
-                .setTexture(createdTargets.depth.get())
-                .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-                .setReadOnly(true)
-        )
+    Core::FramebufferAttachment accumulationAttachments[NWB_AVBOIT_ACCUM_TARGET_COUNT] = {};
+    accumulationAttachments[NWB_AVBOIT_ACCUM_COLOR_LOCATION]
+        .setTexture(avboitTargets.accumColor.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
     ;
+    accumulationAttachments[NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION]
+        .setTexture(avboitTargets.accumExtinction.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
+    ;
+
+    Core::FramebufferDesc accumulationFramebufferDesc;
+    for(const Core::FramebufferAttachment& attachment : accumulationAttachments)
+        accumulationFramebufferDesc.addColorAttachment(attachment);
+    accumulationFramebufferDesc.setDepthAttachment(
+        Core::FramebufferAttachment()
+            .setTexture(createdTargets.depth.get())
+            .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
+            .setReadOnly(true)
+    );
     avboitTargets.accumulationFramebuffer = device->createFramebuffer(accumulationFramebufferDesc);
     if(!avboitTargets.accumulationFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));

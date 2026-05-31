@@ -622,30 +622,34 @@ bool UiSystem::ensureInputLayout(){
     if(!m_vertexShader)
         return false;
 
-    Core::VertexAttributeDesc attributes[3];
-    attributes[0]
+    Core::VertexAttributeDesc attributes[NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT];
+    attributes[NWB_IMGUI_VERTEX_POSITION_LOCATION]
         .setFormat(Core::Format::RG32_FLOAT)
-        .setBufferIndex(0)
+        .setBufferIndex(NWB_IMGUI_VERTEX_BUFFER_INDEX)
         .setOffset(offsetof(ImDrawVert, pos))
         .setElementStride(sizeof(ImDrawVert))
         .setName("POSITION")
     ;
-    attributes[1]
+    attributes[NWB_IMGUI_VERTEX_UV_LOCATION]
         .setFormat(Core::Format::RG32_FLOAT)
-        .setBufferIndex(0)
+        .setBufferIndex(NWB_IMGUI_VERTEX_BUFFER_INDEX)
         .setOffset(offsetof(ImDrawVert, uv))
         .setElementStride(sizeof(ImDrawVert))
         .setName("TEXCOORD")
     ;
-    attributes[2]
+    attributes[NWB_IMGUI_VERTEX_COLOR_LOCATION]
         .setFormat(Core::Format::RGBA8_UNORM)
-        .setBufferIndex(0)
+        .setBufferIndex(NWB_IMGUI_VERTEX_BUFFER_INDEX)
         .setOffset(offsetof(ImDrawVert, col))
         .setElementStride(sizeof(ImDrawVert))
         .setName("COLOR")
     ;
 
-    m_inputLayout = m_graphics.getDevice()->createInputLayout(attributes, 3u, m_vertexShader.get());
+    m_inputLayout = m_graphics.getDevice()->createInputLayout(
+        attributes,
+        NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT,
+        m_vertexShader.get()
+    );
     if(!m_inputLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create input layout"));
         return false;

@@ -44,6 +44,10 @@
 #define NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL 2
 #define NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER 3
 
+#define NWB_AVBOIT_ACCUM_COLOR_LOCATION 0
+#define NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION 1
+#define NWB_AVBOIT_ACCUM_TARGET_COUNT 2
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

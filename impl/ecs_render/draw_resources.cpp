@@ -65,16 +65,50 @@ bool RendererSystem::createComputeEmulationResources(){
     }
 
     if(!m_emulationInputLayout){
-        Core::VertexAttributeDesc attributes[6];
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[0], Core::Format::RGBA32_FLOAT, 0u, "POSITION");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[1], Core::Format::RGB32_FLOAT, 4u, "NORMAL");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[2], Core::Format::RGBA32_FLOAT, 8u, "TANGENT");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[3], Core::Format::RG32_FLOAT, 12u, "TEXCOORD");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[4], Core::Format::RGBA32_FLOAT, 16u, "COLOR");
-        ECSRenderDetail::SetEmulatedVertexAttribute(attributes[5], Core::Format::RGBA32_FLOAT, 20u, "POSITION1");
+        Core::VertexAttributeDesc attributes[NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT];
+        ECSRenderDetail::SetEmulatedVertexAttribute(
+            attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION],
+            Core::Format::RGBA32_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_POSITION_FLOAT_OFFSET,
+            "POSITION"
+        );
+        ECSRenderDetail::SetEmulatedVertexAttribute(
+            attributes[NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION],
+            Core::Format::RGB32_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_NORMAL_FLOAT_OFFSET,
+            "NORMAL"
+        );
+        ECSRenderDetail::SetEmulatedVertexAttribute(
+            attributes[NWB_MESH_EMULATION_VERTEX_TANGENT_LOCATION],
+            Core::Format::RGBA32_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_TANGENT_FLOAT_OFFSET,
+            "TANGENT"
+        );
+        ECSRenderDetail::SetEmulatedVertexAttribute(
+            attributes[NWB_MESH_EMULATION_VERTEX_UV0_LOCATION],
+            Core::Format::RG32_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_UV0_FLOAT_OFFSET,
+            "TEXCOORD"
+        );
+        ECSRenderDetail::SetEmulatedVertexAttribute(
+            attributes[NWB_MESH_EMULATION_VERTEX_COLOR_LOCATION],
+            Core::Format::RGBA32_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_COLOR_FLOAT_OFFSET,
+            "COLOR"
+        );
+        ECSRenderDetail::SetEmulatedVertexAttribute(
+            attributes[NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_LOCATION],
+            Core::Format::RGBA32_FLOAT,
+            NWB_MESH_EMULATION_VERTEX_WORLD_POSITION_FLOAT_OFFSET,
+            "POSITION1"
+        );
 
         auto* device = m_graphics.getDevice();
-        m_emulationInputLayout = device->createInputLayout(attributes, 6, m_emulationVertexShader.get());
+        m_emulationInputLayout = device->createInputLayout(
+            attributes,
+            NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT,
+            m_emulationVertexShader.get()
+        );
         if(!m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;

@@ -4,6 +4,7 @@
 
 #include "common.slangi"
 #include "binding_slots.h"
+#include "../mesh/runtime_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,7 +15,7 @@
 [[vk::binding(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
 
 struct NwbAvboitOccupancyPixelInput{
-    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
 };
 
 static float4 inColor;

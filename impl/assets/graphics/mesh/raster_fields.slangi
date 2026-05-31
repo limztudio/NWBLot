@@ -5,16 +5,18 @@
 #ifndef NWB_GRAPHICS_MESH_RASTER_FIELDS_SLANGI
 #define NWB_GRAPHICS_MESH_RASTER_FIELDS_SLANGI
 
+#include "runtime_constants.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #define NWB_MESH_RASTER_PAYLOAD_FIELDS \
-    [[vk::location(0)]] float4 color : COLOR0; \
-    [[vk::location(1)]] float3 normal : NORMAL0; \
-    [[vk::location(2)]] float4 tangent : TANGENT0; \
-    [[vk::location(3)]] float2 uv0 : TEXCOORD0; \
-    [[vk::location(4)]] float3 worldPosition : TEXCOORD1;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0; \
+    [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0; \
+    [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0; \
+    [[vk::location(NWB_MESH_RASTER_UV0_LOCATION)]] float2 uv0 : TEXCOORD0; \
+    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float3 worldPosition : TEXCOORD1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

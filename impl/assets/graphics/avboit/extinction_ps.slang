@@ -4,6 +4,7 @@
 
 #include "common.slangi"
 #include "binding_slots.h"
+#include "../mesh/runtime_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,7 +18,7 @@
 [[vk::binding(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
 
 struct NwbAvboitExtinctionPixelInput{
-    [[vk::location(0)]] float4 color : COLOR0;
+    [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
 };
 
 static float4 inColor;

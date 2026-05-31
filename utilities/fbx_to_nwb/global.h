@@ -11,6 +11,7 @@
 #include <global/filesystem.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
+#include <global/simdmath.h>
 #include <global/math/type.h>
 #include <global/simplemath.h>
 #include <global/text_utils.h>

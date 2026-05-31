@@ -42,15 +42,23 @@ SceneViewBasis BuildDefaultSceneViewBasis(){
         &cosAngles,
         VectorSet(__hidden_scene::s_DefaultSceneViewYaw, __hidden_scene::s_DefaultSceneViewPitch, 0.0f, 0.0f)
     );
-    const f32 sinYaw = VectorGetX(sinAngles);
-    const f32 cosYaw = VectorGetX(cosAngles);
-    const f32 sinPitch = VectorGetY(sinAngles);
-    const f32 cosPitch = VectorGetY(cosAngles);
+
+    const SIMDVector right = VectorPermute<4, 3, 0, 3>(sinAngles, cosAngles);
+    const SIMDVector upBase = VectorMultiply(
+        VectorPermute<0, 5, 4, 3>(sinAngles, cosAngles),
+        VectorSet(1.0f, 1.0f, -1.0f, 0.0f)
+    );
+    const SIMDVector upScale = VectorPermute<1, 4, 1, 3>(sinAngles, s_SIMDOne);
+    const SIMDVector forwardBase = VectorMultiply(
+        VectorPermute<0, 1, 4, 3>(sinAngles, cosAngles),
+        VectorSet(-1.0f, 1.0f, 1.0f, 0.0f)
+    );
+    const SIMDVector forwardScale = VectorPermute<5, 6, 5, 3>(sinAngles, cosAngles);
 
     SceneViewBasis basis;
-    StoreFloat(VectorSet(cosYaw, 0.0f, sinYaw, 0.0f), &basis.right);
-    StoreFloat(VectorSet(sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch, 0.0f), &basis.up);
-    StoreFloat(VectorSet(-sinYaw * cosPitch, sinPitch, cosYaw * cosPitch, 0.0f), &basis.forward);
+    StoreFloat(right, &basis.right);
+    StoreFloat(VectorMultiply(upBase, upScale), &basis.up);
+    StoreFloat(VectorMultiply(forwardBase, forwardScale), &basis.forward);
     basis.positionDepthBias.w = __hidden_scene::s_DefaultSceneViewDepthOffset;
     return basis;
 }

@@ -276,10 +276,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     Vec3 outputPosition = ToVec3(position);
-    const f32 scale = static_cast<f32>(options.scale);
-    outputPosition.x *= scale;
-    outputPosition.y *= scale;
-    outputPosition.z *= scale;
+    StoreFloat(
+        VectorScale(LoadFloat(outputPosition), static_cast<f32>(options.scale)),
+        &outputPosition
+    );
     return outputPosition;
 }
 
@@ -345,20 +345,26 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         }
     }
 
-    outTangent = Vec4{ outputTangent.x, outputTangent.y, outputTangent.z, sign };
+    StoreFloat(VectorSetW(LoadFloat(outputTangent), sign), &outTangent);
     return true;
 }
 
 [[nodiscard]] bool IsFiniteVec2(const Vec2& value){
-    return IsFinite(value.x) && IsFinite(value.y);
+    const SIMDVector vector = LoadFloat(value);
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(vector), VectorIsInfinite(vector));
+    return (VectorMoveMask(invalid) & 0x3u) == 0u;
 }
 
 [[nodiscard]] bool IsFiniteVec3(const Vec3& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    const SIMDVector vector = LoadFloat(value);
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(vector), VectorIsInfinite(vector));
+    return (VectorMoveMask(invalid) & 0x7u) == 0u;
 }
 
 [[nodiscard]] bool IsFiniteVec4(const Vec4& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+    const SIMDVector vector = LoadFloat(value);
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(vector), VectorIsInfinite(vector));
+    return (VectorMoveMask(invalid) & 0xFu) == 0u;
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){
@@ -429,9 +435,13 @@ template<typename Value, typename Lookup>
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
+        Float4 rebuildPosition;
+        Float4 rebuildNormal;
+        StoreFloat(VectorSetW(LoadFloat(position), 0.0f), &rebuildPosition);
+        StoreFloat(VectorSetW(LoadFloat(normal), 0.0f), &rebuildNormal);
         rebuildVertices.push_back(RebuildVertex{
-            Float4(position.x, position.y, position.z, 0.0f),
-            Float4(normal.x, normal.y, normal.z, 0.0f),
+            rebuildPosition,
+            rebuildNormal,
             Float4(1.0f, 0.0f, 0.0f, 1.0f),
             mesh.uv0[ref.uv0],
         });

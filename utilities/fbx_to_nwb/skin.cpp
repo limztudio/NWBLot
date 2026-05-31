@@ -70,17 +70,10 @@ MeshJointMatrix ToMeshJointMatrix(const ufbx_matrix& matrix){
 
 bool NearlyEqualJointMatrix(const MeshJointMatrix& lhs, const MeshJointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
+    const SIMDVector epsilon = VectorReplicate(s_Epsilon);
     for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-        const Vec4& lhsColumn = lhs.columns[columnIndex];
-        const Vec4& rhsColumn = rhs.columns[columnIndex];
-        if(
-            Abs(lhsColumn.x - rhsColumn.x) > s_Epsilon
-            || Abs(lhsColumn.y - rhsColumn.y) > s_Epsilon
-            || Abs(lhsColumn.z - rhsColumn.z) > s_Epsilon
-            || Abs(lhsColumn.w - rhsColumn.w) > s_Epsilon
-        ){
+        if(!Vector4NearEqual(LoadFloat(lhs.columns[columnIndex]), LoadFloat(rhs.columns[columnIndex]), epsilon))
             return false;
-        }
     }
     return true;
 }
@@ -259,9 +252,21 @@ bool BuildInfluence(
         return false;
     }
 
-    const f32 inverseWeightSum = static_cast<f32>(1.0 / weightSum);
-    for(f32& weight : outInfluence.weight)
-        weight *= inverseWeightSum;
+    const SIMDVector normalizedWeights = VectorScale(
+        VectorSet(
+            outInfluence.weight[0u],
+            outInfluence.weight[1u],
+            outInfluence.weight[2u],
+            outInfluence.weight[3u]
+        ),
+        static_cast<f32>(1.0 / weightSum)
+    );
+    Vec4 weightValues;
+    StoreFloat(normalizedWeights, &weightValues);
+    outInfluence.weight[0u] = weightValues.x;
+    outInfluence.weight[1u] = weightValues.y;
+    outInfluence.weight[2u] = weightValues.z;
+    outInfluence.weight[3u] = weightValues.w;
 
     return true;
 }

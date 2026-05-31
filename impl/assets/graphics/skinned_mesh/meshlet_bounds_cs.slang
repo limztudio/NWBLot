@@ -16,12 +16,12 @@ static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823e+38;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITIONS, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshBoundsPositions;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_MESHLET_DESC, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshBoundsMeshlets;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITION_REF_DELTAS, 0)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPositionRefDeltas;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_LOCAL_VERTEX_REFS, 0)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbSkinnedMeshBoundsLocalVertexRefs;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_PRIMITIVE_INDICES, 0)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPrimitiveIndices;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS, 0)]] RWByteAddressBuffer g_NwbSkinnedMeshBoundsDynamicBounds;
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITIONS, NWB_SKINNED_MESH_BOUNDS_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshBoundsPositions;
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_MESHLET_DESC, NWB_SKINNED_MESH_BOUNDS_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshBoundsMeshlets;
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITION_REF_DELTAS, NWB_SKINNED_MESH_BOUNDS_SET)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPositionRefDeltas;
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_LOCAL_VERTEX_REFS, NWB_SKINNED_MESH_BOUNDS_SET)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbSkinnedMeshBoundsLocalVertexRefs;
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_PRIMITIVE_INDICES, NWB_SKINNED_MESH_BOUNDS_SET)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPrimitiveIndices;
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS, NWB_SKINNED_MESH_BOUNDS_SET)]] RWByteAddressBuffer g_NwbSkinnedMeshBoundsDynamicBounds;
 
 struct NwbSkinnedMeshBoundsPushConstants{
     uint4 payload0;

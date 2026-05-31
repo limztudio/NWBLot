@@ -22,18 +22,18 @@ struct NwbSkinnedMeshJointMatrix{
     float4 column3;
 };
 
-[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_POSITION, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshRestPositions;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_POSITION, 0)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshSkinnedPositions;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_NORMAL, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestNormals;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_NORMAL, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_TANGENT, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_TANGENT, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_MESHLET_DESC, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshMeshlets;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_POSITION_REF_DELTAS, 0)]] ByteAddressBuffer g_NwbSkinnedMeshPositionRefDeltas;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_REF_DELTAS, 0)]] ByteAddressBuffer g_NwbSkinnedMeshAttributeRefDeltas;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_POSITION, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshRestPositions;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_POSITION, NWB_SKINNED_MESH_SET)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshSkinnedPositions;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_NORMAL, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestNormals;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_NORMAL, NWB_SKINNED_MESH_SET)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_TANGENT, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_TANGENT, NWB_SKINNED_MESH_SET)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_MESHLET_DESC, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshMeshlets;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_POSITION_REF_DELTAS, NWB_SKINNED_MESH_SET)]] ByteAddressBuffer g_NwbSkinnedMeshPositionRefDeltas;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_REF_DELTAS, NWB_SKINNED_MESH_SET)]] ByteAddressBuffer g_NwbSkinnedMeshAttributeRefDeltas;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, NWB_SKINNED_MESH_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
 
 struct NwbSkinnedMeshPushConstants{
     uint4 payload0;

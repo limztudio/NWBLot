@@ -17,6 +17,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_DEFERRED_LIGHTING_SET 0
+#define NWB_DEFERRED_COMPOSITE_SET 0
+
 #define NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR 0
 #define NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL 1
 #define NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION 2

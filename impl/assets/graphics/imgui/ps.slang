@@ -8,8 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_IMGUI_BINDING_TEXTURE, 0)]] Texture2D<float4> g_UiTexture;
-[[vk::binding(NWB_IMGUI_BINDING_SAMPLER, 0)]] SamplerState g_UiSampler;
+[[vk::binding(NWB_IMGUI_BINDING_TEXTURE, NWB_IMGUI_SET)]] Texture2D<float4> g_UiTexture;
+[[vk::binding(NWB_IMGUI_BINDING_SAMPLER, NWB_IMGUI_SET)]] SamplerState g_UiSampler;
 
 struct NwbImguiPixelInput{
     [[vk::location(NWB_IMGUI_RASTER_UV_LOCATION)]] float2 uv : TEXCOORD0;

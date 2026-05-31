@@ -14,11 +14,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, 0)]] Texture2D<float4> g_GBufferBaseColor;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, 0)]] Texture2D<float4> g_GBufferNormal;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, 0)]] Texture2D<float4> g_GBufferWorldPosition;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, 0)]] Texture2D<float4> g_GBufferDepth;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, 0)]] SamplerState g_DeferredSampler;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferBaseColor;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferNormal;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
 
 struct NwbDeferredLightingPixelInput{
     [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;

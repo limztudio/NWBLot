@@ -8,10 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR, 0)]] Texture2D<float4> g_OpaqueColor;
-[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR, 0)]] Texture2D<float4> g_AvboitAccumColor;
-[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION, 0)]] Texture2D<float4> g_AvboitAccumExtinction;
-[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, 0)]] SamplerState g_DeferredSampler;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR, NWB_DEFERRED_COMPOSITE_SET)]] Texture2D<float4> g_OpaqueColor;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR, NWB_DEFERRED_COMPOSITE_SET)]] Texture2D<float4> g_AvboitAccumColor;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION, NWB_DEFERRED_COMPOSITE_SET)]] Texture2D<float4> g_AvboitAccumExtinction;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, NWB_DEFERRED_COMPOSITE_SET)]] SamplerState g_DeferredSampler;
 
 struct NwbDeferredCompositePixelInput{
     [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;

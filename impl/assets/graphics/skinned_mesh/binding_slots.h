@@ -17,6 +17,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_SKINNED_MESH_SET 0
+#define NWB_SKINNED_MESH_BOUNDS_SET 0
+
 #define NWB_SKINNED_MESH_BINDING_REST_POSITION 0
 #define NWB_SKINNED_MESH_BINDING_SKINNED_POSITION 1
 #define NWB_SKINNED_MESH_BINDING_REST_NORMAL 2

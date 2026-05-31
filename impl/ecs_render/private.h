@@ -82,11 +82,11 @@ struct SceneShadingGpuData{
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
 };
 
-static_assert(sizeof(ShaderDrivenPushConstants) == 48, "ShaderDrivenPushConstants layout must stay stable");
-static_assert(offsetof(ShaderDrivenPushConstants, meshletCount) == sizeof(u32) * 0u, "ShaderDrivenPushConstants dispatch.x must be meshlet count");
-static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) * 1u, "ShaderDrivenPushConstants dispatch.y must be instance index");
-static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * 2u, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
-static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * 3u, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
+static_assert(sizeof(ShaderDrivenPushConstants) == NWB_MESH_PUSH_CONSTANT_BYTE_SIZE, "ShaderDrivenPushConstants layout must stay stable");
+static_assert(offsetof(ShaderDrivenPushConstants, meshletCount) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT, "ShaderDrivenPushConstants dispatch.x must be meshlet count");
+static_assert(offsetof(ShaderDrivenPushConstants, instanceIndex) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX, "ShaderDrivenPushConstants dispatch.y must be instance index");
+static_assert(offsetof(ShaderDrivenPushConstants, materialConstantByteOffset) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET, "ShaderDrivenPushConstants dispatch.z must be material constant byte offset");
+static_assert(offsetof(ShaderDrivenPushConstants, dispatchFlags) == sizeof(u32) * NWB_MESH_PUSH_DISPATCH_FLAGS, "ShaderDrivenPushConstants dispatch.w must be dispatch flags");
 static_assert(sizeof(TransparentDrawPushConstants) == s_RendererAvboitTransparentDrawPushConstantSize, "TransparentDrawPushConstants layout must stay stable");
 static_assert(sizeof(TransparentDrawPushConstants) <= Core::s_MaxPushConstantSize, "Transparent draw push constants must fit the portable push constant budget");
 static_assert(sizeof(EmulatedVertex) == s_EmulatedVertexStride, "EmulatedVertex layout must match the mesh emulation shader");

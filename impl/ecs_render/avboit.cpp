@@ -174,23 +174,19 @@ bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pas
 
 RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets){
     RendererAvboitPushConstants pushConstants;
-    pushConstants.frame[0] = targets.fullWidth;
-    pushConstants.frame[1] = targets.fullHeight;
-    pushConstants.frame[2] = targets.lowWidth;
-    pushConstants.frame[3] = targets.lowHeight;
-    pushConstants.volume[0] = targets.virtualSliceCount;
-    pushConstants.volume[1] = targets.physicalSliceCount;
+    pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH] = targets.fullWidth;
+    pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_HEIGHT] = targets.fullHeight;
+    pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_LOW_WIDTH] = targets.lowWidth;
+    pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_LOW_HEIGHT] = targets.lowHeight;
+    pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_VIRTUAL_SLICE_COUNT] = targets.virtualSliceCount;
+    pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_PHYSICAL_SLICE_COUNT] = targets.physicalSliceCount;
     const u32 physicalExtinctionWordCount = DivideUp(targets.physicalSliceCount, ECSRenderAvboitDetail::s_AvboitExtinctionSlicesPerWord);
-    pushConstants.volume[2] = static_cast<u32>(
+    pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_EXTINCTION_WORD_COUNT] = static_cast<u32>(
         static_cast<u64>(targets.lowWidth) * static_cast<u64>(targets.lowHeight) * static_cast<u64>(physicalExtinctionWordCount)
     );
-    pushConstants.volume[3] = DivideUp(targets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
-    pushConstants.params = Float4(
-        0.f,
-        ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale,
-        ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias,
-        0.f
-    );
+    pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT] = DivideUp(targets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
+    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale;
+    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS] = ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias;
     return pushConstants;
 }
 

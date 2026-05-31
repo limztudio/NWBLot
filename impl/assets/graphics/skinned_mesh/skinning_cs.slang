@@ -48,19 +48,19 @@ ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 
 
 uint nwbSkinnedMeshMeshletCount(){
-    return g_NwbSkinnedMeshPushConstants.payload0.x;
+    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_MESHLET_COUNT];
 }
 
 uint nwbSkinnedMeshSkinCount(){
-    return g_NwbSkinnedMeshPushConstants.payload0.y;
+    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_SKIN_COUNT];
 }
 
 uint nwbSkinnedMeshJointCount(){
-    return g_NwbSkinnedMeshPushConstants.payload0.z;
+    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_JOINT_COUNT];
 }
 
 uint nwbSkinnedMeshSkinningMode(){
-    return g_NwbSkinnedMeshPushConstants.payload0.w;
+    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_SKINNING_MODE];
 }
 
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){

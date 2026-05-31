@@ -9,6 +9,7 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
+#include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/ecs_mesh_runtime/mesh.h>
 #include <impl/ecs_skinned_mesh/components.h>
 
@@ -64,7 +65,12 @@ private:
         u32 padding2 = 0;
         u32 padding3 = 0;
     };
-    static_assert(sizeof(SkinnedMeshPushConstants) == 32, "SkinnedMesh push constants layout must match the shader ABI");
+    static_assert(sizeof(SkinnedMeshPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "SkinnedMesh push constants layout must match the shader ABI");
+    static_assert(offsetof(SkinnedMeshPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "SkinnedMesh meshlet-count push offset drifted");
+    static_assert(offsetof(SkinnedMeshPushConstants, skinCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKIN_COUNT, "SkinnedMesh skin-count push offset drifted");
+    static_assert(offsetof(SkinnedMeshPushConstants, jointCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_JOINT_COUNT, "SkinnedMesh joint-count push offset drifted");
+    static_assert(offsetof(SkinnedMeshPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "SkinnedMesh skinning-mode push offset drifted");
+    static_assert(offsetof(SkinnedMeshPushConstants, attributeCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT, "SkinnedMesh attribute-count push offset drifted");
 
     struct MeshletBoundsPushConstants{
         u32 meshletCount = 0;
@@ -72,7 +78,8 @@ private:
         u32 padding1 = 0;
         u32 padding2 = 0;
     };
-    static_assert(sizeof(MeshletBoundsPushConstants) == 16, "SkinnedMesh bounds push constants layout must match the shader ABI");
+    static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "SkinnedMesh bounds push constants layout must match the shader ABI");
+    static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "SkinnedMesh bounds meshlet-count push offset drifted");
 
     struct RuntimeResources{
         RuntimeMeshHandle handle;

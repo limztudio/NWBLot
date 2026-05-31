@@ -19,8 +19,8 @@ NwbMeshletBounds nwbMeshLoadMeshletBounds(const uint meshletIndex){
     const uint byteOffset = nwbMeshletBoundsByteOffset(meshletIndex);
 
     NwbMeshletBounds bounds;
-    bounds.sphere = asfloat(g_NwbMeshletBounds.Load4(byteOffset));
-    bounds.conePacked = g_NwbMeshletBounds.Load(byteOffset + 16u);
+    bounds.sphere = asfloat(g_NwbMeshletBounds.Load4(byteOffset + NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET));
+    bounds.conePacked = g_NwbMeshletBounds.Load(byteOffset + NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET);
     return bounds;
 }
 

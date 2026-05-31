@@ -100,19 +100,19 @@ ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
 
 
 uint nwbMeshletCount(){
-    return g_NwbMeshPushConstants.dispatch.x;
+    return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT];
 }
 
 uint nwbMeshInstanceIndex(){
-    return g_NwbMeshPushConstants.dispatch.y;
+    return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 }
 
 uint nwbMeshMaterialConstantByteOffset(){
-    return g_NwbMeshPushConstants.dispatch.z;
+    return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET];
 }
 
 uint nwbMeshDispatchFlags(){
-    return g_NwbMeshPushConstants.dispatch.w;
+    return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS];
 }
 
 float4 nwbMeshTransformWorldToClip(float3 worldPosition){

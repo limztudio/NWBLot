@@ -47,7 +47,7 @@ float nwbAvboitExtinctionSaturation(){
 }
 
 float nwbAvboitSelfOcclusionSliceBias(){
-    return max(g_NwbAvboitDraw.nwbAvboitParams.z, 0.0);
+    return max(g_NwbAvboitDraw.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS], 0.0);
 }
 
 uint nwbAvboitVirtualSliceFromDepth(float depth){

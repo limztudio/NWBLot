@@ -510,7 +510,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         graphicsState.addVertexBuffer(
             Core::VertexBufferBinding()
                 .setBuffer(mesh.emulationVertexBuffer.get())
-                .setSlot(0)
+                .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
                 .setOffset(0)
         );
         if(usesAvboit){

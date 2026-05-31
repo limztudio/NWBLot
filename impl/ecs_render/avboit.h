@@ -7,6 +7,8 @@
 
 #include "system.h"
 
+#include <impl/assets/graphics/avboit/constants.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,13 +24,24 @@ struct RendererAvboitPushConstants{
     u32 volume[4] = {};
     Float4 params = Float4(0.f, 0.f, 0.f, 0.f);
 };
-static_assert(sizeof(RendererAvboitPushConstants) == 48, "RendererAvboitPushConstants layout must stay stable");
+static_assert(sizeof(RendererAvboitPushConstants) == NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE, "RendererAvboitPushConstants layout must stay stable");
+static_assert(offsetof(RendererAvboitPushConstants, frame) == 0u, "RendererAvboit frame push offset drifted");
+static_assert(
+    offsetof(RendererAvboitPushConstants, volume)
+        == offsetof(RendererAvboitPushConstants, frame) + sizeof(((RendererAvboitPushConstants*)nullptr)->frame),
+    "RendererAvboit volume push offset drifted"
+);
+static_assert(
+    offsetof(RendererAvboitPushConstants, params)
+        == offsetof(RendererAvboitPushConstants, volume) + sizeof(((RendererAvboitPushConstants*)nullptr)->volume),
+    "RendererAvboit params push offset drifted"
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = 96u;
+static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

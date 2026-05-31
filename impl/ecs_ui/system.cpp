@@ -973,7 +973,7 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
                 .setFramebuffer(framebuffer)
                 .setViewport(viewportState)
                 .addBindingSet(bindingSet)
-                .addVertexBuffer(Core::VertexBufferBinding().setBuffer(m_vertexBuffer.get()).setSlot(0u).setOffset(0u))
+                .addVertexBuffer(Core::VertexBufferBinding().setBuffer(m_vertexBuffer.get()).setSlot(NWB_IMGUI_VERTEX_BUFFER_INDEX).setOffset(0u))
                 .setIndexBuffer(Core::IndexBufferBinding().setBuffer(m_indexBuffer.get()).setFormat(indexFormat).setOffset(0u))
             ;
 

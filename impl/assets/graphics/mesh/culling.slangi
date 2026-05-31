@@ -23,7 +23,7 @@ bool nwbMeshletConeCullEnabled(){
 }
 
 bool nwbMeshSphereOutsideFrustum(const float3 center, const float radius){
-    for(uint planeIndex = 0u; planeIndex < 6u; ++planeIndex){
+    for(uint planeIndex = 0u; planeIndex < NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT; ++planeIndex){
         const float4 plane = g_NwbMeshFrustumPlanes[planeIndex];
         if(dot(plane.xyz, center) + plane.w < -radius)
             return true;

@@ -50,6 +50,9 @@ struct MeshletBounds{
 static_assert(IsStandardLayout_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
 static_assert(sizeof(MeshletBounds) == NWB_MESHLET_BOUNDS_STRIDE, "MeshletBounds layout drifted");
+static_assert(offsetof(MeshletBounds, sphere) == NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET, "MeshletBounds sphere offset drifted");
+static_assert(offsetof(MeshletBounds, conePacked) == NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET, "MeshletBounds cone offset drifted");
+static_assert(offsetof(MeshletBounds, padding0) == NWB_MESHLET_BOUNDS_PADDING_BYTE_OFFSET, "MeshletBounds padding offset drifted");
 
 struct MeshletPositionStreamRef{
     u32 position = s_MeshMissingStreamIndex;

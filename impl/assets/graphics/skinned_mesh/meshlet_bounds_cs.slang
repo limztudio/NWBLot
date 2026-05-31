@@ -49,7 +49,7 @@ groupshared float3 g_NwbSkinnedMeshBoundsConeAxis;
 
 
 uint nwbSkinnedMeshBoundsMeshletCount(){
-    return g_NwbSkinnedMeshBoundsPushConstants.payload0.x;
+    return g_NwbSkinnedMeshBoundsPushConstants.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT];
 }
 
 uint nwbSkinnedMeshBoundsLoadPrimitiveIndex(const uint primitiveIndex){
@@ -118,9 +118,9 @@ bool nwbSkinnedMeshBoundsFaceNormal(
 
 void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, const uint conePacked){
     const uint byteOffset = nwbMeshletBoundsByteOffset(meshletIndex);
-    g_NwbSkinnedMeshBoundsDynamicBounds.Store4(byteOffset, asuint(sphere));
-    g_NwbSkinnedMeshBoundsDynamicBounds.Store(byteOffset + 16u, conePacked);
-    g_NwbSkinnedMeshBoundsDynamicBounds.Store(byteOffset + 20u, 0u);
+    g_NwbSkinnedMeshBoundsDynamicBounds.Store4(byteOffset + NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET, asuint(sphere));
+    g_NwbSkinnedMeshBoundsDynamicBounds.Store(byteOffset + NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET, conePacked);
+    g_NwbSkinnedMeshBoundsDynamicBounds.Store(byteOffset + NWB_MESHLET_BOUNDS_PADDING_BYTE_OFFSET, 0u);
 }
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){

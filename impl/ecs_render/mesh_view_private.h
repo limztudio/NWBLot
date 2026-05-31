@@ -8,6 +8,7 @@
 #include "system.h"
 
 #include <core/ecs/world.h>
+#include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_scene/module.h>
 
 
@@ -34,7 +35,7 @@ struct MeshViewGpuData{
         Float4(0.f, 0.f, 0.f, 1.f),
     };
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
-    Float4 frustumPlanes[6] = {
+    Float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT] = {
         Float4(1.f, 0.f, 0.f, 0.f),
         Float4(-1.f, 0.f, 0.f, 0.f),
         Float4(0.f, 1.f, 0.f, 0.f),
@@ -44,7 +45,7 @@ struct MeshViewGpuData{
     };
 };
 
-static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * 44u, "MeshViewGpuData layout must match the mesh shaders");
+static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * (20u + NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT * 4u), "MeshViewGpuData layout must match the mesh shaders");
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 
 
@@ -116,7 +117,7 @@ inline SIMDVector BuildViewFrustumSidePlaneVector(
 
 inline void BuildMeshViewFrustumVectors(
     SIMDVector& outCameraPosition,
-    SIMDVector (&outFrustumPlanes)[6],
+    SIMDVector (&outFrustumPlanes)[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT],
     const SIMDVector positionDepthBias,
     const SIMDVector right,
     const SIMDVector up,
@@ -181,7 +182,7 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         StoreFloat(worldToClip.v[columnIndex], &state.worldToClip[columnIndex]);
 
     SIMDVector cameraPosition;
-    SIMDVector frustumPlanes[6];
+    SIMDVector frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
     BuildMeshViewFrustumVectors(
         cameraPosition,
         frustumPlanes,
@@ -195,7 +196,7 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         VectorReplicate(farPlane)
     );
     StoreFloat(cameraPosition, &state.cameraPosition);
-    for(usize planeIndex = 0u; planeIndex < 6u; ++planeIndex)
+    for(usize planeIndex = 0u; planeIndex < NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT; ++planeIndex)
         StoreFloat(frustumPlanes[planeIndex], &state.frustumPlanes[planeIndex]);
 
     return state;

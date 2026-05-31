@@ -18,39 +18,39 @@
 
 
 uint nwbAvboitFullWidth(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame.x;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame[NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH];
 }
 
 uint nwbAvboitFullHeight(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame.y;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame[NWB_AVBOIT_PUSH_FRAME_FULL_HEIGHT];
 }
 
 uint nwbAvboitLowWidth(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame.z;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame[NWB_AVBOIT_PUSH_FRAME_LOW_WIDTH];
 }
 
 uint nwbAvboitLowHeight(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame.w;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitFrame[NWB_AVBOIT_PUSH_FRAME_LOW_HEIGHT];
 }
 
 uint nwbAvboitVirtualSliceCount(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume.x;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume[NWB_AVBOIT_PUSH_VOLUME_VIRTUAL_SLICE_COUNT];
 }
 
 uint nwbAvboitPhysicalSliceCount(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume.y;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume[NWB_AVBOIT_PUSH_VOLUME_PHYSICAL_SLICE_COUNT];
 }
 
 uint nwbAvboitExtinctionWordCount(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume.z;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume[NWB_AVBOIT_PUSH_VOLUME_EXTINCTION_WORD_COUNT];
 }
 
 uint nwbAvboitCoverageWordCount(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume.w;
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume[NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT];
 }
 
 float nwbAvboitExtinctionFixedScale(){
-    return max(NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams.y, 1.0);
+    return max(NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE], 1.0);
 }
 
 

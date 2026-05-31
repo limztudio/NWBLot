@@ -223,10 +223,8 @@ struct StagedDirectoryPaths{
 
 template<typename ArenaT>
 [[nodiscard]] inline StagedDirectoryPaths BuildStagedDirectoryPaths(ArenaT& arena, const Path& outputDirectory, const AStringView stageToken){
-    const Path stageBaseDirectory = outputDirectory.parent_path().empty()
-        ? outputDirectory
-        : outputDirectory.parent_path()
-    ;
+    const Path outputParentDirectory = outputDirectory.parent_path();
+    const Path stageBaseDirectory = outputParentDirectory.empty() ? outputDirectory : outputParentDirectory;
 
     StagedDirectoryPaths output;
 
@@ -274,7 +272,13 @@ template<typename ArenaT>
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GlobalFilesystemDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename Container>
@@ -292,10 +296,10 @@ template<typename Container>
 
     if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
         return false;
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(fileSize))
+    if(!CanRepresentStreamSize(fileSize))
         return false;
 
-    GlobalFilesystemDetail::InputFileStream stream(path, GlobalFilesystemDetail::InputFileStream::binary);
+    InputFileStream stream(path, InputFileStream::binary);
     if(!stream.is_open())
         return false;
 
@@ -303,11 +307,11 @@ template<typename Container>
     if(fileSize == 0)
         return true;
 
-    stream.read(MutableReadBuffer(outData), static_cast<GlobalFilesystemDetail::StreamSize>(fileSize));
+    stream.read(MutableReadBuffer(outData), static_cast<StreamSize>(fileSize));
     if(stream.good())
         return true;
 
-    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(fileSize))
+    if(stream.eof() && stream.gcount() == static_cast<StreamSize>(fileSize))
         return true;
 
     outData.clear();
@@ -315,7 +319,13 @@ template<typename Container>
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename StringT>

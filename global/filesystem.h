@@ -352,6 +352,9 @@ template<typename StringT>
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename Container>
 [[nodiscard]] inline bool ReadBinaryFile(const Path& path, Container& outBytes, ErrorCode& outError){
     return GlobalFilesystemDetail::ReadWholeBinaryFile(path, outBytes, outError);

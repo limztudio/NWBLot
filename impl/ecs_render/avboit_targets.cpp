@@ -100,13 +100,13 @@ static void AddDepthSamplerBindings(
     Core::Sampler* sampler
 ){
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        0,
+        NWB_AVBOIT_BINDING_OPAQUE_DEPTH,
         depth,
         depthFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(1, sampler));
+    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_BINDING_POINT_SAMPLER, sampler));
 }
 
 static bool CreateBindingSet(
@@ -228,7 +228,7 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
     }
 
-    const u32 coverageWordCount = DivideUp(avboitTargets.virtualSliceCount, 32u);
+    const u32 coverageWordCount = DivideUp(avboitTargets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
     const u64 coverageBytes = static_cast<u64>(coverageWordCount) * sizeof(u32);
     const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
     const u64 lowPixelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight;
@@ -310,7 +310,7 @@ bool RendererSystem::createAvboitFrameTargets(
         createdTargets.depthFormat,
         m_deferredSampler.get()
     );
-    occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.coverageBuffer.get()));
+    occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, avboitTargets.coverageBuffer.get()));
     if(!__hidden_avboit_targets::CreateBindingSet(
         *device,
         avboitTargets.occupancyBindingSet,
@@ -321,9 +321,9 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
 
     Core::BindingSetDesc depthWarpBindingSetDesc(m_arena);
-    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.coverageBuffer.get()));
-    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, avboitTargets.depthWarpBuffer.get()));
-    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(2, avboitTargets.controlBuffer.get()));
+    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, avboitTargets.coverageBuffer.get()));
+    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
+    depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
     if(!__hidden_avboit_targets::CreateBindingSet(
         *device,
         avboitTargets.depthWarpBindingSet,
@@ -340,10 +340,10 @@ bool RendererSystem::createAvboitFrameTargets(
         createdTargets.depthFormat,
         m_deferredSampler.get()
     );
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.depthWarpBuffer.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, avboitTargets.controlBuffer.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(4, avboitTargets.extinctionBuffer.get()));
-    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(5, avboitTargets.extinctionOverflowBuffer.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, avboitTargets.extinctionBuffer.get()));
+    extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, avboitTargets.extinctionOverflowBuffer.get()));
     if(!__hidden_avboit_targets::CreateBindingSet(
         *device,
         avboitTargets.extinctionBindingSet,
@@ -354,16 +354,16 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
 
     Core::BindingSetDesc integrateBindingSetDesc(m_arena);
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.extinctionBuffer.get()));
+    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, avboitTargets.extinctionBuffer.get()));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        1,
+        NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE,
         avboitTargets.transmittanceTexture.get(),
         avboitTargets.transmittanceFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ));
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
-    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, avboitTargets.extinctionOverflowBuffer.get()));
+    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
+    integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, avboitTargets.extinctionOverflowBuffer.get()));
     if(!__hidden_avboit_targets::CreateBindingSet(
         *device,
         avboitTargets.integrateBindingSet,
@@ -374,17 +374,17 @@ bool RendererSystem::createAvboitFrameTargets(
         return false;
 
     Core::BindingSetDesc accumulateBindingSetDesc(m_arena);
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, avboitTargets.depthWarpBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        1,
+        NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE,
         avboitTargets.transmittanceTexture.get(),
         avboitTargets.transmittanceFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, avboitTargets.controlBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_avboitLinearSampler.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(4, m_sceneShadingBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, m_avboitLinearSampler.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, m_sceneShadingBuffer.get()));
     if(!__hidden_avboit_targets::CreateBindingSet(
         *device,
         avboitTargets.accumulateBindingSet,

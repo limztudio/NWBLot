@@ -3,14 +3,15 @@
 
 
 #include "common.slangi"
+#include "binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(0, 1)]] Texture2D<float4> g_OpaqueDepth;
-[[vk::binding(1, 1)]] SamplerState g_PointSampler;
-[[vk::binding(2, 1)]] RWStructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
+[[vk::binding(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] Texture2D<float4> g_OpaqueDepth;
+[[vk::binding(NWB_AVBOIT_BINDING_POINT_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_PointSampler;
+[[vk::binding(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
 
 struct NwbAvboitOccupancyPixelInput{
     [[vk::location(0)]] float4 color : COLOR0;
@@ -37,9 +38,9 @@ void main(NwbAvboitOccupancyPixelInput input, float4 fragCoord : SV_Position){
     nwbAvboitLinearVirtualSlicesFromDepth(fragCoord.z, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
 
     if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        InterlockedOr(g_CoverageWords[virtualSlice0 >> 5u], 1u << (virtualSlice0 & 31u));
+        InterlockedOr(g_CoverageWords[virtualSlice0 >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice0 & NWB_AVBOIT_COVERAGE_BIT_MASK));
     if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        InterlockedOr(g_CoverageWords[virtualSlice1 >> 5u], 1u << (virtualSlice1 & 31u));
+        InterlockedOr(g_CoverageWords[virtualSlice1 >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice1 & NWB_AVBOIT_COVERAGE_BIT_MASK));
 }
 
 

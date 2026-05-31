@@ -221,35 +221,35 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
 
     Core::BindingSetDesc lightingBindingSetDesc(m_arena);
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        0,
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR,
         createdTargets.albedo.get(),
         createdTargets.albedoFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        1,
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL,
         createdTargets.normal.get(),
         createdTargets.normalFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        2,
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION,
         createdTargets.worldPosition.get(),
         createdTargets.worldPositionFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        3,
+        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(4, m_deferredSampler.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(5, m_sceneShadingBuffer.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, m_deferredSampler.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, m_sceneShadingBuffer.get()));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, m_deferredLightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));
@@ -258,27 +258,27 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        0,
+        NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR,
         createdTargets.opaqueColor.get(),
         createdTargets.opaqueColorFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        1,
+        NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR,
         createdTargets.avboit.accumColor.get(),
         createdTargets.avboit.accumColorFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        2,
+        NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION,
         createdTargets.avboit.accumExtinction.get(),
         createdTargets.avboit.accumExtinctionFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(3, m_deferredSampler.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, m_deferredSampler.get()));
     createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredCompositeBindingLayout);
     if(!createdTargets.compositeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
@@ -312,10 +312,10 @@ bool RendererSystem::createDeferredCompositeResources(){
     if(!m_deferredCompositeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(3, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, 1));
 
         m_deferredCompositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_deferredCompositeBindingLayout){

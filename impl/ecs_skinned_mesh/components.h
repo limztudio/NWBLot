@@ -10,6 +10,7 @@
 #include <core/alloc/general.h>
 #include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
+#include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/skinned_mesh/joint_types.h>
 
 
@@ -62,8 +63,8 @@ struct RuntimeMeshHandle{
 
 namespace SkinnedMeshSkinningMode{
     enum Enum : u32{
-        LinearBlend = 0,
-        DualQuaternion = 1,
+        LinearBlend = NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND,
+        DualQuaternion = NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION,
     };
 };
 

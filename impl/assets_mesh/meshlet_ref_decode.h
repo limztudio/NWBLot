@@ -211,12 +211,12 @@ struct MeshletAttributeRefEncodingLayout{
     if(width == MeshletRefDeltaWidth::U8)
         return true;
 
-    outDelta |= static_cast<u32>(bytes[byteOffset + 1u]) << 8u;
+    outDelta |= static_cast<u32>(bytes[byteOffset + 1u]) << s_MeshletPackedByteBits;
     if(width == MeshletRefDeltaWidth::U16)
         return true;
 
-    outDelta |= static_cast<u32>(bytes[byteOffset + 2u]) << 16u;
-    outDelta |= static_cast<u32>(bytes[byteOffset + 3u]) << 24u;
+    outDelta |= static_cast<u32>(bytes[byteOffset + 2u]) << (s_MeshletPackedByteBits * 2u);
+    outDelta |= static_cast<u32>(bytes[byteOffset + 3u]) << (s_MeshletPackedByteBits * 3u);
     return true;
 }
 

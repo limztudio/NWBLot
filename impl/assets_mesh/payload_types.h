@@ -7,6 +7,8 @@
 
 #include "skinned_types.h"
 
+#include <impl/assets/graphics/mesh/meshlet_constants.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,10 +19,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshMissingStreamIndex = Limit<u32>::s_Max;
-inline constexpr u32 s_MeshMaxMeshletVertices = 96u;
-inline constexpr u32 s_MeshMaxMeshletTriangles = 126u;
-inline constexpr u32 s_MeshletConeFlagEnabled = 1u << 0u;
+inline constexpr u32 s_MeshMissingStreamIndex = NWB_MESH_MISSING_STREAM_INDEX;
+inline constexpr u32 s_MeshMaxMeshletVertices = NWB_MESH_SHADER_MAX_VERTICES;
+inline constexpr u32 s_MeshMaxMeshletTriangles = NWB_MESH_SHADER_MAX_TRIANGLES;
+inline constexpr u32 s_MeshletConeFlagEnabled = NWB_MESHLET_CONE_FLAG_ENABLED;
 
 struct MeshletDesc{
     u32 localVertexOffset = 0u;
@@ -47,7 +49,7 @@ struct MeshletBounds{
 };
 static_assert(IsStandardLayout_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
-static_assert(sizeof(MeshletBounds) == sizeof(f32) * 6u, "MeshletBounds layout drifted");
+static_assert(sizeof(MeshletBounds) == NWB_MESHLET_BOUNDS_STRIDE, "MeshletBounds layout drifted");
 
 struct MeshletPositionStreamRef{
     u32 position = s_MeshMissingStreamIndex;

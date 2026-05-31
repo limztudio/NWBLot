@@ -750,7 +750,7 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
     case MaterialParameterValueType::Bool:
         return ParseMaterialBoolToken(token, outValue);
     case MaterialParameterValueType::Char:
-        return ParseMaterialParameterSignedToken(begin, end, -128, 127, 0xffu, outValue);
+        return ParseMaterialParameterSignedToken(begin, end, -128, 127, NWB_MATERIAL_TYPED_BYTE_MASK, outValue);
     case MaterialParameterValueType::UChar:
         return ParseMaterialParameterUnsignedToken(begin, end, static_cast<u64>(Limit<u8>::s_Max), outValue);
     case MaterialParameterValueType::Short:
@@ -759,7 +759,7 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
             end,
             static_cast<i64>(Limit<i16>::s_Min),
             static_cast<i64>(Limit<i16>::s_Max),
-            0xffffu,
+            NWB_MATERIAL_TYPED_U16_MASK,
             outValue
         );
     case MaterialParameterValueType::UShort:

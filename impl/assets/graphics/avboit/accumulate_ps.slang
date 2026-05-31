@@ -2,8 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_SCENE_SHADING_SET 1
-#define NWB_SCENE_SHADING_BINDING 4
+#include "binding_slots.h"
+#include "../scene/binding_slots.h"
+
+#define NWB_SCENE_SHADING_SET NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_SET
+#define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING
 #include "common.slangi"
 #include "../scene/lighting.slangi"
 
@@ -11,10 +14,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(1, 1)]] Texture3D<float4> g_Transmittance;
-[[vk::binding(3, 1)]] SamplerState g_LinearSampler;
-[[vk::binding(0, 1)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
-[[vk::binding(2, 1)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, NWB_AVBOIT_TRANSPARENT_SET)]] Texture3D<float4> g_Transmittance;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_LinearSampler;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
 
 struct NwbAvboitAccumulatePixelInput{
     [[vk::location(0)]] float4 color : COLOR0;
@@ -38,7 +41,7 @@ static float3 inWorldPosition;
 
 
 uint nwbAvboitActivePhysicalSliceCount(){
-    return clamp(g_Control[0], 1u, nwbAvboitPhysicalSliceCount());
+    return clamp(g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], 1u, nwbAvboitPhysicalSliceCount());
 }
 
 float nwbAvboitWarpedPhysicalSliceFromVirtualSlice(uint virtualSlice){

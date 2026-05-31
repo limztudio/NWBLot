@@ -26,16 +26,16 @@ template<typename ByteVectorT>
     if(!MeshletRefDeltaFitsWidth(delta, width))
         return false;
 
-    outBytes.push_back(static_cast<u8>(delta & 0xffu));
+    outBytes.push_back(static_cast<u8>(delta & s_MeshletPackedByteMask));
     if(width == MeshletRefDeltaWidth::U8)
         return true;
 
-    outBytes.push_back(static_cast<u8>((delta >> 8u) & 0xffu));
+    outBytes.push_back(static_cast<u8>((delta >> s_MeshletPackedByteBits) & s_MeshletPackedByteMask));
     if(width == MeshletRefDeltaWidth::U16)
         return true;
 
-    outBytes.push_back(static_cast<u8>((delta >> 16u) & 0xffu));
-    outBytes.push_back(static_cast<u8>((delta >> 24u) & 0xffu));
+    outBytes.push_back(static_cast<u8>((delta >> (s_MeshletPackedByteBits * 2u)) & s_MeshletPackedByteMask));
+    outBytes.push_back(static_cast<u8>((delta >> (s_MeshletPackedByteBits * 3u)) & s_MeshletPackedByteMask));
     return true;
 }
 

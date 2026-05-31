@@ -12,6 +12,7 @@
 #include <core/ecs/system.h>
 #include <core/graphics/api.h>
 #include <core/graphics/render_pass.h>
+#include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_mesh_runtime/mesh.h>
 
@@ -389,21 +390,21 @@ private:
     }
 
 private:
-    static constexpr u32 s_MeshPositionBindingSlot = 0u;
-    static constexpr u32 s_MeshNormalBindingSlot = 1u;
-    static constexpr u32 s_MeshTangentBindingSlot = 2u;
-    static constexpr u32 s_MeshUv0BindingSlot = 3u;
-    static constexpr u32 s_MeshColorBindingSlot = 4u;
-    static constexpr u32 s_MeshletDescBindingSlot = 5u;
-    static constexpr u32 s_MeshMaterialTypedBindingSlot = 6u;
-    static constexpr u32 s_MeshletBoundsBindingSlot = 7u;
-    static constexpr u32 s_MeshletPositionRefBindingSlot = 8u;
-    static constexpr u32 s_MeshletAttributeRefBindingSlot = 9u;
-    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = 10u;
-    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = 11u;
-    static constexpr u32 s_MeshInstanceBindingSlot = 12u;
-    static constexpr u32 s_MeshViewBindingSlot = 13u;
-    static constexpr u32 s_MeshGeneratedVertexBindingSlot = 14u;
+    static constexpr u32 s_MeshPositionBindingSlot = NWB_MESH_BINDING_POSITION;
+    static constexpr u32 s_MeshNormalBindingSlot = NWB_MESH_BINDING_NORMAL;
+    static constexpr u32 s_MeshTangentBindingSlot = NWB_MESH_BINDING_TANGENT;
+    static constexpr u32 s_MeshUv0BindingSlot = NWB_MESH_BINDING_UV0;
+    static constexpr u32 s_MeshColorBindingSlot = NWB_MESH_BINDING_COLOR;
+    static constexpr u32 s_MeshletDescBindingSlot = NWB_MESH_BINDING_MESHLET_DESC;
+    static constexpr u32 s_MeshMaterialTypedBindingSlot = NWB_MESH_BINDING_MATERIAL_TYPED;
+    static constexpr u32 s_MeshletBoundsBindingSlot = NWB_MESH_BINDING_MESHLET_BOUNDS;
+    static constexpr u32 s_MeshletPositionRefBindingSlot = NWB_MESH_BINDING_MESHLET_POSITION_REFS;
+    static constexpr u32 s_MeshletAttributeRefBindingSlot = NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS;
+    static constexpr u32 s_MeshletLocalVertexRefBindingSlot = NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS;
+    static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES;
+    static constexpr u32 s_MeshInstanceBindingSlot = NWB_MESH_BINDING_INSTANCE;
+    static constexpr u32 s_MeshViewBindingSlot = NWB_MESH_BINDING_VIEW;
+    static constexpr u32 s_MeshGeneratedVertexBindingSlot = NWB_MESH_BINDING_GENERATED_VERTEX;
     static_assert(s_MeshMaterialTypedBindingSlot == 6u, "Mesh material typed payload binding must stay at slot 6");
 
 private:

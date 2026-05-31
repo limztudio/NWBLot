@@ -23,7 +23,7 @@ namespace SkinnedMeshRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_Epsilon = 0.000001f;
+static constexpr f32 s_Epsilon = static_cast<f32>(NWB_SKINNED_MESH_EPSILON);
 static constexpr f32 s_JointDeterminantEpsilon = 0.000000000001f;
 static constexpr f32 s_RigidJointEpsilon = 0.001f;
 

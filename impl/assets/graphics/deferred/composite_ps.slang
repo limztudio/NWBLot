@@ -2,10 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(0, 0)]] Texture2D<float4> g_OpaqueColor;
-[[vk::binding(1, 0)]] Texture2D<float4> g_AvboitAccumColor;
-[[vk::binding(2, 0)]] Texture2D<float4> g_AvboitAccumExtinction;
-[[vk::binding(3, 0)]] SamplerState g_DeferredSampler;
+#include "binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR, 0)]] Texture2D<float4> g_OpaqueColor;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR, 0)]] Texture2D<float4> g_AvboitAccumColor;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION, 0)]] Texture2D<float4> g_AvboitAccumExtinction;
+[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, 0)]] SamplerState g_DeferredSampler;
 
 struct NwbDeferredCompositePixelInput{
     [[vk::location(0)]] float2 uv : TEXCOORD0;

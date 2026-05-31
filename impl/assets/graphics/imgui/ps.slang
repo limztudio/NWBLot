@@ -2,8 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(0, 0)]] Texture2D<float4> g_UiTexture;
-[[vk::binding(1, 0)]] SamplerState g_UiSampler;
+#include "binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_IMGUI_BINDING_TEXTURE, 0)]] Texture2D<float4> g_UiTexture;
+[[vk::binding(NWB_IMGUI_BINDING_SAMPLER, 0)]] SamplerState g_UiSampler;
 
 struct NwbImguiPixelInput{
     [[vk::location(0)]] float2 uv : TEXCOORD0;

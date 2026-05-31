@@ -10,39 +10,7 @@
 
 
 #include "payload.slangi"
-
-#ifndef NWB_MESH_SHADER_GROUP_SIZE_X
-#define NWB_MESH_SHADER_GROUP_SIZE_X 128
-#endif
-
-#define NWB_MESH_SHADER_MAX_VERTICES 96
-#define NWB_MESH_SHADER_MAX_TRIANGLES 126
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static const uint NWB_MESHLET_BOUNDS_STRIDE = 24u;
-static const uint NWB_MESHLET_CONE_FLAG_ENABLED = 1u;
-static const uint NWB_MESHLET_COUNT_MASK = 0xffu;
-static const uint NWB_MESHLET_PRIMITIVE_COUNT_SHIFT = 8u;
-static const uint NWB_MESHLET_POSITION_COUNT_SHIFT = 16u;
-static const uint NWB_MESHLET_ATTRIBUTE_COUNT_SHIFT = 24u;
-static const uint NWB_MESHLET_CONE_AXIS_X_SHIFT = 0u;
-static const uint NWB_MESHLET_CONE_AXIS_Y_SHIFT = 8u;
-static const uint NWB_MESHLET_CONE_CUTOFF_SHIFT = 16u;
-static const uint NWB_MESHLET_CONE_FLAG_SHIFT = 24u;
-static const uint NWB_MESH_MISSING_STREAM_INDEX = 0xffffffffu;
-static const uint NWB_MESHLET_REF_WIDTH_U8 = 0u;
-static const uint NWB_MESHLET_REF_WIDTH_U16 = 1u;
-static const uint NWB_MESHLET_REF_WIDTH_U32 = 2u;
-static const uint NWB_MESHLET_REF_ENCODING_WIDTH_MASK = 0x3u;
-static const uint NWB_MESHLET_REF_ENCODING_POSITION_SHIFT = 0u;
-static const uint NWB_MESHLET_REF_ENCODING_SKIN_SHIFT = 2u;
-static const uint NWB_MESHLET_REF_ENCODING_NORMAL_SHIFT = 4u;
-static const uint NWB_MESHLET_REF_ENCODING_TANGENT_SHIFT = 6u;
-static const uint NWB_MESHLET_REF_ENCODING_UV0_SHIFT = 8u;
-static const uint NWB_MESHLET_REF_ENCODING_COLOR_SHIFT = 10u;
+#include "meshlet_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,8 +85,8 @@ uint nwbMeshletRefDeltaByteWidth(const uint width){
 }
 
 uint nwbMeshletDecodeRefByte(ByteAddressBuffer buffer, const uint byteOffset){
-    const uint word = buffer.Load(byteOffset & ~3u);
-    return (word >> ((byteOffset & 3u) << 3u)) & 0xffu;
+    const uint word = buffer.Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    return (word >> ((byteOffset & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
 uint nwbMeshletDecodeRefDelta(ByteAddressBuffer buffer, const uint byteOffset, const uint width){
@@ -126,12 +94,12 @@ uint nwbMeshletDecodeRefDelta(ByteAddressBuffer buffer, const uint byteOffset, c
     if(width == NWB_MESHLET_REF_WIDTH_U8)
         return delta;
 
-    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 1u) << 8u;
+    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 1u) << NWB_MESHLET_PACKED_BYTE_BITS;
     if(width == NWB_MESHLET_REF_WIDTH_U16)
         return delta;
 
-    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 2u) << 16u;
-    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 3u) << 24u;
+    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 2u) << (NWB_MESHLET_PACKED_BYTE_BITS * 2u);
+    delta |= nwbMeshletDecodeRefByte(buffer, byteOffset + 3u) << (NWB_MESHLET_PACKED_BYTE_BITS * 3u);
     return delta;
 }
 
@@ -215,11 +183,11 @@ uint nwbMeshletBoundsByteOffset(const uint meshletIndex){
 }
 
 uint nwbMeshletLocalDeformedPosition(const NwbMeshletLocalVertexRef localVertexRef){
-    return localVertexRef.packed & 0xffffu;
+    return localVertexRef.packed & NWB_MESHLET_PACKED_HALFWORD_MASK;
 }
 
 uint nwbMeshletLocalAttribute(const NwbMeshletLocalVertexRef localVertexRef){
-    return localVertexRef.packed >> 16u;
+    return localVertexRef.packed >> NWB_MESHLET_PACKED_HALFWORD_BITS;
 }
 
 uint nwbMeshPackUnorm8(const float value){
@@ -231,13 +199,13 @@ uint nwbMeshPackConeCutoffUnorm8(const float value){
 }
 
 float nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
-    return float((value >> bitShift) & 0xffu) / 255.0;
+    return float((value >> bitShift) & NWB_MESHLET_PACKED_BYTE_MASK) / 255.0;
 }
 
 uint nwbMeshPackConeOct16(float3 axis){
     const float length = abs(axis.x) + abs(axis.y) + abs(axis.z);
-    if(!nwbFiniteFloat(length) || length <= 0.000001)
-        return 0x8080u;
+    if(!nwbFiniteFloat(length) || length <= NWB_MESHLET_CONE_AXIS_LENGTH_EPSILON)
+        return NWB_MESHLET_CONE_AXIS_FALLBACK;
 
     axis /= length;
     if(axis.z < 0.0){

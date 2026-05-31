@@ -21,7 +21,7 @@ groupshared float3 g_NwbMeshletWorldPositions[NWB_MESH_SHADER_MAX_VERTICES];
 groupshared float4 g_NwbMeshletClipPositions[NWB_MESH_SHADER_MAX_VERTICES];
 
 uint nwbMeshletPrimitiveBase(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex){
-    return meshlet.primitiveOffset + localPrimitiveIndex * 3u;
+    return meshlet.primitiveOffset + localPrimitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
 }
 
 uint3 nwbMeshLoadMeshletPrimitive(const uint primitiveBase){

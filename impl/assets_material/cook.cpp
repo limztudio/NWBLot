@@ -1301,8 +1301,11 @@ static bool BuildMaterialBindIncludeSourceImpl(
     outSource += "#ifndef NWB_MATERIAL_TYPED_BINDING\n";
     outSource += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
     outSource += "#endif\n\n";
-    outSource += "#if NWB_MATERIAL_TYPED_BINDING != 1\n";
-    outSource += "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING=1\"\n";
+    outSource += "#ifndef NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
+    outSource += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
+    outSource += "#endif\n\n";
+    outSource += "#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
+    outSource += "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\"\n";
     outSource += "#endif\n\n\n";
     AppendMaterialBindGeneratedSeparator(outSource, 3u);
 

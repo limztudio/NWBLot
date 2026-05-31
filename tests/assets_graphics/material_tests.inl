@@ -109,7 +109,7 @@ static void CheckGeneratedMaterialBindSource(TestContext& context, const AString
         "#ifndef NWB_GENERATED_MATERIAL_BIND_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE_BIND",
         "static const uint2 NWB_MATERIAL_BIND_INTERFACE_HASH_0 = uint2(",
         "static const uint2 NWB_MATERIAL_BIND_LAYOUT_HASH = uint2(",
-        "#if NWB_MATERIAL_TYPED_BINDING != 1",
+        "#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE",
         "static const uint NWB_MATERIAL_BIND_BLOCK_COUNT = 2u;",
         "static const uint NWB_MATERIAL_BIND_FIELD_COUNT = 6u;",
         "static const uint NWB_MATERIAL_BIND_STORAGE_CONSTANT = 1u;",

@@ -1,0 +1,46 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(__cplusplus)
+#pragma once
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_AVBOIT_CONSTANTS_H
+#define NWB_AVBOIT_CONSTANTS_H
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_AVBOIT_WARP_INVALID 0xffffffffu
+#define NWB_AVBOIT_OVERFLOW_INVALID 0xffffffffu
+#define NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD 4u
+#define NWB_AVBOIT_EXTINCTION_BYTE_MASK 0xffu
+#define NWB_AVBOIT_COVERAGE_SLICES_PER_WORD 32u
+#define NWB_AVBOIT_COVERAGE_WORD_SHIFT 5u
+#define NWB_AVBOIT_COVERAGE_BIT_MASK 31u
+#define NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X 64
+
+#define NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES 0
+#define NWB_AVBOIT_CONTROL_COMPRESSION_SHIFT 1
+#define NWB_AVBOIT_CONTROL_VIRTUAL_SLICE_COUNT 2
+#define NWB_AVBOIT_CONTROL_PHYSICAL_SLICE_COUNT 3
+#define NWB_AVBOIT_CONTROL_LOW_WIDTH 4
+#define NWB_AVBOIT_CONTROL_LOW_HEIGHT 5
+#define NWB_AVBOIT_CONTROL_FULL_WIDTH 6
+#define NWB_AVBOIT_CONTROL_FULL_HEIGHT 7
+#define NWB_AVBOIT_CONTROL_WORD_COUNT 8u
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

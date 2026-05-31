@@ -7,6 +7,7 @@
 #include <core/common/log.h>
 #include <core/graphics/module.h>
 #include <core/graphics/shader_archive.h>
+#include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/assets_shader/loader.h>
 
 
@@ -91,18 +92,18 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
     if(!m_skinningBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(4, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(5, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(6, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(7, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(8, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(9, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(10, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(11, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_REST_POSITION, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SKINNED_MESH_BINDING_SKINNED_POSITION, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_REST_NORMAL, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SKINNED_MESH_BINDING_SKINNED_NORMAL, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_REST_TANGENT, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SKINNED_MESH_BINDING_SKINNED_TANGENT, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_MESHLET_DESC, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_BINDING_POSITION_REF_DELTAS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_REF_DELTAS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SkinnedMeshPushConstants)));
 
         m_skinningBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -132,12 +133,12 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
     if(!m_boundsBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(4, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_UAV(5, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITIONS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_MESHLET_DESC, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITION_REF_DELTAS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_LOCAL_VERTEX_REFS, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_PRIMITIVE_INDICES, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_UAV(NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletBoundsPushConstants)));
 
         m_boundsBindingLayout = device->createBindingLayout(bindingLayoutDesc);

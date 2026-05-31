@@ -107,9 +107,9 @@ bool RendererSystem::createAvboitResources(){
         Core::ShaderType::Pixel,
         NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding layout"),
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_BINDING_POINT_SAMPLER, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }
     ))
@@ -122,9 +122,9 @@ bool RendererSystem::createAvboitResources(){
         Core::ShaderType::Compute,
         NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding layout"),
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(1, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(2, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(RendererAvboitPushConstants)));
         }
     ))
@@ -137,12 +137,12 @@ bool RendererSystem::createAvboitResources(){
         Core::ShaderType::Pixel,
         NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding layout"),
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(1, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(4, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(5, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_BINDING_POINT_SAMPLER, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }
     ))
@@ -155,10 +155,10 @@ bool RendererSystem::createAvboitResources(){
         Core::ShaderType::Compute,
         NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding layout"),
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(1, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(3, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(RendererAvboitPushConstants)));
         }
     ))
@@ -171,11 +171,11 @@ bool RendererSystem::createAvboitResources(){
         Core::ShaderType::Pixel,
         NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"),
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(0, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(2, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(3, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(4, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, 1));
+            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
         }
     ))

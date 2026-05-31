@@ -35,12 +35,12 @@ bool RendererSystem::createDeferredLightingResources(){
     if(!m_deferredLightingBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(0, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(1, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(2, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(3, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(4, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(5, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, 1));
 
         m_deferredLightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_deferredLightingBindingLayout){

@@ -3,6 +3,8 @@
 
 
 #include "../mesh/meshlet_payload.slangi"
+#include "binding_slots.h"
+#include "constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,18 +22,18 @@ struct NwbSkinnedMeshJointMatrix{
     float4 column3;
 };
 
-[[vk::binding(0, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshRestPositions;
-[[vk::binding(1, 0)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshSkinnedPositions;
-[[vk::binding(2, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestNormals;
-[[vk::binding(3, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
-[[vk::binding(4, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
-[[vk::binding(5, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
-[[vk::binding(6, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshMeshlets;
-[[vk::binding(7, 0)]] ByteAddressBuffer g_NwbSkinnedMeshPositionRefDeltas;
-[[vk::binding(8, 0)]] ByteAddressBuffer g_NwbSkinnedMeshAttributeRefDeltas;
-[[vk::binding(9, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
-[[vk::binding(10, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
-[[vk::binding(11, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_POSITION, 0)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshRestPositions;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_POSITION, 0)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshSkinnedPositions;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_NORMAL, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestNormals;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_NORMAL, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_TANGENT, 0)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_TANGENT, 0)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_MESHLET_DESC, 0)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshMeshlets;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_POSITION_REF_DELTAS, 0)]] ByteAddressBuffer g_NwbSkinnedMeshPositionRefDeltas;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_REF_DELTAS, 0)]] ByteAddressBuffer g_NwbSkinnedMeshAttributeRefDeltas;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, 0)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, 0)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
+[[vk::binding(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, 0)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
 
 struct NwbSkinnedMeshPushConstants{
     uint4 payload0;
@@ -78,7 +80,7 @@ bool nwbSkinnedMeshTransformJointNormal(const float3x3 jointMatrix, const float3
     const float3 column1 = jointMatrix[1];
     const float3 column2 = jointMatrix[2];
     const float determinant = dot(column0, cross(column1, column2));
-    if(!nwbFiniteFloat(determinant) || abs(determinant) <= 0.000001)
+    if(!nwbFiniteFloat(determinant) || abs(determinant) <= NWB_SKINNED_MESH_EPSILON)
         return false;
 
     const float inverseDeterminant = 1.0 / determinant;
@@ -93,7 +95,7 @@ bool nwbSkinnedMeshTransformJointNormal(const float3x3 jointMatrix, const float3
 
 bool nwbSkinnedMeshNormalizeDualQuaternion(inout float4 real, inout float4 dual){
     const float lengthSquared = dot(real, real);
-    if(!nwbFiniteFloat(lengthSquared) || lengthSquared <= 0.000001)
+    if(!nwbFiniteFloat(lengthSquared) || lengthSquared <= NWB_SKINNED_MESH_EPSILON)
         return false;
 
     const float invLength = rsqrt(lengthSquared);
@@ -126,7 +128,7 @@ bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, 
     for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
         const float weight = skin.weight[influenceIndex];
         const uint jointId = skin.joint[influenceIndex];
-        if(abs(weight) <= 0.000001 || jointId >= jointCount)
+        if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
             continue;
 
         const float4x4 jointMatrix = nwbSkinnedMeshLoadJointMatrix(jointId);
@@ -141,7 +143,7 @@ bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, 
         totalWeight += weight;
     }
 
-    if(abs(totalWeight) <= 0.000001)
+    if(abs(totalWeight) <= NWB_SKINNED_MESH_EPSILON)
         return true;
 
     const float inverseTotalWeight = 1.0 / totalWeight;
@@ -166,7 +168,7 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
     for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
         const float weight = skin.weight[influenceIndex];
         const uint jointId = skin.joint[influenceIndex];
-        if(abs(weight) <= 0.000001 || jointId >= jointCount)
+        if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
             continue;
 
         const NwbSkinnedMeshJointMatrix jointPayload = g_NwbSkinnedMeshJointPalette[jointId];
@@ -189,7 +191,7 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
         totalWeight += weight;
     }
 
-    if(abs(totalWeight) <= 0.000001)
+    if(abs(totalWeight) <= NWB_SKINNED_MESH_EPSILON)
         return true;
     if(!nwbSkinnedMeshNormalizeDualQuaternion(blendedReal, blendedDual))
         return false;
@@ -201,8 +203,7 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
 }
 
 void nwbSkinnedMeshApplySkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
-    const uint dualQuaternionSkinningMode = 1u;
-    const bool skinApplied = nwbSkinnedMeshSkinningMode() == dualQuaternionSkinningMode
+    const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
         ? nwbSkinnedMeshApplyDualQuaternionSkin(skinIndex, position, normal, tangent)
         : nwbSkinnedMeshApplyLinearSkin(skinIndex, position, normal, tangent)
     ;
@@ -278,9 +279,9 @@ void nwbSkinnedMeshMain(const uint meshletIndex, const uint groupThreadIndex){
     const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const uint positionCount = nwbMeshletPositionCount(meshlet);
     const uint attributeCount = nwbMeshletAttributeCount(meshlet);
-    for(uint localPositionIndex = groupThreadIndex; localPositionIndex < positionCount; localPositionIndex += 64u)
+    for(uint localPositionIndex = groupThreadIndex; localPositionIndex < positionCount; localPositionIndex += NWB_SKINNED_MESH_GROUP_SIZE_X)
         nwbSkinnedMeshSkinPosition(meshlet, decodeInfo, localPositionIndex);
-    for(uint localAttributeIndex = groupThreadIndex; localAttributeIndex < attributeCount; localAttributeIndex += 64u)
+    for(uint localAttributeIndex = groupThreadIndex; localAttributeIndex < attributeCount; localAttributeIndex += NWB_SKINNED_MESH_GROUP_SIZE_X)
         nwbSkinnedMeshSkinAttribute(meshlet, decodeInfo, localAttributeIndex);
 }
 
@@ -288,7 +289,7 @@ void nwbSkinnedMeshMain(const uint meshletIndex, const uint groupThreadIndex){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[numthreads(64, 1, 1)]
+[numthreads(NWB_SKINNED_MESH_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshMain(groupID.x, groupThreadID.x);
 }

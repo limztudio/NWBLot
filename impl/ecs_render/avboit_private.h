@@ -26,10 +26,10 @@ namespace ECSRenderAvboitDetail{
 inline constexpr u32 s_AvboitDownsample = 4u;
 inline constexpr u32 s_AvboitVirtualSlices = 128u;
 inline constexpr u32 s_AvboitPhysicalSlices = 64u;
-inline constexpr u32 s_AvboitExtinctionSlicesPerWord = 4u;
+inline constexpr u32 s_AvboitExtinctionSlicesPerWord = NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD;
 inline constexpr f32 s_AvboitExtinctionFixedScale = 45.985905f;
 inline constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
-inline constexpr usize s_AvboitControlWordCount = 8u;
+inline constexpr usize s_AvboitControlWordCount = NWB_AVBOIT_CONTROL_WORD_COUNT;
 
 inline constexpr Name s_AvboitOccupancyPixelShaderName("engine/graphics/avboit/occupancy_ps");
 inline constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit/depth_warp_cs");

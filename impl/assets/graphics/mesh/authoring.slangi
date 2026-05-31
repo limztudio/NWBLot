@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "material_typed_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #ifndef NWB_MESH_SHADER_EMULATION_COMPUTE
 #define NWB_MESH_SHADER_EMULATION_COMPUTE 0
 #endif
@@ -17,8 +23,8 @@
 #error "mesh material shaders must include a generated .bind material interface"
 #endif
 
-#if NWB_MATERIAL_TYPED_BINDING != 1
-#error "mesh material shaders require NWB_MATERIAL_TYPED_BINDING=1"
+#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE
+#error "mesh material shaders require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE"
 #endif
 
 #include "runtime.slangi"

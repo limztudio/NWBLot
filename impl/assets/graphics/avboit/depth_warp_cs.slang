@@ -3,21 +3,22 @@
 
 
 #include "compute_common.slangi"
+#include "binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(0, 0)]] StructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
-[[vk::binding(1, 0)]] RWStructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
-[[vk::binding(2, 0)]] RWStructuredBuffer<uint, Std430DataLayout> g_Control;
+[[vk::binding(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
+[[vk::binding(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, NWB_AVBOIT_COMPUTE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, NWB_AVBOIT_COMPUTE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_Control;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool nwbAvboitVirtualSliceOccupied(uint virtualSlice){
-    return (g_CoverageWords[virtualSlice >> 5u] & (1u << (virtualSlice & 31u))) != 0u;
+    return (g_CoverageWords[virtualSlice >> NWB_AVBOIT_COVERAGE_WORD_SHIFT] & (1u << (virtualSlice & NWB_AVBOIT_COVERAGE_BIT_MASK))) != 0u;
 }
 
 bool nwbAvboitCoarseBinOccupied(uint coarseBin, uint compressionShift){
@@ -84,14 +85,14 @@ void nwbAvboitDepthWarpMain(){
         }
     }
 
-    g_Control[0] = min(max(occupiedCount, 1u), nwbAvboitPhysicalSliceCount());
-    g_Control[1] = compressionShift;
-    g_Control[2] = nwbAvboitVirtualSliceCount();
-    g_Control[3] = nwbAvboitPhysicalSliceCount();
-    g_Control[4] = nwbAvboitLowWidth();
-    g_Control[5] = nwbAvboitLowHeight();
-    g_Control[6] = nwbAvboitFullWidth();
-    g_Control[7] = nwbAvboitFullHeight();
+    g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES] = min(max(occupiedCount, 1u), nwbAvboitPhysicalSliceCount());
+    g_Control[NWB_AVBOIT_CONTROL_COMPRESSION_SHIFT] = compressionShift;
+    g_Control[NWB_AVBOIT_CONTROL_VIRTUAL_SLICE_COUNT] = nwbAvboitVirtualSliceCount();
+    g_Control[NWB_AVBOIT_CONTROL_PHYSICAL_SLICE_COUNT] = nwbAvboitPhysicalSliceCount();
+    g_Control[NWB_AVBOIT_CONTROL_LOW_WIDTH] = nwbAvboitLowWidth();
+    g_Control[NWB_AVBOIT_CONTROL_LOW_HEIGHT] = nwbAvboitLowHeight();
+    g_Control[NWB_AVBOIT_CONTROL_FULL_WIDTH] = nwbAvboitFullWidth();
+    g_Control[NWB_AVBOIT_CONTROL_FULL_HEIGHT] = nwbAvboitFullHeight();
 }
 
 

@@ -11,7 +11,8 @@
 
 #include "raster_fields.slangi"
 #include "meshlet_payload.slangi"
-#include "binding_slots.slangi"
+#include "binding_slots.h"
+#include "runtime_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,14 +99,6 @@ ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const uint NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL = 1u << 0u;
-static const uint NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL = 1u << 1u;
-static const uint NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL = 1u << 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 uint nwbMeshletCount(){
     return g_NwbMeshPushConstants.dispatch.x;
 }
@@ -139,8 +132,8 @@ float3 nwbMeshTransformDirection(float3 direction, const NwbMeshInstanceData ins
 
 uint nwbMeshLoadMeshletPrimitiveIndex(const uint primitiveIndex){
     const uint byteOffset = primitiveIndex;
-    const uint word = g_NwbMeshletPrimitiveIndices.Load(byteOffset & ~3u);
-    return (word >> ((byteOffset & 3u) << 3u)) & 0xffu;
+    const uint word = g_NwbMeshletPrimitiveIndices.Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    return (word >> ((byteOffset & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
 NwbMeshletLocalVertexRef nwbMeshLoadMeshletLocalVertexRef(const NwbMeshletDesc meshlet, const uint localVertexIndex){

@@ -9,6 +9,7 @@
 #include "system.h"
 
 #include <core/common/log.h>
+#include <impl/assets/graphics/mesh/material_typed_constants.h>
 #include <impl/ecs_scene/components.h>
 
 #include <global/algorithm.h>
@@ -32,6 +33,8 @@ namespace ECSRenderDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+inline constexpr usize s_MaterialTypedWordBytes = static_cast<usize>(NWB_MATERIAL_TYPED_WORD_BYTES);
 
 struct MaterialTypedByteRange{
     u32 byteOffset = 0;
@@ -110,7 +113,7 @@ struct MaterialTypedByteContentKeyHasher{
     }
 
     usize alignedByteBegin = 0u;
-    if(!AlignUpChecked(currentByteCount, sizeof(u32), alignedByteBegin)){
+    if(!AlignUpChecked(currentByteCount, s_MaterialTypedWordBytes, alignedByteBegin)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
         return false;
     }
@@ -121,7 +124,7 @@ struct MaterialTypedByteContentKeyHasher{
 
     const usize byteEnd = alignedByteBegin + appendByteCount;
     usize alignedByteEnd = 0u;
-    if(!AlignUpChecked(byteEnd, sizeof(u32), alignedByteEnd)){
+    if(!AlignUpChecked(byteEnd, s_MaterialTypedWordBytes, alignedByteEnd)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
         return false;
     }
@@ -226,13 +229,13 @@ template<typename MaterialTypedByteVector>
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is empty"));
         return false;
     }
-    if((materialTypedBytes.size() & (sizeof(u32) - 1u)) != 0u){
+    if((materialTypedBytes.size() & (s_MaterialTypedWordBytes - 1u)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload is not word-aligned"));
         return false;
     }
 
     outUploadByteCount = materialTypedBytes.size();
-    if(!AlignUpChecked(outUploadByteCount, sizeof(u32), outUploadByteCount)){
+    if(!AlignUpChecked(outUploadByteCount, s_MaterialTypedWordBytes, outUploadByteCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed data upload size overflows alignment"));
         return false;
     }
@@ -253,7 +256,7 @@ template<typename MaterialTypedByteVector>
         return false;
     }
 
-    if(((range.byteOffset | range.byteCount) & static_cast<u32>(sizeof(u32) - 1u)) != 0u){
+    if(((range.byteOffset | range.byteCount) & static_cast<u32>(NWB_MATERIAL_TYPED_WORD_BYTES - 1u)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"), rangeName);
         return false;
     }

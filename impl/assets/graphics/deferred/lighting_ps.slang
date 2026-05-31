@@ -2,8 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_SCENE_SHADING_SET 0
-#define NWB_SCENE_SHADING_BINDING 5
+#include "binding_slots.h"
+#include "../scene/binding_slots.h"
+
+#define NWB_SCENE_SHADING_SET NWB_SCENE_SHADING_DEFERRED_LIGHTING_SET
+#define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING
 
 #include "../scene/lighting.slangi"
 
@@ -11,11 +14,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(0, 0)]] Texture2D<float4> g_GBufferBaseColor;
-[[vk::binding(1, 0)]] Texture2D<float4> g_GBufferNormal;
-[[vk::binding(2, 0)]] Texture2D<float4> g_GBufferWorldPosition;
-[[vk::binding(3, 0)]] Texture2D<float4> g_GBufferDepth;
-[[vk::binding(4, 0)]] SamplerState g_DeferredSampler;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, 0)]] Texture2D<float4> g_GBufferBaseColor;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, 0)]] Texture2D<float4> g_GBufferNormal;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, 0)]] Texture2D<float4> g_GBufferWorldPosition;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, 0)]] Texture2D<float4> g_GBufferDepth;
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, 0)]] SamplerState g_DeferredSampler;
 
 struct NwbDeferredLightingPixelInput{
     [[vk::location(0)]] float2 uv : TEXCOORD0;

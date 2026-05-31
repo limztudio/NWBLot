@@ -18,6 +18,7 @@
 #include "cook_types.h"
 
 #include <core/alloc/scratch.h>
+#include <impl/assets/graphics/mesh/material_typed_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,10 +51,16 @@ inline AStringView TypedBindingImplicitDefineText(){
     return s_DefineText;
 }
 
+#define NWB_MATERIAL_TYPED_STRINGIFY_IMPL(Value) #Value
+#define NWB_MATERIAL_TYPED_STRINGIFY(Value) NWB_MATERIAL_TYPED_STRINGIFY_IMPL(Value)
+
 inline AStringView TypedBindingImplicitDefineValueText(){
-    static constexpr AStringView s_DefineValueText = "1";
+    static constexpr AStringView s_DefineValueText = NWB_MATERIAL_TYPED_STRINGIFY(NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE);
     return s_DefineValueText;
 }
+
+#undef NWB_MATERIAL_TYPED_STRINGIFY
+#undef NWB_MATERIAL_TYPED_STRINGIFY_IMPL
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

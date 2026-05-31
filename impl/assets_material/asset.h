@@ -10,6 +10,7 @@
 #include <core/assets/module.h>
 #include <core/assets/ref.h>
 #include <core/graphics/api.h>
+#include <impl/assets/graphics/mesh/material_typed_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,7 +196,7 @@ namespace MaterialLayoutFieldType{
 }
 
 [[nodiscard]] inline bool AlignMaterialLayoutBlockByteSize(const u32 byteSize, u32& outByteSize){
-    return AlignUpU32Checked(byteSize, sizeof(u32), outByteSize);
+    return AlignUpU32Checked(byteSize, NWB_MATERIAL_TYPED_WORD_BYTES, outByteSize);
 }
 
 struct MaterialTypedLayoutBlock{

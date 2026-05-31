@@ -3,17 +3,18 @@
 
 
 #include "common.slangi"
+#include "binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(0, 1)]] Texture2D<float4> g_OpaqueDepth;
-[[vk::binding(1, 1)]] SamplerState g_PointSampler;
-[[vk::binding(2, 1)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
-[[vk::binding(3, 1)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
-[[vk::binding(4, 1)]] RWStructuredBuffer<uint, Std430DataLayout> g_Extinction;
-[[vk::binding(5, 1)]] RWStructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
+[[vk::binding(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] Texture2D<float4> g_OpaqueDepth;
+[[vk::binding(NWB_AVBOIT_BINDING_POINT_SAMPLER, NWB_AVBOIT_TRANSPARENT_SET)]] SamplerState g_PointSampler;
+[[vk::binding(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
+[[vk::binding(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+[[vk::binding(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_Extinction;
+[[vk::binding(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
 
 struct NwbAvboitExtinctionPixelInput{
     [[vk::location(0)]] float4 color : COLOR0;
@@ -29,7 +30,7 @@ void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinctio
     if(extinction <= 0.0)
         return;
 
-    const uint activePhysicalSlices = max(min(g_Control[0], nwbAvboitPhysicalSliceCount()), 1u);
+    const uint activePhysicalSlices = max(min(g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], nwbAvboitPhysicalSliceCount()), 1u);
     const uint physicalSlice = min(g_DepthWarp[virtualSlice], activePhysicalSlices - 1u);
     const uint wordIndex = nwbAvboitExtinctionWordIndex(lowPixel, physicalSlice);
     if(wordIndex >= nwbAvboitExtinctionWordCount())

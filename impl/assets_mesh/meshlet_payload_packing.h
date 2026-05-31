@@ -17,27 +17,34 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshletCountMask = 0xffu;
-inline constexpr u32 s_MeshletPrimitiveCountShift = 8u;
-inline constexpr u32 s_MeshletPositionCountShift = 16u;
-inline constexpr u32 s_MeshletAttributeCountShift = 24u;
-inline constexpr u32 s_MeshletConeAxisXShift = 0u;
-inline constexpr u32 s_MeshletConeAxisYShift = 8u;
-inline constexpr u32 s_MeshletConeCutoffShift = 16u;
-inline constexpr u32 s_MeshletConeFlagShift = 24u;
-inline constexpr u32 s_MeshletRefEncodingWidthMask = 0x3u;
-inline constexpr u32 s_MeshletRefEncodingPositionShift = 0u;
-inline constexpr u32 s_MeshletRefEncodingSkinShift = 2u;
-inline constexpr u32 s_MeshletRefEncodingNormalShift = 4u;
-inline constexpr u32 s_MeshletRefEncodingTangentShift = 6u;
-inline constexpr u32 s_MeshletRefEncodingUv0Shift = 8u;
-inline constexpr u32 s_MeshletRefEncodingColorShift = 10u;
+inline constexpr u32 s_MeshletCountMask = NWB_MESHLET_COUNT_MASK;
+inline constexpr u32 s_MeshletPrimitiveCountShift = NWB_MESHLET_PRIMITIVE_COUNT_SHIFT;
+inline constexpr u32 s_MeshletPositionCountShift = NWB_MESHLET_POSITION_COUNT_SHIFT;
+inline constexpr u32 s_MeshletAttributeCountShift = NWB_MESHLET_ATTRIBUTE_COUNT_SHIFT;
+inline constexpr u32 s_MeshletConeAxisXShift = NWB_MESHLET_CONE_AXIS_X_SHIFT;
+inline constexpr u32 s_MeshletConeAxisYShift = NWB_MESHLET_CONE_AXIS_Y_SHIFT;
+inline constexpr u32 s_MeshletConeCutoffShift = NWB_MESHLET_CONE_CUTOFF_SHIFT;
+inline constexpr u32 s_MeshletConeFlagShift = NWB_MESHLET_CONE_FLAG_SHIFT;
+inline constexpr u32 s_MeshletPackedByteBits = NWB_MESHLET_PACKED_BYTE_BITS;
+inline constexpr u32 s_MeshletPackedByteMask = NWB_MESHLET_PACKED_BYTE_MASK;
+inline constexpr u32 s_MeshletPackedHalfwordBits = NWB_MESHLET_PACKED_HALFWORD_BITS;
+inline constexpr u32 s_MeshletPackedHalfwordMask = NWB_MESHLET_PACKED_HALFWORD_MASK;
+inline constexpr u32 s_MeshletConeAxisFallback = NWB_MESHLET_CONE_AXIS_FALLBACK;
+inline constexpr f32 s_MeshletConeAxisLengthEpsilon = static_cast<f32>(NWB_MESHLET_CONE_AXIS_LENGTH_EPSILON);
+inline constexpr f32 s_MeshletConeAxisLengthSquaredEpsilon = static_cast<f32>(NWB_MESHLET_CONE_AXIS_LENGTH_SQUARED_EPSILON);
+inline constexpr u32 s_MeshletRefEncodingWidthMask = NWB_MESHLET_REF_ENCODING_WIDTH_MASK;
+inline constexpr u32 s_MeshletRefEncodingPositionShift = NWB_MESHLET_REF_ENCODING_POSITION_SHIFT;
+inline constexpr u32 s_MeshletRefEncodingSkinShift = NWB_MESHLET_REF_ENCODING_SKIN_SHIFT;
+inline constexpr u32 s_MeshletRefEncodingNormalShift = NWB_MESHLET_REF_ENCODING_NORMAL_SHIFT;
+inline constexpr u32 s_MeshletRefEncodingTangentShift = NWB_MESHLET_REF_ENCODING_TANGENT_SHIFT;
+inline constexpr u32 s_MeshletRefEncodingUv0Shift = NWB_MESHLET_REF_ENCODING_UV0_SHIFT;
+inline constexpr u32 s_MeshletRefEncodingColorShift = NWB_MESHLET_REF_ENCODING_COLOR_SHIFT;
 
 namespace MeshletRefDeltaWidth{
     enum Enum : u32{
-        U8,
-        U16,
-        U32,
+        U8 = NWB_MESHLET_REF_WIDTH_U8,
+        U16 = NWB_MESHLET_REF_WIDTH_U16,
+        U32 = NWB_MESHLET_REF_WIDTH_U32,
     };
 };
 
@@ -134,8 +141,8 @@ namespace MeshletRefDeltaWidth{
     f32 y = VectorGetY(axis);
     f32 z = VectorGetZ(axis);
     const f32 length = Abs(x) + Abs(y) + Abs(z);
-    if(!IsFinite(length) || length <= 0.000001f)
-        return 0x8080u;
+    if(!IsFinite(length) || length <= s_MeshletConeAxisLengthEpsilon)
+        return s_MeshletConeAxisFallback;
 
     const f32 invLength = 1.0f / length;
     x *= invLength;
@@ -155,7 +162,7 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] inline f32 UnpackMeshletConeUnorm8(const u32 value, const u32 bitShift){
-    return static_cast<f32>((value >> bitShift) & 0xffu) * (1.0f / 255.0f);
+    return static_cast<f32>((value >> bitShift) & s_MeshletPackedByteMask) * (1.0f / 255.0f);
 }
 
 [[nodiscard]] inline SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked){
@@ -172,7 +179,7 @@ namespace MeshletRefDeltaWidth{
     const SIMDVector axis = VectorSet(x, y, z, 0.0f);
     const SIMDVector lengthSquaredVector = Vector3LengthSq(axis);
     const f32 lengthSquared = VectorGetX(lengthSquaredVector);
-    if(!IsFinite(lengthSquared) || lengthSquared <= 0.00000001f)
+    if(!IsFinite(lengthSquared) || lengthSquared <= s_MeshletConeAxisLengthSquaredEpsilon)
         return VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
 
     return VectorMultiply(axis, VectorReciprocalSqrt(lengthSquaredVector));
@@ -181,7 +188,7 @@ namespace MeshletRefDeltaWidth{
 [[nodiscard]] inline f32 ConservativePackedMeshletConeCutoff(const SIMDVector axis, const f32 cutoff, const u32 packedAxis){
     const SIMDVector unpackedAxis = UnpackMeshletConeOct16Axis(packedAxis);
     const f32 axisLengthSquared = VectorGetX(Vector3LengthSq(axis));
-    const SIMDVector normalizedAxis = IsFinite(axisLengthSquared) && axisLengthSquared > 0.00000001f
+    const SIMDVector normalizedAxis = IsFinite(axisLengthSquared) && axisLengthSquared > s_MeshletConeAxisLengthSquaredEpsilon
         ? VectorMultiply(axis, VectorReciprocalSqrt(VectorReplicate(axisLengthSquared)))
         : unpackedAxis
     ;
@@ -220,7 +227,7 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] inline u32 MeshletConePackedCutoff(const MeshletBounds& bounds){
-    return (bounds.conePacked >> s_MeshletConeCutoffShift) & 0xffu;
+    return (bounds.conePacked >> s_MeshletConeCutoffShift) & s_MeshletPackedByteMask;
 }
 
 [[nodiscard]] inline bool MeshletConeEnabled(const MeshletBounds& bounds){

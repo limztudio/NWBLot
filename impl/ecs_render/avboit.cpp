@@ -184,7 +184,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSyste
     pushConstants.volume[2] = static_cast<u32>(
         static_cast<u64>(targets.lowWidth) * static_cast<u64>(targets.lowHeight) * static_cast<u64>(physicalExtinctionWordCount)
     );
-    pushConstants.volume[3] = DivideUp(targets.virtualSliceCount, 32u);
+    pushConstants.volume[3] = DivideUp(targets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
     pushConstants.params = Float4(
         0.f,
         ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale,
@@ -278,7 +278,7 @@ void RendererSystem::dispatchAvboitIntegration(Core::CommandList& commandList, A
         m_avboitIntegratePipeline.get(),
         targets.integrateBindingSet.get(),
         targets,
-        DivideUp(pixelCount, 64u)
+        DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X))
     );
 }
 

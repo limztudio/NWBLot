@@ -17,6 +17,11 @@
 #include <core/graphics/module.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets_mesh/asset.h>
+#include <impl/assets/graphics/avboit/binding_slots.h>
+#include <impl/assets/graphics/avboit/constants.h>
+#include <impl/assets/graphics/deferred/binding_slots.h>
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
@@ -42,9 +47,9 @@ namespace ECSRenderDetail{
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * 24u;
-inline constexpr u32 s_MeshDispatchFlagScissorCull = 1u << 0u;
-inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = 1u << 1u;
-inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = 1u << 2u;
+inline constexpr u32 s_MeshDispatchFlagScissorCull = NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL;
+inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL;
+inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 
 

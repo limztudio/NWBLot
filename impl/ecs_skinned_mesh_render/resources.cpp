@@ -10,6 +10,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/module.h>
+#include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/ecs_mesh_runtime/buffer_upload.h>
 
 
@@ -161,18 +162,18 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         }
 
         Core::BindingSetDesc skinningBindingSetDesc(m_arena);
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, instance.restPositionBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(1, instance.skinnedPositionBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(2, instance.restNormalBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(3, instance.skinnedNormalBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(4, instance.restTangentBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(5, instance.skinnedTangentBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(6, instance.meshletDescBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(7, instance.meshletPositionRefDeltaBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(8, instance.meshletAttributeRefDeltaBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(9, instance.attributeSkinBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(10, rebuilt.skinBuffer.get()));
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(11, rebuilt.jointPaletteBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_REST_POSITION, instance.restPositionBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SKINNED_MESH_BINDING_SKINNED_POSITION, instance.skinnedPositionBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_REST_NORMAL, instance.restNormalBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SKINNED_MESH_BINDING_SKINNED_NORMAL, instance.skinnedNormalBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_REST_TANGENT, instance.restTangentBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SKINNED_MESH_BINDING_SKINNED_TANGENT, instance.skinnedTangentBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_MESHLET_DESC, instance.meshletDescBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_BINDING_POSITION_REF_DELTAS, instance.meshletPositionRefDeltaBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_REF_DELTAS, instance.meshletAttributeRefDeltaBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, instance.attributeSkinBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, rebuilt.skinBuffer.get()));
+        skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, rebuilt.jointPaletteBuffer.get()));
         rebuilt.skinningBindingSet = device->createBindingSet(skinningBindingSetDesc, m_skinningBindingLayout);
         if(!rebuilt.skinningBindingSet){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skinning binding set for runtime mesh '{}'"), instance.handle.value);
@@ -181,12 +182,12 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     }
 
     Core::BindingSetDesc boundsBindingSetDesc(m_arena);
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(0, instance.skinnedPositionBuffer.get()));
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(1, instance.meshletDescBuffer.get()));
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(2, instance.meshletPositionRefDeltaBuffer.get()));
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(3, instance.meshletLocalVertexRefBuffer.get()));
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(4, instance.meshletPrimitiveIndexBuffer.get()));
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_UAV(5, instance.meshletBoundsBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITIONS, instance.skinnedPositionBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_MESHLET_DESC, instance.meshletDescBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITION_REF_DELTAS, instance.meshletPositionRefDeltaBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_LOCAL_VERTEX_REFS, instance.meshletLocalVertexRefBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_SKINNED_MESH_BOUNDS_BINDING_PRIMITIVE_INDICES, instance.meshletPrimitiveIndexBuffer.get()));
+    boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_UAV(NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS, instance.meshletBoundsBuffer.get()));
     rebuilt.boundsBindingSet = device->createBindingSet(boundsBindingSetDesc, m_boundsBindingLayout);
     if(!rebuilt.boundsBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create bounds binding set for runtime mesh '{}'"), instance.handle.value);

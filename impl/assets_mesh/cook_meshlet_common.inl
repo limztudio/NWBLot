@@ -41,20 +41,21 @@ template<typename CookEntryT>
 
 struct MeshletTriangleData{
     u32 vertexRefs[3] = {};
+    u32 positions[3] = {};
     Float4U centroid;
     Float4U areaNormal;
 };
 
 struct MeshletTrianglePrecompute{
     Core::Assets::AssetVector<MeshletTriangleData> triangles;
-    Core::Assets::AssetVector<u32> vertexTriangleOffsets;
-    Core::Assets::AssetVector<u32> vertexTriangleIndices;
+    Core::Assets::AssetVector<u32> positionTriangleOffsets;
+    Core::Assets::AssetVector<u32> positionTriangleIndices;
     Core::Assets::AssetVector<u8> visitedTriangles;
 
     explicit MeshletTrianglePrecompute(Core::Assets::AssetArena& arena)
         : triangles(arena)
-        , vertexTriangleOffsets(arena)
-        , vertexTriangleIndices(arena)
+        , positionTriangleOffsets(arena)
+        , positionTriangleIndices(arena)
         , visitedTriangles(arena)
     {}
 };
@@ -63,6 +64,11 @@ struct MeshletFrontierCandidate{
     usize frontierOffset = 0u;
     u32 triangleIndex = 0u;
     f32 score = 0.0f;
+};
+
+struct MeshletCandidateSearchResult{
+    MeshletFrontierCandidate candidate;
+    bool found = false;
 };
 
 struct MeshletScoreState{
@@ -102,6 +108,8 @@ static constexpr f32 s_MeshletScoreCentroidWeight = 1.0f;
 static constexpr f32 s_MeshletScoreNormalWeight = 10.0f;
 static constexpr f32 s_MeshletScoreConePenaltyWeight = 12.0f;
 static constexpr f32 s_MeshletScoreDisconnectedPenalty = 24.0f;
+static constexpr usize s_MeshletDisconnectedCandidateParallelThreshold = 4096u;
+static constexpr usize s_MeshletDisconnectedCandidateParallelOversubscription = 4u;
 
 [[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value){
     if(!Core::Mesh::FrameValidDirection(value))

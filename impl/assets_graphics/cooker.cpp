@@ -912,6 +912,7 @@ static bool ParseAssetMetadata(
     const DiscoveredNwbFileVector& nwbFiles,
     const DiscoveredBindFileVector& bindFiles,
     ParsedAssetMetadata& outMetadata,
+    Core::Alloc::ThreadPool& threadPool,
     ScratchArena& scratchArena
 ){
     outMetadata.includeMetadata.reserve(nwbFiles.size());
@@ -1038,6 +1039,7 @@ static bool ParseAssetMetadata(
                 discoveredNwbFile.filePath,
                 doc,
                 meshEntry,
+                threadPool,
                 scratchArena
             ))
                 return false;
@@ -1055,6 +1057,7 @@ static bool ParseAssetMetadata(
                 discoveredNwbFile.filePath,
                 doc,
                 meshEntry,
+                threadPool,
                 scratchArena
             ))
                 return false;
@@ -1485,6 +1488,10 @@ static bool AppendBuiltAssetsToVolume(
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -1492,7 +1499,7 @@ static bool AppendBuiltAssetsToVolume(
 
 
 bool GraphicsAssetCooker::cook(const Core::Assets::AssetCookOptions& options){
-    GraphicsCookEnvironment environment(m_arena);
+    GraphicsCookEnvironment environment(m_arena, options.services.threadPool);
     environment.configuration = options.configuration;
     environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
     environment.assetRoots.reserve(options.assetRoots.size());
@@ -1548,7 +1555,15 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
 
     __hidden_cooker::ParsedAssetMetadata parsedMetadata(m_arena);
-    if(!__hidden_cooker::ParseAssetMetadata(m_arena, shaderCook, nwbFiles, bindFiles, parsedMetadata, scratchArena))
+    if(!__hidden_cooker::ParseAssetMetadata(
+        m_arena,
+        shaderCook,
+        nwbFiles,
+        bindFiles,
+        parsedMetadata,
+        environment.threadPool,
+        scratchArena
+    ))
         return false;
     if(!ValidateMaterialCookInterfaces(parsedMetadata.materialBindEntries, parsedMetadata.materialEntries, scratchArena))
         return false;

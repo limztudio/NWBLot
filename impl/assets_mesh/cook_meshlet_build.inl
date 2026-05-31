@@ -7,7 +7,8 @@ static bool BuildMeshlets(
     const Path& nwbFilePath,
     const tchar* metaKind,
     const Core::Assets::AssetVector<u32>& indices,
-    CookEntryT& entry
+    CookEntryT& entry,
+    Core::Alloc::ThreadPool& threadPool
 ){
     entry.meshlets.clear();
     entry.meshletBounds.clear();
@@ -33,6 +34,7 @@ static bool BuildMeshlets(
     Core::Assets::AssetVector<u32> localAttributeSkins(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<MeshletLocalVertexRef> localVertexRefs(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<u32> localTriangleIndices(entry.positions.get_allocator().arena());
+    Core::Assets::AssetVector<MeshletCandidateSearchResult> parallelCandidates(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<u32> frontier(entry.positions.get_allocator().arena());
     Core::Assets::AssetVector<u8> frontierFlags(entry.positions.get_allocator().arena());
     localSourceVertexRefs.reserve(s_MeshMaxMeshletVertices);
@@ -133,6 +135,8 @@ static bool BuildMeshlets(
             current,
             entry.meshletPrimitiveIndices,
             scoreState,
+            threadPool,
+            parallelCandidates,
             frontier,
             frontierFlags
         ))

@@ -17,20 +17,30 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AssetCookOptions{
-    explicit AssetCookOptions(AssetArena& arena)
-        : repoRoot(arena)
-        , assetRoots(arena)
-        , outputDirectory(arena)
-        , cacheDirectory(arena)
-    {}
+struct AssetCookServices{
+    Alloc::ThreadPool& threadPool;
 
+    explicit AssetCookServices(Alloc::ThreadPool& threadPool)
+        : threadPool(threadPool)
+    {}
+};
+
+struct AssetCookOptions{
     AssetString repoRoot;
     AssetVector<AssetString> assetRoots;
     AssetString outputDirectory;
     AssetString cacheDirectory;
     ACompactString configuration;
     ACompactString assetType;
+    AssetCookServices services;
+
+    explicit AssetCookOptions(AssetArena& arena, Alloc::ThreadPool& threadPool)
+        : repoRoot(arena)
+        , assetRoots(arena)
+        , outputDirectory(arena)
+        , cacheDirectory(arena)
+        , services(threadPool)
+    {}
 };
 
 

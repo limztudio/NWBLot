@@ -106,13 +106,12 @@ Updated: 2026-05-31
   - `    bbb`
   - `))`
   - `    return false;`
-- For other control-statement conditions spanning multiple lines, put `if(`, `for(`, or `while(` on its own line and start the first condition term on the next indented line. Put the outer closing parenthesis/parentheses on their own line:
+- For multiline control-statement conditions whose condition is a single function call, keep the control opener attached to the call opener, indent the call arguments, and close the call/control parentheses together:
   - Correct:
-  - `if(`
-  - `    !foobar(`
-  - `        aaa`
-  - `    )`
-  - `)`
+  - `if(!foobar(`
+  - `    aaa`
+  - `))`
+- For other control-statement conditions spanning multiple lines, put `if(`, `for(`, or `while(` on its own line and start the first condition term on the next indented line. Put the outer closing parenthesis/parentheses on their own line:
   - Correct:
   - `if(`
   - `    xx`
@@ -135,29 +134,17 @@ Updated: 2026-05-31
   - `    && yy`
   - `){`
   - Correct:
-  - `if(`
-  - `    !foobar(`
-  - `        aaa`
-  - `    )`
-  - `){`
+  - `if(!foobar(`
+  - `    aaa`
+  - `)){`
   - Wrong:
   - `if(`
   - `    xx`
   - `    && yy`
   - `)`
   - `{`
-- Exception: when the final argument of a multiline condition call is an inline lambda, keep the call closing parenthesis on the lambda closing-brace line, but still keep the control-statement opener and closer on their own lines:
+- Exception: when the final argument of a compact multiline condition call is an inline lambda, keep the lambda closing brace on its own line and close the call/control parentheses together on the next line:
   - Correct:
-  - `if(`
-  - `    !foobar(`
-  - `        aaa,`
-  - `        [](){`
-  - `            return bbb;`
-  - `        })`
-  - `)`
-  - For a braced `if` body, append the opening brace to the control closing line:
-  - `){`
-  - Wrong:
   - `if(!foobar(`
   - `    aaa,`
   - `    [](){`

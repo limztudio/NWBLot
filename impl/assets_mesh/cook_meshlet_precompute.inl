@@ -11,8 +11,8 @@ template<typename CookEntryT>
     MeshletTrianglePrecompute& outData
 ){
     outData.triangles.clear();
-    outData.vertexTriangleOffsets.clear();
-    outData.vertexTriangleIndices.clear();
+    outData.positionTriangleOffsets.clear();
+    outData.positionTriangleIndices.clear();
     outData.visitedTriangles.clear();
 
     const usize triangleCount = indices.size() / 3u;
@@ -25,21 +25,23 @@ template<typename CookEntryT>
     }
 
     outData.triangles.resize(triangleCount);
-    outData.vertexTriangleOffsets.resize(entry.vertexRefs.size() + 1u, 0u);
-    outData.vertexTriangleIndices.resize(indices.size());
+    outData.positionTriangleOffsets.resize(entry.positions.size() + 1u, 0u);
+    outData.positionTriangleIndices.resize(indices.size());
     outData.visitedTriangles.resize(triangleCount, 0u);
 
-    for(const u32 vertexRefIndex : indices)
-        ++outData.vertexTriangleOffsets[vertexRefIndex + 1u];
+    for(const u32 vertexRefIndex : indices){
+        const MeshVertexRef& vertexRef = entry.vertexRefs[vertexRefIndex];
+        ++outData.positionTriangleOffsets[vertexRef.position + 1u];
+    }
 
-    for(usize vertexRefIndex = 0u; vertexRefIndex < entry.vertexRefs.size(); ++vertexRefIndex)
-        outData.vertexTriangleOffsets[vertexRefIndex + 1u] += outData.vertexTriangleOffsets[vertexRefIndex];
+    for(usize positionIndex = 0u; positionIndex < entry.positions.size(); ++positionIndex)
+        outData.positionTriangleOffsets[positionIndex + 1u] += outData.positionTriangleOffsets[positionIndex];
 
-    Core::Assets::AssetVector<u32> vertexTriangleCursor(entry.positions.get_allocator().arena());
-    vertexTriangleCursor.insert(
-        vertexTriangleCursor.end(),
-        outData.vertexTriangleOffsets.begin(),
-        outData.vertexTriangleOffsets.end()
+    Core::Assets::AssetVector<u32> positionTriangleCursor(entry.positions.get_allocator().arena());
+    positionTriangleCursor.insert(
+        positionTriangleCursor.end(),
+        outData.positionTriangleOffsets.begin(),
+        outData.positionTriangleOffsets.end()
     );
 
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
@@ -48,6 +50,9 @@ template<typename CookEntryT>
         triangle.vertexRefs[0] = indices[indexOffset + 0u];
         triangle.vertexRefs[1] = indices[indexOffset + 1u];
         triangle.vertexRefs[2] = indices[indexOffset + 2u];
+        triangle.positions[0] = entry.vertexRefs[triangle.vertexRefs[0]].position;
+        triangle.positions[1] = entry.vertexRefs[triangle.vertexRefs[1]].position;
+        triangle.positions[2] = entry.vertexRefs[triangle.vertexRefs[2]].position;
 
         const SIMDVector p0 = VectorSetW(
             LoadFloat(MeshletSourceVertexPositionStreamValue(entry, triangle.vertexRefs[0])),
@@ -67,9 +72,9 @@ template<typename CookEntryT>
         StoreFloat(VectorSetW(areaNormal, 0.0f), &triangle.areaNormal);
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
-        for(const u32 vertexRefIndex : triangle.vertexRefs){
-            const u32 adjacencyOffset = vertexTriangleCursor[vertexRefIndex]++;
-            outData.vertexTriangleIndices[adjacencyOffset] = triangleIndexU32;
+        for(const u32 positionIndex : triangle.positions){
+            const u32 adjacencyOffset = positionTriangleCursor[positionIndex]++;
+            outData.positionTriangleIndices[adjacencyOffset] = triangleIndexU32;
         }
     }
 

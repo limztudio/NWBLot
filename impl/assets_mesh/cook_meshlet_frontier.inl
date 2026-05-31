@@ -29,11 +29,11 @@ static void AddMeshletTriangleNeighborsToFrontier(
     Core::Assets::AssetVector<u8>& frontierFlags
 ){
     const MeshletTriangleData& triangle = trianglePrecompute.triangles[triangleIndex];
-    for(const u32 vertexRefIndex : triangle.vertexRefs){
-        const u32 triangleOffsetBegin = trianglePrecompute.vertexTriangleOffsets[vertexRefIndex];
-        const u32 triangleOffsetEnd = trianglePrecompute.vertexTriangleOffsets[vertexRefIndex + 1u];
+    for(const u32 positionIndex : triangle.positions){
+        const u32 triangleOffsetBegin = trianglePrecompute.positionTriangleOffsets[positionIndex];
+        const u32 triangleOffsetEnd = trianglePrecompute.positionTriangleOffsets[positionIndex + 1u];
         for(u32 triangleOffset = triangleOffsetBegin; triangleOffset < triangleOffsetEnd; ++triangleOffset){
-            const u32 neighborTriangleIndex = trianglePrecompute.vertexTriangleIndices[triangleOffset];
+            const u32 neighborTriangleIndex = trianglePrecompute.positionTriangleIndices[triangleOffset];
             if(
                 neighborTriangleIndex == triangleIndex
                 || trianglePrecompute.visitedTriangles[neighborTriangleIndex] != 0u
@@ -140,6 +140,8 @@ template<typename CookEntryT>
     MeshletDesc& meshlet,
     Core::Assets::AssetVector<u8>& primitiveIndices,
     MeshletScoreState& scoreState,
+    Core::Alloc::ThreadPool& threadPool,
+    Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
     Core::Assets::AssetVector<u32>& frontier,
     Core::Assets::AssetVector<u8>& frontierFlags
 ){
@@ -154,6 +156,8 @@ template<typename CookEntryT>
                 scoreState,
                 meshlet,
                 localSourceVertexRefs,
+                threadPool,
+                parallelCandidates,
                 disconnectedCandidate
             ))
                 break;

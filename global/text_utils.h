@@ -80,12 +80,8 @@ inline std::ios_base& StreamHex(std::ios_base& stream){ return std::hex(stream);
 inline std::ios_base& StreamDec(std::ios_base& stream){ return std::dec(stream); }
 
 
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline bool ReadTextLine(BasicStringStream<CharT, ArenaT>& stream, BasicString<CharT, ArenaT>& outLine){
-    return static_cast<bool>(std::getline(stream, outLine));
-}
-template<typename CharT, typename Traits, typename ArenaT>
-[[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, BasicString<CharT, ArenaT>& outLine){
+template<typename CharT, typename Traits, typename AllocatorT>
+[[nodiscard]] inline bool ReadTextLine(std::basic_istream<CharT, Traits>& stream, std::basic_string<CharT, Traits, AllocatorT>& outLine){
     return static_cast<bool>(std::getline(stream, outLine));
 }
 

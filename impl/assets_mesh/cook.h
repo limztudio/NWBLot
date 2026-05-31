@@ -18,6 +18,7 @@
 #include "asset.h"
 
 #include <core/alloc/scratch.h>
+#include <core/alloc/thread.h>
 #include <core/mesh/classification.h>
 #include <core/metascript/parser.h>
 
@@ -126,6 +127,7 @@ struct SkinnedMeshCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool ParseSkinnedMeshCookMetadata(
@@ -134,6 +136,7 @@ struct SkinnedMeshCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     SkinnedMeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 );
 

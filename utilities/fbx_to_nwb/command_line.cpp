@@ -53,7 +53,7 @@ bool PromptString(const AString& label, const AString& defaultValue, AString& ou
     NWB_COUT << ": ";
 
     AString line;
-    if(!std::getline(NWB_CIN, line)){
+    if(!ReadTextLine(NWB_CIN, line)){
         outValue = defaultValue;
         return !outValue.empty();
     }
@@ -69,7 +69,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
         NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         AString line;
-        if(!std::getline(NWB_CIN, line)){
+        if(!ReadTextLine(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -98,7 +98,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
         NWB_COUT << label << " [" << defaultValue << "]: ";
 
         AString line;
-        if(!std::getline(NWB_CIN, line)){
+        if(!ReadTextLine(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }

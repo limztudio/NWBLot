@@ -17,6 +17,7 @@
 #include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
+#include <core/alloc/thread.h>
 #include <core/assets/paths.h>
 #include <core/mesh/frame_math.h>
 #include <core/metascript/parser.h>
@@ -45,12 +46,14 @@ static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 );
 static bool ParseSourceSkinnedMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     SkinnedMeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 );
 
@@ -93,6 +96,7 @@ static bool ParseMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
@@ -113,7 +117,7 @@ static bool ParseMeshMeta(
         return false;
     if(!ValidateMeshAssetFields(discoveredFile, asset))
         return false;
-    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, scratchArena);
+    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, threadPool, scratchArena);
 }
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
@@ -300,6 +304,7 @@ static bool ParseSkinnedMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     SkinnedMeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = SkinnedMeshCookEntry(outEntry.positions.get_allocator().arena());
@@ -324,7 +329,7 @@ static bool ParseSkinnedMeshMeta(
     if(!ValidateSkinnedMeshAssetFields(discoveredFile, asset))
         return false;
     outEntry.meshClass = Core::Mesh::MeshClass::Skinned;
-    return ParseSourceSkinnedMeshMeta(discoveredFile, asset, outEntry, scratchArena);
+    return ParseSourceSkinnedMeshMeta(discoveredFile, asset, outEntry, threadPool, scratchArena);
 }
 
 static bool BuildSkinnedMeshAsset(SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
@@ -373,12 +378,13 @@ bool ParseMeshCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_cook::ParseMeshMeta(discoveredFile, doc, outEntry, scratchArena);
+    return __hidden_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
 }
 
 bool ParseSkinnedMeshCookMetadata(
@@ -387,12 +393,13 @@ bool ParseSkinnedMeshCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     SkinnedMeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_cook::DiscoveredNwbFile discoveredFile;
     if(!__hidden_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_cook::ParseSkinnedMeshMeta(discoveredFile, doc, outEntry, scratchArena);
+    return __hidden_cook::ParseSkinnedMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
 }
 
 bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){

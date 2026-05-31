@@ -31,7 +31,7 @@ int Run(const int argc, char** argv){
     if(prompted){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::AString line;
-        static_cast<void>(std::getline(NWB_CIN, line));
+        static_cast<void>(ReadTextLine(NWB_CIN, line));
     }
     return result;
 }

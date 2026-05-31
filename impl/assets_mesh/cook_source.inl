@@ -226,13 +226,16 @@ static bool ParseCommonSourceMeshStreams(
         return false;
     if(!ValidateSourceIndexStream(discoveredFile.filePath, metaKind, streams.indices, streams.vertexRefs.size()))
         return false;
-    return ValidateSourceVertexRefs(discoveredFile.filePath, metaKind, includeSkin, streams, skinCount);
+    if(!ValidateSourceVertexRefs(discoveredFile.filePath, metaKind, includeSkin, streams, skinCount))
+        return false;
+    return true;
 }
 
 static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     SourceMeshStreams streams(outEntry.positions.get_allocator().arena(), scratchArena);
@@ -240,7 +243,7 @@ static bool ParseSourceMeshMeta(
         return false;
 
     CopySourceStreams(streams, outEntry);
-    return BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry);
+    return BuildMeshlets(discoveredFile.filePath, s_MeshMetaKind, streams.indices, outEntry, threadPool);
 }
 
 
@@ -300,6 +303,7 @@ static bool ParseSourceSkinnedMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     SkinnedMeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!ParseSkinInfluenceStream(discoveredFile.filePath, asset, outEntry.skin, scratchArena))
@@ -340,7 +344,7 @@ static bool ParseSourceSkinnedMeshMeta(
     }
 
     CopySourceStreams(streams, outEntry);
-    return BuildMeshlets(discoveredFile.filePath, s_SkinnedMeshMetaKind, streams.indices, outEntry);
+    return BuildMeshlets(discoveredFile.filePath, s_SkinnedMeshMetaKind, streams.indices, outEntry, threadPool);
 }
 
 

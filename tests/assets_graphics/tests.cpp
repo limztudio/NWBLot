@@ -16,6 +16,7 @@
 #include <tests/test_context.h>
 
 #include <core/alloc/scratch.h>
+#include <core/alloc/thread.h>
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
 #include <core/filesystem/module.h>
@@ -1247,7 +1248,8 @@ static bool CookPreparedGraphicsAssetRoots(
     const Path& outputDirectory,
     const InitializerList<Path> assetRoots
 ){
-    NWB::Core::Assets::AssetCookOptions options(testArena.arena);
+    NWB::Core::Alloc::ThreadPool cookThreadPool(0u, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::Assets::AssetCookOptions options(testArena.arena, cookThreadPool);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot());
     options.assetRoots.reserve(assetRoots.size());
     for(const Path& assetRoot : assetRoots)

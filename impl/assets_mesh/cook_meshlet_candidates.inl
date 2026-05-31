@@ -56,6 +56,27 @@ static void UpdateBestMeshletCandidateIfBetter(
     outCandidate.score = score;
 }
 
+static void UpdateBestMeshletCandidateFromResult(
+    const MeshletCandidateSearchResult& candidate,
+    bool& found,
+    MeshletFrontierCandidate& outCandidate
+){
+    if(!candidate.found)
+        return;
+
+    if(
+        found
+        && (
+            candidate.candidate.score < outCandidate.score
+            || (candidate.candidate.score == outCandidate.score && candidate.candidate.triangleIndex > outCandidate.triangleIndex)
+        )
+    )
+        return;
+
+    found = true;
+    outCandidate = candidate.candidate;
+}
+
 template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
 [[nodiscard]] static bool FindBestMeshletFrontierCandidate(
     const CookEntryT& entry,
@@ -89,10 +110,11 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
 }
 
 template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
-[[nodiscard]] static bool FindBestDisconnectedMeshletCandidate(
+[[nodiscard]] static bool FindBestDisconnectedMeshletCandidateRange(
     const CookEntryT& entry,
     const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchOffset,
+    const usize searchBegin,
+    const usize searchEnd,
     const TriangleIndexVectorT& triangleIndices,
     const MeshletScoreState& scoreState,
     const MeshletDesc& meshlet,
@@ -100,7 +122,7 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
     MeshletFrontierCandidate& outCandidate
 ){
     bool found = false;
-    for(usize triangleIndex = searchOffset; triangleIndex < trianglePrecompute.triangles.size(); ++triangleIndex){
+    for(usize triangleIndex = searchBegin; triangleIndex < searchEnd; ++triangleIndex){
         if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
             continue;
 
@@ -118,6 +140,72 @@ template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefV
             outCandidate
         );
     }
+
+    return found;
+}
+
+template<typename CookEntryT, typename TriangleIndexVectorT, typename VertexRefVectorT>
+[[nodiscard]] static bool FindBestDisconnectedMeshletCandidate(
+    const CookEntryT& entry,
+    const MeshletTrianglePrecompute& trianglePrecompute,
+    const usize searchOffset,
+    const TriangleIndexVectorT& triangleIndices,
+    const MeshletScoreState& scoreState,
+    const MeshletDesc& meshlet,
+    const VertexRefVectorT& localVertexRefs,
+    Core::Alloc::ThreadPool& threadPool,
+    Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
+    MeshletFrontierCandidate& outCandidate
+){
+    const usize triangleCount = trianglePrecompute.triangles.size();
+    if(searchOffset >= triangleCount)
+        return false;
+
+    const usize searchCount = triangleCount - searchOffset;
+    if(!threadPool.isParallelEnabled() || searchCount < s_MeshletDisconnectedCandidateParallelThreshold){
+        return FindBestDisconnectedMeshletCandidateRange(
+            entry,
+            trianglePrecompute,
+            searchOffset,
+            triangleCount,
+            triangleIndices,
+            scoreState,
+            meshlet,
+            localVertexRefs,
+            outCandidate
+        );
+    }
+
+    const usize workerCount = static_cast<usize>(threadPool.workerThreadCount()) + 1u;
+    const usize maxChunkCount = workerCount * s_MeshletDisconnectedCandidateParallelOversubscription;
+    const usize chunkCount = searchCount < maxChunkCount ? searchCount : maxChunkCount;
+    const usize chunkSize = searchCount / chunkCount;
+    const usize remainder = searchCount % chunkCount;
+
+    parallelCandidates.clear();
+    parallelCandidates.resize(chunkCount);
+    threadPool.parallelFor(static_cast<usize>(0), chunkCount, [&](const usize chunkIndex){
+        const usize chunkBegin = searchOffset + chunkIndex * chunkSize + (chunkIndex < remainder ? chunkIndex : remainder);
+        const usize chunkEnd = chunkBegin + chunkSize + (chunkIndex < remainder ? 1u : 0u);
+
+        MeshletCandidateSearchResult result;
+        result.found = FindBestDisconnectedMeshletCandidateRange(
+            entry,
+            trianglePrecompute,
+            chunkBegin,
+            chunkEnd,
+            triangleIndices,
+            scoreState,
+            meshlet,
+            localVertexRefs,
+            result.candidate
+        );
+        parallelCandidates[chunkIndex] = result;
+    });
+
+    bool found = false;
+    for(const MeshletCandidateSearchResult& result : parallelCandidates)
+        UpdateBestMeshletCandidateFromResult(result, found, outCandidate);
 
     return found;
 }

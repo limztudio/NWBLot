@@ -36,9 +36,11 @@ struct GraphicsCookEnvironment{
     AssetRootVector assetRoots;
     Path outputDirectory;
     Path cacheDirectory;
+    Core::Alloc::ThreadPool& threadPool;
 
-    explicit GraphicsCookEnvironment(Core::Alloc::GlobalArena& arena)
+    GraphicsCookEnvironment(Core::Alloc::GlobalArena& arena, Core::Alloc::ThreadPool& threadPool)
         : assetRoots(arena)
+        , threadPool(threadPool)
     {}
 };
 

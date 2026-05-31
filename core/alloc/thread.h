@@ -320,6 +320,7 @@ public:
     inline void wait(){ waitPending(); }
 
 public:
+    [[nodiscard]] inline u32 workerThreadCount()const{ return m_threadCount; }
     inline bool isParallelEnabled()const{ return m_threadCount > 0; }
 
 

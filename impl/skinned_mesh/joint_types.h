@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets/graphics/skinned_mesh/constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +22,7 @@ NWB_IMPL_BEGIN
 using SkinnedMeshJointMatrix = Float44;
 static_assert(IsStandardLayout_V<SkinnedMeshJointMatrix>, "SkinnedMeshJointMatrix must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<SkinnedMeshJointMatrix>, "SkinnedMeshJointMatrix must stay GPU-uploadable");
-static_assert(sizeof(SkinnedMeshJointMatrix) == sizeof(f32) * 16u, "SkinnedMeshJointMatrix GPU layout drifted");
+static_assert(sizeof(SkinnedMeshJointMatrix) == sizeof(f32) * NWB_SKINNED_MESH_JOINT_MATRIX_FLOAT_COUNT, "SkinnedMeshJointMatrix GPU layout drifted");
 static_assert(alignof(SkinnedMeshJointMatrix) >= alignof(Float4), "SkinnedMeshJointMatrix must stay SIMD-aligned");
 
 [[nodiscard]] inline SkinnedMeshJointMatrix MakeIdentitySkinnedMeshJointMatrix(){

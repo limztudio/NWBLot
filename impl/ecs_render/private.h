@@ -115,7 +115,7 @@ static_assert(
     "EmulatedVertex world-position offset must match the mesh emulation shader"
 );
 static_assert(alignof(EmulatedVertex) >= alignof(Float4), "EmulatedVertex must stay SIMD-aligned");
-static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * 12u, "SceneShadingGpuData layout must match the shading shaders");
+static_assert(sizeof(SceneShadingGpuData) == sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT, "SceneShadingGpuData layout must match the shading shaders");
 static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuData must stay SIMD-aligned");
 
 

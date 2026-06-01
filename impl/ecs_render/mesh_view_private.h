@@ -45,7 +45,7 @@ struct MeshViewGpuData{
     };
 };
 
-static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * (20u + NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT * 4u), "MeshViewGpuData layout must match the mesh shaders");
+static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT, "MeshViewGpuData layout must match the mesh shaders");
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 
 

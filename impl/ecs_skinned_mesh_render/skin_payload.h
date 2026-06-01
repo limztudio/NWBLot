@@ -7,6 +7,7 @@
 
 #include "runtime_instance.h"
 
+#include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/skinned_validation.h>
 #include <impl/ecs_skinned_mesh/runtime_helpers.h>
 #include <core/common/log.h>
@@ -26,7 +27,7 @@ struct alignas(Float4) SkinnedMeshSkinInfluenceGpu{
     Float4 weight = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 };
 static_assert(
-    sizeof(SkinnedMeshSkinInfluenceGpu) == sizeof(f32) * 8u,
+    sizeof(SkinnedMeshSkinInfluenceGpu) == sizeof(f32) * NWB_SKINNED_MESH_SKIN_INFLUENCE_FLOAT_COUNT,
     "SkinnedMesh skin influence GPU layout drifted"
 );
 static_assert(

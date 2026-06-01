@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "frame_state.h"
 #include "shape_registry.h"
 
 

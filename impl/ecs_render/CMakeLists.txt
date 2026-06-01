@@ -12,24 +12,29 @@ target_link_libraries(nwb_ecs_render_components INTERFACE
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/avboit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_targets.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/deferred.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/draw.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/draw_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/mesh.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/lighting.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/material.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred_frame.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred_lighting.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_pass_draw.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_pass_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_pass.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_instance.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shader.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_loading.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_view_private.h"
-    "${CMAKE_CURRENT_LIST_DIR}/private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_capacity_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_types.h"
 )
 target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components
@@ -42,6 +47,6 @@ target_link_libraries(nwb_ecs_render PUBLIC
 target_link_libraries(nwb_ecs_render PRIVATE
     nwb_assets_mesh
     nwb_assets_shader_loader
+    nwb_ecs_csg
     nwb_ecs_scene
 )
-

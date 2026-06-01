@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
+#include "renderer_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,8 +78,8 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
         return false;
     }
 
-    const auto foundInfo = m_materialSurfaceInfos.find(materialPath);
-    if(foundInfo != m_materialSurfaceInfos.end()){
+    const auto foundInfo = m_materialState.m_surfaceInfos.find(materialPath);
+    if(foundInfo != m_materialState.m_surfaceInfos.end()){
         outInfo = &foundInfo.value();
         return true;
     }
@@ -156,12 +156,10 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();
 
-    auto result = m_materialSurfaceInfos.try_emplace(materialPath, Move(createdInfo));
+    auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
     outInfo = &it.value();
-#if defined(NWB_DEBUG)
     NWB_ASSERT(outInfo);
-#endif
     return true;
 }
 
@@ -178,11 +176,9 @@ bool RendererSystem::createRendererPipeline(
 
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
-#if defined(NWB_DEBUG)
     NWB_ASSERT(materialKey);
-#endif
 
-    auto [it, inserted] = m_materialPipelines.try_emplace(pipelineKey);
+    auto [it, inserted] = m_materialState.m_pipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
     switch(resources.renderPath){
     case RenderPath::MeshShader:
@@ -203,7 +199,7 @@ bool RendererSystem::createRendererPipeline(
 
     auto removeFailedEntry = [&](){
         if(inserted)
-            m_materialPipelines.erase(it);
+            m_materialState.m_pipelines.erase(it);
     };
     auto failMaterialPipeline = [&](){
         removeFailedEntry();
@@ -228,17 +224,17 @@ bool RendererSystem::createRendererPipeline(
     case MaterialPipelinePass::AvboitOccupancy:
         if(!createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = m_avboitOccupancyPixelShader;
+        passPixelShader = m_avboitState.m_occupancyPixelShader;
         break;
     case MaterialPipelinePass::AvboitExtinction:
         if(!createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = m_avboitExtinctionPixelShader;
+        passPixelShader = m_avboitState.m_extinctionPixelShader;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         if(!createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = m_avboitAccumulatePixelShader;
+        passPixelShader = m_avboitState.m_accumulatePixelShader;
         break;
     default:
         break;
@@ -263,16 +259,16 @@ bool RendererSystem::createRendererPipeline(
         pipelineDesc.setMeshShader(resources.meshShader);
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
-        pipelineDesc.addBindingLayout(m_meshBindingLayout);
+        pipelineDesc.addBindingLayout(m_drawState.m_meshBindingLayout);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            pipelineDesc.addBindingLayout(m_avboitOccupancyBindingLayout);
+            pipelineDesc.addBindingLayout(m_avboitState.m_occupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            pipelineDesc.addBindingLayout(m_avboitExtinctionBindingLayout);
+            pipelineDesc.addBindingLayout(m_avboitState.m_extinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            pipelineDesc.addBindingLayout(m_avboitAccumulateBindingLayout);
+            pipelineDesc.addBindingLayout(m_avboitState.m_accumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
         default:
@@ -314,7 +310,7 @@ bool RendererSystem::createRendererPipeline(
 
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
-        computeDesc.addBindingLayout(m_computeBindingLayout);
+        computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.c_str()));
@@ -322,26 +318,26 @@ bool RendererSystem::createRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(m_emulationInputLayout);
-        emulationDesc.setVertexShader(m_emulationVertexShader);
+        emulationDesc.setInputLayout(m_drawState.m_emulationInputLayout);
+        emulationDesc.setVertexShader(m_drawState.m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
-            emulationDesc.addBindingLayout(m_avboitOccupancyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitState.m_occupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
-            emulationDesc.addBindingLayout(m_avboitExtinctionBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitState.m_extinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            emulationDesc.addBindingLayout(m_avboitEmptyBindingLayout);
-            emulationDesc.addBindingLayout(m_avboitAccumulateBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(m_avboitState.m_accumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
         default:
-            emulationDesc.addBindingLayout(m_emulationViewBindingLayout);
+            emulationDesc.addBindingLayout(m_drawState.m_emulationViewBindingLayout);
             break;
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
@@ -398,9 +394,7 @@ bool RendererSystem::hasTransparentRenderers(){
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))
             return false;
-#if defined(NWB_DEBUG)
         NWB_ASSERT(materialInfo);
-#endif
         return materialInfo->transparent;
     };
 
@@ -417,7 +411,7 @@ bool RendererSystem::hasTransparentRenderers(){
 }
 
 void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
-    auto [it, inserted] = m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
+    auto [it, inserted] = m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!inserted){
         if(it.value() == renderPath)
             return;

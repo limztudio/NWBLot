@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
+#include "renderer_private.h"
 
-#include "capacity_private.h"
+#include "renderer_capacity_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererSystem::createMeshShaderResources(){
-    if(m_meshBindingLayout)
+    if(m_drawState.m_meshBindingLayout)
         return true;
 
     Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
@@ -27,8 +27,8 @@ bool RendererSystem::createMeshShaderResources(){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
     auto* device = m_graphics.getDevice();
-    m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-    if(!m_meshBindingLayout){
+    m_drawState.m_meshBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+    if(!m_drawState.m_meshBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding layout"));
         return false;
     }
@@ -37,7 +37,7 @@ bool RendererSystem::createMeshShaderResources(){
 }
 
 bool RendererSystem::createComputeEmulationResources(){
-    if(!m_computeBindingLayout){
+    if(!m_drawState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         addMeshSourceBindingLayoutItems(bindingLayoutDesc);
@@ -46,16 +46,16 @@ bool RendererSystem::createComputeEmulationResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         auto* device = m_graphics.getDevice();
-        m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_computeBindingLayout){
+        m_drawState.m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_drawState.m_computeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
         }
     }
 
-    if(!m_emulationVertexShader){
+    if(!m_drawState.m_emulationVertexShader){
         if(!loadShader(
-            m_emulationVertexShader,
+            m_drawState.m_emulationVertexShader,
             ECSRenderDetail::s_MeshEmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
@@ -64,7 +64,7 @@ bool RendererSystem::createComputeEmulationResources(){
             return false;
     }
 
-    if(!m_emulationInputLayout){
+    if(!m_drawState.m_emulationInputLayout){
         Core::VertexAttributeDesc attributes[NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT];
         ECSRenderDetail::SetEmulatedVertexAttribute(
             attributes[NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION],
@@ -104,12 +104,12 @@ bool RendererSystem::createComputeEmulationResources(){
         );
 
         auto* device = m_graphics.getDevice();
-        m_emulationInputLayout = device->createInputLayout(
+        m_drawState.m_emulationInputLayout = device->createInputLayout(
             attributes,
             NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT,
-            m_emulationVertexShader.get()
+            m_drawState.m_emulationVertexShader.get()
         );
-        if(!m_emulationInputLayout){
+        if(!m_drawState.m_emulationInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
@@ -119,32 +119,32 @@ bool RendererSystem::createComputeEmulationResources(){
 }
 
 bool RendererSystem::createEmulationViewResources(){
-    if(!m_meshViewBuffer){
+    if(!m_drawState.m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: emulation view resources require a mesh view buffer"));
         return false;
     }
 
     auto* device = m_graphics.getDevice();
-    if(!m_emulationViewBindingLayout){
+    if(!m_drawState.m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
 
-        m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_emulationViewBindingLayout){
+        m_drawState.m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_drawState.m_emulationViewBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding layout"));
             return false;
         }
     }
 
-    if(m_emulationViewBindingSet)
+    if(m_drawState.m_emulationViewBindingSet)
         return true;
 
     Core::BindingSetDesc bindingSetDesc(m_arena);
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_drawState.m_meshViewBuffer.get()));
 
-    m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_emulationViewBindingLayout);
-    if(!m_emulationViewBindingSet){
+    m_drawState.m_emulationViewBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_emulationViewBindingLayout);
+    if(!m_drawState.m_emulationViewBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation view binding set"));
         return false;
     }
@@ -161,10 +161,10 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
         return false;
     }
 #endif
-    if(m_instanceBuffer && m_instanceBufferCapacity >= instanceCount)
+    if(m_drawState.m_instanceBuffer && m_drawState.m_instanceBufferCapacity >= instanceCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_instanceBufferCapacity, instanceCount);
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_drawState.m_instanceBufferCapacity, instanceCount);
 #if defined(NWB_DEBUG)
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
@@ -185,8 +185,8 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
         return false;
     }
 
-    m_instanceBuffer = Move(instanceBuffer);
-    m_instanceBufferCapacity = capacity;
+    m_drawState.m_instanceBuffer = Move(instanceBuffer);
+    m_drawState.m_instanceBufferCapacity = capacity;
     destroyMeshBindingSets();
     return true;
 }
@@ -205,10 +205,10 @@ bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
 #else
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
 #endif
-    if(m_materialTypedBuffer && m_materialTypedBufferCapacity >= requiredByteCount)
+    if(m_drawState.m_materialTypedBuffer && m_drawState.m_materialTypedBufferCapacity >= requiredByteCount)
         return true;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_materialTypedBufferCapacity, requiredByteCount);
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_drawState.m_materialTypedBufferCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))
@@ -222,14 +222,14 @@ bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
         return false;
     }
 
-    m_materialTypedBuffer = Move(materialTypedBuffer);
-    m_materialTypedBufferCapacity = capacity;
+    m_drawState.m_materialTypedBuffer = Move(materialTypedBuffer);
+    m_drawState.m_materialTypedBufferCapacity = capacity;
     destroyMeshBindingSets();
     return true;
 }
 
 bool RendererSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
-    if(!m_meshViewBuffer){
+    if(!m_drawState.m_meshViewBuffer){
         Core::BufferDesc meshViewBufferDesc;
         meshViewBufferDesc
             .setByteSize(sizeof(ECSRenderDetail::MeshViewGpuData))
@@ -243,16 +243,16 @@ bool RendererSystem::updateMeshViewBuffer(Core::CommandList& commandList, const 
             return false;
         }
 
-        m_meshViewBuffer = Move(meshViewBuffer);
+        m_drawState.m_meshViewBuffer = Move(meshViewBuffer);
         destroyMeshBindingSets();
     }
 
     const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);
 
-    commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(m_meshViewBuffer.get(), &viewState, sizeof(viewState));
-    commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.writeBuffer(m_drawState.m_meshViewBuffer.get(), &viewState, sizeof(viewState));
+    commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
     return true;
 }
@@ -262,9 +262,7 @@ bool RendererSystem::uploadInstanceBuffer(Core::CommandList& commandList, const 
         return true;
     if(!reserveInstanceBufferCapacity(instanceData.size()))
         return false;
-#if defined(NWB_DEBUG)
-    NWB_ASSERT(m_instanceBuffer);
-#endif
+    NWB_ASSERT(m_drawState.m_instanceBuffer);
 
 #if defined(NWB_DEBUG)
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
@@ -273,10 +271,10 @@ bool RendererSystem::uploadInstanceBuffer(Core::CommandList& commandList, const 
     }
 #endif
 
-    commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(m_drawState.m_instanceBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(m_instanceBuffer.get(), instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
-    commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.writeBuffer(m_drawState.m_instanceBuffer.get(), instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
+    commandList.setBufferState(m_drawState.m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     return true;
 }
@@ -290,14 +288,12 @@ bool RendererSystem::uploadMaterialTypedBuffer(
         return false;
     if(!reserveMaterialTypedBufferCapacity(uploadBytes))
         return false;
-#if defined(NWB_DEBUG)
-    NWB_ASSERT(m_materialTypedBuffer);
-#endif
+    NWB_ASSERT(m_drawState.m_materialTypedBuffer);
 
-    commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(m_drawState.m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(m_materialTypedBuffer.get(), materialTypedBytes.data(), uploadBytes);
-    commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.writeBuffer(m_drawState.m_materialTypedBuffer.get(), materialTypedBytes.data(), uploadBytes);
+    commandList.setBufferState(m_drawState.m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     return true;
 }
@@ -305,13 +301,18 @@ bool RendererSystem::uploadMaterialTypedBuffer(
 bool RendererSystem::uploadMaterialPassDrawBuffers(
     Core::CommandList& commandList,
     const InstanceGpuDataVector& instanceData,
-    const ECSRenderDetail::MaterialTypedInstanceRangeCollector& materialTypedRanges,
+#if defined(NWB_DEBUG)
+    const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
+#endif
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
-    return materialTypedRanges.uploadRangesReady(instanceData.size(), materialTypedBytes)
-        && uploadInstanceBuffer(commandList, instanceData)
-        && uploadMaterialTypedBuffer(commandList, materialTypedBytes)
-    ;
+#if defined(NWB_DEBUG)
+    NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
+    if(!ECSRenderDetail::ValidateMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes))
+        return false;
+#endif
+
+    return uploadInstanceBuffer(commandList, instanceData) && uploadMaterialTypedBuffer(commandList, materialTypedBytes);
 }
 
 bool RendererSystem::findMaterialPassDrawItemResources(
@@ -322,12 +323,12 @@ bool RendererSystem::findMaterialPassDrawItemResources(
     outMesh = nullptr;
     outPipelineResources = nullptr;
 
-    const auto foundMesh = m_meshMeshes.find(drawItem.meshKey);
-    if(foundMesh == m_meshMeshes.end())
+    const auto foundMesh = m_meshState.m_meshes.find(drawItem.meshKey);
+    if(foundMesh == m_meshState.m_meshes.end())
         return false;
 
-    const auto foundPipeline = m_materialPipelines.find(drawItem.pipelineKey);
-    if(foundPipeline == m_materialPipelines.end())
+    const auto foundPipeline = m_materialState.m_pipelines.find(drawItem.pipelineKey);
+    if(foundPipeline == m_materialState.m_pipelines.end())
         return false;
 
     outMesh = &foundMesh.value();

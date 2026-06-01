@@ -27,9 +27,23 @@ namespace CsgReceiverKind{
     };
 };
 
+namespace CsgReceiverPass{
+    enum Enum : u8{
+        Opaque,
+        Transparent,
+    };
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct CsgReceiverDrawState{
+    bool active = false;
+    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
+    bool generateCaps = false;
+    u32 cutterCount = 0u;
+};
 
 struct CsgFrameState{
     bool hasAnyWork = false;
@@ -64,10 +78,39 @@ struct CsgFrameBuildDesc{
     bool includeTransparentPass = true;
 };
 
+static_assert(IsStandardLayout_V<CsgReceiverDrawState>, "CsgReceiverDrawState must stay layout-stable for frame handoff");
+static_assert(IsTriviallyCopyable_V<CsgReceiverDrawState>, "CsgReceiverDrawState must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameState>, "CsgFrameState must stay layout-stable for frame handoff");
 static_assert(IsTriviallyCopyable_V<CsgFrameState>, "CsgFrameState must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must stay cheap to pass by value");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CsgFrameReceiverLookup final : NoCopy{
+private:
+    using CutterCountMap = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
+
+
+public:
+    CsgFrameReceiverLookup(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena);
+
+
+public:
+    [[nodiscard]] bool empty()const noexcept{ return m_cutterCounts.empty(); }
+    [[nodiscard]] bool resolveReceiverDrawState(
+        Core::ECS::EntityID entity,
+        CsgReceiverPass::Enum receiverPass,
+        CsgReceiverDrawState& outState
+    )const;
+
+
+private:
+    Core::ECS::World& m_world;
+    CutterCountMap m_cutterCounts;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

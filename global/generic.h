@@ -40,9 +40,7 @@ inline T checked_cast(U u){
     if(!u)
         return nullptr;
     T t = static_cast<T>(u);
-#ifdef NWB_DEBUG
     NWB_ASSERT(t);
-#endif
     return t;
 }
 

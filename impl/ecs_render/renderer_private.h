@@ -26,6 +26,7 @@
 #include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/loader.h>
+#include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
 
@@ -151,8 +152,7 @@ inline Core::Format::Enum SelectSupportedFormat(
 inline bool CreateClampSampler(
     Core::Device& device,
     Core::SamplerHandle& sampler,
-    const bool linearFiltering,
-    const tchar* failureMessage
+    const bool linearFiltering
 ){
     if(sampler)
         return true;
@@ -166,12 +166,7 @@ inline bool CreateClampSampler(
     if(sampler)
         return true;
 
-    NWB_LOGGER_ERROR(failureMessage);
     return false;
-}
-
-inline bool CreatePointClampSampler(Core::Device& device, Core::SamplerHandle& sampler, const tchar* failureMessage){
-    return CreateClampSampler(device, sampler, false, failureMessage);
 }
 
 inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device){
@@ -308,7 +303,7 @@ inline TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
-    const RendererSystem::AvboitFrameTargets& targets,
+    const AvboitFrameTargets& targets,
     const u32 dispatchFlags
 ){
     TransparentDrawPushConstants pushConstants;
@@ -335,7 +330,7 @@ inline void SetTransparentDrawPushConstants(
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
     const Core::ViewportState& viewportState,
-    const RendererSystem::AvboitFrameTargets& targets,
+    const AvboitFrameTargets& targets,
     const u32 dispatchFlags
 ){
     const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(meshletCount, instanceIndex, materialConstantByteOffset, viewportState, targets, dispatchFlags);

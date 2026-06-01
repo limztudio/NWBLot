@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
+#include "renderer_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ bool RendererSystem::loadShader(
 
 bool RendererSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
-        m_deferredCompositeVertexShader,
+        m_deferredState.m_compositeVertexShader,
         ECSRenderDetail::s_DeferredCompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,

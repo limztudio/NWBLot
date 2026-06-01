@@ -30,19 +30,15 @@ static constexpr Name s_SkinnedMeshComputeShaderName("engine/graphics/skinned_me
 static constexpr Name s_MeshletBoundsComputeShaderName("engine/graphics/skinned_mesh/meshlet_bounds_cs");
 
 
-static bool EnsureComputePipeline(
-    Core::Device& device,
+static bool LoadComputeShader(
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     SkinnedMeshSystem::ShaderPathResolveCallback& shaderPathResolver,
     Core::ShaderHandle& shader,
-    Core::ComputePipelineHandle& pipeline,
-    const Core::BindingLayoutHandle& bindingLayout,
     const Name& shaderName,
-    const Name& debugName,
-    const tchar* pipelineError
+    const Name& debugName
 ){
-    if(!ShaderAssetLoader::Load(
+    return ShaderAssetLoader::Load(
         shader,
         shaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -52,9 +48,15 @@ static bool EnsureComputePipeline(
         assetManager,
         shaderPathResolver,
         NWB_TEXT("SkinnedMeshSystem")
-    ))
-        return false;
+    );
+}
 
+static bool CreateComputePipeline(
+    Core::Device& device,
+    Core::ComputePipelineHandle& pipeline,
+    const Core::ShaderHandle& shader,
+    const Core::BindingLayoutHandle& bindingLayout
+){
     if(pipeline)
         return true;
 
@@ -62,10 +64,8 @@ static bool EnsureComputePipeline(
     pipelineDesc.setComputeShader(shader);
     pipelineDesc.addBindingLayout(bindingLayout);
     pipeline = device.createComputePipeline(pipelineDesc);
-    if(!pipeline){
-        NWB_LOGGER_ERROR(pipelineError);
+    if(!pipeline)
         return false;
-    }
 
     return true;
 }
@@ -107,18 +107,26 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
         }
     }
 
-    return __hidden_pipeline::EnsureComputePipeline(
-        *device,
+    if(!__hidden_pipeline::LoadComputeShader(
         m_graphics,
         m_assetManager,
         m_shaderPathResolver,
         m_skinningComputeShader,
-        m_skinningComputePipeline,
-        m_skinningBindingLayout,
         __hidden_pipeline::s_SkinnedMeshComputeShaderName,
-        Name("ECSSkinnedMeshRender_SkinnedMeshCS"),
-        NWB_TEXT("SkinnedMeshSystem: failed to create skinning compute pipeline")
-    );
+        Name("ECSSkinnedMeshRender_SkinnedMeshCS")
+    ))
+        return false;
+
+    if(__hidden_pipeline::CreateComputePipeline(
+        *device,
+        m_skinningComputePipeline,
+        m_skinningComputeShader,
+        m_skinningBindingLayout
+    ))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skinning compute pipeline"));
+    return false;
 }
 
 bool SkinnedMeshSystem::ensureBoundsPipeline(){
@@ -142,18 +150,26 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
         }
     }
 
-    return __hidden_pipeline::EnsureComputePipeline(
-        *device,
+    if(!__hidden_pipeline::LoadComputeShader(
         m_graphics,
         m_assetManager,
         m_shaderPathResolver,
         m_boundsComputeShader,
-        m_boundsComputePipeline,
-        m_boundsBindingLayout,
         __hidden_pipeline::s_MeshletBoundsComputeShaderName,
-        Name("ECSSkinnedMeshRender_MeshletBoundsCS"),
-        NWB_TEXT("SkinnedMeshSystem: failed to create bounds compute pipeline")
-    );
+        Name("ECSSkinnedMeshRender_MeshletBoundsCS")
+    ))
+        return false;
+
+    if(__hidden_pipeline::CreateComputePipeline(
+        *device,
+        m_boundsComputePipeline,
+        m_boundsComputeShader,
+        m_boundsBindingLayout
+    ))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create bounds compute pipeline"));
+    return false;
 }
 
 

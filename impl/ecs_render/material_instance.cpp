@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
+#include "renderer_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -211,7 +211,7 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    auto it = m_materialInstanceMutableCache.try_emplace(entity, m_arena).first;
+    auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
     if(
         cacheEntry.materialName == materialInfo.materialName
@@ -228,7 +228,7 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
     if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
-        m_materialInstanceMutableCache.erase(it);
+        m_materialState.m_instanceMutableCache.erase(it);
         return false;
     }
 
@@ -243,17 +243,17 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
 }
 
 void RendererSystem::pruneMaterialInstanceMutableCache(){
-    if(m_materialInstanceMutableCache.empty())
+    if(m_materialState.m_instanceMutableCache.empty())
         return;
 
-    for(auto it = m_materialInstanceMutableCache.begin(); it != m_materialInstanceMutableCache.end();){
+    for(auto it = m_materialState.m_instanceMutableCache.begin(); it != m_materialState.m_instanceMutableCache.end();){
         const Core::ECS::EntityID entity = it->first;
         if(m_world.tryGetComponent<MaterialInstanceComponent>(entity)){
             ++it;
             continue;
         }
 
-        it = m_materialInstanceMutableCache.erase(it);
+        it = m_materialState.m_instanceMutableCache.erase(it);
     }
 }
 

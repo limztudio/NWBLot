@@ -4,34 +4,13 @@
 
 #include "system.h"
 
-#include "private.h"
+#include "renderer_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-usize RendererSystem::MaterialPipelineKeyHasher::operator()(const MaterialPipelineKey& key)const{
-    usize seed = Hasher<Name>{}(key.material);
-    Core::CoreDetail::HashCombine(seed, static_cast<u32>(key.pass));
-    Core::CoreDetail::HashCombine(seed, key.twoSided ? 1u : 0u);
-    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.depthFormat);
-    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleCount);
-    Core::CoreDetail::HashCombine(seed, key.framebufferInfo.sampleQuality);
-    for(const Core::Format::Enum format : key.framebufferInfo.colorFormats)
-        Core::CoreDetail::HashCombine(seed, format);
-
-    return seed;
-}
-
-bool RendererSystem::MaterialPipelineKeyEqualTo::operator()(const MaterialPipelineKey& lhs, const MaterialPipelineKey& rhs)const{
-    return lhs.material == rhs.material && lhs.pass == rhs.pass && lhs.twoSided == rhs.twoSided && lhs.framebufferInfo == rhs.framebufferInfo;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,17 +30,17 @@ RendererSystem::RendererSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_meshMeshes(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    , m_materialSurfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
-    , m_materialPipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
-    , m_materialInstanceMutableCache(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
-    , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_meshState(arena)
+    , m_materialState(arena)
 {
     readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
     readAccess<NWB::Impl::Scene::TransformComponent>();
     readAccess<NWB::Impl::Scene::CameraComponent>();
     readAccess<RendererComponent>();
     readAccess<MaterialInstanceComponent>();
+    readAccess<StaticCsgMeshComponent>();
+    readAccess<SkinnedCsgMeshComponent>();
+    readAccess<CsgCutterComponent>();
 }
 RendererSystem::~RendererSystem(){}
 
@@ -77,54 +56,18 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(width == 0 || height == 0)
         return true;
 
-    if(m_deferredTargets.valid() && m_deferredTargets.width == width && m_deferredTargets.height == height)
+    if(m_deferredState.m_targets.valid() && m_deferredState.m_targets.width == width && m_deferredState.m_targets.height == height)
         return true;
 
     return createDeferredFrameTargets(width, height);
 }
 
 void RendererSystem::invalidateResources(){
-    m_meshMeshes.clear();
-    m_materialPipelines.clear();
-    m_materialInstanceMutableCache.clear();
-    m_loggedMaterialPaths.clear();
-
-    m_meshBindingLayout.reset();
-    m_computeBindingLayout.reset();
-    m_emulationViewBindingLayout.reset();
-    m_deferredLightingBindingLayout.reset();
-    m_deferredCompositeBindingLayout.reset();
-    m_avboitEmptyBindingLayout.reset();
-    m_avboitOccupancyBindingLayout.reset();
-    m_avboitDepthWarpBindingLayout.reset();
-    m_avboitExtinctionBindingLayout.reset();
-    m_avboitIntegrateBindingLayout.reset();
-    m_avboitAccumulateBindingLayout.reset();
-    m_deferredSampler.reset();
-    m_avboitLinearSampler.reset();
-    m_instanceBuffer.reset();
-    m_materialTypedBuffer.reset();
-    m_meshViewBuffer.reset();
-    m_sceneShadingBuffer.reset();
-    m_emulationViewBindingSet.reset();
-    m_emulationVertexShader.reset();
-    m_deferredCompositeVertexShader.reset();
-    m_deferredLightingPixelShader.reset();
-    m_deferredCompositePixelShader.reset();
-    m_avboitOccupancyPixelShader.reset();
-    m_avboitDepthWarpComputeShader.reset();
-    m_avboitExtinctionPixelShader.reset();
-    m_avboitIntegrateComputeShader.reset();
-    m_avboitAccumulatePixelShader.reset();
-    m_emulationInputLayout.reset();
-    m_deferredLightingPipeline.reset();
-    m_deferredCompositePipeline.reset();
-    m_avboitDepthWarpPipeline.reset();
-    m_avboitIntegratePipeline.reset();
-    resetDeferredFrameTargets();
-
-    m_instanceBufferCapacity = 0u;
-    m_materialTypedBufferCapacity = 0u;
+    m_meshState.invalidateResources();
+    m_materialState.invalidateResources();
+    m_drawState.invalidateResources();
+    m_deferredState.invalidateResources();
+    m_avboitState.invalidateResources();
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
@@ -133,9 +76,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     pruneRuntimeMeshResources();
 
-    if(!m_deferredTargets.valid())
+    if(!m_deferredState.m_targets.valid())
         return;
-    DeferredFrameTargets& deferredTargets = m_deferredTargets;
+    DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
     auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
@@ -148,10 +91,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena scratchArena;
-    MaterialPassDrawItemVector opaqueMeshDrawItems{scratchArena};
-    MaterialPassDrawItemVector opaqueComputeDrawItems{scratchArena};
+    MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
-    ECSRenderDetail::MaterialTypedInstanceRangeCollector materialTypedRanges{scratchArena};
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
+#endif
     MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
     Core::ViewportState deferredViewportState;
@@ -165,21 +109,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             false,
-            opaqueMeshDrawItems,
-            opaqueComputeDrawItems,
+            opaqueDrawItems,
             instanceData,
+#if defined(NWB_DEBUG)
             materialTypedRanges,
+#endif
             materialTypedBytes
         );
     }
 
-    const bool hasDeferredDrawItems = !opaqueMeshDrawItems.empty() || !opaqueComputeDrawItems.empty();
+    const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
     const bool deferredUploadReady =
         hasDeferredDrawItems
         && uploadMaterialPassDrawBuffers(
             *commandList,
             instanceData,
+#if defined(NWB_DEBUG)
             materialTypedRanges,
+#endif
             materialTypedBytes
         )
     ;
@@ -192,8 +139,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             nullptr,
             deferredViewportState
         };
-        renderMeshMaterialPassDrawItems(opaqueDrawContext, opaqueMeshDrawItems);
-        renderComputeMaterialPassDrawItems(opaqueDrawContext, opaqueComputeDrawItems);
+        renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
+        renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
     }
     commandList->endRenderPass();
 
@@ -217,6 +164,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* commandLists[] = { commandList.get() };
     device->executeCommandLists(commandLists, 1);
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -5,8 +5,8 @@
 #pragma once
 
 
-#include "capacity_private.h"
-#include "system.h"
+#include "renderer_capacity_private.h"
+#include "renderer_types.h"
 
 #include <core/common/log.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
@@ -44,23 +44,6 @@ struct MaterialTypedByteRange{
 struct MaterialTypedInstanceRanges{
     MaterialTypedByteRange constantRange;
     MaterialTypedByteRange mutableRange;
-};
-
-struct MaterialTypedInstanceRangeVector{
-    explicit MaterialTypedInstanceRangeVector(Core::Alloc::ScratchArena& arena)
-        : m_ranges(arena)
-    {}
-
-    [[nodiscard]] bool empty()const{ return m_ranges.empty(); }
-    [[nodiscard]] usize size()const{ return m_ranges.size(); }
-    void reserve(const usize count){ m_ranges.reserve(count); }
-    void push_back(const MaterialTypedInstanceRanges& ranges){ m_ranges.push_back(ranges); }
-
-    [[nodiscard]] auto begin()const{ return m_ranges.begin(); }
-    [[nodiscard]] auto end()const{ return m_ranges.end(); }
-
-private:
-    Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena> m_ranges;
 };
 
 struct MaterialTypedByteAppendRange{
@@ -203,10 +186,8 @@ inline InstanceGpuData BuildInstanceGpuData(
     const NWB::Impl::Scene::TransformComponent* transform,
     const MaterialTypedInstanceRanges& materialTypedRanges
 ){
-#if defined(NWB_DEBUG)
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.constantRange));
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.mutableRange));
-#endif
 
     InstanceGpuData data;
     if(transform){
@@ -242,6 +223,16 @@ template<typename MaterialTypedByteVector>
 
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_DEBUG)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] inline bool ValidateMaterialTypedUploadRange(
     const MaterialTypedByteRange& range,
@@ -282,6 +273,23 @@ template<typename MaterialTypedByteVector>
     return true;
 }
 
+struct MaterialTypedInstanceRangeVector{
+    explicit MaterialTypedInstanceRangeVector(Core::Alloc::ScratchArena& arena)
+        : m_ranges(arena)
+    {}
+
+    [[nodiscard]] bool empty()const{ return m_ranges.empty(); }
+    [[nodiscard]] usize size()const{ return m_ranges.size(); }
+    void reserve(const usize count){ m_ranges.reserve(count); }
+    void push_back(const MaterialTypedInstanceRanges& ranges){ m_ranges.push_back(ranges); }
+
+    [[nodiscard]] auto begin()const{ return m_ranges.begin(); }
+    [[nodiscard]] auto end()const{ return m_ranges.end(); }
+
+private:
+    Vector<MaterialTypedInstanceRanges, Core::Alloc::ScratchArena> m_ranges;
+};
+
 template<typename MaterialTypedByteVector>
 [[nodiscard]] inline bool ValidateMaterialTypedUploadRanges(
     const MaterialTypedInstanceRangeVector& instanceRanges,
@@ -302,53 +310,11 @@ template<typename MaterialTypedByteVector>
     return true;
 }
 
-struct MaterialTypedInstanceRangeCollector{
-    explicit MaterialTypedInstanceRangeCollector(Core::Alloc::ScratchArena& arena)
-#if defined(NWB_DEBUG)
-        : m_ranges(arena)
-#endif
-    {
-#if !defined(NWB_DEBUG)
-        static_cast<void>(arena);
-#endif
-    }
 
-    void reserve(const usize count){
-#if defined(NWB_DEBUG)
-        m_ranges.reserve(count);
-#else
-        static_cast<void>(count);
-#endif
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    void push_back(const MaterialTypedInstanceRanges& ranges){
-#if defined(NWB_DEBUG)
-        m_ranges.push_back(ranges);
-#else
-        static_cast<void>(ranges);
-#endif
-    }
 
-    template<typename MaterialTypedByteVector>
-    [[nodiscard]] bool uploadRangesReady(
-        const usize instanceCount,
-        const MaterialTypedByteVector& materialTypedBytes
-    )const{
-#if defined(NWB_DEBUG)
-        NWB_ASSERT(instanceCount == m_ranges.size());
-        return ValidateMaterialTypedUploadRanges(m_ranges, materialTypedBytes);
-#else
-        static_cast<void>(instanceCount);
-        static_cast<void>(materialTypedBytes);
-        return true;
 #endif
-    }
-
-private:
-#if defined(NWB_DEBUG)
-    MaterialTypedInstanceRangeVector m_ranges;
-#endif
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

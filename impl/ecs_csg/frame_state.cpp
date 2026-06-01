@@ -20,12 +20,6 @@ namespace __hidden_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CutterCountMap = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] bool ActiveCutter(const CsgCutterComponent& cutter){
     return cutter.active && cutter.shapeType != NAME_NONE;
 }
@@ -34,7 +28,8 @@ void AddSaturating(u32& inOutValue, const u32 value){
     inOutValue = inOutValue <= Limit<u32>::s_Max - value ? inOutValue + value : Limit<u32>::s_Max;
 }
 
-void CountActiveCuttersByReceiverGroup(Core::ECS::World& world, CutterCountMap& outCutterCounts){
+template<typename CutterCountMapT>
+void CountActiveCuttersByReceiverGroup(Core::ECS::World& world, CutterCountMapT& outCutterCounts){
     auto cutterView = world.view<CsgCutterComponent>();
     outCutterCounts.reserve(cutterView.candidateCount());
 
@@ -50,6 +45,24 @@ void CountActiveCuttersByReceiverGroup(Core::ECS::World& world, CutterCountMap& 
     );
 }
 
+[[nodiscard]] const CsgReceiverComponent* ResolveReceiverComponent(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    CsgReceiverKind::Enum& outReceiverKind
+){
+    if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity)){
+        outReceiverKind = CsgReceiverKind::Static;
+        return receiver;
+    }
+
+    if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity)){
+        outReceiverKind = CsgReceiverKind::Skinned;
+        return receiver;
+    }
+
+    return nullptr;
+}
+
 [[nodiscard]] bool ReceiverVisible(
     Core::ECS::World& world,
     const Core::ECS::EntityID entity,
@@ -63,23 +76,22 @@ void CountActiveCuttersByReceiverGroup(Core::ECS::World& world, CutterCountMap& 
     return desc.receiverVisible(world, entity, receiverKind, receiver, desc.receiverVisibleUserData);
 }
 
-[[nodiscard]] bool ReceiverHasPassWork(const CsgReceiverComponent& receiver, const CsgFrameBuildDesc& desc){
-    return
-        (desc.includeOpaquePass && receiver.affectOpaquePass)
-        || (desc.includeTransparentPass && receiver.affectTransparentPass)
-    ;
+[[nodiscard]] bool ReceiverPassEnabled(const CsgReceiverComponent& receiver, const CsgReceiverPass::Enum receiverPass){
+    switch(receiverPass){
+    case CsgReceiverPass::Opaque: return receiver.affectOpaquePass;
+    case CsgReceiverPass::Transparent: return receiver.affectTransparentPass;
+    default: return false;
+    }
 }
 
 void ApplyReceiverWork(
     const CsgReceiverKind::Enum receiverKind,
-    const CsgReceiverComponent& receiver,
+    const bool generateCaps,
+    const bool opaqueWork,
+    const bool transparentWork,
     const u32 cutterCount,
-    const CsgFrameBuildDesc& desc,
     CsgFrameState& inOutState
 ){
-    const bool opaqueWork = desc.includeOpaquePass && receiver.affectOpaquePass;
-    const bool transparentWork = desc.includeTransparentPass && receiver.affectTransparentPass;
-
     AddSaturating(inOutState.receiverCount, 1u);
     AddSaturating(inOutState.cutterCount, cutterCount);
 
@@ -92,7 +104,7 @@ void ApplyReceiverWork(
         inOutState.hasTransparentSkinnedWork = inOutState.hasTransparentSkinnedWork || transparentWork;
     }
 
-    if(receiver.generateCaps){
+    if(generateCaps){
         inOutState.hasOpaqueCapWork = inOutState.hasOpaqueCapWork || opaqueWork;
         inOutState.hasTransparentCapWork = inOutState.hasTransparentCapWork || transparentWork;
     }
@@ -102,7 +114,7 @@ template<typename ReceiverT>
 void GatherReceiverState(
     Core::ECS::World& world,
     const CsgReceiverKind::Enum receiverKind,
-    const CutterCountMap& cutterCounts,
+    const CsgFrameReceiverLookup& receiverLookup,
     const CsgFrameBuildDesc& desc,
     CsgFrameState& inOutState
 ){
@@ -112,16 +124,33 @@ void GatherReceiverState(
             const CsgReceiverComponent& receiver = typedReceiver;
             if(!receiver.enabled)
                 return;
-            if(!ReceiverHasPassWork(receiver, desc))
-                return;
             if(!ReceiverVisible(world, entity, receiverKind, receiver, desc))
                 return;
 
-            const auto foundCutterCount = cutterCounts.find(receiver.receiverGroup);
-            if(foundCutterCount == cutterCounts.end() || foundCutterCount.value() == 0u)
+            CsgReceiverDrawState opaqueState;
+            CsgReceiverDrawState transparentState;
+            const bool opaqueWork =
+                desc.includeOpaquePass
+                && receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Opaque, opaqueState)
+                && opaqueState.receiverKind == receiverKind
+            ;
+            const bool transparentWork =
+                desc.includeTransparentPass
+                && receiverLookup.resolveReceiverDrawState(entity, CsgReceiverPass::Transparent, transparentState)
+                && transparentState.receiverKind == receiverKind
+            ;
+            if(!opaqueWork && !transparentWork)
                 return;
 
-            ApplyReceiverWork(receiverKind, receiver, foundCutterCount.value(), desc, inOutState);
+            const CsgReceiverDrawState& receiverState = opaqueWork ? opaqueState : transparentState;
+            ApplyReceiverWork(
+                receiverKind,
+                receiverState.generateCaps,
+                opaqueWork,
+                transparentWork,
+                receiverState.cutterCount,
+                inOutState
+            );
         }
     );
 }
@@ -136,6 +165,43 @@ void GatherReceiverState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Alloc::ScratchArena& scratchArena)
+    : m_world(world)
+    , m_cutterCounts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena)
+{
+    __hidden_frame_state::CountActiveCuttersByReceiverGroup(m_world, m_cutterCounts);
+}
+
+
+bool CsgFrameReceiverLookup::resolveReceiverDrawState(
+    const Core::ECS::EntityID entity,
+    const CsgReceiverPass::Enum receiverPass,
+    CsgReceiverDrawState& outState
+)const{
+    outState = CsgReceiverDrawState{};
+    if(m_cutterCounts.empty())
+        return false;
+
+    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
+    const CsgReceiverComponent* receiver = __hidden_frame_state::ResolveReceiverComponent(m_world, entity, receiverKind);
+    if(!receiver || !receiver->enabled || !__hidden_frame_state::ReceiverPassEnabled(*receiver, receiverPass))
+        return false;
+
+    const auto foundCutterCount = m_cutterCounts.find(receiver->receiverGroup);
+    if(foundCutterCount == m_cutterCounts.end() || foundCutterCount.value() == 0u)
+        return false;
+
+    outState.active = true;
+    outState.receiverKind = receiverKind;
+    outState.generateCaps = receiver->generateCaps;
+    outState.cutterCount = foundCutterCount.value();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 CsgFrameState BuildCsgFrameState(
     Core::ECS::World& world,
     Core::Alloc::ScratchArena& scratchArena,
@@ -143,27 +209,21 @@ CsgFrameState BuildCsgFrameState(
 ){
     CsgFrameState state;
 
-    __hidden_frame_state::CutterCountMap cutterCounts(
-        0,
-        Hasher<Name>(),
-        EqualTo<Name>(),
-        scratchArena
-    );
-    __hidden_frame_state::CountActiveCuttersByReceiverGroup(world, cutterCounts);
-    if(cutterCounts.empty())
+    const CsgFrameReceiverLookup receiverLookup(world, scratchArena);
+    if(receiverLookup.empty())
         return state;
 
     __hidden_frame_state::GatherReceiverState<StaticCsgMeshComponent>(
         world,
         CsgReceiverKind::Static,
-        cutterCounts,
+        receiverLookup,
         desc,
         state
     );
     __hidden_frame_state::GatherReceiverState<SkinnedCsgMeshComponent>(
         world,
         CsgReceiverKind::Skinned,
-        cutterCounts,
+        receiverLookup,
         desc,
         state
     );

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "system.h"
+#include "renderer_types.h"
 
 #include <impl/assets/graphics/avboit/constants.h>
 
@@ -52,7 +52,7 @@ static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = NWB_AVB
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState();
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState();
 [[nodiscard]] bool MaterialPipelinePassUsesRendererAvboit(MaterialPipelinePass::Enum pass);
-[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets);
+[[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

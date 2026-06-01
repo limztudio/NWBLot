@@ -117,6 +117,17 @@ static NWB::Impl::CsgFrameState BuildTestCsgFrameState(
     return NWB::Impl::BuildCsgFrameState(testWorld.world, scratchArena, desc);
 }
 
+static bool ResolveTestCsgReceiverDrawState(
+    TestWorld& testWorld,
+    const NWB::Core::ECS::EntityID entity,
+    const NWB::Impl::CsgReceiverPass::Enum receiverPass,
+    NWB::Impl::CsgReceiverDrawState& outState
+){
+    NWB::Core::Alloc::ScratchArena scratchArena;
+    const NWB::Impl::CsgFrameReceiverLookup receiverLookup(testWorld.world, scratchArena);
+    return receiverLookup.resolveReceiverDrawState(entity, receiverPass, outState);
+}
+
 struct TestCsgVisibilityFilter{
     NWB::Core::ECS::EntityID hiddenEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
 };
@@ -317,6 +328,151 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
     }
 }
 
+static void TestCsgFrameReceiverLookup(TestContext& context){
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name("project/csg/group_a");
+
+        NWB::Impl::CsgReceiverDrawState drawState;
+        NWB_CSG_TEST_CHECK(context, !ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Opaque,
+            drawState
+        ));
+        NWB_CSG_TEST_CHECK(context, !drawState.active);
+        NWB_CSG_TEST_CHECK(context, drawState.cutterCount == 0u);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name("project/csg/group_a");
+
+        auto boxCutterEntity = testWorld.world.createEntity();
+        auto& boxCutter = boxCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        boxCutter.receiverGroup = Name("project/csg/group_a");
+        boxCutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
+
+        auto sphereCutterEntity = testWorld.world.createEntity();
+        auto& sphereCutter = sphereCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        sphereCutter.receiverGroup = Name("project/csg/group_a");
+        sphereCutter.shapeType = NWB::Impl::s_CsgSphereShapeName;
+
+        auto inactiveCutterEntity = testWorld.world.createEntity();
+        auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        inactiveCutter.receiverGroup = Name("project/csg/group_a");
+        inactiveCutter.shapeType = NWB::Impl::s_CsgCapsuleShapeName;
+        inactiveCutter.active = false;
+
+        auto untypedCutterEntity = testWorld.world.createEntity();
+        auto& untypedCutter = untypedCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        untypedCutter.receiverGroup = Name("project/csg/group_a");
+
+        auto otherGroupCutterEntity = testWorld.world.createEntity();
+        auto& otherGroupCutter = otherGroupCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        otherGroupCutter.receiverGroup = Name("project/csg/group_b");
+        otherGroupCutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
+
+        NWB::Impl::CsgReceiverDrawState opaqueDrawState;
+        NWB_CSG_TEST_CHECK(context, ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Opaque,
+            opaqueDrawState
+        ));
+        NWB_CSG_TEST_CHECK(context, opaqueDrawState.active);
+        NWB_CSG_TEST_CHECK(context, opaqueDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Static);
+        NWB_CSG_TEST_CHECK(context, opaqueDrawState.generateCaps);
+        NWB_CSG_TEST_CHECK(context, opaqueDrawState.cutterCount == 2u);
+
+        NWB::Impl::CsgReceiverDrawState transparentDrawState;
+        NWB_CSG_TEST_CHECK(context, ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Transparent,
+            transparentDrawState
+        ));
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.active);
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Static);
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.generateCaps);
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.cutterCount == 2u);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
+        receiver.receiverGroup = Name("project/csg/group_a");
+        receiver.affectTransparentPass = false;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        cutter.receiverGroup = Name("project/csg/group_a");
+        cutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
+
+        NWB::Impl::CsgReceiverDrawState opaqueDrawState;
+        NWB_CSG_TEST_CHECK(context, ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Opaque,
+            opaqueDrawState
+        ));
+        NWB_CSG_TEST_CHECK(context, opaqueDrawState.active);
+
+        NWB::Impl::CsgReceiverDrawState transparentDrawState;
+        NWB_CSG_TEST_CHECK(context, !ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Transparent,
+            transparentDrawState
+        ));
+        NWB_CSG_TEST_CHECK(context, !transparentDrawState.active);
+    }
+
+    {
+        TestWorld testWorld;
+
+        auto receiverEntity = testWorld.world.createEntity();
+        auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
+        receiver.receiverGroup = Name("project/csg/group_a");
+        receiver.generateCaps = false;
+        receiver.affectOpaquePass = false;
+
+        auto cutterEntity = testWorld.world.createEntity();
+        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
+        cutter.receiverGroup = Name("project/csg/group_a");
+        cutter.shapeType = NWB::Impl::s_CsgCapsuleShapeName;
+
+        NWB::Impl::CsgReceiverDrawState opaqueDrawState;
+        NWB_CSG_TEST_CHECK(context, !ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Opaque,
+            opaqueDrawState
+        ));
+        NWB_CSG_TEST_CHECK(context, !opaqueDrawState.active);
+
+        NWB::Impl::CsgReceiverDrawState transparentDrawState;
+        NWB_CSG_TEST_CHECK(context, ResolveTestCsgReceiverDrawState(
+            testWorld,
+            receiverEntity.id(),
+            NWB::Impl::CsgReceiverPass::Transparent,
+            transparentDrawState
+        ));
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.active);
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Skinned);
+        NWB_CSG_TEST_CHECK(context, !transparentDrawState.generateCaps);
+        NWB_CSG_TEST_CHECK(context, transparentDrawState.cutterCount == 1u);
+    }
+}
+
 struct TestProjectShapeParameters{
     Float4 minExtent = Float4(-2.0f, -3.0f, -4.0f, 0.0f);
     Float4 maxExtent = Float4(2.0f, 3.0f, 4.0f, 0.0f);
@@ -507,6 +663,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("csg", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestCsgReceiverComponents(context);
     __hidden_tests::TestCsgCutterComponent(context);
     __hidden_tests::TestCsgFrameStateKillSwitch(context);
+    __hidden_tests::TestCsgFrameReceiverLookup(context);
     __hidden_tests::TestCsgShapeRegistryBuiltIns(context);
     __hidden_tests::TestCsgShapeRegistryBounds(context);
     __hidden_tests::TestCsgShapeRegistryProjectShape(context);

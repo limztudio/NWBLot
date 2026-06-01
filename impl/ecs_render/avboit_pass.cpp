@@ -63,7 +63,7 @@ static void DispatchAvboitCompute(
     Core::CommandList& commandList,
     Core::ComputePipeline* pipeline,
     Core::BindingSet* bindingSet,
-    const RendererSystem::AvboitFrameTargets& targets,
+    const AvboitFrameTargets& targets,
     const u32 groupCountX
 ){
     if(!pipeline || !bindingSet)
@@ -172,7 +172,7 @@ bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pas
     }
 }
 
-RendererAvboitPushConstants BuildRendererAvboitPushConstants(const RendererSystem::AvboitFrameTargets& targets){
+RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets){
     RendererAvboitPushConstants pushConstants;
     pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH] = targets.fullWidth;
     pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_HEIGHT] = targets.fullHeight;
@@ -219,7 +219,7 @@ void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, Deferred
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
-    if((!m_avboitDepthWarpPipeline || !m_avboitIntegratePipeline) && !createAvboitPipelines())
+    if((!m_avboitState.m_depthWarpPipeline || !m_avboitState.m_integratePipeline) && !createAvboitPipelines())
         return;
 
     renderMaterialPass(
@@ -260,7 +260,7 @@ void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, Deferred
 void RendererSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        m_avboitDepthWarpPipeline.get(),
+        m_avboitState.m_depthWarpPipeline.get(),
         targets.depthWarpBindingSet.get(),
         targets,
         NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X
@@ -271,7 +271,7 @@ void RendererSystem::dispatchAvboitIntegration(Core::CommandList& commandList, A
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        m_avboitIntegratePipeline.get(),
+        m_avboitState.m_integratePipeline.get(),
         targets.integrateBindingSet.get(),
         targets,
         DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X))

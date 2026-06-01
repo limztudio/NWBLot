@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
+#include "renderer_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,20 +39,20 @@ void RendererSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
 }
 
 void RendererSystem::resetDeferredFrameTargets(){
-    m_deferredTargets.lightingBindingSet.reset();
-    m_deferredTargets.compositeBindingSet.reset();
-    resetAvboitFrameTargets(m_deferredTargets.avboit);
+    m_deferredState.m_targets.lightingBindingSet.reset();
+    m_deferredState.m_targets.compositeBindingSet.reset();
+    resetAvboitFrameTargets(m_deferredState.m_targets.avboit);
 
-    m_deferredTargets.framebuffer.reset();
-    m_deferredTargets.opaqueLightingFramebuffer.reset();
+    m_deferredState.m_targets.framebuffer.reset();
+    m_deferredState.m_targets.opaqueLightingFramebuffer.reset();
 
-    m_deferredTargets.albedo.reset();
-    m_deferredTargets.normal.reset();
-    m_deferredTargets.worldPosition.reset();
-    m_deferredTargets.opaqueColor.reset();
-    m_deferredTargets.depth.reset();
+    m_deferredState.m_targets.albedo.reset();
+    m_deferredState.m_targets.normal.reset();
+    m_deferredState.m_targets.worldPosition.reset();
+    m_deferredState.m_targets.opaqueColor.reset();
+    m_deferredState.m_targets.depth.reset();
 
-    m_deferredTargets = DeferredFrameTargets{};
+    m_deferredState.m_targets = DeferredFrameTargets{};
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,9 +102,9 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         return false;
 
     resetDeferredFrameTargets();
-    m_materialPipelines.clear();
-    m_deferredLightingPipeline.reset();
-    m_deferredCompositePipeline.reset();
+    m_materialState.m_pipelines.clear();
+    m_deferredState.m_lightingPipeline.reset();
+    m_deferredState.m_compositePipeline.reset();
 
     DeferredFrameTargets createdTargets;
     createdTargets.width = width;
@@ -259,9 +259,9 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, m_deferredSampler.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, m_sceneShadingBuffer.get()));
-    createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, m_deferredLightingBindingLayout);
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, m_deferredState.m_sampler.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, m_deferredState.m_sceneShadingBuffer.get()));
+    createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, m_deferredState.m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));
         return false;
@@ -289,30 +289,30 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, m_deferredSampler.get()));
-    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredCompositeBindingLayout);
+    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, m_deferredState.m_sampler.get()));
+    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredState.m_compositeBindingLayout);
     if(!createdTargets.compositeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
         return false;
     }
 
-    m_deferredTargets = Move(createdTargets);
-    if(!createDeferredLightingPipeline(m_deferredTargets)){
+    m_deferredState.m_targets = Move(createdTargets);
+    if(!createDeferredLightingPipeline(m_deferredState.m_targets)){
         resetDeferredFrameTargets();
         return false;
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, AVBOIT color {}, extinction {}, transmittance {})")
-        , m_deferredTargets.width
-        , m_deferredTargets.height
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.albedoFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.normalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.worldPositionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.opaqueColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.depthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.accumColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.accumExtinctionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredTargets.avboit.transmittanceFormat).name)
+        , m_deferredState.m_targets.width
+        , m_deferredState.m_targets.height
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.albedoFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.normalFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.worldPositionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.opaqueColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.depthFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumExtinctionFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.transmittanceFormat).name)
     );
     return true;
 }
@@ -320,7 +320,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
 bool RendererSystem::createDeferredCompositeResources(){
     auto* device = m_graphics.getDevice();
 
-    if(!m_deferredCompositeBindingLayout){
+    if(!m_deferredState.m_compositeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR, 1));
@@ -328,21 +328,23 @@ bool RendererSystem::createDeferredCompositeResources(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, 1));
 
-        m_deferredCompositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!m_deferredCompositeBindingLayout){
+        m_deferredState.m_compositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!m_deferredState.m_compositeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding layout"));
             return false;
         }
     }
 
-    if(!ECSRenderDetail::CreatePointClampSampler(*device, m_deferredSampler, NWB_TEXT("RendererSystem: failed to create deferred composite sampler")))
+    if(!ECSRenderDetail::CreateClampSampler(*device, m_deferredState.m_sampler, false)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
+    }
 
     if(!loadDeferredCompositeVertexShader())
         return false;
 
     if(!loadShader(
-        m_deferredCompositePixelShader,
+        m_deferredState.m_compositePixelShader,
         ECSRenderDetail::s_DeferredCompositePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
@@ -361,20 +363,20 @@ bool RendererSystem::createDeferredCompositePipeline(Core::Framebuffer* presenta
         return false;
 
     const Core::FramebufferInfo& framebufferInfo = presentationFramebuffer->getFramebufferInfo();
-    if(m_deferredCompositePipeline && m_deferredCompositePipeline->getFramebufferInfo() == framebufferInfo)
+    if(m_deferredState.m_compositePipeline && m_deferredState.m_compositePipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setVertexShader(m_deferredCompositeVertexShader)
-        .setPixelShader(m_deferredCompositePixelShader)
+        .setVertexShader(m_deferredState.m_compositeVertexShader)
+        .setPixelShader(m_deferredState.m_compositePixelShader)
         .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
-        .addBindingLayout(m_deferredCompositeBindingLayout)
+        .addBindingLayout(m_deferredState.m_compositeBindingLayout)
     ;
 
     auto* device = m_graphics.getDevice();
-    m_deferredCompositePipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
-    if(!m_deferredCompositePipeline){
+    m_deferredState.m_compositePipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    if(!m_deferredState.m_compositePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite pipeline"));
         return false;
     }
@@ -429,14 +431,14 @@ bool RendererSystem::renderDeferredComposite(Core::CommandList& commandList, Def
         return false;
     if(!targets.compositeBindingSet)
         return false;
-    if(!m_deferredCompositePipeline && !createDeferredCompositePipeline(presentationFramebuffer))
+    if(!m_deferredState.m_compositePipeline && !createDeferredCompositePipeline(presentationFramebuffer))
         return false;
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(presentationFramebuffer->getFramebufferInfo().getViewport());
 
     Core::GraphicsState graphicsState;
-    graphicsState.setPipeline(m_deferredCompositePipeline.get());
+    graphicsState.setPipeline(m_deferredState.m_compositePipeline.get());
     graphicsState.setFramebuffer(presentationFramebuffer);
     graphicsState.setViewport(viewportState);
     graphicsState.addBindingSet(targets.compositeBindingSet.get());

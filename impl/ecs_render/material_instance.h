@@ -52,9 +52,7 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount){
     UInt4U packed = {};
-#if defined(NWB_DEBUG)
     NWB_ASSERT(byteCount <= sizeof(packed.raw));
-#endif
     NWB_MEMCPY(packed.raw, sizeof(packed.raw), bytes, byteCount);
     return packed;
 }

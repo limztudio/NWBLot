@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
-#include "timing_names.h"
+#include "renderer_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_draw{
+namespace __hidden_material_pass{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,10 +83,11 @@ void RendererSystem::renderMaterialPass(
     commandList.endRenderPass();
 
     Core::Alloc::ScratchArena scratchArena;
-    MaterialPassDrawItemVector meshDrawItems{scratchArena};
-    MaterialPassDrawItemVector computeDrawItems{scratchArena};
+    MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
-    ECSRenderDetail::MaterialTypedInstanceRangeCollector materialTypedRanges{scratchArena};
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
+#endif
     MaterialTypedByteDataVector materialTypedBytes{scratchArena};
 
     Core::ViewportState viewportState;
@@ -97,13 +97,14 @@ void RendererSystem::renderMaterialPass(
         framebuffer,
         pass,
         transparent,
-        meshDrawItems,
-        computeDrawItems,
+        drawItems,
         instanceData,
+#if defined(NWB_DEBUG)
         materialTypedRanges,
+#endif
         materialTypedBytes
     );
-    if(meshDrawItems.empty() && computeDrawItems.empty())
+    if(drawItems.empty())
         return;
 
     f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(framebuffer->getFramebufferInfo());
@@ -111,7 +112,14 @@ void RendererSystem::renderMaterialPass(
         meshViewAspectRatio = ECSRenderDetail::ResolveExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight);
     if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
-    if(!uploadMaterialPassDrawBuffers(commandList, instanceData, materialTypedRanges, materialTypedBytes))
+    if(!uploadMaterialPassDrawBuffers(
+        commandList,
+        instanceData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes
+    ))
         return;
 
     if(passBindingSet){
@@ -120,18 +128,19 @@ void RendererSystem::renderMaterialPass(
     }
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
-    renderMeshMaterialPassDrawItems(drawContext, meshDrawItems);
-    renderComputeMaterialPassDrawItems(drawContext, computeDrawItems);
+    renderMaterialPassDrawItems(drawContext, drawItems.regular);
+    renderMaterialPassDrawItems(drawContext, drawItems.csg);
 }
 
 void RendererSystem::gatherMaterialPassDrawItems(
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
-    MaterialPassDrawItemVector& meshDrawItems,
-    MaterialPassDrawItemVector& computeDrawItems,
+    MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
-    ECSRenderDetail::MaterialTypedInstanceRangeCollector& materialTypedRanges,
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
+#endif
     MaterialTypedByteDataVector& materialTypedBytes
 ){
     if(!framebuffer)
@@ -139,11 +148,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
     auto rendererView = m_world.view<RendererComponent>();
     auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    usize rendererCapacity = rendererView.candidateCount();
-    meshDrawItems.reserve(rendererCapacity);
-    computeDrawItems.reserve(rendererCapacity);
+    const usize rendererCapacity = rendererView.candidateCount();
+    drawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
+#if defined(NWB_DEBUG)
     materialTypedRanges.reserve(rendererCapacity);
+#endif
     const usize materialTypedByteReserve = rendererCapacity <= Limit<usize>::s_Max / sizeof(u32)
         ? rendererCapacity * sizeof(u32)
         : rendererCapacity
@@ -151,16 +161,16 @@ void RendererSystem::gatherMaterialPassDrawItems(
     materialTypedBytes.reserve(materialTypedByteReserve);
 
     using MaterialTypedByteRangeMap = HashMap<
-        __hidden_draw::MaterialTypedByteRangeKey,
+        __hidden_material_pass::MaterialTypedByteRangeKey,
         ECSRenderDetail::MaterialTypedByteRange,
-        __hidden_draw::MaterialTypedByteRangeKeyHasher,
-        EqualTo<__hidden_draw::MaterialTypedByteRangeKey>,
+        __hidden_material_pass::MaterialTypedByteRangeKeyHasher,
+        EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>,
         Core::Alloc::ScratchArena
     >;
     MaterialTypedByteRangeMap constantMaterialTypedRanges(
         0,
-        __hidden_draw::MaterialTypedByteRangeKeyHasher(),
-        EqualTo<__hidden_draw::MaterialTypedByteRangeKey>(),
+        __hidden_material_pass::MaterialTypedByteRangeKeyHasher(),
+        EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>(),
         materialTypedBytes.get_allocator().arena()
     );
     constantMaterialTypedRanges.reserve(rendererCapacity);
@@ -181,12 +191,14 @@ void RendererSystem::gatherMaterialPassDrawItems(
     mutableMaterialTypedRanges.reserve(rendererCapacity);
 
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
+    const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
+    CsgFrameReceiverLookup csgReceiverLookup(m_world, materialTypedBytes.get_allocator().arena());
 
     auto appendConstantMaterialTypedBytes = [&](
         const MaterialSurfaceInfo& materialInfo,
         ECSRenderDetail::MaterialTypedByteRange& outRange
     ) -> bool{
-        const __hidden_draw::MaterialTypedByteRangeKey rangeKey{
+        const __hidden_material_pass::MaterialTypedByteRangeKey rangeKey{
             materialInfo.materialName,
             materialInfo.typedLayoutHash
         };
@@ -224,20 +236,17 @@ void RendererSystem::gatherMaterialPassDrawItems(
     auto appendDrawForMesh = [&](
         const Core::ECS::EntityID entity,
         const Core::Assets::AssetRef<Material>& material,
-        MeshResources& mesh
+        MeshResources& mesh,
+        const CsgReceiverDrawState& csgReceiverState
     ) -> bool{
-#if defined(NWB_DEBUG)
         NWB_ASSERT(mesh.valid());
-#endif
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))
             return false;
-#if defined(NWB_DEBUG)
         NWB_ASSERT(materialInfo);
-#endif
         if(materialInfo->transparent != transparent)
             return false;
 
@@ -246,13 +255,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
+        if(csgReceiverState.active)
+            pipelineKey.csgMode = csgReceiverState.generateCaps ? MaterialPipelineCsgMode::ClipAndCapSource : MaterialPipelineCsgMode::ClipOnly;
 
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
             return false;
-#if defined(NWB_DEBUG)
         NWB_ASSERT(pipelineResources);
-#endif
 
         auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
 #if defined(NWB_DEBUG)
@@ -269,7 +278,9 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges));
+#if defined(NWB_DEBUG)
             materialTypedRanges.push_back(typedRanges);
+#endif
             return instanceIndex;
         };
 
@@ -284,27 +295,26 @@ void RendererSystem::gatherMaterialPassDrawItems(
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
             drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+            drawItem.csgCutterCount = csgReceiverState.cutterCount;
+            drawItem.csgGenerateCaps = csgReceiverState.generateCaps;
             drawItem.meshletConeCullScaleSafe = transform
-                ? __hidden_draw::meshletConeCullScaleSafe(LoadFloat(transform->scale))
+                ? __hidden_material_pass::meshletConeCullScaleSafe(LoadFloat(transform->scale))
                 : true
             ;
             drawItems.push_back(drawItem);
             return true;
         };
 
+        MaterialPassDrawItems& targetDrawItems = csgReceiverState.active ? drawItems.csg : drawItems.regular;
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
-#if defined(NWB_DEBUG)
             NWB_ASSERT(pipelineResources->meshletPipeline);
-#endif
-            return appendDrawItem(meshDrawItems);
+            return appendDrawItem(targetDrawItems.meshDrawItems);
         }
         case RenderPath::ComputeEmulation:{
-#if defined(NWB_DEBUG)
             NWB_ASSERT(pipelineResources->computePipeline);
             NWB_ASSERT(pipelineResources->emulationPipeline);
-#endif
-            return appendDrawItem(computeDrawItems);
+            return appendDrawItem(targetDrawItems.computeDrawItems);
         }
         default:
             return false;
@@ -332,210 +342,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
         else if(!createMeshResources(resolvedMesh.mesh, mesh))
             continue;
 
-#if defined(NWB_DEBUG)
         NWB_ASSERT(mesh);
-#endif
-        appendDrawForMesh(entity, renderer.material, *mesh);
+        CsgReceiverDrawState csgReceiverState;
+        if(!csgReceiverLookup.empty() && !csgReceiverLookup.resolveReceiverDrawState(entity, csgReceiverPass, csgReceiverState))
+            csgReceiverState = CsgReceiverDrawState{};
+
+        appendDrawForMesh(entity, renderer.material, *mesh, csgReceiverState);
     }
-}
-
-void RendererSystem::setMaterialPassCommonBufferStates(
-    Core::CommandList& commandList,
-    const MeshResources& mesh
-){
-    forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
-        commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
-    });
-    commandList.setBufferState(m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-}
-
-bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
-#if defined(NWB_DEBUG)
-    return mesh.valid() && m_instanceBuffer && m_meshViewBuffer && m_materialTypedBuffer;
-#else
-    static_cast<void>(mesh);
-    return true;
-#endif
-}
-
-u32 RendererSystem::meshDispatchFlags(
-    const MeshResources& mesh,
-    const MaterialPipelinePass::Enum pass,
-    const bool twoSided,
-    const bool meshletConeCullScaleSafe
-)const{
-    u32 flags = 0u;
-    const bool meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
-    const bool meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;
-    // Runtime mesh providers own dynamic culling policy; the renderer only consumes the published freshness flags.
-    if(meshletBoundsFresh)
-        flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
-    if(meshletConesFresh && pass == MaterialPipelinePass::Opaque && !twoSided && meshletConeCullScaleSafe)
-        flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletConeCull;
-    return flags;
-}
-
-u32 RendererSystem::materialPassDrawDispatchFlags(
-    const MaterialPassDrawContext& context,
-    const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh
-)const{
-    return meshDispatchFlags(
-        mesh,
-        context.pass,
-        drawItem.pipelineKey.twoSided,
-        drawItem.meshletConeCullScaleSafe
-    );
-}
-
-void RendererSystem::setMaterialPassDrawPushConstants(
-    const MaterialPassDrawContext& context,
-    const MaterialPassDrawItem& drawItem,
-    const MeshResources& mesh
-){
-    const u32 dispatchFlags = materialPassDrawDispatchFlags(context, drawItem, mesh);
-    if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
-        ECSRenderDetail::SetTransparentDrawPushConstants(
-            context.commandList,
-            mesh.meshletCount,
-            drawItem.instanceIndex,
-            drawItem.materialConstantByteOffset,
-            context.viewportState,
-            *context.avboitTargets,
-            dispatchFlags
-        );
-        return;
-    }
-
-    ECSRenderDetail::SetShaderDrivenPushConstants(
-        context.commandList,
-        mesh.meshletCount,
-        drawItem.instanceIndex,
-        drawItem.materialConstantByteOffset,
-        context.viewportState,
-        dispatchFlags
-    );
-}
-
-void RendererSystem::renderMeshMaterialPassDrawItems(
-    const MaterialPassDrawContext& context,
-    const MaterialPassDrawItemVector& drawItems
-){
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
-#if defined(NWB_DEBUG)
-        NWB_ASSERT(materialPassDrawResourcesReady(mesh));
-        NWB_ASSERT(pipelineResources.meshletPipeline);
-#endif
-        if(!createMeshBindingSet(mesh))
-            return;
-
-        setMaterialPassCommonBufferStates(context.commandList, mesh);
-
-        Core::MeshletState meshletState;
-        meshletState.setPipeline(pipelineResources.meshletPipeline.get());
-        meshletState.setFramebuffer(context.framebuffer);
-        meshletState.setViewport(context.viewportState);
-        meshletState.addBindingSet(mesh.meshBindingSet.get());
-        if(context.passBindingSet)
-            meshletState.addBindingSet(context.passBindingSet);
-
-        context.commandList.setMeshletState(meshletState);
-
-        setMaterialPassDrawPushConstants(context, drawItem, mesh);
-        {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
-
-            context.commandList.dispatchMesh(mesh.meshletCount);
-        }
-    });
-}
-
-void RendererSystem::renderComputeMaterialPassDrawItems(
-    const MaterialPassDrawContext& context,
-    const MaterialPassDrawItemVector& drawItems
-){
-    if(drawItems.empty())
-        return;
-    if(!createEmulationViewResources())
-        return;
-#if defined(NWB_DEBUG)
-    NWB_ASSERT(m_meshViewBuffer);
-    NWB_ASSERT(m_emulationViewBindingSet);
-#endif
-
-    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
-#if defined(NWB_DEBUG)
-        NWB_ASSERT(materialPassDrawResourcesReady(mesh));
-        NWB_ASSERT(pipelineResources.computePipeline);
-        NWB_ASSERT(pipelineResources.emulationPipeline);
-#endif
-        if(!createComputeBindingSet(mesh))
-            return;
-#if defined(NWB_DEBUG)
-        NWB_ASSERT(mesh.computeBindingSet);
-        NWB_ASSERT(mesh.emulationVertexBuffer);
-#endif
-
-        setMaterialPassCommonBufferStates(context.commandList, mesh);
-        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
-
-        Core::ComputeState computeState;
-        computeState.setPipeline(pipelineResources.computePipeline.get());
-        computeState.addBindingSet(mesh.computeBindingSet.get());
-
-        context.commandList.setComputeState(computeState);
-
-        ECSRenderDetail::SetShaderDrivenPushConstants(
-            context.commandList,
-            mesh.meshletCount,
-            drawItem.instanceIndex,
-            drawItem.materialConstantByteOffset,
-            context.viewportState,
-            materialPassDrawDispatchFlags(context, drawItem, mesh)
-        );
-        {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
-
-            context.commandList.dispatch(mesh.meshletCount);
-        }
-
-        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
-
-        Core::GraphicsState graphicsState;
-        graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
-        graphicsState.setFramebuffer(context.framebuffer);
-        graphicsState.setViewport(context.viewportState);
-        graphicsState.addVertexBuffer(
-            Core::VertexBufferBinding()
-                .setBuffer(mesh.emulationVertexBuffer.get())
-                .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
-                .setOffset(0)
-        );
-        if(usesAvboit){
-            graphicsState.addBindingSet(nullptr);
-            graphicsState.addBindingSet(context.passBindingSet);
-        }
-        else{
-            graphicsState.addBindingSet(m_emulationViewBindingSet.get());
-            if(context.passBindingSet)
-                graphicsState.addBindingSet(context.passBindingSet);
-        }
-
-        context.commandList.setGraphicsState(graphicsState);
-
-        setMaterialPassDrawPushConstants(context, drawItem, mesh);
-
-        Core::DrawArguments drawArgs;
-        drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
-        {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
-
-            context.commandList.draw(drawArgs);
-        }
-    });
 }
 
 

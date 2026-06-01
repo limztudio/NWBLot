@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "private.h"
+#include "renderer_private.h"
 
 #include <impl/ecs_mesh_runtime/buffer_upload.h>
 
@@ -142,8 +142,8 @@ template<typename PayloadT, typename PayloadVector>
 
 
 void RendererSystem::destroyMeshBindingSets(){
-    m_emulationViewBindingSet = nullptr;
-    for(auto it = m_meshMeshes.begin(); it != m_meshMeshes.end(); ++it){
+    m_drawState.m_emulationViewBindingSet = nullptr;
+    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end(); ++it){
         MeshResources& mesh = it.value();
         mesh.meshBindingSet = nullptr;
         mesh.computeBindingSet = nullptr;
@@ -174,12 +174,10 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
         return false;
     }
 
-    const auto foundMesh = m_meshMeshes.find(meshPath);
-    if(foundMesh != m_meshMeshes.end()){
+    const auto foundMesh = m_meshState.m_meshes.find(meshPath);
+    if(foundMesh != m_meshState.m_meshes.end()){
         outMesh = &foundMesh.value();
-#if defined(NWB_DEBUG)
         NWB_ASSERT(outMesh->valid());
-#endif
         return true;
     }
 
@@ -307,29 +305,23 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     ) && uploaded;
     if(!uploaded)
         return false;
-#if defined(NWB_DEBUG)
     NWB_ASSERT(createdMesh.valid());
-#endif
 
-    auto result = m_meshMeshes.try_emplace(meshPath, Move(createdMesh));
+    auto result = m_meshState.m_meshes.try_emplace(meshPath, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
-#if defined(NWB_DEBUG)
     NWB_ASSERT(outMesh->valid());
-#endif
     return true;
 }
 
 bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
     outMesh = nullptr;
 
-#if defined(NWB_DEBUG)
     NWB_ASSERT(desc.valid());
-#endif
 
-    const auto foundMesh = m_meshMeshes.find(desc.meshKey);
-    if(foundMesh != m_meshMeshes.end()){
+    const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
+    if(foundMesh != m_meshState.m_meshes.end()){
         if(!foundMesh.value().runtimeMesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource")
                 , StringConvert(desc.meshKey.c_str())
@@ -337,13 +329,11 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
             return false;
         }
         if(foundMesh.value().runtimeMeshVersion != desc.version){
-            m_meshMeshes.erase(foundMesh);
+            m_meshState.m_meshes.erase(foundMesh);
         }
         else{
             outMesh = &foundMesh.value();
-#if defined(NWB_DEBUG)
             NWB_ASSERT(outMesh->valid());
-#endif
             return true;
         }
     }
@@ -373,26 +363,22 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
         NWB_TEXT("meshlet primitive index")
     ))
         return false;
-#if defined(NWB_DEBUG)
     NWB_ASSERT(createdMesh.valid());
-#endif
 
-    auto result = m_meshMeshes.try_emplace(desc.meshKey, Move(createdMesh));
+    auto result = m_meshState.m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
-#if defined(NWB_DEBUG)
     NWB_ASSERT(outMesh->valid());
-#endif
     return true;
 }
 
 void RendererSystem::pruneRuntimeMeshResources(){
-    if(m_meshMeshes.empty())
+    if(m_meshState.m_meshes.empty())
         return;
 
     const auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    for(auto it = m_meshMeshes.begin(); it != m_meshMeshes.end();){
+    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end();){
         const MeshResources& mesh = it.value();
         if(!mesh.runtimeMesh){
             ++it;
@@ -404,7 +390,7 @@ void RendererSystem::pruneRuntimeMeshResources(){
             continue;
         }
 
-        it = m_meshMeshes.erase(it);
+        it = m_meshState.m_meshes.erase(it);
     }
 }
 
@@ -418,9 +404,9 @@ void RendererSystem::addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetD
 }
 
 void RendererSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, m_materialTypedBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, m_drawState.m_instanceBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_drawState.m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, m_drawState.m_materialTypedBuffer.get()));
 }
 
 void RendererSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
@@ -429,15 +415,15 @@ void RendererSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDes
 }
 
 bool RendererSystem::meshFrameBindingResourcesReady(const tchar* context)const{
-    if(!m_instanceBuffer){
+    if(!m_drawState.m_instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
         return false;
     }
-    if(!m_meshViewBuffer){
+    if(!m_drawState.m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a mesh view buffer"), context);
         return false;
     }
-    if(!m_materialTypedBuffer){
+    if(!m_drawState.m_materialTypedBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a material typed buffer"), context);
         return false;
     }
@@ -457,7 +443,7 @@ bool RendererSystem::createMeshBindingSet(MeshResources& mesh){
     addMeshDrawBindingItems(bindingSetDesc, mesh);
 
     auto* device = m_graphics.getDevice();
-    mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, m_meshBindingLayout);
+    mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_meshBindingLayout);
     if(!mesh.meshBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
         return false;
@@ -505,7 +491,7 @@ bool RendererSystem::createComputeBindingSet(MeshResources& mesh){
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, mesh.emulationVertexBuffer.get()));
 
     auto* device = m_graphics.getDevice();
-    mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, m_computeBindingLayout);
+    mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_computeBindingLayout);
     if(!mesh.computeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for mesh '{}'")
             , StringConvert(mesh.meshName.c_str())

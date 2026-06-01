@@ -172,7 +172,7 @@ static Core::RenderState BuildUiRenderState(){
     Core::RenderState renderState;
     renderState.depthStencilState.disableDepthTest().disableDepthWrite();
     renderState.rasterState.enableDepthClip().enableScissor().setCullNone();
-    renderState.blendState.targets[0]
+    renderState.blendState.targets[NWB_IMGUI_COLOR_TARGET_LOCATION]
         .enableBlend()
         .setSrcBlend(Core::BlendFactor::SrcAlpha)
         .setDestBlend(Core::BlendFactor::InvSrcAlpha)

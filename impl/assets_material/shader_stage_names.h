@@ -26,14 +26,12 @@ namespace MaterialShaderStageNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_MeshComputeArchiveStageName("mesh_compute");
+
+
 inline AStringView MeshComputeArchiveStageText(){
     static constexpr AStringView s_StageText = "mesh_compute";
     return s_StageText;
-}
-
-inline const Name& MeshComputeArchiveStageName(){
-    static const Name s_StageName(MeshComputeArchiveStageText().data());
-    return s_StageName;
 }
 
 inline AStringView MeshComputeImplicitDefineText(){

@@ -292,7 +292,7 @@ bool RendererSystem::createRendererPipeline(
     auto tryBuildComputePipeline = [&]() -> bool{
         if(!createComputeEmulationResources())
             return false;
-        const Name& meshComputeArchiveStageName = MaterialShaderStageNames::MeshComputeArchiveStageName();
+        const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
         if(!loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),

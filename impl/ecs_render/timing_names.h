@@ -23,15 +23,8 @@ namespace RendererGpuTimingScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const Name& MeshDispatch(){
-    static const Name s_Name("render.mesh_dispatch");
-    return s_Name;
-}
-
-[[nodiscard]] inline const Name& Raster(){
-    static const Name s_Name("render.raster");
-    return s_Name;
-}
+inline constexpr Name s_MeshDispatch("render.mesh_dispatch");
+inline constexpr Name s_Raster("render.raster");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

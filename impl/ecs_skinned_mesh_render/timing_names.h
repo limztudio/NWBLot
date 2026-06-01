@@ -23,15 +23,8 @@ namespace SkinnedMeshGpuTimingScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const Name& Skinning(){
-    static const Name s_Name("skinned_mesh.skinning");
-    return s_Name;
-}
-
-[[nodiscard]] inline const Name& MeshletBounds(){
-    static const Name s_Name("skinned_mesh.meshlet_bounds");
-    return s_Name;
-}
+inline constexpr Name s_Skinning("skinned_mesh.skinning");
+inline constexpr Name s_MeshletBounds("skinned_mesh.meshlet_bounds");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

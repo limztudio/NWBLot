@@ -23,6 +23,7 @@ namespace __hidden_draw{
 
 inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
+
 [[nodiscard]] static bool meshletConeCullScaleSafe(const SIMDVector scale){
     const f32 x = VectorGetX(scale);
     const f32 y = VectorGetY(scale);
@@ -444,7 +445,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::MeshDispatch(), m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 
             context.commandList.dispatchMesh(mesh.meshletCount);
         }
@@ -496,7 +497,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
             materialPassDrawDispatchFlags(context, drawItem, mesh)
         );
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::MeshDispatch(), m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 
             context.commandList.dispatch(mesh.meshletCount);
         }
@@ -530,7 +531,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::Raster(), m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
 
             context.commandList.draw(drawArgs);
         }

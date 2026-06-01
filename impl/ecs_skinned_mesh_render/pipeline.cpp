@@ -26,15 +26,9 @@ namespace __hidden_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const Name& SkinnedMeshComputeShaderName(){
-    static const Name s("engine/graphics/skinned_mesh/skinning_cs");
-    return s;
-}
+static constexpr Name s_SkinnedMeshComputeShaderName("engine/graphics/skinned_mesh/skinning_cs");
+static constexpr Name s_MeshletBoundsComputeShaderName("engine/graphics/skinned_mesh/meshlet_bounds_cs");
 
-static const Name& MeshletBoundsComputeShaderName(){
-    static const Name s("engine/graphics/skinned_mesh/meshlet_bounds_cs");
-    return s;
-}
 
 static bool EnsureComputePipeline(
     Core::Device& device,
@@ -121,7 +115,7 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
         m_skinningComputeShader,
         m_skinningComputePipeline,
         m_skinningBindingLayout,
-        __hidden_pipeline::SkinnedMeshComputeShaderName(),
+        __hidden_pipeline::s_SkinnedMeshComputeShaderName,
         Name("ECSSkinnedMeshRender_SkinnedMeshCS"),
         NWB_TEXT("SkinnedMeshSystem: failed to create skinning compute pipeline")
     );
@@ -156,7 +150,7 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
         m_boundsComputeShader,
         m_boundsComputePipeline,
         m_boundsBindingLayout,
-        __hidden_pipeline::MeshletBoundsComputeShaderName(),
+        __hidden_pipeline::s_MeshletBoundsComputeShaderName,
         Name("ECSSkinnedMeshRender_MeshletBoundsCS"),
         NWB_TEXT("SkinnedMeshSystem: failed to create bounds compute pipeline")
     );

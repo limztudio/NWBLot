@@ -1,0 +1,488 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "shape_registry.h"
+
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_shape_registry{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool ValidShapeTypeId(const CsgShapeTypeId id){
+    return id != s_InvalidCsgShapeTypeId;
+}
+
+[[nodiscard]] bool ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
+    if(!desc.name){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type with empty name"));
+        return false;
+    }
+    if(!desc.shaderModule){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with empty shader module"), StringConvert(desc.name.c_str()));
+        return false;
+    }
+    if(!desc.boundsCallback){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), StringConvert(desc.name.c_str()));
+        return false;
+    }
+    return true;
+}
+
+template<typename ParameterT>
+[[nodiscard]] bool LoadShapeParameters(const u8* parameterBytes, const usize parameterByteSize, ParameterT& outParameters){
+    if(parameterByteSize != sizeof(ParameterT))
+        return false;
+    if(!parameterBytes)
+        return false;
+
+    NWB_MEMCPY(&outParameters, sizeof(ParameterT), parameterBytes, sizeof(ParameterT));
+    return true;
+}
+
+[[nodiscard]] bool TryBuildTransformedLocalAabbVectors(
+    const SIMDMatrix& shapeToWorldMatrix,
+    const SIMDVector localMin,
+    const SIMDVector localMax,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    if(MatrixIsNaN(shapeToWorldMatrix) || MatrixIsInfinite(shapeToWorldMatrix))
+        return false;
+
+    outMinBounds = VectorReplicate(s_MaxF32);
+    outMaxBounds = VectorReplicate(-s_MaxF32);
+
+    for(u32 corner = 0u; corner < 8u; ++corner){
+        const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
+        const SIMDVector localPoint = VectorSelect(localMin, localMax, cornerSelect);
+        const SIMDVector point = Vector3Transform(localPoint, shapeToWorldMatrix);
+        if(Vector3IsNaN(point) || Vector3IsInfinite(point))
+            return false;
+
+        outMinBounds = VectorMin(outMinBounds, point);
+        outMaxBounds = VectorMax(outMaxBounds, point);
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool ValidBoundsVectors(const SIMDVector minBounds, const SIMDVector maxBounds, const bool finiteBounds){
+    if(!finiteBounds)
+        return true;
+
+    return
+        !Vector3IsNaN(minBounds)
+        && !Vector3IsInfinite(minBounds)
+        && !Vector3IsNaN(maxBounds)
+        && !Vector3IsInfinite(maxBounds)
+        && Vector3GreaterOrEqual(maxBounds, minBounds)
+    ;
+}
+
+[[nodiscard]] bool BuildShapeBoundsForShapeType(
+    const CsgShapeTypeInfo& shapeType,
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+){
+    if(shapeType.desc.parameterByteSize != parameterByteSize)
+        return false;
+
+    if(!shapeType.desc.boundsCallback(
+        shapeToWorld,
+        parameterBytes,
+        parameterByteSize,
+        outMinBounds,
+        outMaxBounds,
+        outFiniteBounds
+    ))
+        return false;
+
+    return ValidBoundsVectors(outMinBounds, outMaxBounds, outFiniteBounds);
+}
+
+[[nodiscard]] bool PlaneBounds(
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+){
+    static_cast<void>(shapeToWorld);
+
+    outMinBounds = VectorZero();
+    outMaxBounds = VectorZero();
+    outFiniteBounds = false;
+
+    CsgPlaneShapeParameters parameters;
+    if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
+        return false;
+
+    const SIMDVector normalDistance = LoadFloat(parameters.normalDistance);
+    return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
+}
+
+[[nodiscard]] bool BoxBounds(
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+){
+    outMinBounds = VectorZero();
+    outMaxBounds = VectorZero();
+    outFiniteBounds = false;
+
+    CsgBoxShapeParameters parameters;
+    if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
+        return false;
+    const SIMDVector halfExtents = VectorSetW(LoadFloat(parameters.halfExtents), 0.0f);
+    if(
+        Vector3IsNaN(halfExtents)
+        || Vector3IsInfinite(halfExtents)
+        || !Vector3Greater(halfExtents, VectorZero())
+    )
+        return false;
+
+    if(!TryBuildTransformedLocalAabbVectors(
+        shapeToWorld,
+        VectorSetW(VectorNegate(halfExtents), 0.0f),
+        halfExtents,
+        outMinBounds,
+        outMaxBounds
+    ))
+        return false;
+
+    outFiniteBounds = true;
+    return true;
+}
+
+[[nodiscard]] bool SphereBounds(
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+){
+    outMinBounds = VectorZero();
+    outMaxBounds = VectorZero();
+    outFiniteBounds = false;
+
+    CsgSphereShapeParameters parameters;
+    if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
+        return false;
+    const SIMDVector radius = VectorSplatX(LoadFloat(parameters.radius));
+    if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || !Vector3Greater(radius, VectorZero()))
+        return false;
+
+    const SIMDVector localMax = VectorSetW(radius, 0.0f);
+
+    if(!TryBuildTransformedLocalAabbVectors(
+        shapeToWorld,
+        VectorSetW(VectorNegate(localMax), 0.0f),
+        localMax,
+        outMinBounds,
+        outMaxBounds
+    ))
+        return false;
+
+    outFiniteBounds = true;
+    return true;
+}
+
+[[nodiscard]] bool CapsuleBounds(
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+){
+    outMinBounds = VectorZero();
+    outMaxBounds = VectorZero();
+    outFiniteBounds = false;
+
+    CsgCapsuleShapeParameters parameters;
+    if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
+        return false;
+    const SIMDVector radiusHalfHeight = LoadFloat(parameters.radiusHalfHeight);
+    const SIMDVector radius = VectorSplatX(radiusHalfHeight);
+    const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
+    if(
+        Vector3IsNaN(radius)
+        || Vector3IsInfinite(radius)
+        || Vector3IsNaN(halfHeight)
+        || Vector3IsInfinite(halfHeight)
+        || !Vector3Greater(radius, VectorZero())
+        || !Vector3GreaterOrEqual(halfHeight, VectorZero())
+    )
+        return false;
+
+    const SIMDVector yExtent = VectorAdd(halfHeight, radius);
+    const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, VectorSelectControl(0u, 1u, 0u, 0u)), 0.0f);
+
+    if(!TryBuildTransformedLocalAabbVectors(
+        shapeToWorld,
+        VectorSetW(VectorNegate(localMax), 0.0f),
+        localMax,
+        outMinBounds,
+        outMaxBounds
+    ))
+        return false;
+
+    outFiniteBounds = true;
+    return true;
+}
+
+[[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(
+    const Name& name,
+    const u32 parameterByteSize,
+    const CsgShapeBoundsCallback boundsCallback,
+    const bool supportsCapGeneration
+){
+    CsgShapeTypeDesc desc;
+    desc.name = name;
+    desc.shaderModule = s_CsgBuiltInShapeShaderModuleName;
+    desc.parameterByteSize = parameterByteSize;
+    desc.boundsCallback = boundsCallback;
+    desc.supportsAnalyticGradient = true;
+    desc.supportsCapGeneration = supportsCapGeneration;
+    return desc;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+CsgShapeRegistry::CsgShapeRegistry(Core::Alloc::GlobalArena& arena)
+    : m_shapeTypes(arena)
+    , m_shapeTypeIds(0, Hasher<Name>(), EqualTo<Name>(), arena)
+{}
+
+
+bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeTypeId& outTypeId, const bool replaceExisting){
+    outTypeId = s_InvalidCsgShapeTypeId;
+    if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
+        return false;
+
+    ScopedLock lock(m_mutex);
+
+    const auto found = m_shapeTypeIds.find(desc.name);
+    if(found != m_shapeTypeIds.end()){
+        if(!replaceExisting){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), StringConvert(desc.name.c_str()));
+            return false;
+        }
+
+        const CsgShapeTypeId existingId = found.value();
+        const usize existingIndex = static_cast<usize>(existingId - 1u);
+        if(!__hidden_shape_registry::ValidShapeTypeId(existingId) || existingIndex >= m_shapeTypes.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' has a stale registry index"), StringConvert(desc.name.c_str()));
+            return false;
+        }
+    }
+
+    if(found != m_shapeTypeIds.end()){
+        const CsgShapeTypeId existingId = found.value();
+        CsgShapeTypeInfo& shapeType = m_shapeTypes[static_cast<usize>(existingId - 1u)];
+        shapeType.desc = desc;
+        outTypeId = existingId;
+        return true;
+    }
+
+    if(m_shapeTypes.size() >= static_cast<usize>(Limit<CsgShapeTypeId>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' because the registry is full"), StringConvert(desc.name.c_str()));
+        return false;
+    }
+
+    const CsgShapeTypeId id = static_cast<CsgShapeTypeId>(m_shapeTypes.size()) + 1u;
+    m_shapeTypes.push_back(CsgShapeTypeInfo{ id, desc });
+    m_shapeTypeIds.emplace(desc.name, id);
+    outTypeId = id;
+    return true;
+}
+
+
+CsgShapeTypeId CsgShapeRegistry::findShapeTypeId(const Name& name)const{
+    if(!name)
+        return s_InvalidCsgShapeTypeId;
+
+    ScopedLock lock(m_mutex);
+    const auto found = m_shapeTypeIds.find(name);
+    return found != m_shapeTypeIds.end() ? found.value() : s_InvalidCsgShapeTypeId;
+}
+
+bool CsgShapeRegistry::findShapeType(const Name& name, CsgShapeTypeInfo& outShapeType)const{
+    outShapeType = CsgShapeTypeInfo{};
+    if(!name)
+        return false;
+
+    ScopedLock lock(m_mutex);
+    const auto found = m_shapeTypeIds.find(name);
+    if(found == m_shapeTypeIds.end())
+        return false;
+
+    return shapeTypeById(found.value(), outShapeType);
+}
+
+bool CsgShapeRegistry::findShapeType(const CsgShapeTypeId typeId, CsgShapeTypeInfo& outShapeType)const{
+    outShapeType = CsgShapeTypeInfo{};
+
+    ScopedLock lock(m_mutex);
+    return shapeTypeById(typeId, outShapeType);
+}
+
+usize CsgShapeRegistry::shapeTypeCount()const{
+    ScopedLock lock(m_mutex);
+    return m_shapeTypes.size();
+}
+
+
+bool CsgShapeRegistry::buildShapeBounds(
+    const Name& name,
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+)const{
+    return buildShapeBounds(
+        findShapeTypeId(name),
+        shapeToWorld,
+        parameterBytes,
+        parameterByteSize,
+        outMinBounds,
+        outMaxBounds,
+        outFiniteBounds
+    );
+}
+
+bool CsgShapeRegistry::buildShapeBounds(
+    const CsgShapeTypeId typeId,
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+)const{
+    outMinBounds = VectorZero();
+    outMaxBounds = VectorZero();
+    outFiniteBounds = false;
+
+    CsgShapeTypeInfo shapeType;
+    if(!findShapeType(typeId, shapeType))
+        return false;
+    return __hidden_shape_registry::BuildShapeBoundsForShapeType(
+        shapeType,
+        shapeToWorld,
+        parameterBytes,
+        parameterByteSize,
+        outMinBounds,
+        outMaxBounds,
+        outFiniteBounds
+    );
+}
+
+
+bool CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId typeId, CsgShapeTypeInfo& outShapeType)const{
+    outShapeType = CsgShapeTypeInfo{};
+    if(!__hidden_shape_registry::ValidShapeTypeId(typeId))
+        return false;
+
+    const usize index = static_cast<usize>(typeId - 1u);
+    if(index >= m_shapeTypes.size())
+        return false;
+
+    outShapeType = m_shapeTypes[index];
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
+    CsgShapeTypeId shapeTypeId = s_InvalidCsgShapeTypeId;
+    bool result = true;
+
+    result = registry.registerShapeType(
+        __hidden_shape_registry::BuiltInShapeDesc(
+            s_CsgPlaneShapeName,
+            sizeof(CsgPlaneShapeParameters),
+            &__hidden_shape_registry::PlaneBounds,
+            true
+        ),
+        shapeTypeId,
+        true
+    ) && result;
+    result = registry.registerShapeType(
+        __hidden_shape_registry::BuiltInShapeDesc(
+            s_CsgBoxShapeName,
+            sizeof(CsgBoxShapeParameters),
+            &__hidden_shape_registry::BoxBounds,
+            true
+        ),
+        shapeTypeId,
+        true
+    ) && result;
+    result = registry.registerShapeType(
+        __hidden_shape_registry::BuiltInShapeDesc(
+            s_CsgSphereShapeName,
+            sizeof(CsgSphereShapeParameters),
+            &__hidden_shape_registry::SphereBounds,
+            true
+        ),
+        shapeTypeId,
+        true
+    ) && result;
+    result = registry.registerShapeType(
+        __hidden_shape_registry::BuiltInShapeDesc(
+            s_CsgCapsuleShapeName,
+            sizeof(CsgCapsuleShapeParameters),
+            &__hidden_shape_registry::CapsuleBounds,
+            true
+        ),
+        shapeTypeId,
+        true
+    ) && result;
+
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

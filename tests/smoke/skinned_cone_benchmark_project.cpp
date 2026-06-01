@@ -606,10 +606,10 @@ private:
             m_context.graphics.gpuTiming().collect(*device);
         }
         const NWB::Core::GpuTimingRecorder& gpuTiming = m_context.graphics.gpuTiming();
-        AccumulateGpuScope(gpuTiming, SkinnedTiming::Skinning(), accum.skinningSeconds, accum.skinningSamples);
-        AccumulateGpuScope(gpuTiming, SkinnedTiming::MeshletBounds(), accum.boundsSeconds, accum.boundsSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::MeshDispatch(), accum.meshDispatchSeconds, accum.meshDispatchSamples);
-        AccumulateGpuScope(gpuTiming, RendererTiming::Raster(), accum.rasterSeconds, accum.rasterSamples);
+        AccumulateGpuScope(gpuTiming, SkinnedTiming::s_Skinning, accum.skinningSeconds, accum.skinningSamples);
+        AccumulateGpuScope(gpuTiming, SkinnedTiming::s_MeshletBounds, accum.boundsSeconds, accum.boundsSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_MeshDispatch, accum.meshDispatchSeconds, accum.meshDispatchSamples);
+        AccumulateGpuScope(gpuTiming, RendererTiming::s_Raster, accum.rasterSeconds, accum.rasterSamples);
     }
 
     void advanceCaseOrFinish(){

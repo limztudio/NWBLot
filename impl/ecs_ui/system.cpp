@@ -35,27 +35,11 @@ namespace __hidden_ui{
 
 static constexpr usize s_DefaultVertexCapacity = 4096u;
 static constexpr usize s_DefaultIndexCapacity = 8192u;
+static constexpr Name s_UiVertexShaderName("engine/graphics/imgui/vs");
+static constexpr Name s_UiPixelShaderName("engine/graphics/imgui/ps");
+static constexpr Name s_UiVertexBufferName("ecs_ui/imgui_vertices");
+static constexpr Name s_UiIndexBufferName("ecs_ui/imgui_indices");
 
-
-static const Name& UiVertexShaderName(){
-    static const Name s("engine/graphics/imgui/vs");
-    return s;
-}
-
-static const Name& UiPixelShaderName(){
-    static const Name s("engine/graphics/imgui/ps");
-    return s;
-}
-
-static const Name& UiVertexBufferName(){
-    static const Name s("ecs_ui/imgui_vertices");
-    return s;
-}
-
-static const Name& UiIndexBufferName(){
-    static const Name s("ecs_ui/imgui_indices");
-    return s;
-}
 
 static Name UiTextureName(const usize uniqueId){
     static constexpr AStringView s_Prefix("ecs_ui/imgui_texture_");
@@ -591,7 +575,7 @@ bool UiSystem::ensureShadersLoaded(){
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
-            __hidden_ui::UiVertexShaderName(),
+            __hidden_ui::s_UiVertexShaderName,
             Core::ShaderType::Vertex,
             Name("ECSUI_ImGuiVS")
         );
@@ -605,7 +589,7 @@ bool UiSystem::ensureShadersLoaded(){
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
-            __hidden_ui::UiPixelShaderName(),
+            __hidden_ui::s_UiPixelShaderName,
             Core::ShaderType::Pixel,
             Name("ECSUI_ImGuiPS")
         );
@@ -680,7 +664,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
         bufferDesc
             .setByteSize(static_cast<u64>(capacity * sizeof(ImDrawVert)))
             .setIsVertexBuffer(true)
-            .setDebugName(__hidden_ui::UiVertexBufferName())
+            .setDebugName(__hidden_ui::s_UiVertexBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
 
@@ -703,7 +687,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
         bufferDesc
             .setByteSize(static_cast<u64>(capacity * sizeof(ImDrawIdx)))
             .setIsIndexBuffer(true)
-            .setDebugName(__hidden_ui::UiIndexBufferName())
+            .setDebugName(__hidden_ui::s_UiIndexBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
 

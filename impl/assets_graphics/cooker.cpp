@@ -48,6 +48,7 @@ static constexpr AStringView s_VolumeName = "graphics";
 static constexpr AStringView s_CookerLogPrefix = "GraphicsAssetCooker";
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
+static constexpr Name s_IncludeAssetTypeName("include");
 
 using CookString = ShaderCook::CookString;
 template<typename T>
@@ -61,11 +62,6 @@ UniquePtr<Core::Assets::IAssetCooker> CreateGraphicsAssetCooker(Core::Alloc::Glo
     return MakeUnique<GraphicsAssetCooker>(arena);
 }
 Core::Assets::AssetCookerAutoRegistrar s_GraphicsAssetCookerAutoRegistrar(&CreateGraphicsAssetCooker);
-
-static const Name& IncludeAssetTypeName(){
-    static const Name s_Name("include");
-    return s_Name;
-}
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 
@@ -982,7 +978,7 @@ static bool ParseAssetMetadata(
             continue;
         }
 
-        if(assetType == IncludeAssetTypeName()){
+        if(assetType == s_IncludeAssetTypeName){
             ShaderCook::IncludeEntry includeEntry(cookArena);
             if(!shaderCook.parseIncludeMeta(nwbFile, doc, includeEntry, scratchArena))
                 return false;

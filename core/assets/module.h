@@ -25,9 +25,9 @@ using AssetBytes = AssetVector<u8>;
 
 #define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
     static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
+    inline static constexpr Name s_AssetTypeName = Name(assetTypeLiteral); \
     [[nodiscard]] static const Name& AssetTypeName(){ \
-        static const Name s_AssetType(s_AssetTypeText.data()); \
-        return s_AssetType; \
+        return s_AssetTypeName; \
     }
 
 

@@ -243,7 +243,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     pushConstants.attributeCount = instance.meshletAttributeRefCount;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::Skinning(), m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::s_Skinning, m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }
@@ -324,7 +324,7 @@ bool SkinnedMeshSystem::dispatchMeshletBounds(
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::MeshletBounds(), m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::s_MeshletBounds, m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }

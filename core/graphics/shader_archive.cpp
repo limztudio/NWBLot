@@ -142,7 +142,6 @@ const ShaderArchive::Record* FindRecord(
 
 
 const Name& ShaderArchive::IndexVirtualPathName(){
-    static const Name s_IndexVirtualPathName(s_IndexVirtualPath);
     return s_IndexVirtualPathName;
 }
 

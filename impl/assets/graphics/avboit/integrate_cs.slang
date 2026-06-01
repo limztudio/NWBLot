@@ -29,7 +29,7 @@ void nwbAvboitIntegrateMain(uint lowPixelIndex){
     const uint activePhysicalSlices = clamp(g_Control[NWB_AVBOIT_CONTROL_ACTIVE_PHYSICAL_SLICES], 1u, physicalSliceCount);
     const uint2 lowPixel = uint2(lowPixelIndex % lowWidth, lowPixelIndex / lowWidth);
     const uint overflowSlice = g_ExtinctionOverflowDepth[lowPixelIndex];
-    const float saturatedExtinction = 16.0;
+    const float saturatedExtinction = NWB_AVBOIT_EXTINCTION_SATURATION;
     float accumulatedExtinction = 0.0;
     uint cachedWordIndex = NWB_AVBOIT_OVERFLOW_INVALID;
     uint cachedPackedWord = 0u;

@@ -155,8 +155,8 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
     ;
     renderState.rasterState.enableDepthClip().setCullBack();
     renderState.blendState
-        .setRenderTarget(0, __hidden_avboit::BuildAdditiveBlendTarget())
-        .setRenderTarget(1, __hidden_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
+        .setRenderTarget(NWB_AVBOIT_ACCUM_COLOR_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget())
+        .setRenderTarget(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
     ;
     return renderState;
 }
@@ -211,7 +211,7 @@ void RendererSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFr
     __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.depthWarpBuffer, 0u);
     __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.controlBuffer, 0u);
     __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.extinctionBuffer, 0u);
-    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.extinctionOverflowBuffer, Limit<u32>::s_Max);
+    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.extinctionOverflowBuffer, NWB_AVBOIT_OVERFLOW_INVALID);
     __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.transmittanceTexture, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 

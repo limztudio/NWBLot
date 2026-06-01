@@ -3,6 +3,7 @@
 
 
 #include "binding_slots.h"
+#include "../avboit/constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +30,7 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const float3 opaqueColor = g_OpaqueColor.Sample(g_DeferredSampler, input.uv).rgb;
     const float4 transparentColorAccum = g_AvboitAccumColor.Sample(g_DeferredSampler, input.uv);
     const float transparentExtinction = g_AvboitAccumExtinction.Sample(g_DeferredSampler, input.uv).r;
-    const float totalTransmittance = exp(-min(transparentExtinction, 16.0));
+    const float totalTransmittance = exp(-min(transparentExtinction, NWB_AVBOIT_EXTINCTION_SATURATION));
 
     NwbDeferredCompositePixelOutput output;
     output.color = float4(transparentColorAccum.rgb + opaqueColor * totalTransmittance, 1.0);

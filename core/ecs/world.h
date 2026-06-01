@@ -83,6 +83,12 @@ public:
         return pool ? pool->tryGet(entityId) : nullptr;
     }
 
+    template<typename T>
+    [[nodiscard]] u64 componentMutationVersion()const{
+        const auto* pool = getPool<T>();
+        return pool ? pool->mutationVersion() : 0u;
+    }
+
 
 public:
     template<typename T, typename... Args>

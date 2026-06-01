@@ -205,6 +205,8 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
     const MaterialInstanceComponent* materialInstance,
     const MaterialTypedByteVector*& outMutableTypedBytes
 ){
+    pruneMaterialInstanceMutableCache();
+
     outMutableTypedBytes = nullptr;
     if(!materialInstance || materialInstance->overrides.empty()){
         outMutableTypedBytes = &materialInfo.mutableDefaultTypedBytes;
@@ -243,18 +245,12 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
 }
 
 void RendererSystem::pruneMaterialInstanceMutableCache(){
-    if(m_materialState.m_instanceMutableCache.empty())
+    const u64 componentMutationVersion = m_world.componentMutationVersion<MaterialInstanceComponent>();
+    if(componentMutationVersion == m_materialState.m_instanceMutableCacheComponentMutationVersion)
         return;
 
-    for(auto it = m_materialState.m_instanceMutableCache.begin(); it != m_materialState.m_instanceMutableCache.end();){
-        const Core::ECS::EntityID entity = it->first;
-        if(m_world.tryGetComponent<MaterialInstanceComponent>(entity)){
-            ++it;
-            continue;
-        }
-
-        it = m_materialState.m_instanceMutableCache.erase(it);
-    }
+    m_materialState.m_instanceMutableCache.clear();
+    m_materialState.m_instanceMutableCacheComponentMutationVersion = componentMutationVersion;
 }
 
 

@@ -64,6 +64,7 @@ public:
     virtual bool remove(EntityID entityId) = 0;
     virtual void clear() = 0;
     virtual usize size()const = 0;
+    virtual u64 mutationVersion()const = 0;
 };
 
 
@@ -106,6 +107,7 @@ public:
         : m_sparse(arena)
         , m_dense(arena)
         , m_components(arena)
+        , m_mutationVersion(0u)
     {}
 
 
@@ -125,6 +127,7 @@ public:
         m_sparse[index] = denseIndex;
         m_dense.push_back(entityId);
         m_components.emplace_back(Forward<Args>(args)...);
+        ++m_mutationVersion;
 
         return m_components[denseIndex];
     }
@@ -172,21 +175,26 @@ public:
         m_dense.pop_back();
         m_components.pop_back();
         m_sparse[index] = ~0u;
+        ++m_mutationVersion;
         return true;
     }
 
     inline virtual void clear()override{
+        if(!m_dense.empty())
+            ++m_mutationVersion;
         m_sparse.clear();
         m_dense.clear();
         m_components.clear();
     }
 
     inline virtual usize size()const override{ return m_dense.size(); }
+    inline virtual u64 mutationVersion()const override{ return m_mutationVersion; }
 
 private:
     Vector<u32, Alloc::GlobalArena> m_sparse;
     Vector<EntityID, Alloc::GlobalArena> m_dense;
     Vector<T, Alloc::GlobalArena> m_components;
+    u64 m_mutationVersion;
 };
 
 

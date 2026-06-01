@@ -69,6 +69,7 @@ void RendererMaterialState::invalidateResources(){
     m_pipelines.clear();
     m_instanceMutableCache.clear();
     m_loggedMaterialPaths.clear();
+    m_instanceMutableCacheComponentMutationVersion = 0u;
 }
 
 

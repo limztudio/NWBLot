@@ -197,6 +197,32 @@ static void TestComponentLifetime(TestContext& context){
     NWB_ECS_TEST_CHECK(context, recycledEntity.id() != entityId);
 }
 
+static void TestComponentMutationVersion(TestContext& context){
+    TestWorld testWorld;
+
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 0u);
+
+    auto entity = testWorld.world.createEntity();
+    entity.addComponent<PositionComponent>();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 1u);
+
+    entity.addComponent<PositionComponent>();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 1u);
+
+    entity.addComponent<VelocityComponent>();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 1u);
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<VelocityComponent>() == 1u);
+
+    entity.removeComponent<VelocityComponent>();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<VelocityComponent>() == 2u);
+
+    entity.removeComponent<VelocityComponent>();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<VelocityComponent>() == 2u);
+
+    entity.destroy();
+    NWB_ECS_TEST_CHECK(context, testWorld.world.componentMutationVersion<PositionComponent>() == 2u);
+}
+
 static void TestMessageBus(TestContext& context){
     TestWorld testWorld;
 
@@ -333,6 +359,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("ecs", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestComponentStorageAndView(context);
     __hidden_tests::TestEmptyViewDoesNotAllocateComponentPools(context);
     __hidden_tests::TestComponentLifetime(context);
+    __hidden_tests::TestComponentMutationVersion(context);
     __hidden_tests::TestMessageBus(context);
     __hidden_tests::TestMoveOnlyMessageBus(context);
     __hidden_tests::TestSystemTick(context);

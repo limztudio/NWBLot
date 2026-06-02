@@ -7,6 +7,14 @@
 
 #include "raster_fields.slangi"
 
+#ifndef NWB_CSG_ENABLED
+#define NWB_CSG_ENABLED 0
+#endif
+
+#if NWB_CSG_ENABLED
+#include "../csg/runtime.slangi"
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,6 +35,10 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inTangent = input.tangent;
     inUv0 = input.uv0;
     inWorldPosition = input.worldPosition;
+#if NWB_CSG_ENABLED
+    if(nwbCsgMeshPixelDiscard(inWorldPosition))
+        discard;
+#endif
 }
 
 

@@ -94,6 +94,21 @@ void RendererDrawState::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererCsgState::invalidateResources(){
+    m_clipBindingLayout.reset();
+    m_clipBindingSet.reset();
+    m_receiverRangeBuffer.reset();
+    m_cutterBuffer.reset();
+    m_parameterByteBuffer.reset();
+    m_receiverRangeBufferCapacity = 0u;
+    m_cutterBufferCapacity = 0u;
+    m_parameterByteBufferCapacity = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererDeferredState::invalidateResources(){
     m_lightingBindingLayout.reset();
     m_sceneShadingBuffer.reset();

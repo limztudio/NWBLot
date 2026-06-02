@@ -78,6 +78,39 @@ static_assert(offsetof(InstanceGpuData, scale) == sizeof(f32) * NWB_MESH_INSTANC
 static_assert(sizeof(InstanceGpuData) == sizeof(f32) * NWB_MESH_INSTANCE_FLOAT_COUNT, "InstanceGpuData stride must match the mesh shaders");
 static_assert(alignof(InstanceGpuData) >= alignof(Float4), "InstanceGpuData must stay SIMD-aligned");
 
+struct CsgReceiverRangeGpuData{
+    u32 firstCutter = 0u;
+    u32 cutterCount = 0u;
+    u32 flags = 0u;
+    u32 padding0 = 0u;
+};
+
+[[nodiscard]] inline Float44 MakeIdentityCsgMatrix(){
+    Float44 matrix{};
+    matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    matrix.rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    return matrix;
+}
+
+struct CsgCutterGpuData{
+    u32 shapeType = 0u;
+    u32 operation = 0u;
+    u32 parameterByteOffset = 0u;
+    u32 parameterByteSize = 0u;
+    Float44 worldToShape = MakeIdentityCsgMatrix();
+    Float44 shapeToWorld = MakeIdentityCsgMatrix();
+    Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
+};
+
+static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 4u, "CsgReceiverRangeGpuData layout must match the CSG shader");
+static_assert(sizeof(CsgCutterGpuData) == sizeof(u32) * 4u + sizeof(Float44) * 2u + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
+static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,6 +121,31 @@ using MaterialTypedLayoutFieldVector = Vector<MaterialTypedLayoutField, Core::Al
 using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::ScratchArena>;
 using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>;
 using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
+using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
+using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
+using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CsgFrameGpuData{
+    CsgReceiverRangeGpuDataVector receiverRanges;
+    CsgCutterGpuDataVector cutters;
+    CsgParameterByteDataVector parameterBytes;
+
+    explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
+        : receiverRanges(arena)
+        , cutters(arena)
+        , parameterBytes(arena)
+    {}
+
+    [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+    void reserve(const usize receiverCapacity, const usize cutterCapacity){
+        receiverRanges.reserve(receiverCapacity);
+        cutters.reserve(cutterCapacity);
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

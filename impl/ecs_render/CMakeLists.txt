@@ -15,6 +15,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_targets.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_lighting.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pass_draw.cpp"

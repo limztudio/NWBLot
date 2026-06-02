@@ -62,6 +62,11 @@ struct CsgFrameState{
     [[nodiscard]] bool empty()const noexcept{ return !hasAnyWork; }
 };
 
+struct CsgFrameCutterRange{
+    u32 firstCutter = 0u;
+    u32 cutterCount = 0u;
+};
+
 using CsgReceiverVisibleCallback = bool(*)(
     Core::ECS::World& world,
     Core::ECS::EntityID entity,
@@ -82,6 +87,8 @@ static_assert(IsStandardLayout_V<CsgReceiverDrawState>, "CsgReceiverDrawState mu
 static_assert(IsTriviallyCopyable_V<CsgReceiverDrawState>, "CsgReceiverDrawState must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameState>, "CsgFrameState must stay layout-stable for frame handoff");
 static_assert(IsTriviallyCopyable_V<CsgFrameState>, "CsgFrameState must stay cheap to pass by value");
+static_assert(IsStandardLayout_V<CsgFrameCutterRange>, "CsgFrameCutterRange must stay layout-stable for frame handoff");
+static_assert(IsTriviallyCopyable_V<CsgFrameCutterRange>, "CsgFrameCutterRange must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must stay cheap to pass by value");
 
@@ -91,7 +98,14 @@ static_assert(IsTriviallyCopyable_V<CsgFrameBuildDesc>, "CsgFrameBuildDesc must 
 
 class CsgFrameReceiverLookup final : NoCopy{
 private:
-    using CutterCountMap = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
+    struct CsgFrameCutterRef{
+        Core::ECS::EntityID entity;
+        const CsgCutterComponent* cutter = nullptr;
+    };
+
+    using CutterRangeMap = HashMap<Name, CsgFrameCutterRange, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
+    using CutterWriteCountMap = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
+    using CutterRefVector = Vector<CsgFrameCutterRef, Core::Alloc::ScratchArena>;
 
 
 public:
@@ -99,17 +113,35 @@ public:
 
 
 public:
-    [[nodiscard]] bool empty()const noexcept{ return m_cutterCounts.empty(); }
+    [[nodiscard]] bool empty()const noexcept{ return m_cutterRanges.empty(); }
+    [[nodiscard]] u32 cutterCount()const noexcept{ return static_cast<u32>(m_cutterRefs.size()); }
     [[nodiscard]] bool resolveReceiverDrawState(
         Core::ECS::EntityID entity,
         CsgReceiverPass::Enum receiverPass,
         CsgReceiverDrawState& outState
     )const;
+    [[nodiscard]] bool resolveReceiverCutterRange(Core::ECS::EntityID entity, CsgFrameCutterRange& outRange)const;
+    template<typename CutterHandler>
+    void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const{
+        CsgFrameCutterRange range;
+        if(!resolveReceiverCutterRange(entity, range))
+            return;
+
+        const usize firstCutter = static_cast<usize>(range.firstCutter);
+        const usize cutterEnd = firstCutter + static_cast<usize>(range.cutterCount);
+        NWB_ASSERT(cutterEnd <= m_cutterRefs.size());
+        for(usize cutterIndex = firstCutter; cutterIndex < cutterEnd; ++cutterIndex){
+            const CsgFrameCutterRef& cutterRef = m_cutterRefs[cutterIndex];
+            NWB_ASSERT(cutterRef.cutter != nullptr);
+            handler(cutterRef.entity, *cutterRef.cutter);
+        }
+    }
 
 
 private:
     Core::ECS::World& m_world;
-    CutterCountMap m_cutterCounts;
+    CutterRangeMap m_cutterRanges;
+    CutterRefVector m_cutterRefs;
 };
 
 

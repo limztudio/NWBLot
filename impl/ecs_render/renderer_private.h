@@ -19,6 +19,8 @@
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
+#include <impl/assets/graphics/csg/binding_slots.h>
+#include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
@@ -126,6 +128,9 @@ static_assert(alignof(SceneShadingGpuData) >= alignof(Float4), "SceneShadingGpuD
 inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh/emulation_vs");
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
+inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_ranges");
+inline constexpr Name s_CsgCutterBufferName("ecs_render/csg_cutters");
+inline constexpr Name s_CsgParameterByteBufferName("ecs_render/csg_parameter_bytes");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred/composite_vs");
 inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred/lighting_ps");

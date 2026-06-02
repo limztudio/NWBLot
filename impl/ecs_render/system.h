@@ -13,6 +13,7 @@
 #include <core/graphics/render_pass.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
+#include <impl/ecs_csg/frame_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -195,6 +196,7 @@ private:
         bool transparent,
         MaterialPassDrawItemPartitions& drawItems,
         InstanceGpuDataVector& instanceData,
+        CsgFrameGpuData& csgFrameData,
 #if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
@@ -233,6 +235,22 @@ private:
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+
+private:
+    [[nodiscard]] bool createCsgClipResources();
+    void destroyCsgClipBindingSet();
+    [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
+    [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
+    [[nodiscard]] bool reserveCsgParameterByteBufferCapacity(usize byteCount);
+    [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    void setCsgClipBufferStates(Core::CommandList& commandList);
+    [[nodiscard]] u32 countCsgReceiverClipCutters(const CsgFrameReceiverLookup& receiverLookup, Core::ECS::EntityID entity)const;
+    [[nodiscard]] bool appendCsgReceiverClipData(
+        const CsgFrameReceiverLookup& receiverLookup,
+        Core::ECS::EntityID entity,
+        CsgFrameGpuData& csgFrameData,
+        CsgReceiverRangeGpuData& outRange
+    )const;
 
 private:
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
@@ -321,6 +339,7 @@ private:
     RendererMeshState m_meshState;
     RendererMaterialState m_materialState;
     RendererDrawState m_drawState;
+    RendererCsgState m_csgState;
     RendererDeferredState m_deferredState;
     RendererAvboitState m_avboitState;
 };

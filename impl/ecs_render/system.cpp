@@ -66,6 +66,7 @@ void RendererSystem::invalidateResources(){
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
+    m_csgState.invalidateResources();
     m_deferredState.invalidateResources();
     m_avboitState.invalidateResources();
 }
@@ -93,6 +94,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::Alloc::ScratchArena scratchArena;
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
+    CsgFrameGpuData csgFrameData{scratchArena};
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
 #endif
@@ -111,6 +113,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             false,
             opaqueDrawItems,
             instanceData,
+            csgFrameData,
 #if defined(NWB_DEBUG)
             materialTypedRanges,
 #endif
@@ -131,6 +134,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
     ;
     if(deferredUploadReady){
+        const bool csgUploadReady = opaqueDrawItems.csg.empty() || uploadCsgFrameBuffers(*commandList, csgFrameData);
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,
             deferredTargets.framebuffer.get(),
@@ -140,7 +144,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredViewportState
         };
         renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
-        renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+        if(csgUploadReady)
+            renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
     }
     commandList->endRenderPass();
 

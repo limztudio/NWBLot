@@ -1,0 +1,117 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_RUNTIME_SLANGI
+#define NWB_GRAPHICS_CSG_RUNTIME_SLANGI
+
+#include "binding_slots.h"
+#include "constants.h"
+
+#include "../mesh/runtime_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgReceiverRange{
+    uint firstCutter;
+    uint cutterCount;
+    uint flags;
+    uint padding0;
+};
+
+struct NwbCsgCutter{
+    uint shapeType;
+    uint operation;
+    uint parameterByteOffset;
+    uint parameterByteSize;
+    float4x4 worldToShape;
+    float4x4 shapeToWorld;
+    float4 parameter0;
+    float4 parameter1;
+};
+
+struct NwbCsgMeshPushConstants{
+    uint4 dispatch;
+    float4 viewportRect;
+    float4 scissorRect;
+};
+
+[[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbCsgReceiverRanges;
+[[vk::binding(NWB_CSG_BINDING_CUTTERS, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbCsgCutters;
+[[vk::binding(NWB_CSG_BINDING_PARAMETER_BYTES, NWB_CSG_CLIP_SET)]] ByteAddressBuffer g_NwbCsgParameterBytes;
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbCsgMeshInstanceIndex(){
+    return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+}
+
+float3 nwbCsgTransformWorldToShape(const float3 worldPosition, const NwbCsgCutter cutter){
+    return mul(cutter.worldToShape, float4(worldPosition, 1.0)).xyz;
+}
+
+float nwbCsgPlaneDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    return dot(shapePosition, cutter.parameter0.xyz) + cutter.parameter0.w;
+}
+
+float nwbCsgBoxDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
+    return length(max(q, float3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float nwbCsgSphereDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    return length(shapePosition) - cutter.parameter0.x;
+}
+
+float nwbCsgCapsuleDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float radius = cutter.parameter0.x;
+    const float halfHeight = cutter.parameter0.y;
+    const float3 q = shapePosition - float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+    return length(q) - radius;
+}
+
+float nwbCsgEvaluateDistance(const float3 worldPosition, const NwbCsgCutter cutter){
+    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
+    switch(cutter.shapeType){
+    case NWB_CSG_SHAPE_PLANE:
+        return nwbCsgPlaneDistance(shapePosition, cutter);
+    case NWB_CSG_SHAPE_BOX:
+        return nwbCsgBoxDistance(shapePosition, cutter);
+    case NWB_CSG_SHAPE_SPHERE:
+        return nwbCsgSphereDistance(shapePosition, cutter);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return nwbCsgCapsuleDistance(shapePosition, cutter);
+    default:
+        return 1.0;
+    }
+}
+
+bool nwbCsgMeshPixelDiscard(const float3 worldPosition){
+    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[nwbCsgMeshInstanceIndex()];
+    for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
+        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
+        if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
+            continue;
+        if(nwbCsgEvaluateDistance(worldPosition, cutter) <= 0.0)
+            return true;
+    }
+
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

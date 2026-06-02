@@ -86,6 +86,28 @@ private:
     usize m_materialTypedBufferCapacity = 0;
 };
 
+class RendererCsgState final : NoCopy{
+    friend class RendererSystem;
+
+public:
+    RendererCsgState() = default;
+
+
+public:
+    void invalidateResources();
+
+
+private:
+    Core::BindingLayoutHandle m_clipBindingLayout;
+    Core::BindingSetHandle m_clipBindingSet;
+    Core::BufferHandle m_receiverRangeBuffer;
+    Core::BufferHandle m_cutterBuffer;
+    Core::BufferHandle m_parameterByteBuffer;
+    usize m_receiverRangeBufferCapacity = 0u;
+    usize m_cutterBufferCapacity = 0u;
+    usize m_parameterByteBufferCapacity = 0u;
+};
+
 class RendererDeferredState final : NoCopy{
     friend class RendererSystem;
 

@@ -85,6 +85,7 @@ void RendererSystem::renderMaterialPass(
     Core::Alloc::ScratchArena scratchArena;
     MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
+    CsgFrameGpuData csgFrameData{scratchArena};
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
 #endif
@@ -99,6 +100,7 @@ void RendererSystem::renderMaterialPass(
         transparent,
         drawItems,
         instanceData,
+        csgFrameData,
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
@@ -121,6 +123,7 @@ void RendererSystem::renderMaterialPass(
         materialTypedBytes
     ))
         return;
+    const bool csgUploadReady = drawItems.csg.empty() || uploadCsgFrameBuffers(commandList, csgFrameData);
 
     if(passBindingSet){
         commandList.setResourceStatesForBindingSet(passBindingSet);
@@ -129,7 +132,8 @@ void RendererSystem::renderMaterialPass(
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
-    renderMaterialPassDrawItems(drawContext, drawItems.csg);
+    if(csgUploadReady)
+        renderMaterialPassDrawItems(drawContext, drawItems.csg);
 }
 
 void RendererSystem::gatherMaterialPassDrawItems(
@@ -138,6 +142,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     const bool transparent,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
+    CsgFrameGpuData& csgFrameData,
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
@@ -193,6 +198,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
     const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
     CsgFrameReceiverLookup csgReceiverLookup(m_world, materialTypedBytes.get_allocator().arena());
+    csgFrameData.reserve(rendererCapacity, csgReceiverLookup.cutterCount());
 
     auto appendConstantMaterialTypedBytes = [&](
         const MaterialSurfaceInfo& materialInfo,
@@ -255,8 +261,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
-        if(csgReceiverState.active)
-            pipelineKey.csgMode = csgReceiverState.generateCaps ? MaterialPipelineCsgMode::ClipAndCapSource : MaterialPipelineCsgMode::ClipOnly;
+        const bool csgClipCandidate = pass == MaterialPipelinePass::Opaque && !transparent && csgReceiverState.active;
+        const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(csgReceiverLookup, entity) : 0u;
+        const bool csgClipActive = csgClipCutterCount > 0u;
+        if(csgClipActive){
+            pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
+            pipelineKey.csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+        }
 
         MaterialPipelineResources* pipelineResources = nullptr;
         if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
@@ -278,6 +289,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges));
+            csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
 #if defined(NWB_DEBUG)
             materialTypedRanges.push_back(typedRanges);
 #endif
@@ -290,12 +302,20 @@ void RendererSystem::gatherMaterialPassDrawItems(
             if(instanceIndex == Limit<u32>::s_Max)
                 return false;
 
+            CsgReceiverRangeGpuData csgRange;
+            if(csgClipActive){
+                if(!appendCsgReceiverClipData(csgReceiverLookup, entity, csgFrameData, csgRange))
+                    return false;
+                NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
+                csgFrameData.receiverRanges[instanceIndex] = csgRange;
+            }
+
             MaterialPassDrawItem drawItem;
             drawItem.meshKey = mesh.meshName;
             drawItem.pipelineKey = pipelineKey;
             drawItem.instanceIndex = instanceIndex;
             drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
-            drawItem.csgCutterCount = csgReceiverState.cutterCount;
+            drawItem.csgCutterCount = csgClipActive ? csgRange.cutterCount : 0u;
             drawItem.csgGenerateCaps = csgReceiverState.generateCaps;
             drawItem.meshletConeCullScaleSafe = transform
                 ? __hidden_material_pass::meshletConeCullScaleSafe(LoadFloat(transform->scale))
@@ -305,7 +325,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             return true;
         };
 
-        MaterialPassDrawItems& targetDrawItems = csgReceiverState.active ? drawItems.csg : drawItems.regular;
+        MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
         switch(pipelineResources->renderPath){
         case RenderPath::MeshShader:{
             NWB_ASSERT(pipelineResources->meshletPipeline);

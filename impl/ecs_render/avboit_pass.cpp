@@ -161,17 +161,6 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
     return renderState;
 }
 
-bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
-    switch(pass){
-    case MaterialPipelinePass::AvboitOccupancy:
-    case MaterialPipelinePass::AvboitExtinction:
-    case MaterialPipelinePass::AvboitAccumulate:
-        return true;
-    default:
-        return false;
-    }
-}
-
 RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets){
     RendererAvboitPushConstants pushConstants;
     pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH] = targets.fullWidth;

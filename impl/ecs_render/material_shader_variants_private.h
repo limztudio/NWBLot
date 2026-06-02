@@ -49,29 +49,14 @@ struct ShaderVariantDefineAssignment{
     if(pipelineKey.csgMode == MaterialPipelineCsgMode::None)
         return false;
 
-    switch(pipelineKey.pass){
-    case MaterialPipelinePass::Opaque:
-    case MaterialPipelinePass::AvboitOccupancy:
-    case MaterialPipelinePass::AvboitExtinction:
-    case MaterialPipelinePass::AvboitAccumulate:
-        return true;
-    default:
-        return false;
-    }
+    return MaterialPipelinePassUsesRendererCsgShaderVariant(pipelineKey.pass);
 }
 
 [[nodiscard]] inline bool AvboitCsgClipPipeline(const MaterialPipelineKey& pipelineKey){
     if(!CsgClipPipeline(pipelineKey))
         return false;
 
-    switch(pipelineKey.pass){
-    case MaterialPipelinePass::AvboitOccupancy:
-    case MaterialPipelinePass::AvboitExtinction:
-    case MaterialPipelinePass::AvboitAccumulate:
-        return true;
-    default:
-        return false;
-    }
+    return MaterialPipelinePassUsesRendererAvboit(pipelineKey.pass);
 }
 
 [[nodiscard]] inline AStringView VariantSegmentDefineName(const AStringView segment){

@@ -59,6 +59,35 @@ namespace MaterialPipelineCsgMode{
     };
 };
 
+[[nodiscard]] inline bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
+    switch(pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+    case MaterialPipelinePass::AvboitExtinction:
+    case MaterialPipelinePass::AvboitAccumulate:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
+    switch(pass){
+    case MaterialPipelinePass::Opaque:
+        return true;
+    default:
+        return MaterialPipelinePassUsesRendererAvboit(pass);
+    }
+}
+
+[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
+    switch(pass){
+    case MaterialPipelinePass::Opaque:
+        return !transparent;
+    default:
+        return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

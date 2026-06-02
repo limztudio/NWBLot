@@ -51,7 +51,6 @@ static constexpr usize s_RendererAvboitTransparentDrawPushConstantSize = NWB_AVB
 [[nodiscard]] Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device);
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState();
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState();
-[[nodiscard]] bool MaterialPipelinePassUsesRendererAvboit(MaterialPipelinePass::Enum pass);
 [[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets);
 
 

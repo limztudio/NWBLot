@@ -31,9 +31,9 @@ namespace __hidden_csg_cap_source{
     const Mesh& mesh,
     const MeshletDesc& meshlet,
     const u32 localVertexIndex,
-    CsgPlaneCapMeshVertex& outVertex
+    CsgCapMeshVertex& outVertex
 ){
-    outVertex = CsgPlaneCapMeshVertex{};
+    outVertex = CsgCapMeshVertex{};
     if(localVertexIndex >= MeshletVertexCount(meshlet))
         return false;
 
@@ -93,7 +93,7 @@ namespace __hidden_csg_cap_source{
 bool ECSRenderCsgCapSource::BuildCapTriangles(
     const Name& meshName,
     const Mesh& mesh,
-    CsgPlaneCapMeshTriangleVector& outTriangles
+    CsgCapMeshTriangleVector& outTriangles
 ){
     outTriangles.clear();
 
@@ -122,7 +122,7 @@ bool ECSRenderCsgCapSource::BuildCapTriangles(
         }
 
         for(usize primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            CsgPlaneCapMeshTriangle triangle;
+            CsgCapMeshTriangle triangle;
             for(u32 corner = 0u; corner < 3u; ++corner){
                 const usize primitiveByteOffset = primitiveByteBegin + primitiveIndex * 3u + static_cast<usize>(corner);
                 const u32 localVertexIndex = static_cast<u32>(mesh.meshletPrimitiveIndices()[primitiveByteOffset]);

@@ -143,10 +143,10 @@ static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData mu
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
-using CsgPlaneCapMeshVertex = RuntimeMeshCapSourceVertex;
-using CsgPlaneCapMeshTriangle = RuntimeMeshCapSourceTriangle;
+using CsgCapMeshVertex = RuntimeMeshCapSourceVertex;
+using CsgCapMeshTriangle = RuntimeMeshCapSourceTriangle;
 
-struct CsgPlaneCapVertexGpuData{
+struct CsgCapVertexGpuData{
     Float4 positionReceiverIndex;
     Float4 normalCutterIndex;
     Float4 tangent;
@@ -154,25 +154,25 @@ struct CsgPlaneCapVertexGpuData{
     Float4 uv0;
 };
 
-struct CsgPlaneCapDrawItem{
+struct CsgCapDrawItem{
     u32 firstVertex = 0u;
     u32 vertexCount = 0u;
 };
 
-static_assert(sizeof(CsgPlaneCapMeshVertex) == sizeof(Float4) * 5u, "CsgPlaneCapMeshVertex must stay tightly packed");
-static_assert(sizeof(CsgPlaneCapMeshTriangle) == sizeof(CsgPlaneCapMeshVertex) * 3u, "CsgPlaneCapMeshTriangle must stay tightly packed");
-static_assert(sizeof(CsgPlaneCapVertexGpuData) == sizeof(Float4) * 5u, "CsgPlaneCapVertexGpuData layout must match the CSG cap shaders");
-static_assert(alignof(CsgPlaneCapMeshVertex) >= alignof(Float4), "CsgPlaneCapMeshVertex must stay SIMD-aligned");
-static_assert(alignof(CsgPlaneCapMeshTriangle) >= alignof(Float4), "CsgPlaneCapMeshTriangle must stay SIMD-aligned");
-static_assert(alignof(CsgPlaneCapVertexGpuData) >= alignof(Float4), "CsgPlaneCapVertexGpuData must stay SIMD-aligned");
-static_assert(IsStandardLayout_V<CsgPlaneCapMeshVertex>, "CsgPlaneCapMeshVertex must stay GPU-friendly");
-static_assert(IsTriviallyCopyable_V<CsgPlaneCapMeshVertex>, "CsgPlaneCapMeshVertex must stay GPU-friendly");
-static_assert(IsStandardLayout_V<CsgPlaneCapMeshTriangle>, "CsgPlaneCapMeshTriangle must stay GPU-friendly");
-static_assert(IsTriviallyCopyable_V<CsgPlaneCapMeshTriangle>, "CsgPlaneCapMeshTriangle must stay GPU-friendly");
-static_assert(IsStandardLayout_V<CsgPlaneCapVertexGpuData>, "CsgPlaneCapVertexGpuData must stay GPU-uploadable");
-static_assert(IsTriviallyCopyable_V<CsgPlaneCapVertexGpuData>, "CsgPlaneCapVertexGpuData must stay GPU-uploadable");
-static_assert(IsStandardLayout_V<CsgPlaneCapDrawItem>, "CsgPlaneCapDrawItem must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<CsgPlaneCapDrawItem>, "CsgPlaneCapDrawItem must stay cheap to pass by value");
+static_assert(sizeof(CsgCapMeshVertex) == sizeof(Float4) * 5u, "CsgCapMeshVertex must stay tightly packed");
+static_assert(sizeof(CsgCapMeshTriangle) == sizeof(CsgCapMeshVertex) * 3u, "CsgCapMeshTriangle must stay tightly packed");
+static_assert(sizeof(CsgCapVertexGpuData) == sizeof(Float4) * 5u, "CsgCapVertexGpuData layout must match the CSG cap shaders");
+static_assert(alignof(CsgCapMeshVertex) >= alignof(Float4), "CsgCapMeshVertex must stay SIMD-aligned");
+static_assert(alignof(CsgCapMeshTriangle) >= alignof(Float4), "CsgCapMeshTriangle must stay SIMD-aligned");
+static_assert(alignof(CsgCapVertexGpuData) >= alignof(Float4), "CsgCapVertexGpuData must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<CsgCapMeshVertex>, "CsgCapMeshVertex must stay GPU-friendly");
+static_assert(IsTriviallyCopyable_V<CsgCapMeshVertex>, "CsgCapMeshVertex must stay GPU-friendly");
+static_assert(IsStandardLayout_V<CsgCapMeshTriangle>, "CsgCapMeshTriangle must stay GPU-friendly");
+static_assert(IsTriviallyCopyable_V<CsgCapMeshTriangle>, "CsgCapMeshTriangle must stay GPU-friendly");
+static_assert(IsStandardLayout_V<CsgCapVertexGpuData>, "CsgCapVertexGpuData must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<CsgCapVertexGpuData>, "CsgCapVertexGpuData must stay GPU-uploadable");
+static_assert(IsStandardLayout_V<CsgCapDrawItem>, "CsgCapDrawItem must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<CsgCapDrawItem>, "CsgCapDrawItem must stay cheap to pass by value");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -187,9 +187,9 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
-using CsgPlaneCapMeshTriangleVector = Vector<CsgPlaneCapMeshTriangle, Core::Alloc::GlobalArena>;
-using CsgPlaneCapVertexGpuDataVector = Vector<CsgPlaneCapVertexGpuData, Core::Alloc::ScratchArena>;
-using CsgPlaneCapDrawItemVector = Vector<CsgPlaneCapDrawItem, Core::Alloc::ScratchArena>;
+using CsgCapMeshTriangleVector = Vector<CsgCapMeshTriangle, Core::Alloc::GlobalArena>;
+using CsgCapVertexGpuDataVector = Vector<CsgCapVertexGpuData, Core::Alloc::ScratchArena>;
+using CsgCapDrawItemVector = Vector<CsgCapDrawItem, Core::Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,28 +199,28 @@ struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
     CsgCutterGpuDataVector cutters;
     CsgParameterByteDataVector parameterBytes;
-    CsgPlaneCapVertexGpuDataVector planeCapVertices;
-    CsgPlaneCapDrawItemVector opaquePlaneCapDrawItems;
-    CsgPlaneCapDrawItemVector transparentPlaneCapDrawItems;
+    CsgCapVertexGpuDataVector capVertices;
+    CsgCapDrawItemVector opaqueCapDrawItems;
+    CsgCapDrawItemVector transparentCapDrawItems;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)
         , cutters(arena)
         , parameterBytes(arena)
-        , planeCapVertices(arena)
-        , opaquePlaneCapDrawItems(arena)
-        , transparentPlaneCapDrawItems(arena)
+        , capVertices(arena)
+        , opaqueCapDrawItems(arena)
+        , transparentCapDrawItems(arena)
     {}
 
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
-    [[nodiscard]] bool hasPlaneCapWork()const noexcept{ return !planeCapVertices.empty() && (!opaquePlaneCapDrawItems.empty() || !transparentPlaneCapDrawItems.empty()); }
-    [[nodiscard]] bool hasOpaquePlaneCapWork()const noexcept{ return !planeCapVertices.empty() && !opaquePlaneCapDrawItems.empty(); }
-    [[nodiscard]] bool hasTransparentPlaneCapWork()const noexcept{ return !planeCapVertices.empty() && !transparentPlaneCapDrawItems.empty(); }
+    [[nodiscard]] bool hasCapWork()const noexcept{ return !capVertices.empty() && (!opaqueCapDrawItems.empty() || !transparentCapDrawItems.empty()); }
+    [[nodiscard]] bool hasOpaqueCapWork()const noexcept{ return !capVertices.empty() && !opaqueCapDrawItems.empty(); }
+    [[nodiscard]] bool hasTransparentCapWork()const noexcept{ return !capVertices.empty() && !transparentCapDrawItems.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);
-        opaquePlaneCapDrawItems.reserve(cutterCapacity);
-        transparentPlaneCapDrawItems.reserve(cutterCapacity);
+        opaqueCapDrawItems.reserve(cutterCapacity);
+        transparentCapDrawItems.reserve(cutterCapacity);
     }
 };
 
@@ -254,10 +254,10 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     u64 runtimeMeshVersion = 0u;
-    CsgPlaneCapMeshTriangleVector csgPlaneCapTriangles;
+    CsgCapMeshTriangleVector csgCapTriangles;
 
     explicit MeshResources(Core::Alloc::GlobalArena& arena)
-        : csgPlaneCapTriangles(arena)
+        : csgCapTriangles(arena)
     {}
 
     [[nodiscard]] bool valid()const noexcept{

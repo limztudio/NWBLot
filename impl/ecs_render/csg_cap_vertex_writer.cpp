@@ -27,7 +27,7 @@ namespace __hidden_csg_cap_vertex_writer{
 
 
 [[nodiscard]] static bool AppendCapVertex(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPoint& point,
     const CapCutterEval& cutterEval,
     const u32 receiverIndex,
@@ -40,7 +40,7 @@ namespace __hidden_csg_cap_vertex_writer{
     const SIMDVector sourceNormal = LoadFloat(point.normal);
     const SIMDVector capNormal = EvaluateWorldCapNormal(cutterEval, position, sourceNormal);
 
-    CsgPlaneCapVertexGpuData vertex;
+    CsgCapVertexGpuData vertex;
     StoreFloat(VectorSetW(position, static_cast<f32>(receiverIndex)), &vertex.positionReceiverIndex);
     StoreFloat(VectorSetW(capNormal, static_cast<f32>(cutterIndex)), &vertex.normalCutterIndex);
     StoreFloat(VectorSetW(LoadFloat(point.tangent), static_cast<f32>(cutterIndex)), &vertex.tangent);
@@ -61,7 +61,7 @@ namespace __hidden_csg_cap_vertex_writer{
 
 
 bool AppendCapTriangle(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapCutterEval& cutterEval,
     const u32 a,

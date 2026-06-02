@@ -103,21 +103,21 @@ private:
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;
-    Core::BufferHandle m_planeCapVertexBuffer;
-    Core::ShaderHandle m_planeCapVertexShader;
-    Core::ShaderHandle m_planeCapPixelShader;
-    Core::ShaderHandle m_planeCapAvboitOccupancyPixelShader;
-    Core::ShaderHandle m_planeCapAvboitExtinctionPixelShader;
-    Core::ShaderHandle m_planeCapAvboitAccumulatePixelShader;
-    Core::InputLayoutHandle m_planeCapInputLayout;
-    Core::GraphicsPipelineHandle m_planeCapPipeline;
-    Core::GraphicsPipelineHandle m_planeCapAvboitOccupancyPipeline;
-    Core::GraphicsPipelineHandle m_planeCapAvboitExtinctionPipeline;
-    Core::GraphicsPipelineHandle m_planeCapAvboitAccumulatePipeline;
+    Core::BufferHandle m_capVertexBuffer;
+    Core::ShaderHandle m_capVertexShader;
+    Core::ShaderHandle m_capPixelShader;
+    Core::ShaderHandle m_capAvboitOccupancyPixelShader;
+    Core::ShaderHandle m_capAvboitExtinctionPixelShader;
+    Core::ShaderHandle m_capAvboitAccumulatePixelShader;
+    Core::InputLayoutHandle m_capInputLayout;
+    Core::GraphicsPipelineHandle m_capPipeline;
+    Core::GraphicsPipelineHandle m_capAvboitOccupancyPipeline;
+    Core::GraphicsPipelineHandle m_capAvboitExtinctionPipeline;
+    Core::GraphicsPipelineHandle m_capAvboitAccumulatePipeline;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
     usize m_parameterByteBufferCapacity = 0u;
-    usize m_planeCapVertexBufferCapacity = 0u;
+    usize m_capVertexBufferCapacity = 0u;
 };
 
 class RendererDeferredState final : NoCopy{

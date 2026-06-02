@@ -260,27 +260,27 @@ private:
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange
     )const;
-    [[nodiscard]] bool appendCsgReceiverPlaneCapGeometry(
+    [[nodiscard]] bool appendCsgReceiverCapGeometry(
         const MeshResources& mesh,
         const NWB::Impl::Scene::TransformComponent* transform,
         u32 receiverIndex,
         const CsgReceiverRangeGpuData& receiverRange,
         CsgFrameGpuData& csgFrameData,
-        CsgPlaneCapDrawItemVector& capDrawItems
+        CsgCapDrawItemVector& capDrawItems
     )const;
-    [[nodiscard]] bool createCsgPlaneCapSharedResources();
-    [[nodiscard]] bool createCsgPlaneCapResources(Core::Framebuffer* framebuffer);
-    [[nodiscard]] bool createCsgTransparentPlaneCapResources(Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass);
-    [[nodiscard]] bool reserveCsgPlaneCapVertexBufferCapacity(usize vertexCount);
-    [[nodiscard]] bool uploadCsgPlaneCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
-    void renderCsgPlaneCaps(
+    [[nodiscard]] bool createCsgCapSharedResources();
+    [[nodiscard]] bool createCsgOpaqueCapResources(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool createCsgTransparentCapResources(Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass);
+    [[nodiscard]] bool reserveCsgCapVertexBufferCapacity(usize vertexCount);
+    [[nodiscard]] bool uploadCsgCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    void renderCsgCaps(
         const MaterialPassDrawContext& context,
         const CsgFrameGpuData& csgFrameData,
-        const CsgPlaneCapDrawItemVector& capDrawItems,
+        const CsgCapDrawItemVector& capDrawItems,
         Core::GraphicsPipeline* pipeline
     );
-    void renderCsgOpaquePlaneCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
-    void renderCsgTransparentPlaneCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
+    void renderCsgOpaqueCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
+    void renderCsgTransparentCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
 
 private:
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);

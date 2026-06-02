@@ -182,7 +182,7 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
-    if(!ECSRenderCsgCapSource::BuildCapTriangles(meshPath, mesh, createdMesh.csgPlaneCapTriangles))
+    if(!ECSRenderCsgCapSource::BuildCapTriangles(meshPath, mesh, createdMesh.csgCapTriangles))
         return false;
 
     bool uploaded = true;
@@ -338,7 +338,7 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
         return false;
     }
     if(desc.capSourceTriangleCount > 0u)
-        createdMesh.csgPlaneCapTriangles.assign(desc.capSourceTriangles, desc.capSourceTriangles + desc.capSourceTriangleCount);
+        createdMesh.csgCapTriangles.assign(desc.capSourceTriangles, desc.capSourceTriangles + desc.capSourceTriangleCount);
     if(!__hidden_mesh::ResolveBufferElementCount(
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,

@@ -76,7 +76,7 @@ static void ReversePolygon(CapIndexVector& polygon){
 }
 
 [[nodiscard]] static bool AppendFanTriangulation(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapProjectedPointVector& projected,
     const CapIndexVector& polygon,
@@ -155,7 +155,7 @@ static void ReversePolygon(CapIndexVector& polygon){
 
 
 bool AppendEarClippedTriangulation(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapIndexVector& loop,
     const CapCutterEval& cutterEval,

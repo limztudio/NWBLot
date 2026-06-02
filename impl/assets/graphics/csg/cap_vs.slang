@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbCsgPlaneCapVertexInput{
+struct NwbCsgCapVertexInput{
     [[vk::location(0)]] float4 positionReceiverIndex : POSITION0;
     [[vk::location(1)]] float4 normalCutterIndex : NORMAL0;
     [[vk::location(2)]] float4 tangent : TANGENT0;
@@ -21,7 +21,7 @@ struct NwbCsgPlaneCapVertexInput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbMeshRasterVertex main(NwbCsgPlaneCapVertexInput input){
+NwbMeshRasterVertex main(NwbCsgCapVertexInput input){
     const float3 worldPosition = input.positionReceiverIndex.xyz;
     const float4 clipPosition = mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
     return nwbMeshBuildRasterVertex(

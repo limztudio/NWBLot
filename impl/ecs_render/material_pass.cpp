@@ -129,14 +129,14 @@ void RendererSystem::renderMaterialPass(
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
-    const bool csgCapUploadReady = csgUploadReady && uploadCsgPlaneCapVertices(commandList, csgFrameData);
+    const bool csgCapUploadReady = csgUploadReady && uploadCsgCapVertices(commandList, csgFrameData);
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgUploadReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
         if(csgCapUploadReady && MaterialPipelinePassUsesRendererAvboit(pass))
-            renderCsgTransparentPlaneCaps(drawContext, csgFrameData);
+            renderCsgTransparentCaps(drawContext, csgFrameData);
     }
 }
 
@@ -336,13 +336,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 csgClipActive
                 && csgReceiverState.generateCaps
                 && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
-                && !appendCsgReceiverPlaneCapGeometry(
+                && !appendCsgReceiverCapGeometry(
                     mesh,
                     transform,
                     instanceIndex,
                     csgRange,
                     csgFrameData,
-                    transparent ? csgFrameData.transparentPlaneCapDrawItems : csgFrameData.opaquePlaneCapDrawItems
+                    transparent ? csgFrameData.transparentCapDrawItems : csgFrameData.opaqueCapDrawItems
                 )
             )
                 return false;

@@ -23,12 +23,12 @@ namespace __hidden_csg_cap_builder{
 
 
 [[nodiscard]] static bool AppendCapGeometry(
-    const CsgPlaneCapMeshTriangleVector& triangles,
+    const CsgCapMeshTriangleVector& triangles,
     const Scene::TransformComponent* transform,
     const CsgCutterGpuData& cutter,
     const u32 receiverIndex,
     const u32 cutterIndex,
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!ECSRenderCsgCapDetail::CutterSupportsCap(cutter.shapeType))
@@ -66,12 +66,12 @@ namespace ECSRenderCsgCapBuilder{
 
 
 bool AppendCapGeometry(
-    const CsgPlaneCapMeshTriangleVector& triangles,
+    const CsgCapMeshTriangleVector& triangles,
     const Scene::TransformComponent* transform,
     const u32 receiverIndex,
     const CsgCutterGpuData& cutter,
     const u32 cutterIndex,
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return __hidden_csg_cap_builder::AppendCapGeometry(

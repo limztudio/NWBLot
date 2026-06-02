@@ -82,7 +82,7 @@ using CapProjectedPointVector = Vector<CapProjectedPoint, Core::Alloc::ScratchAr
 [[nodiscard]] SIMDVector EvaluateWorldCapNormal(const CapCutterEval& cutterEval, SIMDVector worldPosition, SIMDVector fallback);
 
 [[nodiscard]] bool BuildCapSegments(
-    const CsgPlaneCapMeshTriangleVector& triangles,
+    const CsgCapMeshTriangleVector& triangles,
     const Scene::TransformComponent* transform,
     const CapCutterEval& cutterEval,
     CapPointVector& points,
@@ -90,7 +90,7 @@ using CapProjectedPointVector = Vector<CapProjectedPoint, Core::Alloc::ScratchAr
 );
 
 [[nodiscard]] bool AppendCapTriangle(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapCutterEval& cutterEval,
     u32 a,
@@ -101,7 +101,7 @@ using CapProjectedPointVector = Vector<CapProjectedPoint, Core::Alloc::ScratchAr
 );
 
 [[nodiscard]] bool AppendEarClippedTriangulation(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapIndexVector& loop,
     const CapCutterEval& cutterEval,
@@ -111,7 +111,7 @@ using CapProjectedPointVector = Vector<CapProjectedPoint, Core::Alloc::ScratchAr
 );
 
 [[nodiscard]] bool AppendCapLoops(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapEdgeVector& edges,
     const CapCutterEval& cutterEval,

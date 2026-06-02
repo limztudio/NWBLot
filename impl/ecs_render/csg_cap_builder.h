@@ -26,12 +26,12 @@ namespace ECSRenderCsgCapBuilder{
 
 
 [[nodiscard]] bool AppendCapGeometry(
-    const CsgPlaneCapMeshTriangleVector& triangles,
+    const CsgCapMeshTriangleVector& triangles,
     const Scene::TransformComponent* transform,
     u32 receiverIndex,
     const CsgCutterGpuData& cutter,
     u32 cutterIndex,
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     Core::Alloc::ScratchArena& scratchArena
 );
 

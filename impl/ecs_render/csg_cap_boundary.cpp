@@ -52,7 +52,7 @@ namespace __hidden_csg_cap_boundary{
     return NormalizeVector3Or(Vector3Rotate(VectorMultiply(objectDirection, scale), rotation), fallback);
 }
 
-[[nodiscard]] static CapSourceVertex LoadCapSourceVertex(const CsgPlaneCapMeshVertex& vertex){
+[[nodiscard]] static CapSourceVertex LoadCapSourceVertex(const CsgCapMeshVertex& vertex){
     return CapSourceVertex{
         LoadFloat(vertex.position),
         LoadFloat(vertex.normal),
@@ -63,7 +63,7 @@ namespace __hidden_csg_cap_boundary{
 }
 
 [[nodiscard]] static CapSourceVertex TransformCapSourceVertex(
-    const CsgPlaneCapMeshVertex& vertex,
+    const CsgCapMeshVertex& vertex,
     const Scene::TransformComponent* transform
 ){
     const CapSourceVertex source = LoadCapSourceVertex(vertex);
@@ -233,7 +233,7 @@ static void AddUniqueEdge(CapEdgeVector& edges, const u32 a, const u32 b){
 
 
 bool BuildCapSegments(
-    const CsgPlaneCapMeshTriangleVector& triangles,
+    const CsgCapMeshTriangleVector& triangles,
     const Scene::TransformComponent* transform,
     const CapCutterEval& cutterEval,
     CapPointVector& points,
@@ -244,7 +244,7 @@ bool BuildCapSegments(
     points.reserve(triangles.size());
     edges.reserve(triangles.size());
 
-    for(const CsgPlaneCapMeshTriangle& triangle : triangles){
+    for(const CsgCapMeshTriangle& triangle : triangles){
         const CapSourceVertex vertices[] = {
             __hidden_csg_cap_boundary::TransformCapSourceVertex(triangle.vertices[0u], transform),
             __hidden_csg_cap_boundary::TransformCapSourceVertex(triangle.vertices[1u], transform),

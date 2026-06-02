@@ -100,21 +100,21 @@ void RendererCsgState::invalidateResources(){
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();
-    m_planeCapVertexBuffer.reset();
-    m_planeCapVertexShader.reset();
-    m_planeCapPixelShader.reset();
-    m_planeCapAvboitOccupancyPixelShader.reset();
-    m_planeCapAvboitExtinctionPixelShader.reset();
-    m_planeCapAvboitAccumulatePixelShader.reset();
-    m_planeCapInputLayout.reset();
-    m_planeCapPipeline.reset();
-    m_planeCapAvboitOccupancyPipeline.reset();
-    m_planeCapAvboitExtinctionPipeline.reset();
-    m_planeCapAvboitAccumulatePipeline.reset();
+    m_capVertexBuffer.reset();
+    m_capVertexShader.reset();
+    m_capPixelShader.reset();
+    m_capAvboitOccupancyPixelShader.reset();
+    m_capAvboitExtinctionPixelShader.reset();
+    m_capAvboitAccumulatePixelShader.reset();
+    m_capInputLayout.reset();
+    m_capPipeline.reset();
+    m_capAvboitOccupancyPipeline.reset();
+    m_capAvboitExtinctionPipeline.reset();
+    m_capAvboitAccumulatePipeline.reset();
     m_receiverRangeBufferCapacity = 0u;
     m_cutterBufferCapacity = 0u;
     m_parameterByteBufferCapacity = 0u;
-    m_planeCapVertexBufferCapacity = 0u;
+    m_capVertexBufferCapacity = 0u;
 }
 
 

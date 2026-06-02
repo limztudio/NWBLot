@@ -26,7 +26,7 @@ namespace ECSRenderCsgCapSource{
 [[nodiscard]] bool BuildCapTriangles(
     const Name& meshName,
     const Mesh& mesh,
-    CsgPlaneCapMeshTriangleVector& outTriangles
+    CsgCapMeshTriangleVector& outTriangles
 );
 
 

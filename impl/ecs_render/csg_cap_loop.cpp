@@ -69,7 +69,7 @@ namespace __hidden_csg_cap_loop{
 
 
 bool AppendCapLoops(
-    CsgPlaneCapVertexGpuDataVector& vertices,
+    CsgCapVertexGpuDataVector& vertices,
     const CapPointVector& points,
     const CapEdgeVector& edges,
     const CapCutterEval& cutterEval,

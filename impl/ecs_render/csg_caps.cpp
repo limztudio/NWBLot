@@ -4,7 +4,7 @@
 
 #include "renderer_private.h"
 
-#include "csg_plane_cap_builder.h"
+#include "csg_cap_builder.h"
 #include "renderer_capacity_private.h"
 #include "timing_names.h"
 
@@ -37,13 +37,10 @@ bool RendererSystem::appendCsgReceiverPlaneCapGeometry(
     for(u32 cutterOffset = 0u; cutterOffset < receiverRange.cutterCount; ++cutterOffset){
         const u32 cutterIndex = receiverRange.firstCutter + cutterOffset;
         const CsgCutterGpuData& cutter = csgFrameData.cutters[cutterIndex];
-        if(cutter.shapeType != NWB_CSG_SHAPE_PLANE)
-            continue;
-
         if(csgFrameData.planeCapVertices.size() > static_cast<usize>(Limit<u32>::s_Max))
             return false;
         const u32 firstVertex = static_cast<u32>(csgFrameData.planeCapVertices.size());
-        if(!ECSRenderCsgPlaneCapBuilder::AppendPlaneCapGeometry(
+        if(!ECSRenderCsgCapBuilder::AppendCapGeometry(
             mesh.csgPlaneCapTriangles,
             transform,
             receiverIndex,
@@ -101,7 +98,7 @@ bool RendererSystem::createCsgPlaneCapResources(Core::Framebuffer* framebuffer){
             return false;
     }
     if(!m_csgState.m_planeCapInputLayout){
-        Core::VertexAttributeDesc attributes[3];
+        Core::VertexAttributeDesc attributes[5];
         attributes[0]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0u)
@@ -119,12 +116,26 @@ bool RendererSystem::createCsgPlaneCapResources(Core::Framebuffer* framebuffer){
         attributes[2]
             .setFormat(Core::Format::RGBA32_FLOAT)
             .setBufferIndex(0u)
+            .setOffset(offsetof(CsgPlaneCapVertexGpuData, tangent))
+            .setElementStride(sizeof(CsgPlaneCapVertexGpuData))
+            .setName("TANGENT")
+        ;
+        attributes[3]
+            .setFormat(Core::Format::RGBA32_FLOAT)
+            .setBufferIndex(0u)
             .setOffset(offsetof(CsgPlaneCapVertexGpuData, color))
             .setElementStride(sizeof(CsgPlaneCapVertexGpuData))
             .setName("COLOR")
         ;
+        attributes[4]
+            .setFormat(Core::Format::RGBA32_FLOAT)
+            .setBufferIndex(0u)
+            .setOffset(offsetof(CsgPlaneCapVertexGpuData, uv0))
+            .setElementStride(sizeof(CsgPlaneCapVertexGpuData))
+            .setName("TEXCOORD")
+        ;
 
-        m_csgState.m_planeCapInputLayout = device->createInputLayout(attributes, 3u, m_csgState.m_planeCapVertexShader.get());
+        m_csgState.m_planeCapInputLayout = device->createInputLayout(attributes, 5u, m_csgState.m_planeCapVertexShader.get());
         if(!m_csgState.m_planeCapInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG plane cap input layout"));
             return false;

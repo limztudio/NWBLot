@@ -12,7 +12,9 @@
 struct NwbCsgPlaneCapVertexInput{
     [[vk::location(0)]] float4 positionReceiverIndex : POSITION0;
     [[vk::location(1)]] float4 normalCutterIndex : NORMAL0;
-    [[vk::location(2)]] float4 color : COLOR0;
+    [[vk::location(2)]] float4 tangent : TANGENT0;
+    [[vk::location(3)]] float4 color : COLOR0;
+    [[vk::location(4)]] float4 uv0 : TEXCOORD0;
 };
 
 
@@ -26,8 +28,8 @@ NwbMeshRasterVertex main(NwbCsgPlaneCapVertexInput input){
         clipPosition,
         input.color,
         input.normalCutterIndex.xyz,
-        float4(0.0, 0.0, 0.0, input.normalCutterIndex.w),
-        float2(0.0),
+        input.tangent,
+        input.uv0.xy,
         float4(worldPosition, input.positionReceiverIndex.w)
     );
 }

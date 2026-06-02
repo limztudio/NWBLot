@@ -23,7 +23,7 @@ namespace ECSRenderCsgCapSource{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildPlaneCapTriangles(
+[[nodiscard]] bool BuildCapTriangles(
     const Name& meshName,
     const Mesh& mesh,
     CsgPlaneCapMeshTriangleVector& outTriangles

@@ -27,13 +27,13 @@ namespace __hidden_csg_cap_source{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool DecodeMeshletObjectPosition(
+[[nodiscard]] static bool DecodeMeshletObjectVertex(
     const Mesh& mesh,
     const MeshletDesc& meshlet,
     const u32 localVertexIndex,
-    SIMDVector& outPosition
+    CsgPlaneCapMeshVertex& outVertex
 ){
-    outPosition = VectorZero();
+    outVertex = CsgPlaneCapMeshVertex{};
     if(localVertexIndex >= MeshletVertexCount(meshlet))
         return false;
 
@@ -55,7 +55,28 @@ namespace __hidden_csg_cap_source{
     if(positionRef.position >= mesh.positionStream().size())
         return false;
 
-    outPosition = VectorSetW(LoadFloat(mesh.positionStream()[positionRef.position]), 0.0f);
+    MeshletAttributeStreamRef attributeRef;
+    if(!DecodeMeshletAttributeRef(
+        mesh.meshletAttributeRefDeltas().data(),
+        mesh.meshletAttributeRefDeltas().size(),
+        meshlet,
+        localVertexRef.localAttribute,
+        attributeRef
+    ))
+        return false;
+    if(
+        attributeRef.normal >= mesh.normalStream().size()
+        || attributeRef.tangent >= mesh.tangentStream().size()
+        || attributeRef.uv0 >= mesh.uv0Stream().size()
+        || attributeRef.color >= mesh.colorStream().size()
+    )
+        return false;
+
+    StoreFloat(VectorSetW(LoadFloat(mesh.positionStream()[positionRef.position]), 0.0f), &outVertex.position);
+    StoreFloat(VectorSetW(LoadFloat(LoadHalf4U(mesh.normalStream()[attributeRef.normal])), 0.0f), &outVertex.normal);
+    StoreFloat(LoadFloat(LoadHalf4U(mesh.tangentStream()[attributeRef.tangent])), &outVertex.tangent);
+    StoreFloat(VectorSetW(LoadFloat(mesh.uv0Stream()[attributeRef.uv0]), 0.0f), &outVertex.uv0);
+    StoreFloat(LoadFloat(LoadHalf4U(mesh.colorStream()[attributeRef.color])), &outVertex.color);
     return true;
 }
 
@@ -69,7 +90,7 @@ namespace __hidden_csg_cap_source{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ECSRenderCsgCapSource::BuildPlaneCapTriangles(
+bool ECSRenderCsgCapSource::BuildCapTriangles(
     const Name& meshName,
     const Mesh& mesh,
     CsgPlaneCapMeshTriangleVector& outTriangles
@@ -105,15 +126,12 @@ bool ECSRenderCsgCapSource::BuildPlaneCapTriangles(
             for(u32 corner = 0u; corner < 3u; ++corner){
                 const usize primitiveByteOffset = primitiveByteBegin + primitiveIndex * 3u + static_cast<usize>(corner);
                 const u32 localVertexIndex = static_cast<u32>(mesh.meshletPrimitiveIndices()[primitiveByteOffset]);
-                SIMDVector objectPosition;
-                if(!__hidden_csg_cap_source::DecodeMeshletObjectPosition(mesh, meshlet, localVertexIndex, objectPosition)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' failed to decode CSG cap source position")
+                if(!__hidden_csg_cap_source::DecodeMeshletObjectVertex(mesh, meshlet, localVertexIndex, triangle.vertices[corner])){
+                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' failed to decode CSG cap source vertex")
                         , StringConvert(meshName.c_str())
                     );
                     return false;
                 }
-
-                StoreFloat(objectPosition, &triangle.positions[corner]);
             }
             outTriangles.push_back(triangle);
         }

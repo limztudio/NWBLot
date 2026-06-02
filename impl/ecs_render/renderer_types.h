@@ -114,14 +114,24 @@ static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData mu
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
+struct CsgPlaneCapMeshVertex{
+    Float4 position;
+    Float4 normal;
+    Float4 tangent;
+    Float4 uv0;
+    Float4 color;
+};
+
 struct CsgPlaneCapMeshTriangle{
-    Float4 positions[3];
+    CsgPlaneCapMeshVertex vertices[3];
 };
 
 struct CsgPlaneCapVertexGpuData{
     Float4 positionReceiverIndex;
     Float4 normalCutterIndex;
+    Float4 tangent;
     Float4 color;
+    Float4 uv0;
 };
 
 struct CsgPlaneCapDrawItem{
@@ -129,10 +139,14 @@ struct CsgPlaneCapDrawItem{
     u32 vertexCount = 0u;
 };
 
-static_assert(sizeof(CsgPlaneCapMeshTriangle) == sizeof(Float4) * 3u, "CsgPlaneCapMeshTriangle must stay tightly packed");
-static_assert(sizeof(CsgPlaneCapVertexGpuData) == sizeof(Float4) * 3u, "CsgPlaneCapVertexGpuData layout must match the CSG cap shaders");
+static_assert(sizeof(CsgPlaneCapMeshVertex) == sizeof(Float4) * 5u, "CsgPlaneCapMeshVertex must stay tightly packed");
+static_assert(sizeof(CsgPlaneCapMeshTriangle) == sizeof(CsgPlaneCapMeshVertex) * 3u, "CsgPlaneCapMeshTriangle must stay tightly packed");
+static_assert(sizeof(CsgPlaneCapVertexGpuData) == sizeof(Float4) * 5u, "CsgPlaneCapVertexGpuData layout must match the CSG cap shaders");
+static_assert(alignof(CsgPlaneCapMeshVertex) >= alignof(Float4), "CsgPlaneCapMeshVertex must stay SIMD-aligned");
 static_assert(alignof(CsgPlaneCapMeshTriangle) >= alignof(Float4), "CsgPlaneCapMeshTriangle must stay SIMD-aligned");
 static_assert(alignof(CsgPlaneCapVertexGpuData) >= alignof(Float4), "CsgPlaneCapVertexGpuData must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<CsgPlaneCapMeshVertex>, "CsgPlaneCapMeshVertex must stay GPU-friendly");
+static_assert(IsTriviallyCopyable_V<CsgPlaneCapMeshVertex>, "CsgPlaneCapMeshVertex must stay GPU-friendly");
 static_assert(IsStandardLayout_V<CsgPlaneCapMeshTriangle>, "CsgPlaneCapMeshTriangle must stay GPU-friendly");
 static_assert(IsTriviallyCopyable_V<CsgPlaneCapMeshTriangle>, "CsgPlaneCapMeshTriangle must stay GPU-friendly");
 static_assert(IsStandardLayout_V<CsgPlaneCapVertexGpuData>, "CsgPlaneCapVertexGpuData must stay GPU-uploadable");

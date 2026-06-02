@@ -182,7 +182,7 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
-    if(!ECSRenderCsgCapSource::BuildPlaneCapTriangles(meshPath, mesh, createdMesh.csgPlaneCapTriangles))
+    if(!ECSRenderCsgCapSource::BuildCapTriangles(meshPath, mesh, createdMesh.csgPlaneCapTriangles))
         return false;
 
     bool uploaded = true;

@@ -3,8 +3,8 @@
 
 
 #include "renderer_private.h"
+#include "csg_cap_source.h"
 
-#include <impl/assets_mesh/meshlet_ref_decode.h>
 #include <impl/ecs_mesh_runtime/buffer_upload.h>
 
 
@@ -132,124 +132,11 @@ template<typename PayloadT, typename PayloadVector>
     return true;
 }
 
-[[nodiscard]] static bool DecodeMeshletObjectPosition(
-    const Mesh& mesh,
-    const MeshletDesc& meshlet,
-    const u32 localVertexIndex,
-    SIMDVector& outPosition
-){
-    outPosition = VectorZero();
-    if(localVertexIndex >= MeshletVertexCount(meshlet))
-        return false;
-
-    const usize localVertexOffset = static_cast<usize>(meshlet.localVertexOffset) + static_cast<usize>(localVertexIndex);
-    if(localVertexOffset >= mesh.meshletLocalVertexRefs().size())
-        return false;
-
-    const MeshletLocalVertexRef& localVertexRef = mesh.meshletLocalVertexRefs()[localVertexOffset];
-    MeshletPositionStreamRef positionRef;
-    if(!DecodeMeshletPositionRef(
-        mesh.meshletPositionRefDeltas().data(),
-        mesh.meshletPositionRefDeltas().size(),
-        meshlet,
-        localVertexRef.localDeformedPosition,
-        false,
-        positionRef
-    ))
-        return false;
-    if(positionRef.position >= mesh.positionStream().size())
-        return false;
-
-    outPosition = VectorSetW(LoadFloat(mesh.positionStream()[positionRef.position]), 0.0f);
-    return true;
-}
-
-[[nodiscard]] static bool BuildCsgPlaneCapTriangles(
-    const Name& meshName,
-    const Mesh& mesh,
-    CsgPlaneCapMeshTriangleVector& outTriangles
-){
-    outTriangles.clear();
-
-    usize triangleCapacity = 0u;
-    for(const MeshletDesc& meshlet : mesh.meshlets()){
-        const usize primitiveCount = static_cast<usize>(MeshletPrimitiveCount(meshlet));
-        if(primitiveCount > Limit<usize>::s_Max - triangleCapacity){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' CSG cap triangle count overflows")
-                , StringConvert(meshName.c_str())
-            );
-            return false;
-        }
-        triangleCapacity += primitiveCount;
-    }
-    outTriangles.reserve(triangleCapacity);
-
-    for(const MeshletDesc& meshlet : mesh.meshlets()){
-        const usize primitiveCount = static_cast<usize>(MeshletPrimitiveCount(meshlet));
-        const usize primitiveByteBegin = static_cast<usize>(meshlet.primitiveOffset);
-        const usize primitiveByteCount = primitiveCount * 3u;
-        if(primitiveByteBegin > mesh.meshletPrimitiveIndices().size() || primitiveByteCount > mesh.meshletPrimitiveIndices().size() - primitiveByteBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG cap primitive index range")
-                , StringConvert(meshName.c_str())
-            );
-            return false;
-        }
-
-        for(usize primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            CsgPlaneCapMeshTriangle triangle;
-            for(u32 corner = 0u; corner < 3u; ++corner){
-                const usize primitiveByteOffset = primitiveByteBegin + primitiveIndex * 3u + static_cast<usize>(corner);
-                const u32 localVertexIndex = static_cast<u32>(mesh.meshletPrimitiveIndices()[primitiveByteOffset]);
-                SIMDVector objectPosition;
-                if(!DecodeMeshletObjectPosition(mesh, meshlet, localVertexIndex, objectPosition)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' failed to decode CSG cap source position")
-                        , StringConvert(meshName.c_str())
-                    );
-                    return false;
-                }
-
-                StoreFloat(objectPosition, &triangle.positions[corner]);
-            }
-            outTriangles.push_back(triangle);
-        }
-    }
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-void RendererSystem::destroyMeshBindingSets(){
-    m_drawState.m_emulationViewBindingSet = nullptr;
-    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end(); ++it){
-        MeshResources& mesh = it.value();
-        mesh.meshBindingSet = nullptr;
-        mesh.computeBindingSet = nullptr;
-    }
-}
-
-void RendererSystem::addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
-        if(rawView)
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(bindingSlot, 1));
-        else
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(bindingSlot, 1));
-    });
-}
-
-void RendererSystem::addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, 1));
-}
 
 bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh){
     outMesh = nullptr;
@@ -295,7 +182,7 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
-    if(!__hidden_mesh::BuildCsgPlaneCapTriangles(meshPath, mesh, createdMesh.csgPlaneCapTriangles))
+    if(!ECSRenderCsgCapSource::BuildPlaneCapTriangles(meshPath, mesh, createdMesh.csgPlaneCapTriangles))
         return false;
 
     bool uploaded = true;
@@ -481,118 +368,6 @@ void RendererSystem::pruneRuntimeMeshResources(){
         it = m_meshState.m_meshes.erase(it);
     }
 }
-
-void RendererSystem::addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
-    forEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool rawView){
-        if(rawView)
-            bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(bindingSlot, buffer.get()));
-        else
-            bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(bindingSlot, buffer.get()));
-    });
-}
-
-void RendererSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, m_drawState.m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_drawState.m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, m_drawState.m_materialTypedBuffer.get()));
-}
-
-void RendererSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
-    addMeshSourceBindingItems(bindingSetDesc, mesh);
-    addMeshFrameBindingItems(bindingSetDesc);
-}
-
-bool RendererSystem::meshFrameBindingResourcesReady(const tchar* context)const{
-    if(!m_drawState.m_instanceBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
-        return false;
-    }
-    if(!m_drawState.m_meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a mesh view buffer"), context);
-        return false;
-    }
-    if(!m_drawState.m_materialTypedBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a material typed buffer"), context);
-        return false;
-    }
-
-    return true;
-}
-
-bool RendererSystem::createMeshBindingSet(MeshResources& mesh){
-    if(mesh.meshBindingSet)
-        return true;
-    if(!createMeshShaderResources())
-        return false;
-    if(!meshFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
-        return false;
-
-    Core::BindingSetDesc bindingSetDesc(m_arena);
-    addMeshDrawBindingItems(bindingSetDesc, mesh);
-
-    auto* device = m_graphics.getDevice();
-    mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_meshBindingLayout);
-    if(!mesh.meshBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
-        return false;
-    }
-
-    return true;
-}
-
-bool RendererSystem::createComputeBindingSet(MeshResources& mesh){
-    if(mesh.computeBindingSet)
-        return true;
-    if(!createComputeEmulationResources())
-        return false;
-    if(!meshFrameBindingResourcesReady(NWB_TEXT("compute binding set")))
-        return false;
-
-    if(!mesh.emulationVertexBuffer){
-        const Name emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
-        if(!emulationVertexBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for mesh '{}'")
-                , StringConvert(mesh.meshName.c_str())
-            );
-            return false;
-        }
-
-        Core::BufferDesc emulationVertexBufferDesc;
-        emulationVertexBufferDesc
-            .setByteSize(static_cast<u64>(mesh.meshletPrimitiveIndexCount) * ECSRenderDetail::s_EmulatedVertexStride)
-            .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
-            .setCanHaveUAVs(true)
-            .setIsVertexBuffer(true)
-            .setDebugName(emulationVertexBufferName)
-        ;
-        mesh.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);
-        if(!mesh.emulationVertexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for mesh '{}'")
-                , StringConvert(mesh.meshName.c_str())
-            );
-            return false;
-        }
-    }
-
-    Core::BindingSetDesc bindingSetDesc(m_arena);
-    addMeshDrawBindingItems(bindingSetDesc, mesh);
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, mesh.emulationVertexBuffer.get()));
-
-    auto* device = m_graphics.getDevice();
-    mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_computeBindingLayout);
-    if(!mesh.computeBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for mesh '{}'")
-            , StringConvert(mesh.meshName.c_str())
-        );
-        return false;
-    }
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 NWB_IMPL_END
 

@@ -15,15 +15,20 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_targets.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_cap_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_caps.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_plane_cap_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred_composite.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_lighting.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pass_draw.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pass_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_pass.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_bindings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_resources.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/material_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/material_surface.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_instance.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader_loading.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_state.cpp"
@@ -31,6 +36,9 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_private.h"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_cap_source.h"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_plane_cap_builder.h"
+    "${CMAKE_CURRENT_LIST_DIR}/material_shader_variants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_view_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_capacity_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_csg_private.h"
@@ -53,3 +61,4 @@ target_link_libraries(nwb_ecs_render PRIVATE
     nwb_ecs_csg
     nwb_ecs_scene
 )
+

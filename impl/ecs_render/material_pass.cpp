@@ -261,7 +261,13 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
-        const bool csgClipCandidate = pass == MaterialPipelinePass::Opaque && !transparent && csgReceiverState.active;
+        const bool csgClipCandidate =
+            csgReceiverState.active
+            && (
+                (pass == MaterialPipelinePass::Opaque && !transparent)
+                || (MaterialPipelinePassUsesRendererAvboit(pass) && transparent)
+            )
+        ;
         const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(csgReceiverLookup, entity) : 0u;
         const bool csgClipActive = csgClipCutterCount > 0u;
         if(csgClipActive){

@@ -26,40 +26,23 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCsgShaderVariants{
+namespace AssetsGraphicsCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaderStageKeySet = HashSet<
-    AssetsGraphicsCookDetail::ShaderStageKey,
-    AssetsGraphicsCookDetail::ShaderStageKeyHasher,
-    EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>,
-    Core::Alloc::ScratchArena
->;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] AStringView ClipImplicitDefineName();
-[[nodiscard]] AStringView ClipSetImplicitDefineName();
-void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
-void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
-[[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
-[[nodiscard]] bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
-[[nodiscard]] bool BuildClipDefineCombo(
+[[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
+[[nodiscard]] bool PrepareShaderEntriesForCook(
     ShaderCook::CookArena& cookArena,
-    AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
-);
-[[nodiscard]] bool BuildAvboitClipDefineCombo(
-    ShaderCook::CookArena& cookArena,
-    AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
+    ShaderCook& shaderCook,
+    const ResolvedCookPaths& resolvedPaths,
+    const Path& materialBindIncludeRoot,
+    const IncludeMetadataMap& includeMetadata,
+    ShaderEntryVector& inOutShaderEntries,
+    const MaterialCookEntryVector& materialEntries,
+    PreparedShaderPlan& outPreparedPlan,
+    ScratchArena& scratchArena
 );
 
 

@@ -111,11 +111,10 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
         if(!createMeshBindingSet(mesh))
             return;
         if(csgClipDraw){
-            NWB_ASSERT(context.pass == MaterialPipelinePass::Opaque);
-            NWB_ASSERT(!context.passBindingSet);
             if(!createCsgClipResources() || !m_csgState.m_clipBindingSet)
                 return;
         }
@@ -129,10 +128,12 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         meshletState.setFramebuffer(context.framebuffer);
         meshletState.setViewport(context.viewportState);
         meshletState.addBindingSet(mesh.meshBindingSet.get());
+        if(context.passBindingSet)
+            meshletState.addBindingSet(context.passBindingSet);
+        else if(csgClipDraw && usesAvboit)
+            meshletState.addBindingSet(nullptr);
         if(csgClipDraw)
             meshletState.addBindingSet(m_csgState.m_clipBindingSet.get());
-        else if(context.passBindingSet)
-            meshletState.addBindingSet(context.passBindingSet);
 
         context.commandList.setMeshletState(meshletState);
 
@@ -165,8 +166,6 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         if(!createComputeBindingSet(mesh))
             return;
         if(csgClipDraw){
-            NWB_ASSERT(context.pass == MaterialPipelinePass::Opaque);
-            NWB_ASSERT(!context.passBindingSet);
             if(!createCsgClipResources() || !m_csgState.m_clipBindingSet)
                 return;
         }
@@ -181,6 +180,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         Core::ComputeState computeState;
         computeState.setPipeline(pipelineResources.computePipeline.get());
         computeState.addBindingSet(mesh.computeBindingSet.get());
+        if(csgClipDraw && usesAvboit)
+            computeState.addBindingSet(nullptr);
         if(csgClipDraw)
             computeState.addBindingSet(m_csgState.m_clipBindingSet.get());
 
@@ -215,6 +216,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         if(usesAvboit){
             graphicsState.addBindingSet(nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
+            if(csgClipDraw)
+                graphicsState.addBindingSet(m_csgState.m_clipBindingSet.get());
         }
         else{
             graphicsState.addBindingSet(m_drawState.m_emulationViewBindingSet.get());

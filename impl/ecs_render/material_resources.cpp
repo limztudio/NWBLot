@@ -3,6 +3,7 @@
 
 
 #include "renderer_private.h"
+#include "avboit_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,10 +23,38 @@ namespace __hidden_material_resources{
 
 inline constexpr AStringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
+inline constexpr AStringView s_CsgClipSetDefineName = "NWB_CSG_CLIP_SET";
+inline constexpr AStringView s_CsgAvboitClipSetDefineAssignment = "NWB_CSG_CLIP_SET=2";
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 2u;
 
 
 [[nodiscard]] static bool CsgClipPipeline(const MaterialPipelineKey& pipelineKey){
-    return pipelineKey.pass == MaterialPipelinePass::Opaque && pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+    if(pipelineKey.csgMode == MaterialPipelineCsgMode::None)
+        return false;
+
+    switch(pipelineKey.pass){
+    case MaterialPipelinePass::Opaque:
+    case MaterialPipelinePass::AvboitOccupancy:
+    case MaterialPipelinePass::AvboitExtinction:
+    case MaterialPipelinePass::AvboitAccumulate:
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] static bool AvboitCsgClipPipeline(const MaterialPipelineKey& pipelineKey){
+    if(!CsgClipPipeline(pipelineKey))
+        return false;
+
+    switch(pipelineKey.pass){
+    case MaterialPipelinePass::AvboitOccupancy:
+    case MaterialPipelinePass::AvboitExtinction:
+    case MaterialPipelinePass::AvboitAccumulate:
+        return true;
+    default:
+        return false;
+    }
 }
 
 [[nodiscard]] static AStringView VariantSegmentDefineName(const AStringView segment){
@@ -33,17 +62,37 @@ inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
     return equalPos == AStringView::npos ? AStringView{} : segment.substr(0u, equalPos);
 }
 
-[[nodiscard]] static bool BuildCsgClipShaderVariantName(const AStringView baseVariant, Core::GraphicsString& outVariant){
+struct ShaderVariantDefineAssignment{
+    AStringView name;
+    AStringView assignment;
+};
+
+[[nodiscard]] static bool BuildCsgClipShaderVariantName(
+    const AStringView baseVariant,
+    const ShaderVariantDefineAssignment* defineAssignments,
+    const usize defineAssignmentCount,
+    Core::GraphicsString& outVariant
+){
     outVariant.clear();
-    if(baseVariant.empty())
+    if(baseVariant.empty() || !defineAssignments || defineAssignmentCount == 0u)
+        return false;
+    if(defineAssignmentCount > s_MaxCsgClipShaderVariantDefineAssignments)
         return false;
     if(baseVariant == Core::ShaderArchive::s_DefaultVariant){
-        outVariant.assign(s_CsgEnabledDefineAssignment.data(), s_CsgEnabledDefineAssignment.size());
+        for(usize i = 0u; i < defineAssignmentCount; ++i){
+            if(!outVariant.empty())
+                outVariant += ';';
+            outVariant += defineAssignments[i].assignment;
+        }
         return true;
     }
 
-    outVariant.reserve(baseVariant.size() + 1u + s_CsgEnabledDefineAssignment.size());
-    bool insertedCsgDefine = false;
+    usize reserveSize = baseVariant.size();
+    for(usize i = 0u; i < defineAssignmentCount; ++i)
+        reserveSize += 1u + defineAssignments[i].assignment.size();
+    outVariant.reserve(reserveSize);
+
+    bool insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
     usize begin = 0u;
     while(begin < baseVariant.size()){
         usize segmentEnd = baseVariant.find(';', begin);
@@ -54,11 +103,19 @@ inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
         const AStringView defineName = VariantSegmentDefineName(segment);
         if(defineName.empty())
             return false;
-        if(!insertedCsgDefine && s_CsgEnabledDefineName < defineName){
+
+        for(usize i = 0u; i < defineAssignmentCount; ++i){
+            if(insertedDefines[i] || !(defineAssignments[i].name < defineName))
+                continue;
+
             if(!outVariant.empty())
                 outVariant += ';';
-            outVariant += s_CsgEnabledDefineAssignment;
-            insertedCsgDefine = true;
+            outVariant += defineAssignments[i].assignment;
+            insertedDefines[i] = true;
+        }
+        for(usize i = 0u; i < defineAssignmentCount; ++i){
+            if(defineName == defineAssignments[i].name)
+                return false;
         }
 
         if(!outVariant.empty())
@@ -67,12 +124,30 @@ inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
         begin = segmentEnd + 1u;
     }
 
-    if(!insertedCsgDefine){
+    for(usize i = 0u; i < defineAssignmentCount; ++i){
+        if(insertedDefines[i])
+            continue;
+
         if(!outVariant.empty())
             outVariant += ';';
-        outVariant += s_CsgEnabledDefineAssignment;
+        outVariant += defineAssignments[i].assignment;
     }
     return true;
+}
+
+[[nodiscard]] static bool BuildCsgClipShaderVariantName(const AStringView baseVariant, Core::GraphicsString& outVariant){
+    const ShaderVariantDefineAssignment defineAssignments[] = {
+        { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment },
+    };
+    return BuildCsgClipShaderVariantName(baseVariant, defineAssignments, 1u, outVariant);
+}
+
+[[nodiscard]] static bool BuildAvboitCsgClipShaderVariantName(const AStringView baseVariant, Core::GraphicsString& outVariant){
+    const ShaderVariantDefineAssignment defineAssignments[] = {
+        { s_CsgClipSetDefineName, s_CsgAvboitClipSetDefineAssignment },
+        { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment },
+    };
+    return BuildCsgClipShaderVariantName(baseVariant, defineAssignments, 2u, outVariant);
 }
 
 
@@ -285,12 +360,22 @@ bool RendererSystem::createRendererPipeline(
     }
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
     Core::GraphicsString csgShaderVariant(m_arena);
+    Core::GraphicsString avboitCsgShaderVariant(m_arena);
     const bool csgClipPipeline = __hidden_material_resources::CsgClipPipeline(pipelineKey);
-    if(csgClipPipeline && !__hidden_material_resources::BuildCsgClipShaderVariantName(shaderVariant, csgShaderVariant)){
+    const bool avboitCsgClipPipeline = __hidden_material_resources::AvboitCsgClipPipeline(pipelineKey);
+    if(csgClipPipeline && !avboitCsgClipPipeline && !__hidden_material_resources::BuildCsgClipShaderVariantName(shaderVariant, csgShaderVariant)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();
     }
-    const AStringView pixelShaderVariant = csgClipPipeline
+    if(avboitCsgClipPipeline && !__hidden_material_resources::BuildAvboitCsgClipShaderVariantName(shaderVariant, csgShaderVariant)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), StringConvert(materialKey.c_str()));
+        return failMaterialPipeline();
+    }
+    if(avboitCsgClipPipeline && !__hidden_material_resources::BuildAvboitCsgClipShaderVariantName(Core::ShaderArchive::s_DefaultVariant, avboitCsgShaderVariant)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), StringConvert(materialKey.c_str()));
+        return failMaterialPipeline();
+    }
+    const AStringView pixelShaderVariant = csgClipPipeline && !avboitCsgClipPipeline
         ? AStringView(csgShaderVariant)
         : shaderVariant
     ;
@@ -302,6 +387,8 @@ bool RendererSystem::createRendererPipeline(
     const bool hasPixelShader = materialInfo.pixelShader.valid();
     const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
+    Name passPixelShaderName = NAME_NONE;
+    const char* passPixelShaderDebugName = nullptr;
 
     switch(pass){
     case MaterialPipelinePass::Opaque:
@@ -310,16 +397,22 @@ bool RendererSystem::createRendererPipeline(
         if(!createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_occupancyPixelShader;
+        passPixelShaderName = ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName;
+        passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
         if(!createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_extinctionPixelShader;
+        passPixelShaderName = ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName;
+        passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         if(!createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_accumulatePixelShader;
+        passPixelShaderName = ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName;
+        passPixelShaderDebugName = "ECSRender_AvboitAccumulatePS";
         break;
     default:
         break;
@@ -337,6 +430,10 @@ bool RendererSystem::createRendererPipeline(
             if(!loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
+        else if(avboitCsgClipPipeline){
+            if(!loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+                return false;
+        }
         else
             resources.pixelShader = passPixelShader;
 
@@ -345,11 +442,6 @@ bool RendererSystem::createRendererPipeline(
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
         pipelineDesc.addBindingLayout(m_drawState.m_meshBindingLayout);
-        if(csgClipPipeline){
-            if(!createCsgClipResources())
-                return false;
-            pipelineDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
-        }
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
             pipelineDesc.addBindingLayout(m_avboitState.m_occupancyBindingLayout);
@@ -363,6 +455,11 @@ bool RendererSystem::createRendererPipeline(
         case MaterialPipelinePass::Opaque:
         default:
             break;
+        }
+        if(csgClipPipeline){
+            if(!createCsgClipResources())
+                return false;
+            pipelineDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
@@ -392,6 +489,10 @@ bool RendererSystem::createRendererPipeline(
             if(!loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
+        else if(avboitCsgClipPipeline){
+            if(!loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+                return false;
+        }
         else{
             resources.pixelShader = passPixelShader;
         }
@@ -404,6 +505,8 @@ bool RendererSystem::createRendererPipeline(
         if(csgClipPipeline){
             if(!createCsgClipResources())
                 return false;
+            if(avboitCsgClipPipeline)
+                computeDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
             computeDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }
         resources.computePipeline = device->createComputePipeline(computeDesc);
@@ -433,12 +536,12 @@ bool RendererSystem::createRendererPipeline(
         case MaterialPipelinePass::Opaque:
         default:
             emulationDesc.addBindingLayout(m_drawState.m_emulationViewBindingLayout);
-            if(csgClipPipeline){
-                if(!createCsgClipResources())
-                    return false;
-                emulationDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
-            }
             break;
+        }
+        if(csgClipPipeline){
+            if(!createCsgClipResources())
+                return false;
+            emulationDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){

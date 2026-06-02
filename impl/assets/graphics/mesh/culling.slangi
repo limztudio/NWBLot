@@ -100,21 +100,15 @@ bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instanc
     return nwbMeshletCulled(nwbMeshBuildMeshletCullContext(meshletIndex, instance), instance);
 }
 
-uint nwbMeshCsgClassifyMeshlet(const NwbMeshletCullContext context){
 #if NWB_CSG_ENABLED
+uint nwbMeshCsgClassifyMeshlet(const NwbMeshletCullContext context){
     return nwbCsgClassifyMeshlet(context.center, context.radius);
-#else
-    return 1u;
-#endif
 }
 
 uint nwbMeshCsgRasterFlags(const uint csgMeshletClass){
-#if NWB_CSG_ENABLED
     return csgMeshletClass == NWB_CSG_MESHLET_CLASS_UNAFFECTED ? NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED : 0u;
-#else
-    return 0u;
-#endif
 }
+#endif
 
 float2 nwbMeshClipToFramebuffer(const float4 p){
     const float2 viewportMin = g_NwbMeshPushConstants.viewportRect.xy;

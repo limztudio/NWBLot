@@ -16,6 +16,9 @@
 
 #include "cook_types.h"
 
+#include <core/filesystem/module.h>
+#include <core/graphics/shader_archive.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,40 +29,23 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCsgShaderVariants{
+namespace AssetsGraphicsCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaderStageKeySet = HashSet<
-    AssetsGraphicsCookDetail::ShaderStageKey,
-    AssetsGraphicsCookDetail::ShaderStageKeyHasher,
-    EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>,
-    Core::Alloc::ScratchArena
->;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] AStringView ClipImplicitDefineName();
-[[nodiscard]] AStringView ClipSetImplicitDefineName();
-void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
-void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
-[[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
-[[nodiscard]] bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
-[[nodiscard]] bool BuildClipDefineCombo(
+[[nodiscard]] bool AppendPreparedShadersToVolume(
     ShaderCook::CookArena& cookArena,
-    AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
-);
-[[nodiscard]] bool BuildAvboitClipDefineCombo(
-    ShaderCook::CookArena& cookArena,
-    AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
+    ShaderCook& shaderCook,
+    const Path& cacheDirectory,
+    AStringView configurationSafeName,
+    PreparedShaderVector& preparedEntries,
+    Core::Filesystem::VolumeSession& volumeSession,
+    VirtualPathHashSet& inOutSeenVirtualPathHashes,
+    usize shaderRecordCount,
+    Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords,
+    ScratchArena& scratchArena
 );
 
 

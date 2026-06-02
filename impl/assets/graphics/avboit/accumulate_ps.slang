@@ -24,7 +24,7 @@ struct NwbAvboitAccumulatePixelInput{
     [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
     [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0;
     [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0;
-    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float3 worldPosition : TEXCOORD1;
+    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
 };
 
 struct NwbAvboitAccumulatePixelOutput{
@@ -84,7 +84,11 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input, float4 
     inColor = input.color;
     inNormal = input.normal;
     inTangent = input.tangent;
-    inWorldPosition = input.worldPosition;
+    inWorldPosition = input.worldPosition.xyz;
+#if NWB_CSG_ENABLED
+    if(nwbAvboitCsgPixelDiscard(input.worldPosition))
+        discard;
+#endif
 
     const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
     if(alpha <= 0.0)

@@ -37,8 +37,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         return;
     }
 
-    const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
 #if NWB_CSG_ENABLED
+    const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
     if(csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
         for(
             uint localPrimitiveIndex = groupThreadID.x;
@@ -48,8 +48,10 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
             nwbMeshStoreCulledPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
         return;
     }
-#endif
     nwbMeshSetMeshletRasterFlags(nwbMeshCsgRasterFlags(csgMeshletClass), groupThreadID.x);
+#else
+    nwbMeshSetMeshletRasterFlags(0u, groupThreadID.x);
+#endif
 
     nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
 
@@ -116,14 +118,16 @@ void main(
         return;
     }
 
-    const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
 #if NWB_CSG_ENABLED
+    const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
     if(csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
         SetMeshOutputCounts(0u, 0u);
         return;
     }
-#endif
     nwbMeshSetMeshletRasterFlags(nwbMeshCsgRasterFlags(csgMeshletClass), groupThreadIndex);
+#else
+    nwbMeshSetMeshletRasterFlags(0u, groupThreadIndex);
+#endif
 
     const uint vertexCount = nwbMeshletVertexCount(meshlet);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);

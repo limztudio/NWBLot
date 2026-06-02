@@ -26,40 +26,21 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCsgShaderVariants{
+namespace AssetsGraphicsCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaderStageKeySet = HashSet<
-    AssetsGraphicsCookDetail::ShaderStageKey,
-    AssetsGraphicsCookDetail::ShaderStageKeyHasher,
-    EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>,
-    Core::Alloc::ScratchArena
->;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] AStringView ClipImplicitDefineName();
-[[nodiscard]] AStringView ClipSetImplicitDefineName();
-void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
-void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
-[[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
-[[nodiscard]] bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
-[[nodiscard]] bool BuildClipDefineCombo(
-    ShaderCook::CookArena& cookArena,
-    AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
-);
-[[nodiscard]] bool BuildAvboitClipDefineCombo(
-    ShaderCook::CookArena& cookArena,
-    AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
+[[nodiscard]] bool WriteGraphicsVolume(
+    Core::Alloc::GlobalArena& arena,
+    ShaderCook& shaderCook,
+    const ResolvedCookPaths& resolvedPaths,
+    AStringView configurationSafeName,
+    PreparedShaderPlan& preparedPlan,
+    ParsedAssetMetadata& parsedMetadata,
+    GraphicsVolumeWriteResult& outResult,
+    ScratchArena& scratchArena
 );
 
 

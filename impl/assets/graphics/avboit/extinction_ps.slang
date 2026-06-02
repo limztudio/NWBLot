@@ -19,6 +19,9 @@
 
 struct NwbAvboitExtinctionPixelInput{
     [[vk::location(NWB_MESH_RASTER_COLOR_LOCATION)]] float4 color : COLOR0;
+#if NWB_CSG_ENABLED
+    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
+#endif
 };
 
 static float4 inColor;
@@ -58,6 +61,10 @@ void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinctio
 
 void main(NwbAvboitExtinctionPixelInput input, float4 fragCoord : SV_Position){
     inColor = input.color;
+#if NWB_CSG_ENABLED
+    if(nwbAvboitCsgPixelDiscard(input.worldPosition))
+        discard;
+#endif
 
     const float alpha = nwbAvboitResolveFragmentAlpha(input.color);
     uint virtualSlice;

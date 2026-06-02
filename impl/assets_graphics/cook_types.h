@@ -39,12 +39,15 @@ namespace AssetsGraphicsCookDetail{
 
 
 inline constexpr Name s_IncludeAssetTypeName("include");
+inline constexpr AStringView s_GraphicsVolumeName = "graphics";
+inline constexpr AStringView s_GraphicsCookerLogPrefix = "GraphicsAssetCooker";
 
 using CookString = ShaderCook::CookString;
 template<typename T>
 using CookVector = ShaderCook::CookVector<T>;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
+using StagedVolumePaths = StagedDirectoryPaths;
 using IncludeMetadataMap = ShaderCook::CookMap<CookString, ShaderCook::IncludeEntry>;
 using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
 using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
@@ -98,6 +101,7 @@ struct PreparedShaderEntry{
     Name materialTypedBindingInterface = NAME_NONE;
     bool usesMaterialTypedBinding = false;
     bool supportsCsgClipVariant = false;
+    bool supportsAvboitCsgClipVariant = false;
 
     explicit PreparedShaderEntry(ShaderCook::CookArena& arena)
         : entry(arena)
@@ -134,6 +138,12 @@ struct PreparedShaderPlan{
     explicit PreparedShaderPlan(ShaderCook::CookArena& arena)
         : preparedEntries(arena)
     {}
+};
+
+struct GraphicsVolumeWriteResult{
+    ACompactString volumeName;
+    u64 fileCount = 0;
+    u64 segmentCount = 0;
 };
 
 

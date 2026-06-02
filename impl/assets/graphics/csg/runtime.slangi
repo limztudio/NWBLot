@@ -36,7 +36,7 @@ struct NwbCsgCutter{
     float padding2;
 };
 
-#ifndef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
+#if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 struct NwbCsgMeshPushConstants{
     uint4 dispatch;
     float4 viewportRect;
@@ -48,7 +48,7 @@ struct NwbCsgMeshPushConstants{
 [[vk::binding(NWB_CSG_BINDING_CUTTERS, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbCsgCutters;
 [[vk::binding(NWB_CSG_BINDING_PARAMETER_BYTES, NWB_CSG_CLIP_SET)]] ByteAddressBuffer g_NwbCsgParameterBytes;
 
-#ifndef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
+#if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
 #endif
@@ -58,7 +58,9 @@ ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
 
 
 uint nwbCsgMeshInstanceIndex(){
-#ifdef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
+#if defined(NWB_CSG_MESH_INSTANCE_INDEX)
+    return NWB_CSG_MESH_INSTANCE_INDEX;
+#elif defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI)
     return nwbMeshInstanceIndex();
 #else
     return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];

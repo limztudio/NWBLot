@@ -15,6 +15,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_CSG_ENABLED
+#define NWB_CSG_ENABLED 0
+#endif
+
+#if NWB_CSG_ENABLED
+#ifndef NWB_CSG_CLIP_SET
+#define NWB_CSG_CLIP_SET 2
+#endif
+#endif
+
 static const float NWB_AVBOIT_ALPHA_EPSILON = 0.0001;
 static const float NWB_AVBOIT_SPLAT_WEIGHT_EPSILON = 0.00001;
 
@@ -34,6 +44,12 @@ struct NwbAvboitDrawPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 
+#if NWB_CSG_ENABLED
+#define NWB_CSG_MESH_INSTANCE_INDEX (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX])
+#include "../csg/runtime.slangi"
+#undef NWB_CSG_MESH_INSTANCE_INDEX
+#endif
+
 #define NWB_AVBOIT_PUSH_CONSTANTS g_NwbAvboitDraw
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
@@ -41,6 +57,13 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 float nwbAvboitResolveFragmentAlpha(float4 color){
     return clamp(color.a, 0.0, 1.0);
 }
+
+#if NWB_CSG_ENABLED
+bool nwbAvboitCsgPixelDiscard(const float4 worldPosition){
+    const uint rasterFlags = uint(worldPosition.w + 0.5);
+    return (rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u && nwbCsgMeshPixelDiscard(worldPosition.xyz);
+}
+#endif
 
 float nwbAvboitExtinctionSaturation(){
     return float(NWB_AVBOIT_EXTINCTION_BYTE_MASK) / nwbAvboitExtinctionFixedScale();

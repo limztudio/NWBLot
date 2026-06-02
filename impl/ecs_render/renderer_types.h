@@ -114,17 +114,8 @@ static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData mu
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
-struct CsgPlaneCapMeshVertex{
-    Float4 position;
-    Float4 normal;
-    Float4 tangent;
-    Float4 uv0;
-    Float4 color;
-};
-
-struct CsgPlaneCapMeshTriangle{
-    CsgPlaneCapMeshVertex vertices[3];
-};
+using CsgPlaneCapMeshVertex = RuntimeMeshCapSourceVertex;
+using CsgPlaneCapMeshTriangle = RuntimeMeshCapSourceTriangle;
 
 struct CsgPlaneCapVertexGpuData{
     Float4 positionReceiverIndex;

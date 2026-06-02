@@ -331,6 +331,14 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
     createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
     createdMesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
     createdMesh.runtimeMeshVersion = desc.version;
+    if((desc.capSourceTriangles == nullptr) != (desc.capSourceTriangleCount == 0u)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has inconsistent CSG cap source payload")
+            , StringConvert(desc.meshKey.c_str())
+        );
+        return false;
+    }
+    if(desc.capSourceTriangleCount > 0u)
+        createdMesh.csgPlaneCapTriangles.assign(desc.capSourceTriangles, desc.capSourceTriangles + desc.capSourceTriangleCount);
     if(!__hidden_mesh::ResolveBufferElementCount(
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,

@@ -9,6 +9,7 @@
 #include <core/mesh/classification.h>
 #include <impl/assets_mesh/payload_types.h>
 #include <impl/assets_mesh/skinned_types.h>
+#include <impl/ecs_mesh_runtime/mesh.h>
 #include <impl/ecs_skinned_mesh/components.h>
 
 
@@ -33,6 +34,7 @@ struct SkinnedMeshRuntimeMeshInstance{
     using MeshletLocalVertexRefVector = Vector<MeshletLocalVertexRef, Core::Alloc::GlobalArena>;
     using MeshletPrimitiveIndexVector = Vector<u8, Core::Alloc::GlobalArena>;
     using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
+    using CapSourceTriangleVector = RuntimeMeshCapSourceTriangleVector;
 
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle handle;
@@ -50,6 +52,7 @@ struct SkinnedMeshRuntimeMeshInstance{
     MeshletLocalVertexRefVector meshletLocalVertexRefs;
     MeshletPrimitiveIndexVector meshletPrimitiveIndices;
     AttributeSkinVector attributeSkins;
+    CapSourceTriangleVector capSourceTriangles;
     u32 skeletonJointCount = 0;
     SkinVector skin;
     JointVector inverseBindMatrices;
@@ -86,6 +89,7 @@ struct SkinnedMeshRuntimeMeshInstance{
         , meshletLocalVertexRefs(arena)
         , meshletPrimitiveIndices(arena)
         , attributeSkins(arena)
+        , capSourceTriangles(arena)
         , skin(arena)
         , inverseBindMatrices(arena)
     {}
@@ -111,6 +115,7 @@ struct SkinnedMeshRuntimeMeshInstance{
             && meshletPositionRefCount > 0u
             && meshletAttributeRefCount > 0u
             && attributeSkins.size() == meshletAttributeRefCount
+            && !capSourceTriangles.empty()
             && (dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) == 0u
             && restPositionBuffer != nullptr
             && restNormalBuffer != nullptr

@@ -67,6 +67,11 @@ void AddSaturating(u32& inOutValue, const u32 value){
     }
 }
 
+template<typename ComponentT>
+[[nodiscard]] bool HasComponentCandidates(Core::ECS::World& world){
+    return world.view<ComponentT>().candidateCount() > 0u;
+}
+
 void ApplyReceiverWork(
     const CsgReceiverKind::Enum receiverKind,
     const bool generateCaps,
@@ -255,12 +260,25 @@ bool CsgFrameReceiverLookup::resolveReceiverCutterRange(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool HasCsgFrameCandidates(Core::ECS::World& world){
+    return
+        __hidden_frame_state::HasComponentCandidates<CsgCutterComponent>(world)
+        && (
+            __hidden_frame_state::HasComponentCandidates<StaticCsgMeshComponent>(world)
+            || __hidden_frame_state::HasComponentCandidates<SkinnedCsgMeshComponent>(world)
+        )
+    ;
+}
+
 CsgFrameState BuildCsgFrameState(
     Core::ECS::World& world,
     Core::Alloc::ScratchArena& scratchArena,
     const CsgFrameBuildDesc& desc
 ){
     CsgFrameState state;
+
+    if(!HasCsgFrameCandidates(world))
+        return state;
 
     const CsgFrameReceiverLookup receiverLookup(world, scratchArena);
     if(receiverLookup.empty())

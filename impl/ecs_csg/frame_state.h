@@ -148,6 +148,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world);
 [[nodiscard]] CsgFrameState BuildCsgFrameState(
     Core::ECS::World& world,
     Core::Alloc::ScratchArena& scratchArena,

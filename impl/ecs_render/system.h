@@ -191,6 +191,7 @@ private:
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         bool transparent,
+        const CsgFrameState& csgFrameState,
         Core::BindingSet* passBindingSet,
         const AvboitFrameTargets* avboitTargets
     );
@@ -198,6 +199,7 @@ private:
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         bool transparent,
+        const CsgFrameState& csgFrameState,
         MaterialPassDrawItemPartitions& drawItems,
         InstanceGpuDataVector& instanceData,
         CsgFrameGpuData& csgFrameData,
@@ -341,7 +343,7 @@ private:
         Core::Format::Enum transmittanceFormat
     );
     void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
-    void renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets);
 

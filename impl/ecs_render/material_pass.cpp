@@ -56,6 +56,17 @@ struct MaterialTypedByteRangeKeyHasher{
     }
 };
 
+[[nodiscard]] static bool csgFrameHasReceiverPassWork(
+    const CsgFrameState& csgFrameState,
+    const CsgReceiverPass::Enum receiverPass
+){
+    switch(receiverPass){
+    case CsgReceiverPass::Opaque: return csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
+    case CsgReceiverPass::Transparent: return csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
+    default: return false;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -71,6 +82,7 @@ void RendererSystem::renderMaterialPass(
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
+    const CsgFrameState& csgFrameState,
     Core::BindingSet* passBindingSet,
     const AvboitFrameTargets* avboitTargets
 ){
@@ -98,6 +110,7 @@ void RendererSystem::renderMaterialPass(
         framebuffer,
         pass,
         transparent,
+        csgFrameState,
         drawItems,
         instanceData,
         csgFrameData,
@@ -129,13 +142,13 @@ void RendererSystem::renderMaterialPass(
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
-    const bool csgCapUploadReady = csgUploadReady && uploadCsgCapVertices(commandList, csgFrameData);
+    const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && uploadCsgCapVertices(commandList, csgFrameData));
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgUploadReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
-        if(csgCapUploadReady && MaterialPipelinePassUsesRendererAvboit(pass))
+        if(csgCapUploadReady && csgFrameData.hasTransparentCapWork() && MaterialPipelinePassUsesRendererAvboit(pass))
             renderCsgTransparentCaps(drawContext, csgFrameData);
     }
 }
@@ -144,6 +157,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
+    const CsgFrameState& csgFrameState,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
     CsgFrameGpuData& csgFrameData,
@@ -201,8 +215,19 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
     const Core::FramebufferInfo& framebufferInfo = framebuffer->getFramebufferInfo();
     const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
-    CsgFrameReceiverLookup csgReceiverLookup(m_world, materialTypedBytes.get_allocator().arena());
-    csgFrameData.reserve(rendererCapacity, csgReceiverLookup.cutterCount());
+    const bool csgPassActive =
+        MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
+        && __hidden_material_pass::csgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass)
+    ;
+    Optional<CsgFrameReceiverLookup> csgReceiverLookup;
+    const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
+    if(csgPassActive){
+        csgReceiverLookup.emplace(m_world, materialTypedBytes.get_allocator().arena());
+        if(!csgReceiverLookup->empty()){
+            csgReceiverLookupPtr = &*csgReceiverLookup;
+            csgFrameData.reserve(rendererCapacity, csgReceiverLookupPtr->cutterCount());
+        }
+    }
 
     auto appendConstantMaterialTypedBytes = [&](
         const MaterialSurfaceInfo& materialInfo,
@@ -265,11 +290,15 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
-        const bool csgClipCandidate = csgReceiverState.active && MaterialPipelinePassUsesRendererCsgClip(pass, transparent);
-        const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(csgReceiverLookup, entity) : 0u;
+        const bool csgClipCandidate =
+            csgReceiverLookupPtr
+            && csgReceiverState.active
+            && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
+        ;
+        const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(*csgReceiverLookupPtr, entity) : 0u;
         Name csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
         const bool csgEvaluatorReady = csgClipCutterCount > 0u
-            ? resolveCsgReceiverEvaluatorVariant(csgReceiverLookup, entity, csgEvaluatorVariant)
+            ? resolveCsgReceiverEvaluatorVariant(*csgReceiverLookupPtr, entity, csgEvaluatorVariant)
             : true
         ;
         const bool csgClipActive = csgClipCutterCount > 0u && csgEvaluatorReady;
@@ -298,7 +327,8 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             instanceData.push_back(ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges));
-            csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
+            if(csgReceiverLookupPtr)
+                csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
 #if defined(NWB_DEBUG)
             materialTypedRanges.push_back(typedRanges);
 #endif
@@ -313,7 +343,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             CsgReceiverRangeGpuData csgRange;
             if(csgClipActive){
-                if(!appendCsgReceiverClipData(csgReceiverLookup, entity, csgFrameData, csgRange))
+                if(!appendCsgReceiverClipData(*csgReceiverLookupPtr, entity, csgFrameData, csgRange))
                     return false;
                 NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
                 csgFrameData.receiverRanges[instanceIndex] = csgRange;
@@ -389,7 +419,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
         NWB_ASSERT(mesh);
         CsgReceiverDrawState csgReceiverState;
-        if(!csgReceiverLookup.empty() && !csgReceiverLookup.resolveReceiverDrawState(entity, csgReceiverPass, csgReceiverState))
+        if(csgReceiverLookupPtr && !csgReceiverLookupPtr->resolveReceiverDrawState(entity, csgReceiverPass, csgReceiverState))
             csgReceiverState = CsgReceiverDrawState{};
 
         appendDrawForMesh(entity, renderer.material, *mesh, csgReceiverState);

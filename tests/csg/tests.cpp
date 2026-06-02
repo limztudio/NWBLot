@@ -148,6 +148,7 @@ static bool TestCsgReceiverVisible(
 static void TestCsgFrameStateKillSwitch(TestContext& context){
     {
         TestWorld testWorld;
+        NWB_CSG_TEST_CHECK(context, !NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         NWB_CSG_TEST_CHECK(context, state.empty());
@@ -164,6 +165,7 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         cutter.receiverGroup = Name("project/csg/group_a");
         cutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
 
+        NWB_CSG_TEST_CHECK(context, !NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         NWB_CSG_TEST_CHECK(context, state.empty());
@@ -179,6 +181,7 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
         receiver.receiverGroup = Name("project/csg/group_a");
 
+        NWB_CSG_TEST_CHECK(context, !NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         NWB_CSG_TEST_CHECK(context, state.empty());
@@ -197,6 +200,7 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         cutter.receiverGroup = Name("project/csg/group_a");
         cutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
 
+        NWB_CSG_TEST_CHECK(context, NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         NWB_CSG_TEST_CHECK(context, !state.empty());
@@ -234,6 +238,7 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         cutter.receiverGroup = Name("project/csg/group_a");
         cutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
 
+        NWB_CSG_TEST_CHECK(context, NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
 
         NWB_CSG_TEST_CHECK(context, state.empty());

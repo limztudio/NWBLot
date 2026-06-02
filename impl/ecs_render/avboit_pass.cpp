@@ -204,7 +204,11 @@ void RendererSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFr
     __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.transmittanceTexture, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
-void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets){
+void RendererSystem::renderAvboitPasses(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState
+){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
@@ -216,6 +220,7 @@ void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, Deferred
         avboitTargets.lowFramebuffer.get(),
         MaterialPipelinePass::AvboitOccupancy,
         true,
+        csgFrameState,
         avboitTargets.occupancyBindingSet.get(),
         &avboitTargets
     );
@@ -228,6 +233,7 @@ void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, Deferred
         avboitTargets.lowFramebuffer.get(),
         MaterialPipelinePass::AvboitExtinction,
         true,
+        csgFrameState,
         avboitTargets.extinctionBindingSet.get(),
         &avboitTargets
     );
@@ -240,6 +246,7 @@ void RendererSystem::renderAvboitPasses(Core::CommandList& commandList, Deferred
         avboitTargets.accumulationFramebuffer.get(),
         MaterialPipelinePass::AvboitAccumulate,
         true,
+        csgFrameState,
         avboitTargets.accumulateBindingSet.get(),
         &avboitTargets
     );

@@ -96,6 +96,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena scratchArena;
+    CsgFrameState csgFrameState;
+    if(HasCsgFrameCandidates(m_world))
+        csgFrameState = BuildCsgFrameState(m_world, scratchArena);
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
@@ -115,6 +118,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             false,
+            csgFrameState,
             opaqueDrawItems,
             instanceData,
             csgFrameData,
@@ -139,7 +143,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     if(deferredUploadReady){
         const bool csgUploadReady = opaqueDrawItems.csg.empty() || uploadCsgFrameBuffers(*commandList, csgFrameData);
-        const bool csgCapUploadReady = csgUploadReady && uploadCsgCapVertices(*commandList, csgFrameData);
+        const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && uploadCsgCapVertices(*commandList, csgFrameData));
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,
             deferredTargets.framebuffer.get(),
@@ -151,7 +155,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
         if(csgUploadReady){
             renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
-            if(csgCapUploadReady)
+            if(csgCapUploadReady && csgFrameData.hasOpaqueCapWork())
                 renderCsgOpaqueCaps(opaqueDrawContext, csgFrameData);
         }
     }
@@ -164,7 +168,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     clearAvboitTargets(*commandList, deferredTargets.avboit);
     if(hasTransparentRenderers())
-        renderAvboitPasses(*commandList, deferredTargets);
+        renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
 
     commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());
     commandList->commitBarriers();

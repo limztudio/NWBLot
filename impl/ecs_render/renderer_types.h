@@ -181,6 +181,7 @@ struct CsgFrameGpuData{
     CsgParameterByteDataVector parameterBytes;
     CsgPlaneCapVertexGpuDataVector planeCapVertices;
     CsgPlaneCapDrawItemVector opaquePlaneCapDrawItems;
+    CsgPlaneCapDrawItemVector transparentPlaneCapDrawItems;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)
@@ -188,14 +189,18 @@ struct CsgFrameGpuData{
         , parameterBytes(arena)
         , planeCapVertices(arena)
         , opaquePlaneCapDrawItems(arena)
+        , transparentPlaneCapDrawItems(arena)
     {}
 
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+    [[nodiscard]] bool hasPlaneCapWork()const noexcept{ return !planeCapVertices.empty() && (!opaquePlaneCapDrawItems.empty() || !transparentPlaneCapDrawItems.empty()); }
     [[nodiscard]] bool hasOpaquePlaneCapWork()const noexcept{ return !planeCapVertices.empty() && !opaquePlaneCapDrawItems.empty(); }
+    [[nodiscard]] bool hasTransparentPlaneCapWork()const noexcept{ return !planeCapVertices.empty() && !transparentPlaneCapDrawItems.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);
         opaquePlaneCapDrawItems.reserve(cutterCapacity);
+        transparentPlaneCapDrawItems.reserve(cutterCapacity);
     }
 };
 

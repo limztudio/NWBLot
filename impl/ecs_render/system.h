@@ -257,12 +257,22 @@ private:
         const NWB::Impl::Scene::TransformComponent* transform,
         u32 receiverIndex,
         const CsgReceiverRangeGpuData& receiverRange,
-        CsgFrameGpuData& csgFrameData
+        CsgFrameGpuData& csgFrameData,
+        CsgPlaneCapDrawItemVector& capDrawItems
     )const;
+    [[nodiscard]] bool createCsgPlaneCapSharedResources();
     [[nodiscard]] bool createCsgPlaneCapResources(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool createCsgTransparentPlaneCapResources(Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass);
     [[nodiscard]] bool reserveCsgPlaneCapVertexBufferCapacity(usize vertexCount);
     [[nodiscard]] bool uploadCsgPlaneCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    void renderCsgPlaneCaps(
+        const MaterialPassDrawContext& context,
+        const CsgFrameGpuData& csgFrameData,
+        const CsgPlaneCapDrawItemVector& capDrawItems,
+        Core::GraphicsPipeline* pipeline
+    );
     void renderCsgOpaquePlaneCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
+    void renderCsgTransparentPlaneCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
 
 private:
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);

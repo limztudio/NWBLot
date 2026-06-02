@@ -106,8 +106,14 @@ private:
     Core::BufferHandle m_planeCapVertexBuffer;
     Core::ShaderHandle m_planeCapVertexShader;
     Core::ShaderHandle m_planeCapPixelShader;
+    Core::ShaderHandle m_planeCapAvboitOccupancyPixelShader;
+    Core::ShaderHandle m_planeCapAvboitExtinctionPixelShader;
+    Core::ShaderHandle m_planeCapAvboitAccumulatePixelShader;
     Core::InputLayoutHandle m_planeCapInputLayout;
     Core::GraphicsPipelineHandle m_planeCapPipeline;
+    Core::GraphicsPipelineHandle m_planeCapAvboitOccupancyPipeline;
+    Core::GraphicsPipelineHandle m_planeCapAvboitExtinctionPipeline;
+    Core::GraphicsPipelineHandle m_planeCapAvboitAccumulatePipeline;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
     usize m_parameterByteBufferCapacity = 0u;

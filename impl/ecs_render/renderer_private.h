@@ -134,6 +134,9 @@ inline constexpr Name s_CsgParameterByteBufferName("ecs_render/csg_parameter_byt
 inline constexpr Name s_CsgPlaneCapVertexBufferName("ecs_render/csg_plane_cap_vertices");
 inline constexpr Name s_CsgPlaneCapVertexShaderName("engine/graphics/csg/plane_cap_vs");
 inline constexpr Name s_CsgPlaneCapPixelShaderName("engine/graphics/csg/plane_cap_ps");
+inline constexpr Name s_CsgTransparentCapOccupancyPixelShaderName("engine/graphics/csg/transparent_cap_occupancy_ps");
+inline constexpr Name s_CsgTransparentCapExtinctionPixelShaderName("engine/graphics/csg/transparent_cap_extinction_ps");
+inline constexpr Name s_CsgTransparentCapAccumulatePixelShaderName("engine/graphics/csg/transparent_cap_accumulate_ps");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred/composite_vs");
 inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred/lighting_ps");

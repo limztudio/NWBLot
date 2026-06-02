@@ -129,11 +129,15 @@ void RendererSystem::renderMaterialPass(
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
+    const bool csgCapUploadReady = csgUploadReady && uploadCsgPlaneCapVertices(commandList, csgFrameData);
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
-    if(csgUploadReady)
+    if(csgUploadReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
+        if(csgCapUploadReady && MaterialPipelinePassUsesRendererAvboit(pass))
+            renderCsgTransparentPlaneCaps(drawContext, csgFrameData);
+    }
 }
 
 void RendererSystem::gatherMaterialPassDrawItems(
@@ -261,11 +265,12 @@ void RendererSystem::gatherMaterialPassDrawItems(
         pipelineKey.framebufferInfo = framebufferInfo;
         pipelineKey.pass = pass;
         pipelineKey.twoSided = materialInfo->twoSided;
+        const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
         const bool csgClipCandidate =
             csgReceiverState.active
             && (
                 (pass == MaterialPipelinePass::Opaque && !transparent)
-                || (MaterialPipelinePassUsesRendererAvboit(pass) && transparent)
+                || (usesAvboit && transparent)
             )
         ;
         const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(csgReceiverLookup, entity) : 0u;
@@ -332,14 +337,17 @@ void RendererSystem::gatherMaterialPassDrawItems(
             if(
                 csgClipActive
                 && csgReceiverState.generateCaps
-                && pass == MaterialPipelinePass::Opaque
-                && !transparent
+                && (
+                    (pass == MaterialPipelinePass::Opaque && !transparent)
+                    || (usesAvboit && transparent)
+                )
                 && !appendCsgReceiverPlaneCapGeometry(
                     mesh,
                     transform,
                     instanceIndex,
                     csgRange,
-                    csgFrameData
+                    csgFrameData,
+                    transparent ? csgFrameData.transparentPlaneCapDrawItems : csgFrameData.opaquePlaneCapDrawItems
                 )
             )
                 return false;

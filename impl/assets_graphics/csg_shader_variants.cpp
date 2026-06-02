@@ -42,19 +42,26 @@ AStringView ClipImplicitDefineName(){
     return s_ClipImplicitDefineName;
 }
 
-void CollectMaterialPixelShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
+void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys){
     outShaderKeys.clear();
     outShaderKeys.reserve(materialEntries.size());
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
+    const Name& meshStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::MeshStage);
     for(const MaterialCookEntry& materialEntry : materialEntries){
         const auto foundShader = materialEntry.stageShaders.find(Core::ShaderType::PixelStage);
-        if(foundShader == materialEntry.stageShaders.end())
-            continue;
+        if(foundShader != materialEntry.stageShaders.end()){
+            const Core::Assets::AssetRef<Shader>& shaderAsset = foundShader.value();
+            if(shaderAsset.name())
+                outShaderKeys.insert(AssetsGraphicsCookDetail::ShaderStageKey{ shaderAsset.name(), pixelStageName });
+        }
 
-        const Core::Assets::AssetRef<Shader>& shaderAsset = foundShader.value();
-        if(shaderAsset.name())
-            outShaderKeys.insert(AssetsGraphicsCookDetail::ShaderStageKey{ shaderAsset.name(), pixelStageName });
+        const auto foundMeshShader = materialEntry.stageShaders.find(Core::ShaderType::MeshStage);
+        if(foundMeshShader != materialEntry.stageShaders.end()){
+            const Core::Assets::AssetRef<Shader>& shaderAsset = foundMeshShader.value();
+            if(shaderAsset.name())
+                outShaderKeys.insert(AssetsGraphicsCookDetail::ShaderStageKey{ shaderAsset.name(), meshStageName });
+        }
     }
 }
 

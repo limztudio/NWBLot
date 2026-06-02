@@ -60,28 +60,60 @@ bool nwbMeshletBackfaceCull(
     return dot(coneAxis, view) <= -sinThetaPlusAlpha;
 }
 
-bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instance){
-    const NwbMeshletBounds bounds = nwbMeshLoadMeshletBounds(meshletIndex);
-    const float3 center = nwbMeshTransformPosition(bounds.sphere.xyz, instance);
-    const float radius = bounds.sphere.w * nwbMeshMaxAbsScale(instance.scale.xyz);
+struct NwbMeshletCullContext{
+    NwbMeshletBounds bounds;
+    float3 center;
+    float radius;
+};
 
-    if(nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL) && nwbMeshSphereOutsideFrustum(center, radius))
+NwbMeshletCullContext nwbMeshBuildMeshletCullContext(const uint meshletIndex, const NwbMeshInstanceData instance){
+    const NwbMeshletBounds bounds = nwbMeshLoadMeshletBounds(meshletIndex);
+
+    NwbMeshletCullContext context;
+    context.bounds = bounds;
+    context.center = nwbMeshTransformPosition(bounds.sphere.xyz, instance);
+    context.radius = bounds.sphere.w * nwbMeshMaxAbsScale(instance.scale.xyz);
+    return context;
+}
+
+bool nwbMeshletCulled(const NwbMeshletCullContext context, const NwbMeshInstanceData instance){
+    if(nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL) && nwbMeshSphereOutsideFrustum(context.center, context.radius))
         return true;
 
     if(!nwbMeshletConeCullEnabled())
         return false;
 
     const float3 coneAxis = nwbSafeNormalize(
-        nwbRotateVectorByQuaternion(nwbMeshUnpackConeAxis(bounds.conePacked), instance.rotation),
+        nwbRotateVectorByQuaternion(nwbMeshUnpackConeAxis(context.bounds.conePacked), instance.rotation),
         float3(0.0, 0.0, 1.0)
     );
     return nwbMeshletBackfaceCull(
         g_NwbMeshCameraPosition.xyz,
-        center,
-        radius,
+        context.center,
+        context.radius,
         coneAxis,
-        nwbMeshUnpackConeCutoff(bounds.conePacked)
+        nwbMeshUnpackConeCutoff(context.bounds.conePacked)
     );
+}
+
+bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instance){
+    return nwbMeshletCulled(nwbMeshBuildMeshletCullContext(meshletIndex, instance), instance);
+}
+
+uint nwbMeshCsgClassifyMeshlet(const NwbMeshletCullContext context){
+#if NWB_CSG_ENABLED
+    return nwbCsgClassifyMeshlet(context.center, context.radius);
+#else
+    return 1u;
+#endif
+}
+
+uint nwbMeshCsgRasterFlags(const uint csgMeshletClass){
+#if NWB_CSG_ENABLED
+    return csgMeshletClass == NWB_CSG_MESHLET_CLASS_UNAFFECTED ? NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED : 0u;
+#else
+    return 0u;
+#endif
 }
 
 float2 nwbMeshClipToFramebuffer(const float4 p){
@@ -162,13 +194,14 @@ bool nwbMeshTriangleCulled(const NwbMeshGeneratedVertex vertices[3]){
 }
 
 void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
-    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertex(
+    const NwbMeshGeneratedVertex vertex = nwbMeshBuildGeneratedVertexWithRasterFlags(
         float4(2.0, 2.0, 0.0, 1.0),
         float3(0.0, 0.0, 1.0),
         float4(1.0, 0.0, 0.0, 1.0),
         float2(0.0),
         float4(0.0),
-        float3(0.0)
+        float3(0.0),
+        0u
     );
     for(uint corner = 0u; corner < 3u; ++corner)
         g_NwbMeshGeneratedVertices[primitiveBase + corner] = vertex;

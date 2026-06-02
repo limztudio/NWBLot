@@ -34,9 +34,10 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inNormal = input.normal;
     inTangent = input.tangent;
     inUv0 = input.uv0;
-    inWorldPosition = input.worldPosition;
+    inWorldPosition = input.worldPosition.xyz;
 #if NWB_CSG_ENABLED
-    if(nwbCsgMeshPixelDiscard(inWorldPosition))
+    const uint rasterFlags = uint(input.worldPosition.w + 0.5);
+    if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u && nwbCsgMeshPixelDiscard(inWorldPosition))
         discard;
 #endif
 }

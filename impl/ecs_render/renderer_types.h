@@ -85,12 +85,11 @@ struct CsgReceiverRangeGpuData{
     u32 padding0 = 0u;
 };
 
-[[nodiscard]] inline Float44 MakeIdentityCsgMatrix(){
-    Float44 matrix{};
+[[nodiscard]] inline Float34 MakeIdentityCsgMatrix(){
+    Float34 matrix{};
     matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
     matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    matrix.rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     return matrix;
 }
 
@@ -99,14 +98,18 @@ struct CsgCutterGpuData{
     u32 operation = 0u;
     u32 parameterByteOffset = 0u;
     u32 parameterByteSize = 0u;
-    Float44 worldToShape = MakeIdentityCsgMatrix();
-    Float44 shapeToWorld = MakeIdentityCsgMatrix();
+    Float34 worldToShape = MakeIdentityCsgMatrix();
+    Float34 shapeToWorld = MakeIdentityCsgMatrix();
     Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
+    f32 worldToShapeScaleBound = 1.f;
+    f32 padding0 = 0.f;
+    f32 padding1 = 0.f;
+    f32 padding2 = 0.f;
 };
 
 static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 4u, "CsgReceiverRangeGpuData layout must match the CSG shader");
-static_assert(sizeof(CsgCutterGpuData) == sizeof(u32) * 4u + sizeof(Float44) * 2u + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
+static_assert(sizeof(CsgCutterGpuData) == sizeof(u32) * 4u + sizeof(Float34) * 2u + sizeof(Float4) * 3u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");

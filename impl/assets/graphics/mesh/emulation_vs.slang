@@ -26,7 +26,7 @@ NwbMeshRasterVertex main(NwbMeshEmulationVertexInput input){
         input.normal,
         input.tangent,
         input.uv0,
-        input.worldPosition.xyz
+        input.worldPosition
     );
 }
 

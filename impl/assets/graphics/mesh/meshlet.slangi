@@ -96,7 +96,7 @@ NwbMeshRasterVertex nwbMeshBuildRasterVertex(const NwbMeshGeneratedVertex genera
         generatedVertex.normal,
         generatedVertex.tangent,
         generatedVertex.uv0,
-        generatedVertex.worldPosition.xyz
+        generatedVertex.worldPosition
     );
 }
 

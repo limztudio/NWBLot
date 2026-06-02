@@ -13,6 +13,8 @@
 #define NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL (1u << 1u)
 #define NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL (1u << 2u)
 
+#define NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED (1u << 0u)
+
 #define NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT 0u
 #define NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX 1u
 #define NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET 2u
@@ -67,3 +69,4 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

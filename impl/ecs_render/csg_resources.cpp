@@ -95,6 +95,15 @@ template<typename ParameterT>
     );
 }
 
+[[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
+    const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(worldToShape.v[2], 0.0f);
+    SIMDVector lengthSquared = VectorAdd(Vector3LengthSq(row0), Vector3LengthSq(row1));
+    lengthSquared = VectorAdd(lengthSquared, Vector3LengthSq(row2));
+    return VectorSqrt(lengthSquared);
+}
+
 [[nodiscard]] static bool BuildCsgCutterGpuData(
     const CsgCutterComponent& cutter,
     CsgParameterByteDataVector* parameterBytes,
@@ -105,8 +114,13 @@ template<typename ParameterT>
 
     outCutter = CsgCutterGpuData{};
     outCutter.operation = NWB_CSG_OPERATION_SUBTRACT;
-    outCutter.worldToShape = cutter.worldToShape;
-    outCutter.shapeToWorld = cutter.shapeToWorld;
+    const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
+    const SIMDMatrix shapeToWorld = LoadFloat(cutter.shapeToWorld);
+    StoreFloat(worldToShape, &outCutter.worldToShape);
+    StoreFloat(shapeToWorld, &outCutter.shapeToWorld);
+    const f32 worldToShapeScaleBound = VectorGetX(ComputeWorldToShapeScaleBound(worldToShape));
+    if(IsFinite(worldToShapeScaleBound) && worldToShapeScaleBound > 0.0f)
+        outCutter.worldToShapeScaleBound = worldToShapeScaleBound;
 
     if(cutter.shapeType == s_CsgPlaneShapeName){
         CsgPlaneShapeParameters parameters;
@@ -194,7 +208,7 @@ bool RendererSystem::createCsgClipResources(){
     auto* device = m_graphics.getDevice();
     if(!m_csgState.m_clipBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_RECEIVER_RANGES, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CSG_BINDING_PARAMETER_BYTES, 1));

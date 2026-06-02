@@ -39,13 +39,23 @@ struct NwbMeshGeneratedVertex{
     float4 worldPosition;
 };
 
-NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
+groupshared uint g_NwbMeshletRasterFlags;
+
+void nwbMeshSetMeshletRasterFlags(const uint rasterFlags, const uint groupThreadIndex){
+    if(groupThreadIndex == 0u)
+        g_NwbMeshletRasterFlags = rasterFlags;
+
+    GroupMemoryBarrierWithGroupSync();
+}
+
+NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertexWithRasterFlags(
     const float4 position,
     const float3 normal,
     const float4 tangent,
     const float2 uv0,
     const float4 color,
-    const float3 worldPosition
+    const float3 worldPosition,
+    const uint rasterFlags
 ){
     NwbMeshGeneratedVertex generatedVertex;
     generatedVertex.position = position;
@@ -55,8 +65,27 @@ NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
     generatedVertex.uv0 = uv0;
     generatedVertex.padding1 = float2(0.0);
     generatedVertex.color = color;
-    generatedVertex.worldPosition = float4(worldPosition, 1.0);
+    generatedVertex.worldPosition = float4(worldPosition, float(rasterFlags));
     return generatedVertex;
+}
+
+NwbMeshGeneratedVertex nwbMeshBuildGeneratedVertex(
+    const float4 position,
+    const float3 normal,
+    const float4 tangent,
+    const float2 uv0,
+    const float4 color,
+    const float3 worldPosition
+){
+    return nwbMeshBuildGeneratedVertexWithRasterFlags(
+        position,
+        normal,
+        tangent,
+        uv0,
+        color,
+        worldPosition,
+        g_NwbMeshletRasterFlags
+    );
 }
 
 struct NwbMeshInstanceData{

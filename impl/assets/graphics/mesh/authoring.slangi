@@ -19,6 +19,10 @@
 #define NWB_MESH_SHADER_EMULATION_COMPUTE 0
 #endif
 
+#ifndef NWB_CSG_ENABLED
+#define NWB_CSG_ENABLED 0
+#endif
+
 #ifndef NWB_MATERIAL_TYPED_BINDING
 #error "mesh material shaders must include a generated .bind material interface"
 #endif
@@ -30,6 +34,9 @@
 #include "runtime.slangi"
 #include "encoding.slangi"
 #include "material_typed_accessors.slangi"
+#if NWB_CSG_ENABLED
+#include "../csg/runtime.slangi"
+#endif
 #include "culling.slangi"
 #include "meshlet.slangi"
 #include "entrypoints.slangi"

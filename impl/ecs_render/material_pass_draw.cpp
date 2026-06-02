@@ -181,6 +181,8 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         Core::ComputeState computeState;
         computeState.setPipeline(pipelineResources.computePipeline.get());
         computeState.addBindingSet(mesh.computeBindingSet.get());
+        if(csgClipDraw)
+            computeState.addBindingSet(m_csgState.m_clipBindingSet.get());
 
         context.commandList.setComputeState(computeState);
 

@@ -16,7 +16,7 @@
     [[vk::location(NWB_MESH_RASTER_NORMAL_LOCATION)]] float3 normal : NORMAL0; \
     [[vk::location(NWB_MESH_RASTER_TANGENT_LOCATION)]] float4 tangent : TANGENT0; \
     [[vk::location(NWB_MESH_RASTER_UV0_LOCATION)]] float2 uv0 : TEXCOORD0; \
-    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float3 worldPosition : TEXCOORD1;
+    [[vk::location(NWB_MESH_RASTER_WORLD_POSITION_LOCATION)]] float4 worldPosition : TEXCOORD1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +33,7 @@ NwbMeshRasterVertex nwbMeshBuildRasterVertex(
     const float3 normal,
     const float4 tangent,
     const float2 uv0,
-    const float3 worldPosition
+    const float4 worldPosition
 ){
     NwbMeshRasterVertex vertex;
     vertex.position = position;

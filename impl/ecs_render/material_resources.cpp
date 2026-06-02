@@ -294,6 +294,10 @@ bool RendererSystem::createRendererPipeline(
         ? AStringView(csgShaderVariant)
         : shaderVariant
     ;
+    const AStringView meshShaderVariant = csgClipPipeline
+        ? AStringView(csgShaderVariant)
+        : shaderVariant
+    ;
 
     const bool hasPixelShader = materialInfo.pixelShader.valid();
     const bool hasMeshShader = materialInfo.meshShader.valid();
@@ -327,7 +331,7 @@ bool RendererSystem::createRendererPipeline(
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!createMeshShaderResources())
             return false;
-        if(!loadShader(resources.meshShader, materialInfo.meshShader.name(), shaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
+        if(!loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
             if(!loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
@@ -378,7 +382,7 @@ bool RendererSystem::createRendererPipeline(
         if(!loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),
-            shaderVariant,
+            meshShaderVariant,
             Core::ShaderType::Compute,
             "ECSRender_RendererCS",
             &meshComputeArchiveStageName
@@ -397,6 +401,11 @@ bool RendererSystem::createRendererPipeline(
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
+        if(csgClipPipeline){
+            if(!createCsgClipResources())
+                return false;
+            computeDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
+        }
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.c_str()));

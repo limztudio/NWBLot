@@ -56,12 +56,11 @@ static_assert(IsTriviallyCopyable_V<SkinnedCsgMeshComponent>, "SkinnedCsgMeshCom
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Float44 CsgIdentityTransform(){
-    Float44 transform = {};
+[[nodiscard]] inline Float34 CsgIdentityTransform(){
+    Float34 transform = {};
     transform._11 = 1.0f;
     transform._22 = 1.0f;
     transform._33 = 1.0f;
-    transform._44 = 1.0f;
     return transform;
 }
 
@@ -73,8 +72,8 @@ struct CsgCutterComponent{
     Name shapeType = NAME_NONE;
     CsgOperation::Enum operation = CsgOperation::Subtract;
 
-    Float44 worldToShape;
-    Float44 shapeToWorld;
+    Float34 worldToShape;
+    Float34 shapeToWorld;
 
     ParameterByteVector parameterBytes;
 

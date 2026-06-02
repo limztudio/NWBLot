@@ -83,11 +83,9 @@ static void TestCsgCutterComponent(TestContext& context){
     NWB_CSG_TEST_CHECK(context, cutter.worldToShape._11 == 1.0f);
     NWB_CSG_TEST_CHECK(context, cutter.worldToShape._22 == 1.0f);
     NWB_CSG_TEST_CHECK(context, cutter.worldToShape._33 == 1.0f);
-    NWB_CSG_TEST_CHECK(context, cutter.worldToShape._44 == 1.0f);
     NWB_CSG_TEST_CHECK(context, cutter.shapeToWorld._11 == 1.0f);
     NWB_CSG_TEST_CHECK(context, cutter.shapeToWorld._22 == 1.0f);
     NWB_CSG_TEST_CHECK(context, cutter.shapeToWorld._33 == 1.0f);
-    NWB_CSG_TEST_CHECK(context, cutter.shapeToWorld._44 == 1.0f);
 
     cutter.receiverGroup = Name("project/csg/receiver_group_a");
     cutter.shapeType = Name("engine/csg/box");
@@ -532,7 +530,7 @@ static void TestCsgShapeRegistryBounds(TestContext& context){
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
     NWB_CSG_TEST_CHECK(context, NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
 
-    Float44 shapeToWorld = NWB::Impl::CsgIdentityTransform();
+    Float34 shapeToWorld = NWB::Impl::CsgIdentityTransform();
     shapeToWorld._14 = 10.0f;
     shapeToWorld._24 = -5.0f;
     shapeToWorld._34 = 1.0f;

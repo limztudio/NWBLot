@@ -813,13 +813,13 @@ static bool PrepareShaderEntriesForCook(
     outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
     outPreparedPlan.plannedFileCount = 1; // shader archive index
 
-    AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialPixelShaderKeys{
+    AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys{
         0,
         PreparedShaderKeyHasher(),
         EqualTo<PreparedShaderKey>(),
         scratchArena
     };
-    AssetsGraphicsCsgShaderVariants::CollectMaterialPixelShaderKeys(materialEntries, materialPixelShaderKeys);
+    AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, materialClipShaderKeys);
 
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
         PreparedShaderEntry preparedEntry(cookArena);
@@ -930,7 +930,7 @@ static bool PrepareShaderEntriesForCook(
             scratchArena
         ))
             return false;
-        preparedEntry.supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialPixelShaderKeys, preparedEntry.entry);
+        preparedEntry.supportsCsgClipVariant = AssetsGraphicsCsgShaderVariants::SupportsClipVariant(materialClipShaderKeys, preparedEntry.entry);
         if(!CountShaderVariants(preparedEntry.entry, preparedEntry.variantCount))
             return false;
         if(preparedEntry.supportsCsgClipVariant && !AssetsGraphicsCsgShaderVariants::AddClipVariantCount(preparedEntry.entry, preparedEntry.variantCount))
@@ -958,6 +958,7 @@ static bool PrepareShaderEntriesForCook(
         meshComputeShadowEntry.dependencies = meshShaderEntry.dependencies;
         meshComputeShadowEntry.dependencyChecksum = meshShaderEntry.dependencyChecksum;
         meshComputeShadowEntry.variantCount = meshShaderEntry.variantCount;
+        meshComputeShadowEntry.supportsCsgClipVariant = meshShaderEntry.supportsCsgClipVariant;
         meshComputeShadowEntry.materialTypedBindingInterfacePath = meshShaderEntry.materialTypedBindingInterfacePath;
         meshComputeShadowEntry.materialTypedBindingInterface = meshShaderEntry.materialTypedBindingInterface;
         meshComputeShadowEntry.usesMaterialTypedBinding = meshShaderEntry.usesMaterialTypedBinding;

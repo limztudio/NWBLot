@@ -44,7 +44,7 @@ using ShaderStageKeySet = HashSet<
 
 
 [[nodiscard]] AStringView ClipImplicitDefineName();
-void CollectMaterialPixelShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
+void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
 [[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
 [[nodiscard]] bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64& inOutVariantCount);
 [[nodiscard]] bool BuildClipDefineCombo(

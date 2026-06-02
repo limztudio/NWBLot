@@ -26,35 +26,47 @@ struct NwbCsgCutter{
     uint operation;
     uint parameterByteOffset;
     uint parameterByteSize;
-    float4x4 worldToShape;
-    float4x4 shapeToWorld;
+    float3x4 worldToShape;
+    float3x4 shapeToWorld;
     float4 parameter0;
     float4 parameter1;
+    float worldToShapeScaleBound;
+    float padding0;
+    float padding1;
+    float padding2;
 };
 
+#ifndef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
 struct NwbCsgMeshPushConstants{
     uint4 dispatch;
     float4 viewportRect;
     float4 scissorRect;
 };
+#endif
 
 [[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbCsgReceiverRanges;
 [[vk::binding(NWB_CSG_BINDING_CUTTERS, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbCsgCutters;
 [[vk::binding(NWB_CSG_BINDING_PARAMETER_BYTES, NWB_CSG_CLIP_SET)]] ByteAddressBuffer g_NwbCsgParameterBytes;
 
+#ifndef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 uint nwbCsgMeshInstanceIndex(){
+#ifdef NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI
+    return nwbMeshInstanceIndex();
+#else
     return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
+#endif
 }
 
 float3 nwbCsgTransformWorldToShape(const float3 worldPosition, const NwbCsgCutter cutter){
-    return mul(cutter.worldToShape, float4(worldPosition, 1.0)).xyz;
+    return mul(cutter.worldToShape, float4(worldPosition, 1.0));
 }
 
 float nwbCsgPlaneDistance(const float3 shapePosition, const NwbCsgCutter cutter){
@@ -104,6 +116,25 @@ bool nwbCsgMeshPixelDiscard(const float3 worldPosition){
     }
 
     return false;
+}
+
+uint nwbCsgClassifyMeshlet(const float3 center, const float radius){
+    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[nwbCsgMeshInstanceIndex()];
+    bool intersectsAny = false;
+    for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
+        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
+        if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
+            continue;
+
+        const float distance = nwbCsgEvaluateDistance(center, cutter);
+        const float radiusShape = radius * cutter.worldToShapeScaleBound;
+        if(distance < -radiusShape)
+            return NWB_CSG_MESHLET_CLASS_FULLY_REMOVED;
+        if(distance <= radiusShape)
+            intersectsAny = true;
+    }
+
+    return intersectsAny ? NWB_CSG_MESHLET_CLASS_INTERSECTING : NWB_CSG_MESHLET_CLASS_UNAFFECTED;
 }
 
 

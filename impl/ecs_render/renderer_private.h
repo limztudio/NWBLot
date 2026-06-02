@@ -131,6 +131,9 @@ inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data"
 inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_ranges");
 inline constexpr Name s_CsgCutterBufferName("ecs_render/csg_cutters");
 inline constexpr Name s_CsgParameterByteBufferName("ecs_render/csg_parameter_bytes");
+inline constexpr Name s_CsgPlaneCapVertexBufferName("ecs_render/csg_plane_cap_vertices");
+inline constexpr Name s_CsgPlaneCapVertexShaderName("engine/graphics/csg/plane_cap_vs");
+inline constexpr Name s_CsgPlaneCapPixelShaderName("engine/graphics/csg/plane_cap_ps");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred/composite_vs");
 inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred/lighting_ps");

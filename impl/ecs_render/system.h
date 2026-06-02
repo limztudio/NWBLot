@@ -14,6 +14,7 @@
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/frame_state.h>
+#include <impl/ecs_scene/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -251,6 +252,17 @@ private:
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange
     )const;
+    [[nodiscard]] bool appendCsgReceiverPlaneCapGeometry(
+        const MeshResources& mesh,
+        const NWB::Impl::Scene::TransformComponent* transform,
+        u32 receiverIndex,
+        const CsgReceiverRangeGpuData& receiverRange,
+        CsgFrameGpuData& csgFrameData
+    )const;
+    [[nodiscard]] bool createCsgPlaneCapResources(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool reserveCsgPlaneCapVertexBufferCapacity(usize vertexCount);
+    [[nodiscard]] bool uploadCsgPlaneCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    void renderCsgOpaquePlaneCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
 
 private:
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);

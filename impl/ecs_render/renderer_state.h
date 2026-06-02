@@ -103,9 +103,15 @@ private:
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;
+    Core::BufferHandle m_planeCapVertexBuffer;
+    Core::ShaderHandle m_planeCapVertexShader;
+    Core::ShaderHandle m_planeCapPixelShader;
+    Core::InputLayoutHandle m_planeCapInputLayout;
+    Core::GraphicsPipelineHandle m_planeCapPipeline;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
     usize m_parameterByteBufferCapacity = 0u;
+    usize m_planeCapVertexBufferCapacity = 0u;
 };
 
 class RendererDeferredState final : NoCopy{

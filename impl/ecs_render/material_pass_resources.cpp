@@ -127,7 +127,7 @@ bool RendererSystem::createEmulationViewResources(){
     auto* device = m_graphics.getDevice();
     if(!m_drawState.m_emulationViewBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
 
         m_drawState.m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);

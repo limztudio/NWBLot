@@ -328,6 +328,22 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 : true
             ;
             drawItems.push_back(drawItem);
+
+            if(
+                csgClipActive
+                && csgReceiverState.generateCaps
+                && pass == MaterialPipelinePass::Opaque
+                && !transparent
+                && !appendCsgReceiverPlaneCapGeometry(
+                    mesh,
+                    transform,
+                    instanceIndex,
+                    csgRange,
+                    csgFrameData
+                )
+            )
+                return false;
+
             return true;
         };
 

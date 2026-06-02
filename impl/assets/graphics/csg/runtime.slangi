@@ -107,10 +107,14 @@ float nwbCsgEvaluateDistance(const float3 worldPosition, const NwbCsgCutter cutt
     }
 }
 
-bool nwbCsgMeshPixelDiscard(const float3 worldPosition){
-    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[nwbCsgMeshInstanceIndex()];
+bool nwbCsgReceiverPixelDiscardExcept(const uint receiverIndex, const float3 worldPosition, const uint excludedCutterIndex){
+    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
-        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
+        const uint absoluteCutterIndex = receiverRange.firstCutter + cutterIndex;
+        if(absoluteCutterIndex == excludedCutterIndex)
+            continue;
+
+        const NwbCsgCutter cutter = g_NwbCsgCutters[absoluteCutterIndex];
         if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
             continue;
         if(nwbCsgEvaluateDistance(worldPosition, cutter) <= 0.0)
@@ -118,6 +122,14 @@ bool nwbCsgMeshPixelDiscard(const float3 worldPosition){
     }
 
     return false;
+}
+
+bool nwbCsgReceiverPixelDiscard(const uint receiverIndex, const float3 worldPosition){
+    return nwbCsgReceiverPixelDiscardExcept(receiverIndex, worldPosition, 0xFFFFFFFFu);
+}
+
+bool nwbCsgMeshPixelDiscard(const float3 worldPosition){
+    return nwbCsgReceiverPixelDiscard(nwbCsgMeshInstanceIndex(), worldPosition);
 }
 
 uint nwbCsgClassifyMeshlet(const float3 center, const float radius){

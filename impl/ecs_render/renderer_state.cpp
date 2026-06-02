@@ -100,9 +100,15 @@ void RendererCsgState::invalidateResources(){
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();
+    m_planeCapVertexBuffer.reset();
+    m_planeCapVertexShader.reset();
+    m_planeCapPixelShader.reset();
+    m_planeCapInputLayout.reset();
+    m_planeCapPipeline.reset();
     m_receiverRangeBufferCapacity = 0u;
     m_cutterBufferCapacity = 0u;
     m_parameterByteBufferCapacity = 0u;
+    m_planeCapVertexBufferCapacity = 0u;
 }
 
 

@@ -135,6 +135,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     if(deferredUploadReady){
         const bool csgUploadReady = opaqueDrawItems.csg.empty() || uploadCsgFrameBuffers(*commandList, csgFrameData);
+        const bool csgCapUploadReady = csgUploadReady && uploadCsgPlaneCapVertices(*commandList, csgFrameData);
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,
             deferredTargets.framebuffer.get(),
@@ -144,8 +145,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredViewportState
         };
         renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
-        if(csgUploadReady)
+        if(csgUploadReady){
             renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+            if(csgCapUploadReady)
+                renderCsgOpaquePlaneCaps(opaqueDrawContext, csgFrameData);
+        }
     }
     commandList->endRenderPass();
 

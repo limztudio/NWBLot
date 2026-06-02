@@ -114,6 +114,32 @@ static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData mu
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
+struct CsgPlaneCapMeshTriangle{
+    Float4 positions[3];
+};
+
+struct CsgPlaneCapVertexGpuData{
+    Float4 positionReceiverIndex;
+    Float4 normalCutterIndex;
+    Float4 color;
+};
+
+struct CsgPlaneCapDrawItem{
+    u32 firstVertex = 0u;
+    u32 vertexCount = 0u;
+};
+
+static_assert(sizeof(CsgPlaneCapMeshTriangle) == sizeof(Float4) * 3u, "CsgPlaneCapMeshTriangle must stay tightly packed");
+static_assert(sizeof(CsgPlaneCapVertexGpuData) == sizeof(Float4) * 3u, "CsgPlaneCapVertexGpuData layout must match the CSG cap shaders");
+static_assert(alignof(CsgPlaneCapMeshTriangle) >= alignof(Float4), "CsgPlaneCapMeshTriangle must stay SIMD-aligned");
+static_assert(alignof(CsgPlaneCapVertexGpuData) >= alignof(Float4), "CsgPlaneCapVertexGpuData must stay SIMD-aligned");
+static_assert(IsStandardLayout_V<CsgPlaneCapMeshTriangle>, "CsgPlaneCapMeshTriangle must stay GPU-friendly");
+static_assert(IsTriviallyCopyable_V<CsgPlaneCapMeshTriangle>, "CsgPlaneCapMeshTriangle must stay GPU-friendly");
+static_assert(IsStandardLayout_V<CsgPlaneCapVertexGpuData>, "CsgPlaneCapVertexGpuData must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<CsgPlaneCapVertexGpuData>, "CsgPlaneCapVertexGpuData must stay GPU-uploadable");
+static_assert(IsStandardLayout_V<CsgPlaneCapDrawItem>, "CsgPlaneCapDrawItem must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<CsgPlaneCapDrawItem>, "CsgPlaneCapDrawItem must stay cheap to pass by value");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,6 +153,9 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
+using CsgPlaneCapMeshTriangleVector = Vector<CsgPlaneCapMeshTriangle, Core::Alloc::GlobalArena>;
+using CsgPlaneCapVertexGpuDataVector = Vector<CsgPlaneCapVertexGpuData, Core::Alloc::ScratchArena>;
+using CsgPlaneCapDrawItemVector = Vector<CsgPlaneCapDrawItem, Core::Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -136,17 +165,23 @@ struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
     CsgCutterGpuDataVector cutters;
     CsgParameterByteDataVector parameterBytes;
+    CsgPlaneCapVertexGpuDataVector planeCapVertices;
+    CsgPlaneCapDrawItemVector opaquePlaneCapDrawItems;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)
         , cutters(arena)
         , parameterBytes(arena)
+        , planeCapVertices(arena)
+        , opaquePlaneCapDrawItems(arena)
     {}
 
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
+    [[nodiscard]] bool hasOpaquePlaneCapWork()const noexcept{ return !planeCapVertices.empty() && !opaquePlaneCapDrawItems.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);
+        opaquePlaneCapDrawItems.reserve(cutterCapacity);
     }
 };
 
@@ -180,6 +215,11 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     u64 runtimeMeshVersion = 0u;
+    CsgPlaneCapMeshTriangleVector csgPlaneCapTriangles;
+
+    explicit MeshResources(Core::Alloc::GlobalArena& arena)
+        : csgPlaneCapTriangles(arena)
+    {}
 
     [[nodiscard]] bool valid()const noexcept{
         return

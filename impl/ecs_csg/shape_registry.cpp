@@ -26,6 +26,28 @@ namespace __hidden_shape_registry{
     return id != s_InvalidCsgShapeTypeId;
 }
 
+[[nodiscard]] bool ValidShaderModuleInclude(const CsgShapeTypeDesc& desc){
+    if(desc.shaderModule == s_CsgBuiltInShapeShaderModuleName)
+        return true;
+    if(desc.shaderModuleInclude.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with empty shader module include"), StringConvert(desc.name.c_str()));
+        return false;
+    }
+
+    const AStringView include = desc.shaderModuleInclude.view();
+    for(const char ch : include){
+        if(ch != '"' && ch != ';' && ch != '=')
+            continue;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'")
+            , StringConvert(desc.name.c_str())
+            , StringConvert(include)
+        );
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
     if(!desc.name){
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type with empty name"));
@@ -39,7 +61,7 @@ namespace __hidden_shape_registry{
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), StringConvert(desc.name.c_str()));
         return false;
     }
-    return true;
+    return ValidShaderModuleInclude(desc);
 }
 
 template<typename ParameterT>
@@ -361,6 +383,31 @@ bool CsgShapeRegistry::findShapeType(const CsgShapeTypeId typeId, CsgShapeTypeIn
 usize CsgShapeRegistry::shapeTypeCount()const{
     ScopedLock lock(m_mutex);
     return m_shapeTypes.size();
+}
+
+bool CsgShapeRegistry::findShaderModuleInclude(const Name& shaderModule, ACompactString& outShaderModuleInclude)const{
+    outShaderModuleInclude.clear();
+    if(!shaderModule)
+        return false;
+
+    bool found = false;
+    ScopedLock lock(m_mutex);
+    for(const CsgShapeTypeInfo& shapeType : m_shapeTypes){
+        if(shapeType.desc.shaderModule != shaderModule)
+            continue;
+
+        found = true;
+        if(shapeType.desc.shaderModuleInclude.empty())
+            continue;
+        if(outShaderModuleInclude.empty()){
+            outShaderModuleInclude = shapeType.desc.shaderModuleInclude;
+            continue;
+        }
+        if(outShaderModuleInclude != shapeType.desc.shaderModuleInclude)
+            return false;
+    }
+
+    return found;
 }
 
 

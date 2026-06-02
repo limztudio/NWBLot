@@ -603,6 +603,7 @@ static void TestCsgShapeRegistryProjectShape(TestContext& context){
     NWB::Impl::CsgShapeTypeDesc desc;
     desc.name = Name("project/csg/noise_blob");
     desc.shaderModule = Name("project/shaders/csg/noise_blob");
+    desc.shaderModuleInclude = ACompactString("project/shaders/csg/noise_blob.slangi");
     desc.parameterByteSize = sizeof(TestProjectShapeParameters);
     desc.boundsCallback = &TestProjectShapeBounds;
     desc.supportsAnalyticGradient = false;
@@ -616,7 +617,12 @@ static void TestCsgShapeRegistryProjectShape(TestContext& context){
     NWB::Impl::CsgShapeTypeInfo shapeType;
     NWB_CSG_TEST_CHECK(context, registry.findShapeType(desc.name, shapeType));
     NWB_CSG_TEST_CHECK(context, shapeType.desc.shaderModule == desc.shaderModule);
+    NWB_CSG_TEST_CHECK(context, shapeType.desc.shaderModuleInclude == desc.shaderModuleInclude);
     NWB_CSG_TEST_CHECK(context, shapeType.desc.boundsCallback == &TestProjectShapeBounds);
+
+    ACompactString shaderModuleInclude;
+    NWB_CSG_TEST_CHECK(context, registry.findShaderModuleInclude(desc.shaderModule, shaderModuleInclude));
+    NWB_CSG_TEST_CHECK(context, shaderModuleInclude == desc.shaderModuleInclude);
 
     TestProjectShapeParameters parameters;
     SIMDVector minBounds;

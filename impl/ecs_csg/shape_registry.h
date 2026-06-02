@@ -42,6 +42,7 @@ using CsgShapeBoundsCallback = bool(*)(
 struct CsgShapeTypeDesc{
     Name name = NAME_NONE;
     Name shaderModule = NAME_NONE;
+    ACompactString shaderModuleInclude;
 
     u32 parameterByteSize = 0u;
     CsgShapeBoundsCallback boundsCallback = nullptr;
@@ -107,6 +108,7 @@ public:
     [[nodiscard]] bool findShapeType(const Name& name, CsgShapeTypeInfo& outShapeType)const;
     [[nodiscard]] bool findShapeType(CsgShapeTypeId typeId, CsgShapeTypeInfo& outShapeType)const;
     [[nodiscard]] usize shapeTypeCount()const;
+    [[nodiscard]] bool findShaderModuleInclude(const Name& shaderModule, ACompactString& outShaderModuleInclude)const;
 
 
 public:

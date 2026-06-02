@@ -231,6 +231,40 @@ void RendererSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(m_csgState.m_parameterByteBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
+bool RendererSystem::resolveCsgReceiverEvaluatorVariant(
+    const CsgFrameReceiverLookup& receiverLookup,
+    const Core::ECS::EntityID entity,
+    Name& outEvaluatorVariant
+)const{
+    outEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+
+    bool resolved = true;
+    receiverLookup.forEachReceiverCutter(
+        entity,
+        [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
+            static_cast<void>(cutterEntity);
+            if(!resolved || cutter.operation != CsgOperation::Subtract)
+                return;
+
+            CsgShapeTypeInfo shapeType;
+            if(!m_csgShapeRegistry.findShapeType(cutter.shapeType, shapeType)){
+                resolved = false;
+                return;
+            }
+            if(shapeType.desc.shaderModule == s_CsgBuiltInShapeShaderModuleName)
+                return;
+
+            if(outEvaluatorVariant == s_CsgBuiltInShapeShaderModuleName){
+                outEvaluatorVariant = shapeType.desc.shaderModule;
+                return;
+            }
+            if(outEvaluatorVariant != shapeType.desc.shaderModule)
+                resolved = false;
+        }
+    );
+    return resolved;
+}
+
 u32 RendererSystem::countCsgReceiverClipCutters(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity
@@ -241,7 +275,7 @@ u32 RendererSystem::countCsgReceiverClipCutters(
         [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
             static_cast<void>(cutterEntity);
             CsgCutterGpuData unusedCutter;
-            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(cutter, nullptr, unusedCutter))
+            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(m_csgShapeRegistry, cutter, nullptr, unusedCutter))
                 return;
             if(cutterCount < Limit<u32>::s_Max)
                 ++cutterCount;
@@ -270,7 +304,7 @@ bool RendererSystem::appendCsgReceiverClipData(
                 return;
 
             CsgCutterGpuData cutterGpuData;
-            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(cutter, &csgFrameData.parameterBytes, cutterGpuData))
+            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(m_csgShapeRegistry, cutter, &csgFrameData.parameterBytes, cutterGpuData))
                 return;
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){
                 appendFailed = true;

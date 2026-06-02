@@ -109,11 +109,16 @@ template<typename ParameterT>
 }
 
 [[nodiscard]] inline bool BuildCsgCutterGpuData(
+    const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
     CsgParameterByteDataVector* parameterBytes,
     CsgCutterGpuData& outCutter
 ){
     if(cutter.operation != CsgOperation::Subtract)
+        return false;
+
+    CsgShapeTypeInfo shapeType;
+    if(!shapeRegistry.findShapeType(cutter.shapeType, shapeType))
         return false;
 
     outCutter = CsgCutterGpuData{};
@@ -159,7 +164,23 @@ template<typename ParameterT>
         return AppendCsgCutterParameters(parameterBytes, parameters, outCutter);
     }
 
-    return false;
+    if(shapeType.id < NWB_CSG_SHAPE_PROJECT_BEGIN)
+        return false;
+    if(cutter.parameterBytes.size() != static_cast<usize>(shapeType.desc.parameterByteSize))
+        return false;
+
+    outCutter.shapeType = shapeType.id;
+    if(!parameterBytes){
+        outCutter.parameterByteSize = shapeType.desc.parameterByteSize;
+        return true;
+    }
+    return AppendCsgParameterBytes(
+        *parameterBytes,
+        cutter.parameterBytes.data(),
+        cutter.parameterBytes.size(),
+        outCutter.parameterByteOffset,
+        outCutter.parameterByteSize
+    );
 }
 
 

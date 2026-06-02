@@ -33,6 +33,7 @@ namespace AssetsGraphicsCsgShaderVariants{
 
 static constexpr AStringView s_ClipImplicitDefineName = "NWB_CSG_ENABLED";
 static constexpr AStringView s_ClipSetImplicitDefineName = "NWB_CSG_CLIP_SET";
+static constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 static constexpr AStringView s_AvboitClipSetImplicitDefineValue = "2";
 
@@ -49,6 +50,13 @@ AStringView ClipImplicitDefineName(){
 
 AStringView ClipSetImplicitDefineName(){
     return s_ClipSetImplicitDefineName;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AStringView ProjectEvaluatorModuleDefineName(){
+    return s_ProjectEvaluatorModuleDefineName;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

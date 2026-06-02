@@ -36,6 +36,11 @@ struct NwbCsgCutter{
     float padding2;
 };
 
+struct NwbCsgSample{
+    float distance;
+    float3 normal;
+};
+
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 struct NwbCsgMeshPushConstants{
     uint4 dispatch;
@@ -51,6 +56,19 @@ struct NwbCsgMeshPushConstants{
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
+#endif
+
+#if defined(NWB_CSG_PROJECT_EVALUATOR_MODULE)
+#include NWB_CSG_PROJECT_EVALUATOR_MODULE
+#endif
+
+#if !defined(NWB_CSG_HAS_PROJECT_EVALUATOR)
+NwbCsgSample nwbEvalProjectCsgShape(const uint shapeType, const float3 pShape, const uint parameterByteOffset){
+    NwbCsgSample sample;
+    sample.distance = 1e30;
+    sample.normal = float3(0.0, 1.0, 0.0);
+    return sample;
+}
 #endif
 
 
@@ -103,6 +121,8 @@ float nwbCsgEvaluateDistance(const float3 worldPosition, const NwbCsgCutter cutt
     case NWB_CSG_SHAPE_CAPSULE:
         return nwbCsgCapsuleDistance(shapePosition, cutter);
     default:
+        if(cutter.shapeType >= NWB_CSG_SHAPE_PROJECT_BEGIN)
+            return nwbEvalProjectCsgShape(cutter.shapeType, shapePosition, cutter.parameterByteOffset).distance;
         return 1.0;
     }
 }

@@ -30,9 +30,13 @@ RendererSystem::RendererSystem(
     , m_graphics(graphics)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
+    , m_csgShapeRegistry(arena)
     , m_meshState(arena)
     , m_materialState(arena)
 {
+    if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
+
     readAccess<NWB::Impl::Scene::ActiveCameraComponent>();
     readAccess<NWB::Impl::Scene::TransformComponent>();
     readAccess<NWB::Impl::Scene::CameraComponent>();

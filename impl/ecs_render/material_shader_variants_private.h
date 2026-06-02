@@ -29,7 +29,8 @@ inline constexpr AStringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
 inline constexpr AStringView s_CsgClipSetDefineName = "NWB_CSG_CLIP_SET";
 inline constexpr AStringView s_CsgAvboitClipSetDefineAssignment = "NWB_CSG_CLIP_SET=2";
-inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 2u;
+inline constexpr AStringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,6 +77,28 @@ struct ShaderVariantDefineAssignment{
 [[nodiscard]] inline AStringView VariantSegmentDefineName(const AStringView segment){
     const usize equalPos = segment.find('=');
     return equalPos == AStringView::npos ? AStringView{} : segment.substr(0u, equalPos);
+}
+
+[[nodiscard]] inline bool FindVariantDefineAssignment(const AStringView variant, const AStringView defineName, AStringView& outAssignment){
+    outAssignment = AStringView{};
+    if(variant.empty() || variant == Core::ShaderArchive::s_DefaultVariant)
+        return false;
+
+    usize begin = 0u;
+    while(begin < variant.size()){
+        usize segmentEnd = variant.find(';', begin);
+        if(segmentEnd == AStringView::npos)
+            segmentEnd = variant.size();
+
+        const AStringView segment = variant.substr(begin, segmentEnd - begin);
+        if(VariantSegmentDefineName(segment) == defineName){
+            outAssignment = segment;
+            return true;
+        }
+
+        begin = segmentEnd + 1u;
+    }
+    return false;
 }
 
 [[nodiscard]] inline bool BuildCsgClipShaderVariantName(

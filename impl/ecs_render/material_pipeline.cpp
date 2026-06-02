@@ -16,6 +16,87 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_material_pipeline{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool ResolveCsgProjectEvaluatorModuleInclude(
+    const CsgShapeRegistry& shapeRegistry,
+    const Name& evaluatorVariant,
+    ACompactString& outModuleInclude
+){
+    outModuleInclude.clear();
+    if(!evaluatorVariant || evaluatorVariant == s_CsgBuiltInShapeShaderModuleName)
+        return true;
+
+    return shapeRegistry.findShaderModuleInclude(evaluatorVariant, outModuleInclude) && !outModuleInclude.empty();
+}
+
+[[nodiscard]] bool BuildCsgProjectEvaluatorModuleAssignment(const AStringView moduleInclude, Core::GraphicsString& outAssignment){
+    outAssignment.clear();
+    if(moduleInclude.empty())
+        return true;
+
+    outAssignment.reserve(
+        ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName.size()
+        + moduleInclude.size()
+        + 3u
+    );
+    outAssignment += ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName;
+    outAssignment += "=\"";
+    outAssignment += moduleInclude;
+    outAssignment += '"';
+    return true;
+}
+
+[[nodiscard]] bool BuildCsgShaderVariantName(
+    const AStringView baseVariant,
+    const bool avboitClipSet,
+    const AStringView projectEvaluatorModuleAssignment,
+    Core::GraphicsString& outVariant
+){
+    ECSRenderMaterialShaderVariants::ShaderVariantDefineAssignment defineAssignments[
+        ECSRenderMaterialShaderVariants::s_MaxCsgClipShaderVariantDefineAssignments
+    ];
+    usize defineAssignmentCount = 0u;
+
+    if(avboitClipSet){
+        defineAssignments[defineAssignmentCount++] = {
+            ECSRenderMaterialShaderVariants::s_CsgClipSetDefineName,
+            ECSRenderMaterialShaderVariants::s_CsgAvboitClipSetDefineAssignment
+        };
+    }
+    defineAssignments[defineAssignmentCount++] = {
+        ECSRenderMaterialShaderVariants::s_CsgEnabledDefineName,
+        ECSRenderMaterialShaderVariants::s_CsgEnabledDefineAssignment
+    };
+    if(!projectEvaluatorModuleAssignment.empty()){
+        defineAssignments[defineAssignmentCount++] = {
+            ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName,
+            projectEvaluatorModuleAssignment
+        };
+    }
+
+    return ECSRenderMaterialShaderVariants::BuildCsgClipShaderVariantName(
+        baseVariant,
+        defineAssignments,
+        defineAssignmentCount,
+        outVariant
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererSystem::createRendererPipeline(
     const MaterialSurfaceInfo& materialInfo,
     const MaterialPipelineKey& pipelineKey,
@@ -70,15 +151,75 @@ bool RendererSystem::createRendererPipeline(
     Core::GraphicsString avboitCsgShaderVariant(m_arena);
     const bool csgClipPipeline = ECSRenderMaterialShaderVariants::CsgClipPipeline(pipelineKey);
     const bool avboitCsgClipPipeline = ECSRenderMaterialShaderVariants::AvboitCsgClipPipeline(pipelineKey);
-    if(csgClipPipeline && !avboitCsgClipPipeline && !ECSRenderMaterialShaderVariants::BuildCsgClipShaderVariantName(shaderVariant, csgShaderVariant)){
+    ACompactString csgProjectEvaluatorModuleInclude;
+    Core::GraphicsString csgProjectEvaluatorModuleAssignment(m_arena);
+    AStringView materialProjectEvaluatorModuleAssignmentToAdd;
+    AStringView avboitProjectEvaluatorModuleAssignmentToAdd;
+    if(csgClipPipeline){
+        if(!__hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(
+            m_csgShapeRegistry,
+            pipelineKey.csgEvaluatorVariant,
+            csgProjectEvaluatorModuleInclude
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to resolve CSG evaluator module for material '{}'"), StringConvert(materialKey.c_str()));
+            return failMaterialPipeline();
+        }
+        if(!__hidden_material_pipeline::BuildCsgProjectEvaluatorModuleAssignment(csgProjectEvaluatorModuleInclude.view(), csgProjectEvaluatorModuleAssignment)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG evaluator module define for material '{}'"), StringConvert(materialKey.c_str()));
+            return failMaterialPipeline();
+        }
+        if(!csgProjectEvaluatorModuleAssignment.empty()){
+            AStringView existingEvaluatorModuleAssignment;
+            const bool materialVariantHasEvaluatorModule = ECSRenderMaterialShaderVariants::FindVariantDefineAssignment(
+                shaderVariant,
+                ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName,
+                existingEvaluatorModuleAssignment
+            );
+            if(materialVariantHasEvaluatorModule && existingEvaluatorModuleAssignment != AStringView(csgProjectEvaluatorModuleAssignment)){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' uses a different CSG evaluator module than its active cutters")
+                    , StringConvert(materialKey.c_str())
+                );
+                return failMaterialPipeline();
+            }
+            if(!materialVariantHasEvaluatorModule)
+                materialProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
+            avboitProjectEvaluatorModuleAssignmentToAdd = csgProjectEvaluatorModuleAssignment;
+        }
+    }
+    if(
+        csgClipPipeline
+        && !avboitCsgClipPipeline
+        && !__hidden_material_pipeline::BuildCsgShaderVariantName(
+            shaderVariant,
+            false,
+            materialProjectEvaluatorModuleAssignmentToAdd,
+            csgShaderVariant
+        )
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build CSG shader variant for material '{}'"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();
     }
-    if(avboitCsgClipPipeline && !ECSRenderMaterialShaderVariants::BuildAvboitCsgClipShaderVariantName(shaderVariant, csgShaderVariant)){
+    if(
+        avboitCsgClipPipeline
+        && !__hidden_material_pipeline::BuildCsgShaderVariantName(
+            shaderVariant,
+            true,
+            materialProjectEvaluatorModuleAssignmentToAdd,
+            csgShaderVariant
+        )
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG mesh shader variant for material '{}'"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();
     }
-    if(avboitCsgClipPipeline && !ECSRenderMaterialShaderVariants::BuildAvboitCsgClipShaderVariantName(Core::ShaderArchive::s_DefaultVariant, avboitCsgShaderVariant)){
+    if(
+        avboitCsgClipPipeline
+        && !__hidden_material_pipeline::BuildCsgShaderVariantName(
+            Core::ShaderArchive::s_DefaultVariant,
+            true,
+            avboitProjectEvaluatorModuleAssignmentToAdd,
+            avboitCsgShaderVariant
+        )
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to build AVBOIT CSG pixel shader variant for material '{}'"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();
     }

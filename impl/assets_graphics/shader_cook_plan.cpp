@@ -107,6 +107,139 @@ static bool CountShaderVariants(const ShaderCook::ShaderEntry& entry, u64& outVa
     return true;
 }
 
+static AStringView UnquoteProjectEvaluatorModuleInclude(const AStringView defineValue){
+    if(defineValue.size() < 2u || defineValue.front() != '"' || defineValue.back() != '"')
+        return AStringView{};
+
+    return defineValue.substr(1u, defineValue.size() - 2u);
+}
+
+static bool ResolveProjectEvaluatorModuleIncludePath(
+    const AStringView includeName,
+    const ShaderCook::CookVector<Path>& includeDirectories,
+    Path& outPath,
+    ScratchArena& scratchArena
+){
+    outPath.clear();
+    if(includeName.empty())
+        return false;
+
+    ErrorCode errorCode;
+    ScratchString includeText(includeName, scratchArena);
+    const Path includePath(includeText.c_str());
+    if(includePath.is_absolute()){
+        errorCode.clear();
+        if(IsRegularFile(includePath, errorCode)){
+            outPath = includePath.lexically_normal();
+            return true;
+        }
+        if(errorCode && !IsMissingPathError(errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query CSG evaluator module include '{}': {}")
+                , PathToString<tchar>(includePath)
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+    }
+
+    for(const Path& includeDirectory : includeDirectories){
+        const Path candidate = (includeDirectory / includePath).lexically_normal();
+        errorCode.clear();
+        if(IsRegularFile(candidate, errorCode)){
+            outPath = candidate;
+            return true;
+        }
+        if(errorCode && !IsMissingPathError(errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query CSG evaluator module include '{}': {}")
+                , PathToString<tchar>(candidate)
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
+    return false;
+}
+
+static bool SameDependencyPath(const Path& lhs, const Path& rhs, ScratchArena& scratchArena){
+    ErrorCode errorCode;
+    const Path lhsAbsolute = AbsolutePath(lhs, errorCode).lexically_normal();
+    if(errorCode)
+        return false;
+    const Path rhsAbsolute = AbsolutePath(rhs, errorCode).lexically_normal();
+    if(errorCode)
+        return false;
+
+    ScratchString lhsText = PathToString(scratchArena, lhsAbsolute);
+    ScratchString rhsText = PathToString(scratchArena, rhsAbsolute);
+    CanonicalizeTextInPlace(lhsText);
+    CanonicalizeTextInPlace(rhsText);
+    return lhsText == rhsText;
+}
+
+static bool AppendUniqueDependency(
+    ShaderCook::CookVector<Path>& inOutDependencies,
+    const Path& dependency,
+    ScratchArena& scratchArena
+){
+    for(const Path& existingDependency : inOutDependencies){
+        if(SameDependencyPath(existingDependency, dependency, scratchArena))
+            return true;
+    }
+
+    ErrorCode errorCode;
+    Path absoluteDependency = AbsolutePath(dependency, errorCode).lexically_normal();
+    if(errorCode){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve CSG evaluator module dependency '{}': {}")
+            , PathToString<tchar>(dependency)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    inOutDependencies.push_back(Move(absoluteDependency));
+    return true;
+}
+
+static bool AppendCsgProjectEvaluatorModuleDependencies(
+    ShaderCook::CookArena& cookArena,
+    ShaderCook& shaderCook,
+    const ShaderCook::ShaderEntry& entry,
+    const ShaderCook::CookVector<Path>& includeDirectories,
+    ShaderCook::CookVector<Path>& inOutDependencies,
+    ScratchArena& scratchArena
+){
+    ShaderCook::CookString defineName(AssetsGraphicsCsgShaderVariants::ProjectEvaluatorModuleDefineName(), cookArena);
+    const auto foundDefine = entry.defineValues.find(defineName);
+    if(foundDefine == entry.defineValues.end())
+        return true;
+
+    ShaderCook::CookVector<Path> moduleDependencies(cookArena);
+    for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
+        const AStringView includeName = UnquoteProjectEvaluatorModuleInclude(AStringView(defineValue));
+        if(includeName.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: CSG evaluator module define value '{}' must be a quoted include path")
+                , StringConvert(defineValue)
+            );
+            return false;
+        }
+
+        Path modulePath;
+        if(!ResolveProjectEvaluatorModuleIncludePath(includeName, includeDirectories, modulePath, scratchArena))
+            return false;
+
+        moduleDependencies.clear();
+        if(!shaderCook.gatherShaderDependencies(modulePath, includeDirectories, moduleDependencies, scratchArena))
+            return false;
+        for(const Path& dependency : moduleDependencies){
+            if(!AppendUniqueDependency(inOutDependencies, dependency, scratchArena))
+                return false;
+        }
+    }
+
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -247,6 +380,16 @@ bool PrepareShaderEntriesForCook(
         ))
             return false;
 
+        shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
+        if(!__hidden_shader_cook_plan::AppendCsgProjectEvaluatorModuleDependencies(
+            cookArena,
+            shaderCook,
+            preparedEntry.entry,
+            preparedEntry.includeDirectories,
+            preparedEntry.dependencies,
+            scratchArena
+        ))
+            return false;
         shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, MaterialBindNames::TypedBindingImplicitDefineText()))
             return false;

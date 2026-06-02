@@ -14,6 +14,7 @@
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/frame_state.h>
+#include <impl/ecs_csg/shape_registry.h>
 #include <impl/ecs_scene/components.h>
 
 
@@ -83,6 +84,8 @@ public:
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual void invalidateResources()override;
     virtual void render(Core::Framebuffer* framebuffer)override;
+    [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
+    [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
 
 private:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
@@ -245,6 +248,11 @@ private:
     [[nodiscard]] bool reserveCsgParameterByteBufferCapacity(usize byteCount);
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
+    [[nodiscard]] bool resolveCsgReceiverEvaluatorVariant(
+        const CsgFrameReceiverLookup& receiverLookup,
+        Core::ECS::EntityID entity,
+        Name& outEvaluatorVariant
+    )const;
     [[nodiscard]] u32 countCsgReceiverClipCutters(const CsgFrameReceiverLookup& receiverLookup, Core::ECS::EntityID entity)const;
     [[nodiscard]] bool appendCsgReceiverClipData(
         const CsgFrameReceiverLookup& receiverLookup,
@@ -356,6 +364,7 @@ private:
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
+    CsgShapeRegistry m_csgShapeRegistry;
 
 private:
     RendererMeshState m_meshState;

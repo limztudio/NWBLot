@@ -274,10 +274,15 @@ void RendererSystem::gatherMaterialPassDrawItems(
             )
         ;
         const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(csgReceiverLookup, entity) : 0u;
-        const bool csgClipActive = csgClipCutterCount > 0u;
+        Name csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+        const bool csgEvaluatorReady = csgClipCutterCount > 0u
+            ? resolveCsgReceiverEvaluatorVariant(csgReceiverLookup, entity, csgEvaluatorVariant)
+            : true
+        ;
+        const bool csgClipActive = csgClipCutterCount > 0u && csgEvaluatorReady;
         if(csgClipActive){
             pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
-            pipelineKey.csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+            pipelineKey.csgEvaluatorVariant = csgEvaluatorVariant;
         }
 
         MaterialPipelineResources* pipelineResources = nullptr;

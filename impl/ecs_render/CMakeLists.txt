@@ -17,6 +17,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit_target_bindings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit_targets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_cap_proxy.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_cap_proxy_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_cap_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_cap_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_caps.cpp"

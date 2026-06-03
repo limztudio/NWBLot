@@ -45,8 +45,13 @@ inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_rang
 inline constexpr Name s_CsgCutterBufferName("ecs_render/csg_cutters");
 inline constexpr Name s_CsgParameterByteBufferName("ecs_render/csg_parameter_bytes");
 inline constexpr Name s_CsgCapVertexBufferName("ecs_render/csg_cap_vertices");
+inline constexpr Name s_CsgCapProxyBufferName("ecs_render/csg_cap_proxies");
 inline constexpr Name s_CsgCapVertexShaderName("engine/graphics/csg/cap_vs");
 inline constexpr Name s_CsgCapPixelShaderName("engine/graphics/csg/cap_ps");
+inline constexpr Name s_CsgCapProxyPlaneMeshShaderName("engine/graphics/csg/cap_proxy_plane_ms");
+inline constexpr Name s_CsgCapProxyBoxMeshShaderName("engine/graphics/csg/cap_proxy_box_ms");
+inline constexpr Name s_CsgCapProxySphereMeshShaderName("engine/graphics/csg/cap_proxy_sphere_ms");
+inline constexpr Name s_CsgCapProxyCapsuleMeshShaderName("engine/graphics/csg/cap_proxy_capsule_ms");
 inline constexpr Name s_CsgTransparentCapOccupancyPixelShaderName("engine/graphics/csg/transparent_cap_occupancy_ps");
 inline constexpr Name s_CsgTransparentCapExtinctionPixelShaderName("engine/graphics/csg/transparent_cap_extinction_ps");
 inline constexpr Name s_CsgTransparentCapAccumulatePixelShaderName("engine/graphics/csg/transparent_cap_accumulate_ps");
@@ -69,4 +74,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -122,6 +122,20 @@ bool ECSRenderCsgCapProxy::AppendDrawItem(
         return false;
 
     csgFrameData.capProxyDrawItems.push_back(item);
+
+    const u32 proxyShapeMask = CsgCapProxyShapeMask(cutter.shapeType);
+    if(proxyShapeMask != 0u){
+        CsgCapProxyGpuData gpuItem;
+        gpuItem.receiverCutterShapePass.x = item.receiverCutterShapePass.x;
+        gpuItem.receiverCutterShapePass.y = item.receiverCutterShapePass.y;
+        gpuItem.receiverCutterShapePass.z = item.receiverCutterShapePass.z;
+        gpuItem.receiverCutterShapePass.w = item.receiverCutterShapePass.w;
+        gpuItem.receiverBounds = item.receiverBounds;
+        gpuItem.cutterBounds = item.cutterBounds;
+
+        csgFrameData.capProxyGpuItems.push_back(gpuItem);
+        csgFrameData.capProxyShapeMask |= proxyShapeMask;
+    }
     return true;
 }
 

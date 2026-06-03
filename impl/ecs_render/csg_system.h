@@ -69,6 +69,10 @@ public:
     void renderCsgCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData, const CsgCapDrawItemVector& capDrawItems, Core::GraphicsPipeline* pipeline);
     void renderCsgOpaqueCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
     void renderCsgTransparentCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
+    [[nodiscard]] bool createCsgCapProxyResources(Core::Framebuffer* framebuffer, u32 shapeMask);
+    [[nodiscard]] bool reserveCsgCapProxyBufferCapacity(usize proxyCount);
+    [[nodiscard]] bool uploadCsgCapProxies(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    void renderCsgOpaqueCapProxies(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
 };
 
 

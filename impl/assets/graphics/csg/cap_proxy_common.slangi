@@ -1,0 +1,179 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_CAP_PROXY_COMMON_SLANGI
+#define NWB_GRAPHICS_CSG_CAP_PROXY_COMMON_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_CSG_MESH_INSTANCE_INDEX 0u
+
+#include "binding_slots.h"
+#include "constants.h"
+#include "runtime.slangi"
+
+#include "../mesh/binding_slots.h"
+#include "../mesh/meshlet_constants.h"
+#include "../mesh/raster_fields.slangi"
+#include "../mesh/view_buffer.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_MESH_SHADER_EMULATION_COMPUTE
+#define NWB_MESH_SHADER_EMULATION_COMPUTE 0
+#endif
+
+#define NWB_CSG_CAP_PROXY_GROUP_SIZE 64
+#define NWB_CSG_CAP_PROXY_MAX_SEGMENTS 12u
+#define NWB_CSG_CAP_PROXY_MAX_ROWS 5u
+#define NWB_CSG_CAP_PROXY_MAX_VERTICES 78u
+#define NWB_CSG_CAP_PROXY_MAX_TRIANGLES 120u
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgCapProxyBounds{
+    float3 minBounds;
+    int minFlags;
+    float3 maxBounds;
+    int maxFlags;
+};
+
+struct NwbCsgCapProxyDrawItem{
+    uint4 receiverCutterShapePass;
+    NwbCsgCapProxyBounds receiverBounds;
+    NwbCsgCapProxyBounds cutterBounds;
+};
+
+struct NwbCsgCapProxyPushConstants{
+    uint4 dispatch;
+    float4 viewportRect;
+    float4 scissorRect;
+};
+
+[[vk::binding(NWB_CSG_BINDING_CAP_PROXIES, NWB_CSG_CAP_PROXY_SET)]]
+StructuredBuffer<NwbCsgCapProxyDrawItem, Std430DataLayout> g_NwbCsgCapProxies;
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgCapProxyPushConstants> g_NwbCsgCapProxyPushConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbCsgCapProxyBoundsCenter(const NwbCsgCapProxyBounds bounds){
+    return (bounds.minBounds + bounds.maxBounds) * 0.5;
+}
+
+float3 nwbCsgCapProxyBoundsExtents(const NwbCsgCapProxyBounds bounds){
+    return max((bounds.maxBounds - bounds.minBounds) * 0.5, float3(0.0));
+}
+
+float3 nwbCsgTransformShapeToWorld(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float4 p = float4(shapePosition, 1.0);
+    return float3(
+        dot(cutter.shapeToWorldRow0, p),
+        dot(cutter.shapeToWorldRow1, p),
+        dot(cutter.shapeToWorldRow2, p)
+    );
+}
+
+float3 nwbCsgTransformShapeVectorToWorld(const float3 shapeVector, const NwbCsgCutter cutter){
+    return float3(
+        dot(cutter.shapeToWorldRow0.xyz, shapeVector),
+        dot(cutter.shapeToWorldRow1.xyz, shapeVector),
+        dot(cutter.shapeToWorldRow2.xyz, shapeVector)
+    );
+}
+
+float3 nwbCsgCapProxyNormalizeOr(const float3 value, const float3 fallback){
+    const float lengthSquared = dot(value, value);
+    if(lengthSquared <= 0.00000001 || !isfinite(lengthSquared))
+        return fallback;
+    return value * rsqrt(lengthSquared);
+}
+
+float3 nwbCsgCapProxyShapeNormalToWorld(const float3 shapeNormal, const NwbCsgCutter cutter, const float3 fallback){
+    float3 worldNormal =
+        cutter.worldToShapeRow0.xyz * shapeNormal.x
+        + cutter.worldToShapeRow1.xyz * shapeNormal.y
+        + cutter.worldToShapeRow2.xyz * shapeNormal.z
+    ;
+    return nwbCsgCapProxyNormalizeOr(worldNormal, fallback);
+}
+
+float3 nwbCsgCapProxyTangentFromNormal(const float3 normal){
+    const float3 axis = abs(normal.y) < 0.95 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
+    return nwbCsgCapProxyNormalizeOr(cross(axis, normal), float3(1.0, 0.0, 0.0));
+}
+
+NwbMeshRasterVertex nwbCsgCapProxyBuildVertex(
+    const float3 worldPosition,
+    const float3 shapeNormal,
+    const NwbCsgCutter cutter,
+    const uint receiverIndex,
+    const uint cutterIndex
+){
+    const float3 worldNormal = -nwbCsgCapProxyShapeNormalToWorld(shapeNormal, cutter, float3(0.0, 1.0, 0.0));
+    const float3 tangent = nwbCsgCapProxyTangentFromNormal(worldNormal);
+    return nwbMeshBuildRasterVertex(
+        mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0)),
+        float4(0.9, 0.68, 0.72, 1.0),
+        worldNormal,
+        float4(tangent, float(cutterIndex)),
+        float2(0.0, 0.0),
+        float4(worldPosition, float(receiverIndex))
+    );
+}
+
+float nwbCsgCapProxyProjectedRadiusPixels(const float3 centerWorld, const float3 radiusVectorWorld){
+    const float4 centerClip = mul(g_NwbMeshWorldToClip, float4(centerWorld, 1.0));
+    const float4 edgeClip = mul(g_NwbMeshWorldToClip, float4(centerWorld + radiusVectorWorld, 1.0));
+    if(abs(centerClip.w) <= 0.00001 || abs(edgeClip.w) <= 0.00001)
+        return 0.0;
+
+    const float2 centerNdc = centerClip.xy / centerClip.w;
+    const float2 edgeNdc = edgeClip.xy / edgeClip.w;
+    const float2 viewportSize = max(abs(g_NwbCsgCapProxyPushConstants.viewportRect.zw - g_NwbCsgCapProxyPushConstants.viewportRect.xy), float2(1.0));
+    return length((edgeNdc - centerNdc) * viewportSize * 0.5);
+}
+
+uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyDrawItem item, const NwbCsgCutter cutter, const float radiusShape){
+    const float3 centerWorld = nwbCsgCapProxyBoundsCenter(item.cutterBounds);
+    const float3 radiusVectorWorld = nwbCsgTransformShapeVectorToWorld(float3(max(radiusShape, 0.0001), 0.0, 0.0), cutter);
+    const float projectedRadius = nwbCsgCapProxyProjectedRadiusPixels(centerWorld, radiusVectorWorld);
+    if(projectedRadius >= 128.0)
+        return 12u;
+    if(projectedRadius >= 72.0)
+        return 10u;
+    if(projectedRadius >= 32.0)
+        return 8u;
+    return 6u;
+}
+
+void nwbCsgCapProxyGridPrimitive(const uint localPrimitive, const uint segments, out uint3 indices){
+    const uint quad = localPrimitive / 2u;
+    const uint row = quad / segments;
+    const uint column = quad - row * segments;
+    const uint rowBase = row * (segments + 1u) + column;
+    const uint nextRowBase = rowBase + segments + 1u;
+    indices = (localPrimitive & 1u) == 0u
+        ? uint3(rowBase, rowBase + 1u, nextRowBase + 1u)
+        : uint3(rowBase, nextRowBase + 1u, nextRowBase)
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

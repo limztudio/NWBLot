@@ -13,9 +13,14 @@
 #define NWB_CSG_CLIP_SET 1
 #endif
 
+#ifndef NWB_CSG_CAP_PROXY_SET
+#define NWB_CSG_CAP_PROXY_SET 0
+#endif
+
 #define NWB_CSG_BINDING_RECEIVER_RANGES 0
 #define NWB_CSG_BINDING_CUTTERS 1
 #define NWB_CSG_BINDING_PARAMETER_BYTES 2
+#define NWB_CSG_BINDING_CAP_PROXIES 0
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

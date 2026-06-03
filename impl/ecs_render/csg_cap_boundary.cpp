@@ -45,11 +45,15 @@ namespace __hidden_csg_cap_boundary{
     const SIMDVector fallback
 ){
     if(!transform)
-        return NormalizeVector3Or(objectDirection, fallback);
+        return Vector3NormalizeOr(objectDirection, fallback, s_NormalizeMinLengthSquared);
 
     const SIMDVector scale = LoadFloat(transform->scale);
     const SIMDVector rotation = LoadFloat(transform->rotation);
-    return NormalizeVector3Or(Vector3Rotate(VectorMultiply(objectDirection, scale), rotation), fallback);
+    return Vector3NormalizeOr(
+        Vector3Rotate(VectorMultiply(objectDirection, scale), rotation),
+        fallback,
+        s_NormalizeMinLengthSquared
+    );
 }
 
 [[nodiscard]] static CapSourceVertex LoadCapSourceVertex(const CsgCapMeshVertex& vertex){
@@ -86,13 +90,15 @@ namespace __hidden_csg_cap_boundary{
     const CapSourceVertex& b,
     const f32 t
 ){
-    const SIMDVector normal = NormalizeVector3Or(
+    const SIMDVector normal = Vector3NormalizeOr(
         VectorLerp(a.normal, b.normal, t),
-        VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        s_NormalizeMinLengthSquared
     );
-    const SIMDVector tangent = NormalizeVector3Or(
+    const SIMDVector tangent = Vector3NormalizeOr(
         VectorLerp(VectorSetW(a.tangent, 0.0f), VectorSetW(b.tangent, 0.0f), t),
-        VectorSet(1.0f, 0.0f, 0.0f, 0.0f)
+        VectorSet(1.0f, 0.0f, 0.0f, 0.0f),
+        s_NormalizeMinLengthSquared
     );
 
     return CapSourceVertex{

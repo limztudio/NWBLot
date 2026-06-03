@@ -67,7 +67,7 @@ template<typename CookEntryT>
             0.0f
         );
         const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
-        const SIMDVector areaNormal = BuildMeshletFaceNormal(p0, p1, p2);
+        const SIMDVector areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
         triangle.centroid = VectorSetW(centroid, 0.0f);
         triangle.areaNormal = VectorSetW(areaNormal, 0.0f);
 

@@ -30,14 +30,7 @@ static constexpr f32 s_FrameHandednessEpsilon = 0.000001f;
 }
 
 [[nodiscard]] inline SIMDVector FrameNormalizeDirection(const SIMDVector value, const SIMDVector fallback){
-    if(!FrameFiniteVector(value, 0x7u))
-        return fallback;
-
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(value));
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_FrameDirectionEpsilon)
-        return fallback;
-
-    return VectorMultiply(value, VectorReciprocalSqrt(VectorReplicate(lengthSquared)));
+    return Vector3NormalizeOr(value, fallback, s_FrameDirectionEpsilon);
 }
 
 [[nodiscard]] inline SIMDVector FrameProjectOntoPlane(const SIMDVector value, const SIMDVector normal){

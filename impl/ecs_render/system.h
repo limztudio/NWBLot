@@ -253,12 +253,21 @@ private:
     [[nodiscard]] bool resolveCsgReceiverEvaluatorVariant(
         const CsgFrameReceiverLookup& receiverLookup,
         Core::ECS::EntityID entity,
+        const CsgReceiverCpuBounds& receiverBounds,
+        const NWB::Impl::Scene::TransformComponent* transform,
         Name& outEvaluatorVariant
     )const;
-    [[nodiscard]] u32 countCsgReceiverClipCutters(const CsgFrameReceiverLookup& receiverLookup, Core::ECS::EntityID entity)const;
+    [[nodiscard]] u32 countCsgReceiverClipCutters(
+        const CsgFrameReceiverLookup& receiverLookup,
+        Core::ECS::EntityID entity,
+        const CsgReceiverCpuBounds& receiverBounds,
+        const NWB::Impl::Scene::TransformComponent* transform
+    )const;
     [[nodiscard]] bool appendCsgReceiverClipData(
         const CsgFrameReceiverLookup& receiverLookup,
         Core::ECS::EntityID entity,
+        const CsgReceiverCpuBounds& receiverBounds,
+        const NWB::Impl::Scene::TransformComponent* transform,
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange
     )const;

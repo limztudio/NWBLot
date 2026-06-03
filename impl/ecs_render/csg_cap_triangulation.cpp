@@ -32,8 +32,20 @@ static void BuildProjectionBasis(const SIMDVector capNormal, SIMDVector& outU, S
         ? VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
         : VectorSet(1.0f, 0.0f, 0.0f, 0.0f)
     ;
-    outU = NormalizeVector3Or(Vector3Cross(reference, capNormal), VectorSet(1.0f, 0.0f, 0.0f, 0.0f));
-    outV = NormalizeVector3Or(Vector3Cross(capNormal, outU), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+    outU = Vector3NormalizeOr(
+        Vector3Cross(reference, capNormal),
+        VectorSet(1.0f, 0.0f, 0.0f, 0.0f),
+        s_NormalizeMinLengthSquared
+    );
+    outV = Vector3NormalizeOr(
+        Vector3Cross(capNormal, outU),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        s_NormalizeMinLengthSquared
+    );
+}
+
+[[nodiscard]] static SIMDVector ProjectedPointVector(const CapProjectedPoint& point){
+    return VectorSet(point.u, point.v, 0.0f, 0.0f);
 }
 
 [[nodiscard]] static f32 PolygonSignedArea(const CapProjectedPointVector& points, const CapIndexVector& polygon){
@@ -41,9 +53,9 @@ static void BuildProjectionBasis(const SIMDVector capNormal, SIMDVector& outU, S
     for(usize index = 0u; index < polygon.size(); ++index){
         const CapProjectedPoint& a = points[polygon[index]];
         const CapProjectedPoint& b = points[polygon[(index + 1u) % polygon.size()]];
-        area += a.u * b.v - b.u * a.v;
+        area += VectorGetX(TriangleTests::SignedArea2D(VectorZero(), ProjectedPointVector(a), ProjectedPointVector(b)));
     }
-    return area * 0.5f;
+    return area;
 }
 
 static void ReversePolygon(CapIndexVector& polygon){
@@ -57,22 +69,6 @@ static void ReversePolygon(CapIndexVector& polygon){
         ++left;
         --right;
     }
-}
-
-[[nodiscard]] static f32 Cross2(const CapProjectedPoint& a, const CapProjectedPoint& b, const CapProjectedPoint& c){
-    return (b.u - a.u) * (c.v - a.v) - (b.v - a.v) * (c.u - a.u);
-}
-
-[[nodiscard]] static bool PointInTriangle2(
-    const CapProjectedPoint& p,
-    const CapProjectedPoint& a,
-    const CapProjectedPoint& b,
-    const CapProjectedPoint& c
-){
-    const f32 ab = Cross2(a, b, p);
-    const f32 bc = Cross2(b, c, p);
-    const f32 ca = Cross2(c, a, p);
-    return ab >= -s_PointMergeEpsilon && bc >= -s_PointMergeEpsilon && ca >= -s_PointMergeEpsilon;
 }
 
 [[nodiscard]] static bool AppendFanTriangulation(
@@ -124,7 +120,7 @@ static void ReversePolygon(CapIndexVector& polygon){
         const SIMDVector b = LoadFloat(points[loop[(index + 1u) % loop.size()]].position);
         polygonNormal = VectorAdd(polygonNormal, Vector3Cross(a, b));
     }
-    polygonNormal = NormalizeVector3Or(polygonNormal, firstNormal);
+    polygonNormal = Vector3NormalizeOr(polygonNormal, firstNormal, s_NormalizeMinLengthSquared);
     if(VectorGetX(Vector3Dot(polygonNormal, firstNormal)) < 0.0f)
         polygonNormal = VectorNegate(polygonNormal);
 
@@ -187,14 +183,24 @@ bool AppendEarClippedTriangulation(
             const CapProjectedPoint& previous = projected[previousIndex];
             const CapProjectedPoint& current = projected[currentIndex];
             const CapProjectedPoint& next = projected[nextIndex];
-            if(__hidden_csg_cap_triangulation::Cross2(previous, current, next) <= s_PointMergeEpsilon)
+            if(VectorGetX(TriangleTests::EdgeCross2D(
+                __hidden_csg_cap_triangulation::ProjectedPointVector(previous),
+                __hidden_csg_cap_triangulation::ProjectedPointVector(current),
+                __hidden_csg_cap_triangulation::ProjectedPointVector(next)
+            )) <= s_PointMergeEpsilon)
                 continue;
 
             bool containsPoint = false;
             for(const u32 testIndex : polygon){
                 if(testIndex == previousIndex || testIndex == currentIndex || testIndex == nextIndex)
                     continue;
-                if(__hidden_csg_cap_triangulation::PointInTriangle2(projected[testIndex], previous, current, next)){
+                if(TriangleTests::ContainsPoint2D(
+                    __hidden_csg_cap_triangulation::ProjectedPointVector(projected[testIndex]),
+                    __hidden_csg_cap_triangulation::ProjectedPointVector(previous),
+                    __hidden_csg_cap_triangulation::ProjectedPointVector(current),
+                    __hidden_csg_cap_triangulation::ProjectedPointVector(next),
+                    VectorReplicate(s_PointMergeEpsilon)
+                )){
                     containsPoint = true;
                     break;
                 }

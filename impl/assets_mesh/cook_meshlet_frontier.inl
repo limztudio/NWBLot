@@ -92,10 +92,10 @@ static void AddMeshletTriangleToScoreState(
         );
     }
 
-    AccumulateMeshletScoreBounds(trianglePositions, state.minBounds, state.maxBounds, state.hasGeometry);
+    AccumulateMeshletScoreBounds(trianglePositions, state.minBounds, state.maxBounds);
     const SIMDVector triangleCentroid = triangle.centroid;
     const SIMDVector triangleAreaNormal = triangle.areaNormal;
-    state.radius = ComputeMeshletScoreBoundsRadius(state.minBounds, state.maxBounds);
+    state.radius = AabbTests::Radius(state.minBounds, state.maxBounds);
     state.centroidSum = VectorAdd(state.centroidSum, triangleCentroid);
     state.normalSum = VectorAdd(state.normalSum, triangleAreaNormal);
     state.normalAxis = NormalizeMeshletDirectionOrZero(state.normalSum);

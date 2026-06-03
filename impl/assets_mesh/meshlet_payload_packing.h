@@ -177,21 +177,20 @@ namespace MeshletRefDeltaWidth{
     }
 
     const SIMDVector axis = VectorSet(x, y, z, 0.0f);
-    const SIMDVector lengthSquaredVector = Vector3LengthSq(axis);
-    const f32 lengthSquared = VectorGetX(lengthSquaredVector);
-    if(!IsFinite(lengthSquared) || lengthSquared <= s_MeshletConeAxisLengthSquaredEpsilon)
-        return VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-
-    return VectorMultiply(axis, VectorReciprocalSqrt(lengthSquaredVector));
+    return Vector3NormalizeOr(
+        axis,
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        s_MeshletConeAxisLengthSquaredEpsilon
+    );
 }
 
 [[nodiscard]] inline f32 ConservativePackedMeshletConeCutoff(const SIMDVector axis, const f32 cutoff, const u32 packedAxis){
     const SIMDVector unpackedAxis = UnpackMeshletConeOct16Axis(packedAxis);
-    const f32 axisLengthSquared = VectorGetX(Vector3LengthSq(axis));
-    const SIMDVector normalizedAxis = IsFinite(axisLengthSquared) && axisLengthSquared > s_MeshletConeAxisLengthSquaredEpsilon
-        ? VectorMultiply(axis, VectorReciprocalSqrt(VectorReplicate(axisLengthSquared)))
-        : unpackedAxis
-    ;
+    const SIMDVector normalizedAxis = Vector3NormalizeOr(
+        axis,
+        unpackedAxis,
+        s_MeshletConeAxisLengthSquaredEpsilon
+    );
     const f32 axisDot = Max(-1.0f, Min(1.0f, VectorGetX(Vector3Dot(normalizedAxis, unpackedAxis))));
     const f32 safeCutoff = Saturate(cutoff);
     const SIMDVector cosineTerms = VectorSet(safeCutoff, axisDot, 0.0f, 0.0f);

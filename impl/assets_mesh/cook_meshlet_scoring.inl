@@ -51,39 +51,22 @@ template<typename VertexRefVectorT>
 }
 
 static void ResetMeshletScoreState(MeshletScoreState& state){
-    state.minBounds = VectorReplicate(Limit<f32>::s_Max);
-    state.maxBounds = VectorReplicate(-Limit<f32>::s_Max);
+    AabbTests::Reset(state.minBounds, state.maxBounds);
     state.centroidSum = VectorZero();
     state.normalSum = VectorZero();
     state.normalAxis = VectorZero();
     state.primitiveCount = 0u;
     state.radius = 0.0f;
     state.coneCutoff = -1.0f;
-    state.hasGeometry = false;
     state.coneEnabled = false;
-}
-
-[[nodiscard]] static f32 ComputeMeshletScoreBoundsRadius(const SIMDVector minBounds, const SIMDVector maxBounds){
-    const SIMDVector extent = VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f);
-    return VectorGetX(Vector3Length(extent));
 }
 
 static void AccumulateMeshletScoreBounds(
     const SIMDVector (&trianglePositions)[3],
     SIMDVector& minBounds,
-    SIMDVector& maxBounds,
-    bool& hasGeometry
+    SIMDVector& maxBounds
 ){
-    for(const SIMDVector position : trianglePositions){
-        if(!hasGeometry){
-            minBounds = position;
-            maxBounds = position;
-            hasGeometry = true;
-        }else{
-            minBounds = VectorMin(minBounds, position);
-            maxBounds = VectorMax(maxBounds, position);
-        }
-    }
+    AabbTests::ExpandTriangle(trianglePositions[0u], trianglePositions[1u], trianglePositions[2u], minBounds, maxBounds);
 }
 
 [[nodiscard]] static f32 PredictMeshletScoreRadius(
@@ -92,10 +75,9 @@ static void AccumulateMeshletScoreBounds(
 ){
     SIMDVector minBounds = state.minBounds;
     SIMDVector maxBounds = state.maxBounds;
-    bool hasGeometry = state.hasGeometry;
-    AccumulateMeshletScoreBounds(trianglePositions, minBounds, maxBounds, hasGeometry);
+    AccumulateMeshletScoreBounds(trianglePositions, minBounds, maxBounds);
 
-    return ComputeMeshletScoreBoundsRadius(minBounds, maxBounds);
+    return AabbTests::Radius(minBounds, maxBounds);
 }
 
 [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVector triangleCentroid){

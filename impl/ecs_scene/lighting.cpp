@@ -23,12 +23,11 @@ namespace __hidden_lighting{
 
 
 static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward){
-    const SIMDVector lightDirection = VectorNegate(forward);
-    const f32 lightDirectionLengthSquared = VectorGetX(Vector3LengthSq(lightDirection));
-    if(!IsFinite(lightDirectionLengthSquared) || lightDirectionLengthSquared <= 0.0001f)
-        return VectorSet(0.0f, 0.0f, -1.0f, 0.0f);
-
-    return VectorSetW(Vector3Normalize(lightDirection), 0.0f);
+    return Vector3NormalizeOr(
+        VectorNegate(forward),
+        VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
+        0.0001f
+    );
 }
 
 

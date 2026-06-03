@@ -59,6 +59,64 @@ namespace __hidden_csg_resources{
     return true;
 }
 
+[[nodiscard]] static bool BuildReceiverWorldBounds(
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    if(!receiverBounds.valid)
+        return false;
+
+    const SIMDVector localMinBounds = LoadFloat(receiverBounds.minBounds);
+    const SIMDVector localMaxBounds = LoadFloat(receiverBounds.maxBounds);
+    if(!AabbTests::Valid(localMinBounds, localMaxBounds))
+        return false;
+
+    if(!transform){
+        outMinBounds = localMinBounds;
+        outMaxBounds = localMaxBounds;
+        return true;
+    }
+
+    const SIMDVector scale = LoadFloat(transform->scale);
+    const SIMDVector rotation = LoadFloat(transform->rotation);
+    const SIMDVector translation = LoadFloat(transform->position);
+    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
+    return AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
+}
+
+[[nodiscard]] static bool CsgCutterIntersectsReceiver(
+    const CsgShapeRegistry& shapeRegistry,
+    const CsgCutterComponent& cutter,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform
+){
+    SIMDVector receiverMinBounds;
+    SIMDVector receiverMaxBounds;
+    if(!BuildReceiverWorldBounds(receiverBounds, transform, receiverMinBounds, receiverMaxBounds))
+        return true;
+
+    SIMDVector cutterMinBounds;
+    SIMDVector cutterMaxBounds;
+    bool finiteBounds = false;
+    const u8* parameterBytes = cutter.parameterBytes.empty() ? nullptr : cutter.parameterBytes.data();
+    if(!shapeRegistry.buildShapeBounds(
+        cutter.shapeType,
+        LoadFloat(cutter.shapeToWorld),
+        parameterBytes,
+        cutter.parameterBytes.size(),
+        cutterMinBounds,
+        cutterMaxBounds,
+        finiteBounds
+    ))
+        return false;
+    if(!finiteBounds)
+        return true;
+
+    return AabbTests::Intersects(receiverMinBounds, receiverMaxBounds, cutterMinBounds, cutterMaxBounds);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -234,6 +292,8 @@ void RendererSystem::setCsgClipBufferStates(Core::CommandList& commandList){
 bool RendererSystem::resolveCsgReceiverEvaluatorVariant(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform,
     Name& outEvaluatorVariant
 )const{
     outEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
@@ -244,6 +304,8 @@ bool RendererSystem::resolveCsgReceiverEvaluatorVariant(
         [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
             static_cast<void>(cutterEntity);
             if(!resolved || cutter.operation != CsgOperation::Subtract)
+                return;
+            if(!__hidden_csg_resources::CsgCutterIntersectsReceiver(m_csgShapeRegistry, cutter, receiverBounds, transform))
                 return;
 
             CsgShapeTypeInfo shapeType;
@@ -267,13 +329,18 @@ bool RendererSystem::resolveCsgReceiverEvaluatorVariant(
 
 u32 RendererSystem::countCsgReceiverClipCutters(
     const CsgFrameReceiverLookup& receiverLookup,
-    const Core::ECS::EntityID entity
+    const Core::ECS::EntityID entity,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform
 )const{
     u32 cutterCount = 0u;
     receiverLookup.forEachReceiverCutter(
         entity,
         [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
             static_cast<void>(cutterEntity);
+            if(!__hidden_csg_resources::CsgCutterIntersectsReceiver(m_csgShapeRegistry, cutter, receiverBounds, transform))
+                return;
+
             CsgCutterGpuData unusedCutter;
             if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(m_csgShapeRegistry, cutter, nullptr, unusedCutter))
                 return;
@@ -287,6 +354,8 @@ u32 RendererSystem::countCsgReceiverClipCutters(
 bool RendererSystem::appendCsgReceiverClipData(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform,
     CsgFrameGpuData& csgFrameData,
     CsgReceiverRangeGpuData& outRange
 )const{
@@ -301,6 +370,8 @@ bool RendererSystem::appendCsgReceiverClipData(
         [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
             static_cast<void>(cutterEntity);
             if(appendFailed)
+                return;
+            if(!__hidden_csg_resources::CsgCutterIntersectsReceiver(m_csgShapeRegistry, cutter, receiverBounds, transform))
                 return;
 
             CsgCutterGpuData cutterGpuData;

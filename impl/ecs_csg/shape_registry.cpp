@@ -75,44 +75,11 @@ template<typename ParameterT>
     return true;
 }
 
-[[nodiscard]] bool TryBuildTransformedLocalAabbVectors(
-    const SIMDMatrix& shapeToWorldMatrix,
-    const SIMDVector localMin,
-    const SIMDVector localMax,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds
-){
-    if(MatrixIsNaN(shapeToWorldMatrix) || MatrixIsInfinite(shapeToWorldMatrix))
-        return false;
-
-    outMinBounds = VectorReplicate(s_MaxF32);
-    outMaxBounds = VectorReplicate(-s_MaxF32);
-
-    for(u32 corner = 0u; corner < 8u; ++corner){
-        const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
-        const SIMDVector localPoint = VectorSelect(localMin, localMax, cornerSelect);
-        const SIMDVector point = Vector3Transform(localPoint, shapeToWorldMatrix);
-        if(Vector3IsNaN(point) || Vector3IsInfinite(point))
-            return false;
-
-        outMinBounds = VectorMin(outMinBounds, point);
-        outMaxBounds = VectorMax(outMaxBounds, point);
-    }
-
-    return true;
-}
-
 [[nodiscard]] bool ValidBoundsVectors(const SIMDVector minBounds, const SIMDVector maxBounds, const bool finiteBounds){
     if(!finiteBounds)
         return true;
 
-    return
-        !Vector3IsNaN(minBounds)
-        && !Vector3IsInfinite(minBounds)
-        && !Vector3IsNaN(maxBounds)
-        && !Vector3IsInfinite(maxBounds)
-        && Vector3GreaterOrEqual(maxBounds, minBounds)
-    ;
+    return AabbTests::Valid(minBounds, maxBounds);
 }
 
 [[nodiscard]] bool BuildShapeBoundsForShapeType(
@@ -185,7 +152,7 @@ template<typename ParameterT>
     )
         return false;
 
-    if(!TryBuildTransformedLocalAabbVectors(
+    if(!AabbTests::Transform(
         shapeToWorld,
         VectorSetW(VectorNegate(halfExtents), 0.0f),
         halfExtents,
@@ -219,7 +186,7 @@ template<typename ParameterT>
 
     const SIMDVector localMax = VectorSetW(radius, 0.0f);
 
-    if(!TryBuildTransformedLocalAabbVectors(
+    if(!AabbTests::Transform(
         shapeToWorld,
         VectorSetW(VectorNegate(localMax), 0.0f),
         localMax,
@@ -263,7 +230,7 @@ template<typename ParameterT>
     const SIMDVector yExtent = VectorAdd(halfHeight, radius);
     const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, VectorSelectControl(0u, 1u, 0u, 0u)), 0.0f);
 
-    if(!TryBuildTransformedLocalAabbVectors(
+    if(!AabbTests::Transform(
         shapeToWorld,
         VectorSetW(VectorNegate(localMax), 0.0f),
         localMax,

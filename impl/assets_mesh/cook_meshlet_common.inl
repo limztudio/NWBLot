@@ -31,14 +31,6 @@ template<typename CookEntryT>
     return entry.positions[vertexRef.position];
 }
 
-[[nodiscard]] static SIMDVector BuildMeshletFaceNormal(
-    const SIMDVector p0,
-    const SIMDVector p1,
-    const SIMDVector p2
-){
-    return Vector3Cross(VectorSubtract(p1, p0), VectorSubtract(p2, p0));
-}
-
 struct MeshletTriangleData{
     u32 vertexRefs[3] = {};
     u32 positions[3] = {};
@@ -80,7 +72,6 @@ struct MeshletScoreState{
     u32 primitiveCount = 0u;
     f32 radius = 0.0f;
     f32 coneCutoff = -1.0f;
-    bool hasGeometry = false;
     bool coneEnabled = false;
 };
 
@@ -112,10 +103,7 @@ static constexpr usize s_MeshletDisconnectedCandidateParallelThreshold = 4096u;
 static constexpr usize s_MeshletDisconnectedCandidateParallelOversubscription = 4u;
 
 [[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value){
-    if(!Core::Mesh::FrameValidDirection(value))
-        return VectorZero();
-
-    return VectorSetW(Vector3Normalize(value), 0.0f);
+    return Vector3NormalizeOr(value, VectorZero(), Core::Mesh::s_FrameDirectionEpsilon);
 }
 
 

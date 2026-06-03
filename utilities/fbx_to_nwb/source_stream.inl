@@ -243,6 +243,10 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     };
 }
 
+[[nodiscard]] f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal){
+    return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+}
+
 [[nodiscard]] bool TriangleHasArea(
     const SourceTriangleCorner (&vertices)[3],
     const f64 triangleAreaLengthSquaredEpsilon
@@ -251,7 +255,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     const Vec3& b = vertices[1u].position;
     const Vec3& c = vertices[2u].position;
     const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(a, b, c);
-    const f64 areaLengthSquared = areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+    const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
     return areaLengthSquared > triangleAreaLengthSquaredEpsilon;
 }
 
@@ -461,9 +465,9 @@ template<typename Value, typename Lookup>
             continue;
 
         const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
-        const SIMDVector edge01 = VectorSubtract(LoadFloat(rebuildVertices[i1].position), p0);
-        const SIMDVector edge02 = VectorSubtract(LoadFloat(rebuildVertices[i2].position), p0);
-        if(!Core::Mesh::FrameValidDirection(Vector3Cross(edge01, edge02)))
+        const SIMDVector p1 = LoadFloat(rebuildVertices[i1].position);
+        const SIMDVector p2 = LoadFloat(rebuildVertices[i2].position);
+        if(!Core::Mesh::FrameValidDirection(TriangleTests::AreaNormal(p0, p1, p2)))
             continue;
 
         rebuildIndices.push_back(i0);

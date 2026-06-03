@@ -114,6 +114,12 @@ struct CsgReceiverRangeGpuData{
     u32 padding0 = 0u;
 };
 
+struct CsgReceiverCpuBounds{
+    Float4 minBounds = Float4(0.f, 0.f, 0.f, 0.f);
+    Float4 maxBounds = Float4(0.f, 0.f, 0.f, 0.f);
+    bool valid = false;
+};
+
 [[nodiscard]] inline Float34 MakeIdentityCsgMatrix(){
     Float34 matrix{};
     matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
@@ -140,6 +146,9 @@ struct CsgCutterGpuData{
 static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 4u, "CsgReceiverRangeGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgCutterGpuData) == sizeof(u32) * 4u + sizeof(Float34) * 2u + sizeof(Float4) * 3u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");
+static_assert(alignof(CsgReceiverCpuBounds) >= alignof(Float4), "CsgReceiverCpuBounds must stay SIMD-friendly");
+static_assert(IsStandardLayout_V<CsgReceiverCpuBounds>, "CsgReceiverCpuBounds must stay cache-friendly");
+static_assert(IsTriviallyCopyable_V<CsgReceiverCpuBounds>, "CsgReceiverCpuBounds must stay cheap to pass by value");
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
@@ -254,6 +263,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     u64 runtimeMeshVersion = 0u;
+    CsgReceiverCpuBounds csgLocalBounds;
     CsgCapMeshTriangleVector csgCapTriangles;
 
     explicit MeshResources(Core::Alloc::GlobalArena& arena)

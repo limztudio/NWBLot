@@ -132,6 +132,59 @@ template<typename PayloadT, typename PayloadVector>
     return true;
 }
 
+static void StoreReceiverCpuBounds(
+    const SIMDVector minBounds,
+    const SIMDVector maxBounds,
+    CsgReceiverCpuBounds& outBounds
+){
+    StoreFloat(VectorSetW(minBounds, 0.0f), &outBounds.minBounds);
+    StoreFloat(VectorSetW(maxBounds, 0.0f), &outBounds.maxBounds);
+    outBounds.valid = true;
+}
+
+template<typename PositionVector>
+[[nodiscard]] static bool BuildPositionStreamBounds(const PositionVector& positions, CsgReceiverCpuBounds& outBounds){
+    outBounds = CsgReceiverCpuBounds{};
+    if(positions.empty())
+        return false;
+
+    SIMDVector minBounds;
+    SIMDVector maxBounds;
+    AabbTests::Reset(minBounds, maxBounds);
+    for(const Float3U& position : positions)
+        AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
+
+    if(!AabbTests::Valid(minBounds, maxBounds))
+        return false;
+
+    StoreReceiverCpuBounds(minBounds, maxBounds, outBounds);
+    return true;
+}
+
+[[nodiscard]] static bool BuildCapTriangleBounds(const CsgCapMeshTriangleVector& triangles, CsgReceiverCpuBounds& outBounds){
+    outBounds = CsgReceiverCpuBounds{};
+    if(triangles.empty())
+        return false;
+
+    SIMDVector minBounds;
+    SIMDVector maxBounds;
+    AabbTests::Reset(minBounds, maxBounds);
+    for(const CsgCapMeshTriangle& triangle : triangles)
+        AabbTests::ExpandTriangle(
+            LoadFloat(triangle.vertices[0u].position),
+            LoadFloat(triangle.vertices[1u].position),
+            LoadFloat(triangle.vertices[2u].position),
+            minBounds,
+            maxBounds
+        );
+
+    if(!AabbTests::Valid(minBounds, maxBounds))
+        return false;
+
+    StoreReceiverCpuBounds(minBounds, maxBounds, outBounds);
+    return true;
+}
+
 };
 
 
@@ -184,6 +237,12 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
     if(!ECSRenderCsgCapSource::BuildCapTriangles(meshPath, mesh, createdMesh.csgCapTriangles))
         return false;
+    if(!__hidden_mesh::BuildPositionStreamBounds(mesh.positionStream(), createdMesh.csgLocalBounds)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds")
+            , StringConvert(meshPath.c_str())
+        );
+        return false;
+    }
 
     bool uploaded = true;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(
@@ -337,8 +396,15 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
         );
         return false;
     }
-    if(desc.capSourceTriangleCount > 0u)
+    if(desc.capSourceTriangleCount > 0u){
         createdMesh.csgCapTriangles.assign(desc.capSourceTriangles, desc.capSourceTriangles + desc.capSourceTriangleCount);
+        if(!__hidden_mesh::BuildCapTriangleBounds(createdMesh.csgCapTriangles, createdMesh.csgLocalBounds)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has invalid CSG receiver bounds")
+                , StringConvert(desc.meshKey.c_str())
+            );
+            return false;
+        }
+    }
     if(!__hidden_mesh::ResolveBufferElementCount(
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,

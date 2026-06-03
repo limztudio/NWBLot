@@ -34,15 +34,6 @@ bool CutterSupportsCap(const u32 shapeType){
     }
 }
 
-SIMDVector NormalizeVector3Or(const SIMDVector value, const SIMDVector fallback){
-    const SIMDVector lengthSquared = Vector3LengthSq(value);
-    const f32 scalarLengthSquared = VectorGetX(lengthSquared);
-    if(!IsFinite(scalarLengthSquared) || scalarLengthSquared <= 0.00000001f)
-        return fallback;
-
-    return VectorSetW(VectorMultiply(value, VectorReciprocalSqrt(lengthSquared)), 0.0f);
-}
-
 SIMDVector EvaluateShapeDistance(
     const CapCutterEval& cutterEval,
     const SIMDVector worldPosition
@@ -51,21 +42,13 @@ SIMDVector EvaluateShapeDistance(
     const SIMDVector parameters = LoadFloat(cutterEval.cutter.parameter0);
     switch(cutterEval.cutter.shapeType){
     case NWB_CSG_SHAPE_PLANE:
-        return VectorAdd(Vector3Dot(shapePosition, parameters), VectorSplatW(parameters));
-    case NWB_CSG_SHAPE_BOX:{
-        const SIMDVector q = VectorSubtract(VectorAbs(shapePosition), parameters);
-        const SIMDVector outside = VectorMax(q, VectorZero());
-        const f32 insideDistance = Min(Max(VectorGetX(q), Max(VectorGetY(q), VectorGetZ(q))), 0.0f);
-        return VectorAdd(Vector3Length(outside), VectorReplicate(insideDistance));
-    }
+        return SdfTests::Plane(shapePosition, parameters);
+    case NWB_CSG_SHAPE_BOX:
+        return SdfTests::Box(shapePosition, parameters);
     case NWB_CSG_SHAPE_SPHERE:
-        return VectorSubtract(Vector3Length(shapePosition), VectorSplatX(parameters));
-    case NWB_CSG_SHAPE_CAPSULE:{
-        const f32 halfHeight = VectorGetY(parameters);
-        const f32 clampedY = Max(-halfHeight, Min(halfHeight, VectorGetY(shapePosition)));
-        const SIMDVector segmentPoint = VectorSet(0.0f, clampedY, 0.0f, 0.0f);
-        return VectorSubtract(Vector3Length(VectorSubtract(shapePosition, segmentPoint)), VectorSplatX(parameters));
-    }
+        return SdfTests::Sphere(shapePosition, parameters);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return SdfTests::CapsuleY(shapePosition, parameters);
     default:
         return VectorReplicate(1.0f);
     }
@@ -75,63 +58,25 @@ SIMDVector EvaluateShapeDistance(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_csg_cap_shape{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static SIMDVector EvaluateBoxShapeNormal(
-    const SIMDVector shapePosition,
-    const SIMDVector halfExtents
-){
-    const SIMDVector q = VectorSubtract(VectorAbs(shapePosition), halfExtents);
-    const f32 x = VectorGetX(shapePosition);
-    const f32 y = VectorGetY(shapePosition);
-    const f32 z = VectorGetZ(shapePosition);
-    const f32 ox = Max(VectorGetX(q), 0.0f);
-    const f32 oy = Max(VectorGetY(q), 0.0f);
-    const f32 oz = Max(VectorGetZ(q), 0.0f);
-    if(ox * ox + oy * oy + oz * oz > 0.00000001f)
-        return NormalizeVector3Or(
-            VectorSet(x < 0.0f ? -ox : ox, y < 0.0f ? -oy : oy, z < 0.0f ? -oz : oz, 0.0f),
-            VectorSet(0.0f, 1.0f, 0.0f, 0.0f)
-        );
-
-    const f32 dx = VectorGetX(q);
-    const f32 dy = VectorGetY(q);
-    const f32 dz = VectorGetZ(q);
-    if(dx >= dy && dx >= dz)
-        return VectorSet(x < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f, 0.0f);
-    if(dy >= dz)
-        return VectorSet(0.0f, y < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f);
-
-    return VectorSet(0.0f, 0.0f, z < 0.0f ? -1.0f : 1.0f, 0.0f);
-}
-
 [[nodiscard]] static SIMDVector EvaluateShapeNormal(
     const CapCutterEval& cutterEval,
     const SIMDVector worldPosition
 ){
     const SIMDVector shapePosition = Vector3Transform(worldPosition, cutterEval.worldToShape);
     const SIMDVector parameters = LoadFloat(cutterEval.cutter.parameter0);
+    constexpr f32 minLengthSquared = s_NormalizeMinLengthSquared;
+    const SIMDVector fallbackUp = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     switch(cutterEval.cutter.shapeType){
     case NWB_CSG_SHAPE_PLANE:
-        return NormalizeVector3Or(VectorSetW(parameters, 0.0f), VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+        return SdfTests::PlaneNormal(parameters, fallbackUp, minLengthSquared);
     case NWB_CSG_SHAPE_BOX:
-        return EvaluateBoxShapeNormal(shapePosition, parameters);
+        return SdfTests::BoxNormal(shapePosition, parameters, fallbackUp, minLengthSquared);
     case NWB_CSG_SHAPE_SPHERE:
-        return NormalizeVector3Or(shapePosition, VectorSet(0.0f, 1.0f, 0.0f, 0.0f));
-    case NWB_CSG_SHAPE_CAPSULE:{
-        const f32 halfHeight = VectorGetY(parameters);
-        const f32 clampedY = Max(-halfHeight, Min(halfHeight, VectorGetY(shapePosition)));
-        return NormalizeVector3Or(
-            VectorSubtract(shapePosition, VectorSet(0.0f, clampedY, 0.0f, 0.0f)),
-            VectorSet(0.0f, VectorGetY(shapePosition) < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f)
-        );
-    }
+        return SdfTests::SphereNormal(shapePosition, fallbackUp, minLengthSquared);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return SdfTests::CapsuleYNormal(shapePosition, parameters, minLengthSquared);
     default:
-        return VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        return fallbackUp;
     }
 }
 
@@ -146,14 +91,8 @@ namespace __hidden_csg_cap_shape{
     SIMDVector worldNormal = VectorMultiply(row0, VectorSplatX(shapeNormal));
     worldNormal = VectorMultiplyAdd(row1, VectorSplatY(shapeNormal), worldNormal);
     worldNormal = VectorMultiplyAdd(row2, VectorSplatZ(shapeNormal), worldNormal);
-    return NormalizeVector3Or(worldNormal, fallback);
+    return Vector3NormalizeOr(worldNormal, fallback, s_NormalizeMinLengthSquared);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,8 +103,8 @@ SIMDVector EvaluateWorldCapNormal(
     const SIMDVector worldPosition,
     const SIMDVector fallback
 ){
-    const SIMDVector shapeNormal = __hidden_csg_cap_shape::EvaluateShapeNormal(cutterEval, worldPosition);
-    return VectorNegate(__hidden_csg_cap_shape::TransformShapeNormalToWorld(cutterEval.worldToShape, shapeNormal, fallback));
+    const SIMDVector shapeNormal = EvaluateShapeNormal(cutterEval, worldPosition);
+    return VectorNegate(TransformShapeNormalToWorld(cutterEval.worldToShape, shapeNormal, fallback));
 }
 
 

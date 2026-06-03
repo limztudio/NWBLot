@@ -70,7 +70,7 @@ template<typename VisitTriangle>
         }
 
         const TriangleAreaNormal64 areaNormal64 = BuildTriangleAreaNormal64(positions[0u], positions[1u], positions[2u]);
-        const f64 areaLengthSquared = areaNormal64.x * areaNormal64.x + areaNormal64.y * areaNormal64.y + areaNormal64.z * areaNormal64.z;
+        const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal64);
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= options.triangleAreaLengthSquaredEpsilon)
             return true;
 

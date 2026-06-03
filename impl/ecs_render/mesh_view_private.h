@@ -92,15 +92,7 @@ inline SIMDMatrix BuildWorldToClipMatrix(
 }
 
 inline SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
-    const f32 lengthSquared = VectorGetX(Vector3LengthSq(normal));
-    if(!IsFinite(lengthSquared) || lengthSquared <= 0.0f)
-        return VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-
-    const SIMDVector unitNormal = VectorSetW(
-        VectorMultiply(normal, VectorReciprocalSqrt(VectorReplicate(lengthSquared))),
-        0.0f
-    );
-    return VectorSetW(unitNormal, -VectorGetX(Vector3Dot(unitNormal, point)));
+    return PlaneTests::FromPointNormal(normal, point, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
 inline SIMDVector BuildViewFrustumSidePlaneVector(

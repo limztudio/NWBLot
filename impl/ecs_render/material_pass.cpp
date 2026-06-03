@@ -23,7 +23,7 @@ namespace __hidden_material_pass{
 inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
 
-[[nodiscard]] static bool meshletConeCullScaleSafe(const SIMDVector scale){
+[[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVector scale){
     const f32 x = VectorGetX(scale);
     const f32 y = VectorGetY(scale);
     const f32 z = VectorGetZ(scale);
@@ -56,7 +56,7 @@ struct MaterialTypedByteRangeKeyHasher{
     }
 };
 
-[[nodiscard]] static bool csgFrameHasReceiverPassWork(
+[[nodiscard]] static bool CsgFrameHasReceiverPassWork(
     const CsgFrameState& csgFrameState,
     const CsgReceiverPass::Enum receiverPass
 ){
@@ -217,7 +217,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
     const CsgReceiverPass::Enum csgReceiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;
     const bool csgPassActive =
         MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
-        && __hidden_material_pass::csgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass)
+        && __hidden_material_pass::CsgFrameHasReceiverPassWork(csgFrameState, csgReceiverPass)
     ;
     Optional<CsgFrameReceiverLookup> csgReceiverLookup;
     const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
@@ -295,10 +295,24 @@ void RendererSystem::gatherMaterialPassDrawItems(
             && csgReceiverState.active
             && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
         ;
-        const u32 csgClipCutterCount = csgClipCandidate ? countCsgReceiverClipCutters(*csgReceiverLookupPtr, entity) : 0u;
+        const u32 csgClipCutterCount = csgClipCandidate
+            ? countCsgReceiverClipCutters(
+                *csgReceiverLookupPtr,
+                entity,
+                mesh.csgLocalBounds,
+                transform
+            )
+            : 0u
+        ;
         Name csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
         const bool csgEvaluatorReady = csgClipCutterCount > 0u
-            ? resolveCsgReceiverEvaluatorVariant(*csgReceiverLookupPtr, entity, csgEvaluatorVariant)
+            ? resolveCsgReceiverEvaluatorVariant(
+                *csgReceiverLookupPtr,
+                entity,
+                mesh.csgLocalBounds,
+                transform,
+                csgEvaluatorVariant
+            )
             : true
         ;
         const bool csgClipActive = csgClipCutterCount > 0u && csgEvaluatorReady;
@@ -343,7 +357,14 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             CsgReceiverRangeGpuData csgRange;
             if(csgClipActive){
-                if(!appendCsgReceiverClipData(*csgReceiverLookupPtr, entity, csgFrameData, csgRange))
+                if(!appendCsgReceiverClipData(
+                    *csgReceiverLookupPtr,
+                    entity,
+                    mesh.csgLocalBounds,
+                    transform,
+                    csgFrameData,
+                    csgRange
+                ))
                     return false;
                 NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
                 csgFrameData.receiverRanges[instanceIndex] = csgRange;
@@ -357,7 +378,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             drawItem.csgCutterCount = csgClipActive ? csgRange.cutterCount : 0u;
             drawItem.csgGenerateCaps = csgReceiverState.generateCaps;
             drawItem.meshletConeCullScaleSafe = transform
-                ? __hidden_material_pass::meshletConeCullScaleSafe(LoadFloat(transform->scale))
+                ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale))
                 : true
             ;
             drawItems.push_back(drawItem);

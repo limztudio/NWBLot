@@ -152,12 +152,14 @@ bool RebuildTangentFrames(
         const TangentFrameRebuildVertex& vertex1 = vertices[i1];
         const TangentFrameRebuildVertex& vertex2 = vertices[i2];
         const SIMDVector p0 = LoadFloat(vertex0.position);
-        const SIMDVector edge01 = VectorSubtract(LoadFloat(vertex1.position), p0);
-        const SIMDVector edge02 = VectorSubtract(LoadFloat(vertex2.position), p0);
+        const SIMDVector p1 = LoadFloat(vertex1.position);
+        const SIMDVector p2 = LoadFloat(vertex2.position);
+        const SIMDVector edge01 = VectorSubtract(p1, p0);
+        const SIMDVector edge02 = VectorSubtract(p2, p0);
         const SIMDVector uv0 = LoadFloat(vertex0.uv0);
         const SIMDVector uv1 = LoadFloat(vertex1.uv0);
         const SIMDVector uv2 = LoadFloat(vertex2.uv0);
-        const SIMDVector faceNormal = Vector3Cross(edge01, edge02);
+        const SIMDVector faceNormal = TriangleTests::AreaNormal(p0, p1, p2);
         if(!FrameValidDirection(faceNormal))
             return false;
 

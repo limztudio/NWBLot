@@ -73,27 +73,15 @@ static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_
     return uiSystem && uiSystem->wantsMouseCapture();
 }
 
-[[nodiscard]] static SIMDVector NormalizeVec3Vector(SIMDVector valueVector, const SIMDVector fallback){
-    const SIMDVector lengthSqVector = Vector3LengthSq(valueVector);
-    const f32 lengthSq = VectorGetX(lengthSqVector);
-    if(!IsFinite(lengthSq) || lengthSq <= 0.000001f)
-        return fallback;
-
-    const SIMDVector normalizedVector = VectorMultiply(valueVector, VectorReciprocalSqrt(lengthSqVector));
-    if(!FiniteVector3(normalizedVector))
-        return fallback;
-
-    return normalizedVector;
-}
-
 static void ResolveFlyCameraAnglesFromRotation(
     const SIMDVector rotation,
     f32& outYawRadians,
     f32& outPitchRadians){
     const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    const SIMDVector forwardVector = NormalizeVec3Vector(
+    const SIMDVector forwardVector = Vector3NormalizeOr(
         Vector3Rotate(localForward, rotation),
-        localForward
+        localForward,
+        s_CameraMoveEpsilon
     );
     const SIMDVector clampedForward = VectorClamp(forwardVector, s_SIMDNegativeOne, s_SIMDOne);
     const f32 yawRadians = VectorGetX(VectorATan2(VectorSplatX(forwardVector), VectorSplatZ(forwardVector)));

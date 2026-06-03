@@ -4,16 +4,16 @@
 
 template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
-    SIMDVector minBounds = VectorReplicate(Limit<f32>::s_Max);
-    SIMDVector maxBounds = VectorReplicate(-Limit<f32>::s_Max);
+    SIMDVector minBounds;
+    SIMDVector maxBounds;
+    AabbTests::Reset(minBounds, maxBounds);
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
         const SIMDVector position = VectorSetW(LoadFloat(MeshletPositionStreamValue(entry, ref)), 0.0f);
-        minBounds = VectorMin(minBounds, position);
-        maxBounds = VectorMax(maxBounds, position);
+        AabbTests::Expand(position, minBounds, maxBounds);
     }
 
-    const SIMDVector center = VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), 0.5f), 0.0f);
+    const SIMDVector center = AabbTests::Center(minBounds, maxBounds);
     SIMDVector radiusSquared = VectorZero();
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
@@ -42,7 +42,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
                 LoadFloat(MeshletLocalPositionStreamValue(entry, meshlet, localVertex2)),
                 0.0f
             );
-            callback(BuildMeshletFaceNormal(p0, p1, p2));
+            callback(TriangleTests::AreaNormal(p0, p1, p2));
         }
     };
     visitMeshletFaceNormals([&](const SIMDVector faceNormal){

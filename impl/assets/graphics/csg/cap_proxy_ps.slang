@@ -49,6 +49,7 @@ NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     const uint cutterIndex = uint(input.tangent.w + 0.5);
     const float3 worldPosition = input.worldPosition.xyz;
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
+    const float3 capWorldPosition = nwbCsgProjectWorldPositionToCutterSurface(worldPosition, cutter);
 
     const uint expectedOpeningMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
     if(
@@ -58,13 +59,12 @@ NwbMeshGBufferOutput main(NwbMeshPixelInput input){
         discard;
 
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
-    if(!nwbCsgReceiverLocalBoundsContains(receiverRange, worldPosition))
+    if(!nwbCsgReceiverLocalBoundsContains(receiverRange, capWorldPosition))
         discard;
 
-    if(nwbCsgReceiverPixelDiscardExcept(receiverIndex, worldPosition, cutterIndex))
+    if(nwbCsgReceiverPixelDiscardExcept(receiverIndex, capWorldPosition, cutterIndex))
         discard;
 
-    const float3 capWorldPosition = nwbCsgProjectWorldPositionToCutterSurface(worldPosition, cutter);
     const float3 capNormal = nwbCsgFlippedCutterWorldNormal(capWorldPosition, cutter, input.normal);
     nwbWriteMeshGBuffer(input.color.rgb, capNormal, capWorldPosition);
     return nwbBuildMeshGBufferOutput();

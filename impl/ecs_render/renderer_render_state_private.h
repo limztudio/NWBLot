@@ -70,7 +70,11 @@ inline Core::RenderState BuildCompositeRenderState(){
 
 inline Core::RenderState BuildCsgCapProxyRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
+    renderState.depthStencilState
+        .enableDepthTest()
+        .enableDepthWrite()
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
     renderState.rasterState.enableDepthClip().setCullNone();
     return renderState;
 }

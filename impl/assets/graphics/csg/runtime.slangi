@@ -26,8 +26,12 @@ struct NwbCsgCutter{
     uint operation;
     uint parameterByteOffset;
     uint parameterByteSize;
-    float3x4 worldToShape;
-    float3x4 shapeToWorld;
+    float4 worldToShapeRow0;
+    float4 worldToShapeRow1;
+    float4 worldToShapeRow2;
+    float4 shapeToWorldRow0;
+    float4 shapeToWorldRow1;
+    float4 shapeToWorldRow2;
     float4 parameter0;
     float4 parameter1;
     float worldToShapeScaleBound;
@@ -86,7 +90,12 @@ uint nwbCsgMeshInstanceIndex(){
 }
 
 float3 nwbCsgTransformWorldToShape(const float3 worldPosition, const NwbCsgCutter cutter){
-    return mul(cutter.worldToShape, float4(worldPosition, 1.0));
+    const float4 p = float4(worldPosition, 1.0);
+    return float3(
+        dot(cutter.worldToShapeRow0, p),
+        dot(cutter.worldToShapeRow1, p),
+        dot(cutter.worldToShapeRow2, p)
+    );
 }
 
 float nwbCsgPlaneDistance(const float3 shapePosition, const NwbCsgCutter cutter){

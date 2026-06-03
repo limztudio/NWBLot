@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NWBLot CSG Cap Proxy Planner</title>
+    <style>
+        :root{
+            color-scheme: light dark;
+            --bg: #eef1f4;
+            --fg: #1d2630;
+            --muted: #66727f;
+            --panel: #ffffff;
+            --line: #cfd6de;
+            --blue: #2563eb;
+            --green: #11835b;
+            --pink: #be456b;
+            --amber: #9a6700;
+            --shadow: 0 14px 34px rgba(29, 38, 48, 0.10);
+        }
+
+        *{
+            box-sizing: border-box;
+        }
+
+        body{
+            margin: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font: 15px/1.55 "Segoe UI", Arial, sans-serif;
+        }
+
+        main{
+            width: min(1120px, calc(100vw - 40px));
+            margin: 32px auto 48px;
+        }
+
+        header{
+            display: grid;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        h1, h2, h3, p{
+            margin: 0;
+        }
+
+        h1{
+            font-size: 34px;
+            line-height: 1.1;
+            letter-spacing: 0;
+        }
+
+        h2{
+            font-size: 20px;
+            margin-bottom: 12px;
+        }
+
+        h3{
+            font-size: 15px;
+            margin-bottom: 6px;
+        }
+
+        .subtitle{
+            max-width: 820px;
+            color: var(--muted);
+            font-size: 16px;
+        }
+
+        .grid{
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 16px;
+        }
+
+        section{
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+        }
+
+        .span-12{ grid-column: span 12; }
+        .span-8{ grid-column: span 8; }
+        .span-6{ grid-column: span 6; }
+        .span-4{ grid-column: span 4; }
+
+        .pill-row{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .pill{
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: var(--muted);
+            padding: 4px 10px;
+            font-size: 13px;
+        }
+
+        ol, ul{
+            margin: 0;
+            padding-left: 22px;
+        }
+
+        li + li{
+            margin-top: 8px;
+        }
+
+        code{
+            background: rgba(102, 114, 127, 0.13);
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+
+        .phase{
+            display: grid;
+            grid-template-columns: 96px 1fr;
+            gap: 14px;
+            border-top: 1px solid var(--line);
+            padding-top: 14px;
+            margin-top: 14px;
+        }
+
+        .phase:first-of-type{
+            border-top: 0;
+            padding-top: 0;
+            margin-top: 0;
+        }
+
+        .tag{
+            align-self: start;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            padding: 6px 8px;
+            text-align: center;
+        }
+
+        .tag.blue{ background: var(--blue); }
+        .tag.green{ background: var(--green); }
+        .tag.pink{ background: var(--pink); }
+        .tag.amber{ background: var(--amber); }
+
+        table{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        th, td{
+            border-bottom: 1px solid var(--line);
+            padding: 9px 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th{
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        tr:last-child td{
+            border-bottom: 0;
+        }
+
+        .diagram{
+            display: grid;
+            grid-template-columns: 1fr 38px 1fr 38px 1fr;
+            gap: 10px;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .node{
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            min-height: 86px;
+            padding: 12px;
+            background: rgba(37, 99, 235, 0.06);
+        }
+
+        .arrow{
+            color: var(--muted);
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .note{
+            color: var(--muted);
+        }
+
+        @media (max-width: 860px){
+            main{
+                width: min(100vw - 24px, 1120px);
+                margin-top: 20px;
+            }
+
+            .span-8, .span-6, .span-4{
+                grid-column: span 12;
+            }
+
+            .diagram{
+                grid-template-columns: 1fr;
+            }
+
+            .arrow{
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <header>
+        <div class="pill-row">
+            <span class="pill">CSG</span>
+            <span class="pill">Render-only caps</span>
+            <span class="pill">Mesh shader proxy</span>
+            <span class="pill">Static and skinned receivers</span>
+        </div>
+        <h1>CSG Cap Proxy Planner</h1>
+        <p class="subtitle">
+            Replace dynamic CPU cap remeshing with analytic cutter-surface proxy rendering. The goal is less overdraw than an OBB proxy,
+            better behavior for moving cutters, and a path that can work with skinned receivers without CPU skinning cap triangles.
+        </p>
+    </header>
+
+    <div class="grid">
+        <section class="span-12">
+            <h2>Current Situation</h2>
+            <div class="diagram">
+                <div class="node">
+                    <h3>CPU source</h3>
+                    <p>Walk receiver cap source triangles and evaluate the cutter SDF at triangle vertices.</p>
+                </div>
+                <div class="arrow">-&gt;</div>
+                <div class="node">
+                    <h3>CPU topology</h3>
+                    <p>Extract sign-change segments, connect loops, ear-clip them into cap triangles.</p>
+                </div>
+                <div class="arrow">-&gt;</div>
+                <div class="node">
+                    <h3>GPU draw</h3>
+                    <p>Upload frame-local cap vertices and draw them as opaque or transparent cap geometry.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="span-6">
+            <h2>Why Change</h2>
+            <ul>
+                <li>Moving cutters require cap topology regeneration every frame.</li>
+                <li>GPU-skinned receivers do not naturally expose deformed triangles to CPU cap generation.</li>
+                <li>Large receiver triangles need subdivision to find interior cutter contours.</li>
+                <li>CPU triangulation quality and robustness become a rendering concern.</li>
+            </ul>
+        </section>
+
+        <section class="span-6">
+            <h2>Preferred Direction</h2>
+            <ul>
+                <li>Draw shape-specific cutter surface proxies instead of OBBs.</li>
+                <li>Generate proxy patches procedurally in mesh shader for built-in shapes.</li>
+                <li>Use receiver depth, stencil, or mask data to restrict visible cap pixels.</li>
+                <li>Keep SDF discard only as a cleanup rule, not the primary shape limiter.</li>
+            </ul>
+        </section>
+
+        <section class="span-12">
+            <h2>Implementation Phases</h2>
+            <div class="phase">
+                <div class="tag blue">Phase 1</div>
+                <div>
+                    <h3>Introduce cap proxy draw data</h3>
+                    <p>
+                        Add a frame-local cap proxy item containing receiver index, cutter index, receiver group, pass type,
+                        shape type, and bounds. Keep the existing CPU cap path beside it until the proxy path is validated.
+                    </p>
+                </div>
+            </div>
+            <div class="phase">
+                <div class="tag green">Phase 2</div>
+                <div>
+                    <h3>Built-in procedural proxies</h3>
+                    <p>
+                        Add mesh shader variants for plane, box, sphere, and capsule. Sphere/capsule patch density should be chosen
+                        from projected radius so the cap stays smooth without a dense stored mesh.
+                    </p>
+                </div>
+            </div>
+            <div class="phase">
+                <div class="tag pink">Phase 3</div>
+                <div>
+                    <h3>Receiver mask contract</h3>
+                    <p>
+                        Define the rule that makes proxy pixels appear only inside receiver openings. Candidate inputs are receiver
+                        depth, receiver id/stencil, and CSG clip state. This is the most important correctness step.
+                    </p>
+                </div>
+            </div>
+            <div class="phase">
+                <div class="tag amber">Phase 4</div>
+                <div>
+                    <h3>Skinned receiver validation</h3>
+                    <p>
+                        Verify caps on GPU-skinned receivers without CPU deformed triangle extraction. The cap proxy should follow
+                        the cutter and receiver masking instead of requiring CPU-remeshed skin data.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="span-8">
+            <h2>Proxy Shape Plan</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Shape</th>
+                        <th>Proxy geometry</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Plane</td>
+                        <td>One quad or bounded grid</td>
+                        <td>Clip to receiver/cutter bounds to avoid an infinite plane proxy.</td>
+                    </tr>
+                    <tr>
+                        <td>Box</td>
+                        <td>Six quads</td>
+                        <td>Low overdraw and stable normals. Can cull faces outside receiver bounds.</td>
+                    </tr>
+                    <tr>
+                        <td>Sphere</td>
+                        <td>Procedural latitude/longitude or octahedral patches</td>
+                        <td>Choose segment count from projected radius for smooth circular caps.</td>
+                    </tr>
+                    <tr>
+                        <td>Capsule</td>
+                        <td>Cylinder band plus two hemispheres</td>
+                        <td>Patch density can match sphere quality. Emit only visible bands when bounds permit.</td>
+                    </tr>
+                    <tr>
+                        <td>Custom SDF</td>
+                        <td>Project-provided proxy module</td>
+                        <td>Fallback can be no cap or coarse OBB until the project supplies a proxy.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="span-4">
+            <h2>Open Decisions</h2>
+            <ul>
+                <li>Depth/stencil mask format for receiver openings.</li>
+                <li>Whether proxy cap lighting reuses receiver material or a dedicated cap material.</li>
+                <li>Transparent AVBOIT cap ordering and accumulation rules.</li>
+                <li>Fallback behavior for unsupported custom SDF caps.</li>
+            </ul>
+        </section>
+
+        <section class="span-12">
+            <h2>Validation Checklist</h2>
+            <ol>
+                <li>Static cube receiver with rotating capsule cutter has no leaks outside the receiver.</li>
+                <li>Plane, box, sphere, and capsule cutters match existing CPU cap appearance.</li>
+                <li>Cutters moving every frame do not allocate or triangulate CPU cap vertices.</li>
+                <li>Skinned receiver test shows caps following the visible skinned surface mask.</li>
+                <li>Opaque, transparent AVBOIT, depth-only, and selection passes use consistent clip rules.</li>
+            </ol>
+            <p class="note">
+                Keep the CPU cap path as a debug/reference backend until the proxy path passes all built-in shape tests.
+            </p>
+        </section>
+    </div>
+</main>
+</body>
+</html>

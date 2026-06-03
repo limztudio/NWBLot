@@ -28,6 +28,7 @@ inline constexpr f32 s_PointMergeEpsilon = 0.0001f;
 inline constexpr f32 s_PointMergeEpsilonSquared = s_PointMergeEpsilon * s_PointMergeEpsilon;
 inline constexpr f32 s_NormalizeMinLengthSquared = 0.00000001f;
 inline constexpr u32 s_EdgeIntersectionRefineIterations = 8u;
+inline constexpr u32 s_CapBoundarySubdivisionMaxDepth = 4u;
 
 
 struct CapSourceVertex{

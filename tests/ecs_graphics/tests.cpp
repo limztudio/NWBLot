@@ -16,8 +16,10 @@
 #include <impl/ecs_skinned_mesh/components.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
+#include <impl/ecs_csg/module.h>
+#include <impl/ecs_render/csg_cap_proxy.h>
+#include <impl/ecs_render/material_typed_private.h>
 #include <impl/ecs_render/material_instance.h>
-#include <impl/ecs_render/private.h>
 #include <impl/assets_mesh/meshlet_ref_encoding.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_asset.h>
@@ -333,6 +335,101 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
         instanceRanges,
         uploadBytes
     ));
+}
+
+template<typename ParameterT>
+static void AppendTestCsgParameterBytes(
+    NWB::Impl::CsgFrameGpuData& frameData,
+    const ParameterT& parameters,
+    NWB::Impl::CsgCutterGpuData& cutter
+){
+    cutter.parameterByteOffset = static_cast<u32>(frameData.parameterBytes.size());
+    cutter.parameterByteSize = static_cast<u32>(sizeof(ParameterT));
+    frameData.parameterBytes.resize(frameData.parameterBytes.size() + sizeof(ParameterT));
+    NWB_MEMCPY(
+        frameData.parameterBytes.data() + cutter.parameterByteOffset,
+        sizeof(ParameterT),
+        &parameters,
+        sizeof(ParameterT)
+    );
+}
+
+static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
+    TestWorld testWorld;
+    NWB::Core::Alloc::ScratchArena scratchArena;
+    NWB::Impl::CsgShapeRegistry shapeRegistry(testWorld.arena);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RegisterBuiltInCsgShapeTypes(shapeRegistry));
+
+    NWB::Impl::CsgReceiverCpuBounds localBounds;
+    localBounds.minBounds = Float3Int(-1.0f, -2.0f, -3.0f, NWB::Impl::s_CsgBoundsValidFlag);
+    localBounds.maxBounds = Float3Int(1.0f, 2.0f, 3.0f, 0);
+
+    NWB::Impl::Scene::TransformComponent transform;
+    transform.position = Float4(10.0f, 0.5f, -1.0f, 0.0f);
+    transform.scale = Float4(2.0f, 1.0f, 0.5f, 0.0f);
+
+    NWB::Impl::CsgCapProxyBounds receiverBounds;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxy::BuildReceiverBounds(
+        localBounds,
+        &transform,
+        receiverBounds
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, (receiverBounds.minBounds.w & NWB::Impl::s_CsgBoundsValidFlag) != 0);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, (receiverBounds.minBounds.w & NWB::Impl::s_CsgBoundsFiniteFlag) != 0);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(receiverBounds.minBounds.x, 8.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(receiverBounds.maxBounds.x, 12.0f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(receiverBounds.minBounds.y, -1.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(receiverBounds.maxBounds.y, 2.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(receiverBounds.minBounds.z, -2.5f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(receiverBounds.maxBounds.z, 0.5f));
+
+    NWB::Impl::CsgFrameGpuData frameData(scratchArena);
+    NWB::Impl::CsgCutterGpuData capsuleCutter;
+    capsuleCutter.shapeType = NWB_CSG_SHAPE_CAPSULE;
+    capsuleCutter.parameter0 = Float4(0.25f, 0.75f, 0.0f, 0.0f);
+    NWB::Impl::CsgCapsuleShapeParameters capsuleParameters;
+    capsuleParameters.radiusHalfHeight = capsuleCutter.parameter0;
+    AppendTestCsgParameterBytes(frameData, capsuleParameters, capsuleCutter);
+    frameData.cutters.push_back(capsuleCutter);
+
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxy::AppendGpuData(
+        shapeRegistry,
+        receiverBounds,
+        NWB::Impl::CsgReceiverPass::Opaque,
+        7u,
+        0u,
+        capsuleCutter,
+        frameData
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyShapeMask == NWB::Impl::s_CsgCapProxyCapsuleShapeMask);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyGpuItems.size() == 1u);
+    if(!frameData.capProxyGpuItems.empty()){
+        const NWB::Impl::CsgCapProxyGpuData& proxy = frameData.capProxyGpuItems[0u];
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.x == 7u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.y == 0u);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.z == NWB_CSG_SHAPE_CAPSULE);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.w == static_cast<u32>(NWB::Impl::CsgReceiverPass::Opaque));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, (proxy.cutterBounds.minBounds.w & NWB::Impl::s_CsgBoundsValidFlag) != 0);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, (proxy.cutterBounds.minBounds.w & NWB::Impl::s_CsgBoundsFiniteFlag) != 0);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(proxy.cutterBounds.minBounds.x, -0.25f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(proxy.cutterBounds.maxBounds.x, 0.25f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(proxy.cutterBounds.minBounds.y, -1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(proxy.cutterBounds.maxBounds.y, 1.0f));
+    }
+
+    NWB::Impl::CsgCutterGpuData projectCutter;
+    projectCutter.shapeType = NWB_CSG_SHAPE_PROJECT_BEGIN;
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CsgCapProxyShapeMask(projectCutter.shapeType) == 0u);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxy::AppendGpuData(
+        shapeRegistry,
+        receiverBounds,
+        NWB::Impl::CsgReceiverPass::Opaque,
+        7u,
+        1u,
+        projectCutter,
+        frameData
+    ));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyGpuItems.size() == 1u);
 }
 
 static NWB::Impl::SkinnedMeshJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
@@ -666,6 +763,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("ecs graphics", [](NWB::Tests::TestContext& context)
     __hidden_tests::TestMeshSystemResolvesMeshComponent(context);
     __hidden_tests::TestMaterialInstanceComponentSetters(context);
     __hidden_tests::TestMaterialTypedByteRangeDeduplicatesContent(context);
+    __hidden_tests::TestCsgCapProxyGpuDataBuilder(context);
     __hidden_tests::TestJointRotationQuaternionBuildsColumnVectorRotations(context);
     __hidden_tests::TestSkeletonPoseBuildsHierarchicalPalette(context);
     __hidden_tests::TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(context);

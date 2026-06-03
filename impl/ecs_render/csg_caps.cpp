@@ -105,7 +105,7 @@ bool RendererCsgSystem::appendCsgReceiverCapGeometry(
         const CsgCutterGpuData& cutter = csgFrameData.cutters[cutterIndex];
         CsgShapeTypeInfo shapeType;
         const CsgShapeTypeInfo* shapeTypePtr = nullptr;
-        if(m_csgShapeRegistry.findShapeType(cutter.shapeType, shapeType))
+        if(csgShapeRegistry().findShapeType(cutter.shapeType, shapeType))
             shapeTypePtr = &shapeType;
 
         const u8* parameterBytes = __hidden_csg_caps::CsgCutterParameterBytes(csgFrameData, cutter);
@@ -150,10 +150,10 @@ bool RendererCsgSystem::createCsgCapSharedResources(){
     if(!createCsgClipResources())
         return false;
 
-    auto* device = m_graphics.getDevice();
-    if(!m_csgState.m_capVertexShader){
+    auto* device = graphics().getDevice();
+    if(!csgState().m_capVertexShader){
         if(!m_renderer.shaderSystem().loadShader(
-            m_csgState.m_capVertexShader,
+            csgState().m_capVertexShader,
             ECSRenderDetail::s_CsgCapVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
@@ -161,12 +161,12 @@ bool RendererCsgSystem::createCsgCapSharedResources(){
         ))
             return false;
     }
-    if(!m_csgState.m_capInputLayout){
+    if(!csgState().m_capInputLayout){
         Core::VertexAttributeDesc attributes[5];
         __hidden_csg_caps::SetCapVertexAttributes(attributes);
 
-        m_csgState.m_capInputLayout = device->createInputLayout(attributes, 5u, m_csgState.m_capVertexShader.get());
-        if(!m_csgState.m_capInputLayout){
+        csgState().m_capInputLayout = device->createInputLayout(attributes, 5u, csgState().m_capVertexShader.get());
+        if(!csgState().m_capInputLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap input layout"));
             return false;
         }
@@ -178,13 +178,13 @@ bool RendererCsgSystem::createCsgCapSharedResources(){
 bool RendererCsgSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
-    if(m_csgState.m_capPipeline)
+    if(csgState().m_capPipeline)
         return true;
     if(!createCsgCapSharedResources())
         return false;
-    if(!m_csgState.m_capPixelShader){
+    if(!csgState().m_capPixelShader){
         if(!m_renderer.shaderSystem().loadShader(
-            m_csgState.m_capPixelShader,
+            csgState().m_capPixelShader,
             ECSRenderDetail::s_CsgCapPixelShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Pixel,
@@ -195,15 +195,15 @@ bool RendererCsgSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuff
 
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setInputLayout(m_csgState.m_capInputLayout)
-        .setVertexShader(m_csgState.m_capVertexShader)
-        .setPixelShader(m_csgState.m_capPixelShader)
+        .setInputLayout(csgState().m_capInputLayout)
+        .setVertexShader(csgState().m_capVertexShader)
+        .setPixelShader(csgState().m_capPixelShader)
         .setRenderState(ECSRenderDetail::BuildRenderStateForPass(MaterialPipelinePass::Opaque, true))
-        .addBindingLayout(m_drawState.m_emulationViewBindingLayout)
-        .addBindingLayout(m_csgState.m_clipBindingLayout)
+        .addBindingLayout(drawState().m_emulationViewBindingLayout)
+        .addBindingLayout(csgState().m_clipBindingLayout)
     ;
-    m_csgState.m_capPipeline = m_graphics.getDevice()->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
-    if(!m_csgState.m_capPipeline){
+    csgState().m_capPipeline = graphics().getDevice()->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
+    if(!csgState().m_capPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap pipeline"));
         return false;
     }
@@ -226,23 +226,23 @@ bool RendererCsgSystem::createCsgTransparentCapResources(Core::Framebuffer* fram
     const char* pixelShaderDebugName = nullptr;
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
-        pixelShader = &m_csgState.m_capAvboitOccupancyPixelShader;
-        pipeline = &m_csgState.m_capAvboitOccupancyPipeline;
-        passBindingLayout = &m_avboitState.m_occupancyBindingLayout;
+        pixelShader = &csgState().m_capAvboitOccupancyPixelShader;
+        pipeline = &csgState().m_capAvboitOccupancyPipeline;
+        passBindingLayout = &avboitState().m_occupancyBindingLayout;
         pixelShaderName = &ECSRenderDetail::s_CsgTransparentCapOccupancyPixelShaderName;
         pixelShaderDebugName = "ECSRender_CsgTransparentCapOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        pixelShader = &m_csgState.m_capAvboitExtinctionPixelShader;
-        pipeline = &m_csgState.m_capAvboitExtinctionPipeline;
-        passBindingLayout = &m_avboitState.m_extinctionBindingLayout;
+        pixelShader = &csgState().m_capAvboitExtinctionPixelShader;
+        pipeline = &csgState().m_capAvboitExtinctionPipeline;
+        passBindingLayout = &avboitState().m_extinctionBindingLayout;
         pixelShaderName = &ECSRenderDetail::s_CsgTransparentCapExtinctionPixelShaderName;
         pixelShaderDebugName = "ECSRender_CsgTransparentCapExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        pixelShader = &m_csgState.m_capAvboitAccumulatePixelShader;
-        pipeline = &m_csgState.m_capAvboitAccumulatePipeline;
-        passBindingLayout = &m_avboitState.m_accumulateBindingLayout;
+        pixelShader = &csgState().m_capAvboitAccumulatePixelShader;
+        pipeline = &csgState().m_capAvboitAccumulatePipeline;
+        passBindingLayout = &avboitState().m_accumulateBindingLayout;
         pixelShaderName = &ECSRenderDetail::s_CsgTransparentCapAccumulatePixelShaderName;
         pixelShaderDebugName = "ECSRender_CsgTransparentCapAccumulatePS";
         break;
@@ -269,15 +269,15 @@ bool RendererCsgSystem::createCsgTransparentCapResources(Core::Framebuffer* fram
 
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
-        .setInputLayout(m_csgState.m_capInputLayout)
-        .setVertexShader(m_csgState.m_capVertexShader)
+        .setInputLayout(csgState().m_capInputLayout)
+        .setVertexShader(csgState().m_capVertexShader)
         .setPixelShader(*pixelShader)
         .setRenderState(ECSRenderDetail::BuildRenderStateForPass(pass, true))
-        .addBindingLayout(m_drawState.m_emulationViewBindingLayout)
+        .addBindingLayout(drawState().m_emulationViewBindingLayout)
         .addBindingLayout(*passBindingLayout)
-        .addBindingLayout(m_csgState.m_clipBindingLayout)
+        .addBindingLayout(csgState().m_clipBindingLayout)
     ;
-    *pipeline = m_graphics.getDevice()->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
+    *pipeline = graphics().getDevice()->createGraphicsPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
     if(*pipeline)
         return true;
 
@@ -288,12 +288,12 @@ bool RendererCsgSystem::createCsgTransparentCapResources(Core::Framebuffer* fram
 bool RendererCsgSystem::reserveCsgCapVertexBufferCapacity(const usize vertexCount){
     if(vertexCount == 0u)
         return true;
-    if(m_csgState.m_capVertexBuffer && m_csgState.m_capVertexBufferCapacity >= vertexCount)
+    if(csgState().m_capVertexBuffer && csgState().m_capVertexBufferCapacity >= vertexCount)
         return true;
     if(vertexCount > Limit<usize>::s_Max / sizeof(CsgCapVertexGpuData))
         return false;
 
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(m_csgState.m_capVertexBufferCapacity, vertexCount);
+    const usize capacity = ECSRenderDetail::NextGrowingCapacity(csgState().m_capVertexBufferCapacity, vertexCount);
     if(capacity > Limit<usize>::s_Max / sizeof(CsgCapVertexGpuData))
         return false;
 
@@ -306,14 +306,14 @@ bool RendererCsgSystem::reserveCsgCapVertexBufferCapacity(const usize vertexCoun
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
 
-    Core::BufferHandle createdBuffer = m_graphics.createBuffer(bufferDesc);
+    Core::BufferHandle createdBuffer = graphics().createBuffer(bufferDesc);
     if(!createdBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap vertex buffer"));
         return false;
     }
 
-    m_csgState.m_capVertexBuffer = Move(createdBuffer);
-    m_csgState.m_capVertexBufferCapacity = capacity;
+    csgState().m_capVertexBuffer = Move(createdBuffer);
+    csgState().m_capVertexBufferCapacity = capacity;
     return true;
 }
 
@@ -323,14 +323,14 @@ bool RendererCsgSystem::uploadCsgCapVertices(Core::CommandList& commandList, con
     if(!reserveCsgCapVertexBufferCapacity(csgFrameData.capVertices.size()))
         return false;
 
-    commandList.setBufferState(m_csgState.m_capVertexBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(csgState().m_capVertexBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(
-        m_csgState.m_capVertexBuffer.get(),
+        csgState().m_capVertexBuffer.get(),
         csgFrameData.capVertices.data(),
         csgFrameData.capVertices.size() * sizeof(CsgCapVertexGpuData)
     );
-    commandList.setBufferState(m_csgState.m_capVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+    commandList.setBufferState(csgState().m_capVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
     commandList.commitBarriers();
     return true;
 }
@@ -343,17 +343,17 @@ void RendererCsgSystem::renderCsgCaps(
 ){
     if(!csgFrameData.hasCapWork() || capDrawItems.empty())
         return;
-    if(!m_csgState.m_capVertexBuffer)
+    if(!csgState().m_capVertexBuffer)
         return;
-    if(!createCsgClipResources() || !m_csgState.m_clipBindingSet)
+    if(!createCsgClipResources() || !csgState().m_clipBindingSet)
         return;
     if(!pipeline)
         return;
     if(MaterialPipelinePassUsesRendererAvboit(context.pass) && (!context.passBindingSet || !context.avboitTargets))
         return;
 
-    context.commandList.setBufferState(m_csgState.m_capVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
-    context.commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    context.commandList.setBufferState(csgState().m_capVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+    context.commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     setCsgClipBufferStates(context.commandList);
     if(context.passBindingSet)
         context.commandList.setResourceStatesForBindingSet(context.passBindingSet);
@@ -364,14 +364,14 @@ void RendererCsgSystem::renderCsgCaps(
     graphicsState.setViewport(context.viewportState);
     graphicsState.addVertexBuffer(
         Core::VertexBufferBinding()
-            .setBuffer(m_csgState.m_capVertexBuffer.get())
+            .setBuffer(csgState().m_capVertexBuffer.get())
             .setSlot(0u)
             .setOffset(0u)
     );
-    graphicsState.addBindingSet(m_drawState.m_emulationViewBindingSet.get());
+    graphicsState.addBindingSet(drawState().m_emulationViewBindingSet.get());
     if(context.passBindingSet)
         graphicsState.addBindingSet(context.passBindingSet);
-    graphicsState.addBindingSet(m_csgState.m_clipBindingSet.get());
+    graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
     context.commandList.setGraphicsState(graphicsState);
 
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
@@ -391,7 +391,7 @@ void RendererCsgSystem::renderCsgCaps(
         drawArgs.setVertexCount(drawItem.vertexCount);
         drawArgs.setStartVertexLocation(drawItem.firstVertex);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, graphics().getDevice(), context.commandList);
 
             context.commandList.draw(drawArgs);
         }
@@ -407,7 +407,7 @@ void RendererCsgSystem::renderCsgOpaqueCaps(
     if(!createCsgOpaqueCapResources(context.framebuffer))
         return;
 
-    renderCsgCaps(context, csgFrameData, csgFrameData.opaqueCapDrawItems, m_csgState.m_capPipeline.get());
+    renderCsgCaps(context, csgFrameData, csgFrameData.opaqueCapDrawItems, csgState().m_capPipeline.get());
 }
 
 void RendererCsgSystem::renderCsgTransparentCaps(
@@ -422,13 +422,13 @@ void RendererCsgSystem::renderCsgTransparentCaps(
     Core::GraphicsPipeline* pipeline = nullptr;
     switch(context.pass){
     case MaterialPipelinePass::AvboitOccupancy:
-        pipeline = m_csgState.m_capAvboitOccupancyPipeline.get();
+        pipeline = csgState().m_capAvboitOccupancyPipeline.get();
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        pipeline = m_csgState.m_capAvboitExtinctionPipeline.get();
+        pipeline = csgState().m_capAvboitExtinctionPipeline.get();
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        pipeline = m_csgState.m_capAvboitAccumulatePipeline.get();
+        pipeline = csgState().m_capAvboitAccumulatePipeline.get();
         break;
     default:
         break;

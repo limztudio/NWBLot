@@ -15,8 +15,8 @@ NWB_IMPL_BEGIN
 
 
 void RendererMeshSystem::destroyMeshBindingSets(){
-    m_drawState.m_emulationViewBindingSet = nullptr;
-    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end(); ++it){
+    drawState().m_emulationViewBindingSet = nullptr;
+    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it){
         MeshResources& mesh = it.value();
         mesh.meshBindingSet = nullptr;
         mesh.computeBindingSet = nullptr;
@@ -31,11 +31,11 @@ bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
     if(!meshFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
         return false;
 
-    Core::BindingSetDesc bindingSetDesc(m_arena);
+    Core::BindingSetDesc bindingSetDesc(arena());
     addMeshDrawBindingItems(bindingSetDesc, mesh);
 
-    auto* device = m_graphics.getDevice();
-    mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_meshBindingLayout);
+    auto* device = graphics().getDevice();
+    mesh.meshBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_meshBindingLayout);
     if(!mesh.meshBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh shader binding set for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
         return false;
@@ -69,7 +69,7 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
             .setIsVertexBuffer(true)
             .setDebugName(emulationVertexBufferName)
         ;
-        mesh.emulationVertexBuffer = m_graphics.createBuffer(emulationVertexBufferDesc);
+        mesh.emulationVertexBuffer = graphics().createBuffer(emulationVertexBufferDesc);
         if(!mesh.emulationVertexBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation vertex buffer for mesh '{}'")
                 , StringConvert(mesh.meshName.c_str())
@@ -78,12 +78,12 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
         }
     }
 
-    Core::BindingSetDesc bindingSetDesc(m_arena);
+    Core::BindingSetDesc bindingSetDesc(arena());
     addMeshDrawBindingItems(bindingSetDesc, mesh);
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, mesh.emulationVertexBuffer.get()));
 
-    auto* device = m_graphics.getDevice();
-    mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, m_drawState.m_computeBindingLayout);
+    auto* device = graphics().getDevice();
+    mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_computeBindingLayout);
     if(!mesh.computeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for mesh '{}'")
             , StringConvert(mesh.meshName.c_str())
@@ -95,15 +95,15 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
 }
 
 bool RendererMeshSystem::meshFrameBindingResourcesReady(const tchar* context)const{
-    if(!m_drawState.m_instanceBuffer){
+    if(!drawState().m_instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
         return false;
     }
-    if(!m_drawState.m_meshViewBuffer){
+    if(!drawState().m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a mesh view buffer"), context);
         return false;
     }
-    if(!m_drawState.m_materialTypedBuffer){
+    if(!drawState().m_materialTypedBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires a material typed buffer"), context);
         return false;
     }
@@ -121,9 +121,9 @@ void RendererMeshSystem::addMeshSourceBindingItems(Core::BindingSetDesc& binding
 }
 
 void RendererMeshSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, m_drawState.m_instanceBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_drawState.m_meshViewBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, m_drawState.m_materialTypedBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, drawState().m_instanceBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, drawState().m_meshViewBuffer.get()));
+    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, drawState().m_materialTypedBuffer.get()));
 }
 
 void RendererMeshSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{

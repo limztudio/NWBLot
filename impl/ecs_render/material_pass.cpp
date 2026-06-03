@@ -169,8 +169,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     if(!framebuffer)
         return;
 
-    auto rendererView = m_world.view<RendererComponent>();
-    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
+    auto rendererView = world().view<RendererComponent>();
+    auto* ecsMeshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     const usize rendererCapacity = rendererView.candidateCount();
     drawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
@@ -222,7 +222,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     Optional<CsgFrameReceiverLookup> csgReceiverLookup;
     const CsgFrameReceiverLookup* csgReceiverLookupPtr = nullptr;
     if(csgPassActive){
-        csgReceiverLookup.emplace(m_world, materialTypedBytes.get_allocator().arena());
+        csgReceiverLookup.emplace(world(), materialTypedBytes.get_allocator().arena());
         if(!csgReceiverLookup->empty()){
             csgReceiverLookupPtr = &*csgReceiverLookup;
             csgFrameData.reserve(rendererCapacity, csgReceiverLookupPtr->cutterCount());
@@ -255,7 +255,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const MaterialSurfaceInfo& materialInfo,
         ECSRenderDetail::MaterialTypedByteRange& outRange
     ) -> bool{
-        const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
+        const MaterialInstanceComponent* materialInstance = world().tryGetComponent<MaterialInstanceComponent>(entity);
         const MaterialTypedByteVector* mutableTypedBytes = nullptr;
         if(!resolveMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))
             return false;
@@ -276,7 +276,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     ) -> bool{
         NWB_ASSERT(mesh.valid());
 
-        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))

@@ -213,7 +213,7 @@ bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
         return true;
     }
 
-    auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
+    auto it = materialState().m_instanceMutableCache.try_emplace(entity, arena()).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
     if(
         cacheEntry.materialName == materialInfo.materialName
@@ -230,7 +230,7 @@ bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
     if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
-        m_materialState.m_instanceMutableCache.erase(it);
+        materialState().m_instanceMutableCache.erase(it);
         return false;
     }
 
@@ -245,12 +245,12 @@ bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
 }
 
 void RendererMaterialSystem::pruneMaterialInstanceMutableCache(){
-    const u64 componentMutationVersion = m_world.componentMutationVersion<MaterialInstanceComponent>();
-    if(componentMutationVersion == m_materialState.m_instanceMutableCacheComponentMutationVersion)
+    const u64 componentMutationVersion = world().componentMutationVersion<MaterialInstanceComponent>();
+    if(componentMutationVersion == materialState().m_instanceMutableCacheComponentMutationVersion)
         return;
 
-    m_materialState.m_instanceMutableCache.clear();
-    m_materialState.m_instanceMutableCacheComponentMutationVersion = componentMutationVersion;
+    materialState().m_instanceMutableCache.clear();
+    materialState().m_instanceMutableCacheComponentMutationVersion = componentMutationVersion;
 }
 
 

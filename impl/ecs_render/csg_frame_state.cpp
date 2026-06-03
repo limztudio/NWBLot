@@ -16,24 +16,24 @@ NWB_IMPL_BEGIN
 
 CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena){
     CsgFrameState state;
-    if(!HasCsgFrameCandidates(m_world))
+    if(!HasCsgFrameCandidates(world()))
         return state;
 
-    CsgFrameReceiverLookup receiverLookup(m_world, scratchArena);
+    CsgFrameReceiverLookup receiverLookup(world(), scratchArena);
     if(receiverLookup.empty())
         return state;
 
-    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
+    auto* ecsMeshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     if(!ecsMeshSystem)
         return state;
 
-    auto rendererView = m_world.view<RendererComponent>();
+    auto rendererView = world().view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
             continue;
 
         CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-        const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(m_world, entity, receiverKind);
+        const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(world(), entity, receiverKind);
         if(!receiver || !receiver->enabled)
             continue;
 
@@ -55,7 +55,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             continue;
         NWB_ASSERT(materialInfo);
 
-        const Scene::TransformComponent* transform = m_world.tryGetComponent<Scene::TransformComponent>(entity);
+        const Scene::TransformComponent* transform = world().tryGetComponent<Scene::TransformComponent>(entity);
 
         auto countPassCutters = [&](const CsgReceiverPass::Enum pass) -> u32{
             CsgReceiverDrawState drawState;

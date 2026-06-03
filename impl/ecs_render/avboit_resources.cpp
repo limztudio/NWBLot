@@ -14,14 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererAvboitSystem::RendererAvboitSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase(renderer)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_avboit_resources{
 
 
@@ -82,21 +74,21 @@ static bool CreateComputePipeline(
 
 
 bool RendererAvboitSystem::createAvboitResources(){
-    auto* device = m_graphics.getDevice();
+    auto* device = graphics().getDevice();
 
-    if(!ECSRenderDetail::CreateClampSampler(*device, m_deferredState.m_sampler, false)){
+    if(!ECSRenderDetail::CreateClampSampler(*device, deferredState().m_sampler, false)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shared point sampler for AVBOIT"));
         return false;
     }
-    if(!ECSRenderDetail::CreateClampSampler(*device, m_avboitState.m_linearSampler, true)){
+    if(!ECSRenderDetail::CreateClampSampler(*device, avboitState().m_linearSampler, true)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
         return false;
     }
 
     if(!__hidden_avboit_resources::CreateBindingLayout(
-        m_arena,
+        arena(),
         *device,
-        m_avboitState.m_emptyBindingLayout,
+        avboitState().m_emptyBindingLayout,
         Core::ShaderType::Pixel,
         [](Core::BindingLayoutDesc&){}
     )){
@@ -105,9 +97,9 @@ bool RendererAvboitSystem::createAvboitResources(){
     }
 
     if(!__hidden_avboit_resources::CreateBindingLayout(
-        m_arena,
+        arena(),
         *device,
-        m_avboitState.m_occupancyBindingLayout,
+        avboitState().m_occupancyBindingLayout,
         Core::ShaderType::Pixel,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, 1));
@@ -121,9 +113,9 @@ bool RendererAvboitSystem::createAvboitResources(){
     }
 
     if(!__hidden_avboit_resources::CreateBindingLayout(
-        m_arena,
+        arena(),
         *device,
-        m_avboitState.m_depthWarpBindingLayout,
+        avboitState().m_depthWarpBindingLayout,
         Core::ShaderType::Compute,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, 1));
@@ -137,9 +129,9 @@ bool RendererAvboitSystem::createAvboitResources(){
     }
 
     if(!__hidden_avboit_resources::CreateBindingLayout(
-        m_arena,
+        arena(),
         *device,
-        m_avboitState.m_extinctionBindingLayout,
+        avboitState().m_extinctionBindingLayout,
         Core::ShaderType::Pixel,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_AVBOIT_BINDING_OPAQUE_DEPTH, 1));
@@ -156,9 +148,9 @@ bool RendererAvboitSystem::createAvboitResources(){
     }
 
     if(!__hidden_avboit_resources::CreateBindingLayout(
-        m_arena,
+        arena(),
         *device,
-        m_avboitState.m_integrateBindingLayout,
+        avboitState().m_integrateBindingLayout,
         Core::ShaderType::Compute,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, 1));
@@ -173,9 +165,9 @@ bool RendererAvboitSystem::createAvboitResources(){
     }
 
     if(!__hidden_avboit_resources::CreateBindingLayout(
-        m_arena,
+        arena(),
         *device,
-        m_avboitState.m_accumulateBindingLayout,
+        avboitState().m_accumulateBindingLayout,
         Core::ShaderType::Pixel,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
@@ -190,7 +182,7 @@ bool RendererAvboitSystem::createAvboitResources(){
         return false;
     }
 
-    if(!m_deferredState.m_sceneShadingBuffer){
+    if(!deferredState().m_sceneShadingBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation requires a scene shading buffer"));
         return false;
     }
@@ -211,11 +203,11 @@ bool RendererAvboitSystem::createAvboitResources(){
     };
 
     if(
-        !loadAvboitShader(m_avboitState.m_occupancyPixelShader, ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitOccupancyPS")
-        || !loadAvboitShader(m_avboitState.m_depthWarpComputeShader, ECSRenderAvboitDetail::s_AvboitDepthWarpComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitDepthWarpCS")
-        || !loadAvboitShader(m_avboitState.m_extinctionPixelShader, ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitExtinctionPS")
-        || !loadAvboitShader(m_avboitState.m_integrateComputeShader, ECSRenderAvboitDetail::s_AvboitIntegrateComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitIntegrateCS")
-        || !loadAvboitShader(m_avboitState.m_accumulatePixelShader, ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitAccumulatePS")
+        !loadAvboitShader(avboitState().m_occupancyPixelShader, ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitOccupancyPS")
+        || !loadAvboitShader(avboitState().m_depthWarpComputeShader, ECSRenderAvboitDetail::s_AvboitDepthWarpComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitDepthWarpCS")
+        || !loadAvboitShader(avboitState().m_extinctionPixelShader, ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitExtinctionPS")
+        || !loadAvboitShader(avboitState().m_integrateComputeShader, ECSRenderAvboitDetail::s_AvboitIntegrateComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitIntegrateCS")
+        || !loadAvboitShader(avboitState().m_accumulatePixelShader, ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName, Core::ShaderType::Pixel, "ECSRender_AvboitAccumulatePS")
     )
         return false;
 
@@ -226,13 +218,13 @@ bool RendererAvboitSystem::createAvboitPipelines(){
     if(!createAvboitResources())
         return false;
 
-    auto* device = m_graphics.getDevice();
+    auto* device = graphics().getDevice();
 
     if(!__hidden_avboit_resources::CreateComputePipeline(
         *device,
-        m_avboitState.m_depthWarpPipeline,
-        m_avboitState.m_depthWarpComputeShader,
-        m_avboitState.m_depthWarpBindingLayout
+        avboitState().m_depthWarpPipeline,
+        avboitState().m_depthWarpComputeShader,
+        avboitState().m_depthWarpBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
@@ -240,9 +232,9 @@ bool RendererAvboitSystem::createAvboitPipelines(){
 
     if(!__hidden_avboit_resources::CreateComputePipeline(
         *device,
-        m_avboitState.m_integratePipeline,
-        m_avboitState.m_integrateComputeShader,
-        m_avboitState.m_integrateBindingLayout
+        avboitState().m_integratePipeline,
+        avboitState().m_integrateComputeShader,
+        avboitState().m_integrateBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;

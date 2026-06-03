@@ -8,7 +8,7 @@
 #include "components.h"
 #include "material_instance.h"
 #include "renderer_state.h"
-#include "renderer_system_subsystems.h"
+#include "subsystems.h"
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
@@ -64,6 +64,7 @@ namespace ECSRenderDetail{
 
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
+    template<typename RendererT>
     friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
@@ -97,6 +98,17 @@ public:
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
 
 private:
+    [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
+    [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
+    [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }
+    [[nodiscard]] Core::Assets::AssetManager& assetManager()noexcept{ return m_assetManager; }
+    [[nodiscard]] ShaderPathResolveCallback& shaderPathResolver()noexcept{ return m_shaderPathResolver; }
+    [[nodiscard]] RendererMeshState& meshState()noexcept{ return m_meshState; }
+    [[nodiscard]] RendererMaterialState& materialState()noexcept{ return m_materialState; }
+    [[nodiscard]] RendererDrawState& drawState()noexcept{ return m_drawState; }
+    [[nodiscard]] RendererCsgState& csgState()noexcept{ return m_csgState; }
+    [[nodiscard]] RendererDeferredState& deferredState()noexcept{ return m_deferredState; }
+    [[nodiscard]] RendererAvboitState& avboitState()noexcept{ return m_avboitState; }
     [[nodiscard]] RendererShaderSystem& shaderSystem()noexcept{ return m_shaderSystem; }
     [[nodiscard]] RendererMeshSystem& meshSystem()noexcept{ return m_meshSystem; }
     [[nodiscard]] RendererMaterialSystem& materialSystem()noexcept{ return m_materialSystem; }

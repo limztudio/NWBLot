@@ -14,14 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererDeferredSystem::RendererDeferredSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase(renderer)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets.occupancyBindingSet.reset();
     targets.depthWarpBindingSet.reset();
@@ -47,20 +39,20 @@ void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets
 }
 
 void RendererDeferredSystem::resetDeferredFrameTargets(){
-    m_deferredState.m_targets.lightingBindingSet.reset();
-    m_deferredState.m_targets.compositeBindingSet.reset();
-    resetAvboitFrameTargets(m_deferredState.m_targets.avboit);
+    deferredState().m_targets.lightingBindingSet.reset();
+    deferredState().m_targets.compositeBindingSet.reset();
+    resetAvboitFrameTargets(deferredState().m_targets.avboit);
 
-    m_deferredState.m_targets.framebuffer.reset();
-    m_deferredState.m_targets.opaqueLightingFramebuffer.reset();
+    deferredState().m_targets.framebuffer.reset();
+    deferredState().m_targets.opaqueLightingFramebuffer.reset();
 
-    m_deferredState.m_targets.albedo.reset();
-    m_deferredState.m_targets.normal.reset();
-    m_deferredState.m_targets.worldPosition.reset();
-    m_deferredState.m_targets.opaqueColor.reset();
-    m_deferredState.m_targets.depth.reset();
+    deferredState().m_targets.albedo.reset();
+    deferredState().m_targets.normal.reset();
+    deferredState().m_targets.worldPosition.reset();
+    deferredState().m_targets.opaqueColor.reset();
+    deferredState().m_targets.depth.reset();
 
-    m_deferredState.m_targets = DeferredFrameTargets{};
+    deferredState().m_targets = DeferredFrameTargets{};
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,7 +64,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    auto* device = m_graphics.getDevice();
+    auto* device = graphics().getDevice();
     const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(*device);
     const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
     const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
@@ -110,9 +102,9 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
 
     resetDeferredFrameTargets();
-    m_materialState.m_pipelines.clear();
-    m_deferredState.m_lightingPipeline.reset();
-    m_deferredState.m_compositePipeline.reset();
+    materialState().m_pipelines.clear();
+    deferredState().m_lightingPipeline.reset();
+    deferredState().m_compositePipeline.reset();
 
     DeferredFrameTargets createdTargets;
     createdTargets.width = width;
@@ -132,7 +124,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/gbuffer_albedo")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.albedo = m_graphics.createTexture(albedoDesc);
+    createdTargets.albedo = graphics().createTexture(albedoDesc);
     if(!createdTargets.albedo){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
         return false;
@@ -147,7 +139,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/gbuffer_normal")
         .setClearValue(Core::Color(0.5f, 0.5f, 1.f, 1.f))
     ;
-    createdTargets.normal = m_graphics.createTexture(normalDesc);
+    createdTargets.normal = graphics().createTexture(normalDesc);
     if(!createdTargets.normal){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred normal target"));
         return false;
@@ -162,7 +154,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/gbuffer_world_position")
         .setClearValue(Core::Color(0.f, 0.f, 0.f, 1.f))
     ;
-    createdTargets.worldPosition = m_graphics.createTexture(worldPositionDesc);
+    createdTargets.worldPosition = graphics().createTexture(worldPositionDesc);
     if(!createdTargets.worldPosition){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred world-position target"));
         return false;
@@ -177,7 +169,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setName("engine/deferred/opaque_color")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
-    createdTargets.opaqueColor = m_graphics.createTexture(opaqueColorDesc);
+    createdTargets.opaqueColor = graphics().createTexture(opaqueColorDesc);
     if(!createdTargets.opaqueColor){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred opaque color target"));
         return false;
@@ -191,7 +183,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setInRenderTarget(true)
         .setName("engine/deferred/depth")
     ;
-    createdTargets.depth = m_graphics.createTexture(depthDesc);
+    createdTargets.depth = graphics().createTexture(depthDesc);
     if(!createdTargets.depth){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
         return false;
@@ -238,7 +230,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     ))
         return false;
 
-    Core::BindingSetDesc lightingBindingSetDesc(m_arena);
+    Core::BindingSetDesc lightingBindingSetDesc(arena());
     lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR,
         createdTargets.albedo.get(),
@@ -267,15 +259,15 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, m_deferredState.m_sampler.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, m_deferredState.m_sceneShadingBuffer.get()));
-    createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, m_deferredState.m_lightingBindingLayout);
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, deferredState().m_sampler.get()));
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_DEFERRED_LIGHTING_BINDING, deferredState().m_sceneShadingBuffer.get()));
+    createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));
         return false;
     }
 
-    Core::BindingSetDesc bindingSetDesc(m_arena);
+    Core::BindingSetDesc bindingSetDesc(arena());
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR,
         createdTargets.opaqueColor.get(),
@@ -297,30 +289,30 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, m_deferredState.m_sampler.get()));
-    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, m_deferredState.m_compositeBindingLayout);
+    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, deferredState().m_sampler.get()));
+    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, deferredState().m_compositeBindingLayout);
     if(!createdTargets.compositeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
         return false;
     }
 
-    m_deferredState.m_targets = Move(createdTargets);
-    if(!createDeferredLightingPipeline(m_deferredState.m_targets)){
+    deferredState().m_targets = Move(createdTargets);
+    if(!createDeferredLightingPipeline(deferredState().m_targets)){
         resetDeferredFrameTargets();
         return false;
     }
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, AVBOIT color {}, extinction {}, transmittance {})")
-        , m_deferredState.m_targets.width
-        , m_deferredState.m_targets.height
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.albedoFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.normalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.worldPositionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.opaqueColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.depthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.accumExtinctionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_deferredState.m_targets.avboit.transmittanceFormat).name)
+        , deferredState().m_targets.width
+        , deferredState().m_targets.height
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.normalFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.worldPositionFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.opaqueColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.depthFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumExtinctionFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.transmittanceFormat).name)
     );
     return true;
 }

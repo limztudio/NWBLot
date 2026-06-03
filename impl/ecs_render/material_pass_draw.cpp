@@ -22,14 +22,14 @@ void RendererMaterialSystem::setMaterialPassCommonBufferStates(
     RendererMeshSystem::forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
         commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
     });
-    commandList.setBufferState(m_drawState.m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(m_drawState.m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(m_drawState.m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
 #if defined(NWB_DEBUG)
-    return mesh.valid() && m_drawState.m_instanceBuffer && m_drawState.m_meshViewBuffer && m_drawState.m_materialTypedBuffer;
+    return mesh.valid() && drawState().m_instanceBuffer && drawState().m_meshViewBuffer && drawState().m_materialTypedBuffer;
 #else
     static_cast<void>(mesh);
     return true;
@@ -115,7 +115,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         if(!m_renderer.meshSystem().createMeshBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!m_renderer.csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
+            if(!m_renderer.csgSystem().createCsgClipResources() || !csgState().m_clipBindingSet)
                 return;
         }
 
@@ -133,13 +133,13 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         else if(csgClipDraw && usesAvboit)
             meshletState.addBindingSet(nullptr);
         if(csgClipDraw)
-            meshletState.addBindingSet(m_csgState.m_clipBindingSet.get());
+            meshletState.addBindingSet(csgState().m_clipBindingSet.get());
 
         context.commandList.setMeshletState(meshletState);
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
 
             context.commandList.dispatchMesh(mesh.meshletCount);
         }
@@ -154,8 +154,8 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         return;
     if(!createEmulationViewResources())
         return;
-    NWB_ASSERT(m_drawState.m_meshViewBuffer);
-    NWB_ASSERT(m_drawState.m_emulationViewBindingSet);
+    NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(drawState().m_emulationViewBindingSet);
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
@@ -166,7 +166,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         if(!m_renderer.meshSystem().createComputeBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!m_renderer.csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
+            if(!m_renderer.csgSystem().createCsgClipResources() || !csgState().m_clipBindingSet)
                 return;
         }
         NWB_ASSERT(mesh.computeBindingSet);
@@ -183,7 +183,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         if(csgClipDraw && usesAvboit)
             computeState.addBindingSet(nullptr);
         if(csgClipDraw)
-            computeState.addBindingSet(m_csgState.m_clipBindingSet.get());
+            computeState.addBindingSet(csgState().m_clipBindingSet.get());
 
         context.commandList.setComputeState(computeState);
 
@@ -196,7 +196,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             materialPassDrawDispatchFlags(context, drawItem, mesh)
         );
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
 
             context.commandList.dispatch(mesh.meshletCount);
         }
@@ -217,12 +217,12 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             graphicsState.addBindingSet(nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
             if(csgClipDraw)
-                graphicsState.addBindingSet(m_csgState.m_clipBindingSet.get());
+                graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
         }
         else{
-            graphicsState.addBindingSet(m_drawState.m_emulationViewBindingSet.get());
+            graphicsState.addBindingSet(drawState().m_emulationViewBindingSet.get());
             if(csgClipDraw)
-                graphicsState.addBindingSet(m_csgState.m_clipBindingSet.get());
+                graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
             else if(context.passBindingSet)
                 graphicsState.addBindingSet(context.passBindingSet);
         }
@@ -234,7 +234,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
         {
-            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, graphics().getDevice(), context.commandList);
 
             context.commandList.draw(drawArgs);
         }

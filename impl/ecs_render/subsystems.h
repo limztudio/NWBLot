@@ -5,14 +5,13 @@
 #pragma once
 
 
-#include "renderer_system_subsystem_base.h"
-#include "renderer_shader_system.h"
-#include "renderer_mesh_system.h"
-#include "renderer_material_system.h"
-#include "renderer_csg_system.h"
-#include "renderer_deferred_system.h"
-#include "renderer_avboit_system.h"
+#include "subsystem_base.h"
+#include "shader_system.h"
+#include "mesh_system.h"
+#include "material_system.h"
+#include "csg_system.h"
+#include "deferred_system.h"
+#include "avboit_system.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

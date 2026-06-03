@@ -14,14 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMaterialSystem::RendererMaterialSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase(renderer)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     const Material& material,
     const Name& materialPath,
@@ -86,14 +78,14 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
     }
 
-    const auto foundInfo = m_materialState.m_surfaceInfos.find(materialPath);
-    if(foundInfo != m_materialState.m_surfaceInfos.end()){
+    const auto foundInfo = materialState().m_surfaceInfos.find(materialPath);
+    if(foundInfo != materialState().m_surfaceInfos.end()){
         outInfo = &foundInfo.value();
         return true;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
+    if(!assetManager().loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load material '{}'"), StringConvert(materialPath.c_str()));
         return false;
     }
@@ -105,7 +97,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const Material& material = static_cast<const Material&>(*loadedAsset);
     const auto& typedBlockBytes = material.typedBlockBytes();
 
-    MaterialSurfaceInfo createdInfo(m_arena);
+    MaterialSurfaceInfo createdInfo(arena());
     createdInfo.materialName = materialPath;
     if(material.shaderVariant().empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant")
@@ -164,7 +156,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();
 
-    auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
+    auto result = materialState().m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
     outInfo = &it.value();
     NWB_ASSERT(outInfo);
@@ -180,7 +172,7 @@ bool RendererMaterialSystem::hasTransparentRenderers(){
         return materialInfo->transparent;
     };
 
-    auto rendererView = m_world.view<RendererComponent>();
+    auto rendererView = world().view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
         static_cast<void>(entity);
         if(!renderer.visible)

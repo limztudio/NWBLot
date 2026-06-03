@@ -14,14 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererShaderSystem::RendererShaderSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase(renderer)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererShaderSystem::loadShader(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
@@ -36,9 +28,9 @@ bool RendererShaderSystem::loadShader(
         variantName,
         shaderType,
         debugName,
-        m_graphics,
-        m_assetManager,
-        m_shaderPathResolver,
+        graphics(),
+        assetManager(),
+        shaderPathResolver(),
         NWB_TEXT("RendererSystem"),
         archiveStageName
     );
@@ -47,7 +39,7 @@ bool RendererShaderSystem::loadShader(
 
 bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
-        m_deferredState.m_compositeVertexShader,
+        deferredState().m_compositeVertexShader,
         ECSRenderDetail::s_DeferredCompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,

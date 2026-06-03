@@ -101,7 +101,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     const Core::Format::Enum accumExtinctionFormat,
     const Core::Format::Enum transmittanceFormat
 ){
-    auto* device = m_graphics.getDevice();
+    auto* device = graphics().getDevice();
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;
@@ -128,7 +128,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
 
     const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
     avboitTargets.lowRasterTarget = __hidden_avboit_targets::CreateRenderTarget(
-        m_graphics,
+        graphics(),
         avboitTargets.lowWidth,
         avboitTargets.lowHeight,
         avboitTargets.lowRasterFormat,
@@ -141,7 +141,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.accumColor = __hidden_avboit_targets::CreateRenderTarget(
-        m_graphics,
+        graphics(),
         avboitTargets.fullWidth,
         avboitTargets.fullHeight,
         avboitTargets.accumColorFormat,
@@ -154,7 +154,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.accumExtinction = __hidden_avboit_targets::CreateRenderTarget(
-        m_graphics,
+        graphics(),
         avboitTargets.fullWidth,
         avboitTargets.fullHeight,
         avboitTargets.accumExtinctionFormat,
@@ -220,7 +220,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     const u64 extinctionOverflowBytes = lowPixelCount * sizeof(u32);
 
     avboitTargets.coverageBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        m_graphics,
+        graphics(),
         coverageBytes,
         "engine/avboit/depth_coverage"
     );
@@ -230,7 +230,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.depthWarpBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        m_graphics,
+        graphics(),
         depthWarpBytes,
         "engine/avboit/depth_warp_lut"
     );
@@ -240,7 +240,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.controlBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        m_graphics,
+        graphics(),
         static_cast<u64>(ECSRenderAvboitDetail::s_AvboitControlWordCount) * sizeof(u32),
         "engine/avboit/control"
     );
@@ -250,7 +250,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.extinctionBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        m_graphics,
+        graphics(),
         extinctionBytes,
         "engine/avboit/packed_extinction_volume"
     );
@@ -260,7 +260,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.extinctionOverflowBuffer = __hidden_avboit_targets::CreateU32Buffer(
-        m_graphics,
+        graphics(),
         extinctionOverflowBytes,
         "engine/avboit/extinction_overflow_depth"
     );
@@ -270,7 +270,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     }
 
     avboitTargets.transmittanceTexture = __hidden_avboit_targets::CreateTransmittanceVolume(
-        m_graphics,
+        graphics(),
         avboitTargets.lowWidth,
         avboitTargets.lowHeight,
         avboitTargets.physicalSliceCount,

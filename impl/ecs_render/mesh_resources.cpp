@@ -17,14 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererMeshSystem::RendererMeshSystem(RendererSystem& renderer)
-    : RendererSystemSubsystemBase(renderer)
-{}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_mesh{
 
 
@@ -208,15 +200,15 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     }
 
-    const auto foundMesh = m_meshState.m_meshes.find(meshPath);
-    if(foundMesh != m_meshState.m_meshes.end()){
+    const auto foundMesh = meshState().m_meshes.find(meshPath);
+    if(foundMesh != meshState().m_meshes.end()){
         outMesh = &foundMesh.value();
         NWB_ASSERT(outMesh->valid());
         return true;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Mesh::AssetTypeName(), meshPath, loadedAsset)){
+    if(!assetManager().loadSync(Mesh::AssetTypeName(), meshPath, loadedAsset)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load mesh '{}'"), StringConvert(meshPath.c_str()));
         return false;
     }
@@ -239,7 +231,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     }
 
-    MeshResources createdMesh(m_arena);
+    MeshResources createdMesh(arena());
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
@@ -254,7 +246,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
     bool uploaded = true;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float3U>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.positionBuffer,
         AStringView(":positions"),
@@ -262,7 +254,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("position")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.normalBuffer,
         AStringView(":normals"),
@@ -270,7 +262,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("normal")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.tangentBuffer,
         AStringView(":tangents"),
@@ -278,7 +270,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("tangent")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.uv0Buffer,
         AStringView(":uv0"),
@@ -286,7 +278,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("uv0")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.colorBuffer,
         AStringView(":colors"),
@@ -294,7 +286,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("color")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.meshletDescBuffer,
         AStringView(":meshlets"),
@@ -302,7 +294,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet descriptor")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.meshletBoundsBuffer,
         AStringView(":meshlet_bounds"),
@@ -311,7 +303,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.meshletPositionRefDeltaBuffer,
         AStringView(":meshlet_position_ref_deltas"),
@@ -320,7 +312,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.meshletAttributeRefDeltaBuffer,
         AStringView(":meshlet_attribute_ref_deltas"),
@@ -329,7 +321,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.meshletLocalVertexRefBuffer,
         AStringView(":meshlet_local_vertex_refs"),
@@ -337,7 +329,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
-        m_graphics,
+        graphics(),
         meshPath,
         createdMesh.meshletPrimitiveIndexBuffer,
         AStringView(":meshlet_primitive_indices"),
@@ -349,7 +341,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         return false;
     NWB_ASSERT(createdMesh.valid());
 
-    auto result = m_meshState.m_meshes.try_emplace(meshPath, Move(createdMesh));
+    auto result = meshState().m_meshes.try_emplace(meshPath, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
@@ -362,8 +354,8 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
 
     NWB_ASSERT(desc.valid());
 
-    const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
-    if(foundMesh != m_meshState.m_meshes.end()){
+    const auto foundMesh = meshState().m_meshes.find(desc.meshKey);
+    if(foundMesh != meshState().m_meshes.end()){
         if(!foundMesh.value().runtimeMesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource")
                 , StringConvert(desc.meshKey.c_str())
@@ -371,7 +363,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             return false;
         }
         if(foundMesh.value().runtimeMeshVersion != desc.version){
-            m_meshState.m_meshes.erase(foundMesh);
+            meshState().m_meshes.erase(foundMesh);
         }
         else{
             outMesh = &foundMesh.value();
@@ -380,7 +372,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         }
     }
 
-    MeshResources createdMesh(m_arena);
+    MeshResources createdMesh(arena());
     createdMesh.meshName = desc.meshKey;
     createdMesh.positionBuffer = desc.positionBuffer;
     createdMesh.normalBuffer = desc.normalBuffer;
@@ -422,7 +414,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         return false;
     NWB_ASSERT(createdMesh.valid());
 
-    auto result = m_meshState.m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
+    auto result = meshState().m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
     auto it = result.first;
 
     outMesh = &it.value();
@@ -431,11 +423,11 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
 }
 
 void RendererMeshSystem::pruneRuntimeMeshResources(){
-    if(m_meshState.m_meshes.empty())
+    if(meshState().m_meshes.empty())
         return;
 
-    const auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end();){
+    const auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
+    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end();){
         const MeshResources& mesh = it.value();
         if(!mesh.runtimeMesh){
             ++it;
@@ -447,7 +439,7 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
             continue;
         }
 
-        it = m_meshState.m_meshes.erase(it);
+        it = meshState().m_meshes.erase(it);
     }
 }
 

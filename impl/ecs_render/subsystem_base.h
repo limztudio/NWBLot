@@ -79,25 +79,31 @@ struct RendererMaterialInstanceOverrideField{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename RendererT>
 class RendererSystemSubsystemBase : NoCopy{
 protected:
-    explicit RendererSystemSubsystemBase(RendererSystem& renderer);
+    explicit RendererSystemSubsystemBase(RendererT& renderer)
+        : m_renderer(renderer)
+    {}
 
 
 protected:
-    RendererSystem& m_renderer;
-    Core::Alloc::GlobalArena& m_arena;
-    Core::ECS::World& m_world;
-    Core::Graphics& m_graphics;
-    Core::Assets::AssetManager& m_assetManager;
-    RendererShaderPathResolveCallback& m_shaderPathResolver;
-    CsgShapeRegistry& m_csgShapeRegistry;
-    RendererMeshState& m_meshState;
-    RendererMaterialState& m_materialState;
-    RendererDrawState& m_drawState;
-    RendererCsgState& m_csgState;
-    RendererDeferredState& m_deferredState;
-    RendererAvboitState& m_avboitState;
+    [[nodiscard]] Core::Alloc::GlobalArena& arena()const noexcept{ return m_renderer.arena(); }
+    [[nodiscard]] Core::ECS::World& world()const noexcept{ return m_renderer.world(); }
+    [[nodiscard]] Core::Graphics& graphics()const noexcept{ return m_renderer.graphics(); }
+    [[nodiscard]] Core::Assets::AssetManager& assetManager()const noexcept{ return m_renderer.assetManager(); }
+    [[nodiscard]] RendererShaderPathResolveCallback& shaderPathResolver()const noexcept{ return m_renderer.shaderPathResolver(); }
+    [[nodiscard]] CsgShapeRegistry& csgShapeRegistry()const noexcept{ return m_renderer.csgShapeRegistry(); }
+    [[nodiscard]] RendererMeshState& meshState()const noexcept{ return m_renderer.meshState(); }
+    [[nodiscard]] RendererMaterialState& materialState()const noexcept{ return m_renderer.materialState(); }
+    [[nodiscard]] RendererDrawState& drawState()const noexcept{ return m_renderer.drawState(); }
+    [[nodiscard]] RendererCsgState& csgState()const noexcept{ return m_renderer.csgState(); }
+    [[nodiscard]] RendererDeferredState& deferredState()const noexcept{ return m_renderer.deferredState(); }
+    [[nodiscard]] RendererAvboitState& avboitState()const noexcept{ return m_renderer.avboitState(); }
+
+
+protected:
+    RendererT& m_renderer;
 
 protected:
     static constexpr u32 s_MeshInstanceBindingSlot = NWB_MESH_BINDING_INSTANCE;

@@ -63,27 +63,27 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
     DeferredFrameTargets& createdTargets,
     AvboitFrameTargets& avboitTargets
 ){
-    auto* device = m_graphics.getDevice();
+    auto* device = graphics().getDevice();
 
-    Core::BindingSetDesc occupancyBindingSetDesc(m_arena);
+    Core::BindingSetDesc occupancyBindingSetDesc(arena());
     __hidden_avboit_target_bindings::AddDepthSamplerBindings(
         occupancyBindingSetDesc,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        m_deferredState.m_sampler.get()
+        deferredState().m_sampler.get()
     );
     occupancyBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, avboitTargets.coverageBuffer.get()));
     if(!__hidden_avboit_target_bindings::CreateBindingSet(
         *device,
         avboitTargets.occupancyBindingSet,
         occupancyBindingSetDesc,
-        m_avboitState.m_occupancyBindingLayout
+        avboitState().m_occupancyBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding set"));
         return false;
     }
 
-    Core::BindingSetDesc depthWarpBindingSetDesc(m_arena);
+    Core::BindingSetDesc depthWarpBindingSetDesc(arena());
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, avboitTargets.coverageBuffer.get()));
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
     depthWarpBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
@@ -91,18 +91,18 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         *device,
         avboitTargets.depthWarpBindingSet,
         depthWarpBindingSetDesc,
-        m_avboitState.m_depthWarpBindingLayout
+        avboitState().m_depthWarpBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding set"));
         return false;
     }
 
-    Core::BindingSetDesc extinctionBindingSetDesc(m_arena);
+    Core::BindingSetDesc extinctionBindingSetDesc(arena());
     __hidden_avboit_target_bindings::AddDepthSamplerBindings(
         extinctionBindingSetDesc,
         createdTargets.depth.get(),
         createdTargets.depthFormat,
-        m_deferredState.m_sampler.get()
+        deferredState().m_sampler.get()
     );
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
     extinctionBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
@@ -112,13 +112,13 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         *device,
         avboitTargets.extinctionBindingSet,
         extinctionBindingSetDesc,
-        m_avboitState.m_extinctionBindingLayout
+        avboitState().m_extinctionBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding set"));
         return false;
     }
 
-    Core::BindingSetDesc integrateBindingSetDesc(m_arena);
+    Core::BindingSetDesc integrateBindingSetDesc(arena());
     integrateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, avboitTargets.extinctionBuffer.get()));
     integrateBindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE,
@@ -133,13 +133,13 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         *device,
         avboitTargets.integrateBindingSet,
         integrateBindingSetDesc,
-        m_avboitState.m_integrateBindingLayout
+        avboitState().m_integrateBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding set"));
         return false;
     }
 
-    Core::BindingSetDesc accumulateBindingSetDesc(m_arena);
+    Core::BindingSetDesc accumulateBindingSetDesc(arena());
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, avboitTargets.depthWarpBuffer.get()));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
         NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE,
@@ -149,13 +149,13 @@ bool RendererAvboitSystem::createAvboitFrameTargetBindingSets(
         Core::TextureDimension::Texture3D
     ));
     accumulateBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, avboitTargets.controlBuffer.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, m_avboitState.m_linearSampler.get()));
-    accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, m_deferredState.m_sceneShadingBuffer.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER, avboitState().m_linearSampler.get()));
+    accumulateBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SCENE_SHADING_AVBOIT_ACCUMULATE_BINDING, deferredState().m_sceneShadingBuffer.get()));
     if(!__hidden_avboit_target_bindings::CreateBindingSet(
         *device,
         avboitTargets.accumulateBindingSet,
         accumulateBindingSetDesc,
-        m_avboitState.m_accumulateBindingLayout
+        avboitState().m_accumulateBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding set"));
         return false;

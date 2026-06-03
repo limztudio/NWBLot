@@ -212,7 +212,7 @@ void RendererAvboitSystem::renderAvboitPasses(
     AvboitFrameTargets& avboitTargets = targets.avboit;
     if(!avboitTargets.valid())
         return;
-    if((!m_avboitState.m_depthWarpPipeline || !m_avboitState.m_integratePipeline) && !createAvboitPipelines())
+    if((!avboitState().m_depthWarpPipeline || !avboitState().m_integratePipeline) && !createAvboitPipelines())
         return;
 
     m_renderer.materialSystem().renderMaterialPass(
@@ -256,7 +256,7 @@ void RendererAvboitSystem::renderAvboitPasses(
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        m_avboitState.m_depthWarpPipeline.get(),
+        avboitState().m_depthWarpPipeline.get(),
         targets.depthWarpBindingSet.get(),
         targets,
         NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X
@@ -267,7 +267,7 @@ void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandL
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        m_avboitState.m_integratePipeline.get(),
+        avboitState().m_integratePipeline.get(),
         targets.integrateBindingSet.get(),
         targets,
         DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X))

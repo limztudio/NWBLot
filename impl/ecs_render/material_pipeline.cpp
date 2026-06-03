@@ -112,7 +112,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
     NWB_ASSERT(materialKey);
 
-    auto [it, inserted] = m_materialState.m_pipelines.try_emplace(pipelineKey);
+    auto [it, inserted] = materialState().m_pipelines.try_emplace(pipelineKey);
     MaterialPipelineResources& resources = it.value();
     switch(resources.renderPath){
     case RenderPath::MeshShader:
@@ -133,7 +133,7 @@ bool RendererMaterialSystem::createRendererPipeline(
 
     auto removeFailedEntry = [&](){
         if(inserted)
-            m_materialState.m_pipelines.erase(it);
+            materialState().m_pipelines.erase(it);
     };
     auto failMaterialPipeline = [&](){
         removeFailedEntry();
@@ -147,17 +147,17 @@ bool RendererMaterialSystem::createRendererPipeline(
         return false;
     }
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
-    Core::GraphicsString csgShaderVariant(m_arena);
-    Core::GraphicsString avboitCsgShaderVariant(m_arena);
+    Core::GraphicsString csgShaderVariant(arena());
+    Core::GraphicsString avboitCsgShaderVariant(arena());
     const bool csgClipPipeline = ECSRenderMaterialShaderVariants::CsgClipPipeline(pipelineKey);
     const bool avboitCsgClipPipeline = ECSRenderMaterialShaderVariants::AvboitCsgClipPipeline(pipelineKey);
     ACompactString csgProjectEvaluatorModuleInclude;
-    Core::GraphicsString csgProjectEvaluatorModuleAssignment(m_arena);
+    Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
     AStringView avboitProjectEvaluatorModuleAssignmentToAdd;
     if(csgClipPipeline){
         if(!__hidden_material_pipeline::ResolveCsgProjectEvaluatorModuleInclude(
-            m_csgShapeRegistry,
+            csgShapeRegistry(),
             pipelineKey.csgEvaluatorVariant,
             csgProjectEvaluatorModuleInclude
         )){
@@ -244,21 +244,21 @@ bool RendererMaterialSystem::createRendererPipeline(
     case MaterialPipelinePass::AvboitOccupancy:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = m_avboitState.m_occupancyPixelShader;
+        passPixelShader = avboitState().m_occupancyPixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = m_avboitState.m_extinctionPixelShader;
+        passPixelShader = avboitState().m_extinctionPixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
-        passPixelShader = m_avboitState.m_accumulatePixelShader;
+        passPixelShader = avboitState().m_accumulatePixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitAccumulatePS";
         break;
@@ -266,7 +266,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         break;
     }
 
-    auto* device = m_graphics.getDevice();
+    auto* device = graphics().getDevice();
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, materialInfo.twoSided);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
@@ -289,16 +289,16 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setMeshShader(resources.meshShader);
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
-        pipelineDesc.addBindingLayout(m_drawState.m_meshBindingLayout);
+        pipelineDesc.addBindingLayout(drawState().m_meshBindingLayout);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            pipelineDesc.addBindingLayout(m_avboitState.m_occupancyBindingLayout);
+            pipelineDesc.addBindingLayout(avboitState().m_occupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            pipelineDesc.addBindingLayout(m_avboitState.m_extinctionBindingLayout);
+            pipelineDesc.addBindingLayout(avboitState().m_extinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            pipelineDesc.addBindingLayout(m_avboitState.m_accumulateBindingLayout);
+            pipelineDesc.addBindingLayout(avboitState().m_accumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
         default:
@@ -307,7 +307,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(csgClipPipeline){
             if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
-            pipelineDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
+            pipelineDesc.addBindingLayout(csgState().m_clipBindingLayout);
         }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
@@ -349,13 +349,13 @@ bool RendererMaterialSystem::createRendererPipeline(
 
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
-        computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
+        computeDesc.addBindingLayout(drawState().m_computeBindingLayout);
         if(csgClipPipeline){
             if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
             if(avboitCsgClipPipeline)
-                computeDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
-            computeDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
+                computeDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            computeDesc.addBindingLayout(csgState().m_clipBindingLayout);
         }
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
@@ -364,32 +364,32 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(m_drawState.m_emulationInputLayout);
-        emulationDesc.setVertexShader(m_drawState.m_emulationVertexShader);
+        emulationDesc.setInputLayout(drawState().m_emulationInputLayout);
+        emulationDesc.setVertexShader(drawState().m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
-            emulationDesc.addBindingLayout(m_avboitState.m_occupancyBindingLayout);
+            emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(avboitState().m_occupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
-            emulationDesc.addBindingLayout(m_avboitState.m_extinctionBindingLayout);
+            emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(avboitState().m_extinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            emulationDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
-            emulationDesc.addBindingLayout(m_avboitState.m_accumulateBindingLayout);
+            emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(avboitState().m_accumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:
         default:
-            emulationDesc.addBindingLayout(m_drawState.m_emulationViewBindingLayout);
+            emulationDesc.addBindingLayout(drawState().m_emulationViewBindingLayout);
             break;
         }
         if(csgClipPipeline){
             if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
-            emulationDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
+            emulationDesc.addBindingLayout(csgState().m_clipBindingLayout);
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
@@ -441,7 +441,7 @@ bool RendererMaterialSystem::createRendererPipeline(
 }
 
 void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
-    auto [it, inserted] = m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
+    auto [it, inserted] = materialState().m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!inserted){
         if(it.value() == renderPath)
             return;

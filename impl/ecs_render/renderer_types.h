@@ -55,7 +55,6 @@ namespace MaterialPipelineCsgMode{
     enum Enum : u8{
         None,
         ClipOnly,
-        ClipAndCapSource,
     };
 };
 

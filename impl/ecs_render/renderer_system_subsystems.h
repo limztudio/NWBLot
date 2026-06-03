@@ -5,11 +5,13 @@
 #pragma once
 
 
-#include "renderer_pipeline_types.h"
-#include "renderer_csg_types.h"
-#include "renderer_mesh_types.h"
-#include "renderer_draw_types.h"
-#include "renderer_frame_types.h"
+#include "renderer_system_subsystem_base.h"
+#include "renderer_shader_system.h"
+#include "renderer_mesh_system.h"
+#include "renderer_material_system.h"
+#include "renderer_csg_system.h"
+#include "renderer_deferred_system.h"
+#include "renderer_avboit_system.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

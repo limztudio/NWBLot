@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createDeferredLightingResources(){
+bool RendererDeferredSystem::createDeferredLightingResources(){
     auto* device = m_graphics.getDevice();
 
     if(!m_deferredState.m_sceneShadingBuffer){
@@ -54,10 +54,10 @@ bool RendererSystem::createDeferredLightingResources(){
         return false;
     }
 
-    if(!loadDeferredCompositeVertexShader())
+    if(!shaderSystem().loadDeferredCompositeVertexShader())
         return false;
 
-    if(!loadShader(
+    if(!shaderSystem().loadShader(
         m_deferredState.m_lightingPixelShader,
         ECSRenderDetail::s_DeferredLightingPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -69,7 +69,7 @@ bool RendererSystem::createDeferredLightingResources(){
     return true;
 }
 
-bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& targets){
+bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets& targets){
     if(!targets.opaqueLightingFramebuffer)
         return false;
     if(!createDeferredLightingResources())
@@ -97,7 +97,7 @@ bool RendererSystem::createDeferredLightingPipeline(DeferredFrameTargets& target
     return true;
 }
 
-bool RendererSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
+bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
     if(!m_deferredState.m_sceneShadingBuffer)
         return false;
 
@@ -111,7 +111,7 @@ bool RendererSystem::updateSceneShadingBuffer(Core::CommandList& commandList, co
     return true;
 }
 
-bool RendererSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
+bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.lightingBindingSet || !targets.opaqueLightingFramebuffer)
         return false;
     if(!m_deferredState.m_lightingPipeline)

@@ -73,7 +73,7 @@ static bool CreateComputePipeline(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createAvboitResources(){
+bool RendererAvboitSystem::createAvboitResources(){
     auto* device = m_graphics.getDevice();
 
     if(!ECSRenderDetail::CreateClampSampler(*device, m_deferredState.m_sampler, false)){
@@ -193,7 +193,7 @@ bool RendererSystem::createAvboitResources(){
         const Core::ShaderType::Mask shaderType,
         const Name& debugName
     ) -> bool{
-        return loadShader(
+        return shaderSystem().loadShader(
             outShader,
             shaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -214,7 +214,7 @@ bool RendererSystem::createAvboitResources(){
     return true;
 }
 
-bool RendererSystem::createAvboitPipelines(){
+bool RendererAvboitSystem::createAvboitPipelines(){
     if(!createAvboitResources())
         return false;
 

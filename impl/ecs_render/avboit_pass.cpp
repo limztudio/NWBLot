@@ -179,7 +179,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
     return pushConstants;
 }
 
-void RendererSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
+void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
     __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.lowRasterTarget);
     __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.accumColor);
     __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.accumExtinction);
@@ -204,7 +204,7 @@ void RendererSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFr
     __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.transmittanceTexture, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
-void RendererSystem::renderAvboitPasses(
+void RendererAvboitSystem::renderAvboitPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState
@@ -215,7 +215,7 @@ void RendererSystem::renderAvboitPasses(
     if((!m_avboitState.m_depthWarpPipeline || !m_avboitState.m_integratePipeline) && !createAvboitPipelines())
         return;
 
-    renderMaterialPass(
+    materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.lowFramebuffer.get(),
         MaterialPipelinePass::AvboitOccupancy,
@@ -228,7 +228,7 @@ void RendererSystem::renderAvboitPasses(
 
     dispatchAvboitDepthWarp(commandList, avboitTargets);
 
-    renderMaterialPass(
+    materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.lowFramebuffer.get(),
         MaterialPipelinePass::AvboitExtinction,
@@ -241,7 +241,7 @@ void RendererSystem::renderAvboitPasses(
 
     dispatchAvboitIntegration(commandList, avboitTargets);
 
-    renderMaterialPass(
+    materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.accumulationFramebuffer.get(),
         MaterialPipelinePass::AvboitAccumulate,
@@ -253,7 +253,7 @@ void RendererSystem::renderAvboitPasses(
     commandList.endRenderPass();
 }
 
-void RendererSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
+void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
         m_avboitState.m_depthWarpPipeline.get(),
@@ -263,7 +263,7 @@ void RendererSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, Avb
     );
 }
 
-void RendererSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets){
+void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     __hidden_avboit::DispatchAvboitCompute(
         commandList,

@@ -127,7 +127,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createCsgClipResources(){
+bool RendererCsgSystem::createCsgClipResources(){
     auto* device = m_graphics.getDevice();
     if(!m_csgState.m_clipBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
@@ -166,11 +166,11 @@ bool RendererSystem::createCsgClipResources(){
     return true;
 }
 
-void RendererSystem::destroyCsgClipBindingSet(){
+void RendererCsgSystem::destroyCsgClipBindingSet(){
     m_csgState.m_clipBindingSet.reset();
 }
 
-bool RendererSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
+bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
     const usize oldCapacity = m_csgState.m_receiverRangeBufferCapacity;
     if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(
         m_graphics,
@@ -189,7 +189,7 @@ bool RendererSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCoun
     return true;
 }
 
-bool RendererSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
+bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     const usize oldCapacity = m_csgState.m_cutterBufferCapacity;
     if(!__hidden_csg_resources::ReserveCsgStructuredBuffer(
         m_graphics,
@@ -208,7 +208,7 @@ bool RendererSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     return true;
 }
 
-bool RendererSystem::reserveCsgParameterByteBufferCapacity(const usize byteCount){
+bool RendererCsgSystem::reserveCsgParameterByteBufferCapacity(const usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
 #if defined(NWB_DEBUG)
     if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
@@ -243,7 +243,7 @@ bool RendererSystem::reserveCsgParameterByteBufferCapacity(const usize byteCount
     return true;
 }
 
-bool RendererSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
+bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
     if(!csgFrameData.hasWork())
         return true;
     if(
@@ -283,13 +283,13 @@ bool RendererSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const
     return true;
 }
 
-void RendererSystem::setCsgClipBufferStates(Core::CommandList& commandList){
+void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(m_csgState.m_receiverRangeBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(m_csgState.m_cutterBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(m_csgState.m_parameterByteBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
-bool RendererSystem::resolveCsgReceiverEvaluatorVariant(
+bool RendererCsgSystem::resolveCsgReceiverEvaluatorVariant(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
     const CsgReceiverCpuBounds& receiverBounds,
@@ -327,7 +327,7 @@ bool RendererSystem::resolveCsgReceiverEvaluatorVariant(
     return resolved;
 }
 
-u32 RendererSystem::countCsgReceiverClipCutters(
+u32 RendererCsgSystem::countCsgReceiverClipCutters(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
     const CsgReceiverCpuBounds& receiverBounds,
@@ -351,7 +351,7 @@ u32 RendererSystem::countCsgReceiverClipCutters(
     return cutterCount;
 }
 
-bool RendererSystem::appendCsgReceiverClipData(
+bool RendererCsgSystem::appendCsgReceiverClipData(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
     const CsgReceiverCpuBounds& receiverBounds,

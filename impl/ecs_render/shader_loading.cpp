@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::loadShader(
+bool RendererShaderSystem::loadShader(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
     const AStringView variantName,
@@ -37,7 +37,7 @@ bool RendererSystem::loadShader(
 }
 
 
-bool RendererSystem::loadDeferredCompositeVertexShader(){
+bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
         m_deferredState.m_compositeVertexShader,
         ECSRenderDetail::s_DeferredCompositeVertexShaderName,

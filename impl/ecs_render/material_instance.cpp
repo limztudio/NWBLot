@@ -63,11 +63,11 @@ namespace __hidden_material_instance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::findMaterialInstanceOverrideField(
+bool RendererMaterialSystem::findMaterialInstanceOverrideField(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceParameter& parameter,
-    MaterialInstanceOverrideField& outField
+    RendererMaterialInstanceOverrideField& outField
 ){
     outField = {};
 
@@ -125,7 +125,7 @@ bool RendererSystem::findMaterialInstanceOverrideField(
     return false;
 }
 
-bool RendererSystem::applyMaterialInstanceOverrides(
+bool RendererMaterialSystem::applyMaterialInstanceOverrides(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceComponent& materialInstance,
@@ -155,7 +155,7 @@ bool RendererSystem::applyMaterialInstanceOverrides(
             return false;
         }
 
-        MaterialInstanceOverrideField resolvedField;
+        RendererMaterialInstanceOverrideField resolvedField;
         if(!findMaterialInstanceOverrideField(entity, materialInfo, parameter, resolvedField))
             return false;
 
@@ -199,7 +199,7 @@ bool RendererSystem::applyMaterialInstanceOverrides(
     return true;
 }
 
-bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
+bool RendererMaterialSystem::resolveMaterialInstanceMutableTypedBytes(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceComponent* materialInstance,
@@ -244,7 +244,7 @@ bool RendererSystem::resolveMaterialInstanceMutableTypedBytes(
     return true;
 }
 
-void RendererSystem::pruneMaterialInstanceMutableCache(){
+void RendererMaterialSystem::pruneMaterialInstanceMutableCache(){
     const u64 componentMutationVersion = m_world.componentMutationVersion<MaterialInstanceComponent>();
     if(componentMutationVersion == m_materialState.m_instanceMutableCacheComponentMutationVersion)
         return;

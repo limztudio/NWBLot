@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::splitMaterialTypedBytesByClass(
+bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     const Material& material,
     const Name& materialPath,
     MaterialTypedByteVector& outConstantTypedBytes,
@@ -69,7 +69,7 @@ bool RendererSystem::splitMaterialTypedBytesByClass(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
+bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
     outInfo = nullptr;
 
     const Name materialPath = materialAsset.name();
@@ -163,7 +163,7 @@ bool RendererSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Mate
     return true;
 }
 
-bool RendererSystem::hasTransparentRenderers(){
+bool RendererMaterialSystem::hasTransparentRenderers(){
     auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!createMaterialSurfaceInfo(material, materialInfo))

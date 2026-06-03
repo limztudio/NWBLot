@@ -16,14 +16,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createMeshShaderResources(){
+bool RendererMaterialSystem::createMeshShaderResources(){
     if(m_drawState.m_meshBindingLayout)
         return true;
 
     Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
     bindingLayoutDesc.setVisibility(Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
-    addMeshSourceBindingLayoutItems(bindingLayoutDesc);
-    addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+    RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
+    RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)));
 
     auto* device = m_graphics.getDevice();
@@ -36,12 +36,12 @@ bool RendererSystem::createMeshShaderResources(){
     return true;
 }
 
-bool RendererSystem::createComputeEmulationResources(){
+bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!m_drawState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        addMeshSourceBindingLayoutItems(bindingLayoutDesc);
-        addMeshFrameBindingLayoutItems(bindingLayoutDesc);
+        RendererMeshSystem::addMeshSourceBindingLayoutItems(bindingLayoutDesc);
+        RendererMeshSystem::addMeshFrameBindingLayoutItems(bindingLayoutDesc);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
@@ -54,7 +54,7 @@ bool RendererSystem::createComputeEmulationResources(){
     }
 
     if(!m_drawState.m_emulationVertexShader){
-        if(!loadShader(
+        if(!shaderSystem().loadShader(
             m_drawState.m_emulationVertexShader,
             ECSRenderDetail::s_MeshEmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -118,7 +118,7 @@ bool RendererSystem::createComputeEmulationResources(){
     return true;
 }
 
-bool RendererSystem::createEmulationViewResources(){
+bool RendererMaterialSystem::createEmulationViewResources(){
     if(!m_drawState.m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: emulation view resources require a mesh view buffer"));
         return false;
@@ -152,7 +152,7 @@ bool RendererSystem::createEmulationViewResources(){
     return true;
 }
 
-bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
+bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
 #if defined(NWB_DEBUG)
@@ -187,11 +187,11 @@ bool RendererSystem::reserveInstanceBufferCapacity(const usize instanceCount){
 
     m_drawState.m_instanceBuffer = Move(instanceBuffer);
     m_drawState.m_instanceBufferCapacity = capacity;
-    destroyMeshBindingSets();
+    meshSystem().destroyMeshBindingSets();
     return true;
 }
 
-bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
+bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
 #if defined(NWB_DEBUG)
     if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
@@ -224,11 +224,11 @@ bool RendererSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
 
     m_drawState.m_materialTypedBuffer = Move(materialTypedBuffer);
     m_drawState.m_materialTypedBufferCapacity = capacity;
-    destroyMeshBindingSets();
+    meshSystem().destroyMeshBindingSets();
     return true;
 }
 
-bool RendererSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
+bool RendererMaterialSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
     if(!m_drawState.m_meshViewBuffer){
         Core::BufferDesc meshViewBufferDesc;
         meshViewBufferDesc
@@ -244,7 +244,7 @@ bool RendererSystem::updateMeshViewBuffer(Core::CommandList& commandList, const 
         }
 
         m_drawState.m_meshViewBuffer = Move(meshViewBuffer);
-        destroyMeshBindingSets();
+        meshSystem().destroyMeshBindingSets();
     }
 
     const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);
@@ -257,7 +257,7 @@ bool RendererSystem::updateMeshViewBuffer(Core::CommandList& commandList, const 
     return true;
 }
 
-bool RendererSystem::uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData){
+bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
     if(!reserveInstanceBufferCapacity(instanceData.size()))
@@ -279,7 +279,7 @@ bool RendererSystem::uploadInstanceBuffer(Core::CommandList& commandList, const 
     return true;
 }
 
-bool RendererSystem::uploadMaterialTypedBuffer(
+bool RendererMaterialSystem::uploadMaterialTypedBuffer(
     Core::CommandList& commandList,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
@@ -298,7 +298,7 @@ bool RendererSystem::uploadMaterialTypedBuffer(
     return true;
 }
 
-bool RendererSystem::uploadMaterialPassDrawBuffers(
+bool RendererMaterialSystem::uploadMaterialPassDrawBuffers(
     Core::CommandList& commandList,
     const InstanceGpuDataVector& instanceData,
 #if defined(NWB_DEBUG)
@@ -315,7 +315,7 @@ bool RendererSystem::uploadMaterialPassDrawBuffers(
     return uploadInstanceBuffer(commandList, instanceData) && uploadMaterialTypedBuffer(commandList, materialTypedBytes);
 }
 
-bool RendererSystem::findMaterialPassDrawItemResources(
+bool RendererMaterialSystem::findMaterialPassDrawItemResources(
     const MaterialPassDrawItem& drawItem,
     MeshResources*& outMesh,
     MaterialPipelineResources*& outPipelineResources

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::destroyMeshBindingSets(){
+void RendererMeshSystem::destroyMeshBindingSets(){
     m_drawState.m_emulationViewBindingSet = nullptr;
     for(auto it = m_meshState.m_meshes.begin(); it != m_meshState.m_meshes.end(); ++it){
         MeshResources& mesh = it.value();
@@ -23,10 +23,10 @@ void RendererSystem::destroyMeshBindingSets(){
     }
 }
 
-bool RendererSystem::createMeshBindingSet(MeshResources& mesh){
+bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
     if(mesh.meshBindingSet)
         return true;
-    if(!createMeshShaderResources())
+    if(!materialSystem().createMeshShaderResources())
         return false;
     if(!meshFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
         return false;
@@ -44,10 +44,10 @@ bool RendererSystem::createMeshBindingSet(MeshResources& mesh){
     return true;
 }
 
-bool RendererSystem::createComputeBindingSet(MeshResources& mesh){
+bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     if(mesh.computeBindingSet)
         return true;
-    if(!createComputeEmulationResources())
+    if(!materialSystem().createComputeEmulationResources())
         return false;
     if(!meshFrameBindingResourcesReady(NWB_TEXT("compute binding set")))
         return false;
@@ -94,7 +94,7 @@ bool RendererSystem::createComputeBindingSet(MeshResources& mesh){
     return true;
 }
 
-bool RendererSystem::meshFrameBindingResourcesReady(const tchar* context)const{
+bool RendererMeshSystem::meshFrameBindingResourcesReady(const tchar* context)const{
     if(!m_drawState.m_instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: {} requires an instance buffer"), context);
         return false;
@@ -111,7 +111,7 @@ bool RendererSystem::meshFrameBindingResourcesReady(const tchar* context)const{
     return true;
 }
 
-void RendererSystem::addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
+void RendererMeshSystem::addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
     forEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool rawView){
         if(rawView)
             bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(bindingSlot, buffer.get()));
@@ -120,18 +120,18 @@ void RendererSystem::addMeshSourceBindingItems(Core::BindingSetDesc& bindingSetD
     });
 }
 
-void RendererSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
+void RendererMeshSystem::addMeshFrameBindingItems(Core::BindingSetDesc& bindingSetDesc)const{
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, m_drawState.m_instanceBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(s_MeshViewBindingSlot, m_drawState.m_meshViewBuffer.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, m_drawState.m_materialTypedBuffer.get()));
 }
 
-void RendererSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
+void RendererMeshSystem::addMeshDrawBindingItems(Core::BindingSetDesc& bindingSetDesc, const MeshResources& mesh)const{
     addMeshSourceBindingItems(bindingSetDesc, mesh);
     addMeshFrameBindingItems(bindingSetDesc);
 }
 
-void RendererSystem::addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
+void RendererMeshSystem::addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
     forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
         if(rawView)
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(bindingSlot, 1));
@@ -140,7 +140,7 @@ void RendererSystem::addMeshSourceBindingLayoutItems(Core::BindingLayoutDesc& bi
     });
 }
 
-void RendererSystem::addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
+void RendererMeshSystem::addMeshFrameBindingLayoutItems(Core::BindingLayoutDesc& bindingLayoutDesc){
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshInstanceBindingSlot, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(s_MeshMaterialTypedBindingSlot, 1));

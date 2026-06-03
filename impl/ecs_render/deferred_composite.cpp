@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createDeferredCompositeResources(){
+bool RendererDeferredSystem::createDeferredCompositeResources(){
     auto* device = m_graphics.getDevice();
 
     if(!m_deferredState.m_compositeBindingLayout){
@@ -37,10 +37,10 @@ bool RendererSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!loadDeferredCompositeVertexShader())
+    if(!shaderSystem().loadDeferredCompositeVertexShader())
         return false;
 
-    if(!loadShader(
+    if(!shaderSystem().loadShader(
         m_deferredState.m_compositePixelShader,
         ECSRenderDetail::s_DeferredCompositePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
@@ -52,7 +52,7 @@ bool RendererSystem::createDeferredCompositeResources(){
     return true;
 }
 
-bool RendererSystem::createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer){
+bool RendererDeferredSystem::createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer){
     if(!presentationFramebuffer)
         return false;
 
@@ -81,7 +81,7 @@ bool RendererSystem::createDeferredCompositePipeline(Core::Framebuffer* presenta
     return true;
 }
 
-bool RendererSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer){
+bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer){
     if(!presentationFramebuffer)
         return false;
     if(!targets.compositeBindingSet)

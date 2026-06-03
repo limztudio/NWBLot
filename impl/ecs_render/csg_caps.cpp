@@ -83,7 +83,7 @@ static void SetCapVertexAttributes(Core::VertexAttributeDesc (&attributes)[5]){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::appendCsgReceiverCapGeometry(
+bool RendererCsgSystem::appendCsgReceiverCapGeometry(
     const MeshResources& mesh,
     const Scene::TransformComponent* transform,
     const u32 receiverIndex,
@@ -144,15 +144,15 @@ bool RendererSystem::appendCsgReceiverCapGeometry(
     return true;
 }
 
-bool RendererSystem::createCsgCapSharedResources(){
-    if(!createEmulationViewResources())
+bool RendererCsgSystem::createCsgCapSharedResources(){
+    if(!materialSystem().createEmulationViewResources())
         return false;
     if(!createCsgClipResources())
         return false;
 
     auto* device = m_graphics.getDevice();
     if(!m_csgState.m_capVertexShader){
-        if(!loadShader(
+        if(!shaderSystem().loadShader(
             m_csgState.m_capVertexShader,
             ECSRenderDetail::s_CsgCapVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -175,7 +175,7 @@ bool RendererSystem::createCsgCapSharedResources(){
     return true;
 }
 
-bool RendererSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuffer){
+bool RendererCsgSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
     if(m_csgState.m_capPipeline)
@@ -183,7 +183,7 @@ bool RendererSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuffer)
     if(!createCsgCapSharedResources())
         return false;
     if(!m_csgState.m_capPixelShader){
-        if(!loadShader(
+        if(!shaderSystem().loadShader(
             m_csgState.m_capPixelShader,
             ECSRenderDetail::s_CsgCapPixelShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -211,12 +211,12 @@ bool RendererSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuffer)
     return true;
 }
 
-bool RendererSystem::createCsgTransparentCapResources(Core::Framebuffer* framebuffer, const MaterialPipelinePass::Enum pass){
+bool RendererCsgSystem::createCsgTransparentCapResources(Core::Framebuffer* framebuffer, const MaterialPipelinePass::Enum pass){
     if(!framebuffer)
         return false;
     if(!createCsgCapSharedResources())
         return false;
-    if(!createAvboitResources())
+    if(!avboitSystem().createAvboitResources())
         return false;
 
     Core::ShaderHandle* pixelShader = nullptr;
@@ -257,7 +257,7 @@ bool RendererSystem::createCsgTransparentCapResources(Core::Framebuffer* framebu
     if(*pipeline)
         return true;
     if(!*pixelShader){
-        if(!loadShader(
+        if(!shaderSystem().loadShader(
             *pixelShader,
             *pixelShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -285,7 +285,7 @@ bool RendererSystem::createCsgTransparentCapResources(Core::Framebuffer* framebu
     return false;
 }
 
-bool RendererSystem::reserveCsgCapVertexBufferCapacity(const usize vertexCount){
+bool RendererCsgSystem::reserveCsgCapVertexBufferCapacity(const usize vertexCount){
     if(vertexCount == 0u)
         return true;
     if(m_csgState.m_capVertexBuffer && m_csgState.m_capVertexBufferCapacity >= vertexCount)
@@ -317,7 +317,7 @@ bool RendererSystem::reserveCsgCapVertexBufferCapacity(const usize vertexCount){
     return true;
 }
 
-bool RendererSystem::uploadCsgCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
+bool RendererCsgSystem::uploadCsgCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
     if(!csgFrameData.hasCapWork())
         return true;
     if(!reserveCsgCapVertexBufferCapacity(csgFrameData.capVertices.size()))
@@ -335,7 +335,7 @@ bool RendererSystem::uploadCsgCapVertices(Core::CommandList& commandList, const 
     return true;
 }
 
-void RendererSystem::renderCsgCaps(
+void RendererCsgSystem::renderCsgCaps(
     const MaterialPassDrawContext& context,
     const CsgFrameGpuData& csgFrameData,
     const CsgCapDrawItemVector& capDrawItems,
@@ -398,7 +398,7 @@ void RendererSystem::renderCsgCaps(
     }
 }
 
-void RendererSystem::renderCsgOpaqueCaps(
+void RendererCsgSystem::renderCsgOpaqueCaps(
     const MaterialPassDrawContext& context,
     const CsgFrameGpuData& csgFrameData
 ){
@@ -410,7 +410,7 @@ void RendererSystem::renderCsgOpaqueCaps(
     renderCsgCaps(context, csgFrameData, csgFrameData.opaqueCapDrawItems, m_csgState.m_capPipeline.get());
 }
 
-void RendererSystem::renderCsgTransparentCaps(
+void RendererCsgSystem::renderCsgTransparentCaps(
     const MaterialPassDrawContext& context,
     const CsgFrameGpuData& csgFrameData
 ){

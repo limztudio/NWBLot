@@ -15,11 +15,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::setMaterialPassCommonBufferStates(
+void RendererMaterialSystem::setMaterialPassCommonBufferStates(
     Core::CommandList& commandList,
     const MeshResources& mesh
 ){
-    forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
+    RendererMeshSystem::forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
         commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
     });
     commandList.setBufferState(m_drawState.m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -27,7 +27,7 @@ void RendererSystem::setMaterialPassCommonBufferStates(
     commandList.setBufferState(m_drawState.m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
-bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
+bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
 #if defined(NWB_DEBUG)
     return mesh.valid() && m_drawState.m_instanceBuffer && m_drawState.m_meshViewBuffer && m_drawState.m_materialTypedBuffer;
 #else
@@ -36,7 +36,7 @@ bool RendererSystem::materialPassDrawResourcesReady(const MeshResources& mesh)co
 #endif
 }
 
-u32 RendererSystem::meshDispatchFlags(
+u32 RendererMaterialSystem::meshDispatchFlags(
     const MeshResources& mesh,
     const MaterialPipelinePass::Enum pass,
     const bool twoSided,
@@ -53,7 +53,7 @@ u32 RendererSystem::meshDispatchFlags(
     return flags;
 }
 
-u32 RendererSystem::materialPassDrawDispatchFlags(
+u32 RendererMaterialSystem::materialPassDrawDispatchFlags(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
     const MeshResources& mesh
@@ -66,7 +66,7 @@ u32 RendererSystem::materialPassDrawDispatchFlags(
     );
 }
 
-void RendererSystem::setMaterialPassDrawPushConstants(
+void RendererMaterialSystem::setMaterialPassDrawPushConstants(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
     const MeshResources& mesh
@@ -95,7 +95,7 @@ void RendererSystem::setMaterialPassDrawPushConstants(
     );
 }
 
-void RendererSystem::renderMaterialPassDrawItems(
+void RendererMaterialSystem::renderMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItems& drawItems
 ){
@@ -103,7 +103,7 @@ void RendererSystem::renderMaterialPassDrawItems(
     renderComputeMaterialPassDrawItems(context, drawItems.computeDrawItems);
 }
 
-void RendererSystem::renderMeshMaterialPassDrawItems(
+void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
@@ -112,16 +112,16 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-        if(!createMeshBindingSet(mesh))
+        if(!meshSystem().createMeshBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!createCsgClipResources() || !m_csgState.m_clipBindingSet)
+            if(!csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
                 return;
         }
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)
-            setCsgClipBufferStates(context.commandList);
+            csgSystem().setCsgClipBufferStates(context.commandList);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -146,7 +146,7 @@ void RendererSystem::renderMeshMaterialPassDrawItems(
     });
 }
 
-void RendererSystem::renderComputeMaterialPassDrawItems(
+void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
@@ -163,10 +163,10 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(!createComputeBindingSet(mesh))
+        if(!meshSystem().createComputeBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!createCsgClipResources() || !m_csgState.m_clipBindingSet)
+            if(!csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
                 return;
         }
         NWB_ASSERT(mesh.computeBindingSet);
@@ -174,7 +174,7 @@ void RendererSystem::renderComputeMaterialPassDrawItems(
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)
-            setCsgClipBufferStates(context.commandList);
+            csgSystem().setCsgClipBufferStates(context.commandList);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;

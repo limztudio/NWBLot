@@ -22,6 +22,13 @@ NWB_IMPL_BEGIN
 
 
 class RendererSystem;
+class RendererSystemSubsystemBase;
+class RendererShaderSystem;
+class RendererMeshSystem;
+class RendererMaterialSystem;
+class RendererCsgSystem;
+class RendererDeferredSystem;
+class RendererAvboitSystem;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +36,13 @@ class RendererSystem;
 
 class RendererMeshState final : NoCopy{
     friend class RendererSystem;
+    friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     explicit RendererMeshState(Core::Alloc::GlobalArena& arena);
@@ -44,6 +58,13 @@ private:
 
 class RendererMaterialState final : NoCopy{
     friend class RendererSystem;
+    friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     explicit RendererMaterialState(Core::Alloc::GlobalArena& arena);
@@ -63,6 +84,13 @@ private:
 
 class RendererDrawState final : NoCopy{
     friend class RendererSystem;
+    friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     RendererDrawState() = default;
@@ -88,6 +116,13 @@ private:
 
 class RendererCsgState final : NoCopy{
     friend class RendererSystem;
+    friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     RendererCsgState() = default;
@@ -122,6 +157,13 @@ private:
 
 class RendererDeferredState final : NoCopy{
     friend class RendererSystem;
+    friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     RendererDeferredState() = default;
@@ -146,6 +188,13 @@ private:
 
 class RendererAvboitState final : NoCopy{
     friend class RendererSystem;
+    friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     RendererAvboitState() = default;

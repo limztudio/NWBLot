@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
+void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets.occupancyBindingSet.reset();
     targets.depthWarpBindingSet.reset();
     targets.extinctionBindingSet.reset();
@@ -38,7 +38,7 @@ void RendererSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets = AvboitFrameTargets{};
 }
 
-void RendererSystem::resetDeferredFrameTargets(){
+void RendererDeferredSystem::resetDeferredFrameTargets(){
     m_deferredState.m_targets.lightingBindingSet.reset();
     m_deferredState.m_targets.compositeBindingSet.reset();
     resetAvboitFrameTargets(m_deferredState.m_targets.avboit);
@@ -58,7 +58,7 @@ void RendererSystem::resetDeferredFrameTargets(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 height){
+bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
     if(width == 0 || height == 0){
         resetDeferredFrameTargets();
         return false;
@@ -98,7 +98,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         return false;
     if(!createDeferredCompositeResources())
         return false;
-    if(!createAvboitResources())
+    if(!avboitSystem().createAvboitResources())
         return false;
 
     resetDeferredFrameTargets();
@@ -221,7 +221,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
         return false;
     }
 
-    if(!createAvboitFrameTargets(
+    if(!avboitSystem().createAvboitFrameTargets(
         createdTargets,
         avboitLowRasterFormat,
         avboitAccumColorFormat,
@@ -317,7 +317,7 @@ bool RendererSystem::createDeferredFrameTargets(const u32 width, const u32 heigh
     return true;
 }
 
-void RendererSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
+void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(targets.albedo)
         commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 

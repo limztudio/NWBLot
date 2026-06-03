@@ -77,7 +77,7 @@ struct MaterialTypedByteRangeKeyHasher{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::renderMaterialPass(
+void RendererMaterialSystem::renderMaterialPass(
     Core::CommandList& commandList,
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
@@ -136,24 +136,24 @@ void RendererSystem::renderMaterialPass(
         materialTypedBytes
     ))
         return;
-    const bool csgUploadReady = drawItems.csg.empty() || uploadCsgFrameBuffers(commandList, csgFrameData);
+    const bool csgUploadReady = drawItems.csg.empty() || csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData);
 
     if(passBindingSet){
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
-    const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && uploadCsgCapVertices(commandList, csgFrameData));
+    const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && csgSystem().uploadCsgCapVertices(commandList, csgFrameData));
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgUploadReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
         if(csgCapUploadReady && csgFrameData.hasTransparentCapWork() && MaterialPipelinePassUsesRendererAvboit(pass))
-            renderCsgTransparentCaps(drawContext, csgFrameData);
+            csgSystem().renderCsgTransparentCaps(drawContext, csgFrameData);
     }
 }
 
-void RendererSystem::gatherMaterialPassDrawItems(
+void RendererMaterialSystem::gatherMaterialPassDrawItems(
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
@@ -170,7 +170,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         return;
 
     auto rendererView = m_world.view<RendererComponent>();
-    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
+    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     const usize rendererCapacity = rendererView.candidateCount();
     drawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
@@ -296,7 +296,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
             && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
         ;
         const u32 csgClipCutterCount = csgClipCandidate
-            ? countCsgReceiverClipCutters(
+            ? csgSystem().countCsgReceiverClipCutters(
                 *csgReceiverLookupPtr,
                 entity,
                 mesh.csgLocalBounds,
@@ -306,7 +306,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
         ;
         Name csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
         const bool csgEvaluatorReady = csgClipCutterCount > 0u
-            ? resolveCsgReceiverEvaluatorVariant(
+            ? csgSystem().resolveCsgReceiverEvaluatorVariant(
                 *csgReceiverLookupPtr,
                 entity,
                 mesh.csgLocalBounds,
@@ -357,7 +357,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
 
             CsgReceiverRangeGpuData csgRange;
             if(csgClipActive){
-                if(!appendCsgReceiverClipData(
+                if(!csgSystem().appendCsgReceiverClipData(
                     *csgReceiverLookupPtr,
                     entity,
                     mesh.csgLocalBounds,
@@ -387,7 +387,7 @@ void RendererSystem::gatherMaterialPassDrawItems(
                 csgClipActive
                 && csgReceiverState.generateCaps
                 && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
-                && !appendCsgReceiverCapGeometry(
+                && !csgSystem().appendCsgReceiverCapGeometry(
                     mesh,
                     transform,
                     instanceIndex,
@@ -421,21 +421,21 @@ void RendererSystem::gatherMaterialPassDrawItems(
         if(!renderer.visible)
             continue;
 
-        if(!meshSystem){
+        if(!ecsMeshSystem){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: MeshSystem is not registered; renderers cannot resolve mesh"));
             break;
         }
 
         RenderableMeshDesc resolvedMesh;
-        if(!meshSystem->resolveRenderableMesh(entity, resolvedMesh))
+        if(!ecsMeshSystem->resolveRenderableMesh(entity, resolvedMesh))
             continue;
 
         MeshResources* mesh = nullptr;
         if(resolvedMesh.runtime){
-            if(!createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
+            if(!meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
                 continue;
         }
-        else if(!createMeshResources(resolvedMesh.mesh, mesh))
+        else if(!meshSystem().createMeshResources(resolvedMesh.mesh, mesh))
             continue;
 
         NWB_ASSERT(mesh);

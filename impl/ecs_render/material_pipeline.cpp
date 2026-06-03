@@ -97,7 +97,7 @@ namespace __hidden_material_pipeline{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createRendererPipeline(
+bool RendererMaterialSystem::createRendererPipeline(
     const MaterialSurfaceInfo& materialInfo,
     const MaterialPipelineKey& pipelineKey,
     Core::Framebuffer* framebuffer,
@@ -242,21 +242,21 @@ bool RendererSystem::createRendererPipeline(
     case MaterialPipelinePass::Opaque:
         break;
     case MaterialPipelinePass::AvboitOccupancy:
-        if(!createAvboitResources())
+        if(!avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_occupancyPixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        if(!createAvboitResources())
+        if(!avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_extinctionPixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        if(!createAvboitResources())
+        if(!avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_accumulatePixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName;
@@ -272,14 +272,14 @@ bool RendererSystem::createRendererPipeline(
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!createMeshShaderResources())
             return false;
-        if(!loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
+        if(!shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
+            if(!shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
         else if(avboitCsgClipPipeline){
-            if(!loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+            if(!shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else
@@ -305,7 +305,7 @@ bool RendererSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!createCsgClipResources())
+            if(!csgSystem().createCsgClipResources())
                 return false;
             pipelineDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }
@@ -324,7 +324,7 @@ bool RendererSystem::createRendererPipeline(
         if(!createComputeEmulationResources())
             return false;
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
-        if(!loadShader(
+        if(!shaderSystem().loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),
             meshShaderVariant,
@@ -334,11 +334,11 @@ bool RendererSystem::createRendererPipeline(
         ))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
+            if(!shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
         else if(avboitCsgClipPipeline){
-            if(!loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+            if(!shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else{
@@ -351,7 +351,7 @@ bool RendererSystem::createRendererPipeline(
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
         if(csgClipPipeline){
-            if(!createCsgClipResources())
+            if(!csgSystem().createCsgClipResources())
                 return false;
             if(avboitCsgClipPipeline)
                 computeDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
@@ -387,7 +387,7 @@ bool RendererSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!createCsgClipResources())
+            if(!csgSystem().createCsgClipResources())
                 return false;
             emulationDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }
@@ -440,7 +440,7 @@ bool RendererSystem::createRendererPipeline(
     return true;
 }
 
-void RendererSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
+void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
     auto [it, inserted] = m_materialState.m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!inserted){
         if(it.value() == renderPath)

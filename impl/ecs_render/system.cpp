@@ -33,6 +33,12 @@ RendererSystem::RendererSystem(
     , m_csgShapeRegistry(arena)
     , m_meshState(arena)
     , m_materialState(arena)
+    , m_shaderSystem(*this)
+    , m_meshSystem(*this)
+    , m_materialSystem(*this)
+    , m_csgSystem(*this)
+    , m_deferredSystem(*this)
+    , m_avboitSystem(*this)
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
@@ -52,7 +58,7 @@ RendererSystem::~RendererSystem(){}
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
-    pruneMaterialInstanceMutableCache();
+    m_materialSystem.pruneMaterialInstanceMutableCache();
 }
 
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
@@ -63,7 +69,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(m_deferredState.m_targets.valid() && m_deferredState.m_targets.width == width && m_deferredState.m_targets.height == height)
         return true;
 
-    return createDeferredFrameTargets(width, height);
+    return m_deferredSystem.createDeferredFrameTargets(width, height);
 }
 
 void RendererSystem::invalidateResources(){
@@ -79,7 +85,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
-    pruneRuntimeMeshResources();
+    m_meshSystem.pruneRuntimeMeshResources();
 
     if(!m_deferredState.m_targets.valid())
         return;
@@ -93,7 +99,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     commandList->open();
 
-    clearDeferredTargets(*commandList, deferredTargets);
+    m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena scratchArena;
     CsgFrameState csgFrameState;
@@ -111,10 +117,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
-    const bool meshViewReady = updateMeshViewBuffer(*commandList, meshViewAspectRatio);
-    const bool sceneShadingReady = updateSceneShadingBuffer(*commandList, meshViewAspectRatio);
+    const bool meshViewReady = m_materialSystem.updateMeshViewBuffer(*commandList, meshViewAspectRatio);
+    const bool sceneShadingReady = m_deferredSystem.updateSceneShadingBuffer(*commandList, meshViewAspectRatio);
     if(meshViewReady && sceneShadingReady){
-        gatherMaterialPassDrawItems(
+        m_materialSystem.gatherMaterialPassDrawItems(
             deferredTargets.framebuffer.get(),
             MaterialPipelinePass::Opaque,
             false,
@@ -132,7 +138,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
     const bool deferredUploadReady =
         hasDeferredDrawItems
-        && uploadMaterialPassDrawBuffers(
+        && m_materialSystem.uploadMaterialPassDrawBuffers(
             *commandList,
             instanceData,
 #if defined(NWB_DEBUG)
@@ -142,8 +148,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
     ;
     if(deferredUploadReady){
-        const bool csgUploadReady = opaqueDrawItems.csg.empty() || uploadCsgFrameBuffers(*commandList, csgFrameData);
-        const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && uploadCsgCapVertices(*commandList, csgFrameData));
+        const bool csgUploadReady = opaqueDrawItems.csg.empty() || m_csgSystem.uploadCsgFrameBuffers(*commandList, csgFrameData);
+        const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && m_csgSystem.uploadCsgCapVertices(*commandList, csgFrameData));
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,
             deferredTargets.framebuffer.get(),
@@ -152,27 +158,27 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             nullptr,
             deferredViewportState
         };
-        renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
+        m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
         if(csgUploadReady){
-            renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+            m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
             if(csgCapUploadReady && csgFrameData.hasOpaqueCapWork())
-                renderCsgOpaqueCaps(opaqueDrawContext, csgFrameData);
+                m_csgSystem.renderCsgOpaqueCaps(opaqueDrawContext, csgFrameData);
         }
     }
     commandList->endRenderPass();
 
-    if(!renderDeferredLighting(*commandList, deferredTargets)){
+    if(!m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets)){
         commandList->close();
         return;
     }
 
-    clearAvboitTargets(*commandList, deferredTargets.avboit);
-    if(hasTransparentRenderers())
-        renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
+    m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
+    if(m_materialSystem.hasTransparentRenderers())
+        m_avboitSystem.renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
 
     commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());
     commandList->commitBarriers();
-    if(!renderDeferredComposite(*commandList, deferredTargets, framebuffer)){
+    if(!m_deferredSystem.renderDeferredComposite(*commandList, deferredTargets, framebuffer)){
         commandList->close();
         return;
     }

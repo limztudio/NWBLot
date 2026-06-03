@@ -191,7 +191,7 @@ template<typename PositionVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh){
+bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh){
     outMesh = nullptr;
 
     const Name meshPath = meshAsset.name();
@@ -349,7 +349,7 @@ bool RendererSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& mes
     return true;
 }
 
-bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
+bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
     outMesh = nullptr;
 
     NWB_ASSERT(desc.valid());
@@ -422,7 +422,7 @@ bool RendererSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, Mes
     return true;
 }
 
-void RendererSystem::pruneRuntimeMeshResources(){
+void RendererMeshSystem::pruneRuntimeMeshResources(){
     if(m_meshState.m_meshes.empty())
         return;
 

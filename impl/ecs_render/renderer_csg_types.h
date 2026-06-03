@@ -9,6 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/ecs_csg/frame_state.h>
 #include <impl/ecs_mesh_runtime/mesh.h>
 
 #include <global/containers.h>
@@ -30,10 +31,14 @@ struct CsgReceiverRangeGpuData{
     u32 padding0 = 0u;
 };
 
+inline constexpr i32 s_CsgBoundsValidFlag = 1 << 0;
+inline constexpr i32 s_CsgBoundsFiniteFlag = 1 << 1;
+
 struct CsgReceiverCpuBounds{
-    Float4 minBounds = Float4(0.f, 0.f, 0.f, 0.f);
-    Float4 maxBounds = Float4(0.f, 0.f, 0.f, 0.f);
-    bool valid = false;
+    Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
+    Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
+
+    [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_CsgBoundsValidFlag) != 0; }
 };
 
 [[nodiscard]] inline Float34 MakeIdentityCsgMatrix(){
@@ -84,6 +89,26 @@ struct CsgCapDrawItem{
     u32 vertexCount = 0u;
 };
 
+struct CsgCapProxyBounds{
+    Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
+    Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
+
+    [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_CsgBoundsValidFlag) != 0; }
+    [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_CsgBoundsFiniteFlag) != 0; }
+};
+
+struct CsgCapProxyDrawItem{
+    NameHash receiverGroupHash = {};
+    UInt4U receiverCutterShapePass = {};
+    CsgCapProxyBounds receiverBounds;
+    CsgCapProxyBounds cutterBounds;
+
+    [[nodiscard]] u32 receiverIndex()const noexcept{ return receiverCutterShapePass.x; }
+    [[nodiscard]] u32 cutterIndex()const noexcept{ return receiverCutterShapePass.y; }
+    [[nodiscard]] u32 shapeType()const noexcept{ return receiverCutterShapePass.z; }
+    [[nodiscard]] CsgReceiverPass::Enum pass()const noexcept{ return static_cast<CsgReceiverPass::Enum>(receiverCutterShapePass.w); }
+};
+
 static_assert(sizeof(CsgCapMeshVertex) == sizeof(Float4) * 5u, "CsgCapMeshVertex must stay tightly packed");
 static_assert(sizeof(CsgCapMeshTriangle) == sizeof(CsgCapMeshVertex) * 3u, "CsgCapMeshTriangle must stay tightly packed");
 static_assert(sizeof(CsgCapVertexGpuData) == sizeof(Float4) * 5u, "CsgCapVertexGpuData layout must match the CSG cap shaders");
@@ -98,6 +123,11 @@ static_assert(IsStandardLayout_V<CsgCapVertexGpuData>, "CsgCapVertexGpuData must
 static_assert(IsTriviallyCopyable_V<CsgCapVertexGpuData>, "CsgCapVertexGpuData must stay GPU-uploadable");
 static_assert(IsStandardLayout_V<CsgCapDrawItem>, "CsgCapDrawItem must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CsgCapDrawItem>, "CsgCapDrawItem must stay cheap to pass by value");
+static_assert(IsStandardLayout_V<CsgCapProxyBounds>, "CsgCapProxyBounds must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<CsgCapProxyBounds>, "CsgCapProxyBounds must stay cheap to pass by value");
+static_assert(IsStandardLayout_V<CsgCapProxyDrawItem>, "CsgCapProxyDrawItem must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<CsgCapProxyDrawItem>, "CsgCapProxyDrawItem must stay cheap to pass by value");
+static_assert(sizeof(CsgCapProxyDrawItem) == sizeof(NameHash) + sizeof(UInt4U) + sizeof(CsgCapProxyBounds) * 2u, "CsgCapProxyDrawItem must stay tightly packed");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,6 +139,7 @@ using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 using CsgCapMeshTriangleVector = Vector<CsgCapMeshTriangle, Core::Alloc::GlobalArena>;
 using CsgCapVertexGpuDataVector = Vector<CsgCapVertexGpuData, Core::Alloc::ScratchArena>;
 using CsgCapDrawItemVector = Vector<CsgCapDrawItem, Core::Alloc::ScratchArena>;
+using CsgCapProxyDrawItemVector = Vector<CsgCapProxyDrawItem, Core::Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -121,6 +152,7 @@ struct CsgFrameGpuData{
     CsgCapVertexGpuDataVector capVertices;
     CsgCapDrawItemVector opaqueCapDrawItems;
     CsgCapDrawItemVector transparentCapDrawItems;
+    CsgCapProxyDrawItemVector capProxyDrawItems;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)
@@ -129,17 +161,20 @@ struct CsgFrameGpuData{
         , capVertices(arena)
         , opaqueCapDrawItems(arena)
         , transparentCapDrawItems(arena)
+        , capProxyDrawItems(arena)
     {}
 
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
     [[nodiscard]] bool hasCapWork()const noexcept{ return !capVertices.empty() && (!opaqueCapDrawItems.empty() || !transparentCapDrawItems.empty()); }
     [[nodiscard]] bool hasOpaqueCapWork()const noexcept{ return !capVertices.empty() && !opaqueCapDrawItems.empty(); }
     [[nodiscard]] bool hasTransparentCapWork()const noexcept{ return !capVertices.empty() && !transparentCapDrawItems.empty(); }
+    [[nodiscard]] bool hasCapProxyWork()const noexcept{ return !capProxyDrawItems.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);
         opaqueCapDrawItems.reserve(cutterCapacity);
         transparentCapDrawItems.reserve(cutterCapacity);
+        capProxyDrawItems.reserve(cutterCapacity);
     }
 };
 
@@ -151,4 +186,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

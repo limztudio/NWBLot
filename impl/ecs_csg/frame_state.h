@@ -41,6 +41,7 @@ namespace CsgReceiverPass{
 struct CsgReceiverDrawState{
     bool active = false;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
+    Name receiverGroup = NAME_NONE;
     bool generateCaps = false;
     u32 cutterCount = 0u;
 };

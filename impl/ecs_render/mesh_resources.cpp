@@ -137,9 +137,8 @@ static void StoreReceiverCpuBounds(
     const SIMDVector maxBounds,
     CsgReceiverCpuBounds& outBounds
 ){
-    StoreFloat(VectorSetW(minBounds, 0.0f), &outBounds.minBounds);
-    StoreFloat(VectorSetW(maxBounds, 0.0f), &outBounds.maxBounds);
-    outBounds.valid = true;
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag, &outBounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
 }
 
 template<typename PositionVector>

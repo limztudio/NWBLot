@@ -88,11 +88,10 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
         if(!opaqueWork && !transparentWork)
             continue;
 
-        const bool capSourceAvailable = receiver->generateCaps && !mesh->csgCapTriangles.empty();
         AddCsgFrameReceiverWork(
             state,
             receiverKind,
-            capSourceAvailable,
+            receiver->generateCaps,
             opaqueWork,
             transparentWork,
             Max(opaqueCutterCount, transparentCutterCount)

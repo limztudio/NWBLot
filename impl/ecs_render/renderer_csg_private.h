@@ -9,6 +9,7 @@
 
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/ecs_csg/module.h>
+#include <impl/ecs_scene/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,6 +107,52 @@ template<typename ParameterT>
     SIMDVector lengthSquared = VectorAdd(Vector3LengthSq(row0), Vector3LengthSq(row1));
     lengthSquared = VectorAdd(lengthSquared, Vector3LengthSq(row2));
     return VectorSqrt(lengthSquared);
+}
+
+[[nodiscard]] inline bool BuildCsgReceiverWorldBounds(
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    if(!receiverBounds.valid())
+        return false;
+
+    const SIMDVector localMinBounds = LoadFloatInt(receiverBounds.minBounds);
+    const SIMDVector localMaxBounds = LoadFloatInt(receiverBounds.maxBounds);
+    if(!AabbTests::Valid(localMinBounds, localMaxBounds))
+        return false;
+
+    if(!transform){
+        outMinBounds = localMinBounds;
+        outMaxBounds = localMaxBounds;
+        return true;
+    }
+
+    const SIMDVector scale = LoadFloat(transform->scale);
+    const SIMDVector rotation = LoadFloat(transform->rotation);
+    const SIMDVector translation = LoadFloat(transform->position);
+    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
+    return AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
+}
+
+[[nodiscard]] inline bool BuildCsgCutterComponentWorldBounds(
+    const CsgShapeRegistry& shapeRegistry,
+    const CsgCutterComponent& cutter,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds,
+    bool& outFiniteBounds
+){
+    const u8* parameterBytes = cutter.parameterBytes.empty() ? nullptr : cutter.parameterBytes.data();
+    return shapeRegistry.buildShapeBounds(
+        cutter.shapeType,
+        LoadFloat(cutter.shapeToWorld),
+        parameterBytes,
+        cutter.parameterBytes.size(),
+        outMinBounds,
+        outMaxBounds,
+        outFiniteBounds
+    );
 }
 
 [[nodiscard]] inline bool BuildCsgCutterGpuData(

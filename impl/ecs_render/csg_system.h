@@ -54,6 +54,8 @@ public:
     [[nodiscard]] bool appendCsgReceiverCapGeometry(
         const MeshResources& mesh,
         const NWB::Impl::Scene::TransformComponent* transform,
+        const Name& receiverGroup,
+        CsgReceiverPass::Enum receiverPass,
         u32 receiverIndex,
         const CsgReceiverRangeGpuData& receiverRange,
         CsgFrameGpuData& csgFrameData,

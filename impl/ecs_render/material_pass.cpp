@@ -390,6 +390,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 && !m_renderer.csgSystem().appendCsgReceiverCapGeometry(
                     mesh,
                     transform,
+                    csgReceiverState.receiverGroup,
+                    csgReceiverPass,
                     instanceIndex,
                     csgRange,
                     csgFrameData,

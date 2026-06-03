@@ -186,6 +186,7 @@ bool CsgFrameReceiverLookup::resolveReceiverDrawState(
 
     outState.active = true;
     outState.receiverKind = receiverKind;
+    outState.receiverGroup = receiver->receiverGroup;
     outState.generateCaps = receiver->generateCaps;
     outState.cutterCount = foundCutterRange.value().cutterCount;
     return true;

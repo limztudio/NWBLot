@@ -59,33 +59,6 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static bool BuildReceiverWorldBounds(
-    const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds
-){
-    if(!receiverBounds.valid)
-        return false;
-
-    const SIMDVector localMinBounds = LoadFloat(receiverBounds.minBounds);
-    const SIMDVector localMaxBounds = LoadFloat(receiverBounds.maxBounds);
-    if(!AabbTests::Valid(localMinBounds, localMaxBounds))
-        return false;
-
-    if(!transform){
-        outMinBounds = localMinBounds;
-        outMaxBounds = localMaxBounds;
-        return true;
-    }
-
-    const SIMDVector scale = LoadFloat(transform->scale);
-    const SIMDVector rotation = LoadFloat(transform->rotation);
-    const SIMDVector translation = LoadFloat(transform->position);
-    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
-    return AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
-}
-
 [[nodiscard]] static bool CsgCutterIntersectsReceiver(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
@@ -94,22 +67,13 @@ namespace __hidden_csg_resources{
 ){
     SIMDVector receiverMinBounds;
     SIMDVector receiverMaxBounds;
-    if(!BuildReceiverWorldBounds(receiverBounds, transform, receiverMinBounds, receiverMaxBounds))
+    if(!ECSRenderCsgDetail::BuildCsgReceiverWorldBounds(receiverBounds, transform, receiverMinBounds, receiverMaxBounds))
         return true;
 
     SIMDVector cutterMinBounds;
     SIMDVector cutterMaxBounds;
     bool finiteBounds = false;
-    const u8* parameterBytes = cutter.parameterBytes.empty() ? nullptr : cutter.parameterBytes.data();
-    if(!shapeRegistry.buildShapeBounds(
-        cutter.shapeType,
-        LoadFloat(cutter.shapeToWorld),
-        parameterBytes,
-        cutter.parameterBytes.size(),
-        cutterMinBounds,
-        cutterMaxBounds,
-        finiteBounds
-    ))
+    if(!ECSRenderCsgDetail::BuildCsgCutterComponentWorldBounds(shapeRegistry, cutter, cutterMinBounds, cutterMaxBounds, finiteBounds))
         return false;
     if(!finiteBounds)
         return true;

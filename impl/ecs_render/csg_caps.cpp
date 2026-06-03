@@ -62,6 +62,17 @@ static void SetCapVertexAttributes(Core::VertexAttributeDesc (&attributes)[5]){
     ;
 }
 
+[[nodiscard]] const u8* CsgCutterParameterBytes(const CsgFrameGpuData& csgFrameData, const CsgCutterGpuData& cutter){
+    if(cutter.parameterByteSize == 0u)
+        return nullptr;
+    const usize byteOffset = static_cast<usize>(cutter.parameterByteOffset);
+    const usize byteSize = static_cast<usize>(cutter.parameterByteSize);
+    if(byteOffset > csgFrameData.parameterBytes.size() || byteSize > csgFrameData.parameterBytes.size() - byteOffset)
+        return nullptr;
+
+    return csgFrameData.parameterBytes.data() + byteOffset;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,6 +103,15 @@ bool RendererSystem::appendCsgReceiverCapGeometry(
     for(u32 cutterOffset = 0u; cutterOffset < receiverRange.cutterCount; ++cutterOffset){
         const u32 cutterIndex = receiverRange.firstCutter + cutterOffset;
         const CsgCutterGpuData& cutter = csgFrameData.cutters[cutterIndex];
+        CsgShapeTypeInfo shapeType;
+        const CsgShapeTypeInfo* shapeTypePtr = nullptr;
+        if(m_csgShapeRegistry.findShapeType(cutter.shapeType, shapeType))
+            shapeTypePtr = &shapeType;
+
+        const u8* parameterBytes = __hidden_csg_caps::CsgCutterParameterBytes(csgFrameData, cutter);
+        if(cutter.parameterByteSize != 0u && !parameterBytes)
+            return false;
+
         if(csgFrameData.capVertices.size() > static_cast<usize>(Limit<u32>::s_Max))
             return false;
         const u32 firstVertex = static_cast<u32>(csgFrameData.capVertices.size());
@@ -100,6 +120,9 @@ bool RendererSystem::appendCsgReceiverCapGeometry(
             transform,
             receiverIndex,
             cutter,
+            shapeTypePtr,
+            parameterBytes,
+            static_cast<usize>(cutter.parameterByteSize),
             cutterIndex,
             csgFrameData.capVertices,
             scratchArena

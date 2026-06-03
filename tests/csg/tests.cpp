@@ -506,6 +506,25 @@ static bool TestProjectShapeBounds(
     return true;
 }
 
+static bool TestProjectShapeCapEval(
+    const SIMDMatrix& worldToShape,
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    const SIMDVector worldPosition,
+    const SIMDVector fallbackWorldNormal,
+    SIMDVector& outSignedDistance,
+    SIMDVector& outWorldNormal
+){
+    static_cast<void>(worldToShape);
+    static_cast<void>(shapeToWorld);
+    static_cast<void>(worldPosition);
+
+    outSignedDistance = VectorZero();
+    outWorldNormal = Vector3NormalizeOr(fallbackWorldNormal, VectorSet(0.0f, 1.0f, 0.0f, 0.0f), 0.00000001f);
+    return parameterByteSize == sizeof(TestProjectShapeParameters) && parameterBytes;
+}
+
 static void TestCsgShapeRegistryBuiltIns(TestContext& context){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
@@ -624,6 +643,8 @@ static void TestCsgShapeRegistryProjectShape(TestContext& context){
     NWB_CSG_TEST_CHECK(context, shapeType.desc.shaderModule == desc.shaderModule);
     NWB_CSG_TEST_CHECK(context, shapeType.desc.shaderModuleInclude == desc.shaderModuleInclude);
     NWB_CSG_TEST_CHECK(context, shapeType.desc.boundsCallback == &TestProjectShapeBounds);
+    NWB_CSG_TEST_CHECK(context, !shapeType.desc.supportsCapGeneration);
+    NWB_CSG_TEST_CHECK(context, shapeType.desc.capEvalCallback == nullptr);
 
     ACompactString shaderModuleInclude;
     NWB_CSG_TEST_CHECK(context, registry.findShaderModuleInclude(desc.shaderModule, shaderModuleInclude));
@@ -650,6 +671,19 @@ static void TestCsgShapeRegistryProjectShape(TestContext& context){
     NWB_CSG_TEST_CHECK(context, VectorGetX(maxBounds) == 2.0f);
     NWB_CSG_TEST_CHECK(context, VectorGetY(maxBounds) == 3.0f);
     NWB_CSG_TEST_CHECK(context, VectorGetZ(maxBounds) == 4.0f);
+
+    NWB::Impl::CsgShapeTypeDesc capDesc = desc;
+    capDesc.name = Name("project/csg/capped_noise_blob");
+    capDesc.supportsCapGeneration = true;
+    capDesc.capEvalCallback = &TestProjectShapeCapEval;
+    NWB::Impl::CsgShapeTypeId capShapeTypeId = NWB::Impl::s_InvalidCsgShapeTypeId;
+    NWB_CSG_TEST_CHECK(context, registry.registerShapeType(capDesc, capShapeTypeId));
+    NWB_CSG_TEST_CHECK(context, capShapeTypeId != NWB::Impl::s_InvalidCsgShapeTypeId);
+
+    NWB::Impl::CsgShapeTypeInfo capShapeType;
+    NWB_CSG_TEST_CHECK(context, registry.findShapeType(capShapeTypeId, capShapeType));
+    NWB_CSG_TEST_CHECK(context, capShapeType.desc.supportsCapGeneration);
+    NWB_CSG_TEST_CHECK(context, capShapeType.desc.capEvalCallback == &TestProjectShapeCapEval);
 }
 
 

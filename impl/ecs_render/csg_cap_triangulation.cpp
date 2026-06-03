@@ -112,7 +112,9 @@ static void ReversePolygon(CapIndexVector& polygon){
 
     const CapPoint& firstPoint = points[loop[0u]];
     const SIMDVector firstPosition = LoadFloat(firstPoint.position);
-    const SIMDVector firstNormal = EvaluateWorldCapNormal(cutterEval, firstPosition, LoadFloat(firstPoint.normal));
+    SIMDVector firstNormal;
+    if(!EvaluateWorldCapNormal(cutterEval, firstPosition, LoadFloat(firstPoint.normal), firstNormal))
+        return false;
 
     SIMDVector polygonNormal = VectorZero();
     for(usize index = 0u; index < loop.size(); ++index){

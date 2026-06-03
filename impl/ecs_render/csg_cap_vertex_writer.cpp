@@ -38,7 +38,9 @@ namespace __hidden_csg_cap_vertex_writer{
 
     const SIMDVector position = LoadFloat(point.position);
     const SIMDVector sourceNormal = LoadFloat(point.normal);
-    const SIMDVector capNormal = EvaluateWorldCapNormal(cutterEval, position, sourceNormal);
+    SIMDVector capNormal;
+    if(!EvaluateWorldCapNormal(cutterEval, position, sourceNormal, capNormal))
+        return false;
 
     CsgCapVertexGpuData vertex;
     StoreFloat(VectorSetW(position, static_cast<f32>(receiverIndex)), &vertex.positionReceiverIndex);

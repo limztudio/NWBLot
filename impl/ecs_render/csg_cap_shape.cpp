@@ -22,7 +22,7 @@ namespace ECSRenderCsgCapDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CutterSupportsCap(const u32 shapeType){
+[[nodiscard]] static bool BuiltInCutterSupportsCap(const u32 shapeType){
     switch(shapeType){
     case NWB_CSG_SHAPE_PLANE:
     case NWB_CSG_SHAPE_BOX:
@@ -34,23 +34,28 @@ bool CutterSupportsCap(const u32 shapeType){
     }
 }
 
-SIMDVector EvaluateShapeDistance(
-    const CapCutterEval& cutterEval,
-    const SIMDVector worldPosition
-){
-    const SIMDVector shapePosition = Vector3Transform(worldPosition, cutterEval.worldToShape);
-    const SIMDVector parameters = LoadFloat(cutterEval.cutter.parameter0);
-    switch(cutterEval.cutter.shapeType){
+[[nodiscard]] static bool EvaluateBuiltInShapeDistance(
+    const CsgCutterGpuData& cutter,
+    const SIMDVector shapePosition,
+    SIMDVector& outSignedDistance
+)noexcept{
+    const SIMDVector parameters = LoadFloat(cutter.parameter0);
+    switch(cutter.shapeType){
     case NWB_CSG_SHAPE_PLANE:
-        return SdfTests::Plane(shapePosition, parameters);
+        outSignedDistance = SdfTests::Plane(shapePosition, parameters);
+        return true;
     case NWB_CSG_SHAPE_BOX:
-        return SdfTests::Box(shapePosition, parameters);
+        outSignedDistance = SdfTests::Box(shapePosition, parameters);
+        return true;
     case NWB_CSG_SHAPE_SPHERE:
-        return SdfTests::Sphere(shapePosition, parameters);
+        outSignedDistance = SdfTests::Sphere(shapePosition, parameters);
+        return true;
     case NWB_CSG_SHAPE_CAPSULE:
-        return SdfTests::CapsuleY(shapePosition, parameters);
+        outSignedDistance = SdfTests::CapsuleY(shapePosition, parameters);
+        return true;
     default:
-        return VectorReplicate(1.0f);
+        outSignedDistance = VectorReplicate(1.0f);
+        return false;
     }
 }
 
@@ -80,6 +85,27 @@ SIMDVector EvaluateShapeDistance(
     }
 }
 
+[[nodiscard]] static bool EvaluateProjectShapeCap(
+    const CapCutterEval& cutterEval,
+    const SIMDVector worldPosition,
+    const SIMDVector fallbackWorldNormal,
+    SIMDVector& outSignedDistance,
+    SIMDVector& outWorldNormal
+){
+    if(!cutterEval.shapeType || !cutterEval.shapeType->desc.capEvalCallback)
+        return false;
+    return cutterEval.shapeType->desc.capEvalCallback(
+        cutterEval.worldToShape,
+        cutterEval.shapeToWorld,
+        cutterEval.parameterBytes,
+        cutterEval.parameterByteSize,
+        worldPosition,
+        fallbackWorldNormal,
+        outSignedDistance,
+        outWorldNormal
+    );
+}
+
 [[nodiscard]] static SIMDVector TransformShapeNormalToWorld(
     const SIMDMatrix& worldToShape,
     const SIMDVector shapeNormal,
@@ -98,13 +124,51 @@ SIMDVector EvaluateShapeDistance(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVector EvaluateWorldCapNormal(
+bool CutterSupportsCap(const CapCutterEval& cutterEval){
+    if(BuiltInCutterSupportsCap(cutterEval.cutter.shapeType))
+        return true;
+    return
+        cutterEval.shapeType
+        && cutterEval.shapeType->desc.supportsCapGeneration
+        && cutterEval.shapeType->desc.capEvalCallback
+    ;
+}
+
+bool EvaluateShapeDistance(
     const CapCutterEval& cutterEval,
     const SIMDVector worldPosition,
-    const SIMDVector fallback
+    const SIMDVector fallbackWorldNormal,
+    SIMDVector& outSignedDistance
 ){
-    const SIMDVector shapeNormal = EvaluateShapeNormal(cutterEval, worldPosition);
-    return VectorNegate(TransformShapeNormalToWorld(cutterEval.worldToShape, shapeNormal, fallback));
+    outSignedDistance = VectorReplicate(1.0f);
+    if(BuiltInCutterSupportsCap(cutterEval.cutter.shapeType)){
+        const SIMDVector shapePosition = Vector3Transform(worldPosition, cutterEval.worldToShape);
+        return EvaluateBuiltInShapeDistance(cutterEval.cutter, shapePosition, outSignedDistance);
+    }
+
+    SIMDVector unusedWorldNormal = fallbackWorldNormal;
+    return EvaluateProjectShapeCap(cutterEval, worldPosition, fallbackWorldNormal, outSignedDistance, unusedWorldNormal);
+}
+
+bool EvaluateWorldCapNormal(
+    const CapCutterEval& cutterEval,
+    const SIMDVector worldPosition,
+    const SIMDVector fallback,
+    SIMDVector& outWorldNormal
+){
+    outWorldNormal = fallback;
+    if(BuiltInCutterSupportsCap(cutterEval.cutter.shapeType)){
+        const SIMDVector shapeNormal = EvaluateShapeNormal(cutterEval, worldPosition);
+        outWorldNormal = VectorNegate(TransformShapeNormalToWorld(cutterEval.worldToShape, shapeNormal, fallback));
+        return true;
+    }
+
+    SIMDVector unusedDistance = VectorReplicate(1.0f);
+    if(!EvaluateProjectShapeCap(cutterEval, worldPosition, fallback, unusedDistance, outWorldNormal))
+        return false;
+
+    outWorldNormal = Vector3NormalizeOr(outWorldNormal, fallback, s_NormalizeMinLengthSquared);
+    return true;
 }
 
 

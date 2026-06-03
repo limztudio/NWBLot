@@ -124,7 +124,7 @@ static void AddUniqueIntersectionPoint(CapIntersection& intersection, const CapS
     ++intersection.count;
 }
 
-static void IntersectShapeEdge(
+[[nodiscard]] static bool IntersectShapeEdge(
     CapIntersection& intersection,
     const CapSourceVertex& a,
     const CapSourceVertex& b,
@@ -135,17 +135,17 @@ static void IntersectShapeEdge(
     const bool aOnSurface = Abs(da) <= s_CapDistanceEpsilon;
     const bool bOnSurface = Abs(db) <= s_CapDistanceEpsilon;
     if(aOnSurface && bOnSurface)
-        return;
+        return true;
     if(aOnSurface){
         AddUniqueIntersectionPoint(intersection, a);
-        return;
+        return true;
     }
     if(bOnSurface){
         AddUniqueIntersectionPoint(intersection, b);
-        return;
+        return true;
     }
     if((da < 0.0f) == (db < 0.0f))
-        return;
+        return true;
 
     f32 t0 = 0.0f;
     f32 t1 = 1.0f;
@@ -153,7 +153,10 @@ static void IntersectShapeEdge(
     f32 t = Max(0.0f, Min(1.0f, da / (da - db)));
     for(u32 iteration = 0u; iteration < s_EdgeIntersectionRefineIterations; ++iteration){
         const CapSourceVertex midpoint = LerpCapSourceVertex(a, b, t);
-        const f32 distance = VectorGetX(EvaluateShapeDistance(cutterEval, midpoint.position));
+        SIMDVector signedDistance;
+        if(!EvaluateShapeDistance(cutterEval, midpoint.position, midpoint.normal, signedDistance))
+            return false;
+        const f32 distance = VectorGetX(signedDistance);
         if(Abs(distance) <= s_CapDistanceEpsilon)
             break;
 
@@ -168,6 +171,7 @@ static void IntersectShapeEdge(
     }
 
     AddUniqueIntersectionPoint(intersection, LerpCapSourceVertex(a, b, t));
+    return true;
 }
 
 [[nodiscard]] static bool FindOrAppendPoint(
@@ -256,10 +260,18 @@ bool BuildCapSegments(
             __hidden_csg_cap_boundary::TransformCapSourceVertex(triangle.vertices[1u], transform),
             __hidden_csg_cap_boundary::TransformCapSourceVertex(triangle.vertices[2u], transform),
         };
+        SIMDVector signedDistances[3];
+        if(
+            !EvaluateShapeDistance(cutterEval, vertices[0u].position, vertices[0u].normal, signedDistances[0u])
+            || !EvaluateShapeDistance(cutterEval, vertices[1u].position, vertices[1u].normal, signedDistances[1u])
+            || !EvaluateShapeDistance(cutterEval, vertices[2u].position, vertices[2u].normal, signedDistances[2u])
+        )
+            return false;
+
         const f32 distances[] = {
-            VectorGetX(EvaluateShapeDistance(cutterEval, vertices[0u].position)),
-            VectorGetX(EvaluateShapeDistance(cutterEval, vertices[1u].position)),
-            VectorGetX(EvaluateShapeDistance(cutterEval, vertices[2u].position)),
+            VectorGetX(signedDistances[0u]),
+            VectorGetX(signedDistances[1u]),
+            VectorGetX(signedDistances[2u]),
         };
 
         u32 positiveCount = 0u;
@@ -272,9 +284,12 @@ bool BuildCapSegments(
             continue;
 
         CapIntersection intersection;
-        __hidden_csg_cap_boundary::IntersectShapeEdge(intersection, vertices[0u], vertices[1u], distances[0u], distances[1u], cutterEval);
-        __hidden_csg_cap_boundary::IntersectShapeEdge(intersection, vertices[1u], vertices[2u], distances[1u], distances[2u], cutterEval);
-        __hidden_csg_cap_boundary::IntersectShapeEdge(intersection, vertices[2u], vertices[0u], distances[2u], distances[0u], cutterEval);
+        if(
+            !__hidden_csg_cap_boundary::IntersectShapeEdge(intersection, vertices[0u], vertices[1u], distances[0u], distances[1u], cutterEval)
+            || !__hidden_csg_cap_boundary::IntersectShapeEdge(intersection, vertices[1u], vertices[2u], distances[1u], distances[2u], cutterEval)
+            || !__hidden_csg_cap_boundary::IntersectShapeEdge(intersection, vertices[2u], vertices[0u], distances[2u], distances[0u], cutterEval)
+        )
+            return false;
         if(intersection.count != 2u)
             continue;
         if(!__hidden_csg_cap_boundary::AppendCapSegment(points, edges, intersection.vertices[0u], intersection.vertices[1u]))

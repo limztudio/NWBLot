@@ -61,6 +61,12 @@ namespace __hidden_shape_registry{
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), StringConvert(desc.name.c_str()));
         return false;
     }
+    if(desc.supportsCapGeneration && desc.shaderModule != s_CsgBuiltInShapeShaderModuleName && !desc.capEvalCallback){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with cap generation enabled but no CPU cap evaluator")
+            , StringConvert(desc.name.c_str())
+        );
+        return false;
+    }
     return ValidShaderModuleInclude(desc);
 }
 

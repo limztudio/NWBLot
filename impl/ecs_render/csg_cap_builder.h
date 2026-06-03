@@ -7,6 +7,7 @@
 
 #include "renderer_types.h"
 
+#include <impl/ecs_csg/shape_registry.h>
 #include <impl/ecs_scene/components.h>
 
 
@@ -30,6 +31,9 @@ namespace ECSRenderCsgCapBuilder{
     const Scene::TransformComponent* transform,
     u32 receiverIndex,
     const CsgCutterGpuData& cutter,
+    const CsgShapeTypeInfo* shapeType,
+    const u8* parameterBytes,
+    usize parameterByteSize,
     u32 cutterIndex,
     CsgCapVertexGpuDataVector& vertices,
     Core::Alloc::ScratchArena& scratchArena

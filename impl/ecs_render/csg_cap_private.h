@@ -64,7 +64,11 @@ struct CapProjectedPoint{
 
 struct CapCutterEval{
     const CsgCutterGpuData& cutter;
+    const CsgShapeTypeInfo* shapeType = nullptr;
+    const u8* parameterBytes = nullptr;
+    usize parameterByteSize = 0u;
     SIMDMatrix worldToShape;
+    SIMDMatrix shapeToWorld;
 };
 
 using CapPointVector = Vector<CapPoint, Core::Alloc::ScratchArena>;
@@ -77,9 +81,9 @@ using CapProjectedPointVector = Vector<CapProjectedPoint, Core::Alloc::ScratchAr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CutterSupportsCap(u32 shapeType);
-[[nodiscard]] SIMDVector EvaluateShapeDistance(const CapCutterEval& cutterEval, SIMDVector worldPosition);
-[[nodiscard]] SIMDVector EvaluateWorldCapNormal(const CapCutterEval& cutterEval, SIMDVector worldPosition, SIMDVector fallback);
+[[nodiscard]] bool CutterSupportsCap(const CapCutterEval& cutterEval);
+[[nodiscard]] bool EvaluateShapeDistance(const CapCutterEval& cutterEval, SIMDVector worldPosition, SIMDVector fallbackWorldNormal, SIMDVector& outSignedDistance);
+[[nodiscard]] bool EvaluateWorldCapNormal(const CapCutterEval& cutterEval, SIMDVector worldPosition, SIMDVector fallback, SIMDVector& outWorldNormal);
 
 [[nodiscard]] bool BuildCapSegments(
     const CsgCapMeshTriangleVector& triangles,

@@ -24,6 +24,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg_cap_shape.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_cap_triangulation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_cap_vertex_writer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_frame_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_composite.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred_targets.cpp"

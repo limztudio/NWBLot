@@ -149,6 +149,20 @@ private:
 
 
 [[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world);
+[[nodiscard]] const CsgReceiverComponent* ResolveCsgReceiverComponent(
+    Core::ECS::World& world,
+    Core::ECS::EntityID entity,
+    CsgReceiverKind::Enum& outReceiverKind
+);
+void AddCsgFrameReceiverWork(
+    CsgFrameState& inOutState,
+    CsgReceiverKind::Enum receiverKind,
+    bool generateCaps,
+    bool opaqueWork,
+    bool transparentWork,
+    u32 cutterCount
+);
+void FinalizeCsgFrameState(CsgFrameState& inOutState);
 [[nodiscard]] CsgFrameState BuildCsgFrameState(
     Core::ECS::World& world,
     Core::Alloc::ScratchArena& scratchArena,

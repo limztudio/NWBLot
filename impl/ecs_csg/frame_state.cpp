@@ -28,24 +28,6 @@ void AddSaturating(u32& inOutValue, const u32 value){
     inOutValue = inOutValue <= Limit<u32>::s_Max - value ? inOutValue + value : Limit<u32>::s_Max;
 }
 
-[[nodiscard]] const CsgReceiverComponent* ResolveReceiverComponent(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    CsgReceiverKind::Enum& outReceiverKind
-){
-    if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity)){
-        outReceiverKind = CsgReceiverKind::Static;
-        return receiver;
-    }
-
-    if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity)){
-        outReceiverKind = CsgReceiverKind::Skinned;
-        return receiver;
-    }
-
-    return nullptr;
-}
-
 [[nodiscard]] bool ReceiverVisible(
     Core::ECS::World& world,
     const Core::ECS::EntityID entity,
@@ -70,32 +52,6 @@ void AddSaturating(u32& inOutValue, const u32 value){
 template<typename ComponentT>
 [[nodiscard]] bool HasComponentCandidates(Core::ECS::World& world){
     return world.view<ComponentT>().candidateCount() > 0u;
-}
-
-void ApplyReceiverWork(
-    const CsgReceiverKind::Enum receiverKind,
-    const bool generateCaps,
-    const bool opaqueWork,
-    const bool transparentWork,
-    const u32 cutterCount,
-    CsgFrameState& inOutState
-){
-    AddSaturating(inOutState.receiverCount, 1u);
-    AddSaturating(inOutState.cutterCount, cutterCount);
-
-    if(receiverKind == CsgReceiverKind::Static){
-        inOutState.hasOpaqueStaticWork = inOutState.hasOpaqueStaticWork || opaqueWork;
-        inOutState.hasTransparentStaticWork = inOutState.hasTransparentStaticWork || transparentWork;
-    }
-    else{
-        inOutState.hasOpaqueSkinnedWork = inOutState.hasOpaqueSkinnedWork || opaqueWork;
-        inOutState.hasTransparentSkinnedWork = inOutState.hasTransparentSkinnedWork || transparentWork;
-    }
-
-    if(generateCaps){
-        inOutState.hasOpaqueCapWork = inOutState.hasOpaqueCapWork || opaqueWork;
-        inOutState.hasTransparentCapWork = inOutState.hasTransparentCapWork || transparentWork;
-    }
 }
 
 template<typename ReceiverT>
@@ -131,13 +87,13 @@ void GatherReceiverState(
                 return;
 
             const CsgReceiverDrawState& receiverState = opaqueWork ? opaqueState : transparentState;
-            ApplyReceiverWork(
+            AddCsgFrameReceiverWork(
+                inOutState,
                 receiverKind,
                 receiverState.generateCaps,
                 opaqueWork,
                 transparentWork,
-                receiverState.cutterCount,
-                inOutState
+                receiverState.cutterCount
             );
         }
     );
@@ -220,7 +176,7 @@ bool CsgFrameReceiverLookup::resolveReceiverDrawState(
         return false;
 
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-    const CsgReceiverComponent* receiver = __hidden_frame_state::ResolveReceiverComponent(m_world, entity, receiverKind);
+    const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(m_world, entity, receiverKind);
     if(!receiver || !receiver->enabled || !__hidden_frame_state::ReceiverPassEnabled(*receiver, receiverPass))
         return false;
 
@@ -244,7 +200,7 @@ bool CsgFrameReceiverLookup::resolveReceiverCutterRange(
         return false;
 
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-    const CsgReceiverComponent* receiver = __hidden_frame_state::ResolveReceiverComponent(m_world, entity, receiverKind);
+    const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(m_world, entity, receiverKind);
     if(!receiver || !receiver->enabled)
         return false;
 
@@ -267,6 +223,61 @@ bool HasCsgFrameCandidates(Core::ECS::World& world){
             __hidden_frame_state::HasComponentCandidates<StaticCsgMeshComponent>(world)
             || __hidden_frame_state::HasComponentCandidates<SkinnedCsgMeshComponent>(world)
         )
+    ;
+}
+
+const CsgReceiverComponent* ResolveCsgReceiverComponent(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID entity,
+    CsgReceiverKind::Enum& outReceiverKind
+){
+    if(const StaticCsgMeshComponent* receiver = world.tryGetComponent<StaticCsgMeshComponent>(entity)){
+        outReceiverKind = CsgReceiverKind::Static;
+        return receiver;
+    }
+
+    if(const SkinnedCsgMeshComponent* receiver = world.tryGetComponent<SkinnedCsgMeshComponent>(entity)){
+        outReceiverKind = CsgReceiverKind::Skinned;
+        return receiver;
+    }
+
+    return nullptr;
+}
+
+void AddCsgFrameReceiverWork(
+    CsgFrameState& inOutState,
+    const CsgReceiverKind::Enum receiverKind,
+    const bool generateCaps,
+    const bool opaqueWork,
+    const bool transparentWork,
+    const u32 cutterCount
+){
+    __hidden_frame_state::AddSaturating(inOutState.receiverCount, 1u);
+    __hidden_frame_state::AddSaturating(inOutState.cutterCount, cutterCount);
+
+    if(receiverKind == CsgReceiverKind::Static){
+        inOutState.hasOpaqueStaticWork = inOutState.hasOpaqueStaticWork || opaqueWork;
+        inOutState.hasTransparentStaticWork = inOutState.hasTransparentStaticWork || transparentWork;
+    }
+    else{
+        inOutState.hasOpaqueSkinnedWork = inOutState.hasOpaqueSkinnedWork || opaqueWork;
+        inOutState.hasTransparentSkinnedWork = inOutState.hasTransparentSkinnedWork || transparentWork;
+    }
+
+    if(generateCaps){
+        inOutState.hasOpaqueCapWork = inOutState.hasOpaqueCapWork || opaqueWork;
+        inOutState.hasTransparentCapWork = inOutState.hasTransparentCapWork || transparentWork;
+    }
+}
+
+void FinalizeCsgFrameState(CsgFrameState& inOutState){
+    inOutState.hasAnyWork =
+        inOutState.hasOpaqueStaticWork
+        || inOutState.hasOpaqueSkinnedWork
+        || inOutState.hasTransparentStaticWork
+        || inOutState.hasTransparentSkinnedWork
+        || inOutState.hasOpaqueCapWork
+        || inOutState.hasTransparentCapWork
     ;
 }
 
@@ -299,14 +310,7 @@ CsgFrameState BuildCsgFrameState(
         state
     );
 
-    state.hasAnyWork =
-        state.hasOpaqueStaticWork
-        || state.hasOpaqueSkinnedWork
-        || state.hasTransparentStaticWork
-        || state.hasTransparentSkinnedWork
-        || state.hasOpaqueCapWork
-        || state.hasTransparentCapWork
-    ;
+    FinalizeCsgFrameState(state);
     return state;
 }
 

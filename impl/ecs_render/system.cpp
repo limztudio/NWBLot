@@ -102,9 +102,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets);
 
     Core::Alloc::ScratchArena scratchArena;
-    CsgFrameState csgFrameState;
-    if(HasCsgFrameCandidates(m_world))
-        csgFrameState = BuildCsgFrameState(m_world, scratchArena);
+    const CsgFrameState csgFrameState = m_csgSystem.buildFrameState(scratchArena);
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};

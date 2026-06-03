@@ -22,6 +22,7 @@ public:
     explicit RendererCsgSystem(RendererSystem& renderer);
 
 public:
+    [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createCsgClipResources();
     void destroyCsgClipBindingSet();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
@@ -76,4 +77,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

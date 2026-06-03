@@ -157,6 +157,12 @@ uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyDrawItem item, const NwbCsgC
     return 6u;
 }
 
+bool nwbCsgCapProxyItemMatchesPassAndShape(const NwbCsgCapProxyDrawItem item, const uint shapeType){
+    return item.receiverCutterShapePass.w == g_NwbCsgCapProxyPushConstants.dispatch.y
+        && item.receiverCutterShapePass.z == shapeType
+    ;
+}
+
 void nwbCsgCapProxyGridPrimitive(const uint localPrimitive, const uint segments, out uint3 indices){
     const uint quad = localPrimitive / 2u;
     const uint row = quad / segments;

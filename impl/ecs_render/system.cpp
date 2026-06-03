@@ -155,7 +155,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     if(deferredUploadReady){
         const bool csgUploadReady = opaqueDrawItems.csg.empty() || m_csgSystem.uploadCsgFrameBuffers(*commandList, csgFrameData);
-        const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && m_csgSystem.uploadCsgCapVertices(*commandList, csgFrameData));
+        const bool csgCapProxyReady =
+            csgFrameData.hasCapProxyWork()
+            && csgUploadReady
+            && deferredTargets.capProxyFramebuffer
+            && m_csgSystem.uploadCsgCapProxies(*commandList, csgFrameData)
+        ;
         const MaterialPassDrawContext opaqueDrawContext{
             *commandList,
             deferredTargets.framebuffer.get(),
@@ -167,8 +172,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
         if(csgUploadReady){
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
-            if(csgCapUploadReady && csgFrameData.hasOpaqueCapWork())
-                m_csgSystem.renderCsgOpaqueCaps(opaqueDrawContext, csgFrameData);
+            if(csgCapProxyReady){
+                commandList->endRenderPass();
+                const MaterialPassDrawContext capProxyDrawContext{
+                    *commandList,
+                    deferredTargets.capProxyFramebuffer.get(),
+                    MaterialPipelinePass::Opaque,
+                    nullptr,
+                    nullptr,
+                    deferredViewportState
+                };
+                m_csgSystem.renderCsgOpaqueCapProxies(capProxyDrawContext, csgFrameData, deferredTargets.csgOpeningMask.get());
+            }
         }
     }
     commandList->endRenderPass();

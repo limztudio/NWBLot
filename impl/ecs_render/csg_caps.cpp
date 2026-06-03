@@ -35,7 +35,7 @@ bool RendererCsgSystem::appendCsgReceiverCapGeometry(
     if(static_cast<usize>(receiverRange.firstCutter) + static_cast<usize>(receiverRange.cutterCount) > csgFrameData.cutters.size())
         return false;
 
-    Core::Alloc::ScratchArena& scratchArena = csgFrameData.capVertices.get_allocator().arena();
+    const bool buildCpuCapGeometry = receiverPass != CsgReceiverPass::Opaque;
     CsgCapProxyBounds receiverBounds;
     if(!ECSRenderCsgCapProxy::BuildReceiverBounds(mesh.csgLocalBounds, transform, receiverBounds))
         return false;
@@ -54,6 +54,8 @@ bool RendererCsgSystem::appendCsgReceiverCapGeometry(
             csgFrameData
         ))
             return false;
+        if(!buildCpuCapGeometry)
+            continue;
         if(mesh.csgCapTriangles.empty())
             continue;
 
@@ -69,6 +71,7 @@ bool RendererCsgSystem::appendCsgReceiverCapGeometry(
         if(csgFrameData.capVertices.size() > static_cast<usize>(Limit<u32>::s_Max))
             return false;
         const u32 firstVertex = static_cast<u32>(csgFrameData.capVertices.size());
+        Core::Alloc::ScratchArena& scratchArena = csgFrameData.capVertices.get_allocator().arena();
         if(!ECSRenderCsgCapBuilder::AppendCapGeometry(
             mesh.csgCapTriangles,
             transform,

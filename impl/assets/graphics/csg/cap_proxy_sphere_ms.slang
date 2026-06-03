@@ -77,7 +77,7 @@ void main(
 
     const uint groupThreadIndex = groupThreadID.x;
     const NwbCsgCapProxyDrawItem item = g_NwbCsgCapProxies[proxyIndex];
-    if(item.receiverCutterShapePass.z != NWB_CSG_SHAPE_SPHERE){
+    if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_SPHERE)){
         SetMeshOutputCounts(0u, 0u);
         return;
     }

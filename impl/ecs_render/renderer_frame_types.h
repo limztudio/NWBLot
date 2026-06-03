@@ -107,6 +107,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
     Core::FramebufferHandle framebuffer;
+    Core::FramebufferHandle capProxyFramebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;
     Core::BindingSetHandle compositeBindingSet;
@@ -129,6 +130,7 @@ struct DeferredFrameTargets{
             && opaqueColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr
+            && capProxyFramebuffer != nullptr
             && opaqueLightingFramebuffer != nullptr
             && lightingBindingSet != nullptr
             && compositeBindingSet != nullptr

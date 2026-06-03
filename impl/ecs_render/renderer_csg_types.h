@@ -81,6 +81,12 @@ inline constexpr u32 s_CsgCapProxyPlaneShapeMask = 1u << 0;
 inline constexpr u32 s_CsgCapProxyBoxShapeMask = 1u << 1;
 inline constexpr u32 s_CsgCapProxySphereShapeMask = 1u << 2;
 inline constexpr u32 s_CsgCapProxyCapsuleShapeMask = 1u << 3;
+inline constexpr u32 s_CsgCapProxyBuiltInShapeMask =
+    s_CsgCapProxyPlaneShapeMask
+    | s_CsgCapProxyBoxShapeMask
+    | s_CsgCapProxySphereShapeMask
+    | s_CsgCapProxyCapsuleShapeMask
+;
 
 [[nodiscard]] inline constexpr u32 CsgCapProxyShapeMask(const u32 shapeType)noexcept{
     switch(shapeType){

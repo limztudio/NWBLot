@@ -52,6 +52,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_capProxyCapsulePipeline.reset();
 
     deferredState().m_targets.framebuffer.reset();
+    deferredState().m_targets.capProxyFramebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
 
     deferredState().m_targets.albedo.reset();
@@ -226,6 +227,18 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
         return false;
     }
+
+    Core::FramebufferDesc capProxyFramebufferDesc;
+    for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
+        capProxyFramebufferDesc.addColorAttachment(attachment);
+    capProxyFramebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
+    createdTargets.capProxyFramebuffer = device->createFramebuffer(capProxyFramebufferDesc);
+    if(!createdTargets.capProxyFramebuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap proxy framebuffer"));
+        return false;
+    }
+    if(!m_renderer.csgSystem().createCsgCapProxyResources(createdTargets.capProxyFramebuffer.get(), s_CsgCapProxyBuiltInShapeMask))
+        return false;
 
     Core::FramebufferDesc opaqueLightingFramebufferDesc;
     opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources);

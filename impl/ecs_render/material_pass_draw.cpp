@@ -112,10 +112,12 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-        if(!m_renderer.meshSystem().createMeshBindingSet(mesh))
+        if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!m_renderer.csgSystem().createCsgClipResources() || !csgState().m_clipBindingSet)
+            if(!csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
+                return;
+            if(!csgState().m_clipBindingSet)
                 return;
         }
 
@@ -152,7 +154,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
 ){
     if(drawItems.empty())
         return;
-    if(!createEmulationViewResources())
+    if(!drawState().m_emulationViewBindingSet && !createEmulationViewResources())
         return;
     NWB_ASSERT(drawState().m_meshViewBuffer);
     NWB_ASSERT(drawState().m_emulationViewBindingSet);
@@ -163,10 +165,12 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(!m_renderer.meshSystem().createComputeBindingSet(mesh))
+        if(!mesh.computeBindingSet && !m_renderer.meshSystem().createComputeBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!m_renderer.csgSystem().createCsgClipResources() || !csgState().m_clipBindingSet)
+            if(!csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
+                return;
+            if(!csgState().m_clipBindingSet)
                 return;
         }
         NWB_ASSERT(mesh.computeBindingSet);

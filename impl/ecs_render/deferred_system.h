@@ -31,8 +31,11 @@ public:
     [[nodiscard]] bool createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgOpeningMask);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
+
+private:
+    [[nodiscard]] bool createCsgOpeningMaskTarget(DeferredFrameTargets& targets);
 };
 
 

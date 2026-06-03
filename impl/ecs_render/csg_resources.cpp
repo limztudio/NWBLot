@@ -216,7 +216,7 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
         || !reserveCsgParameterByteBufferCapacity(csgFrameData.parameterBytes.size())
     )
         return false;
-    if(!createCsgClipResources())
+    if(!csgState().m_clipBindingSet && !createCsgClipResources())
         return false;
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);

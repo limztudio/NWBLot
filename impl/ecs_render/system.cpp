@@ -66,7 +66,8 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(width == 0 || height == 0)
         return true;
 
-    if(m_deferredState.m_targets.valid() && m_deferredState.m_targets.width == width && m_deferredState.m_targets.height == height)
+    DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
+    if(deferredTargets.valid() && deferredTargets.width == width && deferredTargets.height == height)
         return true;
 
     return m_deferredSystem.createDeferredFrameTargets(width, height);
@@ -91,6 +92,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
+    Core::Alloc::ScratchArena scratchArena;
+    const CsgFrameState csgFrameState = HasCsgFrameCandidates(m_world)
+        ? m_csgSystem.buildFrameState(scratchArena)
+        : CsgFrameState{}
+    ;
+    const bool hasCsgFrameWork = !csgFrameState.empty();
+    if(hasCsgFrameWork && !deferredTargets.csgOpeningMask)
+        return;
+
     auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
     if(!commandList){
@@ -99,10 +109,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     commandList->open();
 
-    m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets);
+    m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasCsgFrameWork);
 
-    Core::Alloc::ScratchArena scratchArena;
-    const CsgFrameState csgFrameState = m_csgSystem.buildFrameState(scratchArena);
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
@@ -170,8 +178,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
-    if(m_materialSystem.hasTransparentRenderers())
+    const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers();
+    if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
+        m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
+        m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
+    }
+    if(hasTransparentRenderers)
         m_avboitSystem.renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
 
     commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());

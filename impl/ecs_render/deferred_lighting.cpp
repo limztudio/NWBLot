@@ -102,12 +102,24 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
         return false;
 
     const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio);
+    if(
+        deferredState().m_sceneShadingGpuDataValid
+        && NWB_MEMCMP(deferredState().m_sceneShadingGpuData, &sceneShadingState, sizeof(sceneShadingState)) == 0
+    )
+        return true;
 
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(deferredState().m_sceneShadingBuffer.get(), &sceneShadingState, sizeof(sceneShadingState));
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
+    NWB_MEMCPY(
+        deferredState().m_sceneShadingGpuData,
+        sizeof(deferredState().m_sceneShadingGpuData),
+        &sceneShadingState,
+        sizeof(sceneShadingState)
+    );
+    deferredState().m_sceneShadingGpuDataValid = true;
     return true;
 }
 

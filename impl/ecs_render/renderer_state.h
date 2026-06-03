@@ -9,6 +9,9 @@
 
 #include <core/ecs/entity_id.h>
 
+#include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
+
 #include <global/generic.h>
 
 
@@ -106,8 +109,10 @@ private:
     Core::BindingSetHandle m_emulationViewBindingSet;
     Core::ShaderHandle m_emulationVertexShader;
     Core::InputLayoutHandle m_emulationInputLayout;
+    u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};
     usize m_instanceBufferCapacity = 0;
     usize m_materialTypedBufferCapacity = 0;
+    bool m_meshViewGpuDataValid = false;
 };
 
 class RendererCsgState final : NoCopy{
@@ -137,6 +142,7 @@ private:
     Core::BufferHandle m_capProxyBuffer;
     Core::ShaderHandle m_capVertexShader;
     Core::ShaderHandle m_capPixelShader;
+    Core::ShaderHandle m_capProxyPixelShader;
     Core::ShaderHandle m_capProxyPlaneMeshShader;
     Core::ShaderHandle m_capProxyBoxMeshShader;
     Core::ShaderHandle m_capProxySphereMeshShader;
@@ -189,6 +195,8 @@ private:
     Core::SamplerHandle m_sampler;
     Core::ShaderHandle m_compositePixelShader;
     Core::GraphicsPipelineHandle m_compositePipeline;
+    u8 m_sceneShadingGpuData[sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT] = {};
+    bool m_sceneShadingGpuDataValid = false;
     DeferredFrameTargets m_targets;
 };
 
@@ -224,6 +232,7 @@ private:
     Core::ShaderHandle m_accumulatePixelShader;
     Core::ComputePipelineHandle m_depthWarpPipeline;
     Core::ComputePipelineHandle m_integratePipeline;
+    bool m_targetsNeedClear = true;
 };
 
 

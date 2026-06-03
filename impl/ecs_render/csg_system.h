@@ -72,7 +72,7 @@ public:
     [[nodiscard]] bool createCsgCapProxyResources(Core::Framebuffer* framebuffer, u32 shapeMask);
     [[nodiscard]] bool reserveCsgCapProxyBufferCapacity(usize proxyCount);
     [[nodiscard]] bool uploadCsgCapProxies(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
-    void renderCsgOpaqueCapProxies(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
+    void renderCsgOpaqueCapProxies(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData, Core::Texture* openingMaskTarget);
 };
 
 

@@ -248,12 +248,19 @@ bool RendererMaterialSystem::updateMeshViewBuffer(Core::CommandList& commandList
     }
 
     const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(world(), fallbackAspectRatio);
+    if(
+        drawState().m_meshViewGpuDataValid
+        && NWB_MEMCMP(drawState().m_meshViewGpuData, &viewState, sizeof(viewState)) == 0
+    )
+        return true;
 
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(drawState().m_meshViewBuffer.get(), &viewState, sizeof(viewState));
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
+    NWB_MEMCPY(drawState().m_meshViewGpuData, sizeof(drawState().m_meshViewGpuData), &viewState, sizeof(viewState));
+    drawState().m_meshViewGpuDataValid = true;
     return true;
 }
 

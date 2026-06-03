@@ -88,6 +88,15 @@ inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
+inline Core::Format::Enum SelectCsgOpeningMaskFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::R32_UINT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::RenderTarget;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

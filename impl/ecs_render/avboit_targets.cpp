@@ -285,6 +285,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
         return false;
 
     createdTargets.avboit = Move(avboitTargets);
+    avboitState().m_targetsNeedClear = true;
     return true;
 }
 

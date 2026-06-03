@@ -86,6 +86,7 @@ void RendererDrawState::invalidateResources(){
     m_emulationViewBindingSet.reset();
     m_emulationVertexShader.reset();
     m_emulationInputLayout.reset();
+    m_meshViewGpuDataValid = false;
     m_instanceBufferCapacity = 0u;
     m_materialTypedBufferCapacity = 0u;
 }
@@ -104,6 +105,7 @@ void RendererCsgState::invalidateResources(){
     m_capProxyBuffer.reset();
     m_capVertexShader.reset();
     m_capPixelShader.reset();
+    m_capProxyPixelShader.reset();
     m_capProxyPlaneMeshShader.reset();
     m_capProxyBoxMeshShader.reset();
     m_capProxySphereMeshShader.reset();
@@ -143,6 +145,7 @@ void RendererDeferredState::invalidateResources(){
     m_sampler.reset();
     m_compositePixelShader.reset();
     m_compositePipeline.reset();
+    m_sceneShadingGpuDataValid = false;
     m_targets = DeferredFrameTargets{};
 }
 
@@ -165,6 +168,7 @@ void RendererAvboitState::invalidateResources(){
     m_accumulatePixelShader.reset();
     m_depthWarpPipeline.reset();
     m_integratePipeline.reset();
+    m_targetsNeedClear = true;
 }
 
 

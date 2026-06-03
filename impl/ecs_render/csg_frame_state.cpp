@@ -16,9 +16,6 @@ NWB_IMPL_BEGIN
 
 CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scratchArena){
     CsgFrameState state;
-    if(!HasCsgFrameCandidates(world()))
-        return state;
-
     CsgFrameReceiverLookup receiverLookup(world(), scratchArena);
     if(receiverLookup.empty())
         return state;

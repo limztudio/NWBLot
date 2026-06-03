@@ -43,12 +43,19 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.compositeBindingSet.reset();
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
 
+    csgState().m_capProxyBindingSet.reset();
+    csgState().m_capProxyPlanePipeline.reset();
+    csgState().m_capProxyBoxPipeline.reset();
+    csgState().m_capProxySpherePipeline.reset();
+    csgState().m_capProxyCapsulePipeline.reset();
+
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
 
     deferredState().m_targets.albedo.reset();
     deferredState().m_targets.normal.reset();
     deferredState().m_targets.worldPosition.reset();
+    deferredState().m_targets.csgOpeningMask.reset();
     deferredState().m_targets.opaqueColor.reset();
     deferredState().m_targets.depth.reset();
 
@@ -188,6 +195,8 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
         return false;
     }
+    if(!createCsgOpeningMaskTarget(createdTargets))
+        return false;
 
     Core::FramebufferAttachment gbufferAttachments[NWB_MESH_GBUFFER_TARGET_COUNT] = {};
     gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION]
@@ -202,7 +211,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setTexture(createdTargets.worldPosition.get())
         .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
     ;
-
     Core::FramebufferDesc framebufferDesc;
     for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
         framebufferDesc.addColorAttachment(attachment);
@@ -317,46 +325,72 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     return true;
 }
 
-void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(targets.albedo)
-        commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+bool RendererDeferredSystem::createCsgOpeningMaskTarget(DeferredFrameTargets& targets){
+    NWB_ASSERT(!targets.csgOpeningMask);
+    NWB_ASSERT(targets.width > 0u && targets.height > 0u);
 
-    if(targets.normal)
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    auto* device = graphics().getDevice();
+    const Core::Format::Enum csgOpeningMaskFormat = ECSRenderDetail::SelectCsgOpeningMaskFormat(*device);
+    if(csgOpeningMaskFormat == Core::Format::UNKNOWN){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported CSG opening mask format"));
+        return false;
+    }
 
-    if(targets.worldPosition)
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    Core::TextureDesc csgOpeningMaskDesc;
+    csgOpeningMaskDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setFormat(csgOpeningMaskFormat)
+        .setInRenderTarget(true)
+        .setName("engine/deferred/csg_opening_mask")
+    ;
+    targets.csgOpeningMask = graphics().createTexture(csgOpeningMaskDesc);
+    if(!targets.csgOpeningMask){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG opening mask target"));
+        return false;
+    }
 
-    if(targets.opaqueColor)
-        commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    csgState().m_capProxyBindingSet.reset();
+    return true;
+}
 
-    if(targets.depth)
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const bool clearCsgOpeningMask){
+    NWB_ASSERT(targets.albedo);
+    NWB_ASSERT(targets.normal);
+    NWB_ASSERT(targets.worldPosition);
+    NWB_ASSERT(targets.opaqueColor);
+    NWB_ASSERT(targets.depth);
+    NWB_ASSERT(!clearCsgOpeningMask || targets.csgOpeningMask);
+
+    commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+
+    if(clearCsgOpeningMask)
+        commandList.setTextureState(targets.csgOpeningMask.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+
+    commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     commandList.commitBarriers();
 
-    if(targets.albedo)
-        commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
+    commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
+    commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
+    commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
 
-    if(targets.normal)
-        commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
+    if(clearCsgOpeningMask)
+        commandList.clearTextureUInt(targets.csgOpeningMask.get(), ECSRenderDetail::s_FramebufferSubresources, NWB_CSG_OPENING_MASK_INVALID_RECEIVER_ID);
 
-    if(targets.worldPosition)
-        commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
+    commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
 
-    if(targets.opaqueColor)
-        commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
-
-    if(targets.depth){
-        commandList.clearDepthStencilTexture(
-            targets.depth.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            true,
-            Core::s_DepthClearValue,
-            false,
-            0
-        );
-    }
+    commandList.clearDepthStencilTexture(
+        targets.depth.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        true,
+        Core::s_DepthClearValue,
+        false,
+        0
+    );
 }
 
 NWB_IMPL_END

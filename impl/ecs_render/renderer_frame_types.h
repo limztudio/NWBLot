@@ -48,6 +48,7 @@ struct AvboitFrameTargets{
     Core::BindingSetHandle accumulateBindingSet;
 
     [[nodiscard]] bool valid()const noexcept{
+#if defined(NWB_DEBUG)
         return
             fullWidth > 0
             && fullHeight > 0
@@ -76,6 +77,9 @@ struct AvboitFrameTargets{
             && integrateBindingSet != nullptr
             && accumulateBindingSet != nullptr
         ;
+#else
+        return accumulationFramebuffer != nullptr;
+#endif
     }
 };
 
@@ -99,6 +103,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle albedo;
     Core::TextureHandle normal;
     Core::TextureHandle worldPosition;
+    Core::TextureHandle csgOpeningMask;
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
     Core::FramebufferHandle framebuffer;
@@ -108,6 +113,7 @@ struct DeferredFrameTargets{
     AvboitFrameTargets avboit;
 
     [[nodiscard]] bool valid()const noexcept{
+#if defined(NWB_DEBUG)
         return
             width > 0
             && height > 0
@@ -119,6 +125,7 @@ struct DeferredFrameTargets{
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr
+            && csgOpeningMask != nullptr
             && opaqueColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr
@@ -127,6 +134,9 @@ struct DeferredFrameTargets{
             && compositeBindingSet != nullptr
             && avboit.valid()
         ;
+#else
+        return framebuffer != nullptr;
+#endif
     }
 };
 
@@ -138,4 +148,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

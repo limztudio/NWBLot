@@ -35,30 +35,6 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
     return target;
 }
 
-static void SetTextureCopyDestIfValid(Core::CommandList& commandList, const Core::TextureHandle& texture){
-    if(texture)
-        commandList.setTextureState(texture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-}
-
-static void SetBufferCopyDestIfValid(Core::CommandList& commandList, const Core::BufferHandle& buffer){
-    if(buffer)
-        commandList.setBufferState(buffer.get(), Core::ResourceStates::CopyDest);
-}
-
-static void ClearTextureFloatIfValid(
-    Core::CommandList& commandList,
-    const Core::TextureHandle& texture,
-    const Core::Color& value
-){
-    if(texture)
-        commandList.clearTextureFloat(texture.get(), ECSRenderDetail::s_FramebufferSubresources, value);
-}
-
-static void ClearBufferUIntIfValid(Core::CommandList& commandList, const Core::BufferHandle& buffer, const u32 value){
-    if(buffer)
-        commandList.clearBufferUInt(buffer.get(), value);
-}
-
 static void DispatchAvboitCompute(
     Core::CommandList& commandList,
     Core::ComputePipeline* pipeline,
@@ -180,28 +156,30 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
 }
 
 void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
-    __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.lowRasterTarget);
-    __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.accumColor);
-    __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.accumExtinction);
-    __hidden_avboit::SetBufferCopyDestIfValid(commandList, targets.coverageBuffer);
-    __hidden_avboit::SetBufferCopyDestIfValid(commandList, targets.depthWarpBuffer);
-    __hidden_avboit::SetBufferCopyDestIfValid(commandList, targets.controlBuffer);
-    __hidden_avboit::SetBufferCopyDestIfValid(commandList, targets.extinctionBuffer);
-    __hidden_avboit::SetBufferCopyDestIfValid(commandList, targets.extinctionOverflowBuffer);
-    __hidden_avboit::SetTextureCopyDestIfValid(commandList, targets.transmittanceTexture);
+    NWB_ASSERT(targets.valid());
+
+    commandList.setTextureState(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setTextureState(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     commandList.commitBarriers();
 
     const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
-    __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.lowRasterTarget, transparentBlack);
-    __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.accumColor, transparentBlack);
-    __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.accumExtinction, transparentBlack);
-    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.coverageBuffer, 0u);
-    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.depthWarpBuffer, 0u);
-    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.controlBuffer, 0u);
-    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.extinctionBuffer, 0u);
-    __hidden_avboit::ClearBufferUIntIfValid(commandList, targets.extinctionOverflowBuffer, NWB_AVBOIT_OVERFLOW_INVALID);
-    __hidden_avboit::ClearTextureFloatIfValid(commandList, targets.transmittanceTexture, Core::Color(1.f, 1.f, 1.f, 1.f));
+    commandList.clearTextureFloat(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
+    commandList.clearTextureFloat(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
+    commandList.clearTextureFloat(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
+    commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), NWB_AVBOIT_OVERFLOW_INVALID);
+    commandList.clearTextureFloat(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
 void RendererAvboitSystem::renderAvboitPasses(
@@ -210,8 +188,7 @@ void RendererAvboitSystem::renderAvboitPasses(
     const CsgFrameState& csgFrameState
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
-    if(!avboitTargets.valid())
-        return;
+    NWB_ASSERT(avboitTargets.valid());
     if((!avboitState().m_depthWarpPipeline || !avboitState().m_integratePipeline) && !createAvboitPipelines())
         return;
 

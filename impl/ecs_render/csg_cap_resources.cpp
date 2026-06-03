@@ -272,7 +272,9 @@ void RendererCsgSystem::renderCsgCaps(
         return;
     if(!csgState().m_capVertexBuffer)
         return;
-    if(!createCsgClipResources() || !csgState().m_clipBindingSet)
+    if(!csgState().m_clipBindingSet && !createCsgClipResources())
+        return;
+    if(!csgState().m_clipBindingSet)
         return;
     if(!pipeline)
         return;
@@ -331,7 +333,7 @@ void RendererCsgSystem::renderCsgOpaqueCaps(
 ){
     if(!csgFrameData.hasOpaqueCapWork())
         return;
-    if(!createCsgOpaqueCapResources(context.framebuffer))
+    if(!csgState().m_capPipeline && !createCsgOpaqueCapResources(context.framebuffer))
         return;
 
     renderCsgCaps(context, csgFrameData, csgFrameData.opaqueCapDrawItems, csgState().m_capPipeline.get());
@@ -343,25 +345,27 @@ void RendererCsgSystem::renderCsgTransparentCaps(
 ){
     if(!csgFrameData.hasTransparentCapWork())
         return;
-    if(!createCsgTransparentCapResources(context.framebuffer, context.pass))
-        return;
 
-    Core::GraphicsPipeline* pipeline = nullptr;
+    Core::GraphicsPipelineHandle* pipeline = nullptr;
     switch(context.pass){
     case MaterialPipelinePass::AvboitOccupancy:
-        pipeline = csgState().m_capAvboitOccupancyPipeline.get();
+        pipeline = &csgState().m_capAvboitOccupancyPipeline;
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        pipeline = csgState().m_capAvboitExtinctionPipeline.get();
+        pipeline = &csgState().m_capAvboitExtinctionPipeline;
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        pipeline = csgState().m_capAvboitAccumulatePipeline.get();
+        pipeline = &csgState().m_capAvboitAccumulatePipeline;
         break;
     default:
         break;
     }
+    if(!pipeline)
+        return;
+    if(!*pipeline && !createCsgTransparentCapResources(context.framebuffer, context.pass))
+        return;
 
-    renderCsgCaps(context, csgFrameData, csgFrameData.transparentCapDrawItems, pipeline);
+    renderCsgCaps(context, csgFrameData, csgFrameData.transparentCapDrawItems, pipeline->get());
 }
 
 

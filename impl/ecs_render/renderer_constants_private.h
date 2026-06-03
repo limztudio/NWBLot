@@ -48,6 +48,7 @@ inline constexpr Name s_CsgCapVertexBufferName("ecs_render/csg_cap_vertices");
 inline constexpr Name s_CsgCapProxyBufferName("ecs_render/csg_cap_proxies");
 inline constexpr Name s_CsgCapVertexShaderName("engine/graphics/csg/cap_vs");
 inline constexpr Name s_CsgCapPixelShaderName("engine/graphics/csg/cap_ps");
+inline constexpr Name s_CsgCapProxyPixelShaderName("engine/graphics/csg/cap_proxy_ps");
 inline constexpr Name s_CsgCapProxyPlaneMeshShaderName("engine/graphics/csg/cap_proxy_plane_ms");
 inline constexpr Name s_CsgCapProxyBoxMeshShaderName("engine/graphics/csg/cap_proxy_box_ms");
 inline constexpr Name s_CsgCapProxySphereMeshShaderName("engine/graphics/csg/cap_proxy_sphere_ms");

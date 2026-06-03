@@ -136,7 +136,7 @@ static void StoreReceiverCpuBounds(
     const SIMDVector maxBounds,
     CsgReceiverCpuBounds& outBounds
 ){
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag, &outBounds.minBounds);
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, &outBounds.minBounds);
     StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
 }
 
@@ -370,7 +370,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     }
     createdMesh.csgLocalBounds.minBounds = desc.localBounds.minBounds;
     createdMesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
-    createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag;
+    createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag;
     createdMesh.csgLocalBounds.maxBounds.w = 0;
     if(!__hidden_mesh::ResolveBufferElementCount(
         createdMesh.meshletPrimitiveIndexBuffer,

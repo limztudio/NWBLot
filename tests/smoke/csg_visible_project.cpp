@@ -33,14 +33,12 @@ using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_CsgVisibleReceiverGroup("project/smoke/csg_visible/receiver");
-
 static constexpr f32 s_CameraStartDepth = 3.0f;
 static constexpr f32 s_CameraTargetY = 0.8f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
-static constexpr f32 s_CubeRotationSpeed = 0.75f;
+static constexpr f32 s_CubeRotationSpeed = 0.25f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube_hard_edges";
@@ -58,6 +56,13 @@ enum Enum : usize{
 };
 
 static_assert(CsgVisibleShapeSlot::Count == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");
+
+inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
+    Name("project/smoke/csg_visible/plane_receiver"),
+    Name("project/smoke/csg_visible/box_receiver"),
+    Name("project/smoke/csg_visible/sphere_receiver"),
+    Name("project/smoke/csg_visible/capsule_receiver"),
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,6 +89,7 @@ static void AssignCsgCutterTransform(
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(
     NWB::Core::ECS::World& world,
     NWB::Core::Alloc::GlobalArena& arena,
+    const Name receiverGroup,
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
@@ -118,7 +124,7 @@ static void AssignCsgCutterTransform(
 
     if(csgReceiver){
         auto& receiver = entity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = s_CsgVisibleReceiverGroup;
+        receiver.receiverGroup = receiverGroup;
         receiver.generateCapProxies = true;
         receiver.affectOpaquePass = true;
         receiver.affectTransparentPass = false;
@@ -155,10 +161,10 @@ static void ApplyCubeRotation(
 
 [[nodiscard]] static Float4 CsgVisibleShapeColor(const usize shapeSlot){
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(0.36f, 0.72f, 1.0f, 1.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(0.92f, 0.58f, 0.32f, 1.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(0.52f, 0.92f, 0.58f, 1.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(1.0f, 0.42f, 0.58f, 1.0f);
+    case CsgVisibleShapeSlot::Plane: return Float4(0.24f, 0.56f, 0.86f, 1.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(0.72f, 0.40f, 0.20f, 1.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(0.34f, 0.70f, 0.42f, 1.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(0.84f, 0.28f, 0.44f, 1.0f);
     default: return Float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
 }
@@ -192,11 +198,12 @@ static void ApplyCutterTransform(
     NWB::Core::ECS::World& world,
     NWB::Core::Alloc::GlobalArena& arena,
     const usize shapeSlot,
+    const Name receiverGroup,
     const Float4& center
 ){
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
-    cutter.receiverGroup = s_CsgVisibleReceiverGroup;
+    cutter.receiverGroup = receiverGroup;
     cutter.operation = NWB::Impl::CsgOperation::Subtract;
     cutter.active = true;
     AssignCsgCutterTransform(cutter, LoadFloat(center), QuaternionIdentity());
@@ -212,21 +219,21 @@ static void ApplyCutterTransform(
     case CsgVisibleShapeSlot::Box:{
         cutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
         NWB::Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4(0.28f, 0.34f, 0.46f, 0.0f);
+        parameters.halfExtents = Float4(0.22f, 0.22f, 0.42f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Sphere:{
         cutter.shapeType = NWB::Impl::s_CsgSphereShapeName;
         NWB::Impl::CsgSphereShapeParameters parameters;
-        parameters.radius = Float4(0.34f, 0.0f, 0.0f, 0.0f);
+        parameters.radius = Float4(0.24f, 0.0f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Capsule:{
         cutter.shapeType = NWB::Impl::s_CsgCapsuleShapeName;
         NWB::Impl::CsgCapsuleShapeParameters parameters;
-        parameters.radiusHalfHeight = Float4(0.22f, 0.34f, 0.0f, 0.0f);
+        parameters.radiusHalfHeight = Float4(0.15f, 0.18f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
@@ -332,12 +339,19 @@ public:
             m_receivers[shapeSlot] = CreateSolidCubeEntity(
                 *m_world,
                 m_context.objectArena,
+                s_CsgVisibleReceiverGroups[shapeSlot],
                 CsgVisibleShapeColor(shapeSlot),
                 receiverPosition,
                 Float4(0.58f, 0.58f, 0.58f, 0.0f),
                 true
             );
-            m_cutters[shapeSlot] = CreateCutter(*m_world, m_context.objectArena, shapeSlot, cutterPosition);
+            m_cutters[shapeSlot] = CreateCutter(
+                *m_world,
+                m_context.objectArena,
+                shapeSlot,
+                s_CsgVisibleReceiverGroups[shapeSlot],
+                cutterPosition
+            );
             m_receiverCenters[shapeSlot] = receiverPosition;
         }
 
@@ -362,7 +376,7 @@ public:
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CubeRotationSpeed;
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot){
-            const f32 rotationPhase = static_cast<f32>(shapeSlot) * 0.55f;
+            const f32 rotationPhase = static_cast<f32>(shapeSlot) * 0.18f;
             const SIMDVector rotation = BuildCubeRotation(m_animationTime, rotationPhase);
             ApplyCubeRotation(*m_world, m_receivers[shapeSlot], rotation);
             ApplyCutterTransform(

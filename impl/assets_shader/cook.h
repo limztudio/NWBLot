@@ -126,6 +126,7 @@ public:
         CookVector<CookString> includeRoots;
         CookMap<CookString, DefineEntry> defineValues;
         CookMap<CookString, CookString> implicitDefines;
+        bool emitMeshComputeShadow = true;
 
         explicit ShaderEntry(CookArena& memoryArena)
             : name(memoryArena)

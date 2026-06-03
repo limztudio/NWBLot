@@ -4,7 +4,7 @@
 
 #include "renderer_private.h"
 
-#include "csg_cap_proxy.h"
+#include "csg_cap_proxy_builder.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +22,7 @@ bool RendererCsgSystem::appendCsgReceiverCapProxies(
     const CsgReceiverPass::Enum receiverPass,
     const u32 receiverIndex,
     const CsgReceiverRangeGpuData& receiverRange,
+    const Float4& color,
     CsgFrameGpuData& csgFrameData
 )const{
     if(receiverRange.cutterCount == 0u)
@@ -33,19 +34,20 @@ bool RendererCsgSystem::appendCsgReceiverCapProxies(
         return false;
 
     CsgCapProxyBounds receiverBounds;
-    if(!ECSRenderCsgCapProxy::BuildReceiverBounds(mesh.csgLocalBounds, transform, receiverBounds))
+    if(!ECSRenderCsgCapProxyBuilder::BuildReceiverBounds(mesh.csgLocalBounds, transform, receiverBounds))
         return false;
 
     for(u32 cutterOffset = 0u; cutterOffset < receiverRange.cutterCount; ++cutterOffset){
         const u32 cutterIndex = receiverRange.firstCutter + cutterOffset;
         const CsgCutterGpuData& cutter = csgFrameData.cutters[cutterIndex];
-        if(!ECSRenderCsgCapProxy::AppendGpuData(
+        if(!ECSRenderCsgCapProxyBuilder::AppendGpuData(
             csgShapeRegistry(),
             receiverBounds,
             receiverPass,
             receiverIndex,
             cutterIndex,
             cutter,
+            color,
             csgFrameData
         ))
             return false;

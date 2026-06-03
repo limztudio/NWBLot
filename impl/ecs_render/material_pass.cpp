@@ -67,6 +67,95 @@ struct MaterialTypedByteRangeKeyHasher{
     }
 }
 
+[[nodiscard]] static bool ReadMaterialFloat4Field(
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialBlockClass::Enum blockClass,
+    const Name& fieldName,
+    const u8* bytes,
+    const usize byteCount,
+    Float4& outValue
+){
+    if(!bytes)
+        return false;
+
+    usize classByteBase = 0u;
+    for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
+        if(block.blockClass != blockClass)
+            continue;
+
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const usize fieldIndex = static_cast<usize>(block.fieldBegin) + static_cast<usize>(fieldOffset);
+            if(fieldIndex >= materialInfo.typedLayoutFields.size())
+                return false;
+
+            const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];
+            if(field.fieldName != fieldName)
+                continue;
+            if(field.fieldType != MaterialLayoutFieldType::Float4)
+                return false;
+
+            const usize blockByteOffset = static_cast<usize>(field.offset);
+            if(blockByteOffset > static_cast<usize>(block.byteSize) || sizeof(Float4) > static_cast<usize>(block.byteSize) - blockByteOffset)
+                return false;
+            if(classByteBase > byteCount || blockByteOffset > byteCount - classByteBase || sizeof(Float4) > byteCount - classByteBase - blockByteOffset)
+                return false;
+
+            NWB_MEMCPY(&outValue, sizeof(outValue), bytes + classByteBase + blockByteOffset, sizeof(outValue));
+            return true;
+        }
+
+        classByteBase += static_cast<usize>(block.byteSize);
+        if(classByteBase > byteCount)
+            return false;
+    }
+
+    return false;
+}
+
+[[nodiscard]] static Float4 ResolveCsgCapProxyColor(
+    const MaterialSurfaceInfo& materialInfo,
+    const MaterialTypedByteDataVector& materialTypedBytes,
+    const ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges
+){
+    static const Name s_BaseColorFieldName("base_color");
+    static const Name s_ColorTintFieldName("color_tint");
+
+    Float4 baseColor(1.0f, 1.0f, 1.0f, 1.0f);
+    Float4 colorTint(1.0f, 1.0f, 1.0f, 1.0f);
+    const usize constantByteOffset = static_cast<usize>(typedRanges.constantRange.byteOffset);
+    const usize constantByteCount = static_cast<usize>(typedRanges.constantRange.byteCount);
+    if(constantByteOffset <= materialTypedBytes.size() && constantByteCount <= materialTypedBytes.size() - constantByteOffset){
+        (void)ReadMaterialFloat4Field(
+            materialInfo,
+            MaterialBlockClass::MaterialConstant,
+            s_BaseColorFieldName,
+            materialTypedBytes.data() + constantByteOffset,
+            constantByteCount,
+            baseColor
+        );
+    }
+
+    const usize mutableByteOffset = static_cast<usize>(typedRanges.mutableRange.byteOffset);
+    const usize mutableByteCount = static_cast<usize>(typedRanges.mutableRange.byteCount);
+    if(mutableByteOffset <= materialTypedBytes.size() && mutableByteCount <= materialTypedBytes.size() - mutableByteOffset){
+        (void)ReadMaterialFloat4Field(
+            materialInfo,
+            MaterialBlockClass::MaterialMutable,
+            s_ColorTintFieldName,
+            materialTypedBytes.data() + mutableByteOffset,
+            mutableByteCount,
+            colorTint
+        );
+    }
+
+    return Float4(
+        baseColor.x * colorTint.x,
+        baseColor.y * colorTint.y,
+        baseColor.z * colorTint.z,
+        baseColor.w * colorTint.w
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -378,6 +467,11 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             ;
             drawItems.push_back(drawItem);
 
+            const Float4 capProxyColor = __hidden_material_pass::ResolveCsgCapProxyColor(
+                *materialInfo,
+                materialTypedBytes,
+                typedRanges
+            );
             if(
                 csgClipActive
                 && csgReceiverState.generateCapProxies
@@ -388,6 +482,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                     csgReceiverPass,
                     instanceIndex,
                     csgRange,
+                    capProxyColor,
                     csgFrameData
                 )
             )

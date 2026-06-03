@@ -1,0 +1,152 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_BUILTIN_SHAPES_SLANGI
+#define NWB_GRAPHICS_CSG_BUILTIN_SHAPES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float nwbCsgPlaneDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    return dot(shapePosition, cutter.parameter0.xyz) + cutter.parameter0.w;
+}
+
+float3 nwbCsgPlaneNormal(const NwbCsgCutter cutter){
+    return nwbCsgNormalizeOr(cutter.parameter0.xyz, float3(0.0, 1.0, 0.0));
+}
+
+float nwbCsgBoxDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
+    return length(max(q, float3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float3 nwbCsgBoxNormal(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
+    const float3 outside = max(q, float3(0.0));
+    if(dot(outside, outside) > 0.00000001)
+        return nwbCsgNormalizeOr(
+            outside * float3(
+                nwbCsgNonZeroSign(shapePosition.x),
+                nwbCsgNonZeroSign(shapePosition.y),
+                nwbCsgNonZeroSign(shapePosition.z)
+            ),
+            float3(1.0, 0.0, 0.0)
+        );
+
+    if(q.x >= q.y && q.x >= q.z)
+        return float3(nwbCsgNonZeroSign(shapePosition.x), 0.0, 0.0);
+    if(q.y >= q.z)
+        return float3(0.0, nwbCsgNonZeroSign(shapePosition.y), 0.0);
+    return float3(0.0, 0.0, nwbCsgNonZeroSign(shapePosition.z));
+}
+
+float nwbCsgSphereDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    return length(shapePosition) - cutter.parameter0.x;
+}
+
+float3 nwbCsgSphereNormal(const float3 shapePosition){
+    return nwbCsgNormalizeOr(shapePosition, float3(0.0, 1.0, 0.0));
+}
+
+float nwbCsgCapsuleDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float radius = cutter.parameter0.x;
+    const float halfHeight = cutter.parameter0.y;
+    const float3 q = shapePosition - float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+    return length(q) - radius;
+}
+
+float3 nwbCsgCapsuleNormal(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float halfHeight = cutter.parameter0.y;
+    const float3 axisPoint = float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+    return nwbCsgNormalizeOr(shapePosition - axisPoint, float3(0.0, nwbCsgNonZeroSign(shapePosition.y), 0.0));
+}
+
+float3 nwbProjectCsgPlanePositionToSurface(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 normal = nwbCsgPlaneNormal(cutter);
+    return shapePosition - normal * nwbCsgPlaneDistance(shapePosition, cutter);
+}
+
+float3 nwbProjectCsgBoxPositionToSurface(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 halfExtents = max(cutter.parameter0.xyz, float3(0.0001));
+    return clamp(shapePosition, -halfExtents, halfExtents);
+}
+
+float3 nwbProjectCsgSpherePositionToSurface(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float radius = max(cutter.parameter0.x, 0.0001);
+    return nwbCsgNormalizeOr(shapePosition, float3(0.0, 1.0, 0.0)) * radius;
+}
+
+float3 nwbProjectCsgCapsulePositionToSurface(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float radius = max(cutter.parameter0.x, 0.0001);
+    const float halfHeight = max(cutter.parameter0.y, 0.0);
+    const float3 axisPoint = float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+    const float3 normal = nwbCsgNormalizeOr(shapePosition - axisPoint, float3(0.0, nwbCsgNonZeroSign(shapePosition.y), 0.0));
+    return axisPoint + normal * radius;
+}
+
+NwbCsgSample nwbEvalBuiltInCsgShape(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter){
+    NwbCsgSample sample;
+    switch(shapeType){
+    case NWB_CSG_SHAPE_PLANE:
+        sample.distance = nwbCsgPlaneDistance(shapePosition, cutter);
+        sample.normal = nwbCsgPlaneNormal(cutter);
+        return sample;
+    case NWB_CSG_SHAPE_BOX:
+        sample.distance = nwbCsgBoxDistance(shapePosition, cutter);
+        sample.normal = nwbCsgBoxNormal(shapePosition, cutter);
+        return sample;
+    case NWB_CSG_SHAPE_SPHERE:
+        sample.distance = nwbCsgSphereDistance(shapePosition, cutter);
+        sample.normal = nwbCsgSphereNormal(shapePosition);
+        return sample;
+    case NWB_CSG_SHAPE_CAPSULE:
+        sample.distance = nwbCsgCapsuleDistance(shapePosition, cutter);
+        sample.normal = nwbCsgCapsuleNormal(shapePosition, cutter);
+        return sample;
+    default:
+        sample.distance = 1.0;
+        sample.normal = float3(0.0, 1.0, 0.0);
+        return sample;
+    }
+}
+
+float3 nwbProjectBuiltInCsgShapePositionToSurface(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter){
+    switch(shapeType){
+    case NWB_CSG_SHAPE_PLANE:
+        return nwbProjectCsgPlanePositionToSurface(shapePosition, cutter);
+    case NWB_CSG_SHAPE_BOX:
+        return nwbProjectCsgBoxPositionToSurface(shapePosition, cutter);
+    case NWB_CSG_SHAPE_SPHERE:
+        return nwbProjectCsgSpherePositionToSurface(shapePosition, cutter);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return nwbProjectCsgCapsulePositionToSurface(shapePosition, cutter);
+    default:
+        return shapePosition;
+    }
+}
+
+float nwbEvalBuiltInCsgShapeDistance(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter){
+    switch(shapeType){
+    case NWB_CSG_SHAPE_PLANE:
+        return nwbCsgPlaneDistance(shapePosition, cutter);
+    case NWB_CSG_SHAPE_BOX:
+        return nwbCsgBoxDistance(shapePosition, cutter);
+    case NWB_CSG_SHAPE_SPHERE:
+        return nwbCsgSphereDistance(shapePosition, cutter);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return nwbCsgCapsuleDistance(shapePosition, cutter);
+    default:
+        return 1.0;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

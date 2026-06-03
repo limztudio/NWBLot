@@ -17,7 +17,7 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
-#include <impl/ecs_render/csg_cap_proxy.h>
+#include <impl/ecs_render/csg_cap_proxy_builder.h>
 #include <impl/ecs_render/material_typed_private.h>
 #include <impl/ecs_render/material_instance.h>
 #include <impl/assets_mesh/meshlet_ref_encoding.h>
@@ -361,7 +361,7 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::RegisterBuiltInCsgShapeTypes(shapeRegistry));
 
     NWB::Impl::CsgReceiverCpuBounds localBounds;
-    localBounds.minBounds = Float3Int(-1.0f, -2.0f, -3.0f, NWB::Impl::s_CsgBoundsValidFlag);
+    localBounds.minBounds = Float3Int(-1.0f, -2.0f, -3.0f, NWB::Impl::s_CsgBoundsValidFlag | NWB::Impl::s_CsgBoundsFiniteFlag);
     localBounds.maxBounds = Float3Int(1.0f, 2.0f, 3.0f, 0);
 
     NWB::Impl::Scene::TransformComponent transform;
@@ -369,7 +369,7 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
     transform.scale = Float4(2.0f, 1.0f, 0.5f, 0.0f);
 
     NWB::Impl::CsgCapProxyBounds receiverBounds;
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxy::BuildReceiverBounds(
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxyBuilder::BuildReceiverBounds(
         localBounds,
         &transform,
         receiverBounds
@@ -392,7 +392,7 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
     AppendTestCsgParameterBytes(frameData, capsuleParameters, capsuleCutter);
     frameData.cutters.push_back(capsuleCutter);
 
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxy::AppendGpuData(
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxyBuilder::AppendGpuData(
         shapeRegistry,
         receiverBounds,
         NWB::Impl::CsgReceiverPass::Opaque,
@@ -420,7 +420,7 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
     NWB::Impl::CsgCutterGpuData projectCutter;
     projectCutter.shapeType = NWB_CSG_SHAPE_PROJECT_BEGIN;
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::CsgCapProxyShapeMask(projectCutter.shapeType) == 0u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxy::AppendGpuData(
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxyBuilder::AppendGpuData(
         shapeRegistry,
         receiverBounds,
         NWB::Impl::CsgReceiverPass::Opaque,

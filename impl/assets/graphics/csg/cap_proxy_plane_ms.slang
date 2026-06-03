@@ -10,10 +10,10 @@
 
 float3 nwbCsgCapProxyPlaneAxis(const float3 normal, const bool secondAxis){
     const float3 base = abs(normal.y) < 0.95 ? float3(0.0, 1.0, 0.0) : float3(1.0, 0.0, 0.0);
-    const float3 axis0 = nwbCsgCapProxyNormalizeOr(cross(base, normal), float3(1.0, 0.0, 0.0));
+    const float3 axis0 = nwbCsgNormalizeOr(cross(base, normal), float3(1.0, 0.0, 0.0));
     if(!secondAxis)
         return axis0;
-    return nwbCsgCapProxyNormalizeOr(cross(normal, axis0), float3(0.0, 0.0, 1.0));
+    return nwbCsgNormalizeOr(cross(normal, axis0), float3(0.0, 0.0, 1.0));
 }
 
 NwbMeshRasterVertex nwbCsgCapProxyPlaneVertex(
@@ -21,7 +21,7 @@ NwbMeshRasterVertex nwbCsgCapProxyPlaneVertex(
     const NwbCsgCutter cutter,
     const uint localVertex
 ){
-    const float3 shapeNormal = nwbCsgCapProxyNormalizeOr(cutter.parameter0.xyz, float3(0.0, 1.0, 0.0));
+    const float3 shapeNormal = nwbCsgPlaneNormal(cutter);
     const float3 centerShape = -shapeNormal * cutter.parameter0.w;
     const float3 receiverExtents = nwbCsgCapProxyBoundsExtents(item.receiverBounds);
     const float extent = max(length(receiverExtents) * 1.5, 0.5);
@@ -35,33 +35,14 @@ NwbMeshRasterVertex nwbCsgCapProxyPlaneVertex(
         shapeNormal,
         cutter,
         item.receiverCutterShapePass.x,
-        item.receiverCutterShapePass.y
+        item.receiverCutterShapePass.y,
+        item.color
     );
 }
 
 void nwbCsgCapProxyPlanePrimitive(const uint localPrimitive, out uint3 indices){
-    indices = localPrimitive == 0u ? uint3(0u, 1u, 2u) : uint3(0u, 2u, 3u);
+    indices = localPrimitive == 0u ? uint3(0u, 2u, 1u) : uint3(0u, 3u, 2u);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[numthreads(NWB_CSG_CAP_PROXY_GROUP_SIZE, 1, 1)]
-void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#else
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,12 +82,6 @@ void main(
     for(uint localPrimitive = groupThreadIndex; localPrimitive < primitiveCount; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE)
         nwbCsgCapProxyPlanePrimitive(localPrimitive, triangles[localPrimitive]);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

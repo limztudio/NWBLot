@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "csg_cap_proxy.h"
+#include "csg_cap_proxy_builder.h"
 
 #include "renderer_csg_private.h"
 
@@ -16,23 +16,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_csg_cap_proxy{
+namespace __hidden_csg_cap_proxy_builder{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static CsgCapProxyBounds MakeCapProxyBounds(
-    const SIMDVector minBounds,
-    const SIMDVector maxBounds,
-    const bool finiteBounds
-){
-    CsgCapProxyBounds bounds;
-    const i32 flags = s_CsgBoundsValidFlag | (finiteBounds ? s_CsgBoundsFiniteFlag : 0);
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), flags, &bounds.minBounds);
-    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &bounds.maxBounds);
-    return bounds;
-}
 
 [[nodiscard]] static bool BuildCutterBounds(
     const CsgShapeRegistry& shapeRegistry,
@@ -42,7 +30,7 @@ namespace __hidden_csg_cap_proxy{
 ){
     outBounds = CsgCapProxyBounds{};
 
-    const u8* parameterBytes = ECSRenderCsgCapProxy::CsgCutterParameterBytes(csgFrameData, cutter);
+    const u8* parameterBytes = ECSRenderCsgCapProxyBuilder::CsgCutterParameterBytes(csgFrameData, cutter);
     if(cutter.parameterByteSize != 0u && !parameterBytes)
         return false;
 
@@ -60,7 +48,7 @@ namespace __hidden_csg_cap_proxy{
     ))
         return false;
 
-    outBounds = MakeCapProxyBounds(minBounds, maxBounds, finiteBounds);
+    outBounds = ECSRenderCsgDetail::BuildCsgBoundsGpuData(minBounds, maxBounds, finiteBounds);
     return true;
 }
 
@@ -74,7 +62,7 @@ namespace __hidden_csg_cap_proxy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const u8* ECSRenderCsgCapProxy::CsgCutterParameterBytes(const CsgFrameGpuData& csgFrameData, const CsgCutterGpuData& cutter){
+const u8* ECSRenderCsgCapProxyBuilder::CsgCutterParameterBytes(const CsgFrameGpuData& csgFrameData, const CsgCutterGpuData& cutter){
     if(cutter.parameterByteSize == 0u)
         return nullptr;
     const usize byteOffset = static_cast<usize>(cutter.parameterByteOffset);
@@ -85,7 +73,7 @@ const u8* ECSRenderCsgCapProxy::CsgCutterParameterBytes(const CsgFrameGpuData& c
     return csgFrameData.parameterBytes.data() + byteOffset;
 }
 
-bool ECSRenderCsgCapProxy::BuildReceiverBounds(
+bool ECSRenderCsgCapProxyBuilder::BuildReceiverBounds(
     const CsgReceiverCpuBounds& localBounds,
     const Scene::TransformComponent* transform,
     CsgCapProxyBounds& outBounds
@@ -97,17 +85,18 @@ bool ECSRenderCsgCapProxy::BuildReceiverBounds(
     if(!ECSRenderCsgDetail::BuildCsgReceiverWorldBounds(localBounds, transform, minBounds, maxBounds))
         return false;
 
-    outBounds = __hidden_csg_cap_proxy::MakeCapProxyBounds(minBounds, maxBounds, true);
+    outBounds = ECSRenderCsgDetail::BuildCsgBoundsGpuData(minBounds, maxBounds, true);
     return true;
 }
 
-bool ECSRenderCsgCapProxy::AppendGpuData(
+bool ECSRenderCsgCapProxyBuilder::AppendGpuData(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCapProxyBounds& receiverBounds,
     const CsgReceiverPass::Enum receiverPass,
     const u32 receiverIndex,
     const u32 cutterIndex,
     const CsgCutterGpuData& cutter,
+    const Float4& color,
     CsgFrameGpuData& csgFrameData
 ){
     const u32 proxyShapeMask = CsgCapProxyShapeMask(cutter.shapeType);
@@ -119,8 +108,9 @@ bool ECSRenderCsgCapProxy::AppendGpuData(
     gpuItem.receiverCutterShapePass.y = cutterIndex;
     gpuItem.receiverCutterShapePass.z = cutter.shapeType;
     gpuItem.receiverCutterShapePass.w = static_cast<u32>(receiverPass);
+    gpuItem.color = color;
     gpuItem.receiverBounds = receiverBounds;
-    if(!__hidden_csg_cap_proxy::BuildCutterBounds(shapeRegistry, csgFrameData, cutter, gpuItem.cutterBounds))
+    if(!__hidden_csg_cap_proxy_builder::BuildCutterBounds(shapeRegistry, csgFrameData, cutter, gpuItem.cutterBounds))
         return false;
 
     csgFrameData.capProxyGpuItems.push_back(gpuItem);

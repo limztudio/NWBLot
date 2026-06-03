@@ -60,6 +60,7 @@ public:
         CsgReceiverPass::Enum receiverPass,
         u32 receiverIndex,
         const CsgReceiverRangeGpuData& receiverRange,
+        const Float4& color,
         CsgFrameGpuData& csgFrameData
     )const;
     [[nodiscard]] bool createCsgCapProxyOpeningMaskResources(Core::Texture* openingMask);

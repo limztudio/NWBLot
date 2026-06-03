@@ -440,7 +440,7 @@ bool PrepareShaderEntriesForCook(
         if(!AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
-        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh";
+        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.entry.emitMeshComputeShadow;
         outPreparedPlan.preparedEntries.push_back(Move(preparedEntry));
 
         if(!emitMeshComputeShadow)

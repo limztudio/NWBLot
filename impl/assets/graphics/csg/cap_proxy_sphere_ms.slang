@@ -17,8 +17,8 @@ NwbMeshRasterVertex nwbCsgCapProxySphereVertex(
 ){
     const uint row = localVertex / (segments + 1u);
     const uint column = localVertex - row * (segments + 1u);
-    const float theta = 3.14159265 * float(row) / float(rows);
-    const float phi = 6.28318531 * float(column) / float(segments);
+    const float theta = NWB_CSG_CAP_PROXY_PI * float(row) / float(rows);
+    const float phi = NWB_CSG_CAP_PROXY_TWO_PI * float(column) / float(segments);
     float sinTheta;
     float cosTheta;
     float sinPhi;
@@ -26,35 +26,17 @@ NwbMeshRasterVertex nwbCsgCapProxySphereVertex(
     sincos(theta, sinTheta, cosTheta);
     sincos(phi, sinPhi, cosPhi);
     const float3 shapeNormal = float3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
-    const float radius = max(cutter.parameter0.x, 0.0001);
+    const float radiusSlack = nwbCsgCapProxySphereRadiusSlack(cutter.parameter0.x, segments, rows);
+    const float radius = max(cutter.parameter0.x, 0.0001) + radiusSlack;
     return nwbCsgCapProxyBuildVertex(
         nwbCsgTransformShapeToWorld(shapeNormal * radius, cutter),
         shapeNormal,
         cutter,
         item.receiverCutterShapePass.x,
-        item.receiverCutterShapePass.y
+        item.receiverCutterShapePass.y,
+        item.color
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[numthreads(NWB_CSG_CAP_PROXY_GROUP_SIZE, 1, 1)]
-void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#else
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,12 +78,6 @@ void main(
     for(uint localPrimitive = groupThreadIndex; localPrimitive < primitiveCount; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE)
         nwbCsgCapProxyGridPrimitive(localPrimitive, segments, triangles[localPrimitive]);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

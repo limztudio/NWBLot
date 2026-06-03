@@ -109,6 +109,37 @@ template<typename ParameterT>
     return VectorSqrt(lengthSquared);
 }
 
+[[nodiscard]] inline CsgBoundsGpuData BuildCsgBoundsGpuData(
+    const SIMDVector minBounds,
+    const SIMDVector maxBounds,
+    const bool finiteBounds
+){
+    CsgBoundsGpuData bounds;
+    const i32 flags = s_CsgBoundsValidFlag | (finiteBounds ? s_CsgBoundsFiniteFlag : 0);
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), flags, &bounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &bounds.maxBounds);
+    return bounds;
+}
+
+[[nodiscard]] inline bool BuildCsgReceiverWorldToLocal(
+    const Scene::TransformComponent* transform,
+    SIMDMatrix& outWorldToLocal
+){
+    if(!transform){
+        outWorldToLocal = MatrixIdentity();
+        return true;
+    }
+
+    const SIMDVector scale = LoadFloat(transform->scale);
+    const SIMDVector rotation = LoadFloat(transform->rotation);
+    const SIMDVector translation = LoadFloat(transform->position);
+    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
+    SIMDVector determinant;
+    outWorldToLocal = MatrixInverse(&determinant, localToWorld);
+    const f32 det = VectorGetX(determinant);
+    return IsFinite(det) && Abs(det) > 0.0f;
+}
+
 [[nodiscard]] inline bool BuildCsgReceiverWorldBounds(
     const CsgReceiverCpuBounds& receiverBounds,
     const Scene::TransformComponent* transform,

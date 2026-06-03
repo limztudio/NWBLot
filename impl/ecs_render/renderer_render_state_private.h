@@ -59,18 +59,18 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
 
 inline Core::RenderState BuildCompositeRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
+    renderState.depthStencilState
+        .enableDepthTest()
+        .enableDepthWrite()
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
     renderState.rasterState.enableDepthClip().setCullNone();
     return renderState;
 }
 
 inline Core::RenderState BuildCsgCapProxyRenderState(){
     Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .disableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
+    renderState.depthStencilState.disableDepthTest().disableDepthWrite();
     renderState.rasterState.enableDepthClip().setCullNone();
     return renderState;
 }

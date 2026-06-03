@@ -28,6 +28,9 @@
 #define NWB_CSG_INVALID_CUTTER_INDEX 0xFFFFFFFFu
 #define NWB_CSG_OPENING_MASK_IMAGE_FORMAT "r32ui"
 
+#define NWB_CSG_BOUNDS_VALID_FLAG 1
+#define NWB_CSG_BOUNDS_FINITE_FLAG 2
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

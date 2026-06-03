@@ -377,6 +377,15 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     if(csgFrameData.cutters.size() > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
+    if(!receiverBounds.valid() || !receiverBounds.finite())
+        return false;
+
+    SIMDMatrix worldToReceiver;
+    if(!ECSRenderCsgDetail::BuildCsgReceiverWorldToLocal(transform, worldToReceiver))
+        return false;
+
+    StoreFloat(worldToReceiver, &outRange.worldToReceiver);
+    outRange.localBounds = receiverBounds;
     outRange.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
     bool appendFailed = false;
     receiverLookup.forEachReceiverCutter(

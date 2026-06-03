@@ -744,6 +744,37 @@ static bool ParseCompactStringField(
     return true;
 }
 
+static bool ParseOptionalIntegerFlagField(
+    const Path& nwbFilePath,
+    const Metascript::Value& asset,
+    const AStringView fieldName,
+    bool& inOutValue
+){
+    const Metascript::Value* fieldValue = asset.findField(fieldName);
+    if(!fieldValue)
+        return true;
+
+    if(!fieldValue->isInteger()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const i64 value = fieldValue->asInteger();
+    if(value != 0 && value != 1){
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    inOutValue = value != 0;
+    return true;
+}
+
 static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>& outDefineValues){
     outDefineValues.clear();
 
@@ -861,7 +892,7 @@ bool ShaderCook::parseShaderMeta(
         nwbFilePath,
         asset,
         "Shader meta",
-        { "stage", "target_profile", "entry_point", "include_roots", "defines" }
+        { "stage", "target_profile", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow" }
     ))
         return false;
     if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
@@ -875,6 +906,8 @@ bool ShaderCook::parseShaderMeta(
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
+    if(!__hidden_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
+        return false;
 
     if(const auto* includeRootsVal = asset.findField("include_roots")){
         if(!includeRootsVal->copyStringList(outEntry.includeRoots)){

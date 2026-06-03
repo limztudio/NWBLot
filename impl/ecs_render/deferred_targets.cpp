@@ -231,7 +231,12 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     Core::FramebufferDesc capProxyFramebufferDesc;
     for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
         capProxyFramebufferDesc.addColorAttachment(attachment);
-    capProxyFramebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
+    capProxyFramebufferDesc.setDepthAttachment(
+        Core::FramebufferAttachment()
+            .setTexture(createdTargets.depth.get())
+            .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
+            .setReadOnly(true)
+    );
     createdTargets.capProxyFramebuffer = device->createFramebuffer(capProxyFramebufferDesc);
     if(!createdTargets.capProxyFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap proxy framebuffer"));

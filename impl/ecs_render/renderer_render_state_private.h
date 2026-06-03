@@ -64,6 +64,17 @@ inline Core::RenderState BuildCompositeRenderState(){
     return renderState;
 }
 
+inline Core::RenderState BuildCsgCapProxyRenderState(){
+    Core::RenderState renderState;
+    renderState.depthStencilState
+        .enableDepthTest()
+        .disableDepthWrite()
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
+    renderState.rasterState.enableDepthClip().setCullNone();
+    return renderState;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -78,4 +89,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

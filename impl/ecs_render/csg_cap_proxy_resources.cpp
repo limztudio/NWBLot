@@ -46,7 +46,7 @@ namespace __hidden_csg_cap_proxy_resources{
     pipelineDesc
         .setMeshShader(meshShader)
         .setPixelShader(pixelShader)
-        .setRenderState(ECSRenderDetail::BuildRenderStateForPass(MaterialPipelinePass::Opaque, true))
+        .setRenderState(ECSRenderDetail::BuildCsgCapProxyRenderState())
         .addBindingLayout(capProxyBindingLayout)
         .addBindingLayout(clipBindingLayout)
         .addBindingLayout(capProxyOpeningMaskBindingLayout)

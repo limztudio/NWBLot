@@ -14,6 +14,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+RendererAvboitSystem::RendererAvboitSystem(RendererSystem& renderer)
+    : RendererSystemSubsystemBase(renderer)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_avboit_resources{
 
 
@@ -193,7 +201,7 @@ bool RendererAvboitSystem::createAvboitResources(){
         const Core::ShaderType::Mask shaderType,
         const Name& debugName
     ) -> bool{
-        return shaderSystem().loadShader(
+        return m_renderer.shaderSystem().loadShader(
             outShader,
             shaderName,
             Core::ShaderArchive::s_DefaultVariant,

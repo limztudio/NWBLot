@@ -37,10 +37,10 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!shaderSystem().loadDeferredCompositeVertexShader())
+    if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
         return false;
 
-    if(!shaderSystem().loadShader(
+    if(!m_renderer.shaderSystem().loadShader(
         m_deferredState.m_compositePixelShader,
         ECSRenderDetail::s_DeferredCompositePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,

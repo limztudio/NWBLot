@@ -46,12 +46,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererSystem;
-class RendererShaderSystem;
-class RendererMeshSystem;
-class RendererMaterialSystem;
-class RendererCsgSystem;
-class RendererDeferredSystem;
-class RendererAvboitSystem;
 class Shader;
 class Mesh;
 
@@ -88,21 +82,6 @@ struct RendererMaterialInstanceOverrideField{
 class RendererSystemSubsystemBase : NoCopy{
 protected:
     explicit RendererSystemSubsystemBase(RendererSystem& renderer);
-
-
-protected:
-    [[nodiscard]] RendererShaderSystem& shaderSystem()noexcept;
-    [[nodiscard]] const RendererShaderSystem& shaderSystem()const noexcept;
-    [[nodiscard]] RendererMeshSystem& meshSystem()noexcept;
-    [[nodiscard]] const RendererMeshSystem& meshSystem()const noexcept;
-    [[nodiscard]] RendererMaterialSystem& materialSystem()noexcept;
-    [[nodiscard]] const RendererMaterialSystem& materialSystem()const noexcept;
-    [[nodiscard]] RendererCsgSystem& csgSystem()noexcept;
-    [[nodiscard]] const RendererCsgSystem& csgSystem()const noexcept;
-    [[nodiscard]] RendererDeferredSystem& deferredSystem()noexcept;
-    [[nodiscard]] const RendererDeferredSystem& deferredSystem()const noexcept;
-    [[nodiscard]] RendererAvboitSystem& avboitSystem()noexcept;
-    [[nodiscard]] const RendererAvboitSystem& avboitSystem()const noexcept;
 
 
 protected:

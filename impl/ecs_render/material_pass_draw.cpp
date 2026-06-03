@@ -112,16 +112,16 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-        if(!meshSystem().createMeshBindingSet(mesh))
+        if(!m_renderer.meshSystem().createMeshBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
+            if(!m_renderer.csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
                 return;
         }
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)
-            csgSystem().setCsgClipBufferStates(context.commandList);
+            m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -163,10 +163,10 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(!meshSystem().createComputeBindingSet(mesh))
+        if(!m_renderer.meshSystem().createComputeBindingSet(mesh))
             return;
         if(csgClipDraw){
-            if(!csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
+            if(!m_renderer.csgSystem().createCsgClipResources() || !m_csgState.m_clipBindingSet)
                 return;
         }
         NWB_ASSERT(mesh.computeBindingSet);
@@ -174,7 +174,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)
-            csgSystem().setCsgClipBufferStates(context.commandList);
+            m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;

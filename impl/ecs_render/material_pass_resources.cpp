@@ -54,7 +54,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     }
 
     if(!m_drawState.m_emulationVertexShader){
-        if(!shaderSystem().loadShader(
+        if(!m_renderer.shaderSystem().loadShader(
             m_drawState.m_emulationVertexShader,
             ECSRenderDetail::s_MeshEmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -187,7 +187,7 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
 
     m_drawState.m_instanceBuffer = Move(instanceBuffer);
     m_drawState.m_instanceBufferCapacity = capacity;
-    meshSystem().destroyMeshBindingSets();
+    m_renderer.meshSystem().destroyMeshBindingSets();
     return true;
 }
 
@@ -224,7 +224,7 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
 
     m_drawState.m_materialTypedBuffer = Move(materialTypedBuffer);
     m_drawState.m_materialTypedBufferCapacity = capacity;
-    meshSystem().destroyMeshBindingSets();
+    m_renderer.meshSystem().destroyMeshBindingSets();
     return true;
 }
 
@@ -244,7 +244,7 @@ bool RendererMaterialSystem::updateMeshViewBuffer(Core::CommandList& commandList
         }
 
         m_drawState.m_meshViewBuffer = Move(meshViewBuffer);
-        meshSystem().destroyMeshBindingSets();
+        m_renderer.meshSystem().destroyMeshBindingSets();
     }
 
     const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);

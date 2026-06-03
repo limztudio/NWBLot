@@ -145,14 +145,14 @@ bool RendererCsgSystem::appendCsgReceiverCapGeometry(
 }
 
 bool RendererCsgSystem::createCsgCapSharedResources(){
-    if(!materialSystem().createEmulationViewResources())
+    if(!m_renderer.materialSystem().createEmulationViewResources())
         return false;
     if(!createCsgClipResources())
         return false;
 
     auto* device = m_graphics.getDevice();
     if(!m_csgState.m_capVertexShader){
-        if(!shaderSystem().loadShader(
+        if(!m_renderer.shaderSystem().loadShader(
             m_csgState.m_capVertexShader,
             ECSRenderDetail::s_CsgCapVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -183,7 +183,7 @@ bool RendererCsgSystem::createCsgOpaqueCapResources(Core::Framebuffer* framebuff
     if(!createCsgCapSharedResources())
         return false;
     if(!m_csgState.m_capPixelShader){
-        if(!shaderSystem().loadShader(
+        if(!m_renderer.shaderSystem().loadShader(
             m_csgState.m_capPixelShader,
             ECSRenderDetail::s_CsgCapPixelShaderName,
             Core::ShaderArchive::s_DefaultVariant,
@@ -216,7 +216,7 @@ bool RendererCsgSystem::createCsgTransparentCapResources(Core::Framebuffer* fram
         return false;
     if(!createCsgCapSharedResources())
         return false;
-    if(!avboitSystem().createAvboitResources())
+    if(!m_renderer.avboitSystem().createAvboitResources())
         return false;
 
     Core::ShaderHandle* pixelShader = nullptr;
@@ -257,7 +257,7 @@ bool RendererCsgSystem::createCsgTransparentCapResources(Core::Framebuffer* fram
     if(*pipeline)
         return true;
     if(!*pixelShader){
-        if(!shaderSystem().loadShader(
+        if(!m_renderer.shaderSystem().loadShader(
             *pixelShader,
             *pixelShaderName,
             Core::ShaderArchive::s_DefaultVariant,

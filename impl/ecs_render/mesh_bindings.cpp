@@ -26,7 +26,7 @@ void RendererMeshSystem::destroyMeshBindingSets(){
 bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
     if(mesh.meshBindingSet)
         return true;
-    if(!materialSystem().createMeshShaderResources())
+    if(!m_renderer.materialSystem().createMeshShaderResources())
         return false;
     if(!meshFrameBindingResourcesReady(NWB_TEXT("mesh binding set")))
         return false;
@@ -47,7 +47,7 @@ bool RendererMeshSystem::createMeshBindingSet(MeshResources& mesh){
 bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
     if(mesh.computeBindingSet)
         return true;
-    if(!materialSystem().createComputeEmulationResources())
+    if(!m_renderer.materialSystem().createComputeEmulationResources())
         return false;
     if(!meshFrameBindingResourcesReady(NWB_TEXT("compute binding set")))
         return false;

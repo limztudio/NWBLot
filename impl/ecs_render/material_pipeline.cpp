@@ -242,21 +242,21 @@ bool RendererMaterialSystem::createRendererPipeline(
     case MaterialPipelinePass::Opaque:
         break;
     case MaterialPipelinePass::AvboitOccupancy:
-        if(!avboitSystem().createAvboitResources())
+        if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_occupancyPixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
-        if(!avboitSystem().createAvboitResources())
+        if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_extinctionPixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
-        if(!avboitSystem().createAvboitResources())
+        if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = m_avboitState.m_accumulatePixelShader;
         passPixelShaderName = ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName;
@@ -272,14 +272,14 @@ bool RendererMaterialSystem::createRendererPipeline(
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!createMeshShaderResources())
             return false;
-        if(!shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
+        if(!m_renderer.shaderSystem().loadShader(resources.meshShader, materialInfo.meshShader.name(), meshShaderVariant, Core::ShaderType::Mesh, "ECSRender_RendererMesh"))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
         else if(avboitCsgClipPipeline){
-            if(!shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else
@@ -305,7 +305,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!csgSystem().createCsgClipResources())
+            if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
             pipelineDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }
@@ -324,7 +324,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(!createComputeEmulationResources())
             return false;
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
-        if(!shaderSystem().loadShader(
+        if(!m_renderer.shaderSystem().loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),
             meshShaderVariant,
@@ -334,11 +334,11 @@ bool RendererMaterialSystem::createRendererPipeline(
         ))
             return false;
         if(pass == MaterialPipelinePass::Opaque){
-            if(!shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
         else if(avboitCsgClipPipeline){
-            if(!shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else{
@@ -351,7 +351,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(m_drawState.m_computeBindingLayout);
         if(csgClipPipeline){
-            if(!csgSystem().createCsgClipResources())
+            if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
             if(avboitCsgClipPipeline)
                 computeDesc.addBindingLayout(m_avboitState.m_emptyBindingLayout);
@@ -387,7 +387,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!csgSystem().createCsgClipResources())
+            if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
             emulationDesc.addBindingLayout(m_csgState.m_clipBindingLayout);
         }

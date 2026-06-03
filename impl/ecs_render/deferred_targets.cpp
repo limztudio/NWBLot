@@ -14,6 +14,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+RendererDeferredSystem::RendererDeferredSystem(RendererSystem& renderer)
+    : RendererSystemSubsystemBase(renderer)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     targets.occupancyBindingSet.reset();
     targets.depthWarpBindingSet.reset();
@@ -98,7 +106,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     if(!createDeferredCompositeResources())
         return false;
-    if(!avboitSystem().createAvboitResources())
+    if(!m_renderer.avboitSystem().createAvboitResources())
         return false;
 
     resetDeferredFrameTargets();
@@ -221,7 +229,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    if(!avboitSystem().createAvboitFrameTargets(
+    if(!m_renderer.avboitSystem().createAvboitFrameTargets(
         createdTargets,
         avboitLowRasterFormat,
         avboitAccumColorFormat,

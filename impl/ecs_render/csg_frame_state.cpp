@@ -43,15 +43,15 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
 
         MeshResources* mesh = nullptr;
         if(resolvedMesh.runtime){
-            if(!meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
+            if(!m_renderer.meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
                 continue;
         }
-        else if(!meshSystem().createMeshResources(resolvedMesh.mesh, mesh))
+        else if(!m_renderer.meshSystem().createMeshResources(resolvedMesh.mesh, mesh))
             continue;
         NWB_ASSERT(mesh);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
+        if(!m_renderer.materialSystem().createMaterialSurfaceInfo(renderer.material, materialInfo))
             continue;
         NWB_ASSERT(materialInfo);
 

@@ -215,7 +215,7 @@ void RendererAvboitSystem::renderAvboitPasses(
     if((!m_avboitState.m_depthWarpPipeline || !m_avboitState.m_integratePipeline) && !createAvboitPipelines())
         return;
 
-    materialSystem().renderMaterialPass(
+    m_renderer.materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.lowFramebuffer.get(),
         MaterialPipelinePass::AvboitOccupancy,
@@ -228,7 +228,7 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     dispatchAvboitDepthWarp(commandList, avboitTargets);
 
-    materialSystem().renderMaterialPass(
+    m_renderer.materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.lowFramebuffer.get(),
         MaterialPipelinePass::AvboitExtinction,
@@ -241,7 +241,7 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     dispatchAvboitIntegration(commandList, avboitTargets);
 
-    materialSystem().renderMaterialPass(
+    m_renderer.materialSystem().renderMaterialPass(
         commandList,
         avboitTargets.accumulationFramebuffer.get(),
         MaterialPipelinePass::AvboitAccumulate,

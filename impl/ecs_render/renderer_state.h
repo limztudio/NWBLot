@@ -22,7 +22,6 @@ NWB_IMPL_BEGIN
 
 
 class RendererSystem;
-class RendererSystemSubsystemBase;
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererMaterialSystem;
@@ -36,7 +35,6 @@ class RendererAvboitSystem;
 
 class RendererMeshState final : NoCopy{
     friend class RendererSystem;
-    friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
@@ -58,7 +56,6 @@ private:
 
 class RendererMaterialState final : NoCopy{
     friend class RendererSystem;
-    friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
@@ -84,7 +81,6 @@ private:
 
 class RendererDrawState final : NoCopy{
     friend class RendererSystem;
-    friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
@@ -116,7 +112,6 @@ private:
 
 class RendererCsgState final : NoCopy{
     friend class RendererSystem;
-    friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
@@ -157,7 +152,6 @@ private:
 
 class RendererDeferredState final : NoCopy{
     friend class RendererSystem;
-    friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;
@@ -188,7 +182,6 @@ private:
 
 class RendererAvboitState final : NoCopy{
     friend class RendererSystem;
-    friend class RendererSystemSubsystemBase;
     friend class RendererShaderSystem;
     friend class RendererMeshSystem;
     friend class RendererMaterialSystem;

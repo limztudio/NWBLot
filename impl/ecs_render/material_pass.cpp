@@ -136,20 +136,20 @@ void RendererMaterialSystem::renderMaterialPass(
         materialTypedBytes
     ))
         return;
-    const bool csgUploadReady = drawItems.csg.empty() || csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData);
+    const bool csgUploadReady = drawItems.csg.empty() || m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData);
 
     if(passBindingSet){
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
-    const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && csgSystem().uploadCsgCapVertices(commandList, csgFrameData));
+    const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && m_renderer.csgSystem().uploadCsgCapVertices(commandList, csgFrameData));
 
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgUploadReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
         if(csgCapUploadReady && csgFrameData.hasTransparentCapWork() && MaterialPipelinePassUsesRendererAvboit(pass))
-            csgSystem().renderCsgTransparentCaps(drawContext, csgFrameData);
+            m_renderer.csgSystem().renderCsgTransparentCaps(drawContext, csgFrameData);
     }
 }
 
@@ -296,7 +296,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
         ;
         const u32 csgClipCutterCount = csgClipCandidate
-            ? csgSystem().countCsgReceiverClipCutters(
+            ? m_renderer.csgSystem().countCsgReceiverClipCutters(
                 *csgReceiverLookupPtr,
                 entity,
                 mesh.csgLocalBounds,
@@ -306,7 +306,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         Name csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
         const bool csgEvaluatorReady = csgClipCutterCount > 0u
-            ? csgSystem().resolveCsgReceiverEvaluatorVariant(
+            ? m_renderer.csgSystem().resolveCsgReceiverEvaluatorVariant(
                 *csgReceiverLookupPtr,
                 entity,
                 mesh.csgLocalBounds,
@@ -357,7 +357,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
             CsgReceiverRangeGpuData csgRange;
             if(csgClipActive){
-                if(!csgSystem().appendCsgReceiverClipData(
+                if(!m_renderer.csgSystem().appendCsgReceiverClipData(
                     *csgReceiverLookupPtr,
                     entity,
                     mesh.csgLocalBounds,
@@ -387,7 +387,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 csgClipActive
                 && csgReceiverState.generateCaps
                 && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
-                && !csgSystem().appendCsgReceiverCapGeometry(
+                && !m_renderer.csgSystem().appendCsgReceiverCapGeometry(
                     mesh,
                     transform,
                     instanceIndex,
@@ -432,10 +432,10 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         MeshResources* mesh = nullptr;
         if(resolvedMesh.runtime){
-            if(!meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
+            if(!m_renderer.meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
                 continue;
         }
-        else if(!meshSystem().createMeshResources(resolvedMesh.mesh, mesh))
+        else if(!m_renderer.meshSystem().createMeshResources(resolvedMesh.mesh, mesh))
             continue;
 
         NWB_ASSERT(mesh);

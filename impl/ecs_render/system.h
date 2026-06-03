@@ -65,6 +65,12 @@ namespace ECSRenderDetail{
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
     friend class RendererSystemSubsystemBase;
+    friend class RendererShaderSystem;
+    friend class RendererMeshSystem;
+    friend class RendererMaterialSystem;
+    friend class RendererCsgSystem;
+    friend class RendererDeferredSystem;
+    friend class RendererAvboitSystem;
 
 public:
     using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
@@ -89,6 +95,13 @@ public:
     virtual void render(Core::Framebuffer* framebuffer)override;
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
+
+private:
+    [[nodiscard]] RendererShaderSystem& shaderSystem()noexcept{ return m_shaderSystem; }
+    [[nodiscard]] RendererMeshSystem& meshSystem()noexcept{ return m_meshSystem; }
+    [[nodiscard]] RendererMaterialSystem& materialSystem()noexcept{ return m_materialSystem; }
+    [[nodiscard]] RendererCsgSystem& csgSystem()noexcept{ return m_csgSystem; }
+    [[nodiscard]] RendererAvboitSystem& avboitSystem()noexcept{ return m_avboitSystem; }
 
 private:
     Core::Alloc::GlobalArena& m_arena;

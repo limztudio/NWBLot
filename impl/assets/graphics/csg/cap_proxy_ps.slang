@@ -22,11 +22,12 @@ Texture2D<uint> g_NwbCsgCapProxyOpeningMask;
 
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     const uint receiverIndex = uint(input.worldPosition.w + 0.5);
+    const uint cutterIndex = uint(input.tangent.w + 0.5);
+    const uint expectedOpeningMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
     const uint openingMaskValue = g_NwbCsgCapProxyOpeningMask.Load(int3(uint2(input.position.xy), 0));
-    if(openingMaskValue != receiverIndex + 1u)
+    if(expectedOpeningMaskValue == NWB_CSG_OPENING_MASK_INVALID_VALUE || openingMaskValue != expectedOpeningMaskValue)
         discard;
 
-    const uint cutterIndex = uint(input.tangent.w + 0.5);
     const float3 worldPosition = input.worldPosition.xyz;
     if(nwbCsgReceiverPixelDiscardExcept(receiverIndex, worldPosition, cutterIndex))
         discard;

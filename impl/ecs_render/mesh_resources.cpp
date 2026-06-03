@@ -3,7 +3,6 @@
 
 
 #include "renderer_private.h"
-#include "csg_cap_source.h"
 
 #include <impl/ecs_mesh_runtime/buffer_upload.h>
 
@@ -160,30 +159,6 @@ template<typename PositionVector>
     return true;
 }
 
-[[nodiscard]] static bool BuildCapTriangleBounds(const CsgCapMeshTriangleVector& triangles, CsgReceiverCpuBounds& outBounds){
-    outBounds = CsgReceiverCpuBounds{};
-    if(triangles.empty())
-        return false;
-
-    SIMDVector minBounds;
-    SIMDVector maxBounds;
-    AabbTests::Reset(minBounds, maxBounds);
-    for(const CsgCapMeshTriangle& triangle : triangles)
-        AabbTests::ExpandTriangle(
-            LoadFloat(triangle.vertices[0u].position),
-            LoadFloat(triangle.vertices[1u].position),
-            LoadFloat(triangle.vertices[2u].position),
-            minBounds,
-            maxBounds
-        );
-
-    if(!AabbTests::Valid(minBounds, maxBounds))
-        return false;
-
-    StoreReceiverCpuBounds(minBounds, maxBounds, outBounds);
-    return true;
-}
-
 };
 
 
@@ -234,8 +209,6 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
-    if(!ECSRenderCsgCapSource::BuildCapTriangles(meshPath, mesh, createdMesh.csgCapTriangles))
-        return false;
     if(!__hidden_mesh::BuildPositionStreamBounds(mesh.positionStream(), createdMesh.csgLocalBounds)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds")
             , StringConvert(meshPath.c_str())
@@ -389,21 +362,16 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
     createdMesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
     createdMesh.runtimeMeshVersion = desc.version;
-    if((desc.capSourceTriangles == nullptr) != (desc.capSourceTriangleCount == 0u)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has inconsistent CSG cap source payload")
+    if(!desc.localBounds.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has invalid CSG receiver bounds")
             , StringConvert(desc.meshKey.c_str())
         );
         return false;
     }
-    if(desc.capSourceTriangleCount > 0u){
-        createdMesh.csgCapTriangles.assign(desc.capSourceTriangles, desc.capSourceTriangles + desc.capSourceTriangleCount);
-        if(!__hidden_mesh::BuildCapTriangleBounds(createdMesh.csgCapTriangles, createdMesh.csgLocalBounds)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has invalid CSG receiver bounds")
-                , StringConvert(desc.meshKey.c_str())
-            );
-            return false;
-        }
-    }
+    createdMesh.csgLocalBounds.minBounds = desc.localBounds.minBounds;
+    createdMesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
+    createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag;
+    createdMesh.csgLocalBounds.maxBounds.w = 0;
     if(!__hidden_mesh::ResolveBufferElementCount(
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,

@@ -39,17 +39,6 @@ using CsgShapeBoundsCallback = bool(*)(
     bool& outFiniteBounds
 );
 
-using CsgShapeCapEvalCallback = bool(*)(
-    const SIMDMatrix& worldToShape,
-    const SIMDMatrix& shapeToWorld,
-    const u8* parameterBytes,
-    usize parameterByteSize,
-    SIMDVector worldPosition,
-    SIMDVector fallbackWorldNormal,
-    SIMDVector& outSignedDistance,
-    SIMDVector& outWorldNormal
-);
-
 struct CsgShapeTypeDesc{
     Name name = NAME_NONE;
     Name shaderModule = NAME_NONE;
@@ -57,10 +46,8 @@ struct CsgShapeTypeDesc{
 
     u32 parameterByteSize = 0u;
     CsgShapeBoundsCallback boundsCallback = nullptr;
-    CsgShapeCapEvalCallback capEvalCallback = nullptr;
 
     bool supportsAnalyticGradient = false;
-    bool supportsCapGeneration = false;
 };
 
 struct CsgShapeTypeInfo{

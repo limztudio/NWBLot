@@ -34,10 +34,9 @@ namespace ECSRenderCsgCapProxy{
     CsgCapProxyBounds& outBounds
 );
 
-[[nodiscard]] bool AppendDrawItem(
+[[nodiscard]] bool AppendGpuData(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCapProxyBounds& receiverBounds,
-    const Name& receiverGroup,
     CsgReceiverPass::Enum receiverPass,
     u32 receiverIndex,
     u32 cutterIndex,

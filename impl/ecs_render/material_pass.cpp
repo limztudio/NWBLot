@@ -142,14 +142,10 @@ void RendererMaterialSystem::renderMaterialPass(
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
-    const bool csgCapUploadReady = !csgFrameData.hasCapWork() || (csgUploadReady && m_renderer.csgSystem().uploadCsgCapVertices(commandList, csgFrameData));
-
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
     renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgUploadReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
-        if(csgCapUploadReady && csgFrameData.hasTransparentCapWork() && MaterialPipelinePassUsesRendererAvboit(pass))
-            m_renderer.csgSystem().renderCsgTransparentCaps(drawContext, csgFrameData);
     }
 }
 
@@ -376,7 +372,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             drawItem.instanceIndex = instanceIndex;
             drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
             drawItem.csgCutterCount = csgClipActive ? csgRange.cutterCount : 0u;
-            drawItem.csgGenerateCaps = csgReceiverState.generateCaps;
             drawItem.meshletConeCullScaleSafe = transform
                 ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale))
                 : true
@@ -385,17 +380,15 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
             if(
                 csgClipActive
-                && csgReceiverState.generateCaps
+                && csgReceiverState.generateCapProxies
                 && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
-                && !m_renderer.csgSystem().appendCsgReceiverCapGeometry(
+                && !m_renderer.csgSystem().appendCsgReceiverCapProxies(
                     mesh,
                     transform,
-                    csgReceiverState.receiverGroup,
                     csgReceiverPass,
                     instanceIndex,
                     csgRange,
-                    csgFrameData,
-                    transparent ? csgFrameData.transparentCapDrawItems : csgFrameData.opaqueCapDrawItems
+                    csgFrameData
                 )
             )
                 return false;

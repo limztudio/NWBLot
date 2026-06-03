@@ -61,12 +61,6 @@ namespace __hidden_shape_registry{
         NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), StringConvert(desc.name.c_str()));
         return false;
     }
-    if(desc.supportsCapGeneration && desc.shaderModule != s_CsgBuiltInShapeShaderModuleName && !desc.capEvalCallback){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with cap generation enabled but no CPU cap evaluator")
-            , StringConvert(desc.name.c_str())
-        );
-        return false;
-    }
     return ValidShaderModuleInclude(desc);
 }
 
@@ -252,8 +246,7 @@ template<typename ParameterT>
 [[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(
     const Name& name,
     const u32 parameterByteSize,
-    const CsgShapeBoundsCallback boundsCallback,
-    const bool supportsCapGeneration
+    const CsgShapeBoundsCallback boundsCallback
 ){
     CsgShapeTypeDesc desc;
     desc.name = name;
@@ -261,7 +254,6 @@ template<typename ParameterT>
     desc.parameterByteSize = parameterByteSize;
     desc.boundsCallback = boundsCallback;
     desc.supportsAnalyticGradient = true;
-    desc.supportsCapGeneration = supportsCapGeneration;
     return desc;
 }
 
@@ -457,8 +449,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             s_CsgPlaneShapeName,
             sizeof(CsgPlaneShapeParameters),
-            &__hidden_shape_registry::PlaneBounds,
-            true
+            &__hidden_shape_registry::PlaneBounds
         ),
         shapeTypeId,
         true
@@ -467,8 +458,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             s_CsgBoxShapeName,
             sizeof(CsgBoxShapeParameters),
-            &__hidden_shape_registry::BoxBounds,
-            true
+            &__hidden_shape_registry::BoxBounds
         ),
         shapeTypeId,
         true
@@ -477,8 +467,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             s_CsgSphereShapeName,
             sizeof(CsgSphereShapeParameters),
-            &__hidden_shape_registry::SphereBounds,
-            true
+            &__hidden_shape_registry::SphereBounds
         ),
         shapeTypeId,
         true
@@ -487,8 +476,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             s_CsgCapsuleShapeName,
             sizeof(CsgCapsuleShapeParameters),
-            &__hidden_shape_registry::CapsuleBounds,
-            true
+            &__hidden_shape_registry::CapsuleBounds
         ),
         shapeTypeId,
         true

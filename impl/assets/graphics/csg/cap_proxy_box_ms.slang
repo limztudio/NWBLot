@@ -28,7 +28,7 @@ void nwbCsgCapProxyBoxFace(const uint face, out float3 normal, out uint4 corners
 }
 
 NwbMeshRasterVertex nwbCsgCapProxyBoxVertex(
-    const NwbCsgCapProxyDrawItem item,
+    const NwbCsgCapProxyGpuData item,
     const NwbCsgCutter cutter,
     const uint localVertex
 ){
@@ -97,7 +97,7 @@ void main(
     }
 
     const uint groupThreadIndex = groupThreadID.x;
-    const NwbCsgCapProxyDrawItem item = g_NwbCsgCapProxies[proxyIndex];
+    const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
     if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_BOX)){
         SetMeshOutputCounts(0u, 0u);
         return;

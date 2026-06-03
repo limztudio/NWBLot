@@ -119,7 +119,7 @@ static void AssignCsgCutterTransform(
     if(csgReceiver){
         auto& receiver = entity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
         receiver.receiverGroup = s_CsgVisibleReceiverGroup;
-        receiver.generateCaps = true;
+        receiver.generateCapProxies = true;
         receiver.affectOpaquePass = true;
         receiver.affectTransparentPass = false;
     }

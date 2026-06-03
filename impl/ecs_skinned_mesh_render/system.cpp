@@ -138,9 +138,8 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     outMesh.meshletAttributeRefDeltaBuffer = instance->meshletAttributeRefDeltaBuffer;
     outMesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
     outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
-    outMesh.capSourceTriangles = instance->capSourceTriangles.data();
+    outMesh.localBounds = instance->localBounds;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
-    outMesh.capSourceTriangleCount = instance->capSourceTriangles.size();
     outMesh.version = instance->editRevision;
     outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinnedMeshletFrustumCullingEnabled;
     outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinnedMeshletConeCullingEnabled;

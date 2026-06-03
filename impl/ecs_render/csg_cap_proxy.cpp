@@ -101,41 +101,30 @@ bool ECSRenderCsgCapProxy::BuildReceiverBounds(
     return true;
 }
 
-bool ECSRenderCsgCapProxy::AppendDrawItem(
+bool ECSRenderCsgCapProxy::AppendGpuData(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCapProxyBounds& receiverBounds,
-    const Name& receiverGroup,
     const CsgReceiverPass::Enum receiverPass,
     const u32 receiverIndex,
     const u32 cutterIndex,
     const CsgCutterGpuData& cutter,
     CsgFrameGpuData& csgFrameData
 ){
-    CsgCapProxyDrawItem item;
-    item.receiverGroupHash = receiverGroup.hash();
-    item.receiverCutterShapePass.x = receiverIndex;
-    item.receiverCutterShapePass.y = cutterIndex;
-    item.receiverCutterShapePass.z = cutter.shapeType;
-    item.receiverCutterShapePass.w = static_cast<u32>(receiverPass);
-    item.receiverBounds = receiverBounds;
-    if(!__hidden_csg_cap_proxy::BuildCutterBounds(shapeRegistry, csgFrameData, cutter, item.cutterBounds))
+    const u32 proxyShapeMask = CsgCapProxyShapeMask(cutter.shapeType);
+    if(proxyShapeMask == 0u)
+        return true;
+
+    CsgCapProxyGpuData gpuItem;
+    gpuItem.receiverCutterShapePass.x = receiverIndex;
+    gpuItem.receiverCutterShapePass.y = cutterIndex;
+    gpuItem.receiverCutterShapePass.z = cutter.shapeType;
+    gpuItem.receiverCutterShapePass.w = static_cast<u32>(receiverPass);
+    gpuItem.receiverBounds = receiverBounds;
+    if(!__hidden_csg_cap_proxy::BuildCutterBounds(shapeRegistry, csgFrameData, cutter, gpuItem.cutterBounds))
         return false;
 
-    csgFrameData.capProxyDrawItems.push_back(item);
-
-    const u32 proxyShapeMask = CsgCapProxyShapeMask(cutter.shapeType);
-    if(proxyShapeMask != 0u){
-        CsgCapProxyGpuData gpuItem;
-        gpuItem.receiverCutterShapePass.x = item.receiverCutterShapePass.x;
-        gpuItem.receiverCutterShapePass.y = item.receiverCutterShapePass.y;
-        gpuItem.receiverCutterShapePass.z = item.receiverCutterShapePass.z;
-        gpuItem.receiverCutterShapePass.w = item.receiverCutterShapePass.w;
-        gpuItem.receiverBounds = item.receiverBounds;
-        gpuItem.cutterBounds = item.cutterBounds;
-
-        csgFrameData.capProxyGpuItems.push_back(gpuItem);
-        csgFrameData.capProxyShapeMask |= proxyShapeMask;
-    }
+    csgFrameData.capProxyGpuItems.push_back(gpuItem);
+    csgFrameData.capProxyShapeMask |= proxyShapeMask;
     return true;
 }
 

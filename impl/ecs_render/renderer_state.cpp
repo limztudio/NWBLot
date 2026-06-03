@@ -103,27 +103,16 @@ void RendererCsgState::invalidateResources(){
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();
-    m_capVertexBuffer.reset();
     m_capProxyBuffer.reset();
-    m_capVertexShader.reset();
-    m_capPixelShader.reset();
     m_capProxyPixelShader.reset();
     m_capProxyPlaneMeshShader.reset();
     m_capProxyBoxMeshShader.reset();
     m_capProxySphereMeshShader.reset();
     m_capProxyCapsuleMeshShader.reset();
-    m_capAvboitOccupancyPixelShader.reset();
-    m_capAvboitExtinctionPixelShader.reset();
-    m_capAvboitAccumulatePixelShader.reset();
-    m_capInputLayout.reset();
     m_capProxyBindingLayout.reset();
     m_capProxyOpeningMaskBindingLayout.reset();
     m_capProxyBindingSet.reset();
     m_capProxyOpeningMaskBindingSet.reset();
-    m_capPipeline.reset();
-    m_capAvboitOccupancyPipeline.reset();
-    m_capAvboitExtinctionPipeline.reset();
-    m_capAvboitAccumulatePipeline.reset();
     m_capProxyPlanePipeline.reset();
     m_capProxyBoxPipeline.reset();
     m_capProxySpherePipeline.reset();
@@ -131,7 +120,6 @@ void RendererCsgState::invalidateResources(){
     m_receiverRangeBufferCapacity = 0u;
     m_cutterBufferCapacity = 0u;
     m_parameterByteBufferCapacity = 0u;
-    m_capVertexBufferCapacity = 0u;
     m_capProxyBufferCapacity = 0u;
 }
 

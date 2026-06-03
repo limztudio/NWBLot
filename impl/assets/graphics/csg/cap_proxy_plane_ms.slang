@@ -17,7 +17,7 @@ float3 nwbCsgCapProxyPlaneAxis(const float3 normal, const bool secondAxis){
 }
 
 NwbMeshRasterVertex nwbCsgCapProxyPlaneVertex(
-    const NwbCsgCapProxyDrawItem item,
+    const NwbCsgCapProxyGpuData item,
     const NwbCsgCutter cutter,
     const uint localVertex
 ){
@@ -83,7 +83,7 @@ void main(
     }
 
     const uint groupThreadIndex = groupThreadID.x;
-    const NwbCsgCapProxyDrawItem item = g_NwbCsgCapProxies[proxyIndex];
+    const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
     if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_PLANE)){
         SetMeshOutputCounts(0u, 0u);
         return;

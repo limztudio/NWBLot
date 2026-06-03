@@ -23,7 +23,6 @@ struct MaterialPassDrawItem{
     u32 instanceIndex = 0;
     u32 materialConstantByteOffset = 0u;
     u32 csgCutterCount = 0u;
-    bool csgGenerateCaps = false;
     bool meshletConeCullScaleSafe = false;
 };
 
@@ -89,4 +88,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

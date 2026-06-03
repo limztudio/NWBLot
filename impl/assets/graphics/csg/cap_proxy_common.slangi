@@ -45,7 +45,7 @@ struct NwbCsgCapProxyBounds{
     int maxFlags;
 };
 
-struct NwbCsgCapProxyDrawItem{
+struct NwbCsgCapProxyGpuData{
     uint4 receiverCutterShapePass;
     NwbCsgCapProxyBounds receiverBounds;
     NwbCsgCapProxyBounds cutterBounds;
@@ -58,7 +58,7 @@ struct NwbCsgCapProxyPushConstants{
 };
 
 [[vk::binding(NWB_CSG_BINDING_CAP_PROXIES, NWB_CSG_CAP_PROXY_SET)]]
-StructuredBuffer<NwbCsgCapProxyDrawItem, Std430DataLayout> g_NwbCsgCapProxies;
+StructuredBuffer<NwbCsgCapProxyGpuData, Std430DataLayout> g_NwbCsgCapProxies;
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgCapProxyPushConstants> g_NwbCsgCapProxyPushConstants;
@@ -144,7 +144,7 @@ float nwbCsgCapProxyProjectedRadiusPixels(const float3 centerWorld, const float3
     return length((edgeNdc - centerNdc) * viewportSize * 0.5);
 }
 
-uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyDrawItem item, const NwbCsgCutter cutter, const float radiusShape){
+uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyGpuData item, const NwbCsgCutter cutter, const float radiusShape){
     const float3 centerWorld = nwbCsgCapProxyBoundsCenter(item.cutterBounds);
     const float3 radiusVectorWorld = nwbCsgTransformShapeVectorToWorld(float3(max(radiusShape, 0.0001), 0.0, 0.0), cutter);
     const float projectedRadius = nwbCsgCapProxyProjectedRadiusPixels(centerWorld, radiusVectorWorld);
@@ -157,7 +157,7 @@ uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyDrawItem item, const NwbCsgC
     return 6u;
 }
 
-bool nwbCsgCapProxyItemMatchesPassAndShape(const NwbCsgCapProxyDrawItem item, const uint shapeType){
+bool nwbCsgCapProxyItemMatchesPassAndShape(const NwbCsgCapProxyGpuData item, const uint shapeType){
     return item.receiverCutterShapePass.w == g_NwbCsgCapProxyPushConstants.dispatch.y
         && item.receiverCutterShapePass.z == shapeType
     ;

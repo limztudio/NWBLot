@@ -69,113 +69,41 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
     );
 }
 
-[[nodiscard]] bool DecodeRuntimeCapSourceVertex(
-    const SkinnedMeshRuntimeMeshInstance& instance,
-    const MeshletDesc& meshlet,
-    const u32 localVertexIndex,
-    RuntimeMeshCapSourceVertex& outVertex
+static void StoreRuntimeLocalBounds(
+    const SIMDVector minBounds,
+    const SIMDVector maxBounds,
+    RuntimeMeshLocalBounds& outBounds
 ){
-    outVertex = RuntimeMeshCapSourceVertex{};
-    if(localVertexIndex >= MeshletVertexCount(meshlet))
-        return false;
-
-    const usize localVertexOffset = static_cast<usize>(meshlet.localVertexOffset) + static_cast<usize>(localVertexIndex);
-    if(localVertexOffset >= instance.meshletLocalVertexRefs.size())
-        return false;
-
-    const MeshletLocalVertexRef& localVertexRef = instance.meshletLocalVertexRefs[localVertexOffset];
-    MeshletPositionStreamRef positionRef;
-    if(!DecodeMeshletPositionRef(
-        instance.meshletPositionRefDeltas.data(),
-        instance.meshletPositionRefDeltas.size(),
-        meshlet,
-        localVertexRef.localDeformedPosition,
-        true,
-        positionRef
-    ))
-        return false;
-    if(positionRef.position >= instance.restPositions.size())
-        return false;
-
-    MeshletAttributeStreamRef attributeRef;
-    if(!DecodeMeshletAttributeRef(
-        instance.meshletAttributeRefDeltas.data(),
-        instance.meshletAttributeRefDeltas.size(),
-        meshlet,
-        localVertexRef.localAttribute,
-        attributeRef
-    ))
-        return false;
-    if(
-        attributeRef.normal >= instance.restNormals.size()
-        || attributeRef.tangent >= instance.restTangents.size()
-        || attributeRef.uv0 >= instance.uv0.size()
-        || attributeRef.color >= instance.colors.size()
-    )
-        return false;
-
-    StoreFloat(VectorSetW(LoadFloat(instance.restPositions[positionRef.position]), 0.0f), &outVertex.position);
-    StoreFloat(VectorSetW(LoadFloat(LoadHalf4U(instance.restNormals[attributeRef.normal])), 0.0f), &outVertex.normal);
-    StoreFloat(LoadFloat(LoadHalf4U(instance.restTangents[attributeRef.tangent])), &outVertex.tangent);
-    StoreFloat(VectorSetW(LoadFloat(instance.uv0[attributeRef.uv0]), 0.0f), &outVertex.uv0);
-    StoreFloat(LoadFloat(LoadHalf4U(instance.colors[attributeRef.color])), &outVertex.color);
-    return true;
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_RuntimeMeshBoundsValidFlag, &outBounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
 }
 
-[[nodiscard]] bool BuildCapSourceTriangles(SkinnedMeshRuntimeMeshInstance& instance){
-    instance.capSourceTriangles.clear();
-
-    usize triangleCapacity = 0u;
-    for(const MeshletDesc& meshlet : instance.meshlets){
-        const usize primitiveCount = static_cast<usize>(MeshletPrimitiveCount(meshlet));
-        if(primitiveCount > Limit<usize>::s_Max - triangleCapacity){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source mesh '{}' CSG cap triangle count overflows")
-                , StringConvert(instance.source.name().c_str())
-            );
-            return false;
-        }
-        triangleCapacity += primitiveCount;
-    }
-    if(triangleCapacity == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source mesh '{}' has no CSG cap source triangles")
+[[nodiscard]] bool BuildRuntimeLocalBounds(SkinnedMeshRuntimeMeshInstance& instance){
+    instance.localBounds = RuntimeMeshLocalBounds{};
+    if(instance.restPositions.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source mesh '{}' has no positions for runtime bounds")
             , StringConvert(instance.source.name().c_str())
         );
         return false;
     }
-    instance.capSourceTriangles.reserve(triangleCapacity);
 
-    for(const MeshletDesc& meshlet : instance.meshlets){
-        const usize primitiveCount = static_cast<usize>(MeshletPrimitiveCount(meshlet));
-        const usize primitiveByteBegin = static_cast<usize>(meshlet.primitiveOffset);
-        const usize primitiveByteCount = primitiveCount * 3u;
-        if(
-            primitiveByteBegin > instance.meshletPrimitiveIndices.size()
-            || primitiveByteCount > instance.meshletPrimitiveIndices.size() - primitiveByteBegin
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source mesh '{}' has invalid CSG cap primitive index range")
-                , StringConvert(instance.source.name().c_str())
-            );
-            return false;
-        }
+    SIMDVector minBounds;
+    SIMDVector maxBounds;
+    AabbTests::Reset(minBounds, maxBounds);
+    for(const Float3U& position : instance.restPositions)
+        AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
 
-        for(usize primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
-            RuntimeMeshCapSourceTriangle triangle;
-            for(u32 corner = 0u; corner < 3u; ++corner){
-                const usize primitiveByteOffset = primitiveByteBegin + primitiveIndex * 3u + static_cast<usize>(corner);
-                const u32 localVertexIndex = static_cast<u32>(instance.meshletPrimitiveIndices[primitiveByteOffset]);
-                if(!DecodeRuntimeCapSourceVertex(instance, meshlet, localVertexIndex, triangle.vertices[corner])){
-                    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source mesh '{}' failed to decode CSG cap source vertex")
-                        , StringConvert(instance.source.name().c_str())
-                    );
-                    return false;
-                }
-            }
-            instance.capSourceTriangles.push_back(triangle);
-        }
+    if(!AabbTests::Valid(minBounds, maxBounds)){
+        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: source mesh '{}' has invalid runtime bounds")
+            , StringConvert(instance.source.name().c_str())
+        );
+        return false;
     }
 
+    StoreRuntimeLocalBounds(minBounds, maxBounds, instance.localBounds);
     return true;
 }
+
 
 [[nodiscard]] bool BuildRuntimeZippedPayload(
     const SkinnedMesh& mesh,
@@ -200,7 +128,6 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
     instance.meshletPositionRefDeltas.clear();
     instance.meshletAttributeRefDeltas.clear();
     instance.attributeSkins.clear();
-    instance.capSourceTriangles.clear();
     instance.meshlets.reserve(mesh.meshlets().size());
     instance.restPositions.reserve(positionRefCount);
     instance.restNormals.reserve(attributeRefCount);
@@ -304,7 +231,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 
     instance.meshletPositionRefCount = static_cast<u32>(runtimePositionRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(runtimeAttributeRefs.size());
-    return BuildCapSourceTriangles(instance);
+    return BuildRuntimeLocalBounds(instance);
 }
 
 

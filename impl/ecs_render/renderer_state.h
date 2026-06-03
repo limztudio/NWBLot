@@ -140,27 +140,16 @@ private:
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;
-    Core::BufferHandle m_capVertexBuffer;
     Core::BufferHandle m_capProxyBuffer;
-    Core::ShaderHandle m_capVertexShader;
-    Core::ShaderHandle m_capPixelShader;
     Core::ShaderHandle m_capProxyPixelShader;
     Core::ShaderHandle m_capProxyPlaneMeshShader;
     Core::ShaderHandle m_capProxyBoxMeshShader;
     Core::ShaderHandle m_capProxySphereMeshShader;
     Core::ShaderHandle m_capProxyCapsuleMeshShader;
-    Core::ShaderHandle m_capAvboitOccupancyPixelShader;
-    Core::ShaderHandle m_capAvboitExtinctionPixelShader;
-    Core::ShaderHandle m_capAvboitAccumulatePixelShader;
-    Core::InputLayoutHandle m_capInputLayout;
     Core::BindingLayoutHandle m_capProxyBindingLayout;
     Core::BindingLayoutHandle m_capProxyOpeningMaskBindingLayout;
     Core::BindingSetHandle m_capProxyBindingSet;
     Core::BindingSetHandle m_capProxyOpeningMaskBindingSet;
-    Core::GraphicsPipelineHandle m_capPipeline;
-    Core::GraphicsPipelineHandle m_capAvboitOccupancyPipeline;
-    Core::GraphicsPipelineHandle m_capAvboitExtinctionPipeline;
-    Core::GraphicsPipelineHandle m_capAvboitAccumulatePipeline;
     Core::MeshletPipelineHandle m_capProxyPlanePipeline;
     Core::MeshletPipelineHandle m_capProxyBoxPipeline;
     Core::MeshletPipelineHandle m_capProxySpherePipeline;
@@ -168,7 +157,6 @@ private:
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
     usize m_parameterByteBufferCapacity = 0u;
-    usize m_capVertexBufferCapacity = 0u;
     usize m_capProxyBufferCapacity = 0u;
 };
 

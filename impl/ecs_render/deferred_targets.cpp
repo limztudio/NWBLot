@@ -404,7 +404,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
 
     if(clearCsgOpeningMask)
-        commandList.clearTextureUInt(targets.csgOpeningMask.get(), ECSRenderDetail::s_FramebufferSubresources, NWB_CSG_OPENING_MASK_INVALID_RECEIVER_ID);
+        commandList.clearTextureUInt(targets.csgOpeningMask.get(), ECSRenderDetail::s_FramebufferSubresources, NWB_CSG_OPENING_MASK_INVALID_VALUE);
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
 

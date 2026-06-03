@@ -58,35 +58,24 @@ struct RuntimeMeshBuffers{
     }
 };
 
-struct RuntimeMeshCapSourceVertex{
-    Float4 position;
-    Float4 normal;
-    Float4 tangent;
-    Float4 uv0;
-    Float4 color;
+inline constexpr i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
+
+struct RuntimeMeshLocalBounds{
+    Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
+    Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
+
+    [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0; }
 };
 
-struct RuntimeMeshCapSourceTriangle{
-    RuntimeMeshCapSourceVertex vertices[3];
-};
-
-static_assert(sizeof(RuntimeMeshCapSourceVertex) == sizeof(Float4) * 5u, "RuntimeMeshCapSourceVertex must stay tightly packed");
-static_assert(sizeof(RuntimeMeshCapSourceTriangle) == sizeof(RuntimeMeshCapSourceVertex) * 3u, "RuntimeMeshCapSourceTriangle must stay tightly packed");
-static_assert(alignof(RuntimeMeshCapSourceVertex) >= alignof(Float4), "RuntimeMeshCapSourceVertex must stay SIMD-aligned");
-static_assert(alignof(RuntimeMeshCapSourceTriangle) >= alignof(Float4), "RuntimeMeshCapSourceTriangle must stay SIMD-aligned");
-static_assert(IsStandardLayout_V<RuntimeMeshCapSourceVertex>, "RuntimeMeshCapSourceVertex must stay GPU-friendly");
-static_assert(IsTriviallyCopyable_V<RuntimeMeshCapSourceVertex>, "RuntimeMeshCapSourceVertex must stay GPU-friendly");
-static_assert(IsStandardLayout_V<RuntimeMeshCapSourceTriangle>, "RuntimeMeshCapSourceTriangle must stay GPU-friendly");
-static_assert(IsTriviallyCopyable_V<RuntimeMeshCapSourceTriangle>, "RuntimeMeshCapSourceTriangle must stay GPU-friendly");
-
-using RuntimeMeshCapSourceTriangleVector = Vector<RuntimeMeshCapSourceTriangle, Core::Alloc::GlobalArena>;
+static_assert(alignof(RuntimeMeshLocalBounds) >= alignof(Float4), "RuntimeMeshLocalBounds must stay SIMD-friendly");
+static_assert(IsStandardLayout_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBounds must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBounds must stay cheap to pass by value");
 
 struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     Name meshKey = NAME_NONE;
-    const RuntimeMeshCapSourceTriangle* capSourceTriangles = nullptr;
+    RuntimeMeshLocalBounds localBounds;
     u32 meshletCount = 0u;
-    usize capSourceTriangleCount = 0u;
     u64 version = 0u;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
@@ -97,7 +86,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
             && meshKey != NAME_NONE
             && buffersValid()
             && meshletCount > 0u
-            && ((capSourceTriangles == nullptr) == (capSourceTriangleCount == 0u))
+            && localBounds.valid()
         ;
     }
 };

@@ -41,8 +41,7 @@ namespace CsgReceiverPass{
 struct CsgReceiverDrawState{
     bool active = false;
     CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-    Name receiverGroup = NAME_NONE;
-    bool generateCaps = false;
+    bool generateCapProxies = false;
     u32 cutterCount = 0u;
 };
 
@@ -54,8 +53,8 @@ struct CsgFrameState{
     bool hasTransparentStaticWork = false;
     bool hasTransparentSkinnedWork = false;
 
-    bool hasOpaqueCapWork = false;
-    bool hasTransparentCapWork = false;
+    bool hasOpaqueCapProxyWork = false;
+    bool hasTransparentCapProxyWork = false;
 
     u32 receiverCount = 0u;
     u32 cutterCount = 0u;
@@ -158,7 +157,7 @@ private:
 void AddCsgFrameReceiverWork(
     CsgFrameState& inOutState,
     CsgReceiverKind::Enum receiverKind,
-    bool generateCaps,
+    bool generateCapProxies,
     bool opaqueWork,
     bool transparentWork,
     u32 cutterCount

@@ -90,7 +90,7 @@ void GatherReceiverState(
             AddCsgFrameReceiverWork(
                 inOutState,
                 receiverKind,
-                receiverState.generateCaps,
+                receiverState.generateCapProxies,
                 opaqueWork,
                 transparentWork,
                 receiverState.cutterCount
@@ -186,8 +186,7 @@ bool CsgFrameReceiverLookup::resolveReceiverDrawState(
 
     outState.active = true;
     outState.receiverKind = receiverKind;
-    outState.receiverGroup = receiver->receiverGroup;
-    outState.generateCaps = receiver->generateCaps;
+    outState.generateCapProxies = receiver->generateCapProxies;
     outState.cutterCount = foundCutterRange.value().cutterCount;
     return true;
 }
@@ -248,7 +247,7 @@ const CsgReceiverComponent* ResolveCsgReceiverComponent(
 void AddCsgFrameReceiverWork(
     CsgFrameState& inOutState,
     const CsgReceiverKind::Enum receiverKind,
-    const bool generateCaps,
+    const bool generateCapProxies,
     const bool opaqueWork,
     const bool transparentWork,
     const u32 cutterCount
@@ -265,9 +264,9 @@ void AddCsgFrameReceiverWork(
         inOutState.hasTransparentSkinnedWork = inOutState.hasTransparentSkinnedWork || transparentWork;
     }
 
-    if(generateCaps){
-        inOutState.hasOpaqueCapWork = inOutState.hasOpaqueCapWork || opaqueWork;
-        inOutState.hasTransparentCapWork = inOutState.hasTransparentCapWork || transparentWork;
+    if(generateCapProxies){
+        inOutState.hasOpaqueCapProxyWork = inOutState.hasOpaqueCapProxyWork || opaqueWork;
+        inOutState.hasTransparentCapProxyWork = inOutState.hasTransparentCapProxyWork || transparentWork;
     }
 }
 
@@ -277,8 +276,8 @@ void FinalizeCsgFrameState(CsgFrameState& inOutState){
         || inOutState.hasOpaqueSkinnedWork
         || inOutState.hasTransparentStaticWork
         || inOutState.hasTransparentSkinnedWork
-        || inOutState.hasOpaqueCapWork
-        || inOutState.hasTransparentCapWork
+        || inOutState.hasOpaqueCapProxyWork
+        || inOutState.hasTransparentCapProxyWork
     ;
 }
 

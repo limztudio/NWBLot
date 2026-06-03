@@ -64,11 +64,11 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletConesFresh = false;
     u64 runtimeMeshVersion = 0u;
     CsgReceiverCpuBounds csgLocalBounds;
-    CsgCapMeshTriangleVector csgCapTriangles;
 
     explicit MeshResources(Core::Alloc::GlobalArena& arena)
-        : csgCapTriangles(arena)
-    {}
+    {
+        static_cast<void>(arena);
+    }
 
     [[nodiscard]] bool valid()const noexcept{
         return
@@ -88,4 +88,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

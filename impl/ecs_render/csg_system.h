@@ -54,24 +54,14 @@ public:
         CsgFrameGpuData& csgFrameData,
         CsgReceiverRangeGpuData& outRange
     )const;
-    [[nodiscard]] bool appendCsgReceiverCapGeometry(
+    [[nodiscard]] bool appendCsgReceiverCapProxies(
         const MeshResources& mesh,
         const NWB::Impl::Scene::TransformComponent* transform,
-        const Name& receiverGroup,
         CsgReceiverPass::Enum receiverPass,
         u32 receiverIndex,
         const CsgReceiverRangeGpuData& receiverRange,
-        CsgFrameGpuData& csgFrameData,
-        CsgCapDrawItemVector& capDrawItems
+        CsgFrameGpuData& csgFrameData
     )const;
-    [[nodiscard]] bool createCsgCapSharedResources();
-    [[nodiscard]] bool createCsgOpaqueCapResources(Core::Framebuffer* framebuffer);
-    [[nodiscard]] bool createCsgTransparentCapResources(Core::Framebuffer* framebuffer, MaterialPipelinePass::Enum pass);
-    [[nodiscard]] bool reserveCsgCapVertexBufferCapacity(usize vertexCount);
-    [[nodiscard]] bool uploadCsgCapVertices(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
-    void renderCsgCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData, const CsgCapDrawItemVector& capDrawItems, Core::GraphicsPipeline* pipeline);
-    void renderCsgOpaqueCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
-    void renderCsgTransparentCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool createCsgCapProxyOpeningMaskResources(Core::Texture* openingMask);
     [[nodiscard]] bool createCsgCapProxyResources(Core::Framebuffer* framebuffer, u32 shapeMask);
     [[nodiscard]] bool reserveCsgCapProxyBufferCapacity(usize proxyCount);

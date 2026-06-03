@@ -223,8 +223,8 @@
         </div>
         <h1>CSG Cap Proxy Planner</h1>
         <p class="subtitle">
-            Replace dynamic CPU cap remeshing with analytic cutter-surface proxy rendering. The goal is less overdraw than an OBB proxy,
-            better behavior for moving cutters, and a path that can work with skinned receivers without CPU skinning cap triangles.
+            Use analytic cutter-surface proxy rendering for caps. The goal is less overdraw than an OBB proxy,
+            better behavior for moving cutters, and a path that can work with skinned receivers without extracting deformed receiver triangles.
         </p>
     </header>
 
@@ -233,18 +233,18 @@
             <h2>Current Situation</h2>
             <div class="diagram">
                 <div class="node">
-                    <h3>CPU source</h3>
-                    <p>Walk receiver cap source triangles and evaluate the cutter SDF at triangle vertices.</p>
+                    <h3>Proxy source</h3>
+                    <p>Build frame-local proxy items from receiver/cutter pairs and CPU bounds callbacks.</p>
                 </div>
                 <div class="arrow">-&gt;</div>
                 <div class="node">
-                    <h3>CPU topology</h3>
-                    <p>Extract sign-change segments, connect loops, ear-clip them into cap triangles.</p>
+                    <h3>Procedural topology</h3>
+                    <p>Emit built-in plane, box, sphere, and capsule patches in mesh shaders.</p>
                 </div>
                 <div class="arrow">-&gt;</div>
                 <div class="node">
-                    <h3>GPU draw</h3>
-                    <p>Upload frame-local cap vertices and draw them as opaque or transparent cap geometry.</p>
+                    <h3>Masked draw</h3>
+                    <p>Draw proxy caps through the opening mask and depth contract.</p>
                 </div>
             </div>
         </section>
@@ -252,10 +252,10 @@
         <section class="span-6">
             <h2>Why Change</h2>
             <ul>
-                <li>Moving cutters require cap topology regeneration every frame.</li>
-                <li>GPU-skinned receivers do not naturally expose deformed triangles to CPU cap generation.</li>
-                <li>Large receiver triangles need subdivision to find interior cutter contours.</li>
-                <li>CPU triangulation quality and robustness become a rendering concern.</li>
+                <li>Moving cutters should update cap appearance through proxy payload updates.</li>
+                <li>GPU-skinned receivers should not require CPU extraction of deformed triangles.</li>
+                <li>Large receiver triangles should not need subdivision just to find interior cutter contours.</li>
+                <li>Cap surface robustness should stay in the rendering proxy path.</li>
             </ul>
         </section>
 
@@ -277,7 +277,7 @@
                     <h3>Introduce cap proxy draw data</h3>
                     <p>
                         Add a frame-local cap proxy item containing receiver index, cutter index, receiver group, pass type,
-                        shape type, and bounds. Keep the existing CPU cap path beside it until the proxy path is validated.
+                        shape type, and bounds.
                     </p>
                 </div>
             </div>
@@ -306,8 +306,8 @@
                 <div>
                     <h3>Skinned receiver validation</h3>
                     <p>
-                        Verify caps on GPU-skinned receivers without CPU deformed triangle extraction. The cap proxy should follow
-                        the cutter and receiver masking instead of requiring CPU-remeshed skin data.
+                        Verify caps on GPU-skinned receivers without deformed triangle extraction. The cap proxy should follow
+                        the cutter and receiver masking.
                     </p>
                 </div>
             </div>
@@ -367,13 +367,13 @@
             <h2>Validation Checklist</h2>
             <ol>
                 <li>Static cube receiver with rotating capsule cutter has no leaks outside the receiver.</li>
-                <li>Plane, box, sphere, and capsule cutters match existing CPU cap appearance.</li>
-                <li>Cutters moving every frame do not allocate or triangulate CPU cap vertices.</li>
+                <li>Plane, box, sphere, and capsule cutters produce stable proxy caps through the opening mask.</li>
+                <li>Cutters moving every frame reuse proxy buffers while only updating compact GPU payloads.</li>
                 <li>Skinned receiver test shows caps following the visible skinned surface mask.</li>
                 <li>Opaque, transparent AVBOIT, depth-only, and selection passes use consistent clip rules.</li>
             </ol>
             <p class="note">
-                Keep the CPU cap path as a debug/reference backend until the proxy path passes all built-in shape tests.
+                Future cap work should extend proxy GPU payloads, masks, or project-provided proxy modules.
             </p>
         </section>
     </div>

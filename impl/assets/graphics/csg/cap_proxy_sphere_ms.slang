@@ -9,7 +9,7 @@
 
 
 NwbMeshRasterVertex nwbCsgCapProxySphereVertex(
-    const NwbCsgCapProxyDrawItem item,
+    const NwbCsgCapProxyGpuData item,
     const NwbCsgCutter cutter,
     const uint localVertex,
     const uint segments,
@@ -76,7 +76,7 @@ void main(
     }
 
     const uint groupThreadIndex = groupThreadID.x;
-    const NwbCsgCapProxyDrawItem item = g_NwbCsgCapProxies[proxyIndex];
+    const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
     if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_SPHERE)){
         SetMeshOutputCounts(0u, 0u);
         return;

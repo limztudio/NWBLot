@@ -32,8 +32,10 @@ struct NwbMeshPixelInput{
 [[vk::binding(NWB_CSG_BINDING_OPENING_MASK_WRITE, NWB_CSG_OPENING_MASK_WRITE_SET), vk::image_format(NWB_CSG_OPENING_MASK_IMAGE_FORMAT)]]
 RWTexture2D<uint> g_NwbCsgOpeningMaskWrite;
 
-void nwbWriteCsgOpeningMask(const float4 pixelPosition, const uint receiverIndex){
-    g_NwbCsgOpeningMaskWrite[uint2(pixelPosition.xy)] = receiverIndex + 1u;
+void nwbWriteCsgOpeningMask(const float4 pixelPosition, const uint receiverIndex, const uint cutterIndex){
+    const uint openingMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
+    if(openingMaskValue != NWB_CSG_OPENING_MASK_INVALID_VALUE)
+        g_NwbCsgOpeningMaskWrite[uint2(pixelPosition.xy)] = openingMaskValue;
 }
 #endif
 
@@ -52,9 +54,13 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
 #if NWB_CSG_ENABLED
     const uint rasterFlags = uint(input.worldPosition.w + 0.5);
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
-    if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u && nwbCsgReceiverPixelDiscard(receiverIndex, inWorldPosition)){
+    const uint discardCutterIndex = (rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u
+        ? nwbCsgFindDiscardCutterExcept(receiverIndex, inWorldPosition, NWB_CSG_INVALID_CUTTER_INDEX)
+        : NWB_CSG_INVALID_CUTTER_INDEX
+    ;
+    if(discardCutterIndex != NWB_CSG_INVALID_CUTTER_INDEX){
 #if NWB_CSG_OPENING_MASK_WRITE_ENABLED
-        nwbWriteCsgOpeningMask(input.position, receiverIndex);
+        nwbWriteCsgOpeningMask(input.position, receiverIndex, discardCutterIndex);
 #endif
         discard;
     }

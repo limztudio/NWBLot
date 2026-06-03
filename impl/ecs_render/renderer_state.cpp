@@ -98,6 +98,8 @@ void RendererDrawState::invalidateResources(){
 void RendererCsgState::invalidateResources(){
     m_clipBindingLayout.reset();
     m_clipBindingSet.reset();
+    m_openingMaskWriteBindingLayout.reset();
+    m_openingMaskWriteBindingSet.reset();
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();
@@ -115,7 +117,9 @@ void RendererCsgState::invalidateResources(){
     m_capAvboitAccumulatePixelShader.reset();
     m_capInputLayout.reset();
     m_capProxyBindingLayout.reset();
+    m_capProxyOpeningMaskBindingLayout.reset();
     m_capProxyBindingSet.reset();
+    m_capProxyOpeningMaskBindingSet.reset();
     m_capPipeline.reset();
     m_capAvboitOccupancyPipeline.reset();
     m_capAvboitExtinctionPipeline.reset();

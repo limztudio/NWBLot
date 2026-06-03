@@ -34,6 +34,7 @@ namespace __hidden_csg_cap_proxy_resources{
     Core::ShaderHandle& pixelShader,
     Core::BindingLayoutHandle& capProxyBindingLayout,
     Core::BindingLayoutHandle& clipBindingLayout,
+    Core::BindingLayoutHandle& capProxyOpeningMaskBindingLayout,
     Core::MeshletPipelineHandle& pipeline
 ){
     if(pipeline)
@@ -48,6 +49,7 @@ namespace __hidden_csg_cap_proxy_resources{
         .setRenderState(ECSRenderDetail::BuildRenderStateForPass(MaterialPipelinePass::Opaque, true))
         .addBindingLayout(capProxyBindingLayout)
         .addBindingLayout(clipBindingLayout)
+        .addBindingLayout(capProxyOpeningMaskBindingLayout)
     ;
 
     pipeline = device.createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
@@ -88,10 +90,11 @@ template<typename ShaderSystem>
     Core::ShaderHandle& pixelShader,
     Core::BindingLayoutHandle& capProxyBindingLayout,
     Core::BindingLayoutHandle& clipBindingLayout,
+    Core::BindingLayoutHandle& capProxyOpeningMaskBindingLayout,
     Core::MeshletPipelineHandle& pipeline,
     const bool needed
 ){
-    return !needed || CreateProxyPipeline(device, framebuffer, meshShader, pixelShader, capProxyBindingLayout, clipBindingLayout, pipeline);
+    return !needed || CreateProxyPipeline(device, framebuffer, meshShader, pixelShader, capProxyBindingLayout, clipBindingLayout, capProxyOpeningMaskBindingLayout, pipeline);
 }
 
 static void RenderProxyShape(
@@ -100,6 +103,7 @@ static void RenderProxyShape(
     const CsgFrameGpuData& csgFrameData,
     Core::BindingSet* capProxyBindingSet,
     Core::BindingSet* clipBindingSet,
+    Core::BindingSet* capProxyOpeningMaskBindingSet,
     Core::MeshletPipeline* pipeline
 ){
     if(!pipeline)
@@ -111,6 +115,7 @@ static void RenderProxyShape(
     meshletState.setViewport(context.viewportState);
     meshletState.addBindingSet(capProxyBindingSet);
     meshletState.addBindingSet(clipBindingSet);
+    meshletState.addBindingSet(capProxyOpeningMaskBindingSet);
     context.commandList.setMeshletState(meshletState);
 
     ECSRenderDetail::SetShaderDrivenPushConstants(
@@ -139,6 +144,47 @@ static void RenderProxyShape(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererCsgSystem::createCsgCapProxyOpeningMaskResources(Core::Texture* openingMask){
+    auto* device = graphics().getDevice();
+    if(!csgState().m_capProxyOpeningMaskBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK, 1));
+
+        csgState().m_capProxyOpeningMaskBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        if(!csgState().m_capProxyOpeningMaskBindingLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap proxy opening mask binding layout"));
+            return false;
+        }
+    }
+
+    if(csgState().m_capProxyOpeningMaskBindingSet)
+        return true;
+    if(!openingMask){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG cap proxy opening mask resources require a valid opening mask target"));
+        return false;
+    }
+
+    Core::BindingSetDesc bindingSetDesc(arena());
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK,
+        openingMask,
+        openingMask->getDescription().format,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    csgState().m_capProxyOpeningMaskBindingSet = device->createBindingSet(bindingSetDesc, csgState().m_capProxyOpeningMaskBindingLayout);
+    if(!csgState().m_capProxyOpeningMaskBindingSet){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap proxy opening mask binding set"));
+        return false;
+    }
+
+    return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffer, const u32 shapeMask){
     if(!framebuffer)
         return false;
@@ -149,6 +195,8 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
         return false;
     }
     if(!createCsgClipResources())
+        return false;
+    if(!csgState().m_capProxyOpeningMaskBindingLayout)
         return false;
 
     auto* device = graphics().getDevice();
@@ -168,9 +216,8 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
 
     if(!csgState().m_capProxyBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Pixel);
+        bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CAP_PROXIES, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
@@ -224,6 +271,7 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
             csgState().m_capProxyPixelShader,
             csgState().m_capProxyBindingLayout,
             csgState().m_clipBindingLayout,
+            csgState().m_capProxyOpeningMaskBindingLayout,
             csgState().m_capProxyPlanePipeline,
             __hidden_csg_cap_proxy_resources::HasProxyShape(shapeMask, s_CsgCapProxyPlaneShapeMask)
         )
@@ -234,6 +282,7 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
             csgState().m_capProxyPixelShader,
             csgState().m_capProxyBindingLayout,
             csgState().m_clipBindingLayout,
+            csgState().m_capProxyOpeningMaskBindingLayout,
             csgState().m_capProxyBoxPipeline,
             __hidden_csg_cap_proxy_resources::HasProxyShape(shapeMask, s_CsgCapProxyBoxShapeMask)
         )
@@ -244,6 +293,7 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
             csgState().m_capProxyPixelShader,
             csgState().m_capProxyBindingLayout,
             csgState().m_clipBindingLayout,
+            csgState().m_capProxyOpeningMaskBindingLayout,
             csgState().m_capProxySpherePipeline,
             __hidden_csg_cap_proxy_resources::HasProxyShape(shapeMask, s_CsgCapProxySphereShapeMask)
         )
@@ -254,6 +304,7 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
             csgState().m_capProxyPixelShader,
             csgState().m_capProxyBindingLayout,
             csgState().m_clipBindingLayout,
+            csgState().m_capProxyOpeningMaskBindingLayout,
             csgState().m_capProxyCapsulePipeline,
             __hidden_csg_cap_proxy_resources::HasProxyShape(shapeMask, s_CsgCapProxyCapsuleShapeMask)
         )
@@ -327,6 +378,7 @@ void RendererCsgSystem::renderCsgOpaqueCapProxies(
     const bool proxyResourcesReady =
         csgState().m_capProxyBindingLayout
         && csgState().m_clipBindingLayout
+        && csgState().m_capProxyOpeningMaskBindingLayout
         && csgState().m_capProxyPixelShader
         && (!__hidden_csg_cap_proxy_resources::HasProxyShape(shapeMask, s_CsgCapProxyPlaneShapeMask) || csgState().m_capProxyPlanePipeline)
         && (!__hidden_csg_cap_proxy_resources::HasProxyShape(shapeMask, s_CsgCapProxyBoxShapeMask) || csgState().m_capProxyBoxPipeline)
@@ -340,17 +392,12 @@ void RendererCsgSystem::renderCsgOpaqueCapProxies(
         return;
     if(!csgState().m_clipBindingSet)
         return;
+    if(!csgState().m_capProxyOpeningMaskBindingSet)
+        return;
 
     if(!csgState().m_capProxyBindingSet){
         Core::BindingSetDesc bindingSetDesc(arena());
         bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CAP_PROXIES, csgState().m_capProxyBuffer.get()));
-        bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK,
-            openingMaskTarget,
-            openingMaskTarget->getDescription().format,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
         bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, drawState().m_meshViewBuffer.get()));
         csgState().m_capProxyBindingSet = graphics().getDevice()->createBindingSet(bindingSetDesc, csgState().m_capProxyBindingLayout);
         if(!csgState().m_capProxyBindingSet){
@@ -365,16 +412,17 @@ void RendererCsgSystem::renderCsgOpaqueCapProxies(
     setCsgClipBufferStates(context.commandList);
     context.commandList.setResourceStatesForBindingSet(csgState().m_capProxyBindingSet.get());
     context.commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
+    context.commandList.setResourceStatesForBindingSet(csgState().m_capProxyOpeningMaskBindingSet.get());
     context.commandList.commitBarriers();
 
     if(__hidden_csg_cap_proxy_resources::HasProxyShape(csgFrameData.capProxyShapeMask, s_CsgCapProxyPlaneShapeMask))
-        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyPlanePipeline.get());
+        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyOpeningMaskBindingSet.get(), csgState().m_capProxyPlanePipeline.get());
     if(__hidden_csg_cap_proxy_resources::HasProxyShape(csgFrameData.capProxyShapeMask, s_CsgCapProxyBoxShapeMask))
-        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyBoxPipeline.get());
+        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyOpeningMaskBindingSet.get(), csgState().m_capProxyBoxPipeline.get());
     if(__hidden_csg_cap_proxy_resources::HasProxyShape(csgFrameData.capProxyShapeMask, s_CsgCapProxySphereShapeMask))
-        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxySpherePipeline.get());
+        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyOpeningMaskBindingSet.get(), csgState().m_capProxySpherePipeline.get());
     if(__hidden_csg_cap_proxy_resources::HasProxyShape(csgFrameData.capProxyShapeMask, s_CsgCapProxyCapsuleShapeMask))
-        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyCapsulePipeline.get());
+        __hidden_csg_cap_proxy_resources::RenderProxyShape(graphics(), context, csgFrameData, csgState().m_capProxyBindingSet.get(), csgState().m_clipBindingSet.get(), csgState().m_capProxyOpeningMaskBindingSet.get(), csgState().m_capProxyCapsulePipeline.get());
 }
 
 

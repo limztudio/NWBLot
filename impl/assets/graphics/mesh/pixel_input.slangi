@@ -11,6 +11,10 @@
 #define NWB_CSG_ENABLED 0
 #endif
 
+#ifndef NWB_CSG_OPENING_MASK_WRITE_ENABLED
+#define NWB_CSG_OPENING_MASK_WRITE_ENABLED 0
+#endif
+
 #if NWB_CSG_ENABLED
 #include "../csg/runtime.slangi"
 #endif
@@ -23,6 +27,15 @@ struct NwbMeshPixelInput{
     float4 position : SV_Position;
     NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
+
+#if NWB_CSG_ENABLED && NWB_CSG_OPENING_MASK_WRITE_ENABLED
+[[vk::binding(NWB_CSG_BINDING_OPENING_MASK_WRITE, NWB_CSG_OPENING_MASK_WRITE_SET), vk::image_format(NWB_CSG_OPENING_MASK_IMAGE_FORMAT)]]
+RWTexture2D<uint> g_NwbCsgOpeningMaskWrite;
+
+void nwbWriteCsgOpeningMask(const float4 pixelPosition, const uint receiverIndex){
+    g_NwbCsgOpeningMaskWrite[uint2(pixelPosition.xy)] = receiverIndex + 1u;
+}
+#endif
 
 static float4 inColor;
 static float3 inNormal;
@@ -38,8 +51,13 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inWorldPosition = input.worldPosition.xyz;
 #if NWB_CSG_ENABLED
     const uint rasterFlags = uint(input.worldPosition.w + 0.5);
-    if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u && nwbCsgMeshPixelDiscard(inWorldPosition))
+    const uint receiverIndex = nwbCsgMeshInstanceIndex();
+    if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u && nwbCsgReceiverPixelDiscard(receiverIndex, inWorldPosition)){
+#if NWB_CSG_OPENING_MASK_WRITE_ENABLED
+        nwbWriteCsgOpeningMask(input.position, receiverIndex);
+#endif
         discard;
+    }
 #endif
 }
 

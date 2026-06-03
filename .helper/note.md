@@ -1,6 +1,6 @@
 # NWBLot Notes
 
-Updated: 2026-05-31
+Updated: 2026-06-03
 
 ## Important Rules
 
@@ -70,6 +70,7 @@ Updated: 2026-05-31
 64. Material shaders include `mesh/authoring.slangi` and then the stable `.bind` virtual include for the selected interface. Shader cook generates deterministic Slang-compatible includes under `material_bind_includes`, resolves authored `.bind` includes to generated content without mutating shader source, and tracks both interface and generated include dependencies for checksum invalidation.
 65. Runtime material typed storage is split by block class: material-constant bytes are immutable material identity, while material-mutable defaults may be overridden through `MaterialInstanceComponent`. Overrides must target `material_mutable` fields on the matching interface; current per-pass uploads deduplicate constant ranges by material/layout and mutable ranges by byte content/revision, with finer dirty-row uploads remaining an optimization rather than an authoring-contract change.
 66. Frame, view, camera, light, and pass values are not material parameters; keep them in existing frame/view/pass buffers.
+67. Renderer frame-target resources and texture-bound binding sets must be created in resource/target setup, not lazily from `update()`, `render()`, draw submission, or material pipeline hot paths. CSG opening-mask write and cap-proxy read resources are created with deferred targets; draw and pipeline code may only consume the existing layouts/binding sets and fail/assert if setup is missing.
 
 ## Scheduler Architecture
 

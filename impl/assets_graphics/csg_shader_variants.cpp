@@ -31,33 +31,9 @@ namespace AssetsGraphicsCsgShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_ClipImplicitDefineName = "NWB_CSG_ENABLED";
-static constexpr AStringView s_ClipSetImplicitDefineName = "NWB_CSG_CLIP_SET";
-static constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 static constexpr AStringView s_AvboitClipSetImplicitDefineValue = "2";
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AStringView ClipImplicitDefineName(){
-    return s_ClipImplicitDefineName;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AStringView ClipSetImplicitDefineName(){
-    return s_ClipSetImplicitDefineName;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-AStringView ProjectEvaluatorModuleDefineName(){
-    return s_ProjectEvaluatorModuleDefineName;
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -133,7 +109,7 @@ static bool BuildClipDefineComboImpl(
     const bool avboitClipSet,
     ShaderCook::DefineCombo& outDefineCombo
 ){
-    const usize addedDefineCount = avboitClipSet ? 2u : 1u;
+    const usize addedDefineCount = 2u;
     if(sourceCombo.size() > Limit<usize>::s_Max - addedDefineCount){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
         return false;
@@ -150,6 +126,17 @@ static bool BuildClipDefineComboImpl(
         if(!outDefineCombo.try_emplace(Move(csgClipSetDefineName), Move(csgClipSetDefineValue)).second){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: reserved CSG shader define '{}' already exists for entry '{}'")
                 , StringConvert(s_ClipSetImplicitDefineName)
+                , StringConvert(entryName)
+            );
+            return false;
+        }
+    }
+    else{
+        ShaderCook::CookString openingMaskWriteDefineName(s_OpeningMaskWriteDefineName, cookArena);
+        ShaderCook::CookString openingMaskWriteDefineValue(s_EnabledImplicitDefineValue, cookArena);
+        if(!outDefineCombo.try_emplace(Move(openingMaskWriteDefineName), Move(openingMaskWriteDefineValue)).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: reserved CSG shader define '{}' already exists for entry '{}'")
+                , StringConvert(s_OpeningMaskWriteDefineName)
                 , StringConvert(entryName)
             );
             return false;

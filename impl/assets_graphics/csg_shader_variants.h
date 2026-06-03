@@ -43,9 +43,10 @@ using ShaderStageKeySet = HashSet<
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AStringView ClipImplicitDefineName();
-[[nodiscard]] AStringView ClipSetImplicitDefineName();
-[[nodiscard]] AStringView ProjectEvaluatorModuleDefineName();
+inline constexpr AStringView s_ClipImplicitDefineName = "NWB_CSG_ENABLED";
+inline constexpr AStringView s_ClipSetImplicitDefineName = "NWB_CSG_CLIP_SET";
+inline constexpr AStringView s_OpeningMaskWriteDefineName = "NWB_CSG_OPENING_MASK_WRITE_ENABLED";
+inline constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
 void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
 void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
 [[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);

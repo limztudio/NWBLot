@@ -54,6 +54,7 @@ namespace __hidden_material_pipeline{
 [[nodiscard]] bool BuildCsgShaderVariantName(
     const AStringView baseVariant,
     const bool avboitClipSet,
+    const bool openingMaskWrite,
     const AStringView projectEvaluatorModuleAssignment,
     Core::GraphicsString& outVariant
 ){
@@ -72,6 +73,12 @@ namespace __hidden_material_pipeline{
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineName,
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineAssignment
     };
+    if(openingMaskWrite){
+        defineAssignments[defineAssignmentCount++] = {
+            ECSRenderMaterialShaderVariants::s_CsgOpeningMaskWriteDefineName,
+            ECSRenderMaterialShaderVariants::s_CsgOpeningMaskWriteDefineAssignment
+        };
+    }
     if(!projectEvaluatorModuleAssignment.empty()){
         defineAssignments[defineAssignmentCount++] = {
             ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName,
@@ -151,6 +158,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     Core::GraphicsString avboitCsgShaderVariant(arena());
     const bool csgClipPipeline = ECSRenderMaterialShaderVariants::CsgClipPipeline(pipelineKey);
     const bool avboitCsgClipPipeline = ECSRenderMaterialShaderVariants::AvboitCsgClipPipeline(pipelineKey);
+    const bool csgOpeningMaskWritePipeline = csgClipPipeline && pass == MaterialPipelinePass::Opaque;
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -192,6 +200,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         && !__hidden_material_pipeline::BuildCsgShaderVariantName(
             shaderVariant,
             false,
+            csgOpeningMaskWritePipeline,
             materialProjectEvaluatorModuleAssignmentToAdd,
             csgShaderVariant
         )
@@ -204,6 +213,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         && !__hidden_material_pipeline::BuildCsgShaderVariantName(
             shaderVariant,
             true,
+            false,
             materialProjectEvaluatorModuleAssignmentToAdd,
             csgShaderVariant
         )
@@ -216,6 +226,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         && !__hidden_material_pipeline::BuildCsgShaderVariantName(
             Core::ShaderArchive::s_DefaultVariant,
             true,
+            false,
             avboitProjectEvaluatorModuleAssignmentToAdd,
             avboitCsgShaderVariant
         )
@@ -309,6 +320,11 @@ bool RendererMaterialSystem::createRendererPipeline(
                 return false;
             pipelineDesc.addBindingLayout(csgState().m_clipBindingLayout);
         }
+        if(csgOpeningMaskWritePipeline){
+            if(!csgState().m_openingMaskWriteBindingLayout)
+                return false;
+            pipelineDesc.addBindingLayout(csgState().m_openingMaskWriteBindingLayout);
+        }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
@@ -390,6 +406,11 @@ bool RendererMaterialSystem::createRendererPipeline(
             if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
             emulationDesc.addBindingLayout(csgState().m_clipBindingLayout);
+        }
+        if(csgOpeningMaskWritePipeline){
+            if(!csgState().m_openingMaskWriteBindingLayout)
+                return false;
+            emulationDesc.addBindingLayout(csgState().m_openingMaskWriteBindingLayout);
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){

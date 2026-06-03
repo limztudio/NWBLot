@@ -24,12 +24,15 @@ public:
 public:
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createCsgClipResources();
+    [[nodiscard]] bool createCsgOpeningMaskWriteResources(Core::Texture* openingMask);
     void destroyCsgClipBindingSet();
+    void destroyCsgOpeningMaskWriteBindingSet();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
     [[nodiscard]] bool reserveCsgParameterByteBufferCapacity(usize byteCount);
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
+    void setCsgOpeningMaskWriteTextureState(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverEvaluatorVariant(
         const CsgFrameReceiverLookup& receiverLookup,
         Core::ECS::EntityID entity,
@@ -69,6 +72,7 @@ public:
     void renderCsgCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData, const CsgCapDrawItemVector& capDrawItems, Core::GraphicsPipeline* pipeline);
     void renderCsgOpaqueCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
     void renderCsgTransparentCaps(const MaterialPassDrawContext& context, const CsgFrameGpuData& csgFrameData);
+    [[nodiscard]] bool createCsgCapProxyOpeningMaskResources(Core::Texture* openingMask);
     [[nodiscard]] bool createCsgCapProxyResources(Core::Framebuffer* framebuffer, u32 shapeMask);
     [[nodiscard]] bool reserveCsgCapProxyBufferCapacity(usize proxyCount);
     [[nodiscard]] bool uploadCsgCapProxies(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);

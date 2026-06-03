@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK, NWB_CSG_CAP_PROXY_SET)]]
+[[vk::binding(NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK, NWB_CSG_CAP_PROXY_OPENING_MASK_SET)]]
 Texture2D<uint> g_NwbCsgCapProxyOpeningMask;
 
 

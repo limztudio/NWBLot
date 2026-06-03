@@ -209,7 +209,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
     ShaderCook::CookVector<Path>& inOutDependencies,
     ScratchArena& scratchArena
 ){
-    ShaderCook::CookString defineName(AssetsGraphicsCsgShaderVariants::ProjectEvaluatorModuleDefineName(), cookArena);
+    ShaderCook::CookString defineName(AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, cookArena);
     const auto foundDefine = entry.defineValues.find(defineName);
     if(foundDefine == entry.defineValues.end())
         return true;
@@ -393,9 +393,11 @@ bool PrepareShaderEntriesForCook(
         shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, MaterialBindNames::TypedBindingImplicitDefineText()))
             return false;
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::ClipImplicitDefineName()))
+        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipImplicitDefineName))
             return false;
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::ClipSetImplicitDefineName()))
+        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipSetImplicitDefineName))
+            return false;
+        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_OpeningMaskWriteDefineName))
             return false;
 
         CookString materialTypedBindingInterfaceText{cookArena};

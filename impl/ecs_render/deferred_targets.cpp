@@ -43,6 +43,8 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.compositeBindingSet.reset();
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
 
+    csgState().m_openingMaskWriteBindingSet.reset();
+    csgState().m_capProxyOpeningMaskBindingSet.reset();
     csgState().m_capProxyBindingSet.reset();
     csgState().m_capProxyPlanePipeline.reset();
     csgState().m_capProxyBoxPipeline.reset();
@@ -197,6 +199,10 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     }
     if(!createCsgOpeningMaskTarget(createdTargets))
         return false;
+    if(!m_renderer.csgSystem().createCsgOpeningMaskWriteResources(createdTargets.csgOpeningMask.get()))
+        return false;
+    if(!m_renderer.csgSystem().createCsgCapProxyOpeningMaskResources(createdTargets.csgOpeningMask.get()))
+        return false;
 
     Core::FramebufferAttachment gbufferAttachments[NWB_MESH_GBUFFER_TARGET_COUNT] = {};
     gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION]
@@ -342,6 +348,7 @@ bool RendererDeferredSystem::createCsgOpeningMaskTarget(DeferredFrameTargets& ta
         .setHeight(targets.height)
         .setFormat(csgOpeningMaskFormat)
         .setInRenderTarget(true)
+        .setInUAV(true)
         .setName("engine/deferred/csg_opening_mask")
     ;
     targets.csgOpeningMask = graphics().createTexture(csgOpeningMaskDesc);

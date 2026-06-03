@@ -135,6 +135,8 @@ public:
 private:
     Core::BindingLayoutHandle m_clipBindingLayout;
     Core::BindingSetHandle m_clipBindingSet;
+    Core::BindingLayoutHandle m_openingMaskWriteBindingLayout;
+    Core::BindingSetHandle m_openingMaskWriteBindingSet;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;
@@ -152,7 +154,9 @@ private:
     Core::ShaderHandle m_capAvboitAccumulatePixelShader;
     Core::InputLayoutHandle m_capInputLayout;
     Core::BindingLayoutHandle m_capProxyBindingLayout;
+    Core::BindingLayoutHandle m_capProxyOpeningMaskBindingLayout;
     Core::BindingSetHandle m_capProxyBindingSet;
+    Core::BindingSetHandle m_capProxyOpeningMaskBindingSet;
     Core::GraphicsPipelineHandle m_capPipeline;
     Core::GraphicsPipelineHandle m_capAvboitOccupancyPipeline;
     Core::GraphicsPipelineHandle m_capAvboitExtinctionPipeline;

@@ -111,6 +111,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        const bool csgOpeningMaskWriteDraw = csgClipDraw && context.pass == MaterialPipelinePass::Opaque;
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
         if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh))
             return;
@@ -120,10 +121,16 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
             if(!csgState().m_clipBindingSet)
                 return;
         }
+        if(csgOpeningMaskWriteDraw){
+            if(!csgState().m_openingMaskWriteBindingSet)
+                return;
+        }
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)
             m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
+        if(csgOpeningMaskWriteDraw)
+            m_renderer.csgSystem().setCsgOpeningMaskWriteTextureState(context.commandList);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -136,6 +143,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
             meshletState.addBindingSet(nullptr);
         if(csgClipDraw)
             meshletState.addBindingSet(csgState().m_clipBindingSet.get());
+        if(csgOpeningMaskWriteDraw)
+            meshletState.addBindingSet(csgState().m_openingMaskWriteBindingSet.get());
 
         context.commandList.setMeshletState(meshletState);
 
@@ -165,12 +174,17 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        const bool csgOpeningMaskWriteDraw = csgClipDraw && context.pass == MaterialPipelinePass::Opaque;
         if(!mesh.computeBindingSet && !m_renderer.meshSystem().createComputeBindingSet(mesh))
             return;
         if(csgClipDraw){
             if(!csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
                 return;
             if(!csgState().m_clipBindingSet)
+                return;
+        }
+        if(csgOpeningMaskWriteDraw){
+            if(!csgState().m_openingMaskWriteBindingSet)
                 return;
         }
         NWB_ASSERT(mesh.computeBindingSet);
@@ -229,6 +243,10 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
                 graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
             else if(context.passBindingSet)
                 graphicsState.addBindingSet(context.passBindingSet);
+        }
+        if(csgOpeningMaskWriteDraw){
+            m_renderer.csgSystem().setCsgOpeningMaskWriteTextureState(context.commandList);
+            graphicsState.addBindingSet(csgState().m_openingMaskWriteBindingSet.get());
         }
 
         context.commandList.setGraphicsState(graphicsState);

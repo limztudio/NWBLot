@@ -52,7 +52,7 @@ NwbMeshRasterVertex nwbCsgCapProxySphereVertex(
 
 
 NwbCsgCapProxyShapeContext nwbCsgCapProxyBuildShapeContext(const NwbCsgCapProxyGpuData item, const NwbCsgCutter cutter){
-    const uint segments = nwbCsgCapProxySegmentCount(item, cutter, cutter.parameter0.x);
+    const uint segments = nwbCsgCapProxySphereSegmentCountForBudget(nwbCsgCapProxySegmentCount(item, cutter, cutter.parameter0.x));
     const uint rows = nwbCsgCapProxySphereRowCount(segments);
     NwbCsgCapProxyShapeContext context;
     context.segments = segments;

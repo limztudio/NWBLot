@@ -27,8 +27,8 @@
 
 #define NWB_CSG_CAP_PROXY_GROUP_SIZE 64
 #define NWB_CSG_CAP_PROXY_MAX_SEGMENTS 16u
-#define NWB_CSG_CAP_PROXY_MAX_VERTICES 150u
-#define NWB_CSG_CAP_PROXY_MAX_TRIANGLES 240u
+#define NWB_CSG_CAP_PROXY_MAX_VERTICES 78u
+#define NWB_CSG_CAP_PROXY_MAX_TRIANGLES 120u
 #define NWB_CSG_CAP_PROXY_EMULATION_VERTEX_COUNT_PER_PROXY (NWB_CSG_CAP_PROXY_MAX_TRIANGLES * 3u)
 
 
@@ -108,6 +108,12 @@ uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyGpuData item, const NwbCsgCu
     if(projectedRadius >= 14.0)
         return 12u;
     return 8u;
+}
+
+bool nwbCsgCapProxyGridBudgetFits(const uint segments, const uint rows){
+    return (rows + 1u) * (segments + 1u) <= NWB_CSG_CAP_PROXY_MAX_VERTICES
+        && rows * segments * 2u <= NWB_CSG_CAP_PROXY_MAX_TRIANGLES
+    ;
 }
 
 bool nwbCsgCapProxyItemMatchesPassAndShape(const NwbCsgCapProxyGpuData item, const uint shapeType){

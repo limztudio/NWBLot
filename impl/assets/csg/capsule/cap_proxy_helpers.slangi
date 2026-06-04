@@ -19,6 +19,18 @@ uint nwbCsgCapProxyCapsuleRowCount(const uint segments){
     return NWB_CSG_CAP_PROXY_MAX_ROWS;
 }
 
+uint nwbCsgCapProxyCapsuleSegmentCountForBudget(const uint requestedSegments){
+    uint segments = min(requestedSegments, NWB_CSG_CAP_PROXY_MAX_SEGMENTS);
+    for(uint attempt = 0u; attempt < NWB_CSG_CAP_PROXY_MAX_SEGMENTS; ++attempt){
+        if(nwbCsgCapProxyGridBudgetFits(segments, nwbCsgCapProxyCapsuleRowCount(segments)))
+            return segments;
+        if(segments <= 3u)
+            return segments;
+        --segments;
+    }
+    return 3u;
+}
+
 float nwbCsgCapProxyCapsuleRadiusSlack(const float radiusShape, const uint segments, const uint rows){
     const float segmentHalfAngle = NWB_CSG_CAP_PROXY_PI / max(float(segments), 3.0);
     const uint capSteps = rows >= 7u ? 3u : 2u;

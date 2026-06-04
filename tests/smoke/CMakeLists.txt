@@ -184,6 +184,62 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_csg_visible_asset_stamp)
         unset(_nwb_csg_visible_runtime_root)
         unset(_nwb_csg_visible_asset_inputs)
+
+        set(_nwb_csg_skinned_visible_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_skinned_visible_smoke_runtime/$<CONFIG>")
+
+        nwb_declare_executable(nwb_csg_skinned_visible_smoke)
+        target_sources(nwb_csg_skinned_visible_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.cpp"
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_csg_skinned_visible_smoke
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            nwb_ecs_csg
+            nwb_ecs_skinned_mesh_render
+        )
+
+        file(GLOB_RECURSE _nwb_csg_skinned_visible_asset_inputs
+            CONFIGURE_DEPENDS
+            LIST_DIRECTORIES false
+            "${PROJECT_SOURCE_DIR}/impl/assets/*"
+            "${CMAKE_CURRENT_LIST_DIR}/assets/*"
+        )
+
+        set(_nwb_csg_skinned_visible_asset_stamp "${_nwb_csg_skinned_visible_runtime_root}/res/.nwb_csg_skinned_visible_assets_$<CONFIG>.stamp")
+        add_custom_command(
+            OUTPUT "${_nwb_csg_skinned_visible_asset_stamp}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_skinned_visible_runtime_root}/res"
+            COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
+                --repo-root "${PROJECT_SOURCE_DIR}"
+                --asset-root "impl/assets"
+                --asset-root "tests/smoke/assets"
+                --output-directory "${_nwb_csg_skinned_visible_runtime_root}/res"
+                --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+                --configuration "$<CONFIG>"
+            COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}"
+            DEPENDS
+                nwb_resource_cooker
+                ${_nwb_csg_skinned_visible_asset_inputs}
+            WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
+            COMMENT "Cooking NWB skinned CSG visible smoke assets for $<CONFIG>..."
+            VERBATIM
+            USES_TERMINAL
+        )
+        add_custom_target(nwb_csg_skinned_visible_smoke_assets DEPENDS "${_nwb_csg_skinned_visible_asset_stamp}")
+        add_dependencies(nwb_csg_skinned_visible_smoke nwb_csg_skinned_visible_smoke_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_visible_capture_smoke
+            csg_skinned_visible_capture.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        unset(_nwb_csg_skinned_visible_asset_stamp)
+        unset(_nwb_csg_skinned_visible_runtime_root)
+        unset(_nwb_csg_skinned_visible_asset_inputs)
     endif()
 
     set(_nwb_skinned_cone_female_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/skinned_cone_female.nwb")

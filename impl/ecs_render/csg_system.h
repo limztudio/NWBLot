@@ -24,15 +24,12 @@ public:
 public:
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createCsgClipResources();
-    [[nodiscard]] bool createCsgOpeningMaskWriteResources(Core::Texture* openingMask);
     void destroyCsgClipBindingSet();
-    void destroyCsgOpeningMaskWriteBindingSet();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
     [[nodiscard]] bool reserveCsgParameterByteBufferCapacity(usize byteCount);
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
-    void setCsgOpeningMaskWriteTextureState(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverEvaluatorVariant(
         const CsgFrameReceiverLookup& receiverLookup,
         Core::ECS::EntityID entity,

@@ -399,8 +399,6 @@ bool PrepareShaderEntriesForCook(
             return false;
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipSetImplicitDefineName))
             return false;
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_OpeningMaskWriteDefineName))
-            return false;
 
         CookString materialTypedBindingInterfaceText{cookArena};
         if(!ResolveMaterialBindDependencyInterface(

@@ -99,7 +99,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         : CsgFrameState{}
     ;
     const bool hasCsgFrameWork = !csgFrameState.empty();
-    if(hasCsgFrameWork && !deferredTargets.csgOpeningMask)
+    if(
+        hasCsgFrameWork
+        && (
+            !deferredTargets.csgCapNormal
+            || !deferredTargets.csgIntervalDepth
+            || !deferredTargets.csgIntervalId
+        )
+    )
         return;
 
     auto* device = m_graphics.getDevice();

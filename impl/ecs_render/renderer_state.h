@@ -135,8 +135,6 @@ public:
 private:
     Core::BindingLayoutHandle m_clipBindingLayout;
     Core::BindingSetHandle m_clipBindingSet;
-    Core::BindingLayoutHandle m_openingMaskWriteBindingLayout;
-    Core::BindingSetHandle m_openingMaskWriteBindingSet;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;

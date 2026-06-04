@@ -88,14 +88,37 @@ inline Core::Format::Enum SelectGBufferDepthFormat(Core::Device& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-inline Core::Format::Enum SelectCsgOpeningMaskFormat(Core::Device& device){
+inline Core::Format::Enum SelectCsgCapNormalFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::RGBA16_FLOAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
+inline Core::Format::Enum SelectCsgIntervalDepthFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::RG32_FLOAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
+inline Core::Format::Enum SelectCsgIntervalIdFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::R32_UINT,
     };
     constexpr Core::FormatSupport::Mask requiredSupport =
         Core::FormatSupport::Texture
         | Core::FormatSupport::RenderTarget
-        | Core::FormatSupport::ShaderUavStore
     ;
 
     return SelectSupportedFormat(device, candidates, requiredSupport);

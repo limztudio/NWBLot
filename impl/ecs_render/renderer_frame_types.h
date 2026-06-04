@@ -100,10 +100,16 @@ struct DeferredFrameTargets{
     Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
     Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
+    u32 csgPeelLayerCount = 0u;
     Core::TextureHandle albedo;
     Core::TextureHandle normal;
     Core::TextureHandle worldPosition;
-    Core::TextureHandle csgOpeningMask;
+    Core::TextureHandle csgCapNormal;
+    Core::TextureHandle csgIntervalDepth;
+    Core::TextureHandle csgIntervalId;
     Core::TextureHandle opaqueColor;
     Core::TextureHandle depth;
     Core::FramebufferHandle framebuffer;
@@ -122,10 +128,16 @@ struct DeferredFrameTargets{
             && worldPositionFormat != Core::Format::UNKNOWN
             && opaqueColorFormat != Core::Format::UNKNOWN
             && depthFormat != Core::Format::UNKNOWN
+            && csgCapNormalFormat != Core::Format::UNKNOWN
+            && csgIntervalDepthFormat != Core::Format::UNKNOWN
+            && csgIntervalIdFormat != Core::Format::UNKNOWN
+            && csgPeelLayerCount > 0u
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr
-            && csgOpeningMask != nullptr
+            && csgCapNormal != nullptr
+            && csgIntervalDepth != nullptr
+            && csgIntervalId != nullptr
             && opaqueColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr

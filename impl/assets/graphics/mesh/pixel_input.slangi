@@ -11,10 +11,6 @@
 #define NWB_CSG_ENABLED 0
 #endif
 
-#ifndef NWB_CSG_OPENING_MASK_WRITE_ENABLED
-#define NWB_CSG_OPENING_MASK_WRITE_ENABLED 0
-#endif
-
 #if NWB_CSG_ENABLED
 #include "../csg/runtime.slangi"
 #endif
@@ -27,17 +23,6 @@ struct NwbMeshPixelInput{
     float4 position : SV_Position;
     NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
-
-#if NWB_CSG_ENABLED && NWB_CSG_OPENING_MASK_WRITE_ENABLED
-[[vk::binding(NWB_CSG_BINDING_OPENING_MASK_WRITE, NWB_CSG_OPENING_MASK_WRITE_SET), vk::image_format(NWB_CSG_OPENING_MASK_IMAGE_FORMAT)]]
-RWTexture2D<uint> g_NwbCsgOpeningMaskWrite;
-
-void nwbWriteCsgOpeningMask(const float4 pixelPosition, const uint receiverIndex, const uint cutterIndex){
-    const uint openingMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
-    if(openingMaskValue != NWB_CSG_OPENING_MASK_INVALID_VALUE)
-        g_NwbCsgOpeningMaskWrite[uint2(pixelPosition.xy)] = openingMaskValue;
-}
-#endif
 
 static float4 inColor;
 static float3 inNormal;
@@ -58,12 +43,8 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
         ? nwbCsgFindDiscardCutterExcept(receiverIndex, inWorldPosition, NWB_CSG_INVALID_CUTTER_INDEX)
         : NWB_CSG_INVALID_CUTTER_INDEX
     ;
-    if(discardCutterIndex != NWB_CSG_INVALID_CUTTER_INDEX){
-#if NWB_CSG_OPENING_MASK_WRITE_ENABLED
-        nwbWriteCsgOpeningMask(input.position, receiverIndex, discardCutterIndex);
-#endif
+    if(discardCutterIndex != NWB_CSG_INVALID_CUTTER_INDEX)
         discard;
-    }
 #endif
 }
 

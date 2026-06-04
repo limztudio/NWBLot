@@ -13,25 +13,9 @@
 #define NWB_CSG_CLIP_SET 1
 #endif
 
-#ifndef NWB_CSG_CAP_PROXY_SET
-#define NWB_CSG_CAP_PROXY_SET 0
-#endif
-
-#ifndef NWB_CSG_OPENING_MASK_WRITE_SET
-#define NWB_CSG_OPENING_MASK_WRITE_SET 2
-#endif
-
-#ifndef NWB_CSG_CAP_PROXY_OPENING_MASK_SET
-#define NWB_CSG_CAP_PROXY_OPENING_MASK_SET 2
-#endif
-
 #define NWB_CSG_BINDING_RECEIVER_RANGES 0
 #define NWB_CSG_BINDING_CUTTERS 1
 #define NWB_CSG_BINDING_PARAMETER_BYTES 2
-#define NWB_CSG_BINDING_OPENING_MASK_WRITE 0
-#define NWB_CSG_BINDING_CAP_PROXIES 0
-#define NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK 1
-#define NWB_CSG_BINDING_CAP_PROXY_GENERATED_VERTEX 14
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

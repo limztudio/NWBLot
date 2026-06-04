@@ -29,10 +29,8 @@ inline constexpr AStringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
 inline constexpr AStringView s_CsgClipSetDefineName = "NWB_CSG_CLIP_SET";
 inline constexpr AStringView s_CsgAvboitClipSetDefineAssignment = "NWB_CSG_CLIP_SET=2";
-inline constexpr AStringView s_CsgOpeningMaskWriteDefineName = "NWB_CSG_OPENING_MASK_WRITE_ENABLED";
-inline constexpr AStringView s_CsgOpeningMaskWriteDefineAssignment = "NWB_CSG_OPENING_MASK_WRITE_ENABLED=1";
 inline constexpr AStringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
-inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 4u;
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

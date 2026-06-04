@@ -289,13 +289,6 @@ float3 nwbCsgProjectWorldPositionToCutterSurface(const float3 worldPosition, con
     return nwbCsgTransformShapeToWorld(nwbCsgProjectShapePositionToCutterSurface(shapePosition, cutter), cutter);
 }
 
-uint nwbCsgPackOpeningMask(const uint receiverIndex, const uint cutterIndex){
-    if(receiverIndex >= NWB_CSG_OPENING_MASK_INDEX_MASK || cutterIndex >= NWB_CSG_OPENING_MASK_INDEX_MASK)
-        return NWB_CSG_OPENING_MASK_INVALID_VALUE;
-
-    return ((cutterIndex + 1u) << NWB_CSG_OPENING_MASK_INDEX_BITS) | (receiverIndex + 1u);
-}
-
 uint nwbCsgFindDiscardCutterExcept(const uint receiverIndex, const float3 worldPosition, const uint excludedCutterIndex){
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){

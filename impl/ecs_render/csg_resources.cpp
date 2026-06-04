@@ -130,52 +130,8 @@ bool RendererCsgSystem::createCsgClipResources(){
     return true;
 }
 
-bool RendererCsgSystem::createCsgOpeningMaskWriteResources(Core::Texture* openingMask){
-    auto* device = graphics().getDevice();
-    if(!csgState().m_openingMaskWriteBindingLayout){
-        Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_BINDING_OPENING_MASK_WRITE, 1));
-
-        csgState().m_openingMaskWriteBindingLayout = device->createBindingLayout(bindingLayoutDesc);
-        if(!csgState().m_openingMaskWriteBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG opening mask write binding layout"));
-            return false;
-        }
-    }
-
-    if(csgState().m_openingMaskWriteBindingSet)
-        return true;
-
-    if(!openingMask){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG opening mask write resources require a valid opening mask target"));
-        return false;
-    }
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_CSG_BINDING_OPENING_MASK_WRITE,
-        openingMask,
-        openingMask->getDescription().format,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-
-    csgState().m_openingMaskWriteBindingSet = device->createBindingSet(bindingSetDesc, csgState().m_openingMaskWriteBindingLayout);
-    if(!csgState().m_openingMaskWriteBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG opening mask write binding set"));
-        return false;
-    }
-
-    return true;
-}
-
 void RendererCsgSystem::destroyCsgClipBindingSet(){
     csgState().m_clipBindingSet.reset();
-}
-
-void RendererCsgSystem::destroyCsgOpeningMaskWriteBindingSet(){
-    csgState().m_openingMaskWriteBindingSet.reset();
 }
 
 bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
@@ -295,12 +251,6 @@ void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(csgState().m_parameterByteBuffer.get(), Core::ResourceStates::ShaderResource);
-}
-
-void RendererCsgSystem::setCsgOpeningMaskWriteTextureState(Core::CommandList& commandList){
-    Core::Texture* openingMask = deferredState().m_targets.csgOpeningMask.get();
-    if(openingMask)
-        commandList.setTextureState(openingMask, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
 }
 
 bool RendererCsgSystem::resolveCsgReceiverEvaluatorVariant(

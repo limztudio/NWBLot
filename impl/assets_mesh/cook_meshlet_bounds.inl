@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f32 s_MeshletBoundsRadiusInflation = 1.25f;
+
 template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
     SIMDVector minBounds;
@@ -67,7 +69,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     }
 
     MeshletBounds bounds;
-    StoreFloat(VectorSetW(center, VectorGetX(VectorSqrt(radiusSquared))), &bounds.sphere);
+    StoreFloat(VectorSetW(center, VectorGetX(VectorSqrt(radiusSquared)) * s_MeshletBoundsRadiusInflation), &bounds.sphere);
     bounds.conePacked = PackMeshletCone(coneAxis, coneCutoff);
     return bounds;
 }

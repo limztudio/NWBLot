@@ -39,7 +39,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
 #if NWB_CSG_ENABLED
     const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
-    if(csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
+    if(nwbMeshCsgFullyRemovedCullEnabled() && csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
         for(
             uint localPrimitiveIndex = groupThreadID.x;
             localPrimitiveIndex < primitiveCount;
@@ -120,7 +120,7 @@ void main(
 
 #if NWB_CSG_ENABLED
     const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
-    if(csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
+    if(nwbMeshCsgFullyRemovedCullEnabled() && csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
         SetMeshOutputCounts(0u, 0u);
         return;
     }

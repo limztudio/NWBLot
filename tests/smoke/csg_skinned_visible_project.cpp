@@ -40,7 +40,7 @@ static constexpr AStringView s_SkinnedMeshPath = "project/characters/skinned_con
 static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
 static constexpr AStringView s_BxdfSurfaceMaterialInterface = "project/shaders/transparent_multi_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
-static constexpr f32 s_CameraDistance = 3.05f;
+static constexpr f32 s_CameraDistance = 3.25f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.54f;
@@ -48,6 +48,7 @@ static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CutterAnimationSpeed = 0.18f;
 static constexpr f32 s_ReceiverYawSpeed = 0.92f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
+static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +77,7 @@ static void AssignCsgCutterTransform(
 }
 
 [[nodiscard]] static SIMDVector BuildCsgReceiverPosition(){
-    return VectorSet(0.38f, 0.0f, 0.0f, 0.0f);
+    return VectorSet(0.48f, 0.0f, 0.0f, 0.0f);
 }
 
 [[nodiscard]] static SIMDVector BuildCutterLocalRotation(const f32 animationTime){
@@ -97,9 +98,6 @@ static void AssignCsgCutterTransform(
 [[nodiscard]] static SIMDVector BuildCutterWorldRotation(const f32 animationTime, const SIMDVector receiverRotation){
     return QuaternionNormalize(QuaternionMultiply(receiverRotation, BuildCutterLocalRotation(animationTime)));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
@@ -226,12 +224,12 @@ private:
 
     void createReceiver(){
         m_plainReceiver = createSkinnedReceiverInstance(
-            Float4(-0.46f, 0.0f, 0.0f, 0.0f),
-            Float4(0.68f, 0.82f, 1.0f, 1.0f),
+            Float4(-0.48f, 0.0f, 0.0f, 0.0f),
+            Float4(0.86f, 0.88f, 0.90f, 1.0f),
             false
         );
         m_receiver = createSkinnedReceiverInstance(
-            Float4(0.38f, 0.0f, 0.0f, 0.0f),
+            Float4(0.48f, 0.0f, 0.0f, 0.0f),
             Float4(0.85f, 0.72f, 1.0f, 1.0f),
             true
         );
@@ -315,7 +313,10 @@ public:
         createReceiver();
         createCutter();
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid() && m_plainReceiver.valid() && m_receiver.valid() && m_cutter.valid(),
+            activeCamera.camera.valid()
+                && m_plainReceiver.valid()
+                && m_receiver.valid()
+                && m_cutter.valid(),
             NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
         );
 
@@ -346,7 +347,7 @@ private:
     NWB::Core::ECS::EntityID m_plainReceiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::ENTITY_ID_INVALID;
-    f32 m_animationTime = 0.0f;
+    f32 m_animationTime = s_InitialAnimationTime;
 };
 
 

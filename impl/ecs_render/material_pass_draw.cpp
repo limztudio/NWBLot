@@ -50,6 +50,8 @@ u32 RendererMaterialSystem::meshDispatchFlags(
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletFrustumCull;
     if(meshletConesFresh && pass == MaterialPipelinePass::Opaque && !twoSided && meshletConeCullScaleSafe)
         flags |= ECSRenderDetail::s_MeshDispatchFlagMeshletConeCull;
+    if(!mesh.runtimeMesh)
+        flags |= ECSRenderDetail::s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
     return flags;
 }
 

@@ -29,11 +29,12 @@ namespace ECSRenderDetail{
 
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * NWB_MESH_EMULATION_VERTEX_FLOAT_COUNT;
-inline constexpr u32 s_CsgCapProxyMaxTriangles = 240u;
+inline constexpr u32 s_CsgCapProxyMaxTriangles = 120u;
 inline constexpr u32 s_CsgCapProxyEmulationVerticesPerProxy = s_CsgCapProxyMaxTriangles * 3u;
 inline constexpr u32 s_MeshDispatchFlagScissorCull = NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL;
 inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL;
 inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL;
+inline constexpr u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 
 

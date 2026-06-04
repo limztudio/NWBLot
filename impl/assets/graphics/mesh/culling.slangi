@@ -101,6 +101,10 @@ bool nwbMeshletCulled(const uint meshletIndex, const NwbMeshInstanceData instanc
 }
 
 #if NWB_CSG_ENABLED
+bool nwbMeshCsgFullyRemovedCullEnabled(){
+    return nwbMeshDispatchFlagEnabled(NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL);
+}
+
 uint nwbMeshCsgClassifyMeshlet(const NwbMeshletCullContext context){
     return nwbCsgClassifyMeshlet(context.center, context.radius);
 }

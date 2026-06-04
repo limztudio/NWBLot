@@ -51,7 +51,7 @@ static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::E
 }
 
 static constexpr bool s_RuntimeSkinnedMeshletFrustumCullingEnabled = true;
-static constexpr bool s_RuntimeSkinnedMeshletConeCullingEnabled = true; // Locked runtime policy; benchmarks override through a test provider only.
+static constexpr bool s_RuntimeSkinnedMeshletConeCullingEnabled = false; // Runtime deformations can make meshlet cones unsafe; benchmarks override through a test provider only.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

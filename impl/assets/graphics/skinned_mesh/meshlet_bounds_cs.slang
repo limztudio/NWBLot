@@ -11,6 +11,7 @@
 
 
 static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823e+38;
+static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -286,7 +287,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     if(groupThreadIndex != 0u)
         return;
 
-    const float radius = sqrt(g_NwbSkinnedMeshBoundsRadiusSq[0u]);
+    const float radius = sqrt(g_NwbSkinnedMeshBoundsRadiusSq[0u]) * NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION;
     const float coneCutoff = g_NwbSkinnedMeshBoundsConeCutoff[0u];
     const bool coneValid = g_NwbSkinnedMeshBoundsValidFaceNormalCount[0u] == primitiveCount
         && nwbValidFrameDirection(g_NwbSkinnedMeshBoundsConeAxis)

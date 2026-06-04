@@ -76,6 +76,35 @@ void RendererMaterialState::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+RendererCsgState::RendererCsgState(Core::Alloc::GlobalArena& arena)
+    : m_capProxyShapeResources(arena)
+{}
+
+void RendererCsgState::invalidateResources(){
+    m_clipBindingLayout.reset();
+    m_clipBindingSet.reset();
+    m_openingMaskWriteBindingLayout.reset();
+    m_openingMaskWriteBindingSet.reset();
+    m_receiverRangeBuffer.reset();
+    m_cutterBuffer.reset();
+    m_parameterByteBuffer.reset();
+    m_capProxyBuffer.reset();
+    m_capProxyPixelShader.reset();
+    m_capProxyBindingLayout.reset();
+    m_capProxyOpeningMaskBindingLayout.reset();
+    m_capProxyBindingSet.reset();
+    m_capProxyOpeningMaskBindingSet.reset();
+    m_capProxyShapeResources.clear();
+    m_receiverRangeBufferCapacity = 0u;
+    m_cutterBufferCapacity = 0u;
+    m_parameterByteBufferCapacity = 0u;
+    m_capProxyBufferCapacity = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererDrawState::invalidateResources(){
     m_meshBindingLayout.reset();
     m_computeBindingLayout.reset();
@@ -89,38 +118,6 @@ void RendererDrawState::invalidateResources(){
     m_meshViewGpuDataValid = false;
     m_instanceBufferCapacity = 0u;
     m_materialTypedBufferCapacity = 0u;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererCsgState::invalidateResources(){
-    m_clipBindingLayout.reset();
-    m_clipBindingSet.reset();
-    m_openingMaskWriteBindingLayout.reset();
-    m_openingMaskWriteBindingSet.reset();
-    m_receiverRangeBuffer.reset();
-    m_cutterBuffer.reset();
-    m_parameterByteBuffer.reset();
-    m_capProxyBuffer.reset();
-    m_capProxyPixelShader.reset();
-    m_capProxyPlaneMeshShader.reset();
-    m_capProxyBoxMeshShader.reset();
-    m_capProxySphereMeshShader.reset();
-    m_capProxyCapsuleMeshShader.reset();
-    m_capProxyBindingLayout.reset();
-    m_capProxyOpeningMaskBindingLayout.reset();
-    m_capProxyBindingSet.reset();
-    m_capProxyOpeningMaskBindingSet.reset();
-    m_capProxyPlanePipeline.reset();
-    m_capProxyBoxPipeline.reset();
-    m_capProxySpherePipeline.reset();
-    m_capProxyCapsulePipeline.reset();
-    m_receiverRangeBufferCapacity = 0u;
-    m_cutterBufferCapacity = 0u;
-    m_parameterByteBufferCapacity = 0u;
-    m_capProxyBufferCapacity = 0u;
 }
 
 

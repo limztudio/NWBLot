@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_GRAPHICS_CSG_CAP_PROXY_COMMON_SLANGI
-#define NWB_GRAPHICS_CSG_CAP_PROXY_COMMON_SLANGI
+#ifndef NWB_GRAPHICS_CSG_SHAPE_CAP_PROXY_COMMON_SLANGI
+#define NWB_GRAPHICS_CSG_SHAPE_CAP_PROXY_COMMON_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -11,14 +11,14 @@
 
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u
 
-#include "binding_slots.h"
-#include "cap_proxy_shape.slangi"
-#include "constants.h"
+#include "../binding_slots.h"
+#include "projection.slangi"
+#include "../constants.h"
 
-#include "../mesh/binding_slots.h"
-#include "../mesh/meshlet_constants.h"
-#include "../mesh/raster_fields.slangi"
-#include "../mesh/view_buffer.slangi"
+#include "../../mesh/binding_slots.h"
+#include "../../mesh/meshlet_constants.h"
+#include "../../mesh/raster_fields.slangi"
+#include "../../mesh/view_buffer.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,13 +26,8 @@
 
 #define NWB_CSG_CAP_PROXY_GROUP_SIZE 64
 #define NWB_CSG_CAP_PROXY_MAX_SEGMENTS 16u
-#define NWB_CSG_CAP_PROXY_MAX_ROWS 7u
 #define NWB_CSG_CAP_PROXY_MAX_VERTICES 150u
 #define NWB_CSG_CAP_PROXY_MAX_TRIANGLES 240u
-
-#define NWB_CSG_CAP_PROXY_PI 3.14159265
-#define NWB_CSG_CAP_PROXY_TWO_PI 6.28318531
-#define NWB_CSG_CAP_PROXY_PI_OVER_EIGHT 0.39269908
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,42 +114,14 @@ uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyGpuData item, const NwbCsgCu
     return 8u;
 }
 
-uint nwbCsgCapProxySphereRowCount(const uint segments){
-    return min(NWB_CSG_CAP_PROXY_MAX_ROWS, max(5u, segments / 2u));
-}
-
-uint nwbCsgCapProxyCapsuleRowCount(const uint segments){
-    return NWB_CSG_CAP_PROXY_MAX_ROWS;
-}
-
-float nwbCsgCapProxyInflatedRoundRadius(const float radiusShape, const float maxHalfAngle){
-    const float radius = max(radiusShape, 0.0001);
-    const float inflationScale = 1.0 / max(cos(maxHalfAngle), 0.25);
-    return radius * inflationScale;
-}
-
-float nwbCsgCapProxyRoundRadiusSlack(const float radiusShape, const float maxHalfAngle){
-    const float radius = max(radiusShape, 0.0001);
-    return nwbCsgCapProxyInflatedRoundRadius(radius, maxHalfAngle) - radius;
-}
-
-float nwbCsgCapProxySphereRadiusSlack(const float radiusShape, const uint segments, const uint rows){
-    const float segmentHalfAngle = NWB_CSG_CAP_PROXY_PI / max(float(segments), 3.0);
-    const float rowHalfAngle = 0.5 * NWB_CSG_CAP_PROXY_PI / max(float(rows), 1.0);
-    return nwbCsgCapProxyRoundRadiusSlack(radiusShape, max(segmentHalfAngle, rowHalfAngle));
-}
-
-float nwbCsgCapProxyCapsuleRadiusSlack(const float radiusShape, const uint segments, const uint rows){
-    const float segmentHalfAngle = NWB_CSG_CAP_PROXY_PI / max(float(segments), 3.0);
-    const uint capSteps = rows >= 7u ? 3u : 2u;
-    const float rowHalfAngle = 0.25 * NWB_CSG_CAP_PROXY_PI / max(float(capSteps), 1.0);
-    return nwbCsgCapProxyRoundRadiusSlack(radiusShape, max(segmentHalfAngle, rowHalfAngle));
-}
-
 bool nwbCsgCapProxyItemMatchesPassAndShape(const NwbCsgCapProxyGpuData item, const uint shapeType){
     return item.receiverCutterShapePass.w == g_NwbCsgCapProxyPushConstants.dispatch.y
         && item.receiverCutterShapePass.z == shapeType
     ;
+}
+
+bool nwbCsgCapProxyItemMatchesDispatchedShape(const NwbCsgCapProxyGpuData item){
+    return nwbCsgCapProxyItemMatchesPassAndShape(item, g_NwbCsgCapProxyPushConstants.dispatch.z);
 }
 
 void nwbCsgCapProxyGridPrimitive(const uint localPrimitive, const uint segments, out uint3 indices){

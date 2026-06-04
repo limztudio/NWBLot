@@ -16,6 +16,7 @@
 
 #include "shader_stage_key.h"
 
+#include <impl/assets_csg/cook.h>
 #include <impl/assets_mesh/cook.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/cook.h>
@@ -120,6 +121,7 @@ struct ParsedAssetMetadata{
     MeshCookEntryVector meshEntries;
     SkinnedMeshCookEntryVector skinnedMeshEntries;
     MaterialCookEntryVector materialEntries;
+    AssetsCsgCook::CsgShapeCookEntryVector csgShapeEntries;
 
     explicit ParsedAssetMetadata(ShaderCook::CookArena& arena)
         : includeMetadata(arena)
@@ -128,6 +130,7 @@ struct ParsedAssetMetadata{
         , meshEntries(arena)
         , skinnedMeshEntries(arena)
         , materialEntries(arena)
+        , csgShapeEntries(arena)
     {}
 };
 

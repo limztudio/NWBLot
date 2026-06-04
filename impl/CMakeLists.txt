@@ -1,5 +1,6 @@
 add_subdirectory(skinned_mesh)
 add_subdirectory(assets_shader)
+add_subdirectory(assets_csg)
 add_subdirectory(assets_material)
 add_subdirectory(assets_mesh)
 add_subdirectory(assets_graphics)

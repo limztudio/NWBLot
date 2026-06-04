@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_ASSETS_CSG_SPHERE_EVAL_SLANGI
+#define NWB_ASSETS_CSG_SPHERE_EVAL_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float nwbCsgSphereDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    return length(shapePosition) - cutter.parameter0.x;
+}
+
+float3 nwbCsgSphereNormal(const float3 shapePosition){
+    return nwbCsgNormalizeOr(shapePosition, float3(0.0, 1.0, 0.0));
+}
+
+NwbCsgSample nwbEvalCsgSphereShape(const float3 shapePosition, const NwbCsgCutter cutter){
+    NwbCsgSample sample;
+    sample.distance = nwbCsgSphereDistance(shapePosition, cutter);
+    sample.normal = nwbCsgSphereNormal(shapePosition);
+    return sample;
+}
+
+#if defined(NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN)
+#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
+#else
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShape
+#endif
+
+bool nwbTryEvalCsgSphereShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    if(shapeType == NWB_CSG_SHAPE_SPHERE){
+        outSample = nwbEvalCsgSphereShape(shapePosition, cutter);
+        return true;
+    }
+    return NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
+}
+
+#undef NWB_CSG_SHAPE_EVAL_CHAIN
+#define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalCsgSphereShape
+#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

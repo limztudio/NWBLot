@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_ASSETS_CSG_BOX_EVAL_SLANGI
+#define NWB_ASSETS_CSG_BOX_EVAL_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float nwbCsgBoxDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
+    return length(max(q, float3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float3 nwbCsgBoxNormal(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
+    const float3 outside = max(q, float3(0.0));
+    if(dot(outside, outside) > 0.00000001)
+        return nwbCsgNormalizeOr(
+            outside * float3(
+                nwbCsgNonZeroSign(shapePosition.x),
+                nwbCsgNonZeroSign(shapePosition.y),
+                nwbCsgNonZeroSign(shapePosition.z)
+            ),
+            float3(1.0, 0.0, 0.0)
+        );
+
+    if(q.x >= q.y && q.x >= q.z)
+        return float3(nwbCsgNonZeroSign(shapePosition.x), 0.0, 0.0);
+    if(q.y >= q.z)
+        return float3(0.0, nwbCsgNonZeroSign(shapePosition.y), 0.0);
+    return float3(0.0, 0.0, nwbCsgNonZeroSign(shapePosition.z));
+}
+
+NwbCsgSample nwbEvalCsgBoxShape(const float3 shapePosition, const NwbCsgCutter cutter){
+    NwbCsgSample sample;
+    sample.distance = nwbCsgBoxDistance(shapePosition, cutter);
+    sample.normal = nwbCsgBoxNormal(shapePosition, cutter);
+    return sample;
+}
+
+#if defined(NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN)
+#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
+#else
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShape
+#endif
+
+bool nwbTryEvalCsgBoxShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    if(shapeType == NWB_CSG_SHAPE_BOX){
+        outSample = nwbEvalCsgBoxShape(shapePosition, cutter);
+        return true;
+    }
+    return NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
+}
+
+#undef NWB_CSG_SHAPE_EVAL_CHAIN
+#define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalCsgBoxShape
+#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

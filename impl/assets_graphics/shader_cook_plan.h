@@ -38,6 +38,7 @@ namespace AssetsGraphicsCookDetail{
     ShaderCook& shaderCook,
     const ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
+    const Path& csgShapeIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const MaterialCookEntryVector& materialEntries,

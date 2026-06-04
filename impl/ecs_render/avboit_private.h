@@ -7,6 +7,8 @@
 
 #include "renderer_private.h"
 
+#include <impl/assets/graphics/avboit/names.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,16 +32,6 @@ inline constexpr u32 s_AvboitExtinctionSlicesPerWord = NWB_AVBOIT_EXTINCTION_SLI
 inline constexpr f32 s_AvboitExtinctionFixedScale = 45.985905f;
 inline constexpr f32 s_AvboitSelfOcclusionSliceBias = 2.f;
 inline constexpr usize s_AvboitControlWordCount = NWB_AVBOIT_CONTROL_WORD_COUNT;
-
-inline constexpr Name s_AvboitOccupancyPixelShaderName("engine/graphics/avboit/occupancy_ps");
-inline constexpr Name s_AvboitDepthWarpComputeShaderName("engine/graphics/avboit/depth_warp_cs");
-inline constexpr Name s_AvboitExtinctionPixelShaderName("engine/graphics/avboit/extinction_ps");
-inline constexpr Name s_AvboitIntegrateComputeShaderName("engine/graphics/avboit/integrate_cs");
-inline constexpr Name s_AvboitAccumulatePixelShaderName("engine/graphics/avboit/accumulate_ps");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 

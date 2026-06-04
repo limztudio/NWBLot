@@ -4,6 +4,8 @@
 
 #include "renderer_private.h"
 
+#include <impl/assets/graphics/deferred/names.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,7 +44,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
 
     if(!m_renderer.shaderSystem().loadShader(
         deferredState().m_compositePixelShader,
-        ECSRenderDetail::s_DeferredCompositePixelShaderName,
+        AssetsGraphicsDeferred::s_CompositePixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_DeferredCompositePS"

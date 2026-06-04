@@ -28,7 +28,7 @@ namespace __hidden_material_pipeline{
     ACompactString& outModuleInclude
 ){
     outModuleInclude.clear();
-    if(!evaluatorVariant || evaluatorVariant == s_CsgBuiltInShapeShaderModuleName)
+    if(!evaluatorVariant)
         return true;
 
     return shapeRegistry.findShaderModuleInclude(evaluatorVariant, outModuleInclude) && !outModuleInclude.empty();
@@ -256,21 +256,21 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = avboitState().m_occupancyPixelShader;
-        passPixelShaderName = ECSRenderAvboitDetail::s_AvboitOccupancyPixelShaderName;
+        passPixelShaderName = AssetsGraphicsAvboit::s_OccupancyPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitOccupancyPS";
         break;
     case MaterialPipelinePass::AvboitExtinction:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = avboitState().m_extinctionPixelShader;
-        passPixelShaderName = ECSRenderAvboitDetail::s_AvboitExtinctionPixelShaderName;
+        passPixelShaderName = AssetsGraphicsAvboit::s_ExtinctionPixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitExtinctionPS";
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
         passPixelShader = avboitState().m_accumulatePixelShader;
-        passPixelShaderName = ECSRenderAvboitDetail::s_AvboitAccumulatePixelShaderName;
+        passPixelShaderName = AssetsGraphicsAvboit::s_AccumulatePixelShaderName;
         passPixelShaderDebugName = "ECSRender_AvboitAccumulatePS";
         break;
     default:

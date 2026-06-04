@@ -115,6 +115,12 @@ private:
     bool m_meshViewGpuDataValid = false;
 };
 
+struct CsgCapProxyShapeResources{
+    CsgShapeTypeId shapeType = s_InvalidCsgShapeTypeId;
+    Core::ShaderHandle meshShader;
+    Core::MeshletPipelineHandle pipeline;
+};
+
 class RendererCsgState final : NoCopy{
     friend class RendererSystem;
     friend class RendererShaderSystem;
@@ -125,7 +131,7 @@ class RendererCsgState final : NoCopy{
     friend class RendererAvboitSystem;
 
 public:
-    RendererCsgState() = default;
+    explicit RendererCsgState(Core::Alloc::GlobalArena& arena);
 
 
 public:
@@ -142,18 +148,11 @@ private:
     Core::BufferHandle m_parameterByteBuffer;
     Core::BufferHandle m_capProxyBuffer;
     Core::ShaderHandle m_capProxyPixelShader;
-    Core::ShaderHandle m_capProxyPlaneMeshShader;
-    Core::ShaderHandle m_capProxyBoxMeshShader;
-    Core::ShaderHandle m_capProxySphereMeshShader;
-    Core::ShaderHandle m_capProxyCapsuleMeshShader;
     Core::BindingLayoutHandle m_capProxyBindingLayout;
     Core::BindingLayoutHandle m_capProxyOpeningMaskBindingLayout;
     Core::BindingSetHandle m_capProxyBindingSet;
     Core::BindingSetHandle m_capProxyOpeningMaskBindingSet;
-    Core::MeshletPipelineHandle m_capProxyPlanePipeline;
-    Core::MeshletPipelineHandle m_capProxyBoxPipeline;
-    Core::MeshletPipelineHandle m_capProxySpherePipeline;
-    Core::MeshletPipelineHandle m_capProxyCapsulePipeline;
+    Vector<CsgCapProxyShapeResources, Core::Alloc::GlobalArena> m_capProxyShapeResources;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
     usize m_parameterByteBufferCapacity = 0u;

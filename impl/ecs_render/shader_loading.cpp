@@ -4,6 +4,8 @@
 
 #include "renderer_private.h"
 
+#include <impl/assets/graphics/deferred/names.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -40,7 +42,7 @@ bool RendererShaderSystem::loadShader(
 bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
         deferredState().m_compositeVertexShader,
-        ECSRenderDetail::s_DeferredCompositeVertexShaderName,
+        AssetsGraphicsDeferred::s_CompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Vertex,
         "ECSRender_DeferredCompositeVS"

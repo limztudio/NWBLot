@@ -310,7 +310,7 @@ bool RendererCsgSystem::resolveCsgReceiverEvaluatorVariant(
     const Scene::TransformComponent* transform,
     Name& outEvaluatorVariant
 )const{
-    outEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+    outEvaluatorVariant = NAME_NONE;
 
     bool resolved = true;
     receiverLookup.forEachReceiverCutter(
@@ -327,10 +327,10 @@ bool RendererCsgSystem::resolveCsgReceiverEvaluatorVariant(
                 resolved = false;
                 return;
             }
-            if(shapeType.desc.shaderModule == s_CsgBuiltInShapeShaderModuleName)
+            if(!shapeType.desc.shaderModule)
                 return;
 
-            if(outEvaluatorVariant == s_CsgBuiltInShapeShaderModuleName){
+            if(!outEvaluatorVariant){
                 outEvaluatorVariant = shapeType.desc.shaderModule;
                 return;
             }

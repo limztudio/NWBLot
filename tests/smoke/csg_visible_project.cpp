@@ -210,28 +210,28 @@ static void ApplyCutterTransform(
 
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane:{
-        cutter.shapeType = NWB::Impl::s_CsgPlaneShapeName;
+        cutter.shapeType = Name("engine/csg/plane");
         NWB::Impl::CsgPlaneShapeParameters parameters;
         parameters.normalDistance = Float4(0.0f, 0.0f, 1.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Box:{
-        cutter.shapeType = NWB::Impl::s_CsgBoxShapeName;
+        cutter.shapeType = Name("engine/csg/box");
         NWB::Impl::CsgBoxShapeParameters parameters;
         parameters.halfExtents = Float4(0.22f, 0.22f, 0.42f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Sphere:{
-        cutter.shapeType = NWB::Impl::s_CsgSphereShapeName;
+        cutter.shapeType = Name("engine/csg/sphere");
         NWB::Impl::CsgSphereShapeParameters parameters;
         parameters.radius = Float4(0.24f, 0.0f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Capsule:{
-        cutter.shapeType = NWB::Impl::s_CsgCapsuleShapeName;
+        cutter.shapeType = Name("engine/csg/capsule");
         NWB::Impl::CsgCapsuleShapeParameters parameters;
         parameters.radiusHalfHeight = Float4(0.15f, 0.18f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);

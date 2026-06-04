@@ -20,11 +20,7 @@ NWB_IMPL_BEGIN
 using CsgShapeTypeId = u32;
 
 inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
-inline constexpr Name s_CsgBuiltInShapeShaderModuleName("engine/csg/builtin_shapes");
-inline constexpr Name s_CsgPlaneShapeName("engine/csg/plane");
-inline constexpr Name s_CsgBoxShapeName("engine/csg/box");
-inline constexpr Name s_CsgSphereShapeName("engine/csg/sphere");
-inline constexpr Name s_CsgCapsuleShapeName("engine/csg/capsule");
+inline constexpr usize s_CsgShapeDefaultParameterMaxBytes = sizeof(Float4) * 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,11 +36,15 @@ using CsgShapeBoundsCallback = bool(*)(
 );
 
 struct CsgShapeTypeDesc{
+    using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeDefaultParameterMaxBytes>;
+
     Name name = NAME_NONE;
     Name shaderModule = NAME_NONE;
+    Name capProxyShader = NAME_NONE;
     ACompactString shaderModuleInclude;
 
     u32 parameterByteSize = 0u;
+    DefaultParameterByteVector defaultParameterBytes;
     CsgShapeBoundsCallback boundsCallback = nullptr;
 
     bool supportsAnalyticGradient = false;

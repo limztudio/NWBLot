@@ -54,6 +54,7 @@ namespace AssetsGraphicsCookDetail{
     const Path& repoRoot,
     const ShaderCook::CookVector<Path>& assetRoots,
     const Path& materialBindIncludeRoot,
+    const Path& csgShapeIncludeRoot,
     const ShaderCook::ShaderEntry& entry,
     ShaderCook::CookVector<Path>& outIncludeDirectories,
     ScratchArena& scratchArena

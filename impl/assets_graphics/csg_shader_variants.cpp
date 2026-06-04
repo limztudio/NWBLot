@@ -10,6 +10,7 @@
 
 #include "csg_shader_variants.h"
 
+#include <impl/assets/graphics/avboit/names.h>
 #include <impl/assets_shader/asset.h>
 
 #include <core/graphics/shader_stage_names.h>
@@ -79,9 +80,9 @@ void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>
     CollectMaterialMeshShaderKeys(materialEntries, outShaderKeys);
 
     const Name& pixelStageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(Core::ShaderType::PixelStage);
-    InsertShaderKey(outShaderKeys, Name("engine/graphics/avboit/occupancy_ps"), pixelStageName);
-    InsertShaderKey(outShaderKeys, Name("engine/graphics/avboit/extinction_ps"), pixelStageName);
-    InsertShaderKey(outShaderKeys, Name("engine/graphics/avboit/accumulate_ps"), pixelStageName);
+    InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_OccupancyPixelShaderName, pixelStageName);
+    InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_ExtinctionPixelShaderName, pixelStageName);
+    InsertShaderKey(outShaderKeys, AssetsGraphicsAvboit::s_AccumulatePixelShaderName, pixelStageName);
 }
 
 bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry){

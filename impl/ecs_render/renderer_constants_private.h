@@ -38,22 +38,13 @@ inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::T
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_MeshEmulationVertexShaderName("engine/graphics/mesh/emulation_vs");
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
 inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_ranges");
 inline constexpr Name s_CsgCutterBufferName("ecs_render/csg_cutters");
 inline constexpr Name s_CsgParameterByteBufferName("ecs_render/csg_parameter_bytes");
 inline constexpr Name s_CsgCapProxyBufferName("ecs_render/csg_cap_proxies");
-inline constexpr Name s_CsgCapProxyPixelShaderName("engine/graphics/csg/cap_proxy_ps");
-inline constexpr Name s_CsgCapProxyPlaneMeshShaderName("engine/graphics/csg/cap_proxy_plane_ms");
-inline constexpr Name s_CsgCapProxyBoxMeshShaderName("engine/graphics/csg/cap_proxy_box_ms");
-inline constexpr Name s_CsgCapProxySphereMeshShaderName("engine/graphics/csg/cap_proxy_sphere_ms");
-inline constexpr Name s_CsgCapProxyCapsuleMeshShaderName("engine/graphics/csg/cap_proxy_capsule_ms");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
-inline constexpr Name s_DeferredCompositeVertexShaderName("engine/graphics/deferred/composite_vs");
-inline constexpr Name s_DeferredLightingPixelShaderName("engine/graphics/deferred/lighting_ps");
-inline constexpr Name s_DeferredCompositePixelShaderName("engine/graphics/deferred/composite_ps");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

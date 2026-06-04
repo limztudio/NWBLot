@@ -33,6 +33,7 @@ RendererSystem::RendererSystem(
     , m_csgShapeRegistry(arena)
     , m_meshState(arena)
     , m_materialState(arena)
+    , m_csgState(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -159,6 +160,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             csgFrameData.hasCapProxyWork()
             && csgUploadReady
             && deferredTargets.capProxyFramebuffer
+            && m_csgSystem.createCsgCapProxyResources(deferredTargets.capProxyFramebuffer.get(), csgFrameData.capProxyShapeTypes)
             && m_csgSystem.uploadCsgCapProxies(*commandList, csgFrameData)
         ;
         const MaterialPassDrawContext opaqueDrawContext{

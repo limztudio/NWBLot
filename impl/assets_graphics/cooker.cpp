@@ -138,12 +138,24 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
     ))
         return false;
 
+    Path csgShapeIncludeRoot;
+    if(!AssetsCsgCook::EmitCsgShapeModuleIncludes(
+        m_arena,
+        resolvedPaths.cacheDirectory,
+        configurationSafeName,
+        parsedMetadata.csgShapeEntries,
+        csgShapeIncludeRoot,
+        scratchArena
+    ))
+        return false;
+
     AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan(m_arena);
     if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
         m_arena,
         shaderCook,
         resolvedPaths,
         materialBindIncludeRoot,
+        csgShapeIncludeRoot,
         parsedMetadata.includeMetadata,
         parsedMetadata.shaderEntries,
         parsedMetadata.materialEntries,

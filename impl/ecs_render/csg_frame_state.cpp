@@ -63,7 +63,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             if(cutterCount == 0u)
                 return 0u;
 
-            Name evaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+            Name evaluatorVariant = NAME_NONE;
             if(!resolveCsgReceiverEvaluatorVariant(receiverLookup, entity, mesh->csgLocalBounds, transform, evaluatorVariant))
                 return 0u;
 

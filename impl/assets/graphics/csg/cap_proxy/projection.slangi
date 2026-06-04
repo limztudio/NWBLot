@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_SHAPE_CAP_PROXY_PROJECTION_SLANGI
+#define NWB_GRAPHICS_CSG_SHAPE_CAP_PROXY_PROJECTION_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../runtime.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbCsgCapProxyEnlargeShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    const float radiusSlack
+){
+    if(radiusSlack <= 0.0)
+        return shapePosition;
+
+    const NwbCsgSample sample = nwbCsgEvaluateShapeSample(shapePosition, cutter);
+    const float3 normal = nwbCsgNormalizeOr(sample.normal, float3(0.0, 1.0, 0.0));
+    return shapePosition + normal * radiusSlack;
+}
+
+float3 nwbCsgCapProxyShrinkShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter
+){
+    return nwbCsgProjectShapePositionToCutterSurface(shapePosition, cutter);
+}
+
+float3 nwbCsgCapProxyShrinkWorldPosition(
+    const float3 worldPosition,
+    const NwbCsgCutter cutter
+){
+    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
+    return nwbCsgTransformShapeToWorld(nwbCsgCapProxyShrinkShapePosition(shapePosition, cutter), cutter);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -11,6 +11,7 @@
 #include <core/graphics/shader_stage_names.h>
 #include <global/text_utils.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
+#include <impl/assets/graphics/imgui/names.h>
 #include <impl/assets_shader/asset.h>
 #include <core/common/log.h>
 
@@ -35,8 +36,6 @@ namespace __hidden_ui{
 
 static constexpr usize s_DefaultVertexCapacity = 4096u;
 static constexpr usize s_DefaultIndexCapacity = 8192u;
-static constexpr Name s_UiVertexShaderName("engine/graphics/imgui/vs");
-static constexpr Name s_UiPixelShaderName("engine/graphics/imgui/ps");
 static constexpr Name s_UiVertexBufferName("ecs_ui/imgui_vertices");
 static constexpr Name s_UiIndexBufferName("ecs_ui/imgui_indices");
 
@@ -575,7 +574,7 @@ bool UiSystem::ensureShadersLoaded(){
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
-            __hidden_ui::s_UiVertexShaderName,
+            AssetsGraphicsImGui::s_VertexShaderName,
             Core::ShaderType::Vertex,
             Name("ECSUI_ImGuiVS")
         );
@@ -589,7 +588,7 @@ bool UiSystem::ensureShadersLoaded(){
             m_graphics,
             m_assetManager,
             m_shaderPathResolver,
-            __hidden_ui::s_UiPixelShaderName,
+            AssetsGraphicsImGui::s_PixelShaderName,
             Core::ShaderType::Pixel,
             Name("ECSUI_ImGuiPS")
         );

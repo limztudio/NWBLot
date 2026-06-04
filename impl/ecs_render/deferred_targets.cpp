@@ -46,10 +46,8 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_openingMaskWriteBindingSet.reset();
     csgState().m_capProxyOpeningMaskBindingSet.reset();
     csgState().m_capProxyBindingSet.reset();
-    csgState().m_capProxyPlanePipeline.reset();
-    csgState().m_capProxyBoxPipeline.reset();
-    csgState().m_capProxySpherePipeline.reset();
-    csgState().m_capProxyCapsulePipeline.reset();
+    for(CsgCapProxyShapeResources& shapeResources : csgState().m_capProxyShapeResources)
+        shapeResources.pipeline.reset();
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.capProxyFramebuffer.reset();
@@ -241,9 +239,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap proxy framebuffer"));
         return false;
     }
-    if(!m_renderer.csgSystem().createCsgCapProxyResources(createdTargets.capProxyFramebuffer.get(), s_CsgCapProxyBuiltInShapeMask))
-        return false;
-
     Core::FramebufferDesc opaqueLightingFramebufferDesc;
     opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources);
     createdTargets.opaqueLightingFramebuffer = device->createFramebuffer(opaqueLightingFramebufferDesc);

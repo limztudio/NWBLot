@@ -389,7 +389,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             )
             : 0u
         ;
-        Name csgEvaluatorVariant = s_CsgBuiltInShapeShaderModuleName;
+        Name csgEvaluatorVariant = NAME_NONE;
         const bool csgEvaluatorReady = csgClipCutterCount > 0u
             ? m_renderer.csgSystem().resolveCsgReceiverEvaluatorVariant(
                 *csgReceiverLookupPtr,

@@ -2,62 +2,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cap_proxy_common.slangi"
+#include "../../graphics/csg/cap_proxy/common.slangi"
+#include "cap_proxy_helpers.slangi"
+#include "eval.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbCsgCapProxyCapsuleRow(
-    const uint row,
-    const uint rows,
-    const float radius,
-    const float halfHeight,
-    out float y,
-    out float ringRadius
-){
-    const uint capSteps = rows >= 7u ? 3u : 2u;
-    if(row <= capSteps){
-        const float angle = 0.5 * NWB_CSG_CAP_PROXY_PI * float(row) / float(capSteps);
-        float sinAngle;
-        float cosAngle;
-        sincos(angle, sinAngle, cosAngle);
-        y = halfHeight + radius * cosAngle;
-        ringRadius = radius * sinAngle;
-        return;
-    }
-
-    const uint bottomBegin = capSteps + 1u;
-    const uint bottomRow = row - bottomBegin;
-    const float angle = 0.5 * NWB_CSG_CAP_PROXY_PI * float(bottomRow) / float(capSteps);
-    float sinAngle;
-    float cosAngle;
-    sincos(angle, sinAngle, cosAngle);
-    y = -halfHeight - radius * sinAngle;
-    ringRadius = radius * cosAngle;
-}
-
-NwbMeshRasterVertex nwbCsgCapProxyCapsuleVertex(
+NwbMeshRasterVertex nwbCsgCapProxySphereVertex(
     const NwbCsgCapProxyGpuData item,
     const NwbCsgCutter cutter,
     const uint localVertex,
-    const uint segments
+    const uint segments,
+    const uint rows
 ){
     const uint row = localVertex / (segments + 1u);
     const uint column = localVertex - row * (segments + 1u);
+    const float theta = NWB_CSG_CAP_PROXY_PI * float(row) / float(rows);
     const float phi = NWB_CSG_CAP_PROXY_TWO_PI * float(column) / float(segments);
-    const uint rows = nwbCsgCapProxyCapsuleRowCount(segments);
-    const float radiusSlack = nwbCsgCapProxyCapsuleRadiusSlack(cutter.parameter0.x, segments, rows);
-    const float radius = max(cutter.parameter0.x, 0.0001);
-    const float halfHeight = max(cutter.parameter0.y, 0.0);
+    float sinTheta;
+    float cosTheta;
     float sinPhi;
     float cosPhi;
+    sincos(theta, sinTheta, cosTheta);
     sincos(phi, sinPhi, cosPhi);
-    float y;
-    float ringRadius;
-    nwbCsgCapProxyCapsuleRow(row, rows, radius, halfHeight, y, ringRadius);
-    const float3 shapePosition = float3(ringRadius * cosPhi, y, ringRadius * sinPhi);
-    const float3 shapeNormal = nwbCsgCapsuleNormal(shapePosition, cutter);
+    const float3 shapeNormal = float3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
+    const float radiusSlack = nwbCsgCapProxySphereRadiusSlack(cutter.parameter0.x, segments, rows);
+    const float radius = max(cutter.parameter0.x, 0.0001);
+    const float3 shapePosition = shapeNormal * radius;
     const float3 enlargedShapePosition = nwbCsgCapProxyEnlargeShapePosition(shapePosition, cutter, radiusSlack);
     return nwbCsgCapProxyBuildVertex(
         nwbCsgTransformShapeToWorld(enlargedShapePosition, cutter),
@@ -90,21 +63,21 @@ void main(
 
     const uint groupThreadIndex = groupThreadID.x;
     const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
-    if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_CAPSULE)){
+    if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_SPHERE)){
         SetMeshOutputCounts(0u, 0u);
         return;
     }
 
     const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
     const uint segments = nwbCsgCapProxySegmentCount(item, cutter, cutter.parameter0.x);
-    const uint rows = nwbCsgCapProxyCapsuleRowCount(segments);
+    const uint rows = nwbCsgCapProxySphereRowCount(segments);
     const uint vertexCount = (rows + 1u) * (segments + 1u);
     const uint primitiveCount = rows * segments * 2u;
 
     SetMeshOutputCounts(vertexCount, primitiveCount);
 
     for(uint localVertex = groupThreadIndex; localVertex < vertexCount; localVertex += NWB_CSG_CAP_PROXY_GROUP_SIZE)
-        vertices[localVertex] = nwbCsgCapProxyCapsuleVertex(item, cutter, localVertex, segments);
+        vertices[localVertex] = nwbCsgCapProxySphereVertex(item, cutter, localVertex, segments, rows);
 
     for(uint localPrimitive = groupThreadIndex; localPrimitive < primitiveCount; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE)
         nwbCsgCapProxyGridPrimitive(localPrimitive, segments, triangles[localPrimitive]);

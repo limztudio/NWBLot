@@ -6,6 +6,8 @@
 
 #include "renderer_capacity_private.h"
 
+#include <impl/assets/graphics/mesh/names.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,7 +58,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!drawState().m_emulationVertexShader){
         if(!m_renderer.shaderSystem().loadShader(
             drawState().m_emulationVertexShader,
-            ECSRenderDetail::s_MeshEmulationVertexShaderName,
+            AssetsGraphicsMesh::s_EmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Vertex,
             "ECSRender_MeshEmulationVS"

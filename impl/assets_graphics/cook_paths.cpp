@@ -309,6 +309,7 @@ bool BuildIncludeDirectories(
     const Path& repoRoot,
     const ShaderCook::CookVector<Path>& assetRoots,
     const Path& materialBindIncludeRoot,
+    const Path& csgShapeIncludeRoot,
     const ShaderCook::ShaderEntry& entry,
     ShaderCook::CookVector<Path>& outIncludeDirectories,
     ScratchArena& scratchArena
@@ -322,18 +323,36 @@ bool BuildIncludeDirectories(
     );
 
     outIncludeDirectories.clear();
-    const usize implicitIncludeRootCount = materialBindIncludeRoot.empty() ? 0u : 1u;
-    if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRootCount){
+    usize implicitIncludeRootCount = 0u;
+    if(!materialBindIncludeRoot.empty())
+        ++implicitIncludeRootCount;
+    if(!csgShapeIncludeRoot.empty())
+        ++implicitIncludeRootCount;
+    usize implicitAssetRootCount = 0u;
+    if(!csgShapeIncludeRoot.empty())
+        implicitAssetRootCount = assetRoots.size();
+    if(
+        implicitIncludeRootCount > Limit<usize>::s_Max - implicitAssetRootCount
+        || entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRootCount - implicitAssetRootCount
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: include root count overflow for entry '{}'"), StringConvert(entry.name));
         return false;
     }
 
-    outIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRootCount);
-    seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRootCount);
+    outIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRootCount + implicitAssetRootCount);
+    seenIncludeDirectories.reserve(entry.includeRoots.size() + implicitIncludeRootCount + implicitAssetRootCount);
 
     if(!materialBindIncludeRoot.empty()){
         if(!__hidden_cook_paths::AppendIncludeDirectory(materialBindIncludeRoot, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
             return false;
+    }
+    if(!csgShapeIncludeRoot.empty()){
+        if(!__hidden_cook_paths::AppendIncludeDirectory(csgShapeIncludeRoot, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
+            return false;
+        for(const Path& assetRoot : assetRoots){
+            if(!__hidden_cook_paths::AppendIncludeDirectory(assetRoot, entry, seenIncludeDirectories, outIncludeDirectories, scratchArena))
+                return false;
+        }
     }
 
     for(const CookString& includeRoot : entry.includeRoots){

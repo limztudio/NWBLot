@@ -52,6 +52,19 @@ namespace __hidden_csg_cap_proxy_builder{
     return true;
 }
 
+[[nodiscard]] static bool AppendUniqueProxyShapeType(
+    const CsgShapeTypeId shapeType,
+    CsgCapProxyShapeTypeVector& shapeTypes
+){
+    for(const CsgShapeTypeId existingShapeType : shapeTypes){
+        if(existingShapeType == shapeType)
+            return true;
+    }
+
+    shapeTypes.push_back(shapeType);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -99,8 +112,10 @@ bool ECSRenderCsgCapProxyBuilder::AppendGpuData(
     const Float4& color,
     CsgFrameGpuData& csgFrameData
 ){
-    const u32 proxyShapeMask = CsgCapProxyShapeMask(cutter.shapeType);
-    if(proxyShapeMask == 0u)
+    CsgShapeTypeInfo shapeType;
+    if(!shapeRegistry.findShapeType(cutter.shapeType, shapeType))
+        return true;
+    if(!shapeType.desc.capProxyShader)
         return true;
 
     CsgCapProxyGpuData gpuItem;
@@ -114,8 +129,7 @@ bool ECSRenderCsgCapProxyBuilder::AppendGpuData(
         return false;
 
     csgFrameData.capProxyGpuItems.push_back(gpuItem);
-    csgFrameData.capProxyShapeMask |= proxyShapeMask;
-    return true;
+    return __hidden_csg_cap_proxy_builder::AppendUniqueProxyShapeType(cutter.shapeType, csgFrameData.capProxyShapeTypes);
 }
 
 

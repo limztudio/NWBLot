@@ -1,0 +1,8 @@
+csg_shape asset;
+
+asset.shape = "engine/csg/sphere";
+asset.module = "engine/csg/built_in";
+asset.module_include = "csg/generated/built_in.slangi";
+asset.eval = "csg/sphere/eval.slangi";
+asset.proxy_shader = "engine/csg/sphere/cap_proxy_ms";
+asset.proxy_source = "cap_proxy_ms.slang";

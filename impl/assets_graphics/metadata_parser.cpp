@@ -55,6 +55,33 @@ static bool AppendUniquePropertyAssetEntry(EntryT& entry, PathHashSetT& seenPath
     return true;
 }
 
+template<typename ShaderIdentityKeySetT>
+static bool AppendUniqueShaderEntry(
+    ShaderCook::ShaderEntry& shaderEntry,
+    const Path& nwbFilePath,
+    ShaderIdentityKeySetT& seenShaderIdentityKeys,
+    ShaderEntryVector& outShaderEntries
+){
+    if(shaderEntry.name.empty())
+        return true;
+
+    const PreparedShaderKey shaderIdentityKey{
+        ToName(shaderEntry.name),
+        ToName(shaderEntry.archiveStage.view())
+    };
+    if(!seenShaderIdentityKeys.insert(shaderIdentityKey).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'")
+            , StringConvert(shaderEntry.name)
+            , StringConvert(shaderEntry.archiveStage.c_str())
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outShaderEntries.push_back(Move(shaderEntry));
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,6 +101,7 @@ bool ParseAssetMetadata(
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.meshEntries.reserve(nwbFiles.size());
     outMetadata.skinnedMeshEntries.reserve(nwbFiles.size());
+    outMetadata.csgShapeEntries.reserve(nwbFiles.size());
 
     HashSet<
         PreparedShaderKey,
@@ -117,21 +145,8 @@ bool ParseAssetMetadata(
             ))
                 return false;
 
-            const PreparedShaderKey shaderIdentityKey{
-                ToName(shaderEntry.name),
-                ToName(shaderEntry.archiveStage.view())
-            };
-            if(!seenShaderIdentityKeys.insert(shaderIdentityKey).second){
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'")
-                    , StringConvert(shaderEntry.name)
-                    , StringConvert(shaderEntry.archiveStage.c_str())
-                    , PathToString<tchar>(nwbFile)
-                );
+            if(!AppendUniqueShaderEntry(shaderEntry, nwbFile, seenShaderIdentityKeys, outMetadata.shaderEntries))
                 return false;
-            }
-
-            if(!shaderEntry.name.empty())
-                outMetadata.shaderEntries.push_back(Move(shaderEntry));
             continue;
         }
 
@@ -181,6 +196,26 @@ bool ParseAssetMetadata(
 
             if(!AppendUniquePropertyAssetEntry(materialEntry, seenPropertyAssetPathHashes, outMetadata.materialEntries))
                 return false;
+            continue;
+        }
+
+        if(assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
+            AssetsCsgCook::CsgShapeCookEntry csgShapeEntry(cookArena);
+            if(!AssetsCsgCook::ParseCsgShapeCookMetadata(
+                cookArena,
+                nwbFile,
+                doc,
+                csgShapeEntry,
+                scratchArena
+            ))
+                return false;
+
+            if(csgShapeEntry.hasProxyShader()){
+                if(!AppendUniqueShaderEntry(csgShapeEntry.proxyShaderEntry, nwbFile, seenShaderIdentityKeys, outMetadata.shaderEntries))
+                    return false;
+            }
+
+            outMetadata.csgShapeEntries.push_back(Move(csgShapeEntry));
             continue;
         }
 

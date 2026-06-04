@@ -4,11 +4,11 @@
 
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u
 
-#include "binding_slots.h"
+#include "../binding_slots.h"
 
-#include "../mesh/gbuffer_io.slangi"
-#include "../mesh/view_buffer.slangi"
-#include "cap_proxy_shape.slangi"
+#include "../../mesh/gbuffer_io.slangi"
+#include "../../mesh/view_buffer.slangi"
+#include "projection.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

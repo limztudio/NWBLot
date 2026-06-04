@@ -8,6 +8,7 @@
 #include <core/graphics/module.h>
 #include <core/graphics/shader_archive.h>
 #include <impl/assets/graphics/skinned_mesh/binding_slots.h>
+#include <impl/assets/graphics/skinned_mesh/names.h>
 #include <impl/assets_shader/loader.h>
 
 
@@ -24,11 +25,6 @@ namespace __hidden_pipeline{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Name s_SkinnedMeshComputeShaderName("engine/graphics/skinned_mesh/skinning_cs");
-static constexpr Name s_MeshletBoundsComputeShaderName("engine/graphics/skinned_mesh/meshlet_bounds_cs");
-
 
 static bool LoadComputeShader(
     Core::Graphics& graphics,
@@ -112,7 +108,7 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
         m_assetManager,
         m_shaderPathResolver,
         m_skinningComputeShader,
-        __hidden_pipeline::s_SkinnedMeshComputeShaderName,
+        AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName,
         Name("ECSSkinnedMeshRender_SkinnedMeshCS")
     ))
         return false;
@@ -155,7 +151,7 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
         m_assetManager,
         m_shaderPathResolver,
         m_boundsComputeShader,
-        __hidden_pipeline::s_MeshletBoundsComputeShaderName,
+        AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName,
         Name("ECSSkinnedMeshRender_MeshletBoundsCS")
     ))
         return false;

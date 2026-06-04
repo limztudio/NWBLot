@@ -11,6 +11,7 @@
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/frame_state.h>
+#include <impl/ecs_csg/shape_registry.h>
 
 #include <global/containers.h>
 
@@ -82,27 +83,6 @@ static_assert(IsTriviallyCopyable_V<CsgReceiverRangeGpuData>, "CsgReceiverRangeG
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
-inline constexpr u32 s_CsgCapProxyPlaneShapeMask = 1u << 0;
-inline constexpr u32 s_CsgCapProxyBoxShapeMask = 1u << 1;
-inline constexpr u32 s_CsgCapProxySphereShapeMask = 1u << 2;
-inline constexpr u32 s_CsgCapProxyCapsuleShapeMask = 1u << 3;
-inline constexpr u32 s_CsgCapProxyBuiltInShapeMask =
-    s_CsgCapProxyPlaneShapeMask
-    | s_CsgCapProxyBoxShapeMask
-    | s_CsgCapProxySphereShapeMask
-    | s_CsgCapProxyCapsuleShapeMask
-;
-
-[[nodiscard]] inline constexpr u32 CsgCapProxyShapeMask(const u32 shapeType)noexcept{
-    switch(shapeType){
-    case NWB_CSG_SHAPE_PLANE: return s_CsgCapProxyPlaneShapeMask;
-    case NWB_CSG_SHAPE_BOX: return s_CsgCapProxyBoxShapeMask;
-    case NWB_CSG_SHAPE_SPHERE: return s_CsgCapProxySphereShapeMask;
-    case NWB_CSG_SHAPE_CAPSULE: return s_CsgCapProxyCapsuleShapeMask;
-    default: return 0u;
-    }
-}
-
 struct CsgCapProxyGpuData{
     UInt4 receiverCutterShapePass = {};
     Float4 color = Float4(1.f, 1.f, 1.f, 1.f);
@@ -125,6 +105,7 @@ using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Allo
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 using CsgCapProxyGpuDataVector = Vector<CsgCapProxyGpuData, Core::Alloc::ScratchArena>;
+using CsgCapProxyShapeTypeVector = Vector<CsgShapeTypeId, Core::Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,17 +116,18 @@ struct CsgFrameGpuData{
     CsgCutterGpuDataVector cutters;
     CsgParameterByteDataVector parameterBytes;
     CsgCapProxyGpuDataVector capProxyGpuItems;
-    u32 capProxyShapeMask = 0u;
+    CsgCapProxyShapeTypeVector capProxyShapeTypes;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)
         , cutters(arena)
         , parameterBytes(arena)
         , capProxyGpuItems(arena)
+        , capProxyShapeTypes(arena)
     {}
 
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
-    [[nodiscard]] bool hasCapProxyWork()const noexcept{ return capProxyShapeMask != 0u && !capProxyGpuItems.empty(); }
+    [[nodiscard]] bool hasCapProxyWork()const noexcept{ return !capProxyShapeTypes.empty() && !capProxyGpuItems.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);

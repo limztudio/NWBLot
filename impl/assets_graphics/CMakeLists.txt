@@ -29,6 +29,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
     )
     target_link_libraries(nwb_assets_graphics_cook PUBLIC nwb_assets)
     target_link_libraries(nwb_assets_graphics_cook PRIVATE
+        nwb_assets_csg_cook
         nwb_assets_mesh_cook
         nwb_assets_material_cook
         nwb_assets_shader_cook

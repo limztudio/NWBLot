@@ -274,6 +274,7 @@ bool PrepareShaderEntriesForCook(
     ShaderCook& shaderCook,
     const ResolvedCookPaths& resolvedPaths,
     const Path& materialBindIncludeRoot,
+    const Path& csgShapeIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const MaterialCookEntryVector& materialEntries,
@@ -367,6 +368,7 @@ bool PrepareShaderEntriesForCook(
             resolvedPaths.repoRoot,
             resolvedPaths.assetRoots,
             materialBindIncludeRoot,
+            csgShapeIncludeRoot,
             preparedEntry.entry,
             preparedEntry.includeDirectories,
             scratchArena
@@ -422,7 +424,8 @@ bool PrepareShaderEntriesForCook(
             preparedEntry.dependencies,
             {
                 { resolvedPaths.repoRoot, "repo" },
-                { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() }
+                { materialBindIncludeRoot, MaterialBindNames::GeneratedIncludeCacheDirectoryText() },
+                { csgShapeIncludeRoot, "csg_modules" }
             },
             preparedEntry.dependencyChecksum,
             scratchArena

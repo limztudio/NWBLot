@@ -4,6 +4,8 @@
 
 #include "renderer_private.h"
 
+#include <impl/assets/graphics/deferred/names.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,7 +61,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
 
     if(!m_renderer.shaderSystem().loadShader(
         deferredState().m_lightingPixelShader,
-        ECSRenderDetail::s_DeferredLightingPixelShaderName,
+        AssetsGraphicsDeferred::s_LightingPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Pixel,
         "ECSRender_DeferredLightingPS"

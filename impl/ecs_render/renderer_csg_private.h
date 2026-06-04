@@ -27,18 +27,6 @@ namespace ECSRenderCsgDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ParameterT>
-[[nodiscard]] inline bool LoadCsgCutterParameters(const CsgCutterComponent& cutter, ParameterT& outParameters){
-    outParameters = ParameterT{};
-    if(cutter.parameterBytes.empty())
-        return true;
-    if(cutter.parameterBytes.size() != sizeof(ParameterT))
-        return false;
-
-    NWB_MEMCPY(&outParameters, sizeof(ParameterT), cutter.parameterBytes.data(), sizeof(ParameterT));
-    return true;
-}
-
 [[nodiscard]] inline bool AppendCsgParameterBytes(
     CsgParameterByteDataVector& parameterBytes,
     const void* sourceBytes,
@@ -80,26 +68,6 @@ template<typename ParameterT>
     return true;
 }
 
-template<typename ParameterT>
-[[nodiscard]] inline bool AppendCsgCutterParameters(
-    CsgParameterByteDataVector* parameterBytes,
-    const ParameterT& parameters,
-    CsgCutterGpuData& inOutCutter
-){
-    if(!parameterBytes){
-        inOutCutter.parameterByteSize = static_cast<u32>(sizeof(ParameterT));
-        return true;
-    }
-
-    return AppendCsgParameterBytes(
-        *parameterBytes,
-        &parameters,
-        sizeof(ParameterT),
-        inOutCutter.parameterByteOffset,
-        inOutCutter.parameterByteSize
-    );
-}
-
 [[nodiscard]] inline SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
     const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
@@ -107,6 +75,47 @@ template<typename ParameterT>
     SIMDVector lengthSquared = VectorAdd(Vector3LengthSq(row0), Vector3LengthSq(row1));
     lengthSquared = VectorAdd(lengthSquared, Vector3LengthSq(row2));
     return VectorSqrt(lengthSquared);
+}
+
+[[nodiscard]] inline bool ResolveCsgCutterParameterBytes(
+    const CsgShapeTypeInfo& shapeType,
+    const CsgCutterComponent& cutter,
+    const u8*& outParameterBytes,
+    usize& outParameterByteSize
+){
+    if(cutter.parameterBytes.empty()){
+        outParameterBytes = shapeType.desc.defaultParameterBytes.empty() ? nullptr : shapeType.desc.defaultParameterBytes.data();
+        outParameterByteSize = shapeType.desc.defaultParameterBytes.size();
+    }else{
+        outParameterBytes = cutter.parameterBytes.data();
+        outParameterByteSize = cutter.parameterBytes.size();
+    }
+
+    return outParameterByteSize == static_cast<usize>(shapeType.desc.parameterByteSize)
+        && (outParameterByteSize == 0u || outParameterBytes)
+    ;
+}
+
+inline void CopyCsgCutterInlineParameters(
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    CsgCutterGpuData& inOutCutter
+){
+    inOutCutter.parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
+    inOutCutter.parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
+    if(!parameterBytes)
+        return;
+
+    const usize parameter0Bytes = Min(parameterByteSize, sizeof(Float4));
+    if(parameter0Bytes > 0u)
+        NWB_MEMCPY(&inOutCutter.parameter0, sizeof(Float4), parameterBytes, parameter0Bytes);
+
+    if(parameterByteSize <= sizeof(Float4))
+        return;
+
+    const usize parameter1Bytes = Min(parameterByteSize - sizeof(Float4), sizeof(Float4));
+    if(parameter1Bytes > 0u)
+        NWB_MEMCPY(&inOutCutter.parameter1, sizeof(Float4), parameterBytes + sizeof(Float4), parameter1Bytes);
 }
 
 [[nodiscard]] inline CsgBoundsGpuData BuildCsgBoundsGpuData(
@@ -174,12 +183,20 @@ template<typename ParameterT>
     SIMDVector& outMaxBounds,
     bool& outFiniteBounds
 ){
-    const u8* parameterBytes = cutter.parameterBytes.empty() ? nullptr : cutter.parameterBytes.data();
+    CsgShapeTypeInfo shapeType;
+    if(!shapeRegistry.findShapeType(cutter.shapeType, shapeType))
+        return false;
+
+    const u8* parameterBytes = nullptr;
+    usize parameterByteSize = 0u;
+    if(!ResolveCsgCutterParameterBytes(shapeType, cutter, parameterBytes, parameterByteSize))
+        return false;
+
     return shapeRegistry.buildShapeBounds(
-        cutter.shapeType,
+        shapeType.id,
         LoadFloat(cutter.shapeToWorld),
         parameterBytes,
-        cutter.parameterBytes.size(),
+        parameterByteSize,
         outMinBounds,
         outMaxBounds,
         outFiniteBounds
@@ -209,53 +226,21 @@ template<typename ParameterT>
     if(IsFinite(worldToShapeScaleBound) && worldToShapeScaleBound > 0.0f)
         outCutter.worldToShapeScaleBound = worldToShapeScaleBound;
 
-    if(cutter.shapeType == s_CsgPlaneShapeName){
-        CsgPlaneShapeParameters parameters;
-        if(!LoadCsgCutterParameters(cutter, parameters))
-            return false;
-        outCutter.shapeType = NWB_CSG_SHAPE_PLANE;
-        outCutter.parameter0 = parameters.normalDistance;
-        return AppendCsgCutterParameters(parameterBytes, parameters, outCutter);
-    }
-    if(cutter.shapeType == s_CsgBoxShapeName){
-        CsgBoxShapeParameters parameters;
-        if(!LoadCsgCutterParameters(cutter, parameters))
-            return false;
-        outCutter.shapeType = NWB_CSG_SHAPE_BOX;
-        outCutter.parameter0 = parameters.halfExtents;
-        return AppendCsgCutterParameters(parameterBytes, parameters, outCutter);
-    }
-    if(cutter.shapeType == s_CsgSphereShapeName){
-        CsgSphereShapeParameters parameters;
-        if(!LoadCsgCutterParameters(cutter, parameters))
-            return false;
-        outCutter.shapeType = NWB_CSG_SHAPE_SPHERE;
-        outCutter.parameter0 = parameters.radius;
-        return AppendCsgCutterParameters(parameterBytes, parameters, outCutter);
-    }
-    if(cutter.shapeType == s_CsgCapsuleShapeName){
-        CsgCapsuleShapeParameters parameters;
-        if(!LoadCsgCutterParameters(cutter, parameters))
-            return false;
-        outCutter.shapeType = NWB_CSG_SHAPE_CAPSULE;
-        outCutter.parameter0 = parameters.radiusHalfHeight;
-        return AppendCsgCutterParameters(parameterBytes, parameters, outCutter);
-    }
-
-    if(shapeType.id < NWB_CSG_SHAPE_PROJECT_BEGIN)
-        return false;
-    if(cutter.parameterBytes.size() != static_cast<usize>(shapeType.desc.parameterByteSize))
+    const u8* sourceParameterBytes = nullptr;
+    usize sourceParameterByteSize = 0u;
+    if(!ResolveCsgCutterParameterBytes(shapeType, cutter, sourceParameterBytes, sourceParameterByteSize))
         return false;
 
     outCutter.shapeType = shapeType.id;
+    CopyCsgCutterInlineParameters(sourceParameterBytes, sourceParameterByteSize, outCutter);
     if(!parameterBytes){
-        outCutter.parameterByteSize = shapeType.desc.parameterByteSize;
+        outCutter.parameterByteSize = static_cast<u32>(sourceParameterByteSize);
         return true;
     }
     return AppendCsgParameterBytes(
         *parameterBytes,
-        cutter.parameterBytes.data(),
-        cutter.parameterBytes.size(),
+        sourceParameterBytes,
+        sourceParameterByteSize,
         outCutter.parameterByteOffset,
         outCutter.parameterByteSize
     );

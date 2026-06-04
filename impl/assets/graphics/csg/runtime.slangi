@@ -94,6 +94,13 @@ float nwbCsgNonZeroSign(const float value){
     return value < 0.0 ? -1.0 : 1.0;
 }
 
+NwbCsgSample nwbInvalidCsgShapeSample(){
+    NwbCsgSample sample;
+    sample.distance = 1e30;
+    sample.normal = float3(0.0, 1.0, 0.0);
+    return sample;
+}
+
 float3 nwbCsgTransformWorldToShape(const float3 worldPosition, const NwbCsgCutter cutter){
     const float4 p = float4(worldPosition, 1.0);
     return float3(
@@ -162,35 +169,122 @@ bool nwbCsgReceiverLocalBoundsContains(const NwbCsgReceiverRange receiverRange, 
     return nwbCsgBoundsContains(receiverRange.localBounds, receiverLocalPosition, 0.001);
 }
 
-#include "builtin_shapes.slangi"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbTryEvalEmptyCsgShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    outSample = nwbInvalidCsgShapeSample();
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN 1
+#if !defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalEmptyCsgShape
+#endif
 
 #if defined(NWB_CSG_PROJECT_EVALUATOR_MODULE)
 #include NWB_CSG_PROJECT_EVALUATOR_MODULE
 #endif
 
 #if !defined(NWB_CSG_HAS_PROJECT_EVALUATOR)
-NwbCsgSample nwbEvalProjectCsgShape(const uint shapeType, const float3 pShape, const uint parameterByteOffset){
-    NwbCsgSample sample;
-    sample.distance = 1e30;
-    sample.normal = float3(0.0, 1.0, 0.0);
-    return sample;
+NwbCsgSample nwbEvalProjectCsgShape(const uint shapeType, const float3 shapePosition, const NwbCsgCutter cutter){
+    return nwbInvalidCsgShapeSample();
 }
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbTryEvalProjectCsgShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    if(shapeType < NWB_CSG_SHAPE_PROJECT_BEGIN){
+        outSample = nwbInvalidCsgShapeSample();
+        return false;
+    }
+
+    outSample = nwbEvalProjectCsgShape(shapeType, shapePosition, cutter);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
+#else
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalEmptyCsgShape
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbTryEvalProjectCsgShapeFallback(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    if(NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample))
+        return true;
+    return nwbTryEvalProjectCsgShape(shapeType, shapePosition, cutter, outSample);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef NWB_CSG_SHAPE_EVAL_CHAIN
+#define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShapeFallback
+#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
+
+#include "dispatch.slangi"
+
+#undef NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbCsgSample nwbCsgEvaluateShapeSample(const float3 shapePosition, const NwbCsgCutter cutter){
+    return nwbEvalCsgShape(cutter.shapeType, shapePosition, cutter);
+}
+
+float nwbCsgEvaluateShapeDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    return nwbEvalCsgShapeDistance(cutter.shapeType, shapePosition, cutter);
+}
+
+float3 nwbCsgProjectShapePositionToCutterSurface(const float3 shapePosition, const NwbCsgCutter cutter){
+    const NwbCsgSample sample = nwbCsgEvaluateShapeSample(shapePosition, cutter);
+    if(!isfinite(sample.distance) || abs(sample.distance) > 1e20)
+        return shapePosition;
+
+    const float3 normal = nwbCsgNormalizeOr(sample.normal, float3(0.0, 1.0, 0.0));
+    return shapePosition - normal * sample.distance;
+}
+
 NwbCsgSample nwbCsgEvaluateSample(const float3 worldPosition, const NwbCsgCutter cutter){
-    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
-    return cutter.shapeType < NWB_CSG_SHAPE_PROJECT_BEGIN
-        ? nwbEvalBuiltInCsgShape(cutter.shapeType, shapePosition, cutter)
-        : nwbEvalProjectCsgShape(cutter.shapeType, shapePosition, cutter.parameterByteOffset)
-    ;
+    return nwbCsgEvaluateShapeSample(nwbCsgTransformWorldToShape(worldPosition, cutter), cutter);
 }
 
 float nwbCsgEvaluateDistance(const float3 worldPosition, const NwbCsgCutter cutter){
-    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
-    return cutter.shapeType < NWB_CSG_SHAPE_PROJECT_BEGIN
-        ? nwbEvalBuiltInCsgShapeDistance(cutter.shapeType, shapePosition, cutter)
-        : nwbEvalProjectCsgShape(cutter.shapeType, shapePosition, cutter.parameterByteOffset).distance
-    ;
+    return nwbCsgEvaluateShapeDistance(nwbCsgTransformWorldToShape(worldPosition, cutter), cutter);
 }
 
 float3 nwbCsgFlippedCutterWorldNormal(const float3 worldPosition, const NwbCsgCutter cutter, const float3 fallback){
@@ -200,11 +294,7 @@ float3 nwbCsgFlippedCutterWorldNormal(const float3 worldPosition, const NwbCsgCu
 
 float3 nwbCsgProjectWorldPositionToCutterSurface(const float3 worldPosition, const NwbCsgCutter cutter){
     const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
-    const float3 surfaceShapePosition = cutter.shapeType < NWB_CSG_SHAPE_PROJECT_BEGIN
-        ? nwbProjectBuiltInCsgShapePositionToSurface(cutter.shapeType, shapePosition, cutter)
-        : shapePosition
-    ;
-    return nwbCsgTransformShapeToWorld(surfaceShapePosition, cutter);
+    return nwbCsgTransformShapeToWorld(nwbCsgProjectShapePositionToCutterSurface(shapePosition, cutter), cutter);
 }
 
 uint nwbCsgPackOpeningMask(const uint receiverIndex, const uint cutterIndex){

@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_ASSETS_CSG_CAPSULE_EVAL_SLANGI
+#define NWB_ASSETS_CSG_CAPSULE_EVAL_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float nwbCsgCapsuleDistance(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float radius = cutter.parameter0.x;
+    const float halfHeight = cutter.parameter0.y;
+    const float3 q = shapePosition - float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+    return length(q) - radius;
+}
+
+float3 nwbCsgCapsuleNormal(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float halfHeight = cutter.parameter0.y;
+    const float3 axisPoint = float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+    return nwbCsgNormalizeOr(shapePosition - axisPoint, float3(0.0, nwbCsgNonZeroSign(shapePosition.y), 0.0));
+}
+
+NwbCsgSample nwbEvalCsgCapsuleShape(const float3 shapePosition, const NwbCsgCutter cutter){
+    NwbCsgSample sample;
+    sample.distance = nwbCsgCapsuleDistance(shapePosition, cutter);
+    sample.normal = nwbCsgCapsuleNormal(shapePosition, cutter);
+    return sample;
+}
+
+#if defined(NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN)
+#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
+#else
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShape
+#endif
+
+bool nwbTryEvalCsgCapsuleShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    if(shapeType == NWB_CSG_SHAPE_CAPSULE){
+        outSample = nwbEvalCsgCapsuleShape(shapePosition, cutter);
+        return true;
+    }
+    return NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
+}
+
+#undef NWB_CSG_SHAPE_EVAL_CHAIN
+#define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalCsgCapsuleShape
+#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

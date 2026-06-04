@@ -25,10 +25,10 @@
 
 
 #define NWB_CSG_CAP_PROXY_GROUP_SIZE 64
-#define NWB_CSG_CAP_PROXY_MAX_SEGMENTS 12u
-#define NWB_CSG_CAP_PROXY_MAX_ROWS 5u
-#define NWB_CSG_CAP_PROXY_MAX_VERTICES 78u
-#define NWB_CSG_CAP_PROXY_MAX_TRIANGLES 120u
+#define NWB_CSG_CAP_PROXY_MAX_SEGMENTS 16u
+#define NWB_CSG_CAP_PROXY_MAX_ROWS 7u
+#define NWB_CSG_CAP_PROXY_MAX_VERTICES 150u
+#define NWB_CSG_CAP_PROXY_MAX_TRIANGLES 240u
 
 #define NWB_CSG_CAP_PROXY_PI 3.14159265
 #define NWB_CSG_CAP_PROXY_TWO_PI 6.28318531
@@ -110,13 +110,21 @@ uint nwbCsgCapProxySegmentCount(const NwbCsgCapProxyGpuData item, const NwbCsgCu
     const float3 centerWorld = nwbCsgCapProxyBoundsCenter(item.cutterBounds);
     const float3 radiusVectorWorld = nwbCsgTransformShapeVectorToWorld(float3(max(radiusShape, 0.0001), 0.0, 0.0), cutter);
     const float projectedRadius = nwbCsgCapProxyProjectedRadiusPixels(centerWorld, radiusVectorWorld);
-    if(projectedRadius >= 128.0)
+    if(projectedRadius >= 48.0)
+        return 16u;
+    if(projectedRadius >= 28.0)
+        return 14u;
+    if(projectedRadius >= 14.0)
         return 12u;
-    if(projectedRadius >= 72.0)
-        return 10u;
-    if(projectedRadius >= 32.0)
-        return 8u;
-    return 6u;
+    return 8u;
+}
+
+uint nwbCsgCapProxySphereRowCount(const uint segments){
+    return min(NWB_CSG_CAP_PROXY_MAX_ROWS, max(5u, segments / 2u));
+}
+
+uint nwbCsgCapProxyCapsuleRowCount(const uint segments){
+    return NWB_CSG_CAP_PROXY_MAX_ROWS;
 }
 
 float nwbCsgCapProxyInflatedRoundRadius(const float radiusShape, const float maxHalfAngle){
@@ -136,9 +144,11 @@ float nwbCsgCapProxySphereRadiusSlack(const float radiusShape, const uint segmen
     return nwbCsgCapProxyRoundRadiusSlack(radiusShape, max(segmentHalfAngle, rowHalfAngle));
 }
 
-float nwbCsgCapProxyCapsuleRadiusSlack(const float radiusShape, const uint segments){
+float nwbCsgCapProxyCapsuleRadiusSlack(const float radiusShape, const uint segments, const uint rows){
     const float segmentHalfAngle = NWB_CSG_CAP_PROXY_PI / max(float(segments), 3.0);
-    return nwbCsgCapProxyRoundRadiusSlack(radiusShape, max(segmentHalfAngle, NWB_CSG_CAP_PROXY_PI_OVER_EIGHT));
+    const uint capSteps = rows >= 7u ? 3u : 2u;
+    const float rowHalfAngle = 0.25 * NWB_CSG_CAP_PROXY_PI / max(float(capSteps), 1.0);
+    return nwbCsgCapProxyRoundRadiusSlack(radiusShape, max(segmentHalfAngle, rowHalfAngle));
 }
 
 bool nwbCsgCapProxyItemMatchesPassAndShape(const NwbCsgCapProxyGpuData item, const uint shapeType){

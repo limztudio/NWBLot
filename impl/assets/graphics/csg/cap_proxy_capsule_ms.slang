@@ -8,15 +8,33 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbCsgCapProxyCapsuleRow(const uint row, const float radius, const float halfHeight, out float y, out float ringRadius){
-    switch(row){
-    case 0u: y = halfHeight + radius; ringRadius = 0.0; return;
-    case 1u: y = halfHeight + radius * 0.70710678; ringRadius = radius * 0.70710678; return;
-    case 2u: y = halfHeight; ringRadius = radius; return;
-    case 3u: y = -halfHeight; ringRadius = radius; return;
-    case 4u: y = -halfHeight - radius * 0.70710678; ringRadius = radius * 0.70710678; return;
-    default: y = -halfHeight - radius; ringRadius = 0.0; return;
+void nwbCsgCapProxyCapsuleRow(
+    const uint row,
+    const uint rows,
+    const float radius,
+    const float halfHeight,
+    out float y,
+    out float ringRadius
+){
+    const uint capSteps = rows >= 7u ? 3u : 2u;
+    if(row <= capSteps){
+        const float angle = 0.5 * NWB_CSG_CAP_PROXY_PI * float(row) / float(capSteps);
+        float sinAngle;
+        float cosAngle;
+        sincos(angle, sinAngle, cosAngle);
+        y = halfHeight + radius * cosAngle;
+        ringRadius = radius * sinAngle;
+        return;
     }
+
+    const uint bottomBegin = capSteps + 1u;
+    const uint bottomRow = row - bottomBegin;
+    const float angle = 0.5 * NWB_CSG_CAP_PROXY_PI * float(bottomRow) / float(capSteps);
+    float sinAngle;
+    float cosAngle;
+    sincos(angle, sinAngle, cosAngle);
+    y = -halfHeight - radius * sinAngle;
+    ringRadius = radius * cosAngle;
 }
 
 NwbMeshRasterVertex nwbCsgCapProxyCapsuleVertex(
@@ -28,7 +46,8 @@ NwbMeshRasterVertex nwbCsgCapProxyCapsuleVertex(
     const uint row = localVertex / (segments + 1u);
     const uint column = localVertex - row * (segments + 1u);
     const float phi = NWB_CSG_CAP_PROXY_TWO_PI * float(column) / float(segments);
-    const float radiusSlack = nwbCsgCapProxyCapsuleRadiusSlack(cutter.parameter0.x, segments);
+    const uint rows = nwbCsgCapProxyCapsuleRowCount(segments);
+    const float radiusSlack = nwbCsgCapProxyCapsuleRadiusSlack(cutter.parameter0.x, segments, rows);
     const float radius = max(cutter.parameter0.x, 0.0001) + radiusSlack;
     const float halfHeight = max(cutter.parameter0.y, 0.0);
     float sinPhi;
@@ -36,7 +55,7 @@ NwbMeshRasterVertex nwbCsgCapProxyCapsuleVertex(
     sincos(phi, sinPhi, cosPhi);
     float y;
     float ringRadius;
-    nwbCsgCapProxyCapsuleRow(row, radius, halfHeight, y, ringRadius);
+    nwbCsgCapProxyCapsuleRow(row, rows, radius, halfHeight, y, ringRadius);
     const float3 shapePosition = float3(ringRadius * cosPhi, y, ringRadius * sinPhi);
     const float3 shapeNormal = nwbCsgCapsuleNormal(shapePosition, cutter);
     return nwbCsgCapProxyBuildVertex(
@@ -77,7 +96,7 @@ void main(
 
     const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
     const uint segments = nwbCsgCapProxySegmentCount(item, cutter, cutter.parameter0.x);
-    const uint rows = NWB_CSG_CAP_PROXY_MAX_ROWS;
+    const uint rows = nwbCsgCapProxyCapsuleRowCount(segments);
     const uint vertexCount = (rows + 1u) * (segments + 1u);
     const uint primitiveCount = rows * segments * 2u;
 

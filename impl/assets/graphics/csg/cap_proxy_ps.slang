@@ -7,6 +7,7 @@
 #include "binding_slots.h"
 
 #include "../mesh/gbuffer_io.slangi"
+#include "../mesh/view_buffer.slangi"
 #include "runtime.slangi"
 
 
@@ -20,31 +21,34 @@ Texture2D<uint> g_NwbCsgCapProxyOpeningMask;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbCsgCapProxyOpeningMaskMatches(const uint2 pixelPosition, const uint expectedOpeningMaskValue){
-    if(g_NwbCsgCapProxyOpeningMask.Load(int3(pixelPosition, 0)) == expectedOpeningMaskValue)
-        return true;
+struct NwbCsgCapProxyGBufferOutput{
+    [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
+    [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;
+    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
+    float depth : SV_Depth;
+};
 
-    uint width;
-    uint height;
-    g_NwbCsgCapProxyOpeningMask.GetDimensions(width, height);
-    const int searchRadius = 2;
-    const int2 pixel = int2(pixelPosition);
-    const int2 maxPixel = int2(max(uint2(width, height), uint2(1u, 1u)) - uint2(1u, 1u));
-    for(int y = -searchRadius; y <= searchRadius; ++y){
-        for(int x = -searchRadius; x <= searchRadius; ++x){
-            if(x == 0 && y == 0)
-                continue;
-
-            const int2 samplePixel = clamp(pixel + int2(x, y), int2(0, 0), maxPixel);
-            if(g_NwbCsgCapProxyOpeningMask.Load(int3(samplePixel, 0)) == expectedOpeningMaskValue)
-                return true;
-        }
-    }
-
-    return false;
+float nwbCsgCapProxyDepth(const float3 worldPosition){
+    const float4 clipPosition = mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
+    return clipPosition.z / clipPosition.w;
 }
 
-NwbMeshGBufferOutput main(NwbMeshPixelInput input){
+NwbCsgCapProxyGBufferOutput nwbBuildCsgCapProxyGBufferOutput(const float3 capWorldPosition){
+    const NwbMeshGBufferOutput gbufferOutput = nwbBuildMeshGBufferOutput();
+
+    NwbCsgCapProxyGBufferOutput output;
+    output.baseColor = gbufferOutput.baseColor;
+    output.normal = gbufferOutput.normal;
+    output.worldPosition = gbufferOutput.worldPosition;
+    output.depth = nwbCsgCapProxyDepth(capWorldPosition);
+    return output;
+}
+
+bool nwbCsgCapProxyOpeningMaskMatches(const uint2 pixelPosition, const uint expectedOpeningMaskValue){
+    return g_NwbCsgCapProxyOpeningMask.Load(int3(pixelPosition, 0)) == expectedOpeningMaskValue;
+}
+
+NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     const uint receiverIndex = uint(input.worldPosition.w + 0.5);
     const uint cutterIndex = uint(input.tangent.w + 0.5);
     const float3 worldPosition = input.worldPosition.xyz;
@@ -67,7 +71,7 @@ NwbMeshGBufferOutput main(NwbMeshPixelInput input){
 
     const float3 capNormal = nwbCsgFlippedCutterWorldNormal(capWorldPosition, cutter, input.normal);
     nwbWriteMeshGBuffer(input.color.rgb, capNormal, capWorldPosition);
-    return nwbBuildMeshGBufferOutput();
+    return nwbBuildCsgCapProxyGBufferOutput(capWorldPosition);
 }
 
 

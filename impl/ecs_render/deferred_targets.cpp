@@ -235,7 +235,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         Core::FramebufferAttachment()
             .setTexture(createdTargets.depth.get())
             .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-            .setReadOnly(true)
     );
     createdTargets.capProxyFramebuffer = device->createFramebuffer(capProxyFramebufferDesc);
     if(!createdTargets.capProxyFramebuffer){

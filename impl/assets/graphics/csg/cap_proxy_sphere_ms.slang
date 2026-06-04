@@ -66,7 +66,7 @@ void main(
 
     const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
     const uint segments = nwbCsgCapProxySegmentCount(item, cutter, cutter.parameter0.x);
-    const uint rows = max(3u, segments / 2u - 1u);
+    const uint rows = nwbCsgCapProxySphereRowCount(segments);
     const uint vertexCount = (rows + 1u) * (segments + 1u);
     const uint primitiveCount = rows * segments * 2u;
 

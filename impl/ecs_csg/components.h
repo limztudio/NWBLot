@@ -33,7 +33,6 @@ struct CsgReceiverComponent{
     Name receiverGroup = NAME_NONE;
 
     bool enabled = true;
-    bool generateCapProxies = true;
 
     bool affectOpaquePass = true;
     bool affectTransparentPass = true;

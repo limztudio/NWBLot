@@ -275,26 +275,6 @@ bool ParseAssetMetadata(
 
     if(!AssetsCsgCook::AssignCsgShapeCookIds(outMetadata.csgShapeEntries))
         return false;
-    for(AssetsCsgCook::CsgShapeCookEntry& csgShapeEntry : outMetadata.csgShapeEntries){
-        if(csgShapeEntry.hasProxyShader()){
-            if(!AppendUniqueShaderEntry(
-                csgShapeEntry.proxyShaderEntry,
-                Path(csgShapeEntry.proxyShaderEntry.source.c_str()),
-                seenShaderIdentityKeys,
-                outMetadata.shaderEntries
-            ))
-                return false;
-        }
-        if(csgShapeEntry.hasProxyPixelShader()){
-            if(!AppendUniqueShaderEntry(
-                csgShapeEntry.proxyPixelShaderEntry,
-                Path(csgShapeEntry.proxyPixelShaderEntry.source.c_str()),
-                seenShaderIdentityKeys,
-                outMetadata.shaderEntries
-            ))
-                return false;
-        }
-    }
 
     if(outMetadata.shaderEntries.empty()){
         if(!outMetadata.materialEntries.empty()){

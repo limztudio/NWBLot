@@ -76,9 +76,9 @@ void RendererMaterialState::invalidateResources(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RendererCsgState::RendererCsgState(Core::Alloc::GlobalArena& arena)
-    : m_capProxyShapeResources(arena)
-{}
+RendererCsgState::RendererCsgState(Core::Alloc::GlobalArena& arena){
+    static_cast<void>(arena);
+}
 
 void RendererCsgState::invalidateResources(){
     m_clipBindingLayout.reset();
@@ -88,20 +88,9 @@ void RendererCsgState::invalidateResources(){
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();
-    m_capProxyBuffer.reset();
-    m_capProxyBindingLayout.reset();
-    m_capProxyComputeBindingLayout.reset();
-    m_capProxyOpeningMaskBindingLayout.reset();
-    m_capProxyBindingSet.reset();
-    m_capProxyComputeBindingSet.reset();
-    m_capProxyOpeningMaskBindingSet.reset();
-    m_capProxyEmulationVertexBuffer.reset();
-    m_capProxyShapeResources.clear();
     m_receiverRangeBufferCapacity = 0u;
     m_cutterBufferCapacity = 0u;
     m_parameterByteBufferCapacity = 0u;
-    m_capProxyBufferCapacity = 0u;
-    m_capProxyEmulationVertexCapacity = 0u;
 }
 
 

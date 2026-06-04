@@ -68,18 +68,6 @@ inline Core::RenderState BuildCompositeRenderState(){
     return renderState;
 }
 
-inline Core::RenderState BuildCsgCapProxyRenderState(){
-    Core::RenderState renderState;
-    renderState.depthStencilState
-        .enableDepthTest()
-        .enableDepthWrite()
-        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
-    ;
-    renderState.rasterState.enableDepthClip().setCullNone();
-    return renderState;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

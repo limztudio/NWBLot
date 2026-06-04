@@ -88,7 +88,6 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
         AddCsgFrameReceiverWork(
             state,
             receiverKind,
-            receiver->generateCapProxies,
             opaqueWork,
             transparentWork,
             Max(opaqueCutterCount, transparentCutterCount)

@@ -214,7 +214,6 @@ private:
         if(enableCsg){
             auto& receiver = entity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
             receiver.receiverGroup = s_ReceiverGroup;
-            receiver.generateCapProxies = true;
             receiver.affectOpaquePass = true;
             receiver.affectTransparentPass = false;
         }

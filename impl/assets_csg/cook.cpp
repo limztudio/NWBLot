@@ -41,60 +41,8 @@ static constexpr AStringView s_ShapeField = "shape";
 static constexpr AStringView s_ModuleField = "module";
 static constexpr AStringView s_ModuleIncludeField = "module_include";
 static constexpr AStringView s_EvalField = "eval";
-static constexpr AStringView s_ProxyShaderField = "proxy_shader";
-static constexpr AStringView s_ProxySourceField = "proxy_source";
-static constexpr AStringView s_ProxyEntryField = "proxy_entry";
-static constexpr AStringView s_ProxyProfileField = "proxy_profile";
-static constexpr AStringView s_ProxyIncludeRootsField = "proxy_include_roots";
-static constexpr AStringView s_ProxyShadowField = "proxy_shadow";
-static constexpr AStringView s_ProxyPixelShaderField = "proxy_pixel_shader";
-static constexpr AStringView s_ProxyPixelSourceField = "proxy_pixel_source";
-static constexpr AStringView s_ProxyPixelEntryField = "proxy_pixel_entry";
-static constexpr AStringView s_ProxyPixelProfileField = "proxy_pixel_profile";
-static constexpr AStringView s_ProxyPixelIncludeRootsField = "proxy_pixel_include_roots";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
-static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
-static constexpr AStringView s_CapProxyShaderShapeIdImplicitDefineName = "NWB_CSG_CAP_PROXY_SHADER_SHAPE_ID";
-static constexpr AStringView s_DefaultProxyEntryPoint = "main";
-static constexpr AStringView s_DefaultProxyTargetProfile = "spirv_1_5";
-static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
-
-struct ShapeShaderFieldSet{
-    AStringView shader;
-    AStringView source;
-    AStringView entry;
-    AStringView profile;
-    AStringView includeRoots;
-    AStringView shadow;
-    AStringView stage;
-    AStringView defaultEntry;
-    bool emitMeshComputeShadow = false;
-};
-
-static constexpr ShapeShaderFieldSet s_ProxyMeshShaderFields{
-    s_ProxyShaderField,
-    s_ProxySourceField,
-    s_ProxyEntryField,
-    s_ProxyProfileField,
-    s_ProxyIncludeRootsField,
-    s_ProxyShadowField,
-    "mesh",
-    s_DefaultProxyEntryPoint,
-    true
-};
-
-static constexpr ShapeShaderFieldSet s_ProxyPixelShaderFields{
-    s_ProxyPixelShaderField,
-    s_ProxyPixelSourceField,
-    s_ProxyPixelEntryField,
-    s_ProxyPixelProfileField,
-    s_ProxyPixelIncludeRootsField,
-    AStringView(),
-    "ps",
-    s_DefaultProxyEntryPoint,
-    false
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,17 +53,6 @@ static constexpr ShapeShaderFieldSet s_ProxyPixelShaderFields{
         || fieldName == s_ModuleField
         || fieldName == s_ModuleIncludeField
         || fieldName == s_EvalField
-        || fieldName == s_ProxyShaderField
-        || fieldName == s_ProxySourceField
-        || fieldName == s_ProxyEntryField
-        || fieldName == s_ProxyProfileField
-        || fieldName == s_ProxyIncludeRootsField
-        || fieldName == s_ProxyShadowField
-        || fieldName == s_ProxyPixelShaderField
-        || fieldName == s_ProxyPixelSourceField
-        || fieldName == s_ProxyPixelEntryField
-        || fieldName == s_ProxyPixelProfileField
-        || fieldName == s_ProxyPixelIncludeRootsField
     ;
 }
 
@@ -202,69 +139,6 @@ static constexpr ShapeShaderFieldSet s_ProxyPixelShaderFields{
     return ParseOptionalStringField(nwbFilePath, asset, fieldName, outText);
 }
 
-[[nodiscard]] static bool ParseOptionalIntegerFlagField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    bool& inOutValue
-){
-    const Metascript::Value* fieldValue = asset.findField(fieldName);
-    if(!fieldValue)
-        return true;
-
-    if(!fieldValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be 0 or 1")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const i64 value = fieldValue->asInteger();
-    if(value != 0 && value != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be 0 or 1")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    inOutValue = value != 0;
-    return true;
-}
-
-[[nodiscard]] static bool ParseOptionalStringListField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    ShaderCook::CookVector<CookString>& outList
-){
-    outList.clear();
-
-    const Metascript::Value* fieldValue = asset.findField(fieldName);
-    if(!fieldValue)
-        return true;
-    if(!fieldValue->copyStringList(outList)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a list of strings")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    for(const CookString& text : outList){
-        if(!TrimView(AStringView(text)).empty())
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' entries must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] static bool ValidateIncludePath(
     const Path& nwbFilePath,
     const AStringView fieldName,
@@ -309,141 +183,11 @@ static constexpr ShapeShaderFieldSet s_ProxyPixelShaderFields{
     return true;
 }
 
-[[nodiscard]] static bool ResolveRelativeSourcePath(
-    ShaderCook::CookArena& cookArena,
-    const Path& nwbFilePath,
-    const AStringView fieldName,
-    const AStringView sourcePath,
-    CookString& outSource
-){
-    outSource.clear();
-    if(!ValidateIncludePath(nwbFilePath, fieldName, sourcePath))
-        return false;
-
-    const Path parentDirectory = nwbFilePath.parent_path();
-    if(parentDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' cannot be resolved because the metadata directory is empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const Path resolvedSourcePath = (parentDirectory / Path(sourcePath)).lexically_normal();
-    const CookString resolvedSourcePathText = PathToString(cookArena, resolvedSourcePath);
-    outSource.assign(resolvedSourcePathText.data(), resolvedSourcePathText.size());
-    return !outSource.empty();
-}
-
 [[nodiscard]] static bool HasSlangIncludeExtension(const AStringView includePath, ScratchArena& scratchArena){
     const Path includePathValue(includePath);
     ScratchString extension = PathToString(scratchArena, includePathValue.extension());
     CanonicalizeTextInPlace(extension);
     return extension == s_SlangIncludeExtension;
-}
-
-[[nodiscard]] static bool HasSlangSourceExtension(const AStringView sourcePath, ScratchArena& scratchArena){
-    const Path sourcePathValue(sourcePath);
-    ScratchString extension = PathToString(scratchArena, sourcePathValue.extension());
-    CanonicalizeTextInPlace(extension);
-    return extension == s_SlangSourceExtension;
-}
-
-[[nodiscard]] static bool HasShapeShaderFields(const Metascript::Value& asset, const ShapeShaderFieldSet& fields){
-    return asset.findField(fields.shader)
-        || asset.findField(fields.source)
-        || asset.findField(fields.entry)
-        || asset.findField(fields.profile)
-        || asset.findField(fields.includeRoots)
-        || (!fields.shadow.empty() && asset.findField(fields.shadow))
-    ;
-}
-
-[[nodiscard]] static bool ParseShapeShaderEntry(
-    ShaderCook::CookArena& cookArena,
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const ShapeShaderFieldSet& fields,
-    ShaderCook::ShaderEntry& outEntry,
-    ScratchArena& scratchArena
-){
-    outEntry = ShaderCook::ShaderEntry(cookArena);
-    if(!HasShapeShaderFields(asset, fields))
-        return true;
-
-    CookString shaderName(cookArena);
-    if(!ParseOptionalStringField(nwbFilePath, asset, fields.shader, shaderName))
-        return false;
-    if(shaderName.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' is required when proxy shader fields are present")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fields.shader)
-        );
-        return false;
-    }
-    if(!Name(AStringView(shaderName))){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a valid name")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fields.shader)
-        );
-        return false;
-    }
-
-    CookString source(cookArena);
-    if(!ParseRequiredStringField(nwbFilePath, asset, fields.source, source))
-        return false;
-    if(!HasSlangSourceExtension(AStringView(source), scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must reference a .slang file")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fields.source)
-        );
-        return false;
-    }
-
-    outEntry.name.assign(AStringView(shaderName));
-    if(!outEntry.stage.assign(fields.stage))
-        return false;
-    if(!outEntry.archiveStage.assign(outEntry.stage))
-        return false;
-    if(!outEntry.targetProfile.assign(s_DefaultProxyTargetProfile))
-        return false;
-    outEntry.entryPoint.assign(fields.defaultEntry);
-    outEntry.emitMeshComputeShadow = fields.emitMeshComputeShadow;
-    outEntry.includeRoots.emplace_back(s_DefaultProxyIncludeRoot, cookArena);
-
-    CookString profile(cookArena);
-    if(!ParseOptionalStringField(nwbFilePath, asset, fields.profile, profile))
-        return false;
-    if(!profile.empty() && !outEntry.targetProfile.assign(AStringView(profile)))
-        return false;
-    CookString entry(cookArena);
-    if(!ParseOptionalStringField(nwbFilePath, asset, fields.entry, entry))
-        return false;
-    if(!entry.empty())
-        outEntry.entryPoint.assign(AStringView(entry));
-    if(!ParseOptionalStringListField(nwbFilePath, asset, fields.includeRoots, outEntry.includeRoots))
-        return false;
-    if(outEntry.includeRoots.empty())
-        outEntry.includeRoots.emplace_back(s_DefaultProxyIncludeRoot, cookArena);
-    if(!fields.shadow.empty() && !ParseOptionalIntegerFlagField(nwbFilePath, asset, fields.shadow, outEntry.emitMeshComputeShadow))
-        return false;
-
-    if(outEntry.targetProfile.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fields.profile)
-        );
-        return false;
-    }
-    if(outEntry.entryPoint.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fields.entry)
-        );
-        return false;
-    }
-
-    return ResolveRelativeSourcePath(cookArena, nwbFilePath, fields.source, AStringView(source), outEntry.source);
 }
 
 [[nodiscard]] static Path BuildCsgShapeIncludeRoot(
@@ -495,29 +239,6 @@ static constexpr ShapeShaderFieldSet s_ProxyPixelShaderFields{
 
     outValue.assign(shapeTypeIdView);
     outValue += 'u';
-    return true;
-}
-
-[[nodiscard]] static bool SetShapeIdImplicitDefine(CsgShapeCookEntry& entry){
-    if(!entry.hasProxyShader())
-        return true;
-
-    ShaderCook::CookArena& cookArena = entry.proxyShaderEntry.name.get_allocator().arena();
-    CookString defineName(s_CapProxyShaderShapeIdImplicitDefineName, cookArena);
-    if(entry.proxyShaderEntry.defineValues.find(defineName) != entry.proxyShaderEntry.defineValues.end()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': proxy shader '{}' uses reserved implicit define '{}' as a variant define")
-            , StringConvert(entry.shapeName.c_str())
-            , StringConvert(entry.proxyShaderEntry.name)
-            , StringConvert(s_CapProxyShaderShapeIdImplicitDefineName)
-        );
-        return false;
-    }
-
-    CookString defineValue(cookArena);
-    if(!MakeShapeIdDefineValue(entry.shapeTypeId, defineValue))
-        return false;
-
-    entry.proxyShaderEntry.implicitDefines.insert_or_assign(Move(defineName), Move(defineValue));
     return true;
 }
 
@@ -665,11 +386,6 @@ bool ParseCsgShapeCookMetadata(
         );
         return false;
     }
-    if(!ParseShapeShaderEntry(cookArena, nwbFilePath, asset, s_ProxyMeshShaderFields, outEntry.proxyShaderEntry, scratchArena))
-        return false;
-    if(!ParseShapeShaderEntry(cookArena, nwbFilePath, asset, s_ProxyPixelShaderFields, outEntry.proxyPixelShaderEntry, scratchArena))
-        return false;
-
     return true;
 }
 
@@ -686,8 +402,6 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
 
         CsgShapeCookEntry& entry = csgShapeEntries[index];
         entry.shapeTypeId = static_cast<u32>(index) + 1u;
-        if(!SetShapeIdImplicitDefine(entry))
-            return false;
     }
 
     return true;

@@ -39,19 +39,16 @@ static void TestCsgReceiverComponents(TestContext& context){
     NWB_CSG_TEST_CHECK(context, staticReceiverEntity.hasComponent<NWB::Impl::StaticCsgMeshComponent>());
     NWB_CSG_TEST_CHECK(context, staticReceiver.receiverGroup == Name("project/csg/receiver_group_a"));
     NWB_CSG_TEST_CHECK(context, staticReceiver.enabled);
-    NWB_CSG_TEST_CHECK(context, staticReceiver.generateCapProxies);
     NWB_CSG_TEST_CHECK(context, staticReceiver.affectOpaquePass);
     NWB_CSG_TEST_CHECK(context, staticReceiver.affectTransparentPass);
 
     auto skinnedReceiverEntity = testWorld.world.createEntity();
     auto& skinnedReceiver = skinnedReceiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
-    skinnedReceiver.generateCapProxies = false;
     skinnedReceiver.affectTransparentPass = false;
 
     NWB_CSG_TEST_CHECK(context, skinnedReceiverEntity.hasComponent<NWB::Impl::SkinnedCsgMeshComponent>());
     NWB_CSG_TEST_CHECK(context, skinnedReceiver.receiverGroup == NAME_NONE);
     NWB_CSG_TEST_CHECK(context, skinnedReceiver.enabled);
-    NWB_CSG_TEST_CHECK(context, !skinnedReceiver.generateCapProxies);
     NWB_CSG_TEST_CHECK(context, skinnedReceiver.affectOpaquePass);
     NWB_CSG_TEST_CHECK(context, !skinnedReceiver.affectTransparentPass);
 
@@ -209,8 +206,6 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         NWB_CSG_TEST_CHECK(context, !state.hasOpaqueSkinnedWork);
         NWB_CSG_TEST_CHECK(context, state.hasTransparentStaticWork);
         NWB_CSG_TEST_CHECK(context, !state.hasTransparentSkinnedWork);
-        NWB_CSG_TEST_CHECK(context, state.hasOpaqueCapProxyWork);
-        NWB_CSG_TEST_CHECK(context, state.hasTransparentCapProxyWork);
         NWB_CSG_TEST_CHECK(context, state.receiverCount == 1u);
         NWB_CSG_TEST_CHECK(context, state.cutterCount == 1u);
     }
@@ -253,7 +248,6 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
         receiver.receiverGroup = Name("project/csg/group_a");
-        receiver.generateCapProxies = false;
         receiver.affectOpaquePass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
@@ -268,8 +262,6 @@ static void TestCsgFrameStateKillSwitch(TestContext& context){
         NWB_CSG_TEST_CHECK(context, !state.hasOpaqueSkinnedWork);
         NWB_CSG_TEST_CHECK(context, !state.hasTransparentStaticWork);
         NWB_CSG_TEST_CHECK(context, state.hasTransparentSkinnedWork);
-        NWB_CSG_TEST_CHECK(context, !state.hasOpaqueCapProxyWork);
-        NWB_CSG_TEST_CHECK(context, !state.hasTransparentCapProxyWork);
         NWB_CSG_TEST_CHECK(context, state.receiverCount == 1u);
         NWB_CSG_TEST_CHECK(context, state.cutterCount == 1u);
     }
@@ -391,7 +383,6 @@ static void TestCsgFrameReceiverLookup(TestContext& context){
         ));
         NWB_CSG_TEST_CHECK(context, opaqueDrawState.active);
         NWB_CSG_TEST_CHECK(context, opaqueDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Static);
-        NWB_CSG_TEST_CHECK(context, opaqueDrawState.generateCapProxies);
         NWB_CSG_TEST_CHECK(context, opaqueDrawState.cutterCount == 2u);
 
         NWB::Impl::CsgReceiverDrawState transparentDrawState;
@@ -403,7 +394,6 @@ static void TestCsgFrameReceiverLookup(TestContext& context){
         ));
         NWB_CSG_TEST_CHECK(context, transparentDrawState.active);
         NWB_CSG_TEST_CHECK(context, transparentDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Static);
-        NWB_CSG_TEST_CHECK(context, transparentDrawState.generateCapProxies);
         NWB_CSG_TEST_CHECK(context, transparentDrawState.cutterCount == 2u);
     }
 
@@ -445,7 +435,6 @@ static void TestCsgFrameReceiverLookup(TestContext& context){
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
         receiver.receiverGroup = Name("project/csg/group_a");
-        receiver.generateCapProxies = false;
         receiver.affectOpaquePass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
@@ -471,7 +460,6 @@ static void TestCsgFrameReceiverLookup(TestContext& context){
         ));
         NWB_CSG_TEST_CHECK(context, transparentDrawState.active);
         NWB_CSG_TEST_CHECK(context, transparentDrawState.receiverKind == NWB::Impl::CsgReceiverKind::Skinned);
-        NWB_CSG_TEST_CHECK(context, !transparentDrawState.generateCapProxies);
         NWB_CSG_TEST_CHECK(context, transparentDrawState.cutterCount == 1u);
     }
 }
@@ -521,8 +509,6 @@ static void TestCsgShapeRegistryBuiltIns(TestContext& context){
     NWB_CSG_TEST_CHECK(context, registry.findShapeType(boxId, boxShape));
     NWB_CSG_TEST_CHECK(context, boxShape.desc.name == Name("engine/csg/box"));
     NWB_CSG_TEST_CHECK(context, !boxShape.desc.shaderModule);
-    NWB_CSG_TEST_CHECK(context, boxShape.desc.capProxyShader == Name("engine/csg/box/cap_proxy_ms"));
-    NWB_CSG_TEST_CHECK(context, boxShape.desc.capProxyPixelShader == Name("engine/csg/box/cap_proxy_ps"));
     NWB_CSG_TEST_CHECK(context, boxShape.desc.parameterByteSize == sizeof(NWB::Impl::CsgBoxShapeParameters));
     NWB_CSG_TEST_CHECK(context, boxShape.desc.supportsAnalyticGradient);
 

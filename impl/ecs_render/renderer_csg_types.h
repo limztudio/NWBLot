@@ -37,7 +37,6 @@ struct CsgBoundsGpuData{
 };
 
 using CsgReceiverCpuBounds = CsgBoundsGpuData;
-using CsgCapProxyBounds = CsgBoundsGpuData;
 
 [[nodiscard]] inline Float34 MakeIdentityCsgMatrix(){
     Float34 matrix{};
@@ -83,29 +82,9 @@ static_assert(IsTriviallyCopyable_V<CsgReceiverRangeGpuData>, "CsgReceiverRangeG
 static_assert(IsStandardLayout_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<CsgCutterGpuData>, "CsgCutterGpuData must stay GPU-uploadable");
 
-struct CsgCapProxyGpuData{
-    UInt4 receiverCutterShapePass = {};
-    Float4 color = Float4(1.f, 1.f, 1.f, 1.f);
-    CsgCapProxyBounds receiverBounds;
-    CsgCapProxyBounds cutterBounds;
-};
-
-static_assert(sizeof(CsgCapProxyGpuData) == sizeof(UInt4) + sizeof(Float4) + sizeof(CsgCapProxyBounds) * 2u, "CsgCapProxyGpuData layout must match the CSG cap proxy shaders");
-static_assert(alignof(CsgCapProxyGpuData) >= alignof(Float4), "CsgCapProxyGpuData must stay SIMD-aligned");
-static_assert(IsStandardLayout_V<CsgCapProxyGpuData>, "CsgCapProxyGpuData must stay GPU-uploadable");
-static_assert(IsTriviallyCopyable_V<CsgCapProxyGpuData>, "CsgCapProxyGpuData must stay GPU-uploadable");
-static_assert(IsStandardLayout_V<CsgCapProxyBounds>, "CsgCapProxyBounds must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<CsgCapProxyBounds>, "CsgCapProxyBounds must stay cheap to pass by value");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::ScratchArena>;
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
-using CsgCapProxyGpuDataVector = Vector<CsgCapProxyGpuData, Core::Alloc::ScratchArena>;
-using CsgCapProxyShapeTypeVector = Vector<CsgShapeTypeId, Core::Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,23 +94,17 @@ struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
     CsgCutterGpuDataVector cutters;
     CsgParameterByteDataVector parameterBytes;
-    CsgCapProxyGpuDataVector capProxyGpuItems;
-    CsgCapProxyShapeTypeVector capProxyShapeTypes;
 
     explicit CsgFrameGpuData(Core::Alloc::ScratchArena& arena)
         : receiverRanges(arena)
         , cutters(arena)
         , parameterBytes(arena)
-        , capProxyGpuItems(arena)
-        , capProxyShapeTypes(arena)
     {}
 
     [[nodiscard]] bool hasWork()const noexcept{ return !receiverRanges.empty() && !cutters.empty(); }
-    [[nodiscard]] bool hasCapProxyWork()const noexcept{ return !capProxyShapeTypes.empty() && !capProxyGpuItems.empty(); }
     void reserve(const usize receiverCapacity, const usize cutterCapacity){
         receiverRanges.reserve(receiverCapacity);
         cutters.reserve(cutterCapacity);
-        capProxyGpuItems.reserve(cutterCapacity);
     }
 };
 

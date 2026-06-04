@@ -44,16 +44,8 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
 
     csgState().m_openingMaskWriteBindingSet.reset();
-    csgState().m_capProxyOpeningMaskBindingSet.reset();
-    csgState().m_capProxyBindingSet.reset();
-    csgState().m_capProxyComputeBindingSet.reset();
-    for(CsgCapProxyShapeResources& shapeResources : csgState().m_capProxyShapeResources){
-        shapeResources.pipeline.reset();
-        shapeResources.emulationPipeline.reset();
-    }
 
     deferredState().m_targets.framebuffer.reset();
-    deferredState().m_targets.capProxyFramebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
 
     deferredState().m_targets.albedo.reset();
@@ -203,8 +195,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     if(!m_renderer.csgSystem().createCsgOpeningMaskWriteResources(createdTargets.csgOpeningMask.get()))
         return false;
-    if(!m_renderer.csgSystem().createCsgCapProxyOpeningMaskResources(createdTargets.csgOpeningMask.get()))
-        return false;
 
     Core::FramebufferAttachment gbufferAttachments[NWB_MESH_GBUFFER_TARGET_COUNT] = {};
     gbufferAttachments[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION]
@@ -229,19 +219,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    Core::FramebufferDesc capProxyFramebufferDesc;
-    for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
-        capProxyFramebufferDesc.addColorAttachment(attachment);
-    capProxyFramebufferDesc.setDepthAttachment(
-        Core::FramebufferAttachment()
-            .setTexture(createdTargets.depth.get())
-            .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
-    );
-    createdTargets.capProxyFramebuffer = device->createFramebuffer(capProxyFramebufferDesc);
-    if(!createdTargets.capProxyFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cap proxy framebuffer"));
-        return false;
-    }
     Core::FramebufferDesc opaqueLightingFramebufferDesc;
     opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources);
     createdTargets.opaqueLightingFramebuffer = device->createFramebuffer(opaqueLightingFramebufferDesc);
@@ -372,7 +349,6 @@ bool RendererDeferredSystem::createCsgOpeningMaskTarget(DeferredFrameTargets& ta
         return false;
     }
 
-    csgState().m_capProxyBindingSet.reset();
     return true;
 }
 

@@ -4,7 +4,3 @@ asset.shape = "engine/csg/plane";
 asset.module = "engine/csg/built_in";
 asset.module_include = "csg/generated/built_in.slangi";
 asset.eval = "csg/plane/eval.slangi";
-asset.proxy_shader = "engine/csg/plane/cap_proxy_ms";
-asset.proxy_source = "cap_proxy_ms.slang";
-asset.proxy_pixel_shader = "engine/csg/plane/cap_proxy_ps";
-asset.proxy_pixel_source = "cap_proxy_ps.slang";

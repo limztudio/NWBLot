@@ -65,12 +65,6 @@ using CsgShapeCookEntryVector = ShaderCook::CookVector<CsgShapeCookEntry>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildDefaultCsgShapeModuleInclude(
-    ShaderCook::CookArena& arena,
-    Name shaderModule,
-    CookString& outInclude
-);
-
 [[nodiscard]] bool ParseCsgShapeCookMetadata(
     ShaderCook::CookArena& cookArena,
     const Path& nwbFilePath,

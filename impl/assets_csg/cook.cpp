@@ -509,7 +509,7 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildDefaultCsgShapeModuleInclude(
+[[nodiscard]] static bool BuildDefaultCsgShapeModuleInclude(
     ShaderCook::CookArena& arena,
     const Name shaderModule,
     CookString& outInclude

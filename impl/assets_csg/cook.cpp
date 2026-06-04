@@ -49,6 +49,9 @@ static constexpr AStringView s_ProxyIncludeRootsField = "proxy_include_roots";
 static constexpr AStringView s_ProxyShadowField = "proxy_shadow";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
+static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
+static constexpr AStringView s_CapProxyChainShapeIdDefineName = "NWB_CSG_CAP_PROXY_CHAIN_SHAPE_ID";
+static constexpr AStringView s_CapProxyShaderShapeIdImplicitDefineName = "NWB_CSG_CAP_PROXY_SHADER_SHAPE_ID";
 static constexpr AStringView s_DefaultProxyEntryPoint = "main";
 static constexpr AStringView s_DefaultProxyTargetProfile = "spirv_1_5";
 static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
@@ -431,6 +434,47 @@ static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
     return entry.shaderModule == shaderModule;
 }
 
+[[nodiscard]] static bool ShapeNameLess(const CsgShapeCookEntry& lhs, const CsgShapeCookEntry& rhs){
+    return AStringView(lhs.shapeName.c_str()) < AStringView(rhs.shapeName.c_str());
+}
+
+[[nodiscard]] static bool MakeShapeIdDefineValue(
+    const u32 shapeTypeId,
+    CookString& outValue
+){
+    char shapeTypeIdText[32] = {};
+    const AStringView shapeTypeIdView = FormatDecimal(shapeTypeId, shapeTypeIdText);
+    if(shapeTypeIdView.empty())
+        return false;
+
+    outValue.assign(shapeTypeIdView);
+    outValue += 'u';
+    return true;
+}
+
+[[nodiscard]] static bool SetShapeIdImplicitDefine(CsgShapeCookEntry& entry){
+    if(!entry.hasProxyShader())
+        return true;
+
+    ShaderCook::CookArena& cookArena = entry.proxyShaderEntry.name.get_allocator().arena();
+    CookString defineName(s_CapProxyShaderShapeIdImplicitDefineName, cookArena);
+    if(entry.proxyShaderEntry.defineValues.find(defineName) != entry.proxyShaderEntry.defineValues.end()){
+        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': proxy shader '{}' uses reserved implicit define '{}' as a variant define")
+            , StringConvert(entry.shapeName.c_str())
+            , StringConvert(entry.proxyShaderEntry.name)
+            , StringConvert(s_CapProxyShaderShapeIdImplicitDefineName)
+        );
+        return false;
+    }
+
+    CookString defineValue(cookArena);
+    if(!MakeShapeIdDefineValue(entry.shapeTypeId, defineValue))
+        return false;
+
+    entry.proxyShaderEntry.implicitDefines.insert_or_assign(Move(defineName), Move(defineValue));
+    return true;
+}
+
 [[nodiscard]] static bool WriteModuleInclude(
     const CsgShapeCookEntryVector& csgShapeEntries,
     const Name shaderModule,
@@ -446,9 +490,29 @@ static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
         if(!SameModule(entry, shaderModule))
             continue;
 
+        CookString shapeTypeIdValue(scratchSource.get_allocator().arena());
+        if(!MakeShapeIdDefineValue(entry.shapeTypeId, shapeTypeIdValue))
+            return false;
+
+        scratchSource += "#define ";
+        scratchSource += s_EvalShapeIdDefineName;
+        scratchSource += ' ';
+        scratchSource += shapeTypeIdValue;
+        scratchSource += "\n";
+        scratchSource += "#define ";
+        scratchSource += s_CapProxyChainShapeIdDefineName;
+        scratchSource += ' ';
+        scratchSource += shapeTypeIdValue;
+        scratchSource += "\n";
         scratchSource += "#include \"";
         scratchSource += entry.evalInclude;
         scratchSource += "\"\n";
+        scratchSource += "#undef ";
+        scratchSource += s_CapProxyChainShapeIdDefineName;
+        scratchSource += "\n";
+        scratchSource += "#undef ";
+        scratchSource += s_EvalShapeIdDefineName;
+        scratchSource += "\n\n";
     }
 
     const Path outputPath = includeRoot / Path(moduleInclude.c_str());
@@ -569,8 +633,27 @@ bool ParseCsgShapeCookMetadata(
     return true;
 }
 
+bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
+    using namespace __hidden_assets_csg_cook;
+
+    Sort(csgShapeEntries.begin(), csgShapeEntries.end(), &ShapeNameLess);
+
+    for(usize index = 0u; index < csgShapeEntries.size(); ++index){
+        if(index >= static_cast<usize>(Limit<u32>::s_Max)){
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: too many CSG shape assets"));
+            return false;
+        }
+
+        CsgShapeCookEntry& entry = csgShapeEntries[index];
+        entry.shapeTypeId = static_cast<u32>(index) + 1u;
+        if(!SetShapeIdImplicitDefine(entry))
+            return false;
+    }
+
+    return true;
+}
+
 bool EmitCsgShapeModuleIncludes(
-    ShaderCook::CookArena& cookArena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const CsgShapeCookEntryVector& csgShapeEntries,
@@ -608,7 +691,7 @@ bool EmitCsgShapeModuleIncludes(
     );
     seenModules.reserve(csgShapeEntries.size());
 
-    CookString scratchSource(cookArena);
+    CookString scratchSource(csgShapeEntries.get_allocator().arena());
     for(const CsgShapeCookEntry& moduleEntry : csgShapeEntries){
         if(!seenModules.insert(moduleEntry.shaderModule.hash()).second)
             continue;

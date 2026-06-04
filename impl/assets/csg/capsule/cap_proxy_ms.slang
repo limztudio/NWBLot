@@ -60,7 +60,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     const uint groupThreadIndex = groupThreadID.x;
     const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
-    const bool itemMatches = nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_CAPSULE);
+    const bool itemMatches = nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_CAP_PROXY_SHADER_SHAPE_ID);
     const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
     const uint segments = nwbCsgCapProxySegmentCount(item, cutter, cutter.parameter0.x);
     const uint rows = nwbCsgCapProxyCapsuleRowCount(segments);
@@ -111,7 +111,7 @@ void main(
 
     const uint groupThreadIndex = groupThreadID.x;
     const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
-    if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_CAPSULE)){
+    if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_CAP_PROXY_SHADER_SHAPE_ID)){
         SetMeshOutputCounts(0u, 0u);
         return;
     }

@@ -44,6 +44,7 @@ using ScratchArena = Core::Alloc::ScratchArena;
 struct CsgShapeCookEntry{
     Name shapeName = NAME_NONE;
     Name shaderModule = NAME_NONE;
+    u32 shapeTypeId = 0u;
     CookString evalInclude;
     CookString moduleInclude;
     ShaderCook::ShaderEntry proxyShaderEntry;
@@ -73,8 +74,9 @@ using CsgShapeCookEntryVector = ShaderCook::CookVector<CsgShapeCookEntry>;
     ScratchArena& scratchArena
 );
 
+[[nodiscard]] bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries);
+
 [[nodiscard]] bool EmitCsgShapeModuleIncludes(
-    ShaderCook::CookArena& cookArena,
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     const CsgShapeCookEntryVector& csgShapeEntries,

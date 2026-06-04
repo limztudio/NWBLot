@@ -44,7 +44,7 @@ bool nwbTryEvalCsgCapsuleShape(
     const NwbCsgCutter cutter,
     out NwbCsgSample outSample
 ){
-    if(shapeType == NWB_CSG_SHAPE_CAPSULE){
+    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
         outSample = nwbEvalCsgCapsuleShape(shapePosition, cutter);
         return true;
     }

@@ -456,16 +456,6 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
 
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/plane"),
-            Name("engine/csg/plane/cap_proxy_ms"),
-            CsgPlaneShapeParameters{},
-            &__hidden_shape_registry::PlaneBounds
-        ),
-        shapeTypeId,
-        true
-    ) && result;
-    result = registry.registerShapeType(
-        __hidden_shape_registry::BuiltInShapeDesc(
             Name("engine/csg/box"),
             Name("engine/csg/box/cap_proxy_ms"),
             CsgBoxShapeParameters{},
@@ -476,20 +466,30 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     ) && result;
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/sphere"),
-            Name("engine/csg/sphere/cap_proxy_ms"),
-            CsgSphereShapeParameters{},
-            &__hidden_shape_registry::SphereBounds
+            Name("engine/csg/capsule"),
+            Name("engine/csg/capsule/cap_proxy_ms"),
+            CsgCapsuleShapeParameters{},
+            &__hidden_shape_registry::CapsuleBounds
         ),
         shapeTypeId,
         true
     ) && result;
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/capsule"),
-            Name("engine/csg/capsule/cap_proxy_ms"),
-            CsgCapsuleShapeParameters{},
-            &__hidden_shape_registry::CapsuleBounds
+            Name("engine/csg/plane"),
+            Name("engine/csg/plane/cap_proxy_ms"),
+            CsgPlaneShapeParameters{},
+            &__hidden_shape_registry::PlaneBounds
+        ),
+        shapeTypeId,
+        true
+    ) && result;
+    result = registry.registerShapeType(
+        __hidden_shape_registry::BuiltInShapeDesc(
+            Name("engine/csg/sphere"),
+            Name("engine/csg/sphere/cap_proxy_ms"),
+            CsgSphereShapeParameters{},
+            &__hidden_shape_registry::SphereBounds
         ),
         shapeTypeId,
         true

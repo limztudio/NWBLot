@@ -210,11 +210,6 @@ bool ParseAssetMetadata(
             ))
                 return false;
 
-            if(csgShapeEntry.hasProxyShader()){
-                if(!AppendUniqueShaderEntry(csgShapeEntry.proxyShaderEntry, nwbFile, seenShaderIdentityKeys, outMetadata.shaderEntries))
-                    return false;
-            }
-
             outMetadata.csgShapeEntries.push_back(Move(csgShapeEntry));
             continue;
         }
@@ -276,6 +271,21 @@ bool ParseAssetMetadata(
             return false;
 
         outMetadata.materialBindEntries.push_back(Move(bindEntry));
+    }
+
+    if(!AssetsCsgCook::AssignCsgShapeCookIds(outMetadata.csgShapeEntries))
+        return false;
+    for(AssetsCsgCook::CsgShapeCookEntry& csgShapeEntry : outMetadata.csgShapeEntries){
+        if(!csgShapeEntry.hasProxyShader())
+            continue;
+
+        if(!AppendUniqueShaderEntry(
+            csgShapeEntry.proxyShaderEntry,
+            Path(csgShapeEntry.proxyShaderEntry.source.c_str()),
+            seenShaderIdentityKeys,
+            outMetadata.shaderEntries
+        ))
+            return false;
     }
 
     if(outMetadata.shaderEntries.empty()){

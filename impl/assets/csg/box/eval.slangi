@@ -54,7 +54,7 @@ bool nwbTryEvalCsgBoxShape(
     const NwbCsgCutter cutter,
     out NwbCsgSample outSample
 ){
-    if(shapeType == NWB_CSG_SHAPE_BOX){
+    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
         outSample = nwbEvalCsgBoxShape(shapePosition, cutter);
         return true;
     }

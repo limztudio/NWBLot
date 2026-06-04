@@ -210,7 +210,6 @@ bool nwbTryShrinkEmptyCsgCapProxyShape(
 
 
 #define NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN 1
-#define NWB_CSG_ENABLE_CAP_PROXY_SHAPE_CHAIN 1
 #if !defined(NWB_CSG_SHAPE_EVAL_CHAIN)
 #define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalEmptyCsgShape
 #endif
@@ -241,11 +240,6 @@ bool nwbTryEvalProjectCsgShape(
     const NwbCsgCutter cutter,
     out NwbCsgSample outSample
 ){
-    if(shapeType < NWB_CSG_SHAPE_PROJECT_BEGIN){
-        outSample = nwbInvalidCsgShapeSample();
-        return false;
-    }
-
     outSample = nwbEvalProjectCsgShape(shapeType, shapePosition, cutter);
     return true;
 }

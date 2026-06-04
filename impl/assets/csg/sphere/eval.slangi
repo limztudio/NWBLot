@@ -39,7 +39,7 @@ bool nwbTryEvalCsgSphereShape(
     const NwbCsgCutter cutter,
     out NwbCsgSample outSample
 ){
-    if(shapeType == NWB_CSG_SHAPE_SPHERE){
+    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
         outSample = nwbEvalCsgSphereShape(shapePosition, cutter);
         return true;
     }

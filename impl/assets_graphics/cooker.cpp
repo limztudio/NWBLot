@@ -140,7 +140,6 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
 
     Path csgShapeIncludeRoot;
     if(!AssetsCsgCook::EmitCsgShapeModuleIncludes(
-        m_arena,
         resolvedPaths.cacheDirectory,
         configurationSafeName,
         parsedMetadata.csgShapeEntries,

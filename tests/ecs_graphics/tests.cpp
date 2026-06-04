@@ -324,17 +324,19 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, ranges.size() == 34u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, uploadBytes.size() == 136u);
 
-    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
     NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRanges instanceRange;
     instanceRange.constantRange = firstRange;
     instanceRange.mutableRange = secondRange;
-    instanceRanges.push_back(instanceRange);
     const NWB::Impl::InstanceGpuData gpuData = NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRange);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, gpuData.translation.w == secondRange.byteOffset);
+#if defined(NWB_DEBUG)
+    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
+    instanceRanges.push_back(instanceRange);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderDetail::ValidateMaterialTypedUploadRanges(
         instanceRanges,
         uploadBytes
     ));
+#endif
 }
 
 template<typename ParameterT>
@@ -404,8 +406,10 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
 
     NWB::Impl::CsgFrameGpuData frameData(scratchArena);
     const Float4 testColor = Float4(1.0f, 0.5f, 0.25f, 1.0f);
+    const NWB::Impl::CsgShapeTypeId capsuleShapeType = shapeRegistry.findShapeTypeId(Name("engine/csg/capsule"));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, capsuleShapeType != NWB::Impl::s_InvalidCsgShapeTypeId);
     NWB::Impl::CsgCutterGpuData capsuleCutter;
-    capsuleCutter.shapeType = NWB_CSG_SHAPE_CAPSULE;
+    capsuleCutter.shapeType = capsuleShapeType;
     capsuleCutter.parameter0 = Float4(0.25f, 0.75f, 0.0f, 0.0f);
     NWB::Impl::CsgCapsuleShapeParameters capsuleParameters;
     capsuleParameters.radiusHalfHeight = capsuleCutter.parameter0;
@@ -423,13 +427,13 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
         frameData
     ));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyShapeTypes.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyShapeTypes[0u] == NWB_CSG_SHAPE_CAPSULE);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyShapeTypes[0u] == capsuleShapeType);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, frameData.capProxyGpuItems.size() == 1u);
     if(!frameData.capProxyGpuItems.empty()){
         const NWB::Impl::CsgCapProxyGpuData& proxy = frameData.capProxyGpuItems[0u];
         NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.x == 7u);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.y == 0u);
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.z == NWB_CSG_SHAPE_CAPSULE);
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.z == capsuleShapeType);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, proxy.receiverCutterShapePass.w == static_cast<u32>(NWB::Impl::CsgReceiverPass::Opaque));
         NWB_ECS_GRAPHICS_TEST_CHECK(context, (proxy.cutterBounds.minBounds.w & NWB::Impl::s_CsgBoundsValidFlag) != 0);
         NWB_ECS_GRAPHICS_TEST_CHECK(context, (proxy.cutterBounds.minBounds.w & NWB::Impl::s_CsgBoundsFiniteFlag) != 0);
@@ -440,7 +444,7 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
     }
 
     NWB::Impl::CsgCutterGpuData projectCutter;
-    projectCutter.shapeType = NWB_CSG_SHAPE_PROJECT_BEGIN;
+    projectCutter.shapeType = static_cast<NWB::Impl::CsgShapeTypeId>(shapeRegistry.shapeTypeCount() + 1u);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NWB::Impl::ECSRenderCsgCapProxyBuilder::AppendGpuData(
         shapeRegistry,
         receiverBounds,

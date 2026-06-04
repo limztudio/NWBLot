@@ -37,7 +37,7 @@ bool nwbTryEvalCsgPlaneShape(
     const NwbCsgCutter cutter,
     out NwbCsgSample outSample
 ){
-    if(shapeType == NWB_CSG_SHAPE_PLANE){
+    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
         outSample = nwbEvalCsgPlaneShape(shapePosition, cutter);
         return true;
     }

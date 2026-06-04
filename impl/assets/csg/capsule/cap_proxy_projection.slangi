@@ -61,7 +61,7 @@ bool nwbTryEnlargeCsgCapsuleCapProxyShape(
     const float radiusSlack,
     out float3 outShapePosition
 ){
-    if(shapeType == NWB_CSG_SHAPE_CAPSULE){
+    if(shapeType == NWB_CSG_CAP_PROXY_CHAIN_SHAPE_ID){
         outShapePosition = nwbCsgCapProxyEnlargeCapsuleShapePosition(shapePosition, cutter, radiusSlack);
         return true;
     }
@@ -88,7 +88,7 @@ bool nwbTryShrinkCsgCapsuleCapProxyShape(
     const NwbCsgCutter cutter,
     out float3 outShapePosition
 ){
-    if(shapeType == NWB_CSG_SHAPE_CAPSULE){
+    if(shapeType == NWB_CSG_CAP_PROXY_CHAIN_SHAPE_ID){
         outShapePosition = nwbCsgCapProxyShrinkCapsuleShapePosition(shapePosition, cutter);
         return true;
     }

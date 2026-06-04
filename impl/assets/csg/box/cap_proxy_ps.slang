@@ -18,6 +18,16 @@ float3 nwbCsgCapProxyShapeShrinkWorldPosition(const float3 worldPosition, const 
     return worldPosition;
 }
 
+bool nwbCsgCapProxyShapeResolveWorldPosition(
+    const float3 proxyWorldPosition,
+    const NwbCsgCutter cutter,
+    const NwbCsgReceiverRange receiverRange,
+    out float3 outWorldPosition
+){
+    outWorldPosition = nwbCsgCapProxyShapeShrinkWorldPosition(proxyWorldPosition, cutter);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

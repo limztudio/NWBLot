@@ -48,7 +48,10 @@ NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     const uint cutterIndex = uint(input.tangent.w + 0.5);
     const float3 worldPosition = input.worldPosition.xyz;
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
-    const float3 capWorldPosition = nwbCsgCapProxyShapeShrinkWorldPosition(worldPosition, cutter);
+    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
+    float3 capWorldPosition;
+    if(!nwbCsgCapProxyShapeResolveWorldPosition(worldPosition, cutter, receiverRange, capWorldPosition))
+        discard;
 
     const uint expectedOpeningMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
     if(
@@ -57,7 +60,6 @@ NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     )
         discard;
 
-    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     if(!nwbCsgReceiverLocalBoundsContains(receiverRange, capWorldPosition))
         discard;
 

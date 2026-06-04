@@ -83,6 +83,10 @@ RendererCsgState::RendererCsgState(Core::Alloc::GlobalArena& arena){
 void RendererCsgState::invalidateResources(){
     m_clipBindingLayout.reset();
     m_clipBindingSet.reset();
+    m_intervalPeelBindingLayout.reset();
+    m_intervalPeelBindingSet.reset();
+    m_intervalPeelComputeShader.reset();
+    m_intervalPeelPipeline.reset();
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();

@@ -25,6 +25,8 @@ public:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     void pruneRuntimeMeshResources();
+    [[nodiscard]] bool createMeshViewBuffer();
+    [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     void destroyMeshBindingSets();
     [[nodiscard]] bool createMeshBindingSet(MeshResources& mesh);
     [[nodiscard]] bool createComputeBindingSet(MeshResources& mesh);

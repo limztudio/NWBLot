@@ -36,6 +36,62 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources&
 #endif
 }
 
+bool RendererMaterialSystem::prepareMaterialPassDrawResources(const MaterialPassDrawItems& drawItems){
+    return prepareMeshMaterialPassDrawResources(drawItems.meshDrawItems)
+        && prepareComputeMaterialPassDrawResources(drawItems.computeDrawItems)
+    ;
+}
+
+bool RendererMaterialSystem::prepareMeshMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems){
+    bool ready = true;
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+        if(!ready)
+            return;
+        NWB_ASSERT(pipelineResources.meshletPipeline);
+        if(!pipelineResources.meshletPipeline){
+            ready = false;
+            return;
+        }
+        if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh)){
+            ready = false;
+            return;
+        }
+
+        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        if(csgClipDraw && !csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
+            ready = false;
+    });
+    return ready;
+}
+
+bool RendererMaterialSystem::prepareComputeMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems){
+    if(drawItems.empty())
+        return true;
+    if(!drawState().m_emulationViewBindingSet && !createEmulationViewResources())
+        return false;
+
+    bool ready = true;
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+        if(!ready)
+            return;
+        NWB_ASSERT(pipelineResources.computePipeline);
+        NWB_ASSERT(pipelineResources.emulationPipeline);
+        if(!pipelineResources.computePipeline || !pipelineResources.emulationPipeline){
+            ready = false;
+            return;
+        }
+        if(!mesh.computeBindingSet && !m_renderer.meshSystem().createComputeBindingSet(mesh)){
+            ready = false;
+            return;
+        }
+
+        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        if(csgClipDraw && !csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
+            ready = false;
+    });
+    return ready;
+}
+
 u32 RendererMaterialSystem::meshDispatchFlags(
     const MeshResources& mesh,
     const MaterialPipelinePass::Enum pass,
@@ -114,14 +170,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
-        if(!mesh.meshBindingSet && !m_renderer.meshSystem().createMeshBindingSet(mesh))
-            return;
-        if(csgClipDraw){
-            if(!csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
-                return;
-            if(!csgState().m_clipBindingSet)
-                return;
-        }
+        NWB_ASSERT(mesh.meshBindingSet);
+        NWB_ASSERT(!csgClipDraw || csgState().m_clipBindingSet);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)
@@ -156,8 +206,6 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
 ){
     if(drawItems.empty())
         return;
-    if(!drawState().m_emulationViewBindingSet && !createEmulationViewResources())
-        return;
     NWB_ASSERT(drawState().m_meshViewBuffer);
     NWB_ASSERT(drawState().m_emulationViewBindingSet);
 
@@ -167,16 +215,9 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(!mesh.computeBindingSet && !m_renderer.meshSystem().createComputeBindingSet(mesh))
-            return;
-        if(csgClipDraw){
-            if(!csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
-                return;
-            if(!csgState().m_clipBindingSet)
-                return;
-        }
         NWB_ASSERT(mesh.computeBindingSet);
         NWB_ASSERT(mesh.emulationVertexBuffer);
+        NWB_ASSERT(!csgClipDraw || csgState().m_clipBindingSet);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw)

@@ -121,8 +121,13 @@ void RendererMaterialSystem::renderMaterialPass(
     f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(framebuffer->getFramebufferInfo());
     if(avboitTargets && avboitTargets->fullWidth > 0 && avboitTargets->fullHeight > 0)
         meshViewAspectRatio = ECSRenderDetail::ResolveExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight);
-    if(!updateMeshViewBuffer(commandList, meshViewAspectRatio))
+    if(!m_renderer.meshSystem().updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
+    if(!prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes))
+        return;
+    const bool regularDrawResourcesReady = prepareMaterialPassDrawResources(drawItems.regular);
+    const bool csgResourcesReady = drawItems.csg.empty() || m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
+    const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || prepareMaterialPassDrawResources(drawItems.csg));
     if(!uploadMaterialPassDrawBuffers(
         commandList,
         instanceData,
@@ -132,15 +137,16 @@ void RendererMaterialSystem::renderMaterialPass(
         materialTypedBytes
     ))
         return;
-    const bool csgUploadReady = drawItems.csg.empty() || m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData);
+    const bool csgUploadReady = csgResourcesReady && (drawItems.csg.empty() || m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData));
 
     if(passBindingSet){
         commandList.setResourceStatesForBindingSet(passBindingSet);
         commandList.commitBarriers();
     }
     const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
-    renderMaterialPassDrawItems(drawContext, drawItems.regular);
-    if(csgUploadReady){
+    if(regularDrawResourcesReady)
+        renderMaterialPassDrawItems(drawContext, drawItems.regular);
+    if(csgUploadReady && csgDrawResourcesReady){
         renderMaterialPassDrawItems(drawContext, drawItems.csg);
     }
 }

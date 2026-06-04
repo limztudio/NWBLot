@@ -33,9 +33,6 @@ public:
     void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
-
-private:
-    [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
 };
 
 

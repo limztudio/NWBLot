@@ -35,7 +35,6 @@ public:
     [[nodiscard]] bool createMeshShaderResources();
     [[nodiscard]] bool createComputeEmulationResources();
     [[nodiscard]] bool createEmulationViewResources();
-    [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     void renderMaterialPass(
         Core::CommandList& commandList,
         Core::Framebuffer* framebuffer,
@@ -78,6 +77,9 @@ public:
     );
     void pruneMaterialInstanceMutableCache();
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
+    [[nodiscard]] bool prepareMaterialPassDrawResources(const MaterialPassDrawItems& drawItems);
+    [[nodiscard]] bool prepareMeshMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool prepareComputeMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh)const;
     void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);
@@ -87,6 +89,10 @@ public:
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);
+    [[nodiscard]] bool prepareMaterialPassDrawBuffers(
+        const InstanceGpuDataVector& instanceData,
+        const MaterialTypedByteDataVector& materialTypedBytes
+    );
     [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialTypedBuffer(Core::CommandList& commandList, const MaterialTypedByteDataVector& materialTypedBytes);
     [[nodiscard]] bool uploadMaterialPassDrawBuffers(

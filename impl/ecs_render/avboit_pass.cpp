@@ -42,8 +42,8 @@ static void DispatchAvboitCompute(
     const AvboitFrameTargets& targets,
     const u32 groupCountX
 ){
-    if(!pipeline || !bindingSet)
-        return;
+    NWB_ASSERT(pipeline);
+    NWB_ASSERT(bindingSet);
 
     commandList.setResourceStatesForBindingSet(bindingSet);
     commandList.commitBarriers();
@@ -189,8 +189,8 @@ void RendererAvboitSystem::renderAvboitPasses(
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
-    if((!avboitState().m_depthWarpPipeline || !avboitState().m_integratePipeline) && !createAvboitPipelines())
-        return;
+    NWB_ASSERT(avboitState().m_depthWarpPipeline);
+    NWB_ASSERT(avboitState().m_integratePipeline);
 
     m_renderer.materialSystem().renderMaterialPass(
         commandList,

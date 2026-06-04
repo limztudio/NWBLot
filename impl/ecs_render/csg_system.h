@@ -25,9 +25,14 @@ public:
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createCsgClipResources();
     void destroyCsgClipBindingSet();
+    [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
+    [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets);
+    void destroyCsgIntervalPeelBindingSet();
+    void dispatchCsgIntervalPeels(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
     [[nodiscard]] bool reserveCsgParameterByteBufferCapacity(usize byteCount);
+    [[nodiscard]] bool prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverEvaluatorVariant(

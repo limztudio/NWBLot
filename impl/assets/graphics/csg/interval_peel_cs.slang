@@ -1,0 +1,267 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "binding_slots.h"
+#include "constants.h"
+
+#include "../mesh/view_buffer.slangi"
+
+#define NWB_CSG_MESH_INSTANCE_INDEX 0u
+#include "runtime.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgIntervalPeelPushConstants{
+    uint4 frame;
+};
+
+struct NwbCsgIntervalPeelEntry{
+    float frontDepth;
+    float backDepth;
+    float3 capNormal;
+    uint id;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgIntervalPeelPushConstants> g_NwbCsgIntervalPeelPushConstants;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_CAP_NORMAL_IMAGE_FORMAT)]]
+RWTexture2DArray<float4> g_NwbCsgCapNormal;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_DEPTH_IMAGE_FORMAT)]]
+RWTexture2DArray<float2> g_NwbCsgIntervalDepth;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_ID_IMAGE_FORMAT)]]
+RWTexture2DArray<uint> g_NwbCsgIntervalId;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbCsgIntervalPeelFrameWidth(){
+    return g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_FRAME_WIDTH];
+}
+
+uint nwbCsgIntervalPeelFrameHeight(){
+    return g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_FRAME_HEIGHT];
+}
+
+uint nwbCsgIntervalPeelReceiverCount(){
+    return g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_RECEIVER_COUNT];
+}
+
+uint nwbCsgIntervalPeelLayerCount(){
+    return min(g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_LAYER_COUNT], NWB_CSG_PEEL_LAYER_COUNT);
+}
+
+float3 nwbCsgClipToWorldPosition(const float4 clipPosition){
+    const float4 worldPosition = mul(g_NwbMeshClipToWorld, clipPosition);
+    return worldPosition.xyz / max(abs(worldPosition.w), 0.000001);
+}
+
+float nwbCsgWorldToDepth(const float3 worldPosition){
+    const float4 clipPosition = mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
+    return clipPosition.z / max(abs(clipPosition.w), 0.000001);
+}
+
+void nwbCsgBuildPixelRay(const uint2 pixel, out float3 outRayBegin, out float3 outRayEnd){
+    const float2 frameSize = float2(nwbCsgIntervalPeelFrameWidth(), nwbCsgIntervalPeelFrameHeight());
+    const float2 uv = (float2(pixel) + 0.5) / frameSize;
+    const float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    outRayBegin = nwbCsgClipToWorldPosition(float4(ndc, 0.0, 1.0));
+    outRayEnd = nwbCsgClipToWorldPosition(float4(ndc, 1.0, 1.0));
+}
+
+uint nwbCsgPackIntervalId(const uint receiverIndex, const uint cutterIndex, const uint operation){
+    const uint receiverBits = (receiverIndex + 1u) & 0x3ffu;
+    const uint operationBits = operation & 0x3u;
+    const uint cutterBits = (cutterIndex + 1u) & 0xfffffu;
+    return (operationBits << 30u) | (receiverBits << 20u) | cutterBits;
+}
+
+NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
+    NwbCsgIntervalPeelEntry entry;
+    entry.frontDepth = 1e30;
+    entry.backDepth = 1e30;
+    entry.capNormal = float3(0.0, 0.0, 0.0);
+    entry.id = 0u;
+    return entry;
+}
+
+float nwbCsgSampleCutterDistanceOnRay(
+    const float3 rayBegin,
+    const float3 rayVector,
+    const float t,
+    const NwbCsgCutter cutter
+){
+    return nwbCsgEvaluateDistance(rayBegin + rayVector * t, cutter);
+}
+
+float nwbCsgRefineCutterIntersection(
+    const float3 rayBegin,
+    const float3 rayVector,
+    const NwbCsgCutter cutter,
+    float lowT,
+    float highT,
+    const bool entering
+){
+    [unroll]
+    for(uint refineIndex = 0u; refineIndex < NWB_CSG_INTERVAL_PEEL_REFINE_STEP_COUNT; ++refineIndex){
+        const float midT = (lowT + highT) * 0.5;
+        const float midDistance = nwbCsgSampleCutterDistanceOnRay(rayBegin, rayVector, midT, cutter);
+        const bool midInside = midDistance <= 0.0;
+        if(midInside == entering)
+            highT = midT;
+        else{
+            lowT = midT;
+        }
+    }
+
+    return (lowT + highT) * 0.5;
+}
+
+bool nwbCsgFindCutterIntervalOnRay(
+    const float3 rayBegin,
+    const float3 rayEnd,
+    const uint receiverIndex,
+    const uint cutterIndex,
+    out NwbCsgIntervalPeelEntry outEntry
+){
+    outEntry = nwbCsgInvalidIntervalPeelEntry();
+
+    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
+    const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
+    if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
+        return false;
+
+    const float3 rayVector = rayEnd - rayBegin;
+    const float step = 1.0 / float(NWB_CSG_INTERVAL_PEEL_STEP_COUNT);
+    float previousT = 0.0;
+    bool inside = nwbCsgSampleCutterDistanceOnRay(rayBegin, rayVector, previousT, cutter) <= 0.0;
+    bool hasFront = inside;
+    float frontT = 0.0;
+
+    [loop]
+    for(uint stepIndex = 1u; stepIndex <= NWB_CSG_INTERVAL_PEEL_STEP_COUNT; ++stepIndex){
+        const float t = float(stepIndex) * step;
+        const float distance = nwbCsgSampleCutterDistanceOnRay(rayBegin, rayVector, t, cutter);
+        const bool nextInside = distance <= 0.0;
+        if(nextInside != inside){
+            const bool entering = nextInside;
+            const float hitT = nwbCsgRefineCutterIntersection(rayBegin, rayVector, cutter, previousT, t, entering);
+            if(entering){
+                frontT = hitT;
+                hasFront = true;
+            }else if(hasFront){
+                const float backT = hitT;
+                const float3 frontWorldPosition = rayBegin + rayVector * frontT;
+                const float3 backWorldPosition = rayBegin + rayVector * backT;
+                const float3 midWorldPosition = rayBegin + rayVector * ((frontT + backT) * 0.5);
+                if(!nwbCsgReceiverLocalBoundsContains(receiverRange, midWorldPosition)){
+                    hasFront = false;
+                    inside = nextInside;
+                    previousT = t;
+                    continue;
+                }
+
+                const float frontDepth = saturate(nwbCsgWorldToDepth(frontWorldPosition));
+                const float backDepth = saturate(nwbCsgWorldToDepth(backWorldPosition));
+                outEntry.frontDepth = min(frontDepth, backDepth);
+                outEntry.backDepth = max(frontDepth, backDepth);
+                outEntry.capNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, normalize(rayBegin - rayEnd));
+                outEntry.id = nwbCsgPackIntervalId(receiverIndex, cutterIndex, cutter.operation);
+                return outEntry.backDepth >= outEntry.frontDepth && outEntry.id != 0u;
+            }
+        }
+
+        inside = nextInside;
+        previousT = t;
+    }
+
+    return false;
+}
+
+void nwbCsgInsertIntervalPeelEntry(
+    inout NwbCsgIntervalPeelEntry entries[NWB_CSG_PEEL_LAYER_COUNT],
+    const NwbCsgIntervalPeelEntry candidate
+){
+    if(candidate.id == 0u)
+        return;
+
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex){
+        if(candidate.frontDepth >= entries[layerIndex].frontDepth)
+            continue;
+
+        NwbCsgIntervalPeelEntry displaced = entries[layerIndex];
+        entries[layerIndex] = candidate;
+        [unroll]
+        for(uint shiftIndex = layerIndex + 1u; shiftIndex < NWB_CSG_PEEL_LAYER_COUNT; ++shiftIndex){
+            NwbCsgIntervalPeelEntry next = entries[shiftIndex];
+            entries[shiftIndex] = displaced;
+            displaced = next;
+        }
+        return;
+    }
+}
+
+void nwbCsgWriteIntervalPeelEntries(
+    const uint2 pixel,
+    const NwbCsgIntervalPeelEntry entries[NWB_CSG_PEEL_LAYER_COUNT]
+){
+    const uint layerCount = nwbCsgIntervalPeelLayerCount();
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= layerCount)
+            continue;
+
+        const uint3 texel = uint3(pixel, layerIndex);
+        const NwbCsgIntervalPeelEntry entry = entries[layerIndex];
+        if(entry.id == 0u)
+            continue;
+
+        g_NwbCsgCapNormal[texel] = float4(entry.capNormal, 1.0);
+        g_NwbCsgIntervalDepth[texel] = float2(entry.frontDepth, entry.backDepth);
+        g_NwbCsgIntervalId[texel] = entry.id;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint frameWidth = nwbCsgIntervalPeelFrameWidth();
+    const uint frameHeight = nwbCsgIntervalPeelFrameHeight();
+    if(dispatchThreadID.x >= frameWidth || dispatchThreadID.y >= frameHeight)
+        return;
+
+    const uint2 pixel = dispatchThreadID.xy;
+    float3 rayBegin;
+    float3 rayEnd;
+    nwbCsgBuildPixelRay(pixel, rayBegin, rayEnd);
+
+    NwbCsgIntervalPeelEntry entries[NWB_CSG_PEEL_LAYER_COUNT];
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex)
+        entries[layerIndex] = nwbCsgInvalidIntervalPeelEntry();
+
+    const uint receiverCount = nwbCsgIntervalPeelReceiverCount();
+    [loop]
+    for(uint receiverIndex = 0u; receiverIndex < receiverCount; ++receiverIndex){
+        const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
+        [loop]
+        for(uint localCutterIndex = 0u; localCutterIndex < receiverRange.cutterCount; ++localCutterIndex){
+            const uint cutterIndex = receiverRange.firstCutter + localCutterIndex;
+            NwbCsgIntervalPeelEntry entry;
+            if(nwbCsgFindCutterIntervalOnRay(rayBegin, rayEnd, receiverIndex, cutterIndex, entry))
+                nwbCsgInsertIntervalPeelEntry(entries, entry);
+        }
+    }
+
+    nwbCsgWriteIntervalPeelEntries(pixel, entries);
+}

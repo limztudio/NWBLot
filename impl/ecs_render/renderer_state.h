@@ -135,6 +135,10 @@ public:
 private:
     Core::BindingLayoutHandle m_clipBindingLayout;
     Core::BindingSetHandle m_clipBindingSet;
+    Core::BindingLayoutHandle m_intervalPeelBindingLayout;
+    Core::BindingSetHandle m_intervalPeelBindingSet;
+    Core::ShaderHandle m_intervalPeelComputeShader;
+    Core::ComputePipelineHandle m_intervalPeelPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;

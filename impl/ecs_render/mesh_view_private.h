@@ -34,6 +34,12 @@ struct MeshViewGpuData{
         Float4(0.f, 0.f, 1.f, 0.f),
         Float4(0.f, 0.f, 0.f, 1.f),
     };
+    Float4 clipToWorld[4] = {
+        Float4(1.f, 0.f, 0.f, 0.f),
+        Float4(0.f, 1.f, 0.f, 0.f),
+        Float4(0.f, 0.f, 1.f, 0.f),
+        Float4(0.f, 0.f, 0.f, 1.f),
+    };
     Float4 cameraPosition = Float4(0.f, 0.f, 0.f, 1.f);
     Float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT] = {
         Float4(1.f, 0.f, 0.f, 0.f),
@@ -172,6 +178,13 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
     const SIMDMatrix worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projection);
     for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
         StoreFloat(worldToClip.v[columnIndex], &state.worldToClip[columnIndex]);
+
+    SIMDVector determinant;
+    const SIMDMatrix clipToWorld = MatrixInverse(&determinant, worldToClip);
+    if(IsFinite(VectorGetX(determinant)) && Abs(VectorGetX(determinant)) > 0.0f){
+        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
+            StoreFloat(clipToWorld.v[columnIndex], &state.clipToWorld[columnIndex]);
+    }
 
     SIMDVector cameraPosition;
     SIMDVector frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];

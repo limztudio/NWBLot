@@ -17,6 +17,14 @@
 #define NWB_CSG_BINDING_CUTTERS 1
 #define NWB_CSG_BINDING_PARAMETER_BYTES 2
 
+#ifndef NWB_CSG_INTERVAL_SET
+#define NWB_CSG_INTERVAL_SET 0
+#endif
+
+#define NWB_CSG_INTERVAL_BINDING_CAP_NORMAL 0
+#define NWB_CSG_INTERVAL_BINDING_DEPTH 1
+#define NWB_CSG_INTERVAL_BINDING_ID 2
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

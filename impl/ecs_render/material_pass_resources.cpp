@@ -230,48 +230,26 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     return true;
 }
 
-bool RendererMaterialSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
-    if(!drawState().m_meshViewBuffer){
-        Core::BufferDesc meshViewBufferDesc;
-        meshViewBufferDesc
-            .setByteSize(sizeof(ECSRenderDetail::MeshViewGpuData))
-            .setIsConstantBuffer(true)
-            .setDebugName(ECSRenderDetail::s_MeshViewBufferName)
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        Core::BufferHandle meshViewBuffer = graphics().createBuffer(meshViewBufferDesc);
-        if(!meshViewBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh view buffer"));
-            return false;
-        }
+bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(
+    const InstanceGpuDataVector& instanceData,
+    const MaterialTypedByteDataVector& materialTypedBytes
+){
+    usize uploadBytes = 0u;
+    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
+        return false;
 
-        drawState().m_meshViewBuffer = Move(meshViewBuffer);
-        m_renderer.meshSystem().destroyMeshBindingSets();
-    }
-
-    const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(world(), fallbackAspectRatio);
-    if(
-        drawState().m_meshViewGpuDataValid
-        && NWB_MEMCMP(drawState().m_meshViewGpuData, &viewState, sizeof(viewState)) == 0
-    )
-        return true;
-
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(drawState().m_meshViewBuffer.get(), &viewState, sizeof(viewState));
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    NWB_MEMCPY(drawState().m_meshViewGpuData, sizeof(drawState().m_meshViewGpuData), &viewState, sizeof(viewState));
-    drawState().m_meshViewGpuDataValid = true;
-    return true;
+    return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
 
 bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
-    if(!reserveInstanceBufferCapacity(instanceData.size()))
-        return false;
     NWB_ASSERT(drawState().m_instanceBuffer);
+    NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
+    if(!drawState().m_instanceBuffer || drawState().m_instanceBufferCapacity < instanceData.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance upload requires a prepared instance buffer"));
+        return false;
+    }
 
 #if defined(NWB_DEBUG)
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
@@ -295,9 +273,12 @@ bool RendererMaterialSystem::uploadMaterialTypedBuffer(
     usize uploadBytes = 0u;
     if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
         return false;
-    if(!reserveMaterialTypedBufferCapacity(uploadBytes))
-        return false;
     NWB_ASSERT(drawState().m_materialTypedBuffer);
+    NWB_ASSERT(drawState().m_materialTypedBufferCapacity >= uploadBytes);
+    if(!drawState().m_materialTypedBuffer || drawState().m_materialTypedBufferCapacity < uploadBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed upload requires a prepared material typed buffer"));
+        return false;
+    }
 
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();

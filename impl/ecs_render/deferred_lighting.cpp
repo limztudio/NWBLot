@@ -100,8 +100,7 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets
 }
 
 bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
-    if(!deferredState().m_sceneShadingBuffer)
-        return false;
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
 
     const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio);
     if(
@@ -126,10 +125,9 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
 }
 
 bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(!targets.lightingBindingSet || !targets.opaqueLightingFramebuffer)
-        return false;
-    if(!deferredState().m_lightingPipeline)
-        return false;
+    NWB_ASSERT(targets.lightingBindingSet);
+    NWB_ASSERT(targets.opaqueLightingFramebuffer);
+    NWB_ASSERT(deferredState().m_lightingPipeline);
 
     commandList.setResourceStatesForBindingSet(targets.lightingBindingSet.get());
     commandList.commitBarriers();

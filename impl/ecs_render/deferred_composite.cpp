@@ -84,12 +84,14 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(Core::Framebuffer* 
 }
 
 bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer){
-    if(!presentationFramebuffer)
-        return false;
-    if(!targets.compositeBindingSet)
-        return false;
-    if(!deferredState().m_compositePipeline && !createDeferredCompositePipeline(presentationFramebuffer))
-        return false;
+    NWB_ASSERT(presentationFramebuffer);
+    NWB_ASSERT(targets.compositeBindingSet);
+    NWB_ASSERT(deferredState().m_compositePipeline);
+    NWB_ASSERT(
+        presentationFramebuffer
+        && deferredState().m_compositePipeline
+        && deferredState().m_compositePipeline->getFramebufferInfo() == presentationFramebuffer->getFramebufferInfo()
+    );
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(presentationFramebuffer->getFramebufferInfo().getViewport());

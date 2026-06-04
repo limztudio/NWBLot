@@ -27,9 +27,11 @@ NwbMeshRasterVertex nwbCsgCapProxySphereVertex(
     sincos(phi, sinPhi, cosPhi);
     const float3 shapeNormal = float3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
     const float radiusSlack = nwbCsgCapProxySphereRadiusSlack(cutter.parameter0.x, segments, rows);
-    const float radius = max(cutter.parameter0.x, 0.0001) + radiusSlack;
+    const float radius = max(cutter.parameter0.x, 0.0001);
+    const float3 shapePosition = shapeNormal * radius;
+    const float3 enlargedShapePosition = nwbCsgCapProxyEnlargeShapePosition(shapePosition, cutter, radiusSlack);
     return nwbCsgCapProxyBuildVertex(
-        nwbCsgTransformShapeToWorld(shapeNormal * radius, cutter),
+        nwbCsgTransformShapeToWorld(enlargedShapePosition, cutter),
         shapeNormal,
         cutter,
         item.receiverCutterShapePass.x,

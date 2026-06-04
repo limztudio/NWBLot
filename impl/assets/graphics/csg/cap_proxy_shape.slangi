@@ -1,0 +1,91 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_CAP_PROXY_SHAPE_SLANGI
+#define NWB_GRAPHICS_CSG_CAP_PROXY_SHAPE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "runtime.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbCsgCapProxyEnlargeSphereShapePosition(
+    const float3 shapePosition,
+    const float radiusSlack
+){
+    return shapePosition + nwbCsgSphereNormal(shapePosition) * radiusSlack;
+}
+
+float3 nwbCsgCapProxyShrinkSphereShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter
+){
+    return nwbProjectCsgSpherePositionToSurface(shapePosition, cutter);
+}
+
+float3 nwbCsgCapProxyEnlargeCapsuleShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    const float radiusSlack
+){
+    return shapePosition + nwbCsgCapsuleNormal(shapePosition, cutter) * radiusSlack;
+}
+
+float3 nwbCsgCapProxyShrinkCapsuleShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter
+){
+    return nwbProjectCsgCapsulePositionToSurface(shapePosition, cutter);
+}
+
+float3 nwbCsgCapProxyEnlargeShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    const float radiusSlack
+){
+    switch(cutter.shapeType){
+    case NWB_CSG_SHAPE_SPHERE:
+        return nwbCsgCapProxyEnlargeSphereShapePosition(shapePosition, radiusSlack);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return nwbCsgCapProxyEnlargeCapsuleShapePosition(shapePosition, cutter, radiusSlack);
+    default:
+        return shapePosition;
+    }
+}
+
+float3 nwbCsgCapProxyShrinkShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter
+){
+    switch(cutter.shapeType){
+    case NWB_CSG_SHAPE_SPHERE:
+        return nwbCsgCapProxyShrinkSphereShapePosition(shapePosition, cutter);
+    case NWB_CSG_SHAPE_CAPSULE:
+        return nwbCsgCapProxyShrinkCapsuleShapePosition(shapePosition, cutter);
+    default:
+        return shapePosition;
+    }
+}
+
+float3 nwbCsgCapProxyShrinkWorldPosition(
+    const float3 worldPosition,
+    const NwbCsgCutter cutter
+){
+    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
+    return nwbCsgTransformShapeToWorld(nwbCsgCapProxyShrinkShapePosition(shapePosition, cutter), cutter);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

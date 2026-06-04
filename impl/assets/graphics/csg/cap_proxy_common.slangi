@@ -12,8 +12,8 @@
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u
 
 #include "binding_slots.h"
+#include "cap_proxy_shape.slangi"
 #include "constants.h"
-#include "runtime.slangi"
 
 #include "../mesh/binding_slots.h"
 #include "../mesh/meshlet_constants.h"

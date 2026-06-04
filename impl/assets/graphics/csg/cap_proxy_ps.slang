@@ -8,7 +8,7 @@
 
 #include "../mesh/gbuffer_io.slangi"
 #include "../mesh/view_buffer.slangi"
-#include "runtime.slangi"
+#include "cap_proxy_shape.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +53,7 @@ NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     const uint cutterIndex = uint(input.tangent.w + 0.5);
     const float3 worldPosition = input.worldPosition.xyz;
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
-    const float3 capWorldPosition = nwbCsgProjectWorldPositionToCutterSurface(worldPosition, cutter);
+    const float3 capWorldPosition = nwbCsgCapProxyShrinkWorldPosition(worldPosition, cutter);
 
     const uint expectedOpeningMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
     if(

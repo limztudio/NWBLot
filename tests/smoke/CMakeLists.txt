@@ -149,6 +149,36 @@ if(Python3_Interpreter_FOUND)
             csg_visible_capture.bmp
             "$<TARGET_FILE:nwb_csg_visible_smoke>"
             "${_nwb_csg_visible_runtime_root}"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_declare_executable(nwb_csg_visible_compute_emulation_smoke)
+        target_sources(nwb_csg_visible_compute_emulation_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_project.cpp"
+        )
+        target_compile_definitions(nwb_csg_visible_compute_emulation_smoke PRIVATE
+            NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_csg_visible_compute_emulation_smoke
+            "${_nwb_csg_visible_runtime_root}"
+            nwb_ecs_csg
+        )
+        add_dependencies(nwb_csg_visible_compute_emulation_smoke nwb_csg_visible_smoke_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_visible_compute_emulation_capture_smoke
+            csg_visible_compute_emulation_capture.bmp
+            "$<TARGET_FILE:nwb_csg_visible_compute_emulation_smoke>"
+            "${_nwb_csg_visible_runtime_root}"
+            "--expect-log-message" "CsgVisibleSmokeProject: forced Meshlets feature off for compute-emulation smoke"
+            "--expect-log-message" "RendererSystem: CSG cap proxy selected CS + VS + PS compute emulation"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_csg_visible_compute_emulation_capture_smoke PROPERTIES
+            CONFIGURATIONS "dbg;opt"
         )
 
         unset(_nwb_csg_visible_asset_stamp)

@@ -62,6 +62,51 @@ void nwbCsgCapProxyBoxPrimitive(const uint localPrimitive, out uint3 indices){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(NWB_CSG_CAP_PROXY_GROUP_SIZE, 1, 1)]
+void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
+    const uint proxyIndex = groupID.x;
+    if(proxyIndex >= g_NwbCsgCapProxyPushConstants.dispatch.x)
+        return;
+
+    const uint groupThreadIndex = groupThreadID.x;
+    const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
+    const bool itemMatches = nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_SHAPE_BOX);
+    const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
+
+    for(uint localPrimitive = groupThreadIndex; localPrimitive < NWB_CSG_CAP_PROXY_MAX_TRIANGLES; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE){
+        if(!itemMatches || localPrimitive >= 12u){
+            nwbCsgCapProxyStoreCulledEmulatedPrimitive(proxyIndex, localPrimitive);
+            continue;
+        }
+
+        uint3 indices;
+        nwbCsgCapProxyBoxPrimitive(localPrimitive, indices);
+        nwbCsgCapProxyStoreEmulatedPrimitive(
+            proxyIndex,
+            localPrimitive,
+            nwbCsgCapProxyBoxVertex(item, cutter, indices.x),
+            nwbCsgCapProxyBoxVertex(item, cutter, indices.y),
+            nwbCsgCapProxyBoxVertex(item, cutter, indices.z)
+        );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#else
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [shader("mesh")]
 [numthreads(NWB_CSG_CAP_PROXY_GROUP_SIZE, 1, 1)]
 [outputtopology("triangle")]
@@ -96,6 +141,12 @@ void main(
     for(uint localPrimitive = groupThreadIndex; localPrimitive < primitiveCount; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE)
         nwbCsgCapProxyBoxPrimitive(localPrimitive, triangles[localPrimitive]);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

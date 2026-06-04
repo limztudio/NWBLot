@@ -25,6 +25,9 @@ namespace __hidden_graphics{
 using UploadBytes = Vector<u8, Alloc::GlobalArena>;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool ComputeTextureUploadByteSize(const Graphics::TextureSetupDesc& desc, usize& outRequiredBytes){
     outRequiredBytes = 0;
 
@@ -824,24 +827,68 @@ Graphics::JobHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshReso
 Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
     CoopVectorSupport output;
 
-    auto* device = getDevice();
+    output.inferencingSupported = queryFeatureSupport(Feature::CooperativeVectorInferencing);
+    output.trainingSupported = queryFeatureSupport(Feature::CooperativeVectorTraining);
 
-    output.inferencingSupported = device->queryFeatureSupport(Feature::CooperativeVectorInferencing);
-    output.trainingSupported = device->queryFeatureSupport(Feature::CooperativeVectorTraining);
+    auto* device = getDevice();
+    if(!device)
+        return output;
 
     const CooperativeVectorDeviceFeatures features = device->queryCoopVecFeatures();
-    output.fp32TrainingSupported = features.trainingFloat32;
+    output.fp32TrainingSupported = output.trainingSupported && features.trainingFloat32;
 
     for(const auto& combo : features.matMulFormats){
         if(__hidden_graphics::IsFp16CoopVecFormat(combo)){
-            output.fp16InferencingSupported = true;
-            output.fp16TrainingSupported = features.trainingFloat16;
+            output.fp16InferencingSupported = output.inferencingSupported;
+            output.fp16TrainingSupported = output.trainingSupported && features.trainingFloat16;
             break;
         }
     }
 
     return output;
 }
+
+bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
+#if !defined(NWB_FINAL)
+    if((m_disabledFeatureSupportMask & BitMask<u64>(static_cast<u32>(feature))) != 0u)
+        return false;
+#endif
+
+    auto* device = getDevice();
+    return device && device->queryFeatureSupport(feature, featureInfo, featureInfoSize);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if !defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void Graphics::setFeatureSupportDisabledForTesting(const Feature::Enum feature, const bool disabled){
+    const u64 featureBit = BitMask<u64>(static_cast<u32>(feature));
+    if(disabled)
+        m_disabledFeatureSupportMask |= featureBit;
+    else
+        m_disabledFeatureSupportMask &= ~featureBit;
+}
+
+void Graphics::clearFeatureSupportDisabledForTesting(){
+    m_disabledFeatureSupportMask = 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
     auto* device = getDevice();

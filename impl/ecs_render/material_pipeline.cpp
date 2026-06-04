@@ -423,7 +423,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         return true;
     };
 
-    const bool meshSupported = device->queryFeatureSupport(Core::Feature::Meshlets);
+    const bool meshSupported = graphics().queryFeatureSupport(Core::Feature::Meshlets);
     if(pass == MaterialPipelinePass::Opaque && !hasPixelShader){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requires a pixel shader"), StringConvert(materialKey.c_str()));
         return failMaterialPipeline();

@@ -91,14 +91,18 @@ void RendererCsgState::invalidateResources(){
     m_capProxyBuffer.reset();
     m_capProxyPixelShader.reset();
     m_capProxyBindingLayout.reset();
+    m_capProxyComputeBindingLayout.reset();
     m_capProxyOpeningMaskBindingLayout.reset();
     m_capProxyBindingSet.reset();
+    m_capProxyComputeBindingSet.reset();
     m_capProxyOpeningMaskBindingSet.reset();
+    m_capProxyEmulationVertexBuffer.reset();
     m_capProxyShapeResources.clear();
     m_receiverRangeBufferCapacity = 0u;
     m_cutterBufferCapacity = 0u;
     m_parameterByteBufferCapacity = 0u;
     m_capProxyBufferCapacity = 0u;
+    m_capProxyEmulationVertexCapacity = 0u;
 }
 
 

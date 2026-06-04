@@ -2886,6 +2886,8 @@ namespace Feature{
         WaveLaneCountMinMax,
         CooperativeVectorInferencing,
         CooperativeVectorTraining,
+
+        kCount
     };
 };
 

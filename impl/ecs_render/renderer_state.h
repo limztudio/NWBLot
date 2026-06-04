@@ -118,7 +118,10 @@ private:
 struct CsgCapProxyShapeResources{
     CsgShapeTypeId shapeType = s_InvalidCsgShapeTypeId;
     Core::ShaderHandle meshShader;
+    Core::ShaderHandle computeShader;
     Core::MeshletPipelineHandle pipeline;
+    Core::ComputePipelineHandle computePipeline;
+    Core::GraphicsPipelineHandle emulationPipeline;
 };
 
 class RendererCsgState final : NoCopy{
@@ -149,14 +152,18 @@ private:
     Core::BufferHandle m_capProxyBuffer;
     Core::ShaderHandle m_capProxyPixelShader;
     Core::BindingLayoutHandle m_capProxyBindingLayout;
+    Core::BindingLayoutHandle m_capProxyComputeBindingLayout;
     Core::BindingLayoutHandle m_capProxyOpeningMaskBindingLayout;
     Core::BindingSetHandle m_capProxyBindingSet;
+    Core::BindingSetHandle m_capProxyComputeBindingSet;
     Core::BindingSetHandle m_capProxyOpeningMaskBindingSet;
+    Core::BufferHandle m_capProxyEmulationVertexBuffer;
     Vector<CsgCapProxyShapeResources, Core::Alloc::GlobalArena> m_capProxyShapeResources;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
     usize m_parameterByteBufferCapacity = 0u;
     usize m_capProxyBufferCapacity = 0u;
+    usize m_capProxyEmulationVertexCapacity = 0u;
 };
 
 class RendererDeferredState final : NoCopy{

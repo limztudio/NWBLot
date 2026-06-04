@@ -107,37 +107,6 @@ static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
     return true;
 }
 
-[[nodiscard]] static bool ParseOptionalNameField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    Name& outName
-){
-    outName = NAME_NONE;
-
-    const Metascript::Value* fieldValue = asset.findField(fieldName);
-    if(!fieldValue)
-        return true;
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a string")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const Metascript::MStringView text = fieldValue->asString();
-    outName = Name(AStringView(text.data(), text.size()));
-    if(!outName){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] static bool ParseOptionalStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
@@ -353,11 +322,18 @@ static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
     if(!HasProxyShaderFields(asset))
         return true;
 
-    Name proxyShaderName = NAME_NONE;
-    if(!ParseOptionalNameField(nwbFilePath, asset, s_ProxyShaderField, proxyShaderName))
+    CookString proxyShaderName(cookArena);
+    if(!ParseOptionalStringField(nwbFilePath, asset, s_ProxyShaderField, proxyShaderName))
         return false;
-    if(!proxyShaderName){
+    if(proxyShaderName.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' is required when proxy shader fields are present")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(s_ProxyShaderField)
+        );
+        return false;
+    }
+    if(!Name(AStringView(proxyShaderName))){
+        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a valid name")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_ProxyShaderField)
         );
@@ -375,7 +351,7 @@ static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
         return false;
     }
 
-    outEntry.name.assign(AStringView(proxyShaderName.c_str()));
+    outEntry.name.assign(AStringView(proxyShaderName));
     if(!outEntry.stage.assign("mesh"))
         return false;
     if(!outEntry.archiveStage.assign(outEntry.stage))
@@ -383,7 +359,7 @@ static constexpr AStringView s_DefaultProxyIncludeRoot = "engine/graphics";
     if(!outEntry.targetProfile.assign(s_DefaultProxyTargetProfile))
         return false;
     outEntry.entryPoint.assign(s_DefaultProxyEntryPoint);
-    outEntry.emitMeshComputeShadow = false;
+    outEntry.emitMeshComputeShadow = true;
     outEntry.includeRoots.emplace_back(s_DefaultProxyIncludeRoot, cookArena);
 
     CookString proxyProfile(cookArena);

@@ -58,7 +58,7 @@ NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     const uint expectedOpeningMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
     if(
         expectedOpeningMaskValue == NWB_CSG_OPENING_MASK_INVALID_VALUE
-        || !nwbCsgCapProxyOpeningMaskMatches(uint2(input.position.xy), expectedOpeningMaskValue)
+        || !nwbCsgCapProxyOpeningMaskMatches(nwbCsgCapProxyWorldToPixelPosition(capWorldPosition), expectedOpeningMaskValue)
     )
         discard;
 

@@ -31,6 +31,7 @@
 #define NWB_CSG_BINDING_OPENING_MASK_WRITE 0
 #define NWB_CSG_BINDING_CAP_PROXIES 0
 #define NWB_CSG_BINDING_CAP_PROXY_OPENING_MASK 1
+#define NWB_CSG_BINDING_CAP_PROXY_GENERATED_VERTEX 14
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

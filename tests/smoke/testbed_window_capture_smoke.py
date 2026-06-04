@@ -1275,6 +1275,21 @@ def validate_transparent_multi_result(result):
         raise SmokeFailure(f"transparent multi-object scene did not show all expected color regions ({observed})")
 
 
+def validate_expected_log_messages(log_directory, log_baseline, required_needles, rejected_needles):
+    if not required_needles and not rejected_needles:
+        return
+    if not log_directory:
+        raise SmokeFailure("cannot validate expected log messages without a logserver")
+
+    log_text = collect_log_delta(log_directory, log_baseline, "logserver_*.log")
+    for needle in required_needles:
+        if needle not in log_text:
+            raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
+    for needle in rejected_needles:
+        if needle in log_text:
+            raise SmokeFailure(f"rejected log message '{needle}' was found\n{log_text[-4000:]}")
+
+
 def capture_checked_window(args, backend, handle):
     result = backend.capture_window(handle, args.output)
     validate_capture_result(result)
@@ -1310,7 +1325,9 @@ def launch_and_capture(args, backend):
         ensure_process_running(testbed_process, "before capture")
 
         ensure_process_running(testbed_process, "before checked capture")
-        return capture_checked_window(args, backend, handle)
+        result = capture_checked_window(args, backend, handle)
+        validate_expected_log_messages(log_directory, log_baseline, args.expect_log_message, args.reject_log_message)
+        return result
     finally:
         terminate_process(testbed_process, "testbed")
         terminate_process(logserver_process, "logserver")
@@ -1328,6 +1345,8 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
+    parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
+    parser.add_argument("--reject-log-message", action="append", default=[], help="Forbidden substring in the logserver output.")
     parser.add_argument(
         "--expect-transparent-multi",
         action="store_true",

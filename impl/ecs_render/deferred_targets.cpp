@@ -46,8 +46,11 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     csgState().m_openingMaskWriteBindingSet.reset();
     csgState().m_capProxyOpeningMaskBindingSet.reset();
     csgState().m_capProxyBindingSet.reset();
-    for(CsgCapProxyShapeResources& shapeResources : csgState().m_capProxyShapeResources)
+    csgState().m_capProxyComputeBindingSet.reset();
+    for(CsgCapProxyShapeResources& shapeResources : csgState().m_capProxyShapeResources){
         shapeResources.pipeline.reset();
+        shapeResources.emulationPipeline.reset();
+    }
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.capProxyFramebuffer.reset();

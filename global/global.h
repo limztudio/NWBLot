@@ -10,6 +10,7 @@
 #include "platform.h"
 #include "type.h"
 #include "limit.h"
+#include "bit.h"
 #include "algorithm.h"
 #include "call_traits.h"
 #include "not_null.h"

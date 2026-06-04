@@ -15,6 +15,35 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct NwbCsgCapProxyPushConstants{
+    uint4 dispatch;
+    float4 viewportRect;
+    float4 scissorRect;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgCapProxyPushConstants> g_NwbCsgCapProxyPushConstants;
+
+float2 nwbCsgCapProxyClipToFramebuffer(const float4 clipPosition){
+    const float2 viewportMin = g_NwbCsgCapProxyPushConstants.viewportRect.xy;
+    const float2 viewportMax = g_NwbCsgCapProxyPushConstants.viewportRect.zw;
+    const float2 viewportSize = viewportMax - viewportMin;
+    const float2 ndc = clipPosition.xy / clipPosition.w;
+
+    return float2(
+        viewportMin.x + (ndc.x * 0.5 + 0.5) * viewportSize.x,
+        viewportMax.y - (ndc.y * 0.5 + 0.5) * viewportSize.y
+    );
+}
+
+uint2 nwbCsgCapProxyWorldToPixelPosition(const float3 worldPosition){
+    const float4 clipPosition = mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
+    const float2 viewportMin = g_NwbCsgCapProxyPushConstants.viewportRect.xy;
+    const float2 viewportMax = g_NwbCsgCapProxyPushConstants.viewportRect.zw;
+    const float2 maxPixel = max(viewportMin, viewportMax - 1.0);
+    return uint2(clamp(nwbCsgCapProxyClipToFramebuffer(clipPosition), viewportMin, maxPixel));
+}
+
 float3 nwbCsgCapProxyEnlargeShapePosition(
     const float3 shapePosition,
     const NwbCsgCutter cutter,
@@ -22,6 +51,10 @@ float3 nwbCsgCapProxyEnlargeShapePosition(
 ){
     if(radiusSlack <= 0.0)
         return shapePosition;
+
+    float3 projectedShapePosition;
+    if(nwbTryEnlargeCsgCapProxyShape(cutter.shapeType, shapePosition, cutter, radiusSlack, projectedShapePosition))
+        return projectedShapePosition;
 
     const NwbCsgSample sample = nwbCsgEvaluateShapeSample(shapePosition, cutter);
     const float3 normal = nwbCsgNormalizeOr(sample.normal, float3(0.0, 1.0, 0.0));
@@ -32,6 +65,10 @@ float3 nwbCsgCapProxyShrinkShapePosition(
     const float3 shapePosition,
     const NwbCsgCutter cutter
 ){
+    float3 projectedShapePosition;
+    if(nwbTryShrinkCsgCapProxyShape(cutter.shapeType, shapePosition, cutter, projectedShapePosition))
+        return projectedShapePosition;
+
     return nwbCsgProjectShapePositionToCutterSurface(shapePosition, cutter);
 }
 

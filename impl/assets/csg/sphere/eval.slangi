@@ -24,6 +24,8 @@ NwbCsgSample nwbEvalCsgSphereShape(const float3 shapePosition, const NwbCsgCutte
     return sample;
 }
 
+#include "cap_proxy_projection.slangi"
+
 #if defined(NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN)
 #if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
 #define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN

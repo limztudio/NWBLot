@@ -113,6 +113,11 @@ public:
 public:
     [[nodiscard]] GraphicsBackend::Device* getDevice()const noexcept{ return m_backend.getDevice(); }
     [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){ return m_backend.enumerateAdapters(outAdapters); }
+    [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature, void* featureInfo = nullptr, usize featureInfoSize = 0)const;
+#if !defined(NWB_FINAL)
+    void setFeatureSupportDisabledForTesting(Feature::Enum feature, bool disabled);
+    void clearFeatureSupportDisabledForTesting();
+#endif
 
     void addRenderPassToFront(IRenderPass& pass);
     void addRenderPassToBack(IRenderPass& pass);
@@ -203,6 +208,9 @@ private:
     i32 m_numberOfAccumulatedFrames = 0;
 
     u32 m_frameIndex = 0;
+#if !defined(NWB_FINAL)
+    u64 m_disabledFeatureSupportMask = 0u;
+#endif
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
 

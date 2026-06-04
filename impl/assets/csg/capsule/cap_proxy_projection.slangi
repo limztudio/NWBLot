@@ -1,0 +1,111 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_CSG_CAPSULE_CAP_PROXY_PROJECTION
+#define NWB_CSG_CAPSULE_CAP_PROXY_PROJECTION
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbCsgCapsuleProjectionAxisPoint(const float3 shapePosition, const NwbCsgCutter cutter){
+    const float halfHeight = max(cutter.parameter0.y, 0.0);
+    return float3(0.0, clamp(shapePosition.y, -halfHeight, halfHeight), 0.0);
+}
+
+float3 nwbCsgCapProxyEnlargeCapsuleShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    const float radiusSlack
+){
+    if(radiusSlack <= 0.0)
+        return shapePosition;
+
+    const float radius = max(cutter.parameter0.x + radiusSlack, 0.0001);
+    const float3 axisPoint = nwbCsgCapsuleProjectionAxisPoint(shapePosition, cutter);
+    const float3 normal = nwbCsgNormalizeOr(shapePosition - axisPoint, nwbCsgCapsuleNormal(shapePosition, cutter));
+    return axisPoint + normal * radius;
+}
+
+float3 nwbCsgCapProxyShrinkCapsuleShapePosition(
+    const float3 shapePosition,
+    const NwbCsgCutter cutter
+){
+    const float radius = max(cutter.parameter0.x, 0.0);
+    const float3 axisPoint = nwbCsgCapsuleProjectionAxisPoint(shapePosition, cutter);
+    const float3 normal = nwbCsgNormalizeOr(shapePosition - axisPoint, nwbCsgCapsuleNormal(shapePosition, cutter));
+    return axisPoint + normal * radius;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_CSG_ENABLE_CAP_PROXY_SHAPE_CHAIN)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN)
+#define NWB_CSG_PREV_ENLARGE NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN
+#else
+#define NWB_CSG_PREV_ENLARGE nwbTryEnlargeEmptyCsgCapProxyShape
+#endif
+
+bool nwbTryEnlargeCsgCapsuleCapProxyShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    const float radiusSlack,
+    out float3 outShapePosition
+){
+    if(shapeType == NWB_CSG_SHAPE_CAPSULE){
+        outShapePosition = nwbCsgCapProxyEnlargeCapsuleShapePosition(shapePosition, cutter, radiusSlack);
+        return true;
+    }
+    return NWB_CSG_PREV_ENLARGE(shapeType, shapePosition, cutter, radiusSlack, outShapePosition);
+}
+
+#undef NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN
+#define NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN nwbTryEnlargeCsgCapsuleCapProxyShape
+#undef NWB_CSG_PREV_ENLARGE
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN)
+#define NWB_CSG_PREV_SHRINK NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN
+#else
+#define NWB_CSG_PREV_SHRINK nwbTryShrinkEmptyCsgCapProxyShape
+#endif
+
+bool nwbTryShrinkCsgCapsuleCapProxyShape(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out float3 outShapePosition
+){
+    if(shapeType == NWB_CSG_SHAPE_CAPSULE){
+        outShapePosition = nwbCsgCapProxyShrinkCapsuleShapePosition(shapePosition, cutter);
+        return true;
+    }
+    return NWB_CSG_PREV_SHRINK(shapeType, shapePosition, cutter, outShapePosition);
+}
+
+#undef NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN
+#define NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN nwbTryShrinkCsgCapsuleCapProxyShape
+#undef NWB_CSG_PREV_SHRINK
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

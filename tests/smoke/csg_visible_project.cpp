@@ -33,13 +33,14 @@ using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_CameraStartDepth = 3.0f;
+static constexpr f32 s_CameraStartDepth = 3.7f;
 static constexpr f32 s_CameraTargetY = 0.8f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CubeRotationSpeed = 0.25f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
+static constexpr f32 s_ReceiverScale = 0.72f;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube_hard_edges";
 static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
@@ -151,10 +152,10 @@ static void ApplyCubeRotation(
 
 [[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot){
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(-1.05f, 1.25f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(1.05f, 1.25f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(-1.05f, 0.25f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(1.05f, 0.25f, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Plane: return Float4(-1.28f, 1.48f, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(1.28f, 1.48f, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(-1.28f, 0.02f, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(1.28f, 0.02f, 0.0f, 0.0f);
     default: return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
     }
 }
@@ -172,9 +173,9 @@ static void ApplyCubeRotation(
 [[nodiscard]] static Float4 CsgVisibleCutterLocalOffset(const usize shapeSlot){
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(0.0f, 0.0f, -0.22f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(0.0f, 0.0f, -0.24f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(0.0f, 0.0f, -0.24f, 0.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(0.0f, 0.0f, -0.30f, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(0.0f, 0.0f, -0.32f, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(0.0f, 0.0f, -0.32f, 0.0f);
     default: return Float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 }
@@ -219,21 +220,21 @@ static void ApplyCutterTransform(
     case CsgVisibleShapeSlot::Box:{
         cutter.shapeType = Name("engine/csg/box");
         NWB::Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4(0.22f, 0.22f, 0.42f, 0.0f);
+        parameters.halfExtents = Float4(0.30f, 0.30f, 0.56f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Sphere:{
         cutter.shapeType = Name("engine/csg/sphere");
         NWB::Impl::CsgSphereShapeParameters parameters;
-        parameters.radius = Float4(0.24f, 0.0f, 0.0f, 0.0f);
+        parameters.radius = Float4(0.34f, 0.0f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Capsule:{
         cutter.shapeType = Name("engine/csg/capsule");
         NWB::Impl::CsgCapsuleShapeParameters parameters;
-        parameters.radiusHalfHeight = Float4(0.15f, 0.18f, 0.0f, 0.0f);
+        parameters.radiusHalfHeight = Float4(0.22f, 0.28f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
@@ -250,7 +251,18 @@ static void ApplyCutterTransform(
 
 class CsgVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    static void applyFeatureOverrides(NWB::ProjectRuntimeContext& context){
+#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
+        context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, true);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: forced Meshlets feature off for compute-emulation smoke"));
+#else
+        static_cast<void>(context);
+#endif
+    }
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+        applyFeatureOverrides(context);
+
         auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
         if(!world){
             NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: ECS world allocation failed"));
@@ -296,6 +308,10 @@ private:
 
         m_world->clear();
         m_world.owner().reset();
+
+#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
+        m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, false);
+#endif
     }
 
 
@@ -342,7 +358,7 @@ public:
                 s_CsgVisibleReceiverGroups[shapeSlot],
                 CsgVisibleShapeColor(shapeSlot),
                 receiverPosition,
-                Float4(0.58f, 0.58f, 0.58f, 0.0f),
+                Float4(s_ReceiverScale, s_ReceiverScale, s_ReceiverScale, 0.0f),
                 true
             );
             m_cutters[shapeSlot] = CreateCutter(

@@ -118,6 +118,7 @@ private:
 struct CsgCapProxyShapeResources{
     CsgShapeTypeId shapeType = s_InvalidCsgShapeTypeId;
     Core::ShaderHandle meshShader;
+    Core::ShaderHandle pixelShader;
     Core::ShaderHandle computeShader;
     Core::MeshletPipelineHandle pipeline;
     Core::ComputePipelineHandle computePipeline;
@@ -150,7 +151,6 @@ private:
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;
     Core::BufferHandle m_capProxyBuffer;
-    Core::ShaderHandle m_capProxyPixelShader;
     Core::BindingLayoutHandle m_capProxyBindingLayout;
     Core::BindingLayoutHandle m_capProxyComputeBindingLayout;
     Core::BindingLayoutHandle m_capProxyOpeningMaskBindingLayout;

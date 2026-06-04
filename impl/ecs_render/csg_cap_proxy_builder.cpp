@@ -115,7 +115,7 @@ bool ECSRenderCsgCapProxyBuilder::AppendGpuData(
     CsgShapeTypeInfo shapeType;
     if(!shapeRegistry.findShapeType(cutter.shapeType, shapeType))
         return true;
-    if(!shapeType.desc.capProxyShader)
+    if(!shapeType.desc.capProxyShader || !shapeType.desc.capProxyPixelShader)
         return true;
 
     CsgCapProxyGpuData gpuItem;

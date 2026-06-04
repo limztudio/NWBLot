@@ -48,15 +48,21 @@ struct CsgShapeCookEntry{
     CookString evalInclude;
     CookString moduleInclude;
     ShaderCook::ShaderEntry proxyShaderEntry;
+    ShaderCook::ShaderEntry proxyPixelShaderEntry;
 
     explicit CsgShapeCookEntry(ShaderCook::CookArena& arena)
         : evalInclude(arena)
         , moduleInclude(arena)
         , proxyShaderEntry(arena)
+        , proxyPixelShaderEntry(arena)
     {}
 
     [[nodiscard]] bool hasProxyShader()const noexcept{
         return !proxyShaderEntry.name.empty();
+    }
+
+    [[nodiscard]] bool hasProxyPixelShader()const noexcept{
+        return !proxyPixelShaderEntry.name.empty();
     }
 };
 

@@ -522,6 +522,7 @@ static void TestCsgShapeRegistryBuiltIns(TestContext& context){
     NWB_CSG_TEST_CHECK(context, boxShape.desc.name == Name("engine/csg/box"));
     NWB_CSG_TEST_CHECK(context, !boxShape.desc.shaderModule);
     NWB_CSG_TEST_CHECK(context, boxShape.desc.capProxyShader == Name("engine/csg/box/cap_proxy_ms"));
+    NWB_CSG_TEST_CHECK(context, boxShape.desc.capProxyPixelShader == Name("engine/csg/box/cap_proxy_ps"));
     NWB_CSG_TEST_CHECK(context, boxShape.desc.parameterByteSize == sizeof(NWB::Impl::CsgBoxShapeParameters));
     NWB_CSG_TEST_CHECK(context, boxShape.desc.supportsAnalyticGradient);
 

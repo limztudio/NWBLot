@@ -184,40 +184,9 @@ bool nwbTryEvalEmptyCsgShape(
 }
 
 
-bool nwbTryEnlargeEmptyCsgCapProxyShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    const float radiusSlack,
-    out float3 outShapePosition
-){
-    outShapePosition = shapePosition;
-    return false;
-}
-
-bool nwbTryShrinkEmptyCsgCapProxyShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out float3 outShapePosition
-){
-    outShapePosition = shapePosition;
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #define NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN 1
 #if !defined(NWB_CSG_SHAPE_EVAL_CHAIN)
 #define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalEmptyCsgShape
-#endif
-#if !defined(NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN)
-#define NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN nwbTryEnlargeEmptyCsgCapProxyShape
-#endif
-#if !defined(NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN)
-#define NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN nwbTryShrinkEmptyCsgCapProxyShape
 #endif
 
 #if defined(NWB_CSG_PROJECT_EVALUATOR_MODULE)
@@ -280,33 +249,6 @@ bool nwbTryEvalProjectCsgShapeFallback(
 #include "dispatch.slangi"
 
 #undef NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN
-#undef NWB_CSG_ENABLE_CAP_PROXY_SHAPE_CHAIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool nwbTryEnlargeCsgCapProxyShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    const float radiusSlack,
-    out float3 outShapePosition
-){
-    return NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN(shapeType, shapePosition, cutter, radiusSlack, outShapePosition);
-}
-
-bool nwbTryShrinkCsgCapProxyShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out float3 outShapePosition
-){
-    return NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN(shapeType, shapePosition, cutter, outShapePosition);
-}
-
-#undef NWB_CSG_CAP_PROXY_ENLARGE_SHAPE_CHAIN
-#undef NWB_CSG_CAP_PROXY_SHRINK_SHAPE_CHAIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

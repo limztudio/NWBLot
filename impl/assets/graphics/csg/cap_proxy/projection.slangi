@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_CSG_ENABLE_CAP_PROXY_SHAPE_CHAIN 1
 #include "../runtime.slangi"
 
 
@@ -44,46 +43,6 @@ uint2 nwbCsgCapProxyWorldToPixelPosition(const float3 worldPosition){
     const float2 maxPixel = max(viewportMin, viewportMax - 1.0);
     return uint2(clamp(nwbCsgCapProxyClipToFramebuffer(clipPosition), viewportMin, maxPixel));
 }
-
-float3 nwbCsgCapProxyEnlargeShapePosition(
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    const float radiusSlack
-){
-    if(radiusSlack <= 0.0)
-        return shapePosition;
-
-    float3 projectedShapePosition;
-    if(nwbTryEnlargeCsgCapProxyShape(cutter.shapeType, shapePosition, cutter, radiusSlack, projectedShapePosition))
-        return projectedShapePosition;
-
-    const NwbCsgSample sample = nwbCsgEvaluateShapeSample(shapePosition, cutter);
-    const float3 normal = nwbCsgNormalizeOr(sample.normal, float3(0.0, 1.0, 0.0));
-    return shapePosition + normal * radiusSlack;
-}
-
-float3 nwbCsgCapProxyShrinkShapePosition(
-    const float3 shapePosition,
-    const NwbCsgCutter cutter
-){
-    float3 projectedShapePosition;
-    if(nwbTryShrinkCsgCapProxyShape(cutter.shapeType, shapePosition, cutter, projectedShapePosition))
-        return projectedShapePosition;
-
-    return nwbCsgProjectShapePositionToCutterSurface(shapePosition, cutter);
-}
-
-float3 nwbCsgCapProxyShrinkWorldPosition(
-    const float3 worldPosition,
-    const NwbCsgCutter cutter
-){
-    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
-    return nwbCsgTransformShapeToWorld(nwbCsgCapProxyShrinkShapePosition(shapePosition, cutter), cutter);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 #endif
 

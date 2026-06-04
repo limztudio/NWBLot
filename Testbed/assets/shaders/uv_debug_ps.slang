@@ -24,7 +24,7 @@ float3 nwbProjectUvDebug(const float2 uv0){
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input);
 
-    const float3 baseColor = clamp(nwbProjectUvDebug(inUv0) * inColor.rgb, float3(0.0), float3(1.0));
+    const float3 baseColor = nwbProjectUvDebug(inUv0) * inColor.rgb;
     nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
 
     return nwbBuildMeshGBufferOutput();

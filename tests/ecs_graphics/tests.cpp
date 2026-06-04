@@ -462,6 +462,7 @@ static void TestCsgCapProxyGpuDataBuilder(TestContext& context){
     projectShapeDesc.shaderModule = Name("project/csg/proxy_shape/module");
     projectShapeDesc.shaderModuleInclude = ACompactString("project/csg/proxy_shape/module.slangi");
     projectShapeDesc.capProxyShader = Name("project/csg/proxy_shape/cap_proxy_ms");
+    projectShapeDesc.capProxyPixelShader = Name("project/csg/proxy_shape/cap_proxy_ps");
     projectShapeDesc.boundsCallback = &TestCsgProxyShapeBounds;
 
     NWB::Impl::CsgShapeTypeId projectShapeType = NWB::Impl::s_InvalidCsgShapeTypeId;

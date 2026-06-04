@@ -2,13 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_CSG_MESH_INSTANCE_INDEX 0u
-
-#include "../binding_slots.h"
-
-#include "../../mesh/gbuffer_io.slangi"
-#include "../../mesh/view_buffer.slangi"
-#include "projection.slangi"
+#ifndef NWB_GRAPHICS_CSG_CAP_PROXY_PS_MAIN_SLANGI
+#define NWB_GRAPHICS_CSG_CAP_PROXY_PS_MAIN_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +48,7 @@ NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     const uint cutterIndex = uint(input.tangent.w + 0.5);
     const float3 worldPosition = input.worldPosition.xyz;
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
-    const float3 capWorldPosition = nwbCsgCapProxyShrinkWorldPosition(worldPosition, cutter);
+    const float3 capWorldPosition = nwbCsgCapProxyShapeShrinkWorldPosition(worldPosition, cutter);
 
     const uint expectedOpeningMaskValue = nwbCsgPackOpeningMask(receiverIndex, cutterIndex);
     if(
@@ -73,6 +68,12 @@ NwbCsgCapProxyGBufferOutput main(NwbMeshPixelInput input){
     nwbWriteMeshGBuffer(input.color.rgb, capNormal, capWorldPosition);
     return nwbBuildCsgCapProxyGBufferOutput(capWorldPosition);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

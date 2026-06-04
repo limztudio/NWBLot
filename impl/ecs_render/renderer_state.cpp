@@ -89,7 +89,6 @@ void RendererCsgState::invalidateResources(){
     m_cutterBuffer.reset();
     m_parameterByteBuffer.reset();
     m_capProxyBuffer.reset();
-    m_capProxyPixelShader.reset();
     m_capProxyBindingLayout.reset();
     m_capProxyComputeBindingLayout.reset();
     m_capProxyOpeningMaskBindingLayout.reset();

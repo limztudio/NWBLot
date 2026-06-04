@@ -41,6 +41,7 @@ struct CsgShapeTypeDesc{
     Name name = NAME_NONE;
     Name shaderModule = NAME_NONE;
     Name capProxyShader = NAME_NONE;
+    Name capProxyPixelShader = NAME_NONE;
     ACompactString shaderModuleInclude;
 
     u32 parameterByteSize = 0u;

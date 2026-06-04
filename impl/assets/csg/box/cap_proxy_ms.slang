@@ -27,28 +27,6 @@ void nwbCsgCapProxyBoxFace(const uint face, out float3 normal, out uint4 corners
     }
 }
 
-NwbMeshRasterVertex nwbCsgCapProxyBoxVertex(
-    const NwbCsgCapProxyGpuData item,
-    const NwbCsgCutter cutter,
-    const uint localVertex
-){
-    const uint face = localVertex / 4u;
-    const uint cornerInFace = localVertex - face * 4u;
-    float3 shapeNormal;
-    uint4 corners;
-    nwbCsgCapProxyBoxFace(face, shapeNormal, corners);
-    const uint corner = corners[cornerInFace];
-    const float3 shapePosition = nwbCsgCapProxyBoxCorner(max(cutter.parameter0.xyz, float3(0.0001)), corner);
-    return nwbCsgCapProxyBuildVertex(
-        nwbCsgTransformShapeToWorld(shapePosition, cutter),
-        shapeNormal,
-        cutter,
-        item.receiverCutterShapePass.x,
-        item.receiverCutterShapePass.y,
-        item.color
-    );
-}
-
 void nwbCsgCapProxyBoxPrimitive(const uint localPrimitive, out uint3 indices){
     const uint face = localPrimitive / 2u;
     const uint baseVertex = face * 4u;
@@ -62,91 +40,60 @@ void nwbCsgCapProxyBoxPrimitive(const uint localPrimitive, out uint3 indices){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
+struct NwbCsgCapProxyShapeContext{
+    float3 halfExtents;
+};
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[numthreads(NWB_CSG_CAP_PROXY_GROUP_SIZE, 1, 1)]
-void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
-    const uint proxyIndex = groupID.x;
-    if(proxyIndex >= g_NwbCsgCapProxyPushConstants.dispatch.x)
-        return;
-
-    const uint groupThreadIndex = groupThreadID.x;
-    const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
-    const bool itemMatches = nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_CAP_PROXY_SHADER_SHAPE_ID);
-    const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
-
-    for(uint localPrimitive = groupThreadIndex; localPrimitive < NWB_CSG_CAP_PROXY_MAX_TRIANGLES; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE){
-        if(!itemMatches || localPrimitive >= 12u){
-            nwbCsgCapProxyStoreCulledEmulatedPrimitive(proxyIndex, localPrimitive);
-            continue;
-        }
-
-        uint3 indices;
-        nwbCsgCapProxyBoxPrimitive(localPrimitive, indices);
-        nwbCsgCapProxyStoreEmulatedPrimitive(
-            proxyIndex,
-            localPrimitive,
-            nwbCsgCapProxyBoxVertex(item, cutter, indices.x),
-            nwbCsgCapProxyBoxVertex(item, cutter, indices.y),
-            nwbCsgCapProxyBoxVertex(item, cutter, indices.z)
-        );
-    }
+NwbCsgCapProxyShapeContext nwbCsgCapProxyBuildShapeContext(const NwbCsgCapProxyGpuData item, const NwbCsgCutter cutter){
+    NwbCsgCapProxyShapeContext context;
+    context.halfExtents = max(cutter.parameter0.xyz, float3(0.0001));
+    return context;
 }
 
+uint nwbCsgCapProxyShapeVertexCount(const NwbCsgCapProxyShapeContext context){
+    return 24u;
+}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+uint nwbCsgCapProxyShapePrimitiveCount(const NwbCsgCapProxyShapeContext context){
+    return 12u;
+}
 
-
-#else
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[shader("mesh")]
-[numthreads(NWB_CSG_CAP_PROXY_GROUP_SIZE, 1, 1)]
-[outputtopology("triangle")]
-void main(
-    uint3 groupThreadID : SV_GroupThreadID,
-    uint3 groupID : SV_GroupID,
-    OutputVertices<NwbMeshRasterVertex, NWB_CSG_CAP_PROXY_MAX_VERTICES> vertices,
-    OutputIndices<uint3, NWB_CSG_CAP_PROXY_MAX_TRIANGLES> triangles
+NwbMeshRasterVertex nwbCsgCapProxyShapeVertex(
+    const NwbCsgCapProxyShapeContext context,
+    const NwbCsgCapProxyGpuData item,
+    const NwbCsgCutter cutter,
+    const uint localVertex
 ){
-    const uint proxyIndex = groupID.x;
-    if(proxyIndex >= g_NwbCsgCapProxyPushConstants.dispatch.x){
-        SetMeshOutputCounts(0u, 0u);
-        return;
-    }
+    const uint face = localVertex / 4u;
+    const uint cornerInFace = localVertex - face * 4u;
+    float3 shapeNormal;
+    uint4 corners;
+    nwbCsgCapProxyBoxFace(face, shapeNormal, corners);
+    const uint corner = corners[cornerInFace];
+    const float3 shapePosition = nwbCsgCapProxyBoxCorner(context.halfExtents, corner);
+    return nwbCsgCapProxyBuildVertex(
+        nwbCsgTransformShapeToWorld(shapePosition, cutter),
+        shapeNormal,
+        cutter,
+        item.receiverCutterShapePass.x,
+        item.receiverCutterShapePass.y,
+        item.color
+    );
+}
 
-    const uint groupThreadIndex = groupThreadID.x;
-    const NwbCsgCapProxyGpuData item = g_NwbCsgCapProxies[proxyIndex];
-    if(!nwbCsgCapProxyItemMatchesPassAndShape(item, NWB_CSG_CAP_PROXY_SHADER_SHAPE_ID)){
-        SetMeshOutputCounts(0u, 0u);
-        return;
-    }
-
-    const uint vertexCount = 24u;
-    const uint primitiveCount = 12u;
-    const NwbCsgCutter cutter = g_NwbCsgCutters[item.receiverCutterShapePass.y];
-
-    SetMeshOutputCounts(vertexCount, primitiveCount);
-
-    for(uint localVertex = groupThreadIndex; localVertex < vertexCount; localVertex += NWB_CSG_CAP_PROXY_GROUP_SIZE)
-        vertices[localVertex] = nwbCsgCapProxyBoxVertex(item, cutter, localVertex);
-
-    for(uint localPrimitive = groupThreadIndex; localPrimitive < primitiveCount; localPrimitive += NWB_CSG_CAP_PROXY_GROUP_SIZE)
-        nwbCsgCapProxyBoxPrimitive(localPrimitive, triangles[localPrimitive]);
+void nwbCsgCapProxyShapePrimitive(
+    const NwbCsgCapProxyShapeContext context,
+    const uint localPrimitive,
+    out uint3 indices
+){
+    nwbCsgCapProxyBoxPrimitive(localPrimitive, indices);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#endif
+#include "../../graphics/csg/cap_proxy/ms_main.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

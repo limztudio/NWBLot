@@ -252,12 +252,14 @@ template<typename ParameterT>
 [[nodiscard]] CsgShapeTypeDesc BuiltInShapeDesc(
     const Name& name,
     const Name& capProxyShader,
+    const Name& capProxyPixelShader,
     const ParameterT& defaultParameters,
     const CsgShapeBoundsCallback boundsCallback
 ){
     CsgShapeTypeDesc desc;
     desc.name = name;
     desc.capProxyShader = capProxyShader;
+    desc.capProxyPixelShader = capProxyPixelShader;
     desc.parameterByteSize = sizeof(ParameterT);
     desc.defaultParameterBytes.resize(sizeof(ParameterT));
     NWB_MEMCPY(desc.defaultParameterBytes.data(), desc.defaultParameterBytes.size(), &defaultParameters, sizeof(ParameterT));
@@ -458,6 +460,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             Name("engine/csg/box"),
             Name("engine/csg/box/cap_proxy_ms"),
+            Name("engine/csg/box/cap_proxy_ps"),
             CsgBoxShapeParameters{},
             &__hidden_shape_registry::BoxBounds
         ),
@@ -468,6 +471,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             Name("engine/csg/capsule"),
             Name("engine/csg/capsule/cap_proxy_ms"),
+            Name("engine/csg/capsule/cap_proxy_ps"),
             CsgCapsuleShapeParameters{},
             &__hidden_shape_registry::CapsuleBounds
         ),
@@ -478,6 +482,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             Name("engine/csg/plane"),
             Name("engine/csg/plane/cap_proxy_ms"),
+            Name("engine/csg/plane/cap_proxy_ps"),
             CsgPlaneShapeParameters{},
             &__hidden_shape_registry::PlaneBounds
         ),
@@ -488,6 +493,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
         __hidden_shape_registry::BuiltInShapeDesc(
             Name("engine/csg/sphere"),
             Name("engine/csg/sphere/cap_proxy_ms"),
+            Name("engine/csg/sphere/cap_proxy_ps"),
             CsgSphereShapeParameters{},
             &__hidden_shape_registry::SphereBounds
         ),

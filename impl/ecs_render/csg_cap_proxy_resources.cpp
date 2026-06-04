@@ -9,7 +9,6 @@
 
 #include <impl/assets/graphics/csg/binding_slots.h>
 #include <impl/assets/graphics/csg/constants.h>
-#include <impl/assets/graphics/csg/names.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/shader_stage_names.h>
 
@@ -136,6 +135,24 @@ template<typename ShaderSystem>
         shaderName,
         Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Mesh,
+        debugName
+    );
+}
+
+template<typename ShaderSystem>
+[[nodiscard]] static bool LoadProxyPixelShader(
+    ShaderSystem& shaderSystem,
+    Core::ShaderHandle& pixelShader,
+    const Name& shaderName,
+    const char* debugName
+){
+    if(pixelShader)
+        return true;
+    return shaderSystem.loadShader(
+        pixelShader,
+        shaderName,
+        Core::ShaderArchive::s_DefaultVariant,
+        Core::ShaderType::Pixel,
         debugName
     );
 }
@@ -393,17 +410,6 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
     auto* device = graphics().getDevice();
     const bool meshSupported = graphics().queryFeatureSupport(Core::Feature::Meshlets);
 
-    if(!csgState().m_capProxyPixelShader){
-        if(!m_renderer.shaderSystem().loadShader(
-            csgState().m_capProxyPixelShader,
-            AssetsGraphicsCsg::s_CapProxyPixelShaderName,
-            Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Pixel,
-            "ECSRender_CsgCapProxyPS"
-        ))
-            return false;
-    }
-
     if(!csgState().m_capProxyBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Mesh | Core::ShaderType::Pixel);
@@ -450,11 +456,22 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG shape '{}' has cap proxy work but no proxy shader"), StringConvert(shapeTypeInfo.desc.name.c_str()));
             return false;
         }
+        if(!shapeTypeInfo.desc.capProxyPixelShader){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG shape '{}' has cap proxy work but no proxy pixel shader"), StringConvert(shapeTypeInfo.desc.name.c_str()));
+            return false;
+        }
 
         CsgCapProxyShapeResources& resources = __hidden_csg_cap_proxy_resources::EnsureProxyShapeResources(
             csgState().m_capProxyShapeResources,
             shapeType
         );
+        if(!__hidden_csg_cap_proxy_resources::LoadProxyPixelShader(
+            shaderSystem,
+            resources.pixelShader,
+            shapeTypeInfo.desc.capProxyPixelShader,
+            "ECSRender_CsgCapProxyShapePS"
+        ))
+            return false;
         if(meshSupported){
             if(!__hidden_csg_cap_proxy_resources::LoadProxyMeshShader(
                 shaderSystem,
@@ -467,7 +484,7 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
                 pipelineDevice,
                 framebuffer,
                 resources.meshShader,
-                csgState().m_capProxyPixelShader,
+                resources.pixelShader,
                 csgState().m_capProxyBindingLayout,
                 csgState().m_clipBindingLayout,
                 csgState().m_capProxyOpeningMaskBindingLayout,
@@ -495,7 +512,7 @@ bool RendererCsgSystem::createCsgCapProxyResources(Core::Framebuffer* framebuffe
                 framebuffer,
                 drawState().m_emulationInputLayout,
                 drawState().m_emulationVertexShader,
-                csgState().m_capProxyPixelShader,
+                resources.pixelShader,
                 csgState().m_capProxyBindingLayout,
                 csgState().m_clipBindingLayout,
                 csgState().m_capProxyOpeningMaskBindingLayout,
@@ -644,7 +661,6 @@ void RendererCsgSystem::renderCsgOpaqueCapProxies(
         csgState().m_capProxyBindingLayout
         && csgState().m_clipBindingLayout
         && csgState().m_capProxyOpeningMaskBindingLayout
-        && csgState().m_capProxyPixelShader
         && __hidden_csg_cap_proxy_resources::ProxyShapeResourcesReady(csgState().m_capProxyShapeResources, csgFrameData.capProxyShapeTypes, meshSupported)
     ;
     if(!proxyResourcesReady)

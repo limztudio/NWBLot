@@ -11,10 +11,6 @@
 
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u
 
-#ifndef NWB_MESH_SHADER_EMULATION_COMPUTE
-#define NWB_MESH_SHADER_EMULATION_COMPUTE 0
-#endif
-
 #include "../binding_slots.h"
 #include "../constants.h"
 
@@ -53,36 +49,6 @@ StructuredBuffer<NwbCsgCapProxyGpuData, Std430DataLayout> g_NwbCsgCapProxies;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct NwbCsgCapProxyGeneratedVertex{
-    float4 position;
-    float3 normal;
-    float padding0;
-    float4 tangent;
-    float2 uv0;
-    float2 padding1;
-    float4 color;
-    float4 worldPosition;
-};
-
-[[vk::binding(NWB_CSG_BINDING_CAP_PROXY_GENERATED_VERTEX, NWB_CSG_CAP_PROXY_SET)]]
-RWStructuredBuffer<NwbCsgCapProxyGeneratedVertex, Std430DataLayout> g_NwbCsgCapProxyGeneratedVertices;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 float3 nwbCsgCapProxyBoundsCenter(const NwbCsgBounds bounds){
     return (bounds.minBounds + bounds.maxBounds) * 0.5;
 }
@@ -115,69 +81,6 @@ NwbMeshRasterVertex nwbCsgCapProxyBuildVertex(
         float4(worldPosition, float(receiverIndex))
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if NWB_MESH_SHADER_EMULATION_COMPUTE
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NwbCsgCapProxyGeneratedVertex nwbCsgCapProxyGeneratedVertex(const NwbMeshRasterVertex vertex){
-    NwbCsgCapProxyGeneratedVertex generatedVertex;
-    generatedVertex.position = vertex.position;
-    generatedVertex.normal = vertex.normal;
-    generatedVertex.padding0 = 0.0;
-    generatedVertex.tangent = vertex.tangent;
-    generatedVertex.uv0 = vertex.uv0;
-    generatedVertex.padding1 = float2(0.0);
-    generatedVertex.color = vertex.color;
-    generatedVertex.worldPosition = vertex.worldPosition;
-    return generatedVertex;
-}
-
-NwbCsgCapProxyGeneratedVertex nwbCsgCapProxyCulledGeneratedVertex(){
-    NwbCsgCapProxyGeneratedVertex generatedVertex;
-    generatedVertex.position = float4(0.0, 0.0, 0.0, 1.0);
-    generatedVertex.normal = float3(0.0, 1.0, 0.0);
-    generatedVertex.padding0 = 0.0;
-    generatedVertex.tangent = float4(1.0, 0.0, 0.0, 0.0);
-    generatedVertex.uv0 = float2(0.0);
-    generatedVertex.padding1 = float2(0.0);
-    generatedVertex.color = float4(0.0);
-    generatedVertex.worldPosition = float4(0.0);
-    return generatedVertex;
-}
-
-void nwbCsgCapProxyStoreEmulatedPrimitive(
-    const uint proxyIndex,
-    const uint localPrimitive,
-    const NwbMeshRasterVertex vertex0,
-    const NwbMeshRasterVertex vertex1,
-    const NwbMeshRasterVertex vertex2
-){
-    const uint vertexBase = proxyIndex * NWB_CSG_CAP_PROXY_EMULATION_VERTEX_COUNT_PER_PROXY + localPrimitive * 3u;
-    g_NwbCsgCapProxyGeneratedVertices[vertexBase + 0u] = nwbCsgCapProxyGeneratedVertex(vertex0);
-    g_NwbCsgCapProxyGeneratedVertices[vertexBase + 1u] = nwbCsgCapProxyGeneratedVertex(vertex1);
-    g_NwbCsgCapProxyGeneratedVertices[vertexBase + 2u] = nwbCsgCapProxyGeneratedVertex(vertex2);
-}
-
-void nwbCsgCapProxyStoreCulledEmulatedPrimitive(const uint proxyIndex, const uint localPrimitive){
-    const uint vertexBase = proxyIndex * NWB_CSG_CAP_PROXY_EMULATION_VERTEX_COUNT_PER_PROXY + localPrimitive * 3u;
-    const NwbCsgCapProxyGeneratedVertex vertex = nwbCsgCapProxyCulledGeneratedVertex();
-    g_NwbCsgCapProxyGeneratedVertices[vertexBase + 0u] = vertex;
-    g_NwbCsgCapProxyGeneratedVertices[vertexBase + 1u] = vertex;
-    g_NwbCsgCapProxyGeneratedVertices[vertexBase + 2u] = vertex;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -389,15 +389,18 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     NWB_ASSERT(!clearCsgTargets || targets.csgCapNormal);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalDepth);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalId);
+    NWB_ASSERT(!clearCsgTargets || targets.csgPeelLayerCount > 0u);
+
+    const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
 
     commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     if(clearCsgTargets){
-        commandList.setTextureState(targets.csgCapNormal.get(), ECSRenderDetail::s_CsgPeelSubresources, Core::ResourceStates::CopyDest);
-        commandList.setTextureState(targets.csgIntervalDepth.get(), ECSRenderDetail::s_CsgPeelSubresources, Core::ResourceStates::CopyDest);
-        commandList.setTextureState(targets.csgIntervalId.get(), ECSRenderDetail::s_CsgPeelSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgCapNormal.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgIntervalId.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -410,9 +413,9 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
 
     if(clearCsgTargets){
-        commandList.clearTextureFloat(targets.csgCapNormal.get(), ECSRenderDetail::s_CsgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureFloat(targets.csgIntervalDepth.get(), ECSRenderDetail::s_CsgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-        commandList.clearTextureUInt(targets.csgIntervalId.get(), ECSRenderDetail::s_CsgPeelSubresources, 0u);
+        commandList.clearTextureFloat(targets.csgCapNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureUInt(targets.csgIntervalId.get(), csgPeelSubresources, 0u);
     }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);

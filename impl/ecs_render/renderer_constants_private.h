@@ -35,7 +35,6 @@ inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = NWB_MESH_DISPATCH_FL
 inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL;
 inline constexpr u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
-inline constexpr Core::TextureSubresourceSet s_CsgPeelSubresources = Core::TextureSubresourceSet(0, 1, 0, s_CsgPeelLayerCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

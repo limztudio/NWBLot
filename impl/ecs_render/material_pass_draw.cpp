@@ -272,7 +272,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
                 .setOffset(0)
         );
         if(usesAvboit){
-            graphicsState.addBindingSet(nullptr);
+            graphicsState.addBindingSet(csgClipDraw ? drawState().m_emulationViewBindingSet.get() : nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
             if(csgClipDraw)
                 graphicsState.addBindingSet(csgState().m_clipBindingSet.get());

@@ -211,7 +211,10 @@ static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
 
             if(!frame.init())
                 return -1;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), frameClientSize.width, frameClientSize.height);
+            i32 initializedFrameWidth = 0;
+            i32 initializedFrameHeight = 0;
+            frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
             NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
             if(!graphicsVolume.load("graphics", resourceMountDirectory))

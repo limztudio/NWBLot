@@ -29,8 +29,10 @@ inline constexpr AStringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
 inline constexpr AStringView s_CsgClipSetDefineName = "NWB_CSG_CLIP_SET";
 inline constexpr AStringView s_CsgAvboitClipSetDefineAssignment = "NWB_CSG_CLIP_SET=2";
+inline constexpr AStringView s_CsgIntervalSampleSetDefineName = "NWB_CSG_INTERVAL_SAMPLE_SET";
+inline constexpr AStringView s_CsgAvboitIntervalSampleSetDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_SET=3";
 inline constexpr AStringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
-inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 3u;
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,9 +166,10 @@ struct ShaderVariantDefineAssignment{
 [[nodiscard]] inline bool BuildAvboitCsgClipShaderVariantName(const AStringView baseVariant, Core::GraphicsString& outVariant){
     const ShaderVariantDefineAssignment defineAssignments[] = {
         { s_CsgClipSetDefineName, s_CsgAvboitClipSetDefineAssignment },
+        { s_CsgIntervalSampleSetDefineName, s_CsgAvboitIntervalSampleSetDefineAssignment },
         { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment },
     };
-    return BuildCsgClipShaderVariantName(baseVariant, defineAssignments, 2u, outVariant);
+    return BuildCsgClipShaderVariantName(baseVariant, defineAssignments, 3u, outVariant);
 }
 
 

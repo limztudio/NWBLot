@@ -67,6 +67,10 @@ namespace __hidden_material_pipeline{
             ECSRenderMaterialShaderVariants::s_CsgClipSetDefineName,
             ECSRenderMaterialShaderVariants::s_CsgAvboitClipSetDefineAssignment
         };
+        defineAssignments[defineAssignmentCount++] = {
+            ECSRenderMaterialShaderVariants::s_CsgIntervalSampleSetDefineName,
+            ECSRenderMaterialShaderVariants::s_CsgAvboitIntervalSampleSetDefineAssignment
+        };
     }
     defineAssignments[defineAssignmentCount++] = {
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineName,
@@ -371,15 +375,15 @@ bool RendererMaterialSystem::createRendererPipeline(
         emulationDesc.setRenderState(renderState);
         switch(pass){
         case MaterialPipelinePass::AvboitOccupancy:
-            emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(csgClipPipeline ? drawState().m_emulationViewBindingLayout : avboitState().m_emptyBindingLayout);
             emulationDesc.addBindingLayout(avboitState().m_occupancyBindingLayout);
             break;
         case MaterialPipelinePass::AvboitExtinction:
-            emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(csgClipPipeline ? drawState().m_emulationViewBindingLayout : avboitState().m_emptyBindingLayout);
             emulationDesc.addBindingLayout(avboitState().m_extinctionBindingLayout);
             break;
         case MaterialPipelinePass::AvboitAccumulate:
-            emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
+            emulationDesc.addBindingLayout(csgClipPipeline ? drawState().m_emulationViewBindingLayout : avboitState().m_emptyBindingLayout);
             emulationDesc.addBindingLayout(avboitState().m_accumulateBindingLayout);
             break;
         case MaterialPipelinePass::Opaque:

@@ -38,6 +38,7 @@ if(WIN32)
         _CRT_NONSTDC_NO_DEPRECATE
     )
     nwb_disable_vendor_warnings(nwb_vendor_zlib)
+    nwb_apply_debug_symbols(nwb_vendor_zlib)
 else()
     find_package(ZLIB REQUIRED)
     add_library(nwb_zlib INTERFACE)

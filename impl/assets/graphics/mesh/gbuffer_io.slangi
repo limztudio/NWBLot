@@ -15,6 +15,9 @@ struct NwbMeshGBufferOutput{
     [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
     [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;
     [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
+#if NWB_CSG_ENABLED
+    float depth : SV_Depth;
+#endif
 };
 
 static float4 outGBufferBaseColor;
@@ -26,6 +29,9 @@ NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
     output.baseColor = outGBufferBaseColor;
     output.normal = outGBufferNormal;
     output.worldPosition = outGBufferWorldPosition;
+#if NWB_CSG_ENABLED
+    output.depth = inPixelDepth;
+#endif
     return output;
 }
 

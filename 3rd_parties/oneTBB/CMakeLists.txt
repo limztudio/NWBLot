@@ -62,6 +62,7 @@ if(WIN32)
         OUTPUT_NAME_OPT "tbb12"
         OUTPUT_NAME_FIN "tbb12"
     )
+    nwb_apply_debug_symbols(nwb_vendor_tbb)
 
     add_library(nwb_vendor_tbbmalloc SHARED)
     add_library(nwb::tbbmalloc ALIAS nwb_vendor_tbbmalloc)
@@ -95,6 +96,7 @@ if(WIN32)
         OUTPUT_NAME_OPT "tbbmalloc"
         OUTPUT_NAME_FIN "tbbmalloc"
     )
+    nwb_apply_debug_symbols(nwb_vendor_tbbmalloc)
 else()
     find_package(TBB CONFIG QUIET)
     if(TARGET TBB::tbb)

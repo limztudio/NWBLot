@@ -19,3 +19,4 @@ if(WIN32)
 endif()
 
 nwb_disable_vendor_warnings(nwb_vendor_ufbx)
+nwb_apply_debug_symbols(nwb_vendor_ufbx)

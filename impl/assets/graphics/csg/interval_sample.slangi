@@ -96,6 +96,13 @@ float3 nwbCsgIntervalSamplePixelDepthToWorldPosition(const uint2 pixel, const fl
     return nwbCsgIntervalSampleClipToWorldPosition(float4(ndc, depth, 1.0));
 }
 
+float3 nwbCsgIntervalSampleNormalizeOr(const float3 value, const float3 fallback){
+    const float lengthSquared = dot(value, value);
+    if(lengthSquared <= 0.000001 || !isfinite(lengthSquared))
+        return fallback;
+    return value * rsqrt(lengthSquared);
+}
+
 NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
     NwbCsgIntervalCapPixel result;
     result.visible = false;
@@ -127,7 +134,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
 
         result.visible = true;
         result.depth = backDepth;
-        result.normal = normalize(g_NwbCsgSampleCapNormal.Load(texel).xyz);
+        result.normal = nwbCsgIntervalSampleNormalizeOr(g_NwbCsgSampleCapNormal.Load(texel).xyz, float3(0.0, 0.0, 1.0));
         result.worldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, backDepth);
     }
 
@@ -144,6 +151,7 @@ NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPos
 
     const uint2 pixel = uint2(rasterPosition.xy);
     const float surfaceDepth = rasterPosition.z;
+    const float depthEpsilon = 0.00002;
     float selectedCapDepth = 1e30;
 
     [unroll]
@@ -163,15 +171,14 @@ NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPos
         if(backDepth < frontDepth)
             continue;
 
-        if(backDepth < selectedCapDepth){
+        if(backDepth < surfaceDepth - depthEpsilon && backDepth < selectedCapDepth){
             selectedCapDepth = backDepth;
             result.capVisible = true;
             result.capDepth = backDepth;
-            result.capNormal = normalize(g_NwbCsgSampleCapNormal.Load(texel).xyz);
+            result.capNormal = nwbCsgIntervalSampleNormalizeOr(g_NwbCsgSampleCapNormal.Load(texel).xyz, float3(0.0, 0.0, 1.0));
             result.capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, backDepth);
         }
 
-        const float depthEpsilon = 0.00002;
         if(surfaceDepth > frontDepth + depthEpsilon && surfaceDepth < backDepth - depthEpsilon)
             result.discardSurface = true;
 

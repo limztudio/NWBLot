@@ -12,3 +12,4 @@ target_include_directories(nwb_vendor_imgui SYSTEM PUBLIC
 )
 
 nwb_disable_vendor_warnings(nwb_vendor_imgui)
+nwb_apply_debug_symbols(nwb_vendor_imgui)

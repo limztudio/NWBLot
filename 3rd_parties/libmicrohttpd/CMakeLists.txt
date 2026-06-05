@@ -40,6 +40,7 @@ if(WIN32)
             WIN32_LEAN_AND_MEAN=1
     )
     nwb_disable_vendor_warnings(nwb_vendor_microhttpd)
+    nwb_apply_debug_symbols(nwb_vendor_microhttpd)
     if(NWB_COMPILER_FRONTEND_MSVC)
         target_compile_options(nwb_vendor_microhttpd PRIVATE /wd4127 /wd5287)
     endif()

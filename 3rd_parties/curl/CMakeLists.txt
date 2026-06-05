@@ -60,6 +60,7 @@ if(WIN32)
             CURL_STATICLIB
     )
     nwb_disable_vendor_warnings(nwb_vendor_curl)
+    nwb_apply_debug_symbols(nwb_vendor_curl)
     target_link_libraries(nwb_vendor_curl PUBLIC
         ws2_32
         iphlpapi

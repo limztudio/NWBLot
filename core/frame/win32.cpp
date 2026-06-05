@@ -41,6 +41,14 @@ namespace FrameDetail{
 static Frame* s_Frame = nullptr;
 
 
+static u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 maxClientDimension){
+    if(maxClientDimension <= 0)
+        return requestedDimension;
+
+    const u32 clampedDimension = Min<u32>(static_cast<u32>(requestedDimension), static_cast<u32>(maxClientDimension));
+    return static_cast<u16>(Min<u32>(clampedDimension, s_MaxU16));
+}
+
 static bool IsExtendedKey(LPARAM lParam){
     return (static_cast<usize>(lParam) & (static_cast<usize>(1) << 24)) != 0;
 }
@@ -408,13 +416,14 @@ bool Frame::init(){
     const tchar* AppName = NWB_TEXT("NWBLoader");
     constexpr DWORD StyleEx = 0;
     constexpr DWORD Style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    auto& frameData = data<Common::WinFrame>();
 
     WNDCLASSEX wc = {};
     {
         wc.cbSize = sizeof(WNDCLASSEX);
         wc.style = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc = FrameDetail::WinProc;
-        wc.hInstance = data<Common::WinFrame>().instance();
+        wc.hInstance = frameData.instance();
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
@@ -425,7 +434,51 @@ bool Frame::init(){
         return false;
     }
 
-    RECT rc = { 0, 0, static_cast<i32>(data<Common::WinFrame>().width()), static_cast<i32>(data<Common::WinFrame>().height()) };
+    RECT workArea = { 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN) };
+    {
+        const POINT origin = { 0, 0 };
+        MONITORINFO monitorInfo = {};
+        monitorInfo.cbSize = sizeof(MONITORINFO);
+        const HMONITOR monitor = MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
+        if(monitor && GetMonitorInfo(monitor, &monitorInfo))
+            workArea = monitorInfo.rcWork;
+    }
+
+    RECT decorationRect = { 0, 0, 0, 0 };
+    if(!AdjustWindowRectEx(&decorationRect, Style, FALSE, StyleEx)){
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
+        return false;
+    }
+
+    const i32 workAreaWidth = workArea.right - workArea.left;
+    const i32 workAreaHeight = workArea.bottom - workArea.top;
+    const i32 decorationWidth = decorationRect.right - decorationRect.left;
+    const i32 decorationHeight = decorationRect.bottom - decorationRect.top;
+    const i32 maxClientWidth = workAreaWidth - decorationWidth;
+    const i32 maxClientHeight = workAreaHeight - decorationHeight;
+    const u16 requestedWidth = frameData.width();
+    const u16 requestedHeight = frameData.height();
+    const u16 windowWidth = FrameDetail::ClampInitialWindowDimension(requestedWidth, maxClientWidth);
+    const u16 windowHeight = FrameDetail::ClampInitialWindowDimension(requestedHeight, maxClientHeight);
+    if(windowWidth == 0u || windowHeight == 0u){
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 work area dimensions are invalid: {}x{}"), workAreaWidth, workAreaHeight);
+        return false;
+    }
+    if(windowWidth != requestedWidth || windowHeight != requestedHeight){
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"),
+            requestedWidth,
+            requestedHeight,
+            windowWidth,
+            windowHeight,
+            workAreaWidth,
+            workAreaHeight
+        );
+    }
+    frameData.width() = windowWidth;
+    frameData.height() = windowHeight;
+
+    RECT rc = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
 
     HWND hwnd = CreateWindowEx(
         StyleEx,
@@ -441,26 +494,26 @@ bool Frame::init(){
         wc.hInstance,
         nullptr
     );
-    data<Common::WinFrame>().setHwnd(hwnd);
-    if(!data<Common::WinFrame>().hwnd()){
+    frameData.setHwnd(hwnd);
+    if(!frameData.hwnd()){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
     }
 
     {
         if(!AdjustWindowRectEx(&rc, Style, FALSE, StyleEx)){
-            data<Common::WinFrame>().setHwnd(nullptr);
+            frameData.setHwnd(nullptr);
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
             return false;
         }
 
         const auto actualWidth = rc.right - rc.left;
         const auto actualHeight = rc.bottom - rc.top;
-        const auto x = (GetSystemMetrics(SM_CXSCREEN) - actualWidth) >> 1;
-        const auto y = (GetSystemMetrics(SM_CYSCREEN) - actualHeight) >> 1;
+        const auto x = workArea.left + (workAreaWidth > actualWidth ? ((workAreaWidth - actualWidth) >> 1) : 0);
+        const auto y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
 
-        if(!MoveWindow(data<Common::WinFrame>().hwnd(), x, y, actualWidth, actualHeight, false)){
-            data<Common::WinFrame>().setHwnd(nullptr);
+        if(!MoveWindow(frameData.hwnd(), x, y, actualWidth, actualHeight, false)){
+            frameData.setHwnd(nullptr);
             NWB_LOGGER_FATAL(NWB_TEXT("Frame window moving failed"));
             return false;
         }

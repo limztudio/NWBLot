@@ -22,6 +22,7 @@
 
 struct NwbMeshPixelInput{
     float4 position : SV_Position;
+    bool frontFace : SV_IsFrontFace;
     NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
 
@@ -30,6 +31,7 @@ static float3 inNormal;
 static float4 inTangent;
 static float2 inUv0;
 static float3 inWorldPosition;
+static float inPixelDepth;
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inColor = input.color;
@@ -37,11 +39,17 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inTangent = input.tangent;
     inUv0 = input.uv0;
     inWorldPosition = input.worldPosition.xyz;
+    inPixelDepth = input.position.z;
 #if NWB_CSG_ENABLED
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
-    if(nwbCsgReceiverPixelDiscard(receiverIndex, inWorldPosition)){
-        nwbCsgMarkReceiverOpening(input.position, receiverIndex);
+    const NwbCsgReceiverIntervalPixel receiverInterval = nwbCsgSampleReceiverIntervals(input.position, receiverIndex);
+    if(receiverInterval.discardSurface)
         discard;
+
+    if(!input.frontFace && receiverInterval.capVisible){
+        inNormal = receiverInterval.capNormal;
+        inWorldPosition = receiverInterval.capWorldPosition;
+        inPixelDepth = receiverInterval.capDepth;
     }
 #endif
 }

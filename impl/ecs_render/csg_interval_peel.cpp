@@ -68,6 +68,7 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_DEPTH, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_ID, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_OPENING_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
     return layout != nullptr;
@@ -119,12 +120,13 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
     Core::GraphicsArena& arena,
     Core::Device& device,
     const DeferredFrameTargets& targets,
+    Core::Buffer* meshViewBuffer,
     Core::BindingLayout* layout,
     Core::BindingSetHandle& bindingSet
 ){
     if(bindingSet)
         return true;
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || !layout)
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || !meshViewBuffer || !layout)
         return false;
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
@@ -157,6 +159,7 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshViewBuffer));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
     return bindingSet != nullptr;
@@ -319,6 +322,10 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
     auto* device = graphics().getDevice();
+    if(!drawState().m_meshViewBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
+        return false;
+    }
     if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || targets.csgPeelLayerCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
         return false;
@@ -337,6 +344,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         arena(),
         *device,
         targets,
+        drawState().m_meshViewBuffer.get(),
         csgState().m_intervalSampleBindingLayout.get(),
         csgState().m_intervalSampleBindingSet
     )){

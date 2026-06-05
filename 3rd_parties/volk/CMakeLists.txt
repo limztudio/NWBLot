@@ -27,3 +27,4 @@ if(NOT WIN32)
 endif()
 
 nwb_disable_vendor_warnings(nwb_vendor_volk)
+nwb_apply_debug_symbols(nwb_vendor_volk)

@@ -305,9 +305,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!m_renderer.csgSystem().createCsgClipResources())
-                return false;
-            if(!m_renderer.csgSystem().createCsgIntervalSampleResources(m_renderer.deferredState().m_targets))
+            if(!csgState().m_clipBindingLayout || !csgState().m_intervalSampleBindingLayout)
                 return false;
             pipelineDesc.addBindingLayout(csgState().m_clipBindingLayout);
             pipelineDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
@@ -354,7 +352,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(drawState().m_computeBindingLayout);
         if(csgClipPipeline){
-            if(!m_renderer.csgSystem().createCsgClipResources())
+            if(!csgState().m_clipBindingLayout)
                 return false;
             if(avboitCsgClipPipeline)
                 computeDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
@@ -390,9 +388,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!m_renderer.csgSystem().createCsgClipResources())
-                return false;
-            if(!m_renderer.csgSystem().createCsgIntervalSampleResources(m_renderer.deferredState().m_targets))
+            if(!csgState().m_clipBindingLayout || !csgState().m_intervalSampleBindingLayout)
                 return false;
             emulationDesc.addBindingLayout(csgState().m_clipBindingLayout);
             emulationDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);

@@ -58,7 +58,7 @@ bool RendererMaterialSystem::prepareMeshMaterialPassDrawResources(const Material
         }
 
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(csgClipDraw && !csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
+        if(csgClipDraw && !csgState().m_clipBindingSet)
             ready = false;
     });
     return ready;
@@ -86,7 +86,7 @@ bool RendererMaterialSystem::prepareComputeMaterialPassDrawResources(const Mater
         }
 
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(csgClipDraw && !csgState().m_clipBindingSet && !m_renderer.csgSystem().createCsgClipResources())
+        if(csgClipDraw && !csgState().m_clipBindingSet)
             ready = false;
     });
     return ready;

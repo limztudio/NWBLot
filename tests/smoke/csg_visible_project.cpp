@@ -378,7 +378,7 @@ public:
             NWB_TEXT("CsgVisibleSmokeProject failed to create all scene entities")
         );
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: visible CSG built-in proxy receiver scene created"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: visible CSG interval receiver scene created"));
         return true;
     }
 

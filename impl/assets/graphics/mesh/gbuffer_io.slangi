@@ -43,12 +43,6 @@ float3 nwbGBufferEncodeNormal(float3 normal){
 }
 
 void nwbWriteMeshGBuffer(float3 baseColor, float3 normal, float3 worldPosition){
-#if NWB_CSG_ENABLED
-    if(inCsgCapVisible){
-        normal = inCsgCapNormal;
-        worldPosition = inCsgCapWorldPosition;
-    }
-#endif
     outGBufferBaseColor = float4(clamp(baseColor, float3(0.0), float3(1.0)), 1.0);
     outGBufferNormal = float4(nwbGBufferEncodeNormal(normal), 1.0);
     outGBufferWorldPosition = float4(worldPosition, 1.0);

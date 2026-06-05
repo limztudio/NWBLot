@@ -57,14 +57,20 @@ uint nwbCsgIntervalPeelLayerCount(){
     return min(g_NwbCsgIntervalPeelPushConstants.frame[NWB_CSG_INTERVAL_PEEL_PUSH_LAYER_COUNT], NWB_CSG_PEEL_LAYER_COUNT);
 }
 
+float nwbCsgSafeHomogeneousW(const float w){
+    if(abs(w) >= 0.000001)
+        return w;
+    return w < 0.0 ? -0.000001 : 0.000001;
+}
+
 float3 nwbCsgClipToWorldPosition(const float4 clipPosition){
     const float4 worldPosition = mul(g_NwbMeshClipToWorld, clipPosition);
-    return worldPosition.xyz / max(abs(worldPosition.w), 0.000001);
+    return worldPosition.xyz / nwbCsgSafeHomogeneousW(worldPosition.w);
 }
 
 float nwbCsgWorldToDepth(const float3 worldPosition){
     const float4 clipPosition = mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
-    return clipPosition.z / max(abs(clipPosition.w), 0.000001);
+    return clipPosition.z / nwbCsgSafeHomogeneousW(clipPosition.w);
 }
 
 void nwbCsgBuildPixelRay(const uint2 pixel, out float3 outRayBegin, out float3 outRayEnd){
@@ -98,6 +104,58 @@ float nwbCsgSampleCutterDistanceOnRay(
     const NwbCsgCutter cutter
 ){
     return nwbCsgEvaluateDistance(rayBegin + rayVector * t, cutter);
+}
+
+bool nwbCsgIntersectRaySlab(
+    const float origin,
+    const float direction,
+    const float minBound,
+    const float maxBound,
+    inout float inOutMinT,
+    inout float inOutMaxT
+){
+    if(abs(direction) <= 0.000001)
+        return origin >= minBound && origin <= maxBound;
+
+    const float invDirection = 1.0 / direction;
+    float slabMinT = (minBound - origin) * invDirection;
+    float slabMaxT = (maxBound - origin) * invDirection;
+    if(slabMinT > slabMaxT){
+        const float temp = slabMinT;
+        slabMinT = slabMaxT;
+        slabMaxT = temp;
+    }
+
+    inOutMinT = max(inOutMinT, slabMinT);
+    inOutMaxT = min(inOutMaxT, slabMaxT);
+    return inOutMinT <= inOutMaxT;
+}
+
+bool nwbCsgFindReceiverRayRange(
+    const NwbCsgReceiverRange receiverRange,
+    const float3 rayBegin,
+    const float3 rayEnd,
+    out float outBeginT,
+    out float outEndT
+){
+    outBeginT = 0.0;
+    outEndT = 1.0;
+
+    if(!nwbCsgBoundsValid(receiverRange.localBounds))
+        return false;
+    if(!nwbCsgBoundsFinite(receiverRange.localBounds))
+        return true;
+
+    const float3 localBegin = nwbCsgTransformWorldToReceiverLocal(rayBegin, receiverRange);
+    const float3 localEnd = nwbCsgTransformWorldToReceiverLocal(rayEnd, receiverRange);
+    const float3 localRay = localEnd - localBegin;
+    const float3 minBounds = receiverRange.localBounds.minBounds - float3(0.001);
+    const float3 maxBounds = receiverRange.localBounds.maxBounds + float3(0.001);
+
+    return nwbCsgIntersectRaySlab(localBegin.x, localRay.x, minBounds.x, maxBounds.x, outBeginT, outEndT)
+        && nwbCsgIntersectRaySlab(localBegin.y, localRay.y, minBounds.y, maxBounds.y, outBeginT, outEndT)
+        && nwbCsgIntersectRaySlab(localBegin.z, localRay.z, minBounds.z, maxBounds.z, outBeginT, outEndT)
+    ;
 }
 
 float nwbCsgRefineCutterIntersection(
@@ -138,15 +196,22 @@ bool nwbCsgFindCutterIntervalOnRay(
         return false;
 
     const float3 rayVector = rayEnd - rayBegin;
-    const float step = 1.0 / float(NWB_CSG_INTERVAL_PEEL_STEP_COUNT);
-    float previousT = 0.0;
+    float beginT;
+    float endT;
+    if(!nwbCsgFindReceiverRayRange(receiverRange, rayBegin, rayEnd, beginT, endT))
+        return false;
+    if(endT <= beginT)
+        return false;
+
+    const float step = (endT - beginT) / float(NWB_CSG_INTERVAL_PEEL_STEP_COUNT);
+    float previousT = beginT;
     bool inside = nwbCsgSampleCutterDistanceOnRay(rayBegin, rayVector, previousT, cutter) <= 0.0;
     bool hasFront = inside;
-    float frontT = 0.0;
+    float frontT = beginT;
 
     [loop]
     for(uint stepIndex = 1u; stepIndex <= NWB_CSG_INTERVAL_PEEL_STEP_COUNT; ++stepIndex){
-        const float t = float(stepIndex) * step;
+        const float t = beginT + float(stepIndex) * step;
         const float distance = nwbCsgSampleCutterDistanceOnRay(rayBegin, rayVector, t, cutter);
         const bool nextInside = distance <= 0.0;
         if(nextInside != inside){

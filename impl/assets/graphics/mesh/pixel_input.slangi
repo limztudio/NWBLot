@@ -31,9 +31,6 @@ static float4 inTangent;
 static float2 inUv0;
 static float3 inWorldPosition;
 static float4 inRasterPosition;
-static bool inCsgCapVisible;
-static float3 inCsgCapNormal;
-static float3 inCsgCapWorldPosition;
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inRasterPosition = input.position;
@@ -42,20 +39,19 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inTangent = input.tangent;
     inUv0 = input.uv0;
     inWorldPosition = input.worldPosition.xyz;
-    inCsgCapVisible = false;
-    inCsgCapNormal = inNormal;
-    inCsgCapWorldPosition = inWorldPosition;
 #if NWB_CSG_ENABLED
-    const uint rasterFlags = uint(input.worldPosition.w + 0.5);
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
-    if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u){
-        const NwbCsgReceiverIntervalPixel csgIntervalPixel = nwbCsgSampleReceiverIntervals(input.position, receiverIndex);
-        if(csgIntervalPixel.discardSurface)
+    const NwbCsgReceiverIntervalPixel csgIntervalPixel = nwbCsgSampleReceiverIntervals(input.position, receiverIndex);
+    const bool csgSurfaceDiscard = nwbCsgReceiverPixelDiscard(receiverIndex, inWorldPosition);
+    if(csgIntervalPixel.discardSurface && !csgSurfaceDiscard)
+        discard;
+
+    if(csgSurfaceDiscard){
+        if(!csgIntervalPixel.capVisible)
             discard;
 
-        inCsgCapVisible = csgIntervalPixel.capVisible;
-        inCsgCapNormal = csgIntervalPixel.capNormal;
-        inCsgCapWorldPosition = csgIntervalPixel.capWorldPosition;
+        inNormal = csgIntervalPixel.capNormal;
+        inWorldPosition = csgIntervalPixel.capWorldPosition;
     }
 #endif
 }

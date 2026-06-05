@@ -47,9 +47,15 @@ uint nwbCsgIntervalIdOperation(const uint id){
     return (id >> 30u) & 0x3u;
 }
 
+float nwbCsgIntervalSampleSafeHomogeneousW(const float w){
+    if(abs(w) >= 0.000001)
+        return w;
+    return w < 0.0 ? -0.000001 : 0.000001;
+}
+
 float3 nwbCsgIntervalSampleClipToWorldPosition(const float4 clipPosition){
     const float4 worldPosition = mul(g_NwbMeshClipToWorld, clipPosition);
-    return worldPosition.xyz / max(abs(worldPosition.w), 0.000001);
+    return worldPosition.xyz / nwbCsgIntervalSampleSafeHomogeneousW(worldPosition.w);
 }
 
 float2 nwbCsgIntervalSampleFrameSize(){
@@ -107,6 +113,7 @@ NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPos
             result.capNormal = normalize(g_NwbCsgSampleCapNormal.Load(texel).xyz);
             result.capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, backDepth);
         }
+
     }
 
     return result;

@@ -67,6 +67,7 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_DEPTH, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_ID, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_OPENING_MASK, 1));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
     return layout != nullptr;
@@ -123,7 +124,7 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
 ){
     if(bindingSet)
         return true;
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !layout)
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || !layout)
         return false;
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
@@ -148,6 +149,13 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
         targets.csgIntervalIdFormat,
         csgPeelSubresources,
         Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CSG_INTERVAL_BINDING_OPENING_MASK,
+        targets.csgOpeningMask.get(),
+        targets.csgOpeningMaskFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
     ));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
@@ -175,6 +183,29 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
     return pipeline != nullptr;
 }
 
+[[nodiscard]] static bool CreateIntervalCapFillPipeline(
+    Core::Device& device,
+    Core::GraphicsPipelineHandle& pipeline,
+    const Core::ShaderHandle& vertexShader,
+    const Core::ShaderHandle& pixelShader,
+    const Core::BindingLayoutHandle& intervalSampleBindingLayout,
+    const Core::FramebufferInfo& framebufferInfo
+){
+    if(pipeline && pipeline->getFramebufferInfo() == framebufferInfo)
+        return true;
+
+    Core::GraphicsPipelineDesc pipelineDesc;
+    pipelineDesc
+        .setVertexShader(vertexShader)
+        .setPixelShader(pixelShader)
+        .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
+        .addBindingLayout(intervalSampleBindingLayout)
+    ;
+
+    pipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    return pipeline != nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -197,7 +228,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
         return false;
     }
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || targets.csgPeelLayerCount == 0u){
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || targets.csgPeelLayerCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires valid peel targets"));
         return false;
     }
@@ -231,6 +262,20 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
             return false;
     }
 
+    if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
+        return false;
+
+    if(!csgState().m_intervalCapFillPixelShader){
+        if(!m_renderer.shaderSystem().loadShader(
+            csgState().m_intervalCapFillPixelShader,
+            AssetsGraphicsCsg::s_IntervalCapFillPixelShaderName,
+            Core::ShaderArchive::s_DefaultVariant,
+            Core::ShaderType::Pixel,
+            "ECSRender_CsgIntervalCapFillPS"
+        ))
+            return false;
+    }
+
     if(!__hidden_csg_interval_peel::CreateIntervalPeelPipeline(
         *device,
         csgState().m_intervalPeelPipeline,
@@ -239,6 +284,18 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         csgState().m_clipBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
+        return false;
+    }
+
+    if(!__hidden_csg_interval_peel::CreateIntervalCapFillPipeline(
+        *device,
+        csgState().m_intervalCapFillPipeline,
+        deferredState().m_compositeVertexShader,
+        csgState().m_intervalCapFillPixelShader,
+        csgState().m_intervalSampleBindingLayout,
+        targets.framebuffer->getFramebufferInfo()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval cap fill pipeline"));
         return false;
     }
 
@@ -262,7 +319,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
     auto* device = graphics().getDevice();
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || targets.csgPeelLayerCount == 0u){
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || targets.csgPeelLayerCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
         return false;
     }
@@ -327,6 +384,29 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         DivideUp(targets.height, static_cast<u32>(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y)),
         1u
     );
+}
+
+void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    NWB_ASSERT(csgState().m_intervalCapFillPipeline);
+    NWB_ASSERT(csgState().m_intervalSampleBindingSet);
+    NWB_ASSERT(targets.framebuffer);
+
+    commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
+    commandList.commitBarriers();
+
+    Core::ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(targets.framebuffer->getFramebufferInfo().getViewport());
+
+    Core::GraphicsState graphicsState;
+    graphicsState.setPipeline(csgState().m_intervalCapFillPipeline.get());
+    graphicsState.setFramebuffer(targets.framebuffer.get());
+    graphicsState.setViewport(viewportState);
+    graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
+    commandList.setGraphicsState(graphicsState);
+
+    Core::DrawArguments drawArgs;
+    drawArgs.setVertexCount(3);
+    commandList.draw(drawArgs);
 }
 
 

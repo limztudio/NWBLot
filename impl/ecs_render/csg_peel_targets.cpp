@@ -18,10 +18,12 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     NWB_ASSERT(!targets.csgCapNormal);
     NWB_ASSERT(!targets.csgIntervalDepth);
     NWB_ASSERT(!targets.csgIntervalId);
+    NWB_ASSERT(!targets.csgOpeningMask);
     NWB_ASSERT(targets.width > 0u && targets.height > 0u);
     NWB_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalIdFormat != Core::Format::UNKNOWN);
+    NWB_ASSERT(targets.csgOpeningMaskFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgPeelLayerCount == ECSRenderDetail::s_CsgPeelLayerCount);
 
     auto createPeelTexture = [&](const Core::Format::Enum format, const Name& name){
@@ -54,6 +56,22 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     targets.csgIntervalId = createPeelTexture(targets.csgIntervalIdFormat, Name("engine/deferred/csg_interval_id"));
     if(!targets.csgIntervalId){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"));
+        return false;
+    }
+
+    Core::TextureDesc openingMaskDesc;
+    openingMaskDesc
+        .setWidth(targets.width)
+        .setHeight(targets.height)
+        .setFormat(targets.csgOpeningMaskFormat)
+        .setDimension(Core::TextureDimension::Texture2D)
+        .setInRenderTarget(true)
+        .setInUAV(true)
+        .setName("engine/deferred/csg_opening_mask")
+    ;
+    targets.csgOpeningMask = graphics().createTexture(openingMaskDesc);
+    if(!targets.csgOpeningMask){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG opening mask target"));
         return false;
     }
 

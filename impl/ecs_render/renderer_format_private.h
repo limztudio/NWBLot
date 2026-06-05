@@ -127,6 +127,19 @@ inline Core::Format::Enum SelectCsgIntervalIdFormat(Core::Device& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
+inline Core::Format::Enum SelectCsgOpeningMaskFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        NWB_CSG_OPENING_MASK_CORE_FORMAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+        | Core::FormatSupport::ShaderUavStore
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

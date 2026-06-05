@@ -81,7 +81,7 @@ static void AssignCsgCutterTransform(
 }
 
 [[nodiscard]] static SIMDVector BuildCutterLocalRotation(const f32 animationTime){
-    const SIMDVector horizontalCapsule = QuaternionRotationRollPitchYaw(0.0f, 0.0f, -s_PIDIV2);
+    const SIMDVector horizontalCapsule = QuaternionRotationRollPitchYaw(s_PIDIV2, s_PIDIV2, 0.0f);
     const SIMDVector gentleRoll = QuaternionRotationRollPitchYaw(0.0f, animationTime * 0.18f, 0.0f);
     return QuaternionNormalize(QuaternionMultiply(horizontalCapsule, gentleRoll));
 }

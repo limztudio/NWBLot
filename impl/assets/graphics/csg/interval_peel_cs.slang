@@ -236,7 +236,7 @@ bool nwbCsgFindCutterIntervalOnRay(
                 const float backDepth = saturate(nwbCsgWorldToDepth(backWorldPosition));
                 outEntry.frontDepth = min(frontDepth, backDepth);
                 outEntry.backDepth = max(frontDepth, backDepth);
-                outEntry.capNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, normalize(rayBegin - rayEnd));
+                outEntry.capNormal = -nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, normalize(rayBegin - rayEnd));
                 outEntry.id = nwbCsgPackIntervalId(receiverIndex, cutterIndex, cutter.operation);
                 return outEntry.backDepth >= outEntry.frontDepth && outEntry.id != 0u;
             }

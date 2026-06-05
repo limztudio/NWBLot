@@ -119,6 +119,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !deferredTargets.csgCapNormal
             || !deferredTargets.csgIntervalDepth
             || !deferredTargets.csgIntervalId
+            || !deferredTargets.csgOpeningMask
         )
     )
         return;
@@ -206,6 +207,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
         if(csgUploadReady && csgDrawResourcesReady){
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+            if(csgFrameData.hasWork())
+                m_csgSystem.renderCsgIntervalCaps(*commandList, deferredTargets);
         }
     }
     commandList->endRenderPass();

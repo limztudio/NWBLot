@@ -28,6 +28,7 @@
 #define NWB_CSG_INTERVAL_BINDING_CAP_NORMAL 0
 #define NWB_CSG_INTERVAL_BINDING_DEPTH 1
 #define NWB_CSG_INTERVAL_BINDING_ID 2
+#define NWB_CSG_INTERVAL_BINDING_OPENING_MASK 3
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

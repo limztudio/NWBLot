@@ -54,6 +54,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.csgCapNormal.reset();
     deferredState().m_targets.csgIntervalDepth.reset();
     deferredState().m_targets.csgIntervalId.reset();
+    deferredState().m_targets.csgOpeningMask.reset();
     deferredState().m_targets.opaqueColor.reset();
     deferredState().m_targets.depth.reset();
 
@@ -78,6 +79,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgCapNormalFormat(*device);
     const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgIntervalDepthFormat(*device);
     const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgIntervalIdFormat(*device);
+    const Core::Format::Enum csgOpeningMaskFormat = ECSRenderDetail::SelectCsgOpeningMaskFormat(*device);
     const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(*device);
     const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(*device);
     const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(*device);
@@ -91,6 +93,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         || csgCapNormalFormat == Core::Format::UNKNOWN
         || csgIntervalDepthFormat == Core::Format::UNKNOWN
         || csgIntervalIdFormat == Core::Format::UNKNOWN
+        || csgOpeningMaskFormat == Core::Format::UNKNOWN
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
@@ -128,6 +131,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     createdTargets.csgCapNormalFormat = csgCapNormalFormat;
     createdTargets.csgIntervalDepthFormat = csgIntervalDepthFormat;
     createdTargets.csgIntervalIdFormat = csgIntervalIdFormat;
+    createdTargets.csgOpeningMaskFormat = csgOpeningMaskFormat;
     createdTargets.csgPeelLayerCount = ECSRenderDetail::s_CsgPeelLayerCount;
 
     Core::TextureDesc albedoDesc;
@@ -318,7 +322,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap normal {}, interval depth {}, interval id {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap normal {}, interval depth {}, interval id {}, opening mask {}, AVBOIT color {}, extinction {}, transmittance {})")
         , deferredState().m_targets.width
         , deferredState().m_targets.height
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
@@ -330,6 +334,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgCapNormalFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalDepthFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgIntervalIdFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.csgOpeningMaskFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumColorFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.accumExtinctionFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.avboit.transmittanceFormat).name)
@@ -346,6 +351,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     NWB_ASSERT(!clearCsgTargets || targets.csgCapNormal);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalDepth);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalId);
+    NWB_ASSERT(!clearCsgTargets || targets.csgOpeningMask);
     NWB_ASSERT(!clearCsgTargets || targets.csgPeelLayerCount > 0u);
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
@@ -358,6 +364,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
         commandList.setTextureState(targets.csgCapNormal.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgIntervalId.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgOpeningMask.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -373,6 +380,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
         commandList.clearTextureFloat(targets.csgCapNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
         commandList.clearTextureFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
         commandList.clearTextureUInt(targets.csgIntervalId.get(), csgPeelSubresources, 0u);
+        commandList.clearTextureUInt(targets.csgOpeningMask.get(), ECSRenderDetail::s_FramebufferSubresources, 0u);
     }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);

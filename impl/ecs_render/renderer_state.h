@@ -140,7 +140,9 @@ private:
     Core::BindingLayoutHandle m_intervalSampleBindingLayout;
     Core::BindingSetHandle m_intervalSampleBindingSet;
     Core::ShaderHandle m_intervalPeelComputeShader;
+    Core::ShaderHandle m_intervalCapFillPixelShader;
     Core::ComputePipelineHandle m_intervalPeelPipeline;
+    Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
     Core::BufferHandle m_parameterByteBuffer;

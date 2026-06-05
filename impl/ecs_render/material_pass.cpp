@@ -317,6 +317,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(csgClipActive){
             pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
             pipelineKey.csgEvaluatorVariant = csgEvaluatorVariant;
+            pipelineKey.twoSided = true;
         }
 
         MaterialPipelineResources* pipelineResources = nullptr;

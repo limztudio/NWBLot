@@ -85,9 +85,6 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 
-    if(!HasCsgFrameCandidates(m_world))
-        return true;
-
     return m_csgSystem.createCsgIntervalPeelResources(deferredTargets);
 }
 
@@ -125,7 +122,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
     )
         return;
-
     auto* device = m_graphics.getDevice();
     Core::CommandListHandle commandList = device->createCommandList();
     if(!commandList){

@@ -173,7 +173,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_visible_compute_emulation_smoke>"
             "${_nwb_csg_visible_runtime_root}"
             "--expect-log-message" "CsgVisibleSmokeProject: forced Meshlets feature off for compute-emulation smoke"
-            "--expect-log-message" "RendererSystem: CSG cap proxy selected CS + VS + PS compute emulation"
+            "--expect-log-message" "selected CS + PS by compiling its mesh shader for compute emulation"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )

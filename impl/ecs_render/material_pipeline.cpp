@@ -267,7 +267,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     }
 
     auto* device = graphics().getDevice();
-    const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, materialInfo.twoSided);
+    const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
 
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!createMeshShaderResources())
@@ -307,7 +307,10 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(csgClipPipeline){
             if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
+            if(!m_renderer.csgSystem().createCsgIntervalSampleResources(m_renderer.deferredState().m_targets))
+                return false;
             pipelineDesc.addBindingLayout(csgState().m_clipBindingLayout);
+            pipelineDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
         }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
@@ -389,7 +392,10 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(csgClipPipeline){
             if(!m_renderer.csgSystem().createCsgClipResources())
                 return false;
+            if(!m_renderer.csgSystem().createCsgIntervalSampleResources(m_renderer.deferredState().m_targets))
+                return false;
             emulationDesc.addBindingLayout(csgState().m_clipBindingLayout);
+            emulationDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){

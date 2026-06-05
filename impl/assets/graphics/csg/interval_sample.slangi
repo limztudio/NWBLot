@@ -1,0 +1,122 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_INTERVAL_SAMPLE_SLANGI
+#define NWB_GRAPHICS_CSG_INTERVAL_SAMPLE_SLANGI
+
+#include "binding_slots.h"
+#include "constants.h"
+
+#include "../mesh/view_buffer.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float4> g_NwbCsgSampleCapNormal;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float2> g_NwbCsgSampleIntervalDepth;
+
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_ID, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<uint> g_NwbCsgSampleIntervalId;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgReceiverIntervalPixel{
+    bool discardSurface;
+    bool capVisible;
+    float3 capNormal;
+    float3 capWorldPosition;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbCsgIntervalIdReceiverIndex(const uint id){
+    const uint receiverBits = (id >> 20u) & 0x3ffu;
+    return receiverBits == 0u ? 0xffffffffu : receiverBits - 1u;
+}
+
+uint nwbCsgIntervalIdOperation(const uint id){
+    return (id >> 30u) & 0x3u;
+}
+
+float3 nwbCsgIntervalSampleClipToWorldPosition(const float4 clipPosition){
+    const float4 worldPosition = mul(g_NwbMeshClipToWorld, clipPosition);
+    return worldPosition.xyz / max(abs(worldPosition.w), 0.000001);
+}
+
+float2 nwbCsgIntervalSampleFrameSize(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    g_NwbCsgSampleIntervalDepth.GetDimensions(width, height, layerCount);
+    return float2(width, height);
+}
+
+float3 nwbCsgIntervalSamplePixelDepthToWorldPosition(const uint2 pixel, const float depth){
+    const float2 frameSize = nwbCsgIntervalSampleFrameSize();
+    const float2 uv = (float2(pixel) + 0.5) / max(frameSize, float2(1.0, 1.0));
+    const float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    return nwbCsgIntervalSampleClipToWorldPosition(float4(ndc, depth, 1.0));
+}
+
+NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPosition, const uint receiverIndex){
+    NwbCsgReceiverIntervalPixel result;
+    result.discardSurface = false;
+    result.capVisible = false;
+    result.capNormal = float3(0.0, 0.0, 1.0);
+    result.capWorldPosition = float3(0.0, 0.0, 0.0);
+
+    const uint2 pixel = uint2(rasterPosition.xy);
+    const float surfaceDepth = rasterPosition.z;
+    float selectedCapDepth = 1e30;
+
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex){
+        const int4 texel = int4(int2(pixel), int(layerIndex), 0);
+        const uint id = g_NwbCsgSampleIntervalId.Load(texel);
+        if(id == 0u)
+            continue;
+        if(nwbCsgIntervalIdReceiverIndex(id) != receiverIndex)
+            continue;
+        if(nwbCsgIntervalIdOperation(id) != NWB_CSG_OPERATION_SUBTRACT)
+            continue;
+
+        const float2 intervalDepth = g_NwbCsgSampleIntervalDepth.Load(texel);
+        const float frontDepth = min(intervalDepth.x, intervalDepth.y);
+        const float backDepth = max(intervalDepth.x, intervalDepth.y);
+        if(backDepth < frontDepth)
+            continue;
+
+        const float depthEpsilon = 0.00002;
+        if(surfaceDepth > frontDepth + depthEpsilon && surfaceDepth < backDepth - depthEpsilon){
+            result.discardSurface = true;
+            return result;
+        }
+
+        if(surfaceDepth + depthEpsilon >= backDepth && backDepth < selectedCapDepth){
+            selectedCapDepth = backDepth;
+            result.capVisible = true;
+            result.capNormal = normalize(g_NwbCsgSampleCapNormal.Load(texel).xyz);
+            result.capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, backDepth);
+        }
+    }
+
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

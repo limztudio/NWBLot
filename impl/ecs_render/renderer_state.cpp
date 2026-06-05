@@ -85,6 +85,8 @@ void RendererCsgState::invalidateResources(){
     m_clipBindingSet.reset();
     m_intervalPeelBindingLayout.reset();
     m_intervalPeelBindingSet.reset();
+    m_intervalSampleBindingLayout.reset();
+    m_intervalSampleBindingSet.reset();
     m_intervalPeelComputeShader.reset();
     m_intervalPeelPipeline.reset();
     m_receiverRangeBuffer.reset();

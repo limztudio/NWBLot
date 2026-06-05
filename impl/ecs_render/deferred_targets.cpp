@@ -43,6 +43,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.compositeBindingSet.reset();
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
     csgState().m_intervalPeelBindingSet.reset();
+    csgState().m_intervalSampleBindingSet.reset();
 
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();

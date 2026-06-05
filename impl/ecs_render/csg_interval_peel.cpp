@@ -54,6 +54,24 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
     return layout != nullptr;
 }
 
+[[nodiscard]] static bool CreateIntervalSampleBindingLayout(
+    Core::GraphicsArena& arena,
+    Core::Device& device,
+    Core::BindingLayoutHandle& layout
+){
+    if(layout)
+        return true;
+
+    Core::BindingLayoutDesc bindingLayoutDesc(arena);
+    bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_DEPTH, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_ID, 1));
+
+    layout = device.createBindingLayout(bindingLayoutDesc);
+    return layout != nullptr;
+}
+
 [[nodiscard]] static bool CreateIntervalPeelBindingSet(
     Core::GraphicsArena& arena,
     Core::Device& device,
@@ -91,6 +109,46 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
         Core::TextureDimension::Texture2DArray
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshViewBuffer));
+
+    bindingSet = device.createBindingSet(bindingSetDesc, layout);
+    return bindingSet != nullptr;
+}
+
+[[nodiscard]] static bool CreateIntervalSampleBindingSet(
+    Core::GraphicsArena& arena,
+    Core::Device& device,
+    const DeferredFrameTargets& targets,
+    Core::BindingLayout* layout,
+    Core::BindingSetHandle& bindingSet
+){
+    if(bindingSet)
+        return true;
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !layout)
+        return false;
+
+    const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
+    Core::BindingSetDesc bindingSetDesc(arena);
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_CAP_NORMAL,
+        targets.csgCapNormal.get(),
+        targets.csgCapNormalFormat,
+        csgPeelSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_DEPTH,
+        targets.csgIntervalDepth.get(),
+        targets.csgIntervalDepthFormat,
+        csgPeelSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_ID,
+        targets.csgIntervalId.get(),
+        targets.csgIntervalIdFormat,
+        csgPeelSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
     return bindingSet != nullptr;
@@ -153,6 +211,15 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
+    if(!__hidden_csg_interval_peel::CreateIntervalSampleBindingLayout(
+        arena(),
+        *device,
+        csgState().m_intervalSampleBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding layout"));
+        return false;
+    }
+
     if(!csgState().m_intervalPeelComputeShader){
         if(!m_renderer.shaderSystem().loadShader(
             csgState().m_intervalPeelComputeShader,
@@ -184,6 +251,39 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         csgState().m_intervalPeelBindingSet
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval peel binding set"));
+        return false;
+    }
+
+    if(!createCsgIntervalSampleResources(targets))
+        return false;
+
+    return true;
+}
+
+bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
+    auto* device = graphics().getDevice();
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || targets.csgPeelLayerCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
+        return false;
+    }
+
+    if(!__hidden_csg_interval_peel::CreateIntervalSampleBindingLayout(
+        arena(),
+        *device,
+        csgState().m_intervalSampleBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding layout"));
+        return false;
+    }
+
+    if(!__hidden_csg_interval_peel::CreateIntervalSampleBindingSet(
+        arena(),
+        *device,
+        targets,
+        csgState().m_intervalSampleBindingLayout.get(),
+        csgState().m_intervalSampleBindingSet
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding set"));
         return false;
     }
 

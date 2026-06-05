@@ -101,18 +101,16 @@ NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPos
         if(backDepth < frontDepth)
             continue;
 
-        const float depthEpsilon = 0.00002;
-        if(surfaceDepth > frontDepth + depthEpsilon && surfaceDepth < backDepth - depthEpsilon){
-            result.discardSurface = true;
-            return result;
-        }
-
-        if(surfaceDepth + depthEpsilon >= backDepth && backDepth < selectedCapDepth){
+        if(backDepth < selectedCapDepth){
             selectedCapDepth = backDepth;
             result.capVisible = true;
             result.capNormal = normalize(g_NwbCsgSampleCapNormal.Load(texel).xyz);
             result.capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, backDepth);
         }
+
+        const float depthEpsilon = 0.00002;
+        if(surfaceDepth > frontDepth + depthEpsilon && surfaceDepth < backDepth - depthEpsilon)
+            result.discardSurface = true;
 
     }
 

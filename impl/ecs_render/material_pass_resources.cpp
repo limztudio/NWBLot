@@ -131,6 +131,7 @@ bool RendererMaterialSystem::createEmulationViewResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Vertex | Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(s_MeshViewBindingSlot, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         drawState().m_emulationViewBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!drawState().m_emulationViewBindingLayout){

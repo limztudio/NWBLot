@@ -31,7 +31,6 @@ RWTexture2D<uint> g_NwbCsgOpeningMask;
 
 
 struct NwbCsgReceiverIntervalPixel{
-    bool discardSurface;
     bool capVisible;
     float capDepth;
     float3 capNormal;
@@ -143,7 +142,6 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
 
 NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPosition, const uint receiverIndex){
     NwbCsgReceiverIntervalPixel result;
-    result.discardSurface = false;
     result.capVisible = false;
     result.capDepth = 1e30;
     result.capNormal = float3(0.0, 0.0, 1.0);
@@ -178,10 +176,6 @@ NwbCsgReceiverIntervalPixel nwbCsgSampleReceiverIntervals(const float4 rasterPos
             result.capNormal = nwbCsgIntervalSampleNormalizeOr(g_NwbCsgSampleCapNormal.Load(texel).xyz, float3(0.0, 0.0, 1.0));
             result.capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, backDepth);
         }
-
-        if(surfaceDepth > frontDepth + depthEpsilon && surfaceDepth < backDepth - depthEpsilon)
-            result.discardSurface = true;
-
     }
 
     return result;

@@ -33,8 +33,10 @@ using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_CameraStartDepth = 3.7f;
+static constexpr f32 s_CameraStartDepth = 18.0f;
+static constexpr f32 s_CameraStartX = 5.0f;
 static constexpr f32 s_CameraTargetY = 0.8f;
+static constexpr f32 s_CameraStartY = -4.0f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
@@ -331,7 +333,7 @@ public:
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
             *m_world,
-            Float4(0.0f, s_CameraTargetY, -s_CameraStartDepth)
+            Float4(s_CameraStartX, s_CameraStartY, -s_CameraStartDepth)
         );
         NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,

@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "transparent_multi_bxdf.slangi"
+#include "smoke_bxdf.slangi"
 #include "mesh/gbuffer_io.slangi"
 
 
@@ -12,7 +12,7 @@
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
     nwbLoadMeshPixelInput(input);
 
-    const float3 baseColor = clamp(nwbTransparentMultiBxdfPixelColor(inColor.rgb), float3(0.0), float3(1.0));
+    const float3 baseColor = clamp(nwbSmokeBxdfPixelColor(inColor.rgb), float3(0.0), float3(1.0));
     nwbWriteMeshGBuffer(baseColor, inNormal, inWorldPosition);
 
     return nwbBuildMeshGBufferOutput();

@@ -3,9 +3,9 @@
 
 
 #include "mesh/authoring.slangi"
-#include "project/shaders/transparent_multi_bxdf_surface.bind"
-#include "transparent_multi_bxdf.slangi"
-#include "transparent_multi_bxdf_mesh_vertex.slangi"
+#include "project/shaders/smoke_bxdf_surface.bind"
+#include "smoke_bxdf.slangi"
+#include "smoke_bxdf_mesh_vertex.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

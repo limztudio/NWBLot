@@ -38,7 +38,7 @@ using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 static constexpr AStringView s_SkinnedMeshPath = "project/characters/skinned_cone_female";
 static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
-static constexpr AStringView s_BxdfSurfaceMaterialInterface = "project/shaders/transparent_multi_bxdf_surface";
+static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
 static constexpr f32 s_CameraDistance = 3.25f;
 static constexpr f32 s_CameraHeight = 0.92f;
@@ -200,7 +200,7 @@ private:
         auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
         renderer.material = material;
 
-        const Name materialInterface(s_BxdfSurfaceMaterialInterface);
+        const Name materialInterface(s_SmokeBxdfSurfaceMaterialInterface);
         entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, materialInterface);
         if(!NWB::Impl::SetMaterialMutableFloat4(
             *m_world,

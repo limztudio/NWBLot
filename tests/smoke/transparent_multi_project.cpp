@@ -35,7 +35,7 @@ static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube";
-static constexpr AStringView s_TransparentMultiBxdfSurfaceMaterialInterface = "project/shaders/transparent_multi_bxdf_surface";
+static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
 
 
@@ -64,7 +64,7 @@ static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/tr
     auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
     renderer.material = material;
 
-    const Name materialInterface(s_TransparentMultiBxdfSurfaceMaterialInterface);
+    const Name materialInterface(s_SmokeBxdfSurfaceMaterialInterface);
     entity.addComponent<NWB::Impl::MaterialInstanceComponent>(arena, materialInterface);
     if(!NWB::Impl::SetMaterialMutableFloat4(
         world,

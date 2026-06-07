@@ -51,7 +51,7 @@ static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube_hard_edges";
 static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
-static constexpr AStringView s_BxdfSurfaceMaterialInterface = "project/shaders/transparent_multi_bxdf_surface";
+static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 
 namespace CsgVisibleShapeSlot{
 enum Enum : usize{
@@ -119,7 +119,7 @@ static void AssignCsgCutterTransform(
     auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
     renderer.material = material;
 
-    const Name materialInterface(s_BxdfSurfaceMaterialInterface);
+    const Name materialInterface(s_SmokeBxdfSurfaceMaterialInterface);
     entity.addComponent<NWB::Impl::MaterialInstanceComponent>(arena, materialInterface);
     if(!NWB::Impl::SetMaterialMutableFloat4(
         world,

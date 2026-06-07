@@ -18,14 +18,12 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     NWB_ASSERT(!targets.csgCapBackNormal);
     NWB_ASSERT(!targets.csgIntervalDepth);
     NWB_ASSERT(!targets.csgIntervalId);
-    NWB_ASSERT(!targets.csgReceiverFrontSurfaceMask);
     NWB_ASSERT(!targets.csgReceiverSurfaceMask);
     NWB_ASSERT(!targets.csgReceiverBackSurfaceMask);
     NWB_ASSERT(targets.width > 0u && targets.height > 0u);
     NWB_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgIntervalIdFormat != Core::Format::UNKNOWN);
-    NWB_ASSERT(targets.csgReceiverFrontSurfaceMaskFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgReceiverSurfaceMaskFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgReceiverBackSurfaceMaskFormat != Core::Format::UNKNOWN);
     NWB_ASSERT(targets.csgPeelLayerCount == ECSRenderDetail::s_CsgPeelLayerCount);
@@ -77,15 +75,6 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         ;
         return graphics().createTexture(desc);
     };
-
-    targets.csgReceiverFrontSurfaceMask = createReceiverSurfaceTexture(
-        targets.csgReceiverFrontSurfaceMaskFormat,
-        Name("engine/deferred/csg_receiver_front_surface_mask")
-    );
-    if(!targets.csgReceiverFrontSurfaceMask){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred CSG receiver front surface mask target"));
-        return false;
-    }
 
     targets.csgReceiverSurfaceMask = createReceiverSurfaceTexture(
         targets.csgReceiverSurfaceMaskFormat,

@@ -119,7 +119,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !deferredTargets.csgCapBackNormal
             || !deferredTargets.csgIntervalDepth
             || !deferredTargets.csgIntervalId
-            || !deferredTargets.csgReceiverFrontSurfaceMask
             || !deferredTargets.csgReceiverSurfaceMask
             || !deferredTargets.csgReceiverBackSurfaceMask
         )

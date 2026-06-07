@@ -26,8 +26,6 @@ struct NwbCsgReceiverSurfacePixelInput{
 void main(const NwbCsgReceiverSurfacePixelInput input){
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
     if(input.frontFace){
-        nwbCsgMarkReceiverFrontSurface(input.position, receiverIndex);
-
         if(nwbCsgReceiverPixelDiscard(receiverIndex, input.worldPosition.xyz))
             nwbCsgMarkReceiverOpeningSurface(input.position, receiverIndex);
     }else{

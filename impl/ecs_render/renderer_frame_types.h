@@ -103,7 +103,6 @@ struct DeferredFrameTargets{
     Core::Format::Enum csgCapNormalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalDepthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgIntervalIdFormat = Core::Format::UNKNOWN;
-    Core::Format::Enum csgReceiverFrontSurfaceMaskFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverSurfaceMaskFormat = Core::Format::UNKNOWN;
     Core::Format::Enum csgReceiverBackSurfaceMaskFormat = Core::Format::UNKNOWN;
     u32 csgPeelLayerCount = 0u;
@@ -113,7 +112,6 @@ struct DeferredFrameTargets{
     Core::TextureHandle csgCapBackNormal;
     Core::TextureHandle csgIntervalDepth;
     Core::TextureHandle csgIntervalId;
-    Core::TextureHandle csgReceiverFrontSurfaceMask;
     Core::TextureHandle csgReceiverSurfaceMask;
     Core::TextureHandle csgReceiverBackSurfaceMask;
     Core::TextureHandle opaqueColor;
@@ -137,7 +135,6 @@ struct DeferredFrameTargets{
             && csgCapNormalFormat != Core::Format::UNKNOWN
             && csgIntervalDepthFormat != Core::Format::UNKNOWN
             && csgIntervalIdFormat != Core::Format::UNKNOWN
-            && csgReceiverFrontSurfaceMaskFormat != Core::Format::UNKNOWN
             && csgReceiverSurfaceMaskFormat != Core::Format::UNKNOWN
             && csgReceiverBackSurfaceMaskFormat != Core::Format::UNKNOWN
             && csgPeelLayerCount > 0u
@@ -147,7 +144,6 @@ struct DeferredFrameTargets{
             && csgCapBackNormal != nullptr
             && csgIntervalDepth != nullptr
             && csgIntervalId != nullptr
-            && csgReceiverFrontSurfaceMask != nullptr
             && csgReceiverSurfaceMask != nullptr
             && csgReceiverBackSurfaceMask != nullptr
             && opaqueColor != nullptr

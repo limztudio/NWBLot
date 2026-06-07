@@ -114,7 +114,7 @@ static constexpr f32 s_CameraHeight = 1.1f;
 static constexpr u32 s_AnimatedJointModulo = 16u;
 static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
 static constexpr AStringView s_BenchmarkSkinnedMeshPath = "project/characters/skinned_cone_female";
-static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/materials/mat_skinned_solid";
+static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/smoke/skinned_cone_benchmark/materials/solid";
 static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNED_CONE_STATIC_PREVIEW";
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {

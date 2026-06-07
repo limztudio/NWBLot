@@ -272,25 +272,17 @@ if(Python3_Interpreter_FOUND)
             CONFIGURE_DEPENDS
             LIST_DIRECTORIES false
             "${PROJECT_SOURCE_DIR}/impl/assets/*"
-            "${PROJECT_SOURCE_DIR}/Testbed/assets/*"
+            "${CMAKE_CURRENT_LIST_DIR}/assets/*"
         )
 
-        set(_nwb_skinned_cone_asset_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_assets/$<CONFIG>/assets")
-        set(_nwb_skinned_cone_cooked_female_nwb "${_nwb_skinned_cone_asset_root}/characters/skinned_cone_female.nwb")
         set(_nwb_skinned_cone_asset_stamp "${_nwb_skinned_cone_runtime_root}/res/.nwb_skinned_cone_benchmark_assets_$<CONFIG>.stamp")
         add_custom_command(
-            OUTPUT
-                "${_nwb_skinned_cone_asset_stamp}"
-                "${_nwb_skinned_cone_cooked_female_nwb}"
-            COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_nwb_skinned_cone_asset_root}"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinned_cone_asset_root}/characters"
-            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_nwb_skinned_cone_female_nwb}" "${_nwb_skinned_cone_cooked_female_nwb}"
+            OUTPUT "${_nwb_skinned_cone_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinned_cone_runtime_root}/res"
             COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
-                --asset-root "Testbed/assets"
-                --asset-root "${_nwb_skinned_cone_asset_root}"
+                --asset-root "tests/smoke/assets"
                 --output-directory "${_nwb_skinned_cone_runtime_root}/res"
                 --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
@@ -326,8 +318,6 @@ if(Python3_Interpreter_FOUND)
         )
 
         unset(_nwb_skinned_cone_asset_stamp)
-        unset(_nwb_skinned_cone_cooked_female_nwb)
-        unset(_nwb_skinned_cone_asset_root)
         unset(_nwb_skinned_cone_female_nwb)
         unset(_nwb_skinned_cone_runtime_root)
         unset(_nwb_skinned_cone_asset_inputs)

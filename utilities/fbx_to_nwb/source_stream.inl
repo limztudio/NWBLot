@@ -65,10 +65,6 @@ struct PositionKeyEqual{
     }
 };
 
-[[nodiscard]] SIMDVector LoadVec3ZeroW(const Vec3& value){
-    return VectorSetW(LoadFloat(value), 0.0f);
-}
-
 [[nodiscard]] bool IsFiniteSimdVector(const SIMDVector value, const u32 activeMask){
     const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
     return (VectorMoveMask(invalid) & activeMask) == 0u;
@@ -290,7 +286,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
     Vec3 outputPosition = ToVec3(position);
     const f32 scale = static_cast<f32>(options.scale);
-    StoreFloat(VectorScale(LoadVec3ZeroW(outputPosition), scale), &outputPosition);
+    StoreFloat(VectorScale(VectorSetW(LoadFloat(outputPosition), 0.0f), scale), &outputPosition);
     return outputPosition;
 }
 
@@ -348,26 +344,17 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(LoadVec3ZeroW(normal), LoadVec3ZeroW(outputTangent));
-            const f32 bitangentDot = VectorGetX(Vector3Dot(tangentSpaceBitangent, LoadVec3ZeroW(outputBitangent)));
+            const SIMDVector normalVector = VectorSetW(LoadFloat(normal), 0.0f);
+            const SIMDVector tangentVector = VectorSetW(LoadFloat(outputTangent), 0.0f);
+            const SIMDVector bitangentVector = VectorSetW(LoadFloat(outputBitangent), 0.0f);
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(normalVector, tangentVector);
+            const f32 bitangentDot = VectorGetX(Vector3Dot(tangentSpaceBitangent, bitangentVector));
             sign = bitangentDot < 0.0f ? -1.0f : 1.0f;
         }
     }
 
     outTangent = Vec4{ outputTangent.x, outputTangent.y, outputTangent.z, sign };
     return true;
-}
-
-[[nodiscard]] bool IsFiniteVec2(const Vec2& value){
-    return IsFiniteSimdVector(LoadFloat(value), 0x3u);
-}
-
-[[nodiscard]] bool IsFiniteVec3(const Vec3& value){
-    return IsFiniteSimdVector(LoadFloat(value), 0x7u);
-}
-
-[[nodiscard]] bool IsFiniteVec4(const Vec4& value){
-    return IsFiniteSimdVector(LoadFloat(value), 0xFu);
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){
@@ -379,9 +366,14 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] bool IsFiniteSourceTriangleCorner(const SourceTriangleCorner& corner, const bool wantsSkinning){
-    if(!IsFiniteVec3(corner.position) || !IsFiniteVec3(corner.normal) || !IsFiniteVec2(corner.uv0) || !IsFiniteVec4(corner.color))
+    if(
+        !IsFiniteSimdVector(LoadFloat(corner.position), 0x7u)
+        || !IsFiniteSimdVector(LoadFloat(corner.normal), 0x7u)
+        || !IsFiniteSimdVector(LoadFloat(corner.uv0), 0x3u)
+        || !IsFiniteSimdVector(LoadFloat(corner.color), 0xFu)
+    )
         return false;
-    if(corner.hasTangent && !IsFiniteVec4(corner.tangent))
+    if(corner.hasTangent && !IsFiniteSimdVector(LoadFloat(corner.tangent), 0xFu))
         return false;
     return !wantsSkinning || IsFiniteSkinInfluence(corner.skin);
 }

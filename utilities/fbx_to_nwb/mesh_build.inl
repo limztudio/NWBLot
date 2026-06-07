@@ -84,7 +84,10 @@ template<typename VisitTriangle>
             auto result = outNormals.emplace(key, areaNormal);
             if(!result.second){
                 Vec3& normal = result.first.value();
-                StoreFloat(VectorAdd(LoadVec3ZeroW(normal), LoadVec3ZeroW(areaNormal)), &normal);
+                StoreFloat(
+                    VectorAdd(VectorSetW(LoadFloat(normal), 0.0f), VectorSetW(LoadFloat(areaNormal), 0.0f)),
+                    &normal
+                );
             }
         }
         return true;

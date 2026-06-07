@@ -247,10 +247,6 @@ bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList
         return true;
     NWB_ASSERT(drawState().m_instanceBuffer);
     NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
-    if(!drawState().m_instanceBuffer || drawState().m_instanceBufferCapacity < instanceData.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance upload requires a prepared instance buffer"));
-        return false;
-    }
 
 #if defined(NWB_DEBUG)
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
@@ -276,10 +272,6 @@ bool RendererMaterialSystem::uploadMaterialTypedBuffer(
         return false;
     NWB_ASSERT(drawState().m_materialTypedBuffer);
     NWB_ASSERT(drawState().m_materialTypedBufferCapacity >= uploadBytes);
-    if(!drawState().m_materialTypedBuffer || drawState().m_materialTypedBufferCapacity < uploadBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed upload requires a prepared material typed buffer"));
-        return false;
-    }
 
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();

@@ -232,18 +232,6 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
     NWB_ASSERT(csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size());
     NWB_ASSERT(csgState().m_parameterByteBufferCapacity >= Max<usize>(csgFrameData.parameterBytes.size(), sizeof(u32)));
     NWB_ASSERT(csgState().m_clipBindingSet);
-    if(
-        !csgState().m_receiverRangeBuffer
-        || !csgState().m_cutterBuffer
-        || !csgState().m_parameterByteBuffer
-        || csgState().m_receiverRangeBufferCapacity < csgFrameData.receiverRanges.size()
-        || csgState().m_cutterBufferCapacity < csgFrameData.cutters.size()
-        || csgState().m_parameterByteBufferCapacity < Max<usize>(csgFrameData.parameterBytes.size(), sizeof(u32))
-        || !csgState().m_clipBindingSet
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG upload requires prepared CSG buffers"));
-        return false;
-    }
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);

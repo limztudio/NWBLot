@@ -33,16 +33,21 @@ using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_CameraStartDepth = 18.0f;
-static constexpr f32 s_CameraStartX = 5.0f;
-static constexpr f32 s_CameraTargetY = 0.8f;
-static constexpr f32 s_CameraStartY = -4.0f;
+static constexpr f32 s_CameraTargetY = 0.75f;
+static constexpr f32 s_CameraStartDepth = 6.5f;
+static constexpr f32 s_CameraStartX = 0.0f;
+static constexpr f32 s_CameraStartY = s_CameraTargetY;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CubeRotationSpeed = 0.25f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
-static constexpr f32 s_ReceiverScale = 0.72f;
+static constexpr f32 s_ShapeGridCenterY = s_CameraTargetY;
+static constexpr f32 s_ShapeGridHalfSpacingX = 1.55f;
+static constexpr f32 s_ShapeGridHalfSpacingY = 1.05f;
+static constexpr f32 s_ReceiverBaseScale = 0.72f;
+static constexpr f32 s_ReceiverScale = 1.08f;
+static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
 static constexpr AStringView s_CubeMeshPath = "project/meshes/cube_hard_edges";
 static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
@@ -153,10 +158,10 @@ static void ApplyCubeRotation(
 
 [[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot){
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(-1.28f, 1.48f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(1.28f, 1.48f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(-1.28f, 0.02f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(1.28f, 0.02f, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacingX, s_ShapeGridCenterY + s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacingX, s_ShapeGridCenterY + s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(-s_ShapeGridHalfSpacingX, s_ShapeGridCenterY - s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(s_ShapeGridHalfSpacingX, s_ShapeGridCenterY - s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
     default: return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
     }
 }
@@ -174,9 +179,9 @@ static void ApplyCubeRotation(
 [[nodiscard]] static Float4 CsgVisibleCutterLocalOffset(const usize shapeSlot){
     switch(shapeSlot){
     case CsgVisibleShapeSlot::Plane: return Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(0.0f, 0.0f, -0.30f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(0.0f, 0.0f, -0.32f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(0.0f, 0.0f, -0.32f, 0.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(0.0f, 0.0f, -0.30f * s_CutterScale, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(0.0f, 0.0f, -0.32f * s_CutterScale, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(0.0f, 0.0f, -0.32f * s_CutterScale, 0.0f);
     default: return Float4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 }
@@ -221,21 +226,21 @@ static void ApplyCutterTransform(
     case CsgVisibleShapeSlot::Box:{
         cutter.shapeType = Name("engine/csg/box");
         NWB::Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4(0.30f, 0.30f, 0.56f, 0.0f);
+        parameters.halfExtents = Float4(0.30f * s_CutterScale, 0.30f * s_CutterScale, 0.56f * s_CutterScale, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Sphere:{
         cutter.shapeType = Name("engine/csg/sphere");
         NWB::Impl::CsgSphereShapeParameters parameters;
-        parameters.radius = Float4(0.34f, 0.0f, 0.0f, 0.0f);
+        parameters.radius = Float4(0.34f * s_CutterScale, 0.0f, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }
     case CsgVisibleShapeSlot::Capsule:{
         cutter.shapeType = Name("engine/csg/capsule");
         NWB::Impl::CsgCapsuleShapeParameters parameters;
-        parameters.radiusHalfHeight = Float4(0.22f, 0.28f, 0.0f, 0.0f);
+        parameters.radiusHalfHeight = Float4(0.22f * s_CutterScale, 0.28f * s_CutterScale, 0.0f, 0.0f);
         AssignCsgCutterParameters(cutter, parameters);
         break;
     }

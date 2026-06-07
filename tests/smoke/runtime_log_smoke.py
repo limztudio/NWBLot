@@ -38,7 +38,7 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, default=Path.cwd(), help="Working directory for launched processes.")
     parser.add_argument("--timeout", type=float, default=180.0, help="Seconds to wait for the executable to finish.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
+    parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
     parser.add_argument("--application-arg", action="append", default=[], help="Extra argument to pass to the launched application.")
@@ -59,11 +59,11 @@ def run(args):
     logserver_process = None
     runtime_process = None
     try:
-        logserver_process, log_port, log_directory, log_baseline = launch_logserver(args, executable, env)
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(args, executable, env)
         runtime_process = launch_testbed(args, executable, env, log_port)
         exit_code = wait_for_process_exit(runtime_process, args.timeout)
         tail = read_process_tail(runtime_process)
-        log_text = collect_log_delta(log_directory, log_baseline, "logserver_*.log") if log_directory else tail
+        log_text = collect_log_delta(log_directory, log_baseline, log_pattern) if log_directory else tail
 
         if exit_code != 0:
             raise SmokeFailure(f"runtime exited with {exit_code}\n{tail}\n{log_text[-4000:]}")

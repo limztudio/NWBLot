@@ -2,6 +2,11 @@ find_package(Python3 COMPONENTS Interpreter)
 
 if(Python3_Interpreter_FOUND)
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY)
+        if(TARGET nwb_logserver)
+            set(_nwb_smoke_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+        else()
+            set(_nwb_smoke_logserver_args "--no-logserver")
+        endif()
         add_test(
             NAME "${TEST_NAME}"
             COMMAND
@@ -10,6 +15,7 @@ if(Python3_Interpreter_FOUND)
                 "--executable" "${EXECUTABLE_PATH}"
                 "--working-directory" "${WORKING_DIRECTORY}"
                 "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}"
+                ${_nwb_smoke_logserver_args}
                 ${ARGN}
         )
         set_tests_properties("${TEST_NAME}" PROPERTIES
@@ -246,6 +252,11 @@ if(Python3_Interpreter_FOUND)
 
     if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinned_cone_female_nwb}")
         set(_nwb_skinned_cone_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_runtime/$<CONFIG>")
+        if(TARGET nwb_logserver)
+            set(_nwb_skinned_cone_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+        else()
+            set(_nwb_skinned_cone_logserver_args "--no-logserver")
+        endif()
 
         nwb_declare_executable(nwb_skinned_cone_benchmark)
         target_sources(nwb_skinned_cone_benchmark PRIVATE
@@ -305,6 +316,7 @@ if(Python3_Interpreter_FOUND)
                 "--executable" "$<TARGET_FILE:nwb_skinned_cone_benchmark>"
                 "--working-directory" "${_nwb_skinned_cone_runtime_root}"
                 "--timeout" "240"
+                ${_nwb_skinned_cone_logserver_args}
                 "--expect-log-message" "SkinnedConeBenchmark: culling benchmark passed"
         )
         set_tests_properties(nwb_skinned_cone_culling_benchmark PROPERTIES
@@ -319,6 +331,7 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_skinned_cone_female_nwb)
         unset(_nwb_skinned_cone_runtime_root)
         unset(_nwb_skinned_cone_asset_inputs)
+        unset(_nwb_skinned_cone_logserver_args)
     else()
         message(STATUS "Skipping skinned cone culling benchmark; missing tests/smoke/assets/characters/skinned_cone_female.nwb.")
     endif()

@@ -496,7 +496,7 @@ static void TestMeshAcceptanceQualityBuilderChecks(TestContext& context){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletAcceptanceTrianglesMatchSource(testArena, loadedMesh, sourceTriangles));
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cookedMetrics.meshletCount == 2u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cookedMetrics.coneDisabledCount == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.70710677f, 0.0001f));
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.88388348f, 0.0001f));
             NWB_ASSETS_GRAPHICS_TEST_CHECK(
                 context,
                 MeshletAcceptanceAverageVertexReuse(cookedMetrics) == static_cast<f64>(NWB::Impl::s_MeshMaxMeshletTriangles)

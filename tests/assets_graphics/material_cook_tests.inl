@@ -19,13 +19,18 @@ static void TestMaterialBindCookIntegration(TestContext& context){
     ));
 
     const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
+    const Path generatedCsgIncludeRoot = root / "cache" / "tests" / "csg_modules";
+    const Path generatedCsgBuiltInIncludePath = generatedCsgIncludeRoot / "csg" / "generated" / "built_in.slangi";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedIncludePath, generatedSource));
     CheckGeneratedMaterialBindSource(context, AStringView(generatedSource.data(), generatedSource.size()));
+    NWB::Impl::ShaderCook::CookString generatedCsgSource(testArena.arena);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ReadTextFile(generatedCsgBuiltInIncludePath, generatedCsgSource));
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
     includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
+    includeDirectories.push_back(generatedCsgIncludeRoot);
     includeDirectories.push_back(AssetsGraphicsTestRepoRoot() / "impl" / "assets" / "graphics");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena;
@@ -36,6 +41,7 @@ static void TestMaterialBindCookIntegration(TestContext& context){
         scratchArena
     ));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsCanonicalPath(dependencies, generatedIncludePath));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, ContainsCanonicalPath(dependencies, generatedCsgBuiltInIncludePath));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadCookedMaterial(

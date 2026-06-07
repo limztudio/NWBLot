@@ -110,6 +110,10 @@ def collect_log_delta(directory, baseline, pattern):
     return "\n".join(chunk for chunk in chunks if chunk)
 
 
+def standalone_log_pattern(executable):
+    return f"{executable.resolve().stem}_*.log"
+
+
 def wait_for_log_message(directory, baseline, pattern, needle, timeout_seconds):
     deadline = time.monotonic() + timeout_seconds
     last_text = ""
@@ -1197,14 +1201,20 @@ def create_capture_backend():
 
 def launch_logserver(args, executable, env):
     if args.no_logserver:
-        return None, None, None, {}
+        log_directory = executable.resolve().parent
+        log_pattern = standalone_log_pattern(executable)
+        return None, None, log_directory, snapshot_log_files(log_directory, log_pattern), log_pattern
 
     logserver = Path(args.logserver_executable) if args.logserver_executable else executable_sibling(executable, "logserver")
     if not logserver:
-        raise SmokeSkip("logserver executable was not found next to the testbed target")
+        write_status("INFO: logserver executable was not found; using standalone loader logs")
+        log_directory = executable.resolve().parent
+        log_pattern = standalone_log_pattern(executable)
+        return None, None, log_directory, snapshot_log_files(log_directory, log_pattern), log_pattern
 
     log_directory = logserver.resolve().parent
-    log_baseline = snapshot_log_files(log_directory, "logserver_*.log")
+    log_pattern = "logserver_*.log"
+    log_baseline = snapshot_log_files(log_directory, log_pattern)
     port = args.log_port if args.log_port else choose_free_port()
     process = subprocess.Popen(
         [str(logserver), "-p", str(port)],
@@ -1220,13 +1230,15 @@ def launch_logserver(args, executable, env):
         terminate_process(process, "logserver")
         raise
 
-    return process, port, log_directory, log_baseline
+    return process, port, log_directory, log_baseline, log_pattern
 
 
 def launch_testbed(args, executable, env, log_port):
     command = [str(executable)]
     if log_port:
         command.extend(["-a", "http://localhost", "-p", str(log_port)])
+    else:
+        command.extend(["-a", "", "-p", "0"])
     command.extend(args.application_arg)
 
     return subprocess.Popen(
@@ -1275,13 +1287,13 @@ def validate_transparent_multi_result(result):
         raise SmokeFailure(f"transparent multi-object scene did not show all expected color regions ({observed})")
 
 
-def validate_expected_log_messages(log_directory, log_baseline, required_needles, rejected_needles):
+def validate_expected_log_messages(log_directory, log_baseline, log_pattern, required_needles, rejected_needles):
     if not required_needles and not rejected_needles:
         return
     if not log_directory:
-        raise SmokeFailure("cannot validate expected log messages without a logserver")
+        raise SmokeFailure("cannot validate expected log messages without captured runtime logs")
 
-    log_text = collect_log_delta(log_directory, log_baseline, "logserver_*.log")
+    log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
     for needle in required_needles:
         if needle not in log_text:
             raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
@@ -1311,7 +1323,7 @@ def launch_and_capture(args, backend):
     logserver_process = None
     testbed_process = None
     try:
-        logserver_process, log_port, log_directory, log_baseline = launch_logserver(args, executable, env)
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(args, executable, env)
         testbed_process = launch_testbed(args, executable, env, log_port)
         handle = backend.wait_for_window(testbed_process.pid, args.timeout, args.window_title)
         if not handle:
@@ -1326,7 +1338,7 @@ def launch_and_capture(args, backend):
 
         ensure_process_running(testbed_process, "before checked capture")
         result = capture_checked_window(args, backend, handle)
-        validate_expected_log_messages(log_directory, log_baseline, args.expect_log_message, args.reject_log_message)
+        validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message)
         return result
     finally:
         terminate_process(testbed_process, "testbed")
@@ -1343,7 +1355,7 @@ def parse_args(argv):
     parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver or pass log CLI options.")
+    parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an unused localhost port.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
     parser.add_argument("--reject-log-message", action="append", default=[], help="Forbidden substring in the logserver output.")

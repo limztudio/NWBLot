@@ -72,6 +72,7 @@ struct UpdateCallbackContext{
 struct LoaderOptions{
     AString<NWB::Core::Alloc::GlobalArena> logAddress;
     bool enableGpuDebug = false;
+    bool useStandaloneLogger = false;
 
     explicit LoaderOptions(NWB::Core::Alloc::GlobalArena& arena)
         : logAddress(arena)
@@ -188,110 +189,120 @@ bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& op
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
-    {
-        NWB::Log::Client logger;
-        if(!logger.init(MakeNotNull(options.logAddress.c_str())))
+static int RunProjectRuntime(const __hidden_loader::LoaderOptions& options, void* inst){
+    try{
+        const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
+        if(frameClientSize.width == 0 || frameClientSize.height == 0){
+            NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
             return -1;
-        NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
-
-        try{
-            const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
-            if(frameClientSize.width == 0 || frameClientSize.height == 0){
-                NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
-                return -1;
-            }
-
-            NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
-            const Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
-            frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
-            if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
-                return -1;
-
-            if(!frame.init())
-                return -1;
-            i32 initializedFrameWidth = 0;
-            i32 initializedFrameHeight = 0;
-            frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
-
-            NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
-            if(!graphicsVolume.load("graphics", resourceMountDirectory))
-                return -1;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
-
-            __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
-
-            NWB::Core::Assets::AssetRegistry assetRegistry(frame.projectObjectArena());
-            NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
-
-            NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
-
-            NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
-            if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
-                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
-                    , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
-                );
-                return -1;
-            }
-
-            NWB::ProjectRuntimeContext context = {
-                frame.graphics(),
-                frame.input(),
-                frame.projectObjectArena(),
-                frame.projectThreadPool(),
-                frame.projectJobSystem(),
-                assetManager,
-                {},
-                {},
-            };
-            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
-                return NWB::Core::ShaderArchive::findVirtualPath(
-                    shaderArchiveRecords,
-                    shaderName,
-                    variantName,
-                    stageName,
-                    outVirtualPath
-                );
-            };
-            context.requestQuit = [&frame](){
-                frame.requestQuit();
-            };
-
-            auto callbacks = NWB::CreateProjectEntryCallbacks(context);
-            if(!callbacks){
-                NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
-                return -1;
-            }
-            __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ *callbacks };
-            __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
-
-            callbackShutdownGuard.activate();
-            if(!callbacks->onStartup()){
-                NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
-                return -1;
-            }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
-            frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
-
-            if(!frame.showFrame()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
-                return -1;
-            }
-
-            if(!frame.mainLoop()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
-                return -1;
-            }
         }
-        catch(const GeneralException& e){
-            NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
+
+        NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+        const Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
+        frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
+        if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
+            return -1;
+
+        if(!frame.init())
+            return -1;
+        i32 initializedFrameWidth = 0;
+        i32 initializedFrameHeight = 0;
+        frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
+
+        NWB::Core::Filesystem::VolumeSession graphicsVolume(frame.projectObjectArena());
+        if(!graphicsVolume.load("graphics", resourceMountDirectory))
+            return -1;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
+
+        __hidden_loader::VolumeAssetBinarySource assetBinarySource(graphicsVolume);
+
+        NWB::Core::Assets::AssetRegistry assetRegistry(frame.projectObjectArena());
+        NWB::Core::Assets::RegisterAutoCollectedAssetCodecs(assetRegistry);
+
+        NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
+
+        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
+        if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
+                , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
+            );
+            return -1;
+        }
+
+        NWB::ProjectRuntimeContext context = {
+            frame.graphics(),
+            frame.input(),
+            frame.projectObjectArena(),
+            frame.projectThreadPool(),
+            frame.projectJobSystem(),
+            assetManager,
+            {},
+            {},
+        };
+        context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
+            return NWB::Core::ShaderArchive::findVirtualPath(
+                shaderArchiveRecords,
+                shaderName,
+                variantName,
+                stageName,
+                outVirtualPath
+            );
+        };
+        context.requestQuit = [&frame](){
+            frame.requestQuit();
+        };
+
+        auto callbacks = NWB::CreateProjectEntryCallbacks(context);
+        if(!callbacks){
+            NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
+            return -1;
+        }
+        __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{ *callbacks };
+        __hidden_loader::UpdateCallbackContext updateCallbackContext{ *callbacks };
+
+        callbackShutdownGuard.activate();
+        if(!callbacks->onStartup()){
+            NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
+            return -1;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
+        frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
+
+        if(!frame.showFrame()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
+            return -1;
+        }
+
+        if(!frame.mainLoop()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
             return -1;
         }
     }
+    catch(const GeneralException& e){
+        NWB_LOGGER_FATAL(NWB_TEXT("Exception: {}"), StringConvert(e.what()));
+        return -1;
+    }
 
     return 0;
+}
+
+static int MainLogic(const __hidden_loader::LoaderOptions& options, void* inst){
+    if(options.useStandaloneLogger){
+        NWB::Log::ClientStandalone logger;
+        if(!logger.init())
+            return -1;
+        NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
+        return RunProjectRuntime(options, inst);
+    }
+
+    NWB::Log::Client logger;
+    if(!logger.init(MakeNotNull(options.logAddress.c_str())))
+        return -1;
+    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
+    return RunProjectRuntime(options, inst);
 }
 
 
@@ -319,7 +330,9 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             return -1;
         }
 
-        options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
+        options.useStandaloneLogger = address.empty() || port == 0u;
+        if(!options.useStandaloneLogger)
+            options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
     }
 
     return MainLogic(options, inst);

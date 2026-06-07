@@ -60,6 +60,12 @@ bool RendererMaterialSystem::prepareMeshMaterialPassDrawResources(const Material
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
         if(csgClipDraw && !csgState().m_clipBindingSet)
             ready = false;
+        if(
+            csgClipDraw
+            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
+            && !csgState().m_receiverSurfaceBindingSet
+        )
+            ready = false;
     });
     return ready;
 }
@@ -87,6 +93,12 @@ bool RendererMaterialSystem::prepareComputeMaterialPassDrawResources(const Mater
 
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
         if(csgClipDraw && !csgState().m_clipBindingSet)
+            ready = false;
+        if(
+            csgClipDraw
+            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
+            && !csgState().m_receiverSurfaceBindingSet
+        )
             ready = false;
     });
     return ready;
@@ -172,15 +184,20 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
         NWB_ASSERT(pipelineResources.meshletPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        const bool writesCsgReceiverSurfaceMask =
+            csgClipDraw
+            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(context.pass)
+        ;
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
         NWB_ASSERT(mesh.meshBindingSet);
         NWB_ASSERT(!csgClipDraw || csgState().m_clipBindingSet);
-        NWB_ASSERT(!csgClipDraw || csgState().m_intervalSampleBindingSet);
+        NWB_ASSERT(!writesCsgReceiverSurfaceMask || csgState().m_receiverSurfaceBindingSet);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw){
             m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
-            context.commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
+            if(writesCsgReceiverSurfaceMask)
+                context.commandList.setResourceStatesForBindingSet(csgState().m_receiverSurfaceBindingSet.get());
         }
 
         Core::MeshletState meshletState;
@@ -194,8 +211,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
             meshletState.addBindingSet(nullptr);
         if(csgClipDraw)
             meshletState.addBindingSet(csgState().m_clipBindingSet.get());
-        if(csgClipDraw)
-            meshletState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
+        if(writesCsgReceiverSurfaceMask)
+            meshletState.addBindingSet(csgState().m_receiverSurfaceBindingSet.get());
 
         context.commandList.setMeshletState(meshletState);
 
@@ -223,15 +240,20 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
         const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        const bool writesCsgReceiverSurfaceMask =
+            csgClipDraw
+            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(context.pass)
+        ;
         NWB_ASSERT(mesh.computeBindingSet);
         NWB_ASSERT(mesh.emulationVertexBuffer);
         NWB_ASSERT(!csgClipDraw || csgState().m_clipBindingSet);
-        NWB_ASSERT(!csgClipDraw || csgState().m_intervalSampleBindingSet);
+        NWB_ASSERT(!writesCsgReceiverSurfaceMask || csgState().m_receiverSurfaceBindingSet);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
         if(csgClipDraw){
             m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
-            context.commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
+            if(writesCsgReceiverSurfaceMask)
+                context.commandList.setResourceStatesForBindingSet(csgState().m_receiverSurfaceBindingSet.get());
         }
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
@@ -276,14 +298,15 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             graphicsState.addBindingSet(context.passBindingSet);
             if(csgClipDraw)
                 graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
-            if(csgClipDraw)
-                graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
+            if(writesCsgReceiverSurfaceMask)
+                graphicsState.addBindingSet(csgState().m_receiverSurfaceBindingSet.get());
         }
         else{
             graphicsState.addBindingSet(drawState().m_emulationViewBindingSet.get());
             if(csgClipDraw){
                 graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
-                graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
+                if(writesCsgReceiverSurfaceMask)
+                    graphicsState.addBindingSet(csgState().m_receiverSurfaceBindingSet.get());
             }
             else if(context.passBindingSet)
                 graphicsState.addBindingSet(context.passBindingSet);
@@ -301,6 +324,43 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             context.commandList.draw(drawArgs);
         }
     });
+}
+
+
+bool RendererMaterialSystem::buildCsgReceiverSurfaceDrawItems(
+    Core::Framebuffer* framebuffer,
+    const MaterialPassDrawItems& sourceDrawItems,
+    MaterialPassDrawItems& outDrawItems
+){
+    if(!framebuffer)
+        return false;
+
+    outDrawItems.reserve(sourceDrawItems.meshDrawItems.size() + sourceDrawItems.computeDrawItems.size());
+
+    auto appendReceiverSurfaceItems = [&](const MaterialPassDrawItemVector& sourceItems, MaterialPassDrawItemVector& outItems) -> bool{
+        for(const MaterialPassDrawItem& sourceItem : sourceItems){
+            const auto foundMaterialInfo = materialState().m_surfaceInfos.find(sourceItem.pipelineKey.material);
+            if(foundMaterialInfo == materialState().m_surfaceInfos.end()){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: missing CSG receiver surface material '{}'"), StringConvert(sourceItem.pipelineKey.material.c_str()));
+                return false;
+            }
+
+            MaterialPassDrawItem receiverSurfaceItem = sourceItem;
+            receiverSurfaceItem.pipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
+
+            MaterialPipelineResources* pipelineResources = nullptr;
+            if(!createRendererPipeline(foundMaterialInfo.value(), receiverSurfaceItem.pipelineKey, framebuffer, pipelineResources))
+                return false;
+            NWB_ASSERT(pipelineResources);
+
+            outItems.push_back(receiverSurfaceItem);
+        }
+        return true;
+    };
+
+    return appendReceiverSurfaceItems(sourceDrawItems.meshDrawItems, outDrawItems.meshDrawItems)
+        && appendReceiverSurfaceItems(sourceDrawItems.computeDrawItems, outDrawItems.computeDrawItems)
+    ;
 }
 
 

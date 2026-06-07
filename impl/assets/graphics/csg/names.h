@@ -27,6 +27,7 @@ namespace AssetsGraphicsCsg{
 
 inline constexpr Name s_IntervalPeelComputeShaderName("engine/graphics/csg/interval_peel_cs");
 inline constexpr Name s_IntervalCapFillPixelShaderName("engine/graphics/csg/interval_cap_fill_ps");
+inline constexpr Name s_ReceiverSurfacePixelShaderName("engine/graphics/csg/receiver_surface_ps");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

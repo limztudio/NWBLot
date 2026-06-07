@@ -87,6 +87,7 @@ public:
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool buildCsgReceiverSurfaceDrawItems(Core::Framebuffer* framebuffer, const MaterialPassDrawItems& sourceDrawItems, MaterialPassDrawItems& outDrawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);
     [[nodiscard]] bool prepareMaterialPassDrawBuffers(

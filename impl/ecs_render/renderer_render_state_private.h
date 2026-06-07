@@ -47,6 +47,20 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return applyTwoSided(BuildMeshRenderState());
+    case MaterialPipelinePass::CsgReceiverSurface:{
+        Core::RenderState renderState;
+        renderState.depthStencilState
+            .enableDepthTest()
+            .disableDepthWrite()
+            .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+        ;
+        Core::BlendState::RenderTarget target;
+        target.setColorWriteMask(Core::ColorMask::None);
+        for(u32 index = 0u; index < Core::s_MaxRenderTargets; ++index)
+            renderState.blendState.setRenderTarget(index, target);
+        renderState.rasterState.enableDepthClip().setCullNone();
+        return renderState;
+    }
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
         return applyTwoSided(BuildRendererAvboitVoxelRenderState());

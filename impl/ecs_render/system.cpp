@@ -119,7 +119,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !deferredTargets.csgCapNormal
             || !deferredTargets.csgIntervalDepth
             || !deferredTargets.csgIntervalId
-            || !deferredTargets.csgOpeningMask
+            || !deferredTargets.csgReceiverFrontSurfaceMask
+            || !deferredTargets.csgReceiverSurfaceMask
+            || !deferredTargets.csgReceiverBackSurfaceMask
         )
     )
         return;
@@ -134,6 +136,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasCsgFrameWork);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
+    MaterialPassDrawItems csgReceiverSurfaceDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
 #if defined(NWB_DEBUG)
@@ -164,6 +167,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
+    const bool csgReceiverSurfaceDrawItemsReady =
+        opaqueDrawItems.csg.empty()
+        || m_materialSystem.buildCsgReceiverSurfaceDrawItems(
+            deferredTargets.framebuffer.get(),
+            opaqueDrawItems.csg,
+            csgReceiverSurfaceDrawItems
+        )
+    ;
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && m_materialSystem.prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes)
@@ -179,6 +190,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool csgDrawResourcesReady =
         csgResourcesReady
         && (opaqueDrawItems.csg.empty() || m_materialSystem.prepareMaterialPassDrawResources(opaqueDrawItems.csg))
+    ;
+    const bool csgReceiverSurfaceDrawResourcesReady =
+        csgResourcesReady
+        && csgReceiverSurfaceDrawItemsReady
+        && (csgReceiverSurfaceDrawItems.empty() || m_materialSystem.prepareMaterialPassDrawResources(csgReceiverSurfaceDrawItems))
     ;
     const bool deferredUploadReady =
         deferredResourcesReady
@@ -205,8 +221,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         if(regularDrawResourcesReady)
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
-        if(csgUploadReady && csgDrawResourcesReady)
+        const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
+            *commandList,
+            deferredTargets.framebuffer.get(),
+            MaterialPipelinePass::CsgReceiverSurface,
+            nullptr,
+            nullptr,
+            deferredViewportState
+        };
+        if(csgUploadReady && csgReceiverSurfaceDrawResourcesReady)
+            m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, csgReceiverSurfaceDrawItems);
+        if(csgUploadReady && csgDrawResourcesReady){
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+            if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                m_csgSystem.renderCsgIntervalCaps(*commandList, deferredTargets);
+        }
     }
     commandList->endRenderPass();
 

@@ -34,6 +34,7 @@ class Shader;
 namespace MaterialPipelinePass{
     enum Enum : u8{
         Opaque,
+        CsgReceiverSurface,
         AvboitOccupancy,
         AvboitExtinction,
         AvboitAccumulate,
@@ -68,6 +69,7 @@ namespace MaterialPipelineCsgMode{
 [[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::Opaque:
+    case MaterialPipelinePass::CsgReceiverSurface:
         return true;
     default:
         return MaterialPipelinePassUsesRendererAvboit(pass);
@@ -77,10 +79,15 @@ namespace MaterialPipelineCsgMode{
 [[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
     switch(pass){
     case MaterialPipelinePass::Opaque:
+    case MaterialPipelinePass::CsgReceiverSurface:
         return !transparent;
     default:
         return transparent && MaterialPipelinePassUsesRendererAvboit(pass);
     }
+}
+
+[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(const MaterialPipelinePass::Enum pass){
+    return pass == MaterialPipelinePass::CsgReceiverSurface;
 }
 
 

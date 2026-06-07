@@ -6,6 +6,8 @@
 #include "avboit_private.h"
 #include "material_shader_variants_private.h"
 
+#include <impl/assets/graphics/csg/names.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -155,6 +157,10 @@ bool RendererMaterialSystem::createRendererPipeline(
     Core::GraphicsString avboitCsgShaderVariant(arena());
     const bool csgClipPipeline = ECSRenderMaterialShaderVariants::CsgClipPipeline(pipelineKey);
     const bool avboitCsgClipPipeline = ECSRenderMaterialShaderVariants::AvboitCsgClipPipeline(pipelineKey);
+    const bool csgReceiverSurfaceMaskPipeline =
+        csgClipPipeline
+        && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(pass)
+    ;
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -245,6 +251,10 @@ bool RendererMaterialSystem::createRendererPipeline(
     switch(pass){
     case MaterialPipelinePass::Opaque:
         break;
+    case MaterialPipelinePass::CsgReceiverSurface:
+        passPixelShaderName = AssetsGraphicsCsg::s_ReceiverSurfacePixelShaderName;
+        passPixelShaderDebugName = "ECSRender_CsgReceiverSurfacePS";
+        break;
     case MaterialPipelinePass::AvboitOccupancy:
         if(!m_renderer.avboitSystem().createAvboitResources())
             return failMaterialPipeline();
@@ -282,6 +292,10 @@ bool RendererMaterialSystem::createRendererPipeline(
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
                 return false;
         }
+        else if(pass == MaterialPipelinePass::CsgReceiverSurface){
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
+                return false;
+        }
         else if(avboitCsgClipPipeline){
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, AStringView(avboitCsgShaderVariant), Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
@@ -309,10 +323,13 @@ bool RendererMaterialSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!csgState().m_clipBindingLayout || !csgState().m_intervalSampleBindingLayout)
+            if(!csgState().m_clipBindingLayout)
+                return false;
+            if(csgReceiverSurfaceMaskPipeline && !csgState().m_receiverSurfaceBindingLayout)
                 return false;
             pipelineDesc.addBindingLayout(csgState().m_clipBindingLayout);
-            pipelineDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
+            if(csgReceiverSurfaceMaskPipeline)
+                pipelineDesc.addBindingLayout(csgState().m_receiverSurfaceBindingLayout);
         }
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
@@ -340,6 +357,10 @@ bool RendererMaterialSystem::createRendererPipeline(
             return false;
         if(pass == MaterialPipelinePass::Opaque){
             if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, materialInfo.pixelShader.name(), pixelShaderVariant, Core::ShaderType::Pixel, "ECSRender_RendererPS"))
+                return false;
+        }
+        else if(pass == MaterialPipelinePass::CsgReceiverSurface){
+            if(!m_renderer.shaderSystem().loadShader(resources.pixelShader, passPixelShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Pixel, passPixelShaderDebugName))
                 return false;
         }
         else if(avboitCsgClipPipeline){
@@ -392,10 +413,13 @@ bool RendererMaterialSystem::createRendererPipeline(
             break;
         }
         if(csgClipPipeline){
-            if(!csgState().m_clipBindingLayout || !csgState().m_intervalSampleBindingLayout)
+            if(!csgState().m_clipBindingLayout)
+                return false;
+            if(csgReceiverSurfaceMaskPipeline && !csgState().m_receiverSurfaceBindingLayout)
                 return false;
             emulationDesc.addBindingLayout(csgState().m_clipBindingLayout);
-            emulationDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
+            if(csgReceiverSurfaceMaskPipeline)
+                emulationDesc.addBindingLayout(csgState().m_receiverSurfaceBindingLayout);
         }
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){

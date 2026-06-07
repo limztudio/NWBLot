@@ -67,7 +67,31 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_DEPTH, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_ID, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_OPENING_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_RECEIVER_FRONT_SURFACE_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
+
+    layout = device.createBindingLayout(bindingLayoutDesc);
+    return layout != nullptr;
+}
+
+[[nodiscard]] static bool CreateReceiverSurfaceBindingLayout(
+    Core::GraphicsArena& arena,
+    Core::Device& device,
+    Core::BindingLayoutHandle& layout
+){
+    if(layout)
+        return true;
+
+    Core::BindingLayoutDesc bindingLayoutDesc(arena);
+    bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_DEPTH, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CSG_INTERVAL_BINDING_ID, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_RECEIVER_FRONT_SURFACE_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK, 1));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK, 1));
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
@@ -126,7 +150,70 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
 ){
     if(bindingSet)
         return true;
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || !meshViewBuffer || !layout)
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgReceiverFrontSurfaceMask || !targets.csgReceiverSurfaceMask || !targets.csgReceiverBackSurfaceMask || !meshViewBuffer || !layout)
+        return false;
+
+    const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
+    Core::BindingSetDesc bindingSetDesc(arena);
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_CAP_NORMAL,
+        targets.csgCapNormal.get(),
+        targets.csgCapNormalFormat,
+        csgPeelSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_DEPTH,
+        targets.csgIntervalDepth.get(),
+        targets.csgIntervalDepthFormat,
+        csgPeelSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_ID,
+        targets.csgIntervalId.get(),
+        targets.csgIntervalIdFormat,
+        csgPeelSubresources,
+        Core::TextureDimension::Texture2DArray
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_FRONT_SURFACE_MASK,
+        targets.csgReceiverFrontSurfaceMask.get(),
+        targets.csgReceiverFrontSurfaceMaskFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK,
+        targets.csgReceiverSurfaceMask.get(),
+        targets.csgReceiverSurfaceMaskFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK,
+        targets.csgReceiverBackSurfaceMask.get(),
+        targets.csgReceiverBackSurfaceMaskFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshViewBuffer));
+
+    bindingSet = device.createBindingSet(bindingSetDesc, layout);
+    return bindingSet != nullptr;
+}
+
+[[nodiscard]] static bool CreateReceiverSurfaceBindingSet(
+    Core::GraphicsArena& arena,
+    Core::Device& device,
+    const DeferredFrameTargets& targets,
+    Core::Buffer* meshViewBuffer,
+    Core::BindingLayout* layout,
+    Core::BindingSetHandle& bindingSet
+){
+    if(bindingSet)
+        return true;
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgReceiverFrontSurfaceMask || !targets.csgReceiverSurfaceMask || !targets.csgReceiverBackSurfaceMask || !meshViewBuffer || !layout)
         return false;
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
@@ -153,9 +240,23 @@ static_assert(sizeof(CsgIntervalPeelPushConstants) == NWB_CSG_INTERVAL_PEEL_PUSH
         Core::TextureDimension::Texture2DArray
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_CSG_INTERVAL_BINDING_OPENING_MASK,
-        targets.csgOpeningMask.get(),
-        targets.csgOpeningMaskFormat,
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_FRONT_SURFACE_MASK,
+        targets.csgReceiverFrontSurfaceMask.get(),
+        targets.csgReceiverFrontSurfaceMaskFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK,
+        targets.csgReceiverSurfaceMask.get(),
+        targets.csgReceiverSurfaceMaskFormat,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::TextureDimension::Texture2D
+    ));
+    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
+        NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK,
+        targets.csgReceiverBackSurfaceMask.get(),
+        targets.csgReceiverBackSurfaceMaskFormat,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture2D
     ));
@@ -231,7 +332,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
         return false;
     }
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || targets.csgPeelLayerCount == 0u){
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgReceiverFrontSurfaceMask || !targets.csgReceiverSurfaceMask || !targets.csgReceiverBackSurfaceMask || targets.csgPeelLayerCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval peel requires valid peel targets"));
         return false;
     }
@@ -251,6 +352,15 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         csgState().m_intervalSampleBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding layout"));
+        return false;
+    }
+
+    if(!__hidden_csg_interval_peel::CreateReceiverSurfaceBindingLayout(
+        arena(),
+        *device,
+        csgState().m_receiverSurfaceBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver surface binding layout"));
         return false;
     }
 
@@ -326,7 +436,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
         return false;
     }
-    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgOpeningMask || targets.csgPeelLayerCount == 0u){
+    if(!targets.csgCapNormal || !targets.csgIntervalDepth || !targets.csgIntervalId || !targets.csgReceiverFrontSurfaceMask || !targets.csgReceiverSurfaceMask || !targets.csgReceiverBackSurfaceMask || targets.csgPeelLayerCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
         return false;
     }
@@ -337,6 +447,27 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         csgState().m_intervalSampleBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval sample binding layout"));
+        return false;
+    }
+
+    if(!__hidden_csg_interval_peel::CreateReceiverSurfaceBindingLayout(
+        arena(),
+        *device,
+        csgState().m_receiverSurfaceBindingLayout
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver surface binding layout"));
+        return false;
+    }
+
+    if(!__hidden_csg_interval_peel::CreateReceiverSurfaceBindingSet(
+        arena(),
+        *device,
+        targets,
+        drawState().m_meshViewBuffer.get(),
+        csgState().m_receiverSurfaceBindingLayout.get(),
+        csgState().m_receiverSurfaceBindingSet
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver surface binding set"));
         return false;
     }
 

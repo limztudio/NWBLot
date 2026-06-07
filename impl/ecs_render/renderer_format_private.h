@@ -127,9 +127,35 @@ inline Core::Format::Enum SelectCsgIntervalIdFormat(Core::Device& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
-inline Core::Format::Enum SelectCsgOpeningMaskFormat(Core::Device& device){
+inline Core::Format::Enum SelectCsgReceiverSurfaceMaskFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
-        NWB_CSG_OPENING_MASK_CORE_FORMAT,
+        NWB_CSG_RECEIVER_SURFACE_MASK_CORE_FORMAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+        | Core::FormatSupport::ShaderUavStore
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
+inline Core::Format::Enum SelectCsgReceiverFrontSurfaceMaskFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        NWB_CSG_RECEIVER_FRONT_SURFACE_MASK_CORE_FORMAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::RenderTarget
+        | Core::FormatSupport::ShaderUavStore
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
+inline Core::Format::Enum SelectCsgReceiverBackSurfaceMaskFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        NWB_CSG_RECEIVER_BACK_SURFACE_MASK_CORE_FORMAT,
     };
     constexpr Core::FormatSupport::Mask requiredSupport =
         Core::FormatSupport::Texture

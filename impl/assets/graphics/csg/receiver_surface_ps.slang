@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../mesh/raster_fields.slangi"
+#include "runtime.slangi"
+
+#define NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE 1
+#include "interval_sample.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgReceiverSurfacePixelInput{
+    float4 position : SV_Position;
+    NWB_MESH_RASTER_PAYLOAD_FIELDS
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[earlydepthstencil]
+void main(const NwbCsgReceiverSurfacePixelInput input){
+    const uint receiverIndex = nwbCsgMeshInstanceIndex();
+    nwbCsgMarkReceiverFrontSurface(input.position, receiverIndex);
+    nwbCsgMarkReceiverBackSurface(input.position, receiverIndex);
+
+    if(nwbCsgReceiverPixelDiscard(receiverIndex, input.worldPosition.xyz))
+        nwbCsgMarkReceiverOpeningSurface(input.position, receiverIndex);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

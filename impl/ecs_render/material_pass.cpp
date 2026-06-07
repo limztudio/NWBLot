@@ -325,6 +325,16 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             return false;
         NWB_ASSERT(pipelineResources);
 
+        const bool csgReceiverSurfaceActive = csgClipActive && pass == MaterialPipelinePass::Opaque;
+        MaterialPipelineKey csgReceiverSurfacePipelineKey = pipelineKey;
+        MaterialPipelineResources* csgReceiverSurfacePipelineResources = nullptr;
+        if(csgReceiverSurfaceActive){
+            csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
+            if(!createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources))
+                return false;
+            NWB_ASSERT(csgReceiverSurfacePipelineResources);
+        }
+
         auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
 #if defined(NWB_DEBUG)
             if(instanceData.size() >= static_cast<usize>(Limit<u32>::s_Max)){
@@ -348,56 +358,72 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             return instanceIndex;
         };
 
-        auto appendDrawItem = [&](MaterialPassDrawItemVector& drawItems) -> bool{
-            ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
-            const u32 instanceIndex = appendInstance(typedRanges);
-            if(instanceIndex == Limit<u32>::s_Max)
-                return false;
-
-            CsgReceiverRangeGpuData csgRange;
-            if(csgClipActive){
-                if(!m_renderer.csgSystem().appendCsgReceiverClipData(
-                    *csgReceiverLookupPtr,
-                    entity,
-                    mesh.csgLocalBounds,
-                    transform,
-                    csgFrameData,
-                    csgRange
-                ))
-                    return false;
-                NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
-                csgFrameData.receiverRanges[instanceIndex] = csgRange;
+        auto appendDrawItemForRenderPath = [](
+            const RenderPath::Enum renderPath,
+            const MaterialPassDrawItem& drawItem,
+            MaterialPassDrawItems& targetDrawItems
+        ) -> bool{
+            switch(renderPath){
+            case RenderPath::MeshShader:{
+                targetDrawItems.meshDrawItems.push_back(drawItem);
+                return true;
             }
-
-            MaterialPassDrawItem drawItem;
-            drawItem.meshKey = mesh.meshName;
-            drawItem.pipelineKey = pipelineKey;
-            drawItem.instanceIndex = instanceIndex;
-            drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
-            drawItem.csgCutterCount = csgClipActive ? csgRange.cutterCount : 0u;
-            drawItem.meshletConeCullScaleSafe = transform
-                ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale))
-                : true
-            ;
-            drawItems.push_back(drawItem);
-
-            return true;
+            case RenderPath::ComputeEmulation:{
+                targetDrawItems.computeDrawItems.push_back(drawItem);
+                return true;
+            }
+            default:
+                return false;
+            }
         };
 
-        MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
-        switch(pipelineResources->renderPath){
-        case RenderPath::MeshShader:{
-            NWB_ASSERT(pipelineResources->meshletPipeline);
-            return appendDrawItem(targetDrawItems.meshDrawItems);
-        }
-        case RenderPath::ComputeEmulation:{
-            NWB_ASSERT(pipelineResources->computePipeline);
-            NWB_ASSERT(pipelineResources->emulationPipeline);
-            return appendDrawItem(targetDrawItems.computeDrawItems);
-        }
-        default:
+        ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+        const u32 instanceIndex = appendInstance(typedRanges);
+        if(instanceIndex == Limit<u32>::s_Max)
             return false;
+
+        CsgReceiverRangeGpuData csgRange;
+        if(csgClipActive){
+            if(!m_renderer.csgSystem().appendCsgReceiverClipData(
+                *csgReceiverLookupPtr,
+                entity,
+                mesh.csgLocalBounds,
+                transform,
+                csgFrameData,
+                csgRange
+            ))
+                return false;
+            NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
+            csgFrameData.receiverRanges[instanceIndex] = csgRange;
         }
+
+        MaterialPassDrawItem drawItem;
+        drawItem.meshKey = mesh.meshName;
+        drawItem.pipelineKey = pipelineKey;
+        drawItem.instanceIndex = instanceIndex;
+        drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+        drawItem.csgCutterCount = csgClipActive ? csgRange.cutterCount : 0u;
+        drawItem.meshletConeCullScaleSafe = transform
+            ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale))
+            : true
+        ;
+
+        MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
+        if(!appendDrawItemForRenderPath(pipelineResources->renderPath, drawItem, targetDrawItems))
+            return false;
+
+        if(csgReceiverSurfaceActive){
+            MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;
+            csgReceiverSurfaceDrawItem.pipelineKey = csgReceiverSurfacePipelineKey;
+            if(!appendDrawItemForRenderPath(
+                csgReceiverSurfacePipelineResources->renderPath,
+                csgReceiverSurfaceDrawItem,
+                drawItems.csgReceiverSurface
+            ))
+                return false;
+        }
+
+        return true;
     };
 
     for(auto&& [entity, renderer] : rendererView){

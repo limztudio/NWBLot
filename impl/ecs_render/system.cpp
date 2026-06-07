@@ -136,7 +136,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasCsgFrameWork);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
-    MaterialPassDrawItems csgReceiverSurfaceDrawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
 #if defined(NWB_DEBUG)
@@ -167,14 +166,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
-    const bool csgReceiverSurfaceDrawItemsReady =
-        opaqueDrawItems.csg.empty()
-        || m_materialSystem.buildCsgReceiverSurfaceDrawItems(
-            deferredTargets.framebuffer.get(),
-            opaqueDrawItems.csg,
-            csgReceiverSurfaceDrawItems
-        )
-    ;
     const bool deferredResourcesReady =
         hasDeferredDrawItems
         && m_materialSystem.prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes)
@@ -193,8 +184,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
-        && csgReceiverSurfaceDrawItemsReady
-        && (csgReceiverSurfaceDrawItems.empty() || m_materialSystem.prepareMaterialPassDrawResources(csgReceiverSurfaceDrawItems))
+        && (opaqueDrawItems.csgReceiverSurface.empty() || m_materialSystem.prepareMaterialPassDrawResources(opaqueDrawItems.csgReceiverSurface))
     ;
     const bool deferredUploadReady =
         deferredResourcesReady
@@ -230,7 +220,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredViewportState
         };
         if(csgUploadReady && csgReceiverSurfaceDrawResourcesReady)
-            m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, csgReceiverSurfaceDrawItems);
+            m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
         if(csgUploadReady && csgDrawResourcesReady){
             m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
             if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)

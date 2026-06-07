@@ -326,44 +326,6 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     });
 }
 
-
-bool RendererMaterialSystem::buildCsgReceiverSurfaceDrawItems(
-    Core::Framebuffer* framebuffer,
-    const MaterialPassDrawItems& sourceDrawItems,
-    MaterialPassDrawItems& outDrawItems
-){
-    if(!framebuffer)
-        return false;
-
-    outDrawItems.reserve(sourceDrawItems.meshDrawItems.size() + sourceDrawItems.computeDrawItems.size());
-
-    auto appendReceiverSurfaceItems = [&](const MaterialPassDrawItemVector& sourceItems, MaterialPassDrawItemVector& outItems) -> bool{
-        for(const MaterialPassDrawItem& sourceItem : sourceItems){
-            const auto foundMaterialInfo = materialState().m_surfaceInfos.find(sourceItem.pipelineKey.material);
-            if(foundMaterialInfo == materialState().m_surfaceInfos.end()){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: missing CSG receiver surface material '{}'"), StringConvert(sourceItem.pipelineKey.material.c_str()));
-                return false;
-            }
-
-            MaterialPassDrawItem receiverSurfaceItem = sourceItem;
-            receiverSurfaceItem.pipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
-
-            MaterialPipelineResources* pipelineResources = nullptr;
-            if(!createRendererPipeline(foundMaterialInfo.value(), receiverSurfaceItem.pipelineKey, framebuffer, pipelineResources))
-                return false;
-            NWB_ASSERT(pipelineResources);
-
-            outItems.push_back(receiverSurfaceItem);
-        }
-        return true;
-    };
-
-    return appendReceiverSurfaceItems(sourceDrawItems.meshDrawItems, outDrawItems.meshDrawItems)
-        && appendReceiverSurfaceItems(sourceDrawItems.computeDrawItems, outDrawItems.computeDrawItems)
-    ;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

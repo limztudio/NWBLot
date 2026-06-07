@@ -67,16 +67,19 @@ struct MaterialPassDrawItems{
 struct MaterialPassDrawItemPartitions{
     MaterialPassDrawItems regular;
     MaterialPassDrawItems csg;
+    MaterialPassDrawItems csgReceiverSurface;
 
     explicit MaterialPassDrawItemPartitions(Core::Alloc::ScratchArena& arena)
         : regular(arena)
         , csg(arena)
+        , csgReceiverSurface(arena)
     {}
 
-    [[nodiscard]] bool empty()const noexcept{ return regular.empty() && csg.empty(); }
+    [[nodiscard]] bool empty()const noexcept{ return regular.empty() && csg.empty() && csgReceiverSurface.empty(); }
     void reserve(const usize capacity){
         regular.reserve(capacity);
         csg.reserve(capacity);
+        csgReceiverSurface.reserve(capacity);
     }
 };
 

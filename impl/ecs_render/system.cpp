@@ -116,7 +116,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(
         hasCsgFrameWork
         && (
-            !deferredTargets.csgCapNormal
+            !deferredTargets.csgCapBackNormal
             || !deferredTargets.csgIntervalDepth
             || !deferredTargets.csgIntervalId
             || !deferredTargets.csgReceiverFrontSurfaceMask

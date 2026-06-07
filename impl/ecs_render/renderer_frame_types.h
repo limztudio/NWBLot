@@ -110,7 +110,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle albedo;
     Core::TextureHandle normal;
     Core::TextureHandle worldPosition;
-    Core::TextureHandle csgCapNormal;
+    Core::TextureHandle csgCapBackNormal;
     Core::TextureHandle csgIntervalDepth;
     Core::TextureHandle csgIntervalId;
     Core::TextureHandle csgReceiverFrontSurfaceMask;
@@ -144,7 +144,7 @@ struct DeferredFrameTargets{
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr
-            && csgCapNormal != nullptr
+            && csgCapBackNormal != nullptr
             && csgIntervalDepth != nullptr
             && csgIntervalId != nullptr
             && csgReceiverFrontSurfaceMask != nullptr

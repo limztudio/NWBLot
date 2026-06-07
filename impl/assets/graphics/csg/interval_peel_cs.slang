@@ -21,15 +21,15 @@ struct NwbCsgIntervalPeelPushConstants{
 struct NwbCsgIntervalPeelEntry{
     float frontDepth;
     float backDepth;
-    float3 capNormal;
+    float3 backCapNormal;
     uint id;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalPeelPushConstants> g_NwbCsgIntervalPeelPushConstants;
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_CAP_NORMAL_IMAGE_FORMAT)]]
-RWTexture2DArray<float4> g_NwbCsgCapNormal;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_CAP_NORMAL_IMAGE_FORMAT)]]
+RWTexture2DArray<float4> g_NwbCsgBackCapNormal;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SET), vk::image_format(NWB_CSG_INTERVAL_DEPTH_IMAGE_FORMAT)]]
 RWTexture2DArray<float2> g_NwbCsgIntervalDepth;
@@ -92,7 +92,7 @@ NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
     NwbCsgIntervalPeelEntry entry;
     entry.frontDepth = 1e30;
     entry.backDepth = 1e30;
-    entry.capNormal = float3(0.0, 0.0, 0.0);
+    entry.backCapNormal = float3(0.0, 0.0, 0.0);
     entry.id = 0u;
     return entry;
 }
@@ -236,7 +236,8 @@ bool nwbCsgFindCutterIntervalOnRay(
                 const float backDepth = saturate(nwbCsgWorldToDepth(backWorldPosition));
                 outEntry.frontDepth = min(frontDepth, backDepth);
                 outEntry.backDepth = max(frontDepth, backDepth);
-                outEntry.capNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, normalize(rayBegin - rayEnd));
+                const float3 viewFacingFallback = normalize(rayBegin - rayEnd);
+                outEntry.backCapNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback);
                 outEntry.id = nwbCsgPackIntervalId(receiverIndex, cutterIndex, cutter.operation);
                 return outEntry.backDepth >= outEntry.frontDepth && outEntry.id != 0u;
             }
@@ -288,7 +289,7 @@ void nwbCsgWriteIntervalPeelEntries(
         if(entry.id == 0u)
             continue;
 
-        g_NwbCsgCapNormal[texel] = float4(entry.capNormal, 1.0);
+        g_NwbCsgBackCapNormal[texel] = float4(entry.backCapNormal, 1.0);
         g_NwbCsgIntervalDepth[texel] = float2(entry.frontDepth, entry.backDepth);
         g_NwbCsgIntervalId[texel] = entry.id;
     }

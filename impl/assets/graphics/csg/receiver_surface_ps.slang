@@ -14,6 +14,7 @@
 
 struct NwbCsgReceiverSurfacePixelInput{
     float4 position : SV_Position;
+    bool frontFace : SV_IsFrontFace;
     NWB_MESH_RASTER_PAYLOAD_FIELDS
 };
 
@@ -24,11 +25,14 @@ struct NwbCsgReceiverSurfacePixelInput{
 [earlydepthstencil]
 void main(const NwbCsgReceiverSurfacePixelInput input){
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
-    nwbCsgMarkReceiverFrontSurface(input.position, receiverIndex);
-    nwbCsgMarkReceiverBackSurface(input.position, receiverIndex);
+    if(input.frontFace){
+        nwbCsgMarkReceiverFrontSurface(input.position, receiverIndex);
 
-    if(nwbCsgReceiverPixelDiscard(receiverIndex, input.worldPosition.xyz))
-        nwbCsgMarkReceiverOpeningSurface(input.position, receiverIndex);
+        if(nwbCsgReceiverPixelDiscard(receiverIndex, input.worldPosition.xyz))
+            nwbCsgMarkReceiverOpeningSurface(input.position, receiverIndex);
+    }else{
+        nwbCsgMarkReceiverBackSurface(input.position, receiverIndex);
+    }
 }
 
 

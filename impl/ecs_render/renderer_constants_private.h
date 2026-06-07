@@ -30,6 +30,7 @@ namespace ECSRenderDetail{
 inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f);
 inline constexpr u32 s_EmulatedVertexStride = sizeof(f32) * NWB_MESH_EMULATION_VERTEX_FLOAT_COUNT;
 inline constexpr u32 s_CsgPeelLayerCount = NWB_CSG_PEEL_LAYER_COUNT;
+inline constexpr u32 s_CsgReceiverSurfaceLayerCount = NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT;
 inline constexpr u32 s_MeshDispatchFlagScissorCull = NWB_MESH_DISPATCH_FLAG_SCISSOR_CULL;
 inline constexpr u32 s_MeshDispatchFlagMeshletFrustumCull = NWB_MESH_DISPATCH_FLAG_MESHLET_FRUSTUM_CULL;
 inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL;

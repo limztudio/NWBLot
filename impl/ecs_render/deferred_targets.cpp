@@ -52,7 +52,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.albedo.reset();
     deferredState().m_targets.normal.reset();
     deferredState().m_targets.worldPosition.reset();
-    deferredState().m_targets.csgCapNormal.reset();
+    deferredState().m_targets.csgCapBackNormal.reset();
     deferredState().m_targets.csgIntervalDepth.reset();
     deferredState().m_targets.csgIntervalId.reset();
     deferredState().m_targets.csgReceiverFrontSurfaceMask.reset();
@@ -331,7 +331,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap normal {}, interval depth {}, interval id {}, receiver front surface mask {}, receiver surface mask {}, receiver back surface mask {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver front surface mask {}, receiver surface mask {}, receiver back surface mask {}, AVBOIT color {}, extinction {}, transmittance {})")
         , deferredState().m_targets.width
         , deferredState().m_targets.height
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
@@ -359,7 +359,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     NWB_ASSERT(targets.worldPosition);
     NWB_ASSERT(targets.opaqueColor);
     NWB_ASSERT(targets.depth);
-    NWB_ASSERT(!clearCsgTargets || targets.csgCapNormal);
+    NWB_ASSERT(!clearCsgTargets || targets.csgCapBackNormal);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalDepth);
     NWB_ASSERT(!clearCsgTargets || targets.csgIntervalId);
     NWB_ASSERT(!clearCsgTargets || targets.csgReceiverFrontSurfaceMask);
@@ -368,18 +368,19 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     NWB_ASSERT(!clearCsgTargets || targets.csgPeelLayerCount > 0u);
 
     const Core::TextureSubresourceSet csgPeelSubresources(0, 1, 0, targets.csgPeelLayerCount);
+    const Core::TextureSubresourceSet csgReceiverSurfaceSubresources(0, 1, 0, ECSRenderDetail::s_CsgReceiverSurfaceLayerCount);
 
     commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     if(clearCsgTargets){
-        commandList.setTextureState(targets.csgCapNormal.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgCapBackNormal.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
         commandList.setTextureState(targets.csgIntervalId.get(), csgPeelSubresources, Core::ResourceStates::CopyDest);
-        commandList.setTextureState(targets.csgReceiverFrontSurfaceMask.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-        commandList.setTextureState(targets.csgReceiverSurfaceMask.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-        commandList.setTextureState(targets.csgReceiverBackSurfaceMask.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverFrontSurfaceMask.get(), csgReceiverSurfaceSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverSurfaceMask.get(), csgReceiverSurfaceSubresources, Core::ResourceStates::CopyDest);
+        commandList.setTextureState(targets.csgReceiverBackSurfaceMask.get(), csgReceiverSurfaceSubresources, Core::ResourceStates::CopyDest);
     }
 
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -392,12 +393,12 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
 
     if(clearCsgTargets){
-        commandList.clearTextureFloat(targets.csgCapNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.csgCapBackNormal.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
         commandList.clearTextureFloat(targets.csgIntervalDepth.get(), csgPeelSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
         commandList.clearTextureUInt(targets.csgIntervalId.get(), csgPeelSubresources, 0u);
-        commandList.clearTextureUInt(targets.csgReceiverFrontSurfaceMask.get(), ECSRenderDetail::s_FramebufferSubresources, NWB_CSG_RECEIVER_FRONT_SURFACE_MASK_INVALID);
-        commandList.clearTextureUInt(targets.csgReceiverSurfaceMask.get(), ECSRenderDetail::s_FramebufferSubresources, NWB_CSG_RECEIVER_SURFACE_MASK_INVALID);
-        commandList.clearTextureUInt(targets.csgReceiverBackSurfaceMask.get(), ECSRenderDetail::s_FramebufferSubresources, NWB_CSG_RECEIVER_BACK_SURFACE_MASK_INVALID);
+        commandList.clearTextureUInt(targets.csgReceiverFrontSurfaceMask.get(), csgReceiverSurfaceSubresources, NWB_CSG_RECEIVER_FRONT_SURFACE_MASK_INVALID);
+        commandList.clearTextureUInt(targets.csgReceiverSurfaceMask.get(), csgReceiverSurfaceSubresources, NWB_CSG_RECEIVER_SURFACE_MASK_INVALID);
+        commandList.clearTextureUInt(targets.csgReceiverBackSurfaceMask.get(), csgReceiverSurfaceSubresources, NWB_CSG_RECEIVER_BACK_SURFACE_MASK_INVALID);
     }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);

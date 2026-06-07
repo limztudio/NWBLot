@@ -18,8 +18,8 @@
 #define NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE 0
 #endif
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_NORMAL, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2DArray<float4> g_NwbCsgSampleCapNormal;
+[[vk::binding(NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL, NWB_CSG_INTERVAL_SAMPLE_SET)]]
+Texture2DArray<float4> g_NwbCsgSampleBackCapNormal;
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_DEPTH, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 Texture2DArray<float2> g_NwbCsgSampleIntervalDepth;
@@ -29,18 +29,18 @@ Texture2DArray<uint> g_NwbCsgSampleIntervalId;
 
 #if NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_FRONT_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_FRONT_SURFACE_MASK_IMAGE_FORMAT)]]
-RWTexture2D<uint> g_NwbCsgReceiverFrontSurfaceMask;
+RWTexture2DArray<uint> g_NwbCsgReceiverFrontSurfaceMask;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_SURFACE_MASK_IMAGE_FORMAT)]]
-RWTexture2D<uint> g_NwbCsgReceiverSurfaceMask;
+RWTexture2DArray<uint> g_NwbCsgReceiverSurfaceMask;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET), vk::image_format(NWB_CSG_RECEIVER_BACK_SURFACE_MASK_IMAGE_FORMAT)]]
-RWTexture2D<uint> g_NwbCsgReceiverBackSurfaceMask;
+RWTexture2DArray<uint> g_NwbCsgReceiverBackSurfaceMask;
 #else
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_FRONT_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2D<uint> g_NwbCsgReceiverFrontSurfaceMask;
+Texture2DArray<uint> g_NwbCsgReceiverFrontSurfaceMask;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2D<uint> g_NwbCsgReceiverSurfaceMask;
+Texture2DArray<uint> g_NwbCsgReceiverSurfaceMask;
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_RECEIVER_BACK_SURFACE_MASK, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-Texture2D<uint> g_NwbCsgReceiverBackSurfaceMask;
+Texture2DArray<uint> g_NwbCsgReceiverBackSurfaceMask;
 #endif
 
 
@@ -67,52 +67,122 @@ uint nwbCsgIntervalIdOperation(const uint id){
     return (id >> 30u) & 0x3u;
 }
 
+uint nwbCsgReceiverSurfaceLayerCount(){
+    uint width = 1u;
+    uint height = 1u;
+    uint layerCount = 1u;
+    g_NwbCsgReceiverSurfaceMask.GetDimensions(width, height, layerCount);
+    return min(layerCount, NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT);
+}
+
 uint nwbCsgReceiverSurfaceMaskDepthBits(const float depth){
     const float clampedDepth = saturate(depth);
     const uint maxDepthBits = (NWB_CSG_RECEIVER_SURFACE_MASK_INVALID >> NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS) - 1u;
     return min(uint(clampedDepth * float(maxDepthBits) + 0.5), maxDepthBits);
 }
 
+uint nwbCsgReceiverSurfaceMaskReceiverBits(const uint receiverIndex){
+    return (receiverIndex + 1u) & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
+}
+
 uint nwbCsgReceiverSurfaceMaskValue(const float depth, const uint receiverIndex){
-    const uint receiverBits = (receiverIndex + 1u) & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
+    const uint receiverBits = nwbCsgReceiverSurfaceMaskReceiverBits(receiverIndex);
     if(receiverBits == 0u)
         return 0u;
 
     return (nwbCsgReceiverSurfaceMaskDepthBits(depth) << NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS) | receiverBits;
 }
 
-uint nwbCsgLoadReceiverFrontSurfaceMask(const uint2 pixel){
+uint nwbCsgReceiverSurfaceMaskValueDepthBits(const uint value){
+    return value >> NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS;
+}
+
+bool nwbCsgReceiverSurfaceMaskValueMatchesReceiver(const uint value, const uint receiverIndex){
+    return (value & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK) == nwbCsgReceiverSurfaceMaskReceiverBits(receiverIndex);
+}
+
+uint nwbCsgLoadReceiverFrontSurfaceMask(const uint2 pixel, const uint layerIndex){
 #if NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE
-    return g_NwbCsgReceiverFrontSurfaceMask[pixel];
+    return g_NwbCsgReceiverFrontSurfaceMask[uint3(pixel, layerIndex)];
 #else
-    return g_NwbCsgReceiverFrontSurfaceMask.Load(int3(int2(pixel), 0));
+    return g_NwbCsgReceiverFrontSurfaceMask.Load(int4(int2(pixel), int(layerIndex), 0));
 #endif
 }
 
-uint nwbCsgLoadReceiverSurfaceMask(const uint2 pixel){
+uint nwbCsgLoadReceiverSurfaceMask(const uint2 pixel, const uint layerIndex){
 #if NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE
-    return g_NwbCsgReceiverSurfaceMask[pixel];
+    return g_NwbCsgReceiverSurfaceMask[uint3(pixel, layerIndex)];
 #else
-    return g_NwbCsgReceiverSurfaceMask.Load(int3(int2(pixel), 0));
+    return g_NwbCsgReceiverSurfaceMask.Load(int4(int2(pixel), int(layerIndex), 0));
 #endif
 }
 
-uint nwbCsgLoadReceiverBackSurfaceMask(const uint2 pixel){
+uint nwbCsgLoadReceiverBackSurfaceMask(const uint2 pixel, const uint layerIndex){
 #if NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE
-    return g_NwbCsgReceiverBackSurfaceMask[pixel];
+    return g_NwbCsgReceiverBackSurfaceMask[uint3(pixel, layerIndex)];
 #else
-    return g_NwbCsgReceiverBackSurfaceMask.Load(int3(int2(pixel), 0));
+    return g_NwbCsgReceiverBackSurfaceMask.Load(int4(int2(pixel), int(layerIndex), 0));
 #endif
 }
 
 #if NWB_CSG_RECEIVER_SURFACE_MASK_WRITABLE
+void nwbCsgInsertReceiverFrontSurfaceValue(const uint2 pixel, const uint value){
+    uint candidate = value;
+    const uint layerCount = nwbCsgReceiverSurfaceLayerCount();
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= layerCount)
+            return;
+
+        uint previousValue;
+        InterlockedMin(g_NwbCsgReceiverFrontSurfaceMask[uint3(pixel, layerIndex)], candidate, previousValue);
+        if(previousValue == candidate || previousValue == NWB_CSG_RECEIVER_FRONT_SURFACE_MASK_INVALID)
+            return;
+        if(previousValue > candidate)
+            candidate = previousValue;
+    }
+}
+
+void nwbCsgInsertReceiverOpeningSurfaceValue(const uint2 pixel, const uint value){
+    uint candidate = value;
+    const uint layerCount = nwbCsgReceiverSurfaceLayerCount();
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= layerCount)
+            return;
+
+        uint previousValue;
+        InterlockedMin(g_NwbCsgReceiverSurfaceMask[uint3(pixel, layerIndex)], candidate, previousValue);
+        if(previousValue == candidate || previousValue == NWB_CSG_RECEIVER_SURFACE_MASK_INVALID)
+            return;
+        if(previousValue > candidate)
+            candidate = previousValue;
+    }
+}
+
+void nwbCsgInsertReceiverBackSurfaceValue(const uint2 pixel, const uint value){
+    uint candidate = value;
+    const uint layerCount = nwbCsgReceiverSurfaceLayerCount();
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= layerCount)
+            return;
+
+        uint previousValue;
+        InterlockedMin(g_NwbCsgReceiverBackSurfaceMask[uint3(pixel, layerIndex)], candidate, previousValue);
+        if(previousValue == candidate || previousValue == NWB_CSG_RECEIVER_BACK_SURFACE_MASK_INVALID)
+            return;
+        if(previousValue > candidate)
+            candidate = previousValue;
+    }
+}
+
 void nwbCsgMarkReceiverFrontSurface(const float4 rasterPosition, const uint receiverIndex){
     const uint receiverSurfaceValue = nwbCsgReceiverSurfaceMaskValue(rasterPosition.z, receiverIndex);
     if(receiverSurfaceValue == 0u)
         return;
 
-    uint previousValue;
-    InterlockedMin(g_NwbCsgReceiverFrontSurfaceMask[uint2(rasterPosition.xy)], receiverSurfaceValue, previousValue);
+    nwbCsgInsertReceiverFrontSurfaceValue(uint2(rasterPosition.xy), receiverSurfaceValue);
 }
 
 void nwbCsgMarkReceiverOpeningSurface(const float4 rasterPosition, const uint receiverIndex){
@@ -120,8 +190,7 @@ void nwbCsgMarkReceiverOpeningSurface(const float4 rasterPosition, const uint re
     if(receiverSurfaceValue == 0u)
         return;
 
-    uint previousValue;
-    InterlockedMin(g_NwbCsgReceiverSurfaceMask[uint2(rasterPosition.xy)], receiverSurfaceValue, previousValue);
+    nwbCsgInsertReceiverOpeningSurfaceValue(uint2(rasterPosition.xy), receiverSurfaceValue);
 }
 
 void nwbCsgMarkReceiverBackSurface(const float4 rasterPosition, const uint receiverIndex){
@@ -129,54 +198,76 @@ void nwbCsgMarkReceiverBackSurface(const float4 rasterPosition, const uint recei
     if(receiverSurfaceValue == 0u)
         return;
 
-    uint previousValue;
-    InterlockedMax(g_NwbCsgReceiverBackSurfaceMask[uint2(rasterPosition.xy)], receiverSurfaceValue, previousValue);
+    nwbCsgInsertReceiverBackSurfaceValue(uint2(rasterPosition.xy), receiverSurfaceValue);
 }
 #endif
 
-bool nwbCsgLoadReceiverSurfaceSpan(
+bool nwbCsgFindReceiverBackSurfaceAfterOpening(
     const uint2 pixel,
     const uint receiverIndex,
+    const uint receiverOpeningDepthBits,
+    out uint outReceiverBackDepthBits
+){
+    outReceiverBackDepthBits = 0u;
+
+    const uint layerCount = nwbCsgReceiverSurfaceLayerCount();
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= layerCount)
+            return false;
+
+        const uint receiverBackSurfaceValue = nwbCsgLoadReceiverBackSurfaceMask(pixel, layerIndex);
+        if(receiverBackSurfaceValue == NWB_CSG_RECEIVER_BACK_SURFACE_MASK_INVALID)
+            return false;
+        const uint receiverBackSurfaceDepthBits = nwbCsgReceiverSurfaceMaskValueDepthBits(receiverBackSurfaceValue);
+        if(receiverBackSurfaceDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS < receiverOpeningDepthBits)
+            continue;
+        if(!nwbCsgReceiverSurfaceMaskValueMatchesReceiver(receiverBackSurfaceValue, receiverIndex))
+            continue;
+
+        outReceiverBackDepthBits = receiverBackSurfaceDepthBits;
+        return true;
+    }
+
+    return false;
+}
+
+bool nwbCsgFindReceiverSurfaceSpanForInterval(
+    const uint2 pixel,
+    const uint receiverIndex,
+    const uint intervalBackDepthBits,
     out uint outReceiverOpeningDepthBits,
     out uint outReceiverBackDepthBits
 ){
     outReceiverOpeningDepthBits = 0u;
     outReceiverBackDepthBits = 0u;
 
-    const uint receiverSurfaceValue = nwbCsgLoadReceiverSurfaceMask(pixel);
-    if(receiverSurfaceValue == NWB_CSG_RECEIVER_SURFACE_MASK_INVALID)
-        return false;
+    const uint layerCount = nwbCsgReceiverSurfaceLayerCount();
+    [unroll]
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_RECEIVER_SURFACE_LAYER_COUNT; ++layerIndex){
+        if(layerIndex >= layerCount)
+            return false;
 
-    const uint receiverBits = receiverSurfaceValue & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
-    if(receiverBits != ((receiverIndex + 1u) & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK))
-        return false;
+        const uint receiverSurfaceValue = nwbCsgLoadReceiverSurfaceMask(pixel, layerIndex);
+        if(receiverSurfaceValue == NWB_CSG_RECEIVER_SURFACE_MASK_INVALID)
+            return false;
+        if(!nwbCsgReceiverSurfaceMaskValueMatchesReceiver(receiverSurfaceValue, receiverIndex))
+            continue;
 
-    const uint receiverSurfaceDepthBits = receiverSurfaceValue >> NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS;
-    const uint receiverFrontSurfaceValue = nwbCsgLoadReceiverFrontSurfaceMask(pixel);
-    if(receiverFrontSurfaceValue == NWB_CSG_RECEIVER_FRONT_SURFACE_MASK_INVALID)
-        return false;
-    const uint receiverFrontBits = receiverFrontSurfaceValue & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
-    if(receiverFrontBits != receiverBits)
-        return false;
+        const uint receiverOpeningDepthBits = nwbCsgReceiverSurfaceMaskValueDepthBits(receiverSurfaceValue);
+        if(receiverOpeningDepthBits > intervalBackDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS)
+            return false;
 
-    const uint receiverFrontSurfaceDepthBits = receiverFrontSurfaceValue >> NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS;
-    if(receiverSurfaceDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS < receiverFrontSurfaceDepthBits)
-        return false;
+        uint receiverBackDepthBits;
+        if(!nwbCsgFindReceiverBackSurfaceAfterOpening(pixel, receiverIndex, receiverOpeningDepthBits, receiverBackDepthBits))
+            continue;
 
-    const uint receiverBackSurfaceValue = nwbCsgLoadReceiverBackSurfaceMask(pixel);
-    if(receiverBackSurfaceValue == NWB_CSG_RECEIVER_BACK_SURFACE_MASK_INVALID)
-        return false;
-    const uint receiverBackBits = receiverBackSurfaceValue & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
-    if(receiverBackBits != receiverBits)
-        return false;
+        outReceiverOpeningDepthBits = receiverOpeningDepthBits;
+        outReceiverBackDepthBits = receiverBackDepthBits;
+        return true;
+    }
 
-    const uint receiverBackSurfaceDepthBits = receiverBackSurfaceValue >> NWB_CSG_RECEIVER_SURFACE_MASK_PAYLOAD_BITS;
-    if(receiverBackSurfaceDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS < receiverSurfaceDepthBits)
-        return false;
-
-    outReceiverOpeningDepthBits = receiverSurfaceDepthBits;
-    outReceiverBackDepthBits = receiverBackSurfaceDepthBits;
-    return true;
+    return false;
 }
 
 float nwbCsgIntervalSampleSafeHomogeneousW(const float w){
@@ -212,6 +303,27 @@ float3 nwbCsgIntervalSampleNormalizeOr(const float3 value, const float3 fallback
     return value * rsqrt(lengthSquared);
 }
 
+bool nwbCsgIntervalCapDepthInsideReceiverSpan(
+    const uint capDepthBits,
+    const uint receiverOpeningDepthBits,
+    const uint receiverBackDepthBits
+){
+    return capDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS >= receiverOpeningDepthBits
+        && capDepthBits <= receiverBackDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS
+    ;
+}
+
+float3 nwbCsgIntervalSampleVisibleCapNormal(const float3 normal, const float3 worldPosition){
+    const float3 normalVector = nwbCsgIntervalSampleNormalizeOr(normal, float3(0.0, 0.0, 1.0));
+    const float3 viewVector = nwbCsgIntervalSampleNormalizeOr(g_NwbMeshCameraPosition.xyz - worldPosition, normalVector);
+    return dot(normalVector, viewVector) < 0.0 ? -normalVector : normalVector;
+}
+
+float3 nwbCsgIntervalSampleBackCapNormal(const int4 texel){
+    const float3 normal = g_NwbCsgSampleBackCapNormal.Load(texel).xyz;
+    return nwbCsgIntervalSampleNormalizeOr(normal, float3(0.0, 0.0, 1.0));
+}
+
 NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
     NwbCsgIntervalCapPixel result;
     result.visible = false;
@@ -239,26 +351,31 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
 
         uint receiverOpeningDepthBits;
         uint receiverBackDepthBits;
-        if(!nwbCsgLoadReceiverSurfaceSpan(pixel, receiverIndex, receiverOpeningDepthBits, receiverBackDepthBits))
-            continue;
-
         const uint frontDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(frontDepth);
         const uint backDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(backDepth);
-        if(receiverOpeningDepthBits > backDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS)
+        if(!nwbCsgFindReceiverSurfaceSpanForInterval(
+            pixel,
+            receiverIndex,
+            backDepthBits,
+            receiverOpeningDepthBits,
+            receiverBackDepthBits
+        ))
             continue;
+
         if(receiverOpeningDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS < frontDepthBits)
+            continue;
+        if(backDepthBits > receiverBackDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS)
             continue;
 
         const float capDepth = backDepth;
-        if(backDepthBits > receiverBackDepthBits + NWB_CSG_RECEIVER_SURFACE_MASK_DEPTH_EPSILON_BITS)
-            continue;
         if(capDepth >= result.depth)
             continue;
 
+        const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, capDepth);
         result.visible = true;
         result.depth = capDepth;
-        result.normal = nwbCsgIntervalSampleNormalizeOr(g_NwbCsgSampleCapNormal.Load(texel).xyz, float3(0.0, 0.0, 1.0));
-        result.worldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, capDepth);
+        result.normal = nwbCsgIntervalSampleVisibleCapNormal(nwbCsgIntervalSampleBackCapNormal(texel), capWorldPosition);
+        result.worldPosition = capWorldPosition;
     }
 
     return result;

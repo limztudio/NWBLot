@@ -362,18 +362,19 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             const RenderPath::Enum renderPath,
             const MaterialPassDrawItem& drawItem,
             MaterialPassDrawItems& targetDrawItems
-        ) -> bool{
+        ){
             switch(renderPath){
             case RenderPath::MeshShader:{
                 targetDrawItems.meshDrawItems.push_back(drawItem);
-                return true;
+                break;
             }
             case RenderPath::ComputeEmulation:{
                 targetDrawItems.computeDrawItems.push_back(drawItem);
-                return true;
+                break;
             }
             default:
-                return false;
+                NWB_ASSERT(false);
+                break;
             }
         };
 
@@ -409,18 +410,16 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
 
         MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
-        if(!appendDrawItemForRenderPath(pipelineResources->renderPath, drawItem, targetDrawItems))
-            return false;
+        appendDrawItemForRenderPath(pipelineResources->renderPath, drawItem, targetDrawItems);
 
         if(csgReceiverSurfaceActive){
             MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;
             csgReceiverSurfaceDrawItem.pipelineKey = csgReceiverSurfacePipelineKey;
-            if(!appendDrawItemForRenderPath(
+            appendDrawItemForRenderPath(
                 csgReceiverSurfacePipelineResources->renderPath,
                 csgReceiverSurfaceDrawItem,
                 drawItems.csgReceiverSurface
-            ))
-                return false;
+            );
         }
 
         return true;

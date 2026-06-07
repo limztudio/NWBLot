@@ -253,12 +253,17 @@ float3 nwbCsgIntervalSampleClipToWorldPosition(const float4 clipPosition){
     return worldPosition.xyz / nwbCsgIntervalSampleSafeHomogeneousW(worldPosition.w);
 }
 
-float2 nwbCsgIntervalSampleFrameSize(){
+uint2 nwbCsgIntervalSampleFrameExtent(){
     uint width = 1u;
     uint height = 1u;
     uint layerCount = 1u;
     g_NwbCsgSampleIntervalDepth.GetDimensions(width, height, layerCount);
-    return float2(width, height);
+    return uint2(width, height);
+}
+
+float2 nwbCsgIntervalSampleFrameSize(){
+    const uint2 frameExtent = nwbCsgIntervalSampleFrameExtent();
+    return float2(frameExtent);
 }
 
 float3 nwbCsgIntervalSamplePixelDepthToWorldPosition(const uint2 pixel, const float depth){
@@ -286,18 +291,36 @@ float3 nwbCsgIntervalSampleBackCapNormal(const int4 texel){
     return nwbCsgIntervalSampleNormalizeOr(normal, float3(0.0, 0.0, 1.0));
 }
 
-NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
+bool nwbCsgIntervalSamplePixelInFrame(const int2 pixel){
+    const uint2 frameExtent = nwbCsgIntervalSampleFrameExtent();
+    return pixel.x >= 0
+        && pixel.y >= 0
+        && uint(pixel.x) < frameExtent.x
+        && uint(pixel.y) < frameExtent.y
+    ;
+}
+
+void nwbCsgSelectNearestIntervalCap(inout NwbCsgIntervalCapPixel result, const NwbCsgIntervalCapPixel candidate){
+    if(!candidate.visible || candidate.depth >= result.depth)
+        return;
+
+    result = candidate;
+}
+
+NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCapAtPixels(
+    const uint2 outputPixel,
+    const uint2 receiverPixel,
+    const uint2 intervalPixel
+){
     NwbCsgIntervalCapPixel result;
     result.visible = false;
     result.depth = 1e30;
     result.normal = float3(0.0, 0.0, 1.0);
     result.worldPosition = float3(0.0, 0.0, 0.0);
 
-    const uint2 pixel = uint2(rasterPosition.xy);
-
     [unroll]
     for(uint layerIndex = 0u; layerIndex < NWB_CSG_PEEL_LAYER_COUNT; ++layerIndex){
-        const int4 texel = int4(int2(pixel), int(layerIndex), 0);
+        const int4 texel = int4(int2(intervalPixel), int(layerIndex), 0);
         const uint id = g_NwbCsgSampleIntervalId.Load(texel);
         if(id == 0u)
             continue;
@@ -313,7 +336,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
         const uint frontDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(frontDepth);
         const uint backDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(backDepth);
         if(!nwbCsgFindReceiverSurfaceSpanForInterval(
-            pixel,
+            receiverPixel,
             receiverIndex,
             frontDepthBits,
             backDepthBits,
@@ -328,11 +351,59 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
         if(capDepth >= result.depth)
             continue;
 
-        const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(pixel, capDepth);
+        const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(outputPixel, capDepth);
         result.visible = true;
         result.depth = capDepth;
         result.normal = nwbCsgIntervalSampleVisibleCapNormal(nwbCsgIntervalSampleBackCapNormal(texel), capWorldPosition);
         result.worldPosition = capWorldPosition;
+    }
+
+    return result;
+}
+
+NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
+    const uint2 pixel = uint2(rasterPosition.xy);
+    NwbCsgIntervalCapPixel result = nwbCsgSampleNearestIntervalCapAtPixels(pixel, pixel, pixel);
+    if(result.visible)
+        return result;
+
+    [unroll]
+    for(int offsetY = -1; offsetY <= 1; ++offsetY){
+        [unroll]
+        for(int offsetX = -1; offsetX <= 1; ++offsetX){
+            if(offsetX == 0 && offsetY == 0)
+                continue;
+
+            const int2 intervalPixel = int2(pixel) + int2(offsetX, offsetY);
+            if(!nwbCsgIntervalSamplePixelInFrame(intervalPixel))
+                continue;
+
+            nwbCsgSelectNearestIntervalCap(
+                result,
+                nwbCsgSampleNearestIntervalCapAtPixels(pixel, pixel, uint2(intervalPixel))
+            );
+        }
+    }
+    if(result.visible)
+        return result;
+
+    [unroll]
+    for(int offsetY = -1; offsetY <= 1; ++offsetY){
+        [unroll]
+        for(int offsetX = -1; offsetX <= 1; ++offsetX){
+            if(offsetX == 0 && offsetY == 0)
+                continue;
+
+            const int2 neighborPixel = int2(pixel) + int2(offsetX, offsetY);
+            if(!nwbCsgIntervalSamplePixelInFrame(neighborPixel))
+                continue;
+
+            const uint2 neighbor = uint2(neighborPixel);
+            nwbCsgSelectNearestIntervalCap(
+                result,
+                nwbCsgSampleNearestIntervalCapAtPixels(pixel, neighbor, neighbor)
+            );
+        }
     }
 
     return result;

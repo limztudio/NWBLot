@@ -154,7 +154,7 @@ bool LoadShaderArchiveRecords(
 }
 
 void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
-#if defined(NWB_DEBUG)
+#if !defined(NWB_FINAL)
     app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer");
 #else
     static_cast<void>(app);
@@ -163,7 +163,7 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 }
 
 bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& options){
-#if defined(NWB_DEBUG)
+#if !defined(NWB_FINAL)
     if(options.enableGpuDebug){
         if(!graphics.setDebugRuntimeEnabled(true)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));

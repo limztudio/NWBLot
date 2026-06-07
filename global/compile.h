@@ -325,7 +325,7 @@ inline int BoundedStrError(char* dest, const std::size_t destSize, const int err
 
 
 [[nodiscard]] constexpr bool CanEnableDebugRuntime(){
-#if defined(NWB_DEBUG)
+#if !defined(NWB_FINAL)
     return true;
 #else
     return false;

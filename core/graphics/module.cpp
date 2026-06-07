@@ -380,7 +380,7 @@ bool Graphics::createHeadlessDevice(){
 
 bool Graphics::createInstance(const InstanceParameters& params){
     if(!__hidden_graphics::CopyInstanceParameters(m_deviceCreationParams, params)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: debug runtime is only available in dbg builds"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: debug runtime is only available in non-final builds"));
         return false;
     }
 

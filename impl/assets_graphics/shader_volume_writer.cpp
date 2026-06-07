@@ -37,6 +37,14 @@ struct VariantCachePaths{
     Path sourceChecksumPath;
 };
 
+namespace CacheReadStatus{
+enum Enum : u8{
+    Hit = 0,
+    Miss,
+    Error
+};
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +73,49 @@ static VariantCachePaths BuildVariantCachePaths(
     return cachePaths;
 }
 
+static CacheReadStatus::Enum TryReadCachedSourceChecksum(
+    const ShaderCook::ShaderEntry& entry,
+    const Path& sourceChecksumPath,
+    ScratchString& outCachedText
+){
+    ErrorCode errorCode;
+    if(ReadBinaryFile(sourceChecksumPath, outCachedText, errorCode))
+        return CacheReadStatus::Hit;
+
+    if(errorCode && !IsMissingPathError(errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to read checksum cache '{}' for entry '{}': {}")
+            , PathToString<tchar>(sourceChecksumPath)
+            , StringConvert(entry.name)
+            , StringConvert(errorCode.message())
+        );
+        return CacheReadStatus::Error;
+    }
+
+    return CacheReadStatus::Miss;
+}
+
+static CacheReadStatus::Enum TryReadCachedBytecode(
+    const ShaderCook::ShaderEntry& entry,
+    const Path& bytecodePath,
+    Core::GraphicsBytes& outBytecode
+){
+    ErrorCode errorCode;
+    if(ReadBinaryFile(bytecodePath, outBytecode, errorCode) && !outBytecode.empty() && (outBytecode.size() & 3u) == 0u)
+        return CacheReadStatus::Hit;
+
+    if(errorCode && !IsMissingPathError(errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to read bytecode cache '{}' for entry '{}': {}")
+            , PathToString<tchar>(bytecodePath)
+            , StringConvert(entry.name)
+            , StringConvert(errorCode.message())
+        );
+        return CacheReadStatus::Error;
+    }
+
+    outBytecode.clear();
+    return CacheReadStatus::Miss;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -84,40 +135,25 @@ static bool GetVariantBytecode(
 
     outBytecode.clear();
 
-    errorCode.clear();
-    const bool hasCachedBytecode = FileExists(cachePaths.bytecodePath, errorCode);
-    if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query bytecode cache '{}' for entry '{}': {}")
-            , PathToString<tchar>(cachePaths.bytecodePath)
-            , StringConvert(entry.name)
-            , StringConvert(errorCode.message())
-        );
+    ScratchString cachedText{scratchArena};
+    const CacheReadStatus::Enum checksumCacheStatus = __hidden_shader_volume_writer::TryReadCachedSourceChecksum(
+        entry,
+        cachePaths.sourceChecksumPath,
+        cachedText
+    );
+    if(checksumCacheStatus == CacheReadStatus::Error)
         return false;
-    }
 
-    errorCode.clear();
-    const bool hasCachedChecksum = FileExists(cachePaths.sourceChecksumPath, errorCode);
-    if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query checksum cache '{}' for entry '{}': {}")
-            , PathToString<tchar>(cachePaths.sourceChecksumPath)
-            , StringConvert(entry.name)
-            , StringConvert(errorCode.message())
+    if(checksumCacheStatus == CacheReadStatus::Hit && TrimView(cachedText) == AStringView(sourceChecksumHex.data(), sourceChecksumHex.size())){
+        const CacheReadStatus::Enum bytecodeCacheStatus = __hidden_shader_volume_writer::TryReadCachedBytecode(
+            entry,
+            cachePaths.bytecodePath,
+            outBytecode
         );
-        return false;
-    }
-
-    bool cacheUpToDate = false;
-    if(hasCachedBytecode && hasCachedChecksum){
-        ScratchString cachedText{scratchArena};
-        cacheUpToDate = ReadTextFile(cachePaths.sourceChecksumPath, cachedText)
-            && TrimView(cachedText) == AStringView(sourceChecksumHex.data(), sourceChecksumHex.size())
-        ;
-    }
-    if(cacheUpToDate){
-        errorCode.clear();
-        if(ReadBinaryFile(cachePaths.bytecodePath, outBytecode, errorCode) && !outBytecode.empty() && (outBytecode.size() & 3u) == 0u)
+        if(bytecodeCacheStatus == CacheReadStatus::Error)
+            return false;
+        if(bytecodeCacheStatus == CacheReadStatus::Hit)
             return true;
-        outBytecode.clear();
     }
 
     HashMap<

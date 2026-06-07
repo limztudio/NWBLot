@@ -65,6 +65,15 @@ struct PositionKeyEqual{
     }
 };
 
+[[nodiscard]] SIMDVector LoadVec3ZeroW(const Vec3& value){
+    return VectorSetW(LoadFloat(value), 0.0f);
+}
+
+[[nodiscard]] bool IsFiniteSimdVector(const SIMDVector value, const u32 activeMask){
+    const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
+    return (VectorMoveMask(invalid) & activeMask) == 0u;
+}
+
 using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
 
 struct MeshSkinInfluenceHasher{
@@ -281,9 +290,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
     Vec3 outputPosition = ToVec3(position);
     const f32 scale = static_cast<f32>(options.scale);
-    outputPosition.x *= scale;
-    outputPosition.y *= scale;
-    outputPosition.z *= scale;
+    StoreFloat(VectorScale(LoadVec3ZeroW(outputPosition), scale), &outputPosition);
     return outputPosition;
 }
 
@@ -341,16 +348,8 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 
         Vec3 outputBitangent = ToVec3(bitangent);
         if(Normalize(outputBitangent)){
-            const Vec3 tangentSpaceBitangent{
-                normal.y * outputTangent.z - normal.z * outputTangent.y,
-                normal.z * outputTangent.x - normal.x * outputTangent.z,
-                normal.x * outputTangent.y - normal.y * outputTangent.x,
-            };
-            const f32 bitangentDot =
-                tangentSpaceBitangent.x * outputBitangent.x
-                + tangentSpaceBitangent.y * outputBitangent.y
-                + tangentSpaceBitangent.z * outputBitangent.z
-            ;
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(LoadVec3ZeroW(normal), LoadVec3ZeroW(outputTangent));
+            const f32 bitangentDot = VectorGetX(Vector3Dot(tangentSpaceBitangent, LoadVec3ZeroW(outputBitangent)));
             sign = bitangentDot < 0.0f ? -1.0f : 1.0f;
         }
     }
@@ -360,15 +359,15 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 [[nodiscard]] bool IsFiniteVec2(const Vec2& value){
-    return IsFinite(value.x) && IsFinite(value.y);
+    return IsFiniteSimdVector(LoadFloat(value), 0x3u);
 }
 
 [[nodiscard]] bool IsFiniteVec3(const Vec3& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+    return IsFiniteSimdVector(LoadFloat(value), 0x7u);
 }
 
 [[nodiscard]] bool IsFiniteVec4(const Vec4& value){
-    return IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+    return IsFiniteSimdVector(LoadFloat(value), 0xFu);
 }
 
 [[nodiscard]] bool IsFiniteSkinInfluence(const MeshSkinInfluence& value){

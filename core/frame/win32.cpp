@@ -41,6 +41,72 @@ namespace FrameDetail{
 static Frame* s_Frame = nullptr;
 
 
+static HMODULE GetUser32Module(){
+    HMODULE module = GetModuleHandleW(L"user32.dll");
+    if(!module)
+        module = LoadLibraryW(L"user32.dll");
+    return module;
+}
+
+static void EnableProcessDpiAwareness(){
+    HMODULE user32 = GetUser32Module();
+    if(!user32)
+        return;
+
+    using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
+    const auto setProcessDpiAwarenessContext =
+        reinterpret_cast<SetProcessDpiAwarenessContextFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"))
+    ;
+    if(setProcessDpiAwarenessContext){
+        constexpr isize PerMonitorAwareV2 = -4;
+        if(setProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(PerMonitorAwareV2)))
+            return;
+    }
+
+    using SetProcessDpiAwareFn = BOOL(WINAPI*)();
+    const auto setProcessDpiAware = reinterpret_cast<SetProcessDpiAwareFn>(GetProcAddress(user32, "SetProcessDPIAware"));
+    if(setProcessDpiAware)
+        setProcessDpiAware();
+}
+
+static UINT QueryInitialWindowDpi(){
+    constexpr UINT DefaultDpi = 96;
+
+    HMODULE user32 = GetUser32Module();
+    if(user32){
+        using GetDpiForSystemFn = UINT(WINAPI*)();
+        const auto getDpiForSystem = reinterpret_cast<GetDpiForSystemFn>(GetProcAddress(user32, "GetDpiForSystem"));
+        if(getDpiForSystem){
+            const UINT dpi = getDpiForSystem();
+            if(dpi != 0)
+                return dpi;
+        }
+    }
+
+    HDC screenDc = GetDC(nullptr);
+    if(!screenDc)
+        return DefaultDpi;
+
+    const i32 dpi = GetDeviceCaps(screenDc, LOGPIXELSX);
+    ReleaseDC(nullptr, screenDc);
+
+    return dpi > 0 ? static_cast<UINT>(dpi) : DefaultDpi;
+}
+
+static bool AdjustWindowRectForDpi(RECT& rect, DWORD style, BOOL hasMenu, DWORD styleEx, UINT dpi){
+    HMODULE user32 = GetUser32Module();
+    if(user32){
+        using AdjustWindowRectExForDpiFn = BOOL(WINAPI*)(LPRECT, DWORD, BOOL, DWORD, UINT);
+        const auto adjustWindowRectExForDpi =
+            reinterpret_cast<AdjustWindowRectExForDpiFn>(GetProcAddress(user32, "AdjustWindowRectExForDpi"))
+        ;
+        if(adjustWindowRectExForDpi)
+            return adjustWindowRectExForDpi(&rect, style, hasMenu, styleEx, dpi) != FALSE;
+    }
+
+    return AdjustWindowRectEx(&rect, style, hasMenu, styleEx) != FALSE;
+}
+
 static u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 maxClientDimension){
     if(maxClientDimension <= 0)
         return requestedDimension;
@@ -412,6 +478,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 
 bool Frame::init(){
+    FrameDetail::EnableProcessDpiAwareness();
+
     const tchar* ClassName = NWB_TEXT("NWB_FRAME");
     const tchar* AppName = NWB_TEXT("NWBLoader");
     constexpr DWORD StyleEx = 0;
@@ -444,8 +512,10 @@ bool Frame::init(){
             workArea = monitorInfo.rcWork;
     }
 
+    const UINT initialDpi = FrameDetail::QueryInitialWindowDpi();
+
     RECT decorationRect = { 0, 0, 0, 0 };
-    if(!AdjustWindowRectEx(&decorationRect, Style, FALSE, StyleEx)){
+    if(!FrameDetail::AdjustWindowRectForDpi(decorationRect, Style, FALSE, StyleEx, initialDpi)){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }
@@ -479,16 +549,25 @@ bool Frame::init(){
     frameData.height() = windowHeight;
 
     RECT rc = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
+    if(!FrameDetail::AdjustWindowRectForDpi(rc, Style, FALSE, StyleEx, initialDpi)){
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
+        return false;
+    }
+
+    const auto actualWidth = rc.right - rc.left;
+    const auto actualHeight = rc.bottom - rc.top;
+    const auto x = workArea.left + (workAreaWidth > actualWidth ? ((workAreaWidth - actualWidth) >> 1) : 0);
+    const auto y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
 
     HWND hwnd = CreateWindowEx(
         StyleEx,
         wc.lpszClassName,
         AppName,
         Style,
-        0,
-        0,
-        rc.right - rc.left,
-        rc.bottom - rc.top,
+        x,
+        y,
+        actualWidth,
+        actualHeight,
         nullptr,
         nullptr,
         wc.hInstance,
@@ -498,25 +577,6 @@ bool Frame::init(){
     if(!frameData.hwnd()){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
-    }
-
-    {
-        if(!AdjustWindowRectEx(&rc, Style, FALSE, StyleEx)){
-            frameData.setHwnd(nullptr);
-            NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
-            return false;
-        }
-
-        const auto actualWidth = rc.right - rc.left;
-        const auto actualHeight = rc.bottom - rc.top;
-        const auto x = workArea.left + (workAreaWidth > actualWidth ? ((workAreaWidth - actualWidth) >> 1) : 0);
-        const auto y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
-
-        if(!MoveWindow(frameData.hwnd(), x, y, actualWidth, actualHeight, false)){
-            frameData.setHwnd(nullptr);
-            NWB_LOGGER_FATAL(NWB_TEXT("Frame window moving failed"));
-            return false;
-        }
     }
 
     if(!startup())

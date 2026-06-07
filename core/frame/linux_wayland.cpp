@@ -48,6 +48,7 @@ struct WaylandContext{
     wl_display* display = nullptr;
     wl_registry* registry = nullptr;
     wl_compositor* compositor = nullptr;
+    wl_output* output = nullptr;
     wl_seat* seat = nullptr;
     wl_surface* surface = nullptr;
     wl_pointer* pointer = nullptr;
@@ -63,7 +64,9 @@ struct WaylandContext{
     bool configured = false;
     bool visible = false;
     bool shouldClose = false;
+    bool initialSizeConstrained = false;
 
+    i32 bufferScale = 1;
     u32 seatVersion = 0;
 
     i32 repeatRate = 25;
@@ -102,12 +105,35 @@ static void SetWaylandContext(Common::LinuxFrame& frameData, WaylandContext* con
     frameData.nativeState() = context;
 }
 
-static u16 ClampDimension(i32 value){
-    if(value <= 0)
+static i32 ClampBufferScale(i32 value){
+    return value > 1 ? value : 1;
+}
+
+static void ApplyBufferScale(WaylandContext& context, i32 value){
+    context.bufferScale = ClampBufferScale(value);
+    if(context.surface)
+        wl_surface_set_buffer_scale(context.surface, context.bufferScale);
+}
+
+static i32 LogicalDimensionForPixels(u16 pixelDimension, i32 bufferScale){
+    const i32 scale = ClampBufferScale(bufferScale);
+    const i32 pixels = pixelDimension > 0u ? static_cast<i32>(pixelDimension) : 1;
+    return (pixels + scale - 1) / scale;
+}
+
+static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale){
+    if(logicalDimension <= 0)
         return 0;
-    if(static_cast<u32>(value) > s_MaxU16)
+
+    const u64 pixels = static_cast<u64>(logicalDimension) * static_cast<u64>(ClampBufferScale(bufferScale));
+    if(pixels > static_cast<u64>(s_MaxU16))
         return static_cast<u16>(s_MaxU16);
-    return static_cast<u16>(value);
+
+    return static_cast<u16>(pixels);
+}
+
+static f64 SurfaceCoordinateToPixels(wl_fixed_t value, i32 bufferScale){
+    return wl_fixed_to_double(value) * static_cast<f64>(ClampBufferScale(bufferScale));
 }
 
 static i32 TranslateModifiers(const WaylandContext& context){
@@ -237,6 +263,10 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData){
         wl_seat_destroy(context->seat);
         context->seat = nullptr;
     }
+    if(context->output){
+        wl_output_destroy(context->output);
+        context->output = nullptr;
+    }
     if(context->toplevel){
         xdg_toplevel_destroy(context->toplevel);
         context->toplevel = nullptr;
@@ -276,12 +306,69 @@ static void DestroyWaylandContext(Common::LinuxFrame& frameData){
     frameData.setActive(false);
 }
 
+static void OnOutputGeometry(
+    void* data,
+    wl_output* output,
+    i32 x,
+    i32 y,
+    i32 physicalWidth,
+    i32 physicalHeight,
+    i32 subpixel,
+    const char* make,
+    const char* model,
+    i32 transform
+){
+    static_cast<void>(data);
+    static_cast<void>(output);
+    static_cast<void>(x);
+    static_cast<void>(y);
+    static_cast<void>(physicalWidth);
+    static_cast<void>(physicalHeight);
+    static_cast<void>(subpixel);
+    static_cast<void>(make);
+    static_cast<void>(model);
+    static_cast<void>(transform);
+}
+
+static void OnOutputMode(void* data, wl_output* output, u32 flags, i32 width, i32 height, i32 refresh){
+    static_cast<void>(data);
+    static_cast<void>(output);
+    static_cast<void>(flags);
+    static_cast<void>(width);
+    static_cast<void>(height);
+    static_cast<void>(refresh);
+}
+
+static void OnOutputDone(void* data, wl_output* output){
+    static_cast<void>(data);
+    static_cast<void>(output);
+}
+
+static void OnOutputScale(void* data, wl_output* output, i32 factor){
+    static_cast<void>(output);
+
+    auto& context = *static_cast<WaylandContext*>(data);
+    ApplyBufferScale(context, factor);
+}
+
+static const wl_output_listener s_OutputListener = {
+    &OnOutputGeometry,
+    &OnOutputMode,
+    &OnOutputDone,
+    &OnOutputScale,
+};
+
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interface, u32 version){
     auto& context = *static_cast<WaylandContext*>(data);
 
     if(NWB_STRCMP(interface, wl_compositor_interface.name) == 0){
         const u32 bindVersion = version < 4 ? version : 4;
         context.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, bindVersion));
+    }
+    else if(NWB_STRCMP(interface, wl_output_interface.name) == 0 && !context.output){
+        const u32 bindVersion = version < 2 ? version : 2;
+        context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
+        wl_output_add_listener(context.output, &s_OutputListener, &context);
     }
     else if(NWB_STRCMP(interface, wl_seat_interface.name) == 0){
         const u32 bindVersion = version < 5 ? version : 5;
@@ -312,6 +399,12 @@ static void OnXdgSurfaceConfigure(void* data, xdg_surface* xdgSurface, u32 seria
     context.configured = true;
     context.visible = !context.shouldClose;
 
+    if(context.initialSizeConstrained && context.toplevel){
+        xdg_toplevel_set_min_size(context.toplevel, 0, 0);
+        xdg_toplevel_set_max_size(context.toplevel, 0, 0);
+        context.initialSizeConstrained = false;
+    }
+
     if(context.surface)
         wl_surface_commit(context.surface);
 }
@@ -323,9 +416,9 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
     auto& frameData = context.frame->data<Common::LinuxFrame>();
 
     if(width > 0)
-        frameData.width() = ClampDimension(width);
+        frameData.width() = PixelDimensionForLogical(width, context.bufferScale);
     if(height > 0)
-        frameData.height() = ClampDimension(height);
+        frameData.height() = PixelDimensionForLogical(height, context.bufferScale);
 
     bool activated = false;
     if(states && states->data && states->size >= sizeof(u32)){
@@ -381,7 +474,10 @@ static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surfa
     static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    context.frame->input().mousePosUpdate(
+        SurfaceCoordinateToPixels(sx, context.bufferScale),
+        SurfaceCoordinateToPixels(sy, context.bufferScale)
+    );
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
@@ -396,7 +492,10 @@ static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_
     static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
-    context.frame->input().mousePosUpdate(wl_fixed_to_double(sx), wl_fixed_to_double(sy));
+    context.frame->input().mousePosUpdate(
+        SurfaceCoordinateToPixels(sx, context.bufferScale),
+        SurfaceCoordinateToPixels(sy, context.bufferScale)
+    );
 }
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
@@ -842,6 +941,7 @@ bool InitWaylandFrame(Frame& frame){
         CleanupWaylandFrame(frame);
         return false;
     }
+    ApplyBufferScale(*context, context->bufferScale);
     SetWaylandSurface(frameData, context->surface);
 
     context->xdgSurface = xdg_wm_base_get_xdg_surface(context->wmBase, context->surface);
@@ -861,6 +961,17 @@ bool InitWaylandFrame(Frame& frame){
     xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context);
     xdg_toplevel_set_title(context->toplevel, AppName);
     xdg_toplevel_set_app_id(context->toplevel, AppName);
+    xdg_toplevel_set_min_size(
+        context->toplevel,
+        LogicalDimensionForPixels(frameData.width(), context->bufferScale),
+        LogicalDimensionForPixels(frameData.height(), context->bufferScale)
+    );
+    xdg_toplevel_set_max_size(
+        context->toplevel,
+        LogicalDimensionForPixels(frameData.width(), context->bufferScale),
+        LogicalDimensionForPixels(frameData.height(), context->bufferScale)
+    );
+    context->initialSizeConstrained = true;
 
     wl_surface_commit(context->surface);
     if(wl_display_flush(context->display) == -1 && errno != EAGAIN){

@@ -75,7 +75,7 @@ SkinnedMeshRuntimeMeshCache::SkinnedMeshRuntimeMeshCache(Core::Alloc::GlobalAren
 {}
 
 
-void SkinnedMeshRuntimeMeshCache::update(Core::ECS::World& world){
+void SkinnedMeshRuntimeMeshCache::prepareResources(Core::ECS::World& world){
     auto skinnedMeshView = world.view<SkinnedMeshComponent>();
     const usize rendererCandidateCount = skinnedMeshView.candidateCount();
     if(rendererCandidateCount == 0u){

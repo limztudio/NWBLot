@@ -127,6 +127,7 @@ public:
 
 public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
+    virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
 
@@ -138,6 +139,11 @@ private:
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool dispatchRuntimeMesh(
         Core::CommandList& commandList,
+        SkinnedMeshRuntimeMeshInstance& instance,
+        const SkinnedMeshJointPaletteComponent* jointPalette,
+        const SkinnedMeshSkeletonPoseComponent* skeletonPose
+    );
+    [[nodiscard]] bool prepareRuntimeMeshResources(
         SkinnedMeshRuntimeMeshInstance& instance,
         const SkinnedMeshJointPaletteComponent* jointPalette,
         const SkinnedMeshSkeletonPoseComponent* skeletonPose

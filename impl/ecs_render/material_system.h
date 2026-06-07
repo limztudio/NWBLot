@@ -44,6 +44,13 @@ public:
         Core::BindingSet* passBindingSet,
         const AvboitFrameTargets* avboitTargets
     );
+    [[nodiscard]] bool prepareMaterialPassResources(
+        Core::Framebuffer* framebuffer,
+        MaterialPipelinePass::Enum pass,
+        bool transparent,
+        const CsgFrameState& csgFrameState,
+        const AvboitFrameTargets* avboitTargets
+    );
     void gatherMaterialPassDrawItems(
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
@@ -77,6 +84,9 @@ public:
     );
     void pruneMaterialInstanceMutableCache();
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
+    [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
+    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareMaterialPassDrawResources(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems);
@@ -93,6 +103,10 @@ public:
         const InstanceGpuDataVector& instanceData,
         const MaterialTypedByteDataVector& materialTypedBytes
     );
+    [[nodiscard]] bool materialPassDrawBuffersReady(
+        const InstanceGpuDataVector& instanceData,
+        const MaterialTypedByteDataVector& materialTypedBytes
+    )const;
     [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialTypedBuffer(Core::CommandList& commandList, const MaterialTypedByteDataVector& materialTypedBytes);
     [[nodiscard]] bool uploadMaterialPassDrawBuffers(

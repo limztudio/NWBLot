@@ -32,6 +32,7 @@ public:
         Core::Format::Enum transmittanceFormat
     );
     [[nodiscard]] bool createAvboitFrameTargetBindingSets(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
+    [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets);

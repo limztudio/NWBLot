@@ -88,7 +88,55 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     return m_csgSystem.createCsgIntervalPeelResources(deferredTargets);
 }
 
+bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
+    if(!framebuffer)
+        return false;
+
+    m_meshSystem.pruneRuntimeMeshResources();
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
+
+    if(!m_deferredState.m_targets.valid())
+        return true;
+    DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
+
+    Core::Alloc::ScratchArena scratchArena;
+    m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)
+        ? m_csgSystem.buildFrameState(scratchArena)
+        : CsgFrameState{}
+    ;
+    m_preparedCsgFrameStateValid = true;
+    const bool hasCsgFrameWork = !m_preparedCsgFrameState.empty();
+    if(
+        hasCsgFrameWork
+        && (
+            !deferredTargets.csgCapBackNormal
+            || !deferredTargets.csgIntervalDepth
+            || !deferredTargets.csgIntervalId
+            || !deferredTargets.csgReceiverSurfaceMask
+            || !deferredTargets.csgReceiverBackSurfaceMask
+        )
+    )
+        return false;
+
+    if(!m_materialSystem.prepareMaterialPassResources(
+        deferredTargets.framebuffer.get(),
+        MaterialPipelinePass::Opaque,
+        false,
+        m_preparedCsgFrameState,
+        nullptr
+    ))
+        return false;
+
+    if(m_materialSystem.hasTransparentRenderers())
+        return m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState);
+
+    return true;
+}
+
 void RendererSystem::invalidateResources(){
+    m_preparedCsgFrameState = CsgFrameState{};
+    m_preparedCsgFrameStateValid = false;
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
@@ -101,17 +149,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
-    m_meshSystem.pruneRuntimeMeshResources();
-
     if(!m_deferredState.m_targets.valid())
         return;
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
+    if(!m_preparedCsgFrameStateValid)
+        return;
+
     Core::Alloc::ScratchArena scratchArena;
-    const CsgFrameState csgFrameState = HasCsgFrameCandidates(m_world)
-        ? m_csgSystem.buildFrameState(scratchArena)
-        : CsgFrameState{}
-    ;
+    const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasCsgFrameWork = !csgFrameState.empty();
     if(
         hasCsgFrameWork
@@ -167,23 +213,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
     const bool deferredResourcesReady =
         hasDeferredDrawItems
-        && m_materialSystem.prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes)
+        && m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
     ;
     const bool regularDrawResourcesReady =
         deferredResourcesReady
-        && m_materialSystem.prepareMaterialPassDrawResources(opaqueDrawItems.regular)
+        && m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
     ;
     const bool csgResourcesReady =
         deferredResourcesReady
-        && (opaqueDrawItems.csg.empty() || m_csgSystem.prepareCsgFrameBuffers(csgFrameData))
+        && (opaqueDrawItems.csg.empty() || m_csgSystem.csgFrameBuffersReady(csgFrameData))
     ;
     const bool csgDrawResourcesReady =
         csgResourcesReady
-        && (opaqueDrawItems.csg.empty() || m_materialSystem.prepareMaterialPassDrawResources(opaqueDrawItems.csg))
+        && (opaqueDrawItems.csg.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
     ;
     const bool csgReceiverSurfaceDrawResourcesReady =
         csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty() || m_materialSystem.prepareMaterialPassDrawResources(opaqueDrawItems.csgReceiverSurface))
+        && (opaqueDrawItems.csgReceiverSurface.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
     ;
     const bool deferredUploadReady =
         deferredResourcesReady

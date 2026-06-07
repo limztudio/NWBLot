@@ -182,6 +182,39 @@ void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, Av
     commandList.clearTextureFloat(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
+bool RendererAvboitSystem::prepareAvboitPassResources(
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState
+){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
+    if(!avboitTargets.valid())
+        return false;
+
+    return
+        m_renderer.materialSystem().prepareMaterialPassResources(
+            avboitTargets.lowFramebuffer.get(),
+            MaterialPipelinePass::AvboitOccupancy,
+            true,
+            csgFrameState,
+            &avboitTargets
+        )
+        && m_renderer.materialSystem().prepareMaterialPassResources(
+            avboitTargets.lowFramebuffer.get(),
+            MaterialPipelinePass::AvboitExtinction,
+            true,
+            csgFrameState,
+            &avboitTargets
+        )
+        && m_renderer.materialSystem().prepareMaterialPassResources(
+            avboitTargets.accumulationFramebuffer.get(),
+            MaterialPipelinePass::AvboitAccumulate,
+            true,
+            csgFrameState,
+            &avboitTargets
+        )
+    ;
+}
+
 void RendererAvboitSystem::renderAvboitPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,

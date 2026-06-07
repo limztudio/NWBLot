@@ -88,7 +88,7 @@ public:
 
 
 public:
-    void update(Core::ECS::World& world);
+    void prepareResources(Core::ECS::World& world);
     void clear();
 
     [[nodiscard]] RuntimeMeshHandle handleForEntity(Core::ECS::EntityID entity)const;

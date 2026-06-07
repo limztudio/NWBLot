@@ -207,6 +207,34 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
     return true;
 }
 
+static bool HasTextureRequests(const ImDrawData& drawData){
+#if defined(IMGUI_HAS_TEXTURES)
+    if(!drawData.Textures)
+        return false;
+
+    for(i32 i = 0; i < drawData.Textures->Size; ++i){
+        const ImTextureData* textureData = drawData.Textures->Data[i];
+        if(!textureData)
+            continue;
+
+        switch(textureData->Status){
+        case ImTextureStatus_WantCreate:
+        case ImTextureStatus_WantUpdates:
+        case ImTextureStatus_WantDestroy:
+            return true;
+        case ImTextureStatus_OK:
+        case ImTextureStatus_Destroyed:
+        default:
+            break;
+        }
+    }
+#else
+    static_cast<void>(drawData);
+#endif
+
+    return false;
+}
+
 static Core::ShaderHandle CreateShaderFromAsset(
     Core::GraphicsArena& arena,
     Core::Graphics& graphics,
@@ -401,6 +429,68 @@ void UiSystem::finishFrame(){
     m_frameFinished = true;
 }
 
+bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
+    static_cast<void>(sampleCount);
+    if(width == 0 || height == 0)
+        return true;
+
+    Core::Framebuffer* framebuffer = m_graphics.getCurrentFramebuffer();
+    return !framebuffer || ensureRenderResources(framebuffer);
+}
+
+bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
+    if(!framebuffer)
+        return false;
+
+    setCurrentContext();
+    if(m_frameStarted && !m_frameFinished)
+        finishFrame();
+    if(!m_frameFinished)
+        return true;
+
+    ImDrawData* drawData = ImGui::GetDrawData();
+    if(!drawData)
+        return true;
+
+    const SIMDVector framebufferExtent = VectorMultiply(
+        VectorSet(drawData->DisplaySize.x, drawData->DisplaySize.y, 0.0f, 0.0f),
+        VectorSet(drawData->FramebufferScale.x, drawData->FramebufferScale.y, 0.0f, 0.0f)
+    );
+    const i32 framebufferWidth = static_cast<i32>(VectorGetX(framebufferExtent));
+    const i32 framebufferHeight = static_cast<i32>(VectorGetY(framebufferExtent));
+    if(framebufferWidth <= 0 || framebufferHeight <= 0){
+        m_frameStarted = false;
+        m_frameFinished = false;
+        return true;
+    }
+
+    if(!ensureRenderResources(framebuffer))
+        return false;
+
+    if(__hidden_ui::HasTextureRequests(*drawData)){
+        auto* device = m_graphics.getDevice();
+        Core::CommandListHandle commandList = device->createCommandList();
+        if(!commandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create preparation command list"));
+            return false;
+        }
+
+        commandList->open();
+        const bool texturesReady = processTextureRequests(*commandList, *drawData);
+        commandList->close();
+        if(!texturesReady)
+            return false;
+
+        Core::CommandList* commandLists[] = { commandList.get() };
+        device->executeCommandLists(commandLists, 1);
+    }
+
+    return ensureBuffers(
+        static_cast<usize>(drawData->TotalVtxCount),
+        static_cast<usize>(drawData->TotalIdxCount)
+    );
+}
+
 void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
@@ -427,7 +517,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(!ensureRenderResources(framebuffer))
+    if(!m_pipeline)
         return;
 
     auto* device = m_graphics.getDevice();
@@ -438,7 +528,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     }
 
     commandList->open();
-    const bool success = processTextureRequests(*commandList, *drawData) && uploadDrawBuffers(*commandList, *drawData);
+    const bool success = uploadDrawBuffers(*commandList, *drawData);
     if(success)
         renderDrawData(*commandList, framebuffer, *drawData);
 
@@ -701,6 +791,18 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     return true;
 }
 
+bool UiSystem::drawBuffersReady(const usize vertexCount, const usize indexCount)const{
+    if(vertexCount == 0 || indexCount == 0)
+        return true;
+
+    return
+        m_vertexBuffer
+        && m_indexBuffer
+        && m_vertexBufferCapacity >= vertexCount
+        && m_indexBufferCapacity >= indexCount
+    ;
+}
+
 bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData){
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
@@ -842,8 +944,11 @@ bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& dra
     const usize indexCount = static_cast<usize>(drawData.TotalIdxCount);
     if(vertexCount == 0 || indexCount == 0)
         return true;
-    if(!ensureBuffers(vertexCount, indexCount))
+
+    if(!drawBuffersReady(vertexCount, indexCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: draw buffers were not prepared before render"));
         return false;
+    }
 
     u64 vertexByteOffset = 0u;
     u64 indexByteOffset = 0u;

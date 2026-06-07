@@ -36,6 +36,73 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources&
 #endif
 }
 
+bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems){
+    return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems)
+        && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems)
+    ;
+}
+
+bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        MeshResources* mesh = nullptr;
+        MaterialPipelineResources* pipelineResources = nullptr;
+        if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
+            return false;
+        NWB_ASSERT(mesh);
+        NWB_ASSERT(pipelineResources);
+        if(!materialPassDrawResourcesReady(*mesh) || !pipelineResources->meshletPipeline || !mesh->meshBindingSet){
+            return false;
+        }
+
+        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        if(csgClipDraw && !csgState().m_clipBindingSet)
+            return false;
+        if(
+            csgClipDraw
+            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
+            && !csgState().m_receiverSurfaceBindingSet
+        )
+            return false;
+    }
+    return true;
+}
+
+bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
+    if(drawItems.empty())
+        return true;
+    if(!drawState().m_emulationViewBindingSet)
+        return false;
+
+    for(const MaterialPassDrawItem& drawItem : drawItems){
+        MeshResources* mesh = nullptr;
+        MaterialPipelineResources* pipelineResources = nullptr;
+        if(!findMaterialPassDrawItemResources(drawItem, mesh, pipelineResources))
+            return false;
+        NWB_ASSERT(mesh);
+        NWB_ASSERT(pipelineResources);
+        if(
+            !materialPassDrawResourcesReady(*mesh)
+            || !pipelineResources->computePipeline
+            || !pipelineResources->emulationPipeline
+            || !mesh->computeBindingSet
+            || !mesh->emulationVertexBuffer
+        ){
+            return false;
+        }
+
+        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
+        if(csgClipDraw && !csgState().m_clipBindingSet)
+            return false;
+        if(
+            csgClipDraw
+            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
+            && !csgState().m_receiverSurfaceBindingSet
+        )
+            return false;
+    }
+    return true;
+}
+
 bool RendererMaterialSystem::prepareMaterialPassDrawResources(const MaterialPassDrawItems& drawItems){
     return prepareMeshMaterialPassDrawResources(drawItems.meshDrawItems)
         && prepareComputeMaterialPassDrawResources(drawItems.computeDrawItems)

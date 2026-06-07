@@ -242,6 +242,29 @@ bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(
     return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
 
+bool RendererMaterialSystem::materialPassDrawBuffersReady(
+    const InstanceGpuDataVector& instanceData,
+    const MaterialTypedByteDataVector& materialTypedBytes
+)const{
+    usize uploadBytes = 0u;
+    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
+        return false;
+
+    usize requiredMaterialTypedBytes = Max<usize>(uploadBytes, sizeof(u32));
+#if defined(NWB_DEBUG)
+    if(!AlignUpChecked(requiredMaterialTypedBytes, sizeof(u32), requiredMaterialTypedBytes))
+        return false;
+#else
+    requiredMaterialTypedBytes = AlignUp(requiredMaterialTypedBytes, sizeof(u32));
+#endif
+
+    return
+        (instanceData.empty() || (drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceData.size()))
+        && drawState().m_materialTypedBuffer
+        && drawState().m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
+    ;
+}
+
 bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;

@@ -92,6 +92,7 @@ public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
 
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
+    virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
     virtual void render(Core::Framebuffer* framebuffer)override;
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
@@ -130,6 +131,8 @@ private:
     RendererCsgState m_csgState;
     RendererDeferredState m_deferredState;
     RendererAvboitState m_avboitState;
+    CsgFrameState m_preparedCsgFrameState;
+    bool m_preparedCsgFrameStateValid = false;
 
 private:
     RendererShaderSystem m_shaderSystem;

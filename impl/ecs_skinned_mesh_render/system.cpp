@@ -94,9 +94,39 @@ SkinnedMeshSystem::~SkinnedMeshSystem(){
 }
 
 void SkinnedMeshSystem::update(Core::ECS::World& world, const f32 delta){
+    static_cast<void>(world);
     static_cast<void>(delta);
-    m_runtimeMeshCache.update(world);
+}
+
+bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
+    static_cast<void>(framebuffer);
+
+    m_runtimeMeshCache.prepareResources(m_world);
     pruneRuntimeResources();
+
+    bool ready = true;
+    m_world.view<SkinnedMeshComponent>().each(
+        [&](Core::ECS::EntityID entity, SkinnedMeshComponent& renderer){
+            if(!ready)
+                return;
+            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !renderer.runtimeMesh.valid())
+                return;
+
+            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer.runtimeMesh);
+            if(!instance)
+                return;
+#if defined(NWB_DEBUG)
+            if(!instance->valid())
+                return;
+#endif
+
+            const SkinnedMeshJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkinnedMeshJointPaletteComponent>(entity);
+            const SkinnedMeshSkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkinnedMeshSkeletonPoseComponent>(entity);
+            ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
+        }
+    );
+
+    return ready;
 }
 
 bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){

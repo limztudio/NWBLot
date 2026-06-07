@@ -73,6 +73,63 @@ struct MaterialTypedByteRangeKeyHasher{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererMaterialSystem::prepareMaterialPassResources(
+    Core::Framebuffer* framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    const bool transparent,
+    const CsgFrameState& csgFrameState,
+    const AvboitFrameTargets* avboitTargets
+){
+    if(!framebuffer)
+        return false;
+
+    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
+    if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
+        return false;
+
+    Core::Alloc::ScratchArena scratchArena;
+    MaterialPassDrawItemPartitions drawItems{scratchArena};
+    InstanceGpuDataVector instanceData{scratchArena};
+    CsgFrameGpuData csgFrameData{scratchArena};
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
+#endif
+    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
+
+    gatherMaterialPassDrawItems(
+        framebuffer,
+        pass,
+        transparent,
+        csgFrameState,
+        drawItems,
+        instanceData,
+        csgFrameData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes
+    );
+    if(drawItems.empty())
+        return true;
+
+    const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
+    const bool regularDrawResourcesReady = prepareMaterialPassDrawResources(drawItems.regular);
+    const bool csgResourcesReady = drawItems.csg.empty() || m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
+    const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || prepareMaterialPassDrawResources(drawItems.csg));
+    const bool csgReceiverSurfaceDrawResourcesReady =
+        csgResourcesReady
+        && (drawItems.csgReceiverSurface.empty() || prepareMaterialPassDrawResources(drawItems.csgReceiverSurface))
+    ;
+
+    return
+        drawBuffersReady
+        && regularDrawResourcesReady
+        && csgResourcesReady
+        && csgDrawResourcesReady
+        && csgReceiverSurfaceDrawResourcesReady
+    ;
+}
+
 void RendererMaterialSystem::renderMaterialPass(
     Core::CommandList& commandList,
     Core::Framebuffer* framebuffer,
@@ -123,11 +180,11 @@ void RendererMaterialSystem::renderMaterialPass(
         meshViewAspectRatio = ECSRenderDetail::ResolveExtentAspectRatio(avboitTargets->fullWidth, avboitTargets->fullHeight);
     if(!m_renderer.meshSystem().updateMeshViewBuffer(commandList, meshViewAspectRatio))
         return;
-    if(!prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes))
+    if(!materialPassDrawBuffersReady(instanceData, materialTypedBytes))
         return;
-    const bool regularDrawResourcesReady = prepareMaterialPassDrawResources(drawItems.regular);
-    const bool csgResourcesReady = drawItems.csg.empty() || m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
-    const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || prepareMaterialPassDrawResources(drawItems.csg));
+    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular);
+    const bool csgResourcesReady = drawItems.csg.empty() || m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg));
     if(!uploadMaterialPassDrawBuffers(
         commandList,
         instanceData,

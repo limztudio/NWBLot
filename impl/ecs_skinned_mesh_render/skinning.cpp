@@ -88,6 +88,51 @@ static void SetSkinnedBufferStates(
     commandList.setBufferState(instance.skinnedTangentBuffer.get(), state);
 }
 
+struct RuntimeSkinPayloadScratch{
+    Vector<SkinnedMeshSkinInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
+    Vector<SkinnedMeshJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
+    u32 resolvedSkinningMode = SkinnedMeshSkinningMode::LinearBlend;
+
+    explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
+        : skinInfluences(scratchArena)
+        , jointMatrices(scratchArena)
+    {}
+
+    [[nodiscard]] bool hasActiveSkin()const{
+        return !skinInfluences.empty() && !jointMatrices.empty();
+    }
+};
+
+static bool BuildRuntimeSkinPayload(
+    SkinnedMeshRuntimeMeshInstance& instance,
+    const SkinnedMeshJointPaletteComponent* jointPalette,
+    const SkinnedMeshSkeletonPoseComponent* skeletonPose,
+    RuntimeSkinPayloadScratch& payload
+){
+    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkinnedMeshSkinningMode::LinearBlend;
+    if(SkinnedMeshRuntime::HasSkeletonPose(skeletonPose)){
+        Vector<SkinnedMeshJointMatrix, Core::Alloc::ScratchArena> poseJoints{ payload.skinInfluences.get_allocator().arena() };
+        if(!SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, payload.resolvedSkinningMode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
+            return false;
+        }
+        return SkinnedMeshSkinPayload::BuildSkinPayloadFromJointMatrices(
+            instance,
+            poseJoints,
+            payload.resolvedSkinningMode,
+            payload.skinInfluences,
+            payload.jointMatrices
+        );
+    }
+
+    return SkinnedMeshSkinPayload::BuildSkinPayload(
+        instance,
+        jointPalette,
+        payload.skinInfluences,
+        payload.jointMatrices
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -98,6 +143,49 @@ static void SetSkinnedBufferStates(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool SkinnedMeshSystem::prepareRuntimeMeshResources(
+    SkinnedMeshRuntimeMeshInstance& instance,
+    const SkinnedMeshJointPaletteComponent* jointPalette,
+    const SkinnedMeshSkeletonPoseComponent* skeletonPose
+){
+    Core::Alloc::ScratchArena scratchArena;
+    __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
+    if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
+        return false;
+
+    const bool hasActiveSkin = payload.hasActiveSkin();
+    RuntimePayloadViews payloadViews;
+    if(hasActiveSkin){
+        payloadViews.skinInfluences = payload.skinInfluences.data();
+        payloadViews.jointPalette = payload.jointMatrices.data();
+        payloadViews.skinInfluenceCount = payload.skinInfluences.size();
+        payloadViews.jointPaletteCount = payload.jointMatrices.size();
+    }
+
+    const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinnedMeshInputDirty) != 0u;
+    const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
+    const auto foundRuntimeResources = m_runtimeResources.find(instance.handle.value);
+    const bool hadSkinningResources = foundRuntimeResources != m_runtimeResources.end() && foundRuntimeResources.value().usesSkinning();
+    if(!hasActiveSkin && !skinnedMeshInputDirty && !meshletBoundsDirty && !hadSkinningResources)
+        return true;
+    if(instance.meshlets.empty())
+        return true;
+
+    if(hasActiveSkin && !ensureSkinningPipeline())
+        return false;
+    if(!ensureBoundsPipeline())
+        return false;
+
+    RuntimeResources* resources = nullptr;
+    bool resourcesRebuilt = false;
+    return ensureRuntimeResources(
+        instance,
+        payloadViews,
+        resources,
+        resourcesRebuilt
+    );
+}
+
 bool SkinnedMeshSystem::dispatchRuntimeMesh(
     Core::CommandList& commandList,
     SkinnedMeshRuntimeMeshInstance& instance,
@@ -105,37 +193,11 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     const SkinnedMeshSkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena scratchArena;
-    Vector<SkinnedMeshSkinInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences{ scratchArena };
-    Vector<SkinnedMeshJointMatrix, Core::Alloc::ScratchArena> jointMatrices{ scratchArena };
-    u32 resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkinnedMeshSkinningMode::LinearBlend;
-    if(SkinnedMeshRuntime::HasSkeletonPose(skeletonPose)){
-        Vector<SkinnedMeshJointMatrix, Core::Alloc::ScratchArena> poseJoints{ scratchArena };
-        if(!SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, resolvedSkinningMode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
-            return false;
-        }
-        if(!SkinnedMeshSkinPayload::BuildSkinPayloadFromJointMatrices(
-            instance,
-            poseJoints,
-            resolvedSkinningMode,
-            skinInfluences,
-            jointMatrices
-        ))
-            return false;
-    }
-    else{
-        if(!SkinnedMeshSkinPayload::BuildSkinPayload(instance, jointPalette, skinInfluences, jointMatrices))
-            return false;
-    }
+    __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
+    if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
+        return false;
 
-    const bool hasActiveSkin = !skinInfluences.empty() && !jointMatrices.empty();
-    RuntimePayloadViews payloadViews;
-    if(hasActiveSkin){
-        payloadViews.skinInfluences = skinInfluences.data();
-        payloadViews.jointPalette = jointMatrices.data();
-        payloadViews.skinInfluenceCount = skinInfluences.size();
-        payloadViews.jointPaletteCount = jointMatrices.size();
-    }
+    const bool hasActiveSkin = payload.hasActiveSkin();
 
     const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinnedMeshInputDirty) != 0u;
     const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
@@ -146,20 +208,14 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     if(instance.meshlets.empty())
         return false;
 
-    if(hasActiveSkin && !ensureSkinningPipeline())
+    if(hasActiveSkin && (!m_skinningBindingLayout || !m_skinningComputePipeline))
         return false;
-    if(!ensureBoundsPipeline())
+    if(!m_boundsBindingLayout || !m_boundsComputePipeline)
         return false;
 
-    RuntimeResources* resources = nullptr;
-    bool resourcesRebuilt = false;
-    if(!ensureRuntimeResources(
-        instance,
-        payloadViews,
-        resources,
-        resourcesRebuilt
-    ))
+    if(foundRuntimeResources == m_runtimeResources.end())
         return false;
+    RuntimeResources* resources = &foundRuntimeResources.value();
 #if defined(NWB_DEBUG)
     if(
         !resources
@@ -198,19 +254,17 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     }
 
     usize jointPaletteBytes = 0;
-    if(!resourcesRebuilt){
-        if(!__hidden_skinning::BufferPayloadBytes(
-            jointMatrices.size(),
-            sizeof(SkinnedMeshJointMatrix),
-            jointPaletteBytes,
-            NWB_TEXT("joint palette")
-        ))
-            return false;
+    if(!__hidden_skinning::BufferPayloadBytes(
+        payload.jointMatrices.size(),
+        sizeof(SkinnedMeshJointMatrix),
+        jointPaletteBytes,
+        NWB_TEXT("joint palette")
+    ))
+        return false;
 
-        commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(resources->jointPaletteBuffer.get(), jointMatrices.data(), jointPaletteBytes);
-    }
+    commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(resources->jointPaletteBuffer.get(), payload.jointMatrices.data(), jointPaletteBytes);
 
     __hidden_skinning::SetRestBufferStates(
         commandList,
@@ -237,9 +291,9 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
 
     SkinnedMeshPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
-    pushConstants.skinCount = static_cast<u32>(skinInfluences.size());
-    pushConstants.jointCount = static_cast<u32>(jointMatrices.size());
-    pushConstants.skinningMode = resolvedSkinningMode;
+    pushConstants.skinCount = static_cast<u32>(payload.skinInfluences.size());
+    pushConstants.jointCount = static_cast<u32>(payload.jointMatrices.size());
+    pushConstants.skinningMode = payload.resolvedSkinningMode;
     pushConstants.attributeCount = instance.meshletAttributeRefCount;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {

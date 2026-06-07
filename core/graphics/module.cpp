@@ -573,8 +573,14 @@ void Graphics::render(){
     if(auto* device = getDevice())
         m_gpuTiming.collect(*device);
 
-    for(auto* renderPass : m_renderPasses)
+    for(auto* renderPass : m_renderPasses){
+        if(!renderPass->prepareResources(framebuffer)){
+            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: render pass skipped after resource preparation failed"));
+            continue;
+        }
+
         renderPass->render(framebuffer);
+    }
 }
 
 void Graphics::updateAverageFrameTime(f64 elapsedTime){

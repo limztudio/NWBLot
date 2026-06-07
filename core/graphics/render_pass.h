@@ -31,6 +31,7 @@ public:
     virtual void setLatewarpOptions(){}
     virtual bool shouldRenderUnfocused(){ return false; }
     virtual bool validateResources(u32, u32, u32){ return true; }
+    virtual bool prepareResources(Framebuffer*){ return true; }
     virtual void invalidateResources(){}
     virtual void render(Framebuffer*){}
     virtual void animate(f32){}

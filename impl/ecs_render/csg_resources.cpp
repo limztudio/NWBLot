@@ -222,6 +222,29 @@ bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameDa
     return true;
 }
 
+bool RendererCsgSystem::csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const{
+    if(!csgFrameData.hasWork())
+        return true;
+
+    usize requiredParameterBytes = Max<usize>(csgFrameData.parameterBytes.size(), sizeof(u32));
+#if defined(NWB_DEBUG)
+    if(!AlignUpChecked(requiredParameterBytes, sizeof(u32), requiredParameterBytes))
+        return false;
+#else
+    requiredParameterBytes = AlignUp(requiredParameterBytes, sizeof(u32));
+#endif
+
+    return
+        csgState().m_receiverRangeBuffer
+        && csgState().m_receiverRangeBufferCapacity >= csgFrameData.receiverRanges.size()
+        && csgState().m_cutterBuffer
+        && csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size()
+        && csgState().m_parameterByteBuffer
+        && csgState().m_parameterByteBufferCapacity >= requiredParameterBytes
+        && csgState().m_clipBindingSet
+    ;
+}
+
 bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
     if(!csgFrameData.hasWork())
         return true;

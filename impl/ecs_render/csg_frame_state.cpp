@@ -59,15 +59,13 @@ CsgFrameState RendererCsgSystem::buildFrameState(Core::Alloc::ScratchArena& scra
             if(!receiverLookup.resolveReceiverDrawState(entity, pass, drawState) || drawState.receiverKind != receiverKind)
                 return 0u;
 
-            const u32 cutterCount = countCsgReceiverClipCutters(receiverLookup, entity, mesh->csgLocalBounds, transform);
-            if(cutterCount == 0u)
+            CsgReceiverClipDrawInfo clipInfo;
+            if(!resolveCsgReceiverClipDrawInfo(receiverLookup, entity, mesh->csgLocalBounds, transform, clipInfo))
+                return 0u;
+            if(clipInfo.cutterCount == 0u)
                 return 0u;
 
-            Name evaluatorVariant = NAME_NONE;
-            if(!resolveCsgReceiverEvaluatorVariant(receiverLookup, entity, mesh->csgLocalBounds, transform, evaluatorVariant))
-                return 0u;
-
-            return cutterCount;
+            return clipInfo.cutterCount;
         };
 
         const u32 opaqueCutterCount =

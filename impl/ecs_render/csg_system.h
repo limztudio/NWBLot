@@ -37,18 +37,12 @@ public:
     [[nodiscard]] bool prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
-    [[nodiscard]] bool resolveCsgReceiverEvaluatorVariant(
+    [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
         Core::ECS::EntityID entity,
         const CsgReceiverCpuBounds& receiverBounds,
         const NWB::Impl::Scene::TransformComponent* transform,
-        Name& outEvaluatorVariant
-    )const;
-    [[nodiscard]] u32 countCsgReceiverClipCutters(
-        const CsgFrameReceiverLookup& receiverLookup,
-        Core::ECS::EntityID entity,
-        const CsgReceiverCpuBounds& receiverBounds,
-        const NWB::Impl::Scene::TransformComponent* transform
+        CsgReceiverClipDrawInfo& outInfo
     )const;
     [[nodiscard]] bool appendCsgReceiverClipData(
         const CsgFrameReceiverLookup& receiverLookup,

@@ -279,14 +279,14 @@ void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(csgState().m_parameterByteBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
-bool RendererCsgSystem::resolveCsgReceiverEvaluatorVariant(
+bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     const CsgFrameReceiverLookup& receiverLookup,
     const Core::ECS::EntityID entity,
     const CsgReceiverCpuBounds& receiverBounds,
     const Scene::TransformComponent* transform,
-    Name& outEvaluatorVariant
+    CsgReceiverClipDrawInfo& outInfo
 )const{
-    outEvaluatorVariant = NAME_NONE;
+    outInfo = CsgReceiverClipDrawInfo{};
 
     bool resolved = true;
     receiverLookup.forEachReceiverCutter(
@@ -303,42 +303,23 @@ bool RendererCsgSystem::resolveCsgReceiverEvaluatorVariant(
                 resolved = false;
                 return;
             }
-            if(!shapeType.desc.shaderModule)
+            const u8* parameterBytes = nullptr;
+            usize parameterByteSize = 0u;
+            if(!ECSRenderCsgDetail::ResolveCsgCutterParameterBytes(shapeType, cutter, parameterBytes, parameterByteSize))
                 return;
-
-            if(!outEvaluatorVariant){
-                outEvaluatorVariant = shapeType.desc.shaderModule;
-                return;
+            if(shapeType.desc.shaderModule){
+                if(!outInfo.evaluatorVariant)
+                    outInfo.evaluatorVariant = shapeType.desc.shaderModule;
+                else if(outInfo.evaluatorVariant != shapeType.desc.shaderModule){
+                    resolved = false;
+                    return;
+                }
             }
-            if(outEvaluatorVariant != shapeType.desc.shaderModule)
-                resolved = false;
+            if(outInfo.cutterCount < Limit<u32>::s_Max)
+                ++outInfo.cutterCount;
         }
     );
     return resolved;
-}
-
-u32 RendererCsgSystem::countCsgReceiverClipCutters(
-    const CsgFrameReceiverLookup& receiverLookup,
-    const Core::ECS::EntityID entity,
-    const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform
-)const{
-    u32 cutterCount = 0u;
-    receiverLookup.forEachReceiverCutter(
-        entity,
-        [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
-            static_cast<void>(cutterEntity);
-            if(!__hidden_csg_resources::CsgCutterIntersectsReceiver(csgShapeRegistry(), cutter, receiverBounds, transform))
-                return;
-
-            CsgCutterGpuData unusedCutter;
-            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(csgShapeRegistry(), cutter, nullptr, unusedCutter))
-                return;
-            if(cutterCount < Limit<u32>::s_Max)
-                ++cutterCount;
-        }
-    );
-    return cutterCount;
 }
 
 bool RendererCsgSystem::appendCsgReceiverClipData(

@@ -293,30 +293,21 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             && csgReceiverState.active
             && MaterialPipelinePassUsesRendererCsgClip(pass, transparent)
         ;
-        const u32 csgClipCutterCount = csgClipCandidate
-            ? m_renderer.csgSystem().countCsgReceiverClipCutters(
-                *csgReceiverLookupPtr,
-                entity,
-                mesh.csgLocalBounds,
-                transform
-            )
-            : 0u
-        ;
-        Name csgEvaluatorVariant = NAME_NONE;
-        const bool csgEvaluatorReady = csgClipCutterCount > 0u
-            ? m_renderer.csgSystem().resolveCsgReceiverEvaluatorVariant(
+        CsgReceiverClipDrawInfo csgClipInfo;
+        const bool csgClipInfoReady =
+            csgClipCandidate
+            && m_renderer.csgSystem().resolveCsgReceiverClipDrawInfo(
                 *csgReceiverLookupPtr,
                 entity,
                 mesh.csgLocalBounds,
                 transform,
-                csgEvaluatorVariant
+                csgClipInfo
             )
-            : true
         ;
-        const bool csgClipActive = csgClipCutterCount > 0u && csgEvaluatorReady;
+        const bool csgClipActive = csgClipInfoReady && csgClipInfo.cutterCount > 0u;
         if(csgClipActive){
             pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
-            pipelineKey.csgEvaluatorVariant = csgEvaluatorVariant;
+            pipelineKey.csgEvaluatorVariant = csgClipInfo.evaluatorVariant;
             pipelineKey.twoSided = true;
         }
 
@@ -403,7 +394,6 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         drawItem.pipelineKey = pipelineKey;
         drawItem.instanceIndex = instanceIndex;
         drawItem.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
-        drawItem.csgCutterCount = csgClipActive ? csgRange.cutterCount : 0u;
         drawItem.meshletConeCullScaleSafe = transform
             ? __hidden_material_pass::MeshletConeCullScaleSafe(LoadFloat(transform->scale))
             : true

@@ -90,6 +90,11 @@ using CsgParameterByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct CsgReceiverClipDrawInfo{
+    u32 cutterCount = 0u;
+    Name evaluatorVariant = NAME_NONE;
+};
+
 struct CsgFrameGpuData{
     CsgReceiverRangeGpuDataVector receiverRanges;
     CsgCutterGpuDataVector cutters;

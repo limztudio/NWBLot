@@ -98,7 +98,6 @@ bool RendererCsgSystem::createCsgClipResources(){
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_RECEIVER_RANGES, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::RawBuffer_SRV(NWB_CSG_BINDING_PARAMETER_BYTES, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         csgState().m_clipBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -110,7 +109,7 @@ bool RendererCsgSystem::createCsgClipResources(){
 
     if(csgState().m_clipBindingSet)
         return true;
-    if(!csgState().m_receiverRangeBuffer || !csgState().m_cutterBuffer || !csgState().m_parameterByteBuffer)
+    if(!csgState().m_receiverRangeBuffer || !csgState().m_cutterBuffer)
         return true;
 
     Core::BindingSetDesc bindingSetDesc(arena());
@@ -119,7 +118,6 @@ bool RendererCsgSystem::createCsgClipResources(){
         csgState().m_receiverRangeBuffer.get()
     ));
     bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, csgState().m_cutterBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_SRV(NWB_CSG_BINDING_PARAMETER_BYTES, csgState().m_parameterByteBuffer.get()));
 
     csgState().m_clipBindingSet = device->createBindingSet(bindingSetDesc, csgState().m_clipBindingLayout);
     if(!csgState().m_clipBindingSet){
@@ -172,48 +170,12 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     return true;
 }
 
-bool RendererCsgSystem::reserveCsgParameterByteBufferCapacity(const usize byteCount){
-    usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
-#if defined(NWB_DEBUG)
-    if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG parameter byte buffer request overflows alignment"));
-        return false;
-    }
-#else
-    requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
-#endif
-    if(csgState().m_parameterByteBuffer && csgState().m_parameterByteBufferCapacity >= requiredByteCount)
-        return true;
-
-    const usize capacity = ECSRenderDetail::NextGrowingCapacity(csgState().m_parameterByteBufferCapacity, requiredByteCount);
-    Core::BufferDesc bufferDesc;
-    bufferDesc
-        .setByteSize(static_cast<u64>(capacity))
-        .setStructStride(sizeof(u32))
-        .setCanHaveRawViews(true)
-        .setDebugName(ECSRenderDetail::s_CsgParameterByteBufferName)
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
-    ;
-
-    Core::BufferHandle createdBuffer = graphics().createBuffer(bufferDesc);
-    if(!createdBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG parameter byte buffer"));
-        return false;
-    }
-
-    csgState().m_parameterByteBuffer = Move(createdBuffer);
-    csgState().m_parameterByteBufferCapacity = capacity;
-    destroyCsgClipBindingSet();
-    return true;
-}
-
 bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData){
     if(!csgFrameData.hasWork())
         return true;
     if(
         !reserveCsgReceiverRangeBufferCapacity(csgFrameData.receiverRanges.size())
         || !reserveCsgCutterBufferCapacity(csgFrameData.cutters.size())
-        || !reserveCsgParameterByteBufferCapacity(csgFrameData.parameterBytes.size())
     )
         return false;
     if(!csgState().m_clipBindingSet && !createCsgClipResources())
@@ -226,21 +188,11 @@ bool RendererCsgSystem::csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData
     if(!csgFrameData.hasWork())
         return true;
 
-    usize requiredParameterBytes = Max<usize>(csgFrameData.parameterBytes.size(), sizeof(u32));
-#if defined(NWB_DEBUG)
-    if(!AlignUpChecked(requiredParameterBytes, sizeof(u32), requiredParameterBytes))
-        return false;
-#else
-    requiredParameterBytes = AlignUp(requiredParameterBytes, sizeof(u32));
-#endif
-
     return
         csgState().m_receiverRangeBuffer
         && csgState().m_receiverRangeBufferCapacity >= csgFrameData.receiverRanges.size()
         && csgState().m_cutterBuffer
         && csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size()
-        && csgState().m_parameterByteBuffer
-        && csgState().m_parameterByteBufferCapacity >= requiredParameterBytes
         && csgState().m_clipBindingSet
     ;
 }
@@ -250,15 +202,12 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
         return true;
     NWB_ASSERT(csgState().m_receiverRangeBuffer);
     NWB_ASSERT(csgState().m_cutterBuffer);
-    NWB_ASSERT(csgState().m_parameterByteBuffer);
     NWB_ASSERT(csgState().m_receiverRangeBufferCapacity >= csgFrameData.receiverRanges.size());
     NWB_ASSERT(csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size());
-    NWB_ASSERT(csgState().m_parameterByteBufferCapacity >= Max<usize>(csgFrameData.parameterBytes.size(), sizeof(u32)));
     NWB_ASSERT(csgState().m_clipBindingSet);
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(csgState().m_parameterByteBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(
         csgState().m_receiverRangeBuffer.get(),
@@ -270,15 +219,6 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
         csgFrameData.cutters.data(),
         csgFrameData.cutters.size() * sizeof(CsgCutterGpuData)
     );
-    const u32 emptyParameterBytes = 0u;
-    const void* parameterByteData = &emptyParameterBytes;
-    if(!csgFrameData.parameterBytes.empty())
-        parameterByteData = csgFrameData.parameterBytes.data();
-    commandList.writeBuffer(
-        csgState().m_parameterByteBuffer.get(),
-        parameterByteData,
-        Max<usize>(csgFrameData.parameterBytes.size(), sizeof(u32))
-    );
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
     return true;
@@ -287,7 +227,6 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
 void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(csgState().m_parameterByteBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 
 bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
@@ -366,7 +305,7 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
                 return;
 
             CsgCutterGpuData cutterGpuData;
-            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(csgShapeRegistry(), cutter, &csgFrameData.parameterBytes, cutterGpuData))
+            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(csgShapeRegistry(), cutter, cutterGpuData))
                 return;
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){
                 appendFailed = true;

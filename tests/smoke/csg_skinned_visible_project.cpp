@@ -19,6 +19,8 @@
 #include <impl/ecs_skinned_mesh/runtime_helpers.h>
 #include <impl/ecs_skinned_mesh_render/module.h>
 
+#include "csg_smoke_helpers.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,6 +33,8 @@ namespace __hidden_csg_skinned_visible_smoke{
 
 using SmokeSkinnedMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedMesh>;
 using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using NWB::Tests::Smoke::AssignCsgCutterParameters;
+using NWB::Tests::Smoke::AssignCsgCutterTransform;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,24 +70,6 @@ static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 #endif
 }
 
-
-template<typename ParameterT>
-static void AssignCsgCutterParameters(NWB::Impl::CsgCutterComponent& cutter, const ParameterT& parameters){
-    cutter.parameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
-}
-
-static void AssignCsgCutterTransform(
-    NWB::Impl::CsgCutterComponent& cutter,
-    const SIMDVector center,
-    const SIMDVector rotation
-){
-    const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
-    SIMDVector determinant;
-    const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
-    StoreFloat(worldToShape, &cutter.worldToShape);
-    StoreFloat(shapeToWorld, &cutter.shapeToWorld);
-}
 
 [[nodiscard]] static SIMDVector BuildReceiverRotation(const f32 animationTime){
     return QuaternionRotationRollPitchYaw(0.0f, animationTime * s_ReceiverYawSpeed, 0.0f);

@@ -95,10 +95,8 @@ void RendererCsgState::invalidateResources(){
     m_intervalCapFillPipeline.reset();
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
-    m_parameterByteBuffer.reset();
     m_receiverRangeBufferCapacity = 0u;
     m_cutterBufferCapacity = 0u;
-    m_parameterByteBufferCapacity = 0u;
 }
 
 

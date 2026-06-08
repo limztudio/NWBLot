@@ -17,20 +17,13 @@
 struct NwbCsgCutter{
     uint shapeType;
     uint operation;
-    uint parameterByteOffset;
-    uint parameterByteSize;
+    float worldToShapeScaleBound;
+    float padding0;
     float4 worldToShapeRow0;
     float4 worldToShapeRow1;
     float4 worldToShapeRow2;
-    float4 shapeToWorldRow0;
-    float4 shapeToWorldRow1;
-    float4 shapeToWorldRow2;
     float4 parameter0;
     float4 parameter1;
-    float worldToShapeScaleBound;
-    float padding0;
-    float padding1;
-    float padding2;
 };
 
 struct NwbCsgBounds{
@@ -66,7 +59,6 @@ struct NwbCsgMeshPushConstants{
 
 [[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbCsgReceiverRanges;
 [[vk::binding(NWB_CSG_BINDING_CUTTERS, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbCsgCutters;
-[[vk::binding(NWB_CSG_BINDING_PARAMETER_BYTES, NWB_CSG_CLIP_SET)]] ByteAddressBuffer g_NwbCsgParameterBytes;
 
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 [[vk::push_constant]]
@@ -107,23 +99,6 @@ float3 nwbCsgTransformWorldToShape(const float3 worldPosition, const NwbCsgCutte
         dot(cutter.worldToShapeRow0, p),
         dot(cutter.worldToShapeRow1, p),
         dot(cutter.worldToShapeRow2, p)
-    );
-}
-
-float3 nwbCsgTransformShapeToWorld(const float3 shapePosition, const NwbCsgCutter cutter){
-    const float4 p = float4(shapePosition, 1.0);
-    return float3(
-        dot(cutter.shapeToWorldRow0, p),
-        dot(cutter.shapeToWorldRow1, p),
-        dot(cutter.shapeToWorldRow2, p)
-    );
-}
-
-float3 nwbCsgTransformShapeVectorToWorld(const float3 shapeVector, const NwbCsgCutter cutter){
-    return float3(
-        dot(cutter.shapeToWorldRow0.xyz, shapeVector),
-        dot(cutter.shapeToWorldRow1.xyz, shapeVector),
-        dot(cutter.shapeToWorldRow2.xyz, shapeVector)
     );
 }
 
@@ -262,15 +237,6 @@ float nwbCsgEvaluateShapeDistance(const float3 shapePosition, const NwbCsgCutter
     return nwbEvalCsgShapeDistance(cutter.shapeType, shapePosition, cutter);
 }
 
-float3 nwbCsgProjectShapePositionToCutterSurface(const float3 shapePosition, const NwbCsgCutter cutter){
-    const NwbCsgSample sample = nwbCsgEvaluateShapeSample(shapePosition, cutter);
-    if(!isfinite(sample.distance) || abs(sample.distance) > 1e20)
-        return shapePosition;
-
-    const float3 normal = nwbCsgNormalizeOr(sample.normal, float3(0.0, 1.0, 0.0));
-    return shapePosition - normal * sample.distance;
-}
-
 NwbCsgSample nwbCsgEvaluateSample(const float3 worldPosition, const NwbCsgCutter cutter){
     return nwbCsgEvaluateShapeSample(nwbCsgTransformWorldToShape(worldPosition, cutter), cutter);
 }
@@ -284,67 +250,24 @@ float3 nwbCsgFlippedCutterWorldNormal(const float3 worldPosition, const NwbCsgCu
     return -nwbCsgTransformShapeNormalToWorld(sample.normal, cutter, fallback);
 }
 
-float3 nwbCsgProjectWorldPositionToCutterSurface(const float3 worldPosition, const NwbCsgCutter cutter){
-    const float3 shapePosition = nwbCsgTransformWorldToShape(worldPosition, cutter);
-    return nwbCsgTransformShapeToWorld(nwbCsgProjectShapePositionToCutterSurface(shapePosition, cutter), cutter);
-}
-
-uint nwbCsgFindDiscardCutterExcept(const uint receiverIndex, const float3 worldPosition, const uint excludedCutterIndex){
-    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
-    for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
-        const uint absoluteCutterIndex = receiverRange.firstCutter + cutterIndex;
-        if(absoluteCutterIndex == excludedCutterIndex)
-            continue;
-
-        const NwbCsgCutter cutter = g_NwbCsgCutters[absoluteCutterIndex];
-        if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
-            continue;
-        if(nwbCsgEvaluateDistance(worldPosition, cutter) <= 0.0)
-            return absoluteCutterIndex;
-    }
-
-    return NWB_CSG_INVALID_CUTTER_INDEX;
-}
-
-uint nwbCsgFindDiscardCutterWithWorldToleranceExcept(
+bool nwbCsgReceiverPixelDiscardWithWorldTolerance(
     const uint receiverIndex,
     const float3 worldPosition,
-    const float worldDistanceTolerance,
-    const uint excludedCutterIndex
+    const float worldDistanceTolerance
 ){
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     const float safeWorldDistanceTolerance = max(worldDistanceTolerance, 0.0);
     for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
-        const uint absoluteCutterIndex = receiverRange.firstCutter + cutterIndex;
-        if(absoluteCutterIndex == excludedCutterIndex)
-            continue;
-
-        const NwbCsgCutter cutter = g_NwbCsgCutters[absoluteCutterIndex];
+        const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
         if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
             continue;
 
         const float shapeDistanceTolerance = safeWorldDistanceTolerance * cutter.worldToShapeScaleBound;
         if(nwbCsgEvaluateDistance(worldPosition, cutter) <= shapeDistanceTolerance)
-            return absoluteCutterIndex;
+            return true;
     }
 
-    return NWB_CSG_INVALID_CUTTER_INDEX;
-}
-
-bool nwbCsgReceiverPixelDiscardExcept(const uint receiverIndex, const float3 worldPosition, const uint excludedCutterIndex){
-    return nwbCsgFindDiscardCutterExcept(receiverIndex, worldPosition, excludedCutterIndex) != NWB_CSG_INVALID_CUTTER_INDEX;
-}
-
-bool nwbCsgReceiverPixelDiscard(const uint receiverIndex, const float3 worldPosition){
-    return nwbCsgReceiverPixelDiscardExcept(receiverIndex, worldPosition, 0xFFFFFFFFu);
-}
-
-bool nwbCsgReceiverPixelDiscardWithWorldTolerance(const uint receiverIndex, const float3 worldPosition, const float worldDistanceTolerance){
-    return nwbCsgFindDiscardCutterWithWorldToleranceExcept(receiverIndex, worldPosition, worldDistanceTolerance, 0xFFFFFFFFu) != NWB_CSG_INVALID_CUTTER_INDEX;
-}
-
-bool nwbCsgMeshPixelDiscard(const float3 worldPosition){
-    return nwbCsgReceiverPixelDiscard(nwbCsgMeshInstanceIndex(), worldPosition);
+    return false;
 }
 
 uint nwbCsgClassifyMeshlet(const float3 center, const float radius){

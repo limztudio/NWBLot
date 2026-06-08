@@ -510,7 +510,6 @@ static void TestCsgShapeRegistryBuiltIns(TestContext& context){
     NWB_CSG_TEST_CHECK(context, boxShape.desc.name == Name("engine/csg/box"));
     NWB_CSG_TEST_CHECK(context, !boxShape.desc.shaderModule);
     NWB_CSG_TEST_CHECK(context, boxShape.desc.parameterByteSize == sizeof(NWB::Impl::CsgBoxShapeParameters));
-    NWB_CSG_TEST_CHECK(context, boxShape.desc.supportsAnalyticGradient);
 
     NWB_CSG_TEST_CHECK(context, NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     NWB_CSG_TEST_CHECK(context, registry.shapeTypeCount() == 4u);
@@ -598,7 +597,6 @@ static void TestCsgShapeRegistryProjectShape(TestContext& context){
     desc.shaderModuleInclude = ACompactString("project/shaders/csg/noise_blob.slangi");
     desc.parameterByteSize = sizeof(TestProjectShapeParameters);
     desc.boundsCallback = &TestProjectShapeBounds;
-    desc.supportsAnalyticGradient = false;
 
     NWB::Impl::CsgShapeTypeId shapeTypeId = NWB::Impl::s_InvalidCsgShapeTypeId;
     NWB_CSG_TEST_CHECK(context, registry.registerShapeType(desc, shapeTypeId));

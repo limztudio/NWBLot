@@ -46,7 +46,7 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 
 #if NWB_CSG_ENABLED
 #define NWB_CSG_MESH_INSTANCE_INDEX (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX])
-#include "../csg/runtime.slangi"
+#include "../csg/pixel_runtime.slangi"
 #undef NWB_CSG_MESH_INSTANCE_INDEX
 #endif
 
@@ -61,7 +61,10 @@ float nwbAvboitResolveFragmentAlpha(float4 color){
 #if NWB_CSG_ENABLED
 bool nwbAvboitCsgPixelDiscard(const float4 worldPosition){
     const uint rasterFlags = uint(worldPosition.w + 0.5);
-    return (rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) == 0u && nwbCsgMeshPixelDiscard(worldPosition.xyz);
+    if((rasterFlags & NWB_MESH_RASTER_FLAG_CSG_UNAFFECTED) != 0u)
+        return false;
+
+    return nwbCsgReceiverPixelDiscard(nwbCsgMeshInstanceIndex(), worldPosition.xyz);
 }
 #endif
 

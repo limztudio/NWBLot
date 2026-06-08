@@ -45,7 +45,6 @@ inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
 inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_ranges");
 inline constexpr Name s_CsgCutterBufferName("ecs_render/csg_cutters");
-inline constexpr Name s_CsgParameterByteBufferName("ecs_render/csg_parameter_bytes");
 inline constexpr Name s_SceneShadingBufferName("ecs_render/scene_shading_data");
 
 

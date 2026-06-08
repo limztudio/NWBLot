@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 using CsgShapeTypeId = u32;
 
 inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
-inline constexpr usize s_CsgShapeDefaultParameterMaxBytes = sizeof(Float4) * 2u;
+inline constexpr usize s_CsgShapeInlineParameterMaxBytes = sizeof(Float4) * 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,7 +36,7 @@ using CsgShapeBoundsCallback = bool(*)(
 );
 
 struct CsgShapeTypeDesc{
-    using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeDefaultParameterMaxBytes>;
+    using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
 
     Name name = NAME_NONE;
     Name shaderModule = NAME_NONE;
@@ -45,8 +45,6 @@ struct CsgShapeTypeDesc{
     u32 parameterByteSize = 0u;
     DefaultParameterByteVector defaultParameterBytes;
     CsgShapeBoundsCallback boundsCallback = nullptr;
-
-    bool supportsAnalyticGradient = false;
 };
 
 struct CsgShapeTypeInfo{

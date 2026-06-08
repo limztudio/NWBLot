@@ -16,6 +16,8 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material_instance.h>
 
+#include "csg_smoke_helpers.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +30,8 @@ namespace __hidden_csg_visible_smoke{
 
 using SmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using NWB::Tests::Smoke::AssignCsgCutterParameters;
+using NWB::Tests::Smoke::AssignCsgCutterTransform;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,24 +79,6 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename ParameterT>
-static void AssignCsgCutterParameters(NWB::Impl::CsgCutterComponent& cutter, const ParameterT& parameters){
-    cutter.parameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
-}
-
-static void AssignCsgCutterTransform(
-    NWB::Impl::CsgCutterComponent& cutter,
-    const SIMDVector center,
-    const SIMDVector rotation
-){
-    const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
-    SIMDVector determinant;
-    const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
-    StoreFloat(worldToShape, &cutter.worldToShape);
-    StoreFloat(shapeToWorld, &cutter.shapeToWorld);
-}
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSolidCubeEntity(
     NWB::Core::ECS::World& world,

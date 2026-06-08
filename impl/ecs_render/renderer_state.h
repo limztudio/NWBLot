@@ -147,10 +147,8 @@ private:
     Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
-    Core::BufferHandle m_parameterByteBuffer;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
-    usize m_parameterByteBufferCapacity = 0u;
 };
 
 class RendererDeferredState final : NoCopy{

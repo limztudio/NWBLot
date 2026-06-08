@@ -33,7 +33,6 @@ public:
     void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
-    [[nodiscard]] bool reserveCsgParameterByteBufferCapacity(usize byteCount);
     [[nodiscard]] bool prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);

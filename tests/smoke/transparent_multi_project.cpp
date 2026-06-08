@@ -18,6 +18,10 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material_instance.h>
 
+#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+#include "csg_smoke_helpers.h"
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +34,10 @@ namespace __hidden_transparent_multi_smoke{
 
 using SmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+using NWB::Tests::Smoke::AssignCsgCutterParameters;
+using NWB::Tests::Smoke::AssignCsgCutterTransform;
+#endif
 
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
@@ -57,24 +65,6 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-template<typename ParameterT>
-static void AssignCsgCutterParameters(NWB::Impl::CsgCutterComponent& cutter, const ParameterT& parameters){
-    cutter.parameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
-}
-
-static void AssignCsgCutterTransform(
-    NWB::Impl::CsgCutterComponent& cutter,
-    const SIMDVector center,
-    const SIMDVector rotation
-){
-    const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
-    SIMDVector determinant;
-    const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
-    StoreFloat(worldToShape, &cutter.worldToShape);
-    StoreFloat(shapeToWorld, &cutter.shapeToWorld);
-}
-
 [[nodiscard]] static SIMDVector BuildTransparentCsgRotation(const f32 time){
     return QuaternionRotationRollPitchYaw(time * 0.32f, time, time * 0.16f);
 }

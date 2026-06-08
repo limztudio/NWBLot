@@ -52,7 +52,12 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     const float csgWorldDistanceTolerance = max(length(csgWorldPositionDx), length(csgWorldPositionDy)) * 0.5;
     const bool csgPixelDiscard = nwbCsgReceiverPixelDiscardWithWorldTolerance(receiverIndex, inWorldPosition, csgWorldDistanceTolerance);
 #if NWB_CSG_INTERVAL_SAMPLE_ENABLED
-    const bool csgIntervalPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(input.position, receiverIndex);
+    const bool csgIntervalPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(
+        input.position,
+        receiverIndex,
+        inWorldPosition,
+        csgWorldDistanceTolerance
+    );
 #else
     const bool csgIntervalPixelDiscard = false;
 #endif

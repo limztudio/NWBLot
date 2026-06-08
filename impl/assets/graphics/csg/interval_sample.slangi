@@ -220,8 +220,10 @@ bool nwbCsgFindReceiverSurfaceSpanForIntervalWithTolerance(
     const uint intervalFrontDepthBits,
     const uint intervalBackDepthBits,
     const uint extraDepthToleranceBits,
+    out uint outReceiverOpeningDepthBits,
     out uint outReceiverBackDepthBits
 ){
+    outReceiverOpeningDepthBits = 0u;
     outReceiverBackDepthBits = 0u;
     const uint depthEpsilonBits = nwbCsgReceiverSurfaceDepthCompareEpsilonBits(extraDepthToleranceBits);
 
@@ -254,6 +256,7 @@ bool nwbCsgFindReceiverSurfaceSpanForIntervalWithTolerance(
         ))
             continue;
 
+        outReceiverOpeningDepthBits = receiverOpeningDepthBits;
         outReceiverBackDepthBits = receiverBackDepthBits;
         return true;
     }
@@ -266,6 +269,7 @@ bool nwbCsgFindReceiverSurfaceSpanForInterval(
     const uint receiverIndex,
     const uint intervalFrontDepthBits,
     const uint intervalBackDepthBits,
+    out uint outReceiverOpeningDepthBits,
     out uint outReceiverBackDepthBits
 ){
     return nwbCsgFindReceiverSurfaceSpanForIntervalWithTolerance(
@@ -274,19 +278,20 @@ bool nwbCsgFindReceiverSurfaceSpanForInterval(
         intervalFrontDepthBits,
         intervalBackDepthBits,
         0u,
+        outReceiverOpeningDepthBits,
         outReceiverBackDepthBits
     );
 }
 
-bool nwbCsgReceiverDepthInInterval(
+bool nwbCsgReceiverDepthInSpan(
     const uint receiverDepthBits,
-    const uint intervalFrontDepthBits,
-    const uint intervalBackDepthBits,
+    const uint receiverOpeningDepthBits,
+    const uint receiverBackDepthBits,
     const uint extraDepthToleranceBits
 ){
     const uint depthEpsilonBits = nwbCsgReceiverSurfaceDepthCompareEpsilonBits(extraDepthToleranceBits);
-    return receiverDepthBits + depthEpsilonBits >= intervalFrontDepthBits
-        && receiverDepthBits <= intervalBackDepthBits + depthEpsilonBits
+    return receiverDepthBits + depthEpsilonBits >= receiverOpeningDepthBits
+        && receiverDepthBits <= receiverBackDepthBits + depthEpsilonBits
     ;
 }
 
@@ -380,6 +385,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCapAtPixels(
         const float frontDepth = min(intervalDepth.x, intervalDepth.y);
         const float backDepth = max(intervalDepth.x, intervalDepth.y);
 
+        uint receiverOpeningDepthBits;
         uint receiverBackDepthBits;
         const uint frontDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(frontDepth);
         const uint backDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(backDepth);
@@ -388,6 +394,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCapAtPixels(
             receiverIndex,
             frontDepthBits,
             backDepthBits,
+            receiverOpeningDepthBits,
             receiverBackDepthBits
         ))
             continue;
@@ -432,9 +439,8 @@ bool nwbCsgReceiverIntervalPixelDiscardAtPixels(
         const float backDepth = max(intervalDepth.x, intervalDepth.y);
         const uint frontDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(frontDepth);
         const uint backDepthBits = nwbCsgReceiverSurfaceMaskDepthBits(backDepth);
-        if(!nwbCsgReceiverDepthInInterval(receiverDepthBits, frontDepthBits, backDepthBits, extraDepthToleranceBits))
-            continue;
 
+        uint receiverOpeningDepthBits;
         uint receiverBackDepthBits;
         if(!nwbCsgFindReceiverSurfaceSpanForIntervalWithTolerance(
             receiverPixel,
@@ -442,11 +448,14 @@ bool nwbCsgReceiverIntervalPixelDiscardAtPixels(
             frontDepthBits,
             backDepthBits,
             extraDepthToleranceBits,
+            receiverOpeningDepthBits,
             receiverBackDepthBits
         ))
             continue;
 
         if(backDepthBits > receiverBackDepthBits + nwbCsgReceiverSurfaceDepthCompareEpsilonBits(extraDepthToleranceBits))
+            continue;
+        if(!nwbCsgReceiverDepthInSpan(receiverDepthBits, receiverOpeningDepthBits, receiverBackDepthBits, extraDepthToleranceBits))
             continue;
 
         return true;
@@ -554,27 +563,6 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPositio
             nwbCsgSelectNearestIntervalCap(
                 result,
                 nwbCsgSampleNearestIntervalCapAtPixels(pixel, pixel, uint2(intervalPixel))
-            );
-        }
-    }
-    if(result.visible)
-        return result;
-
-    [unroll]
-    for(int offsetY = -1; offsetY <= 1; ++offsetY){
-        [unroll]
-        for(int offsetX = -1; offsetX <= 1; ++offsetX){
-            if(offsetX == 0 && offsetY == 0)
-                continue;
-
-            const int2 neighborPixel = int2(pixel) + int2(offsetX, offsetY);
-            if(!nwbCsgIntervalSamplePixelInFrame(neighborPixel))
-                continue;
-
-            const uint2 neighbor = uint2(neighborPixel);
-            nwbCsgSelectNearestIntervalCap(
-                result,
-                nwbCsgSampleNearestIntervalCapAtPixels(pixel, neighbor, neighbor)
             );
         }
     }

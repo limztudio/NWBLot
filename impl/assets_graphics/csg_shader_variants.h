@@ -45,6 +45,7 @@ using ShaderStageKeySet = HashSet<
 
 inline constexpr AStringView s_ClipImplicitDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_ClipSetImplicitDefineName = "NWB_CSG_CLIP_SET";
+inline constexpr AStringView s_IntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
 inline constexpr AStringView s_IntervalSampleSetImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_SET";
 inline constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
 void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);

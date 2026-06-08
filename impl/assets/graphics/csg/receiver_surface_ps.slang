@@ -26,7 +26,10 @@ struct NwbCsgReceiverSurfacePixelInput{
 void main(const NwbCsgReceiverSurfacePixelInput input){
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
     if(input.frontFace){
-        if(nwbCsgReceiverPixelDiscard(receiverIndex, input.worldPosition.xyz))
+        const float3 worldPositionDx = ddx(input.worldPosition.xyz);
+        const float3 worldPositionDy = ddy(input.worldPosition.xyz);
+        const float worldDistanceTolerance = max(length(worldPositionDx), length(worldPositionDy)) * 0.5;
+        if(nwbCsgReceiverPixelDiscardWithWorldTolerance(receiverIndex, input.worldPosition.xyz, worldDistanceTolerance))
             nwbCsgMarkReceiverOpeningSurface(input.position, receiverIndex);
     }else{
         nwbCsgMarkReceiverBackSurface(input.position, receiverIndex);

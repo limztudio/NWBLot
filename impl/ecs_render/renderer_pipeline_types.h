@@ -90,6 +90,10 @@ namespace MaterialPipelineCsgMode{
     return pass == MaterialPipelinePass::CsgReceiverSurface;
 }
 
+[[nodiscard]] inline bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
+    return pass == MaterialPipelinePass::Opaque;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

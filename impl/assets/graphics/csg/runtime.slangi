@@ -306,12 +306,41 @@ uint nwbCsgFindDiscardCutterExcept(const uint receiverIndex, const float3 worldP
     return NWB_CSG_INVALID_CUTTER_INDEX;
 }
 
+uint nwbCsgFindDiscardCutterWithWorldToleranceExcept(
+    const uint receiverIndex,
+    const float3 worldPosition,
+    const float worldDistanceTolerance,
+    const uint excludedCutterIndex
+){
+    const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
+    const float safeWorldDistanceTolerance = max(worldDistanceTolerance, 0.0);
+    for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
+        const uint absoluteCutterIndex = receiverRange.firstCutter + cutterIndex;
+        if(absoluteCutterIndex == excludedCutterIndex)
+            continue;
+
+        const NwbCsgCutter cutter = g_NwbCsgCutters[absoluteCutterIndex];
+        if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
+            continue;
+
+        const float shapeDistanceTolerance = safeWorldDistanceTolerance * cutter.worldToShapeScaleBound;
+        if(nwbCsgEvaluateDistance(worldPosition, cutter) <= shapeDistanceTolerance)
+            return absoluteCutterIndex;
+    }
+
+    return NWB_CSG_INVALID_CUTTER_INDEX;
+}
+
 bool nwbCsgReceiverPixelDiscardExcept(const uint receiverIndex, const float3 worldPosition, const uint excludedCutterIndex){
     return nwbCsgFindDiscardCutterExcept(receiverIndex, worldPosition, excludedCutterIndex) != NWB_CSG_INVALID_CUTTER_INDEX;
 }
 
 bool nwbCsgReceiverPixelDiscard(const uint receiverIndex, const float3 worldPosition){
     return nwbCsgReceiverPixelDiscardExcept(receiverIndex, worldPosition, 0xFFFFFFFFu);
+}
+
+bool nwbCsgReceiverPixelDiscardWithWorldTolerance(const uint receiverIndex, const float3 worldPosition, const float worldDistanceTolerance){
+    return nwbCsgFindDiscardCutterWithWorldToleranceExcept(receiverIndex, worldPosition, worldDistanceTolerance, 0xFFFFFFFFu) != NWB_CSG_INVALID_CUTTER_INDEX;
 }
 
 bool nwbCsgMeshPixelDiscard(const float3 worldPosition){

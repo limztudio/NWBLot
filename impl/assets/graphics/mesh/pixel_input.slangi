@@ -13,6 +13,12 @@
 
 #if NWB_CSG_ENABLED
 #include "../csg/runtime.slangi"
+#ifndef NWB_CSG_INTERVAL_SAMPLE_ENABLED
+#define NWB_CSG_INTERVAL_SAMPLE_ENABLED 0
+#endif
+#if NWB_CSG_INTERVAL_SAMPLE_ENABLED
+#include "../csg/interval_sample.slangi"
+#endif
 #endif
 
 
@@ -41,8 +47,16 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inPixelDepth = input.position.z;
 #if NWB_CSG_ENABLED
     const uint receiverIndex = nwbCsgMeshInstanceIndex();
-    const bool csgPixelDiscard = nwbCsgReceiverPixelDiscard(receiverIndex, inWorldPosition);
-    if(csgPixelDiscard){
+    const float3 csgWorldPositionDx = ddx(inWorldPosition);
+    const float3 csgWorldPositionDy = ddy(inWorldPosition);
+    const float csgWorldDistanceTolerance = max(length(csgWorldPositionDx), length(csgWorldPositionDy)) * 0.5;
+    const bool csgPixelDiscard = nwbCsgReceiverPixelDiscardWithWorldTolerance(receiverIndex, inWorldPosition, csgWorldDistanceTolerance);
+#if NWB_CSG_INTERVAL_SAMPLE_ENABLED
+    const bool csgIntervalPixelDiscard = nwbCsgReceiverIntervalPixelDiscard(input.position, receiverIndex);
+#else
+    const bool csgIntervalPixelDiscard = false;
+#endif
+    if(csgPixelDiscard || csgIntervalPixelDiscard){
         discard;
     }
 #endif

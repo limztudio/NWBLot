@@ -50,8 +50,9 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
     case MaterialPipelinePass::CsgReceiverSurface:{
         Core::RenderState renderState;
         renderState.depthStencilState
-            .disableDepthTest()
+            .enableDepthTest()
             .disableDepthWrite()
+            .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
         ;
         Core::BlendState::RenderTarget target;
         target.setColorWriteMask(Core::ColorMask::None);

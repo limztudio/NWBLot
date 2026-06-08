@@ -31,6 +31,7 @@ class CaptureResult:
     has_pixel_variation: bool
     appears_blank: bool
     transparent_multi: "TransparentMultiAnalysis"
+    transparent_csg: "TransparentCsgAnalysis"
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,14 @@ class TransparentMultiAnalysis:
     left_pixels: int
     center_pixels: int
     right_pixels: int
+
+
+@dataclass(frozen=True)
+class TransparentCsgAnalysis:
+    cut_void_pixels: int
+    cut_region_pixels: int
+    remaining_center_pixels: int
+    remaining_region_pixels: int
 
 
 def write_status(message):
@@ -247,6 +256,7 @@ def write_capture_rows(handle, width, height, rows_rgb, output_path):
     write_bmp_24(output_path, width, height, rows_rgb)
     analysis = analyze_rgb_rows(rows_rgb)
     transparent_multi = analyze_transparent_multi_rows(rows_rgb)
+    transparent_csg = analyze_transparent_csg_rows(rows_rgb)
     return CaptureResult(
         handle,
         width,
@@ -254,6 +264,7 @@ def write_capture_rows(handle, width, height, rows_rgb, output_path):
         analysis.has_pixel_variation,
         analysis.appears_blank,
         transparent_multi,
+        transparent_csg,
     )
 
 
@@ -305,6 +316,26 @@ def analyze_transparent_multi_rows(rows_rgb):
     return TransparentMultiAnalysis(left_pixels, center_pixels, right_pixels)
 
 
+def analyze_transparent_csg_rows(rows_rgb):
+    height = len(rows_rgb)
+    width = len(rows_rgb[0]) if height else 0
+    if width == 0 or height == 0:
+        return TransparentCsgAnalysis(0, 0, 0, 0)
+
+    background = estimate_background_rgb(rows_rgb, width, height)
+    cut_region = normalized_region(width, height, 0.42, 0.31, 0.56, 0.45)
+    remaining_region = normalized_region(width, height, 0.40, 0.52, 0.56, 0.68)
+
+    cut_void_pixels = count_background_like_pixels(rows_rgb, background, cut_region)
+    remaining_center_pixels = count_foreground_pixels_in_region(rows_rgb, background, remaining_region)
+    return TransparentCsgAnalysis(
+        cut_void_pixels,
+        region_pixel_count(cut_region),
+        remaining_center_pixels,
+        region_pixel_count(remaining_region),
+    )
+
+
 def estimate_background_rgb(rows_rgb, width, height):
     samples = []
     edge = min(max(min(width, height) // 24, 8), 32)
@@ -324,11 +355,26 @@ def estimate_background_rgb(rows_rgb, width, height):
     return tuple(sorted(channel)[len(samples) // 2] for channel in zip(*samples))
 
 
-def count_foreground_pixels(rows_rgb, width, height, background, x0, y0, x1, y1):
+def normalized_region(width, height, x0, y0, x1, y1):
     start_x = min(max(int(width * x0), 0), width)
     end_x = min(max(int(width * x1), start_x), width)
     start_y = min(max(int(height * y0), 0), height)
     end_y = min(max(int(height * y1), start_y), height)
+    return start_x, start_y, end_x, end_y
+
+
+def region_pixel_count(region):
+    start_x, start_y, end_x, end_y = region
+    return max(end_x - start_x, 0) * max(end_y - start_y, 0)
+
+
+def count_foreground_pixels(rows_rgb, width, height, background, x0, y0, x1, y1):
+    region = normalized_region(width, height, x0, y0, x1, y1)
+    return count_foreground_pixels_in_region(rows_rgb, background, region)
+
+
+def count_foreground_pixels_in_region(rows_rgb, background, region):
+    start_x, start_y, end_x, end_y = region
     count = 0
 
     for y in range(start_y, end_y):
@@ -340,6 +386,24 @@ def count_foreground_pixels(rows_rgb, width, height, background, x0, y0, x1, y1)
                 abs(blue - background[2]),
             )
             if sum(channel_delta) >= 34 and max(channel_delta) >= 14:
+                count += 1
+
+    return count
+
+
+def count_background_like_pixels(rows_rgb, background, region):
+    start_x, start_y, end_x, end_y = region
+    count = 0
+
+    for y in range(start_y, end_y):
+        for x in range(start_x, end_x):
+            red, green, blue = rows_rgb[y][x]
+            channel_delta = (
+                abs(red - background[0]),
+                abs(green - background[1]),
+                abs(blue - background[2]),
+            )
+            if sum(channel_delta) <= 28 and max(channel_delta) <= 12:
                 count += 1
 
     return count
@@ -1287,6 +1351,26 @@ def validate_transparent_multi_result(result):
         raise SmokeFailure(f"transparent multi-object scene did not show all expected color regions ({observed})")
 
 
+def validate_transparent_csg_result(result):
+    analysis = result.transparent_csg
+    min_void_pixels = max(160, analysis.cut_region_pixels // 3)
+    min_remaining_pixels = max(160, analysis.remaining_region_pixels // 5)
+    missing = []
+    if analysis.cut_void_pixels < min_void_pixels:
+        missing.append(f"cut_void={analysis.cut_void_pixels}")
+    if analysis.remaining_center_pixels < min_remaining_pixels:
+        missing.append(f"remaining_center={analysis.remaining_center_pixels}")
+
+    if missing:
+        observed = (
+            f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, "
+            f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}, "
+            f"min_void={min_void_pixels}, "
+            f"min_remaining={min_remaining_pixels}"
+        )
+        raise SmokeFailure(f"transparent CSG scene did not show the expected clipped center region ({observed})")
+
+
 def validate_expected_log_messages(log_directory, log_baseline, log_pattern, required_needles, rejected_needles):
     if not required_needles and not rejected_needles:
         return
@@ -1307,6 +1391,8 @@ def capture_checked_window(args, backend, handle):
     validate_capture_result(result)
     if args.expect_transparent_multi:
         validate_transparent_multi_result(result)
+    if args.expect_transparent_csg:
+        validate_transparent_csg_result(result)
     return result
 
 
@@ -1365,6 +1451,11 @@ def parse_args(argv):
         help="Assert that the captured scene contains multiple distinct transparent mesh colors.",
     )
     parser.add_argument(
+        "--expect-transparent-csg",
+        action="store_true",
+        help="Assert that the captured transparent center mesh contains a clipped CSG void.",
+    )
+    parser.add_argument(
         "--software-vulkan",
         choices=("auto", "on", "off"),
         default="off",
@@ -1404,6 +1495,13 @@ def main(argv):
             status = (
                 f"{status}; transparent regions "
                 f"left={analysis.left_pixels}, center={analysis.center_pixels}, right={analysis.right_pixels}"
+            )
+        if args.expect_transparent_csg:
+            analysis = result.transparent_csg
+            status = (
+                f"{status}; transparent CSG "
+                f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, "
+                f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}"
             )
         write_status(status)
         return 0

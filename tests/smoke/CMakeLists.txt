@@ -96,12 +96,62 @@ if(Python3_Interpreter_FOUND)
         add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
 
+        nwb_declare_executable(nwb_transparent_csg_smoke)
+        target_sources(nwb_transparent_csg_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+        )
+        target_compile_definitions(nwb_transparent_csg_smoke PRIVATE
+            NWB_TRANSPARENT_MULTI_ENABLE_CSG=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_transparent_csg_smoke
+            "${_nwb_transparent_multi_runtime_root}"
+            nwb_ecs_csg
+        )
+        add_dependencies(nwb_transparent_csg_smoke nwb_transparent_multi_smoke_assets)
+
         nwb_add_window_capture_smoke(
             nwb_transparent_multi_capture_smoke
             transparent_multi_capture.bmp
             "$<TARGET_FILE:nwb_transparent_multi_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
             "--expect-transparent-multi"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_transparent_csg_capture_early_smoke
+            transparent_csg_capture_early.bmp
+            "$<TARGET_FILE:nwb_transparent_csg_smoke>"
+            "${_nwb_transparent_multi_runtime_root}"
+            "--expect-transparent-multi"
+            "--expect-transparent-csg"
+            "--settle-seconds" "0.75"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_transparent_csg_capture_mid_smoke
+            transparent_csg_capture_mid.bmp
+            "$<TARGET_FILE:nwb_transparent_csg_smoke>"
+            "${_nwb_transparent_multi_runtime_root}"
+            "--expect-transparent-multi"
+            "--expect-transparent-csg"
+            "--settle-seconds" "2.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_transparent_csg_capture_late_smoke
+            transparent_csg_capture_late.bmp
+            "$<TARGET_FILE:nwb_transparent_csg_smoke>"
+            "${_nwb_transparent_multi_runtime_root}"
+            "--expect-transparent-multi"
+            "--expect-transparent-csg"
+            "--settle-seconds" "3.25"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
         )
 
         unset(_nwb_transparent_multi_asset_stamp)
@@ -234,10 +284,122 @@ if(Python3_Interpreter_FOUND)
         add_dependencies(nwb_csg_skinned_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
         nwb_add_window_capture_smoke(
+            nwb_csg_skinned_visible_capture_early_smoke
+            csg_skinned_visible_capture_early.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "0.75"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
             nwb_csg_skinned_visible_capture_smoke
             csg_skinned_visible_capture.bmp
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "2.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_visible_capture_late_smoke
+            csg_skinned_visible_capture_late.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "3.25"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_declare_executable(nwb_csg_skinned_sphere_visible_smoke)
+        target_sources(nwb_csg_skinned_sphere_visible_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.cpp"
+        )
+        target_compile_definitions(nwb_csg_skinned_sphere_visible_smoke PRIVATE
+            NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_csg_skinned_sphere_visible_smoke
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            nwb_ecs_csg
+            nwb_ecs_skinned_mesh_render
+        )
+        add_dependencies(nwb_csg_skinned_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_sphere_visible_capture_early_smoke
+            csg_skinned_sphere_visible_capture_early.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "0.75"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_sphere_visible_capture_mid_smoke
+            csg_skinned_sphere_visible_capture_mid.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "2.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_sphere_visible_capture_late_smoke
+            csg_skinned_sphere_visible_capture_late.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "3.25"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_declare_executable(nwb_csg_skinned_transparent_sphere_visible_smoke)
+        target_sources(nwb_csg_skinned_transparent_sphere_visible_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_visible_project.cpp"
+        )
+        target_compile_definitions(nwb_csg_skinned_transparent_sphere_visible_smoke PRIVATE
+            NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER=1
+            NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_csg_skinned_transparent_sphere_visible_smoke
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            nwb_ecs_csg
+            nwb_ecs_skinned_mesh_render
+        )
+        add_dependencies(nwb_csg_skinned_transparent_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_transparent_sphere_visible_capture_early_smoke
+            csg_skinned_transparent_sphere_visible_capture_early.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "0.75"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_transparent_sphere_visible_capture_mid_smoke
+            csg_skinned_transparent_sphere_visible_capture_mid.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "2.0"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_csg_skinned_transparent_sphere_visible_capture_late_smoke
+            csg_skinned_transparent_sphere_visible_capture_late.bmp
+            "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
+            "${_nwb_csg_skinned_visible_runtime_root}"
+            "--settle-seconds" "3.25"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )

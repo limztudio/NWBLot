@@ -37,7 +37,11 @@ using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 
 static constexpr AStringView s_SkinnedMeshPath = "project/characters/skinned_cone_female";
-static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/transparent_multi/materials/shared";
+#else
+static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible/materials/solid";
+#endif
 static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
 static constexpr f32 s_CameraDistance = 3.25f;
@@ -52,6 +56,15 @@ static constexpr f32 s_InitialAnimationTime = s_PIDIV2 / s_ReceiverYawSpeed;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static f32 ReceiverAlpha(){
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return 0.44f;
+#else
+    return 1.0f;
+#endif
+}
 
 
 template<typename ParameterT>
@@ -185,7 +198,7 @@ private:
         SmokeSkinnedMeshRef mesh;
         mesh.virtualPath = Name(s_SkinnedMeshPath);
         SmokeMaterialRef material;
-        material.virtualPath = Name(s_SolidMaterialPath);
+        material.virtualPath = Name(s_ReceiverMaterialPath);
 
         auto entity = m_world->createEntity();
         auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
@@ -214,8 +227,13 @@ private:
         if(enableCsg){
             auto& receiver = entity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
             receiver.receiverGroup = s_ReceiverGroup;
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+            receiver.affectOpaquePass = false;
+            receiver.affectTransparentPass = true;
+#else
             receiver.affectOpaquePass = true;
             receiver.affectTransparentPass = false;
+#endif
         }
 
         return entity.id();
@@ -224,12 +242,12 @@ private:
     void createReceiver(){
         m_plainReceiver = createSkinnedReceiverInstance(
             Float4(-0.48f, 0.0f, 0.0f, 0.0f),
-            Float4(0.86f, 0.88f, 0.90f, 1.0f),
+            Float4(0.86f, 0.88f, 0.90f, ReceiverAlpha()),
             false
         );
         m_receiver = createSkinnedReceiverInstance(
             Float4(0.48f, 0.0f, 0.0f, 0.0f),
-            Float4(0.85f, 0.72f, 1.0f, 1.0f),
+            Float4(0.85f, 0.72f, 1.0f, ReceiverAlpha()),
             true
         );
     }
@@ -238,12 +256,21 @@ private:
         auto entity = m_world->createEntity();
         auto& cutter = entity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
         cutter.receiverGroup = s_ReceiverGroup;
+#if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+        cutter.shapeType = Name("engine/csg/sphere");
+#else
         cutter.shapeType = Name("engine/csg/capsule");
+#endif
         cutter.operation = NWB::Impl::CsgOperation::Subtract;
         cutter.active = true;
 
+#if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+        NWB::Impl::CsgSphereShapeParameters parameters;
+        parameters.radius = Float4(0.18f, 0.0f, 0.0f, 0.0f);
+#else
         NWB::Impl::CsgCapsuleShapeParameters parameters;
         parameters.radiusHalfHeight = Float4(0.105f, 0.27f, 0.0f, 0.0f);
+#endif
         AssignCsgCutterParameters(cutter, parameters);
         const SIMDVector receiverRotation = BuildReceiverRotation(0.0f);
         AssignCsgCutterTransform(
@@ -319,7 +346,15 @@ public:
             NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
         );
 
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created"));
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created"));
+#else
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created"));
+#endif
         return true;
     }
 

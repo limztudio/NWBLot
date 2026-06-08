@@ -5,7 +5,6 @@
 #include "renderer_private.h"
 
 #include "renderer_capacity_private.h"
-#include "renderer_csg_private.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +21,133 @@ namespace __hidden_csg_resources{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+enum class CsgClipCutterResolveResult{
+    Skipped,
+    Ready
+};
+
+struct CsgResolvedClipCutter{
+    const CsgCutterComponent* cutter = nullptr;
+    CsgShapeTypeInfo shapeType;
+    const u8* parameterBytes = nullptr;
+    usize parameterByteSize = 0u;
+};
+
+[[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
+    const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(worldToShape.v[2], 0.0f);
+    SIMDVector lengthSquared = VectorAdd(Vector3LengthSq(row0), Vector3LengthSq(row1));
+    lengthSquared = VectorAdd(lengthSquared, Vector3LengthSq(row2));
+    return VectorSqrt(lengthSquared);
+}
+
+[[nodiscard]] static bool ResolveCsgCutterParameterBytes(
+    const CsgShapeTypeInfo& shapeType,
+    const CsgCutterComponent& cutter,
+    const u8*& outParameterBytes,
+    usize& outParameterByteSize
+){
+    if(cutter.parameterBytes.empty()){
+        outParameterBytes = shapeType.desc.defaultParameterBytes.empty() ? nullptr : shapeType.desc.defaultParameterBytes.data();
+        outParameterByteSize = shapeType.desc.defaultParameterBytes.size();
+    }else{
+        outParameterBytes = cutter.parameterBytes.data();
+        outParameterByteSize = cutter.parameterBytes.size();
+    }
+
+    return outParameterByteSize == static_cast<usize>(shapeType.desc.parameterByteSize)
+        && (outParameterByteSize == 0u || outParameterBytes)
+    ;
+}
+
+static void CopyCsgCutterInlineParameters(
+    const u8* parameterBytes,
+    const usize parameterByteSize,
+    CsgCutterGpuData& inOutCutter
+){
+    inOutCutter.parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
+    inOutCutter.parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
+    if(!parameterBytes)
+        return;
+
+    const usize parameter0Bytes = Min(parameterByteSize, sizeof(Float4));
+    if(parameter0Bytes > 0u)
+        NWB_MEMCPY(&inOutCutter.parameter0, sizeof(Float4), parameterBytes, parameter0Bytes);
+
+    if(parameterByteSize <= sizeof(Float4))
+        return;
+
+    const usize parameter1Bytes = Min(parameterByteSize - sizeof(Float4), sizeof(Float4));
+    if(parameter1Bytes > 0u)
+        NWB_MEMCPY(&inOutCutter.parameter1, sizeof(Float4), parameterBytes + sizeof(Float4), parameter1Bytes);
+}
+
+[[nodiscard]] static bool BuildCsgReceiverWorldToLocal(
+    const Scene::TransformComponent* transform,
+    SIMDMatrix& outWorldToLocal
+){
+    if(!transform){
+        outWorldToLocal = MatrixIdentity();
+        return true;
+    }
+
+    const SIMDVector scale = LoadFloat(transform->scale);
+    const SIMDVector rotation = LoadFloat(transform->rotation);
+    const SIMDVector translation = LoadFloat(transform->position);
+    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
+    SIMDVector determinant;
+    outWorldToLocal = MatrixInverse(&determinant, localToWorld);
+    const f32 det = VectorGetX(determinant);
+    return IsFinite(det) && Abs(det) > 0.0f;
+}
+
+[[nodiscard]] static bool BuildCsgReceiverWorldBounds(
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform,
+    SIMDVector& outMinBounds,
+    SIMDVector& outMaxBounds
+){
+    if(!receiverBounds.valid())
+        return false;
+
+    const SIMDVector localMinBounds = LoadFloatInt(receiverBounds.minBounds);
+    const SIMDVector localMaxBounds = LoadFloatInt(receiverBounds.maxBounds);
+    if(!AabbTests::Valid(localMinBounds, localMaxBounds))
+        return false;
+
+    if(!transform){
+        outMinBounds = localMinBounds;
+        outMaxBounds = localMaxBounds;
+        return true;
+    }
+
+    const SIMDVector scale = LoadFloat(transform->scale);
+    const SIMDVector rotation = LoadFloat(transform->rotation);
+    const SIMDVector translation = LoadFloat(transform->position);
+    const SIMDMatrix localToWorld = MatrixAffineTransformation(scale, VectorZero(), rotation, translation);
+    return AabbTests::Transform(localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
+}
+
+static void BuildResolvedClipCutterGpuData(
+    const CsgResolvedClipCutter& resolvedCutter,
+    CsgCutterGpuData& outCutter
+){
+    NWB_ASSERT(resolvedCutter.cutter);
+    NWB_ASSERT(resolvedCutter.parameterByteSize == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
+    NWB_ASSERT(resolvedCutter.parameterByteSize == 0u || resolvedCutter.parameterBytes);
+
+    outCutter = CsgCutterGpuData{};
+    const SIMDMatrix worldToShape = LoadFloat(resolvedCutter.cutter->worldToShape);
+    StoreFloat(worldToShape, &outCutter.worldToShape);
+    const f32 worldToShapeScaleBound = VectorGetX(ComputeWorldToShapeScaleBound(worldToShape));
+    if(IsFinite(worldToShapeScaleBound) && worldToShapeScaleBound > 0.0f)
+        outCutter.worldToShapeScaleBound = worldToShapeScaleBound;
+
+    outCutter.shapeType = resolvedCutter.shapeType.id;
+    CopyCsgCutterInlineParameters(resolvedCutter.parameterBytes, resolvedCutter.parameterByteSize, outCutter);
+}
 
 [[nodiscard]] static bool ReserveCsgStructuredBuffer(
     Core::Graphics& graphics,
@@ -59,26 +185,80 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static bool CsgCutterIntersectsReceiver(
+[[nodiscard]] static CsgClipCutterResolveResult ResolveReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
     const CsgReceiverCpuBounds& receiverBounds,
-    const Scene::TransformComponent* transform
+    const Scene::TransformComponent* transform,
+    CsgResolvedClipCutter& outCutter
 ){
+    outCutter = CsgResolvedClipCutter{};
+    if(!shapeRegistry.findShapeType(cutter.shapeType, outCutter.shapeType))
+        return CsgClipCutterResolveResult::Skipped;
+    if(!ResolveCsgCutterParameterBytes(outCutter.shapeType, cutter, outCutter.parameterBytes, outCutter.parameterByteSize))
+        return CsgClipCutterResolveResult::Skipped;
+    outCutter.cutter = &cutter;
+
     SIMDVector receiverMinBounds;
     SIMDVector receiverMaxBounds;
-    if(!ECSRenderCsgDetail::BuildCsgReceiverWorldBounds(receiverBounds, transform, receiverMinBounds, receiverMaxBounds))
-        return true;
+    if(!BuildCsgReceiverWorldBounds(receiverBounds, transform, receiverMinBounds, receiverMaxBounds))
+        return CsgClipCutterResolveResult::Ready;
 
     SIMDVector cutterMinBounds;
     SIMDVector cutterMaxBounds;
     bool finiteBounds = false;
-    if(!ECSRenderCsgDetail::BuildCsgCutterComponentWorldBounds(shapeRegistry, cutter, cutterMinBounds, cutterMaxBounds, finiteBounds))
-        return false;
+    if(!shapeRegistry.buildShapeBounds(
+        outCutter.shapeType.id,
+        LoadFloat(cutter.shapeToWorld),
+        outCutter.parameterBytes,
+        outCutter.parameterByteSize,
+        cutterMinBounds,
+        cutterMaxBounds,
+        finiteBounds
+    ))
+        return CsgClipCutterResolveResult::Skipped;
     if(!finiteBounds)
-        return true;
+        return CsgClipCutterResolveResult::Ready;
 
-    return AabbTests::Intersects(receiverMinBounds, receiverMaxBounds, cutterMinBounds, cutterMaxBounds);
+    return AabbTests::Intersects(receiverMinBounds, receiverMaxBounds, cutterMinBounds, cutterMaxBounds)
+        ? CsgClipCutterResolveResult::Ready
+        : CsgClipCutterResolveResult::Skipped
+    ;
+}
+
+template<typename CutterHandler>
+[[nodiscard]] static bool ForEachReceiverClipCutter(
+    const CsgShapeRegistry& shapeRegistry,
+    const CsgFrameReceiverLookup& receiverLookup,
+    const Core::ECS::EntityID entity,
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform,
+    CutterHandler&& handler
+){
+    bool resolved = true;
+    receiverLookup.forEachReceiverCutter(
+        entity,
+        [&](const Core::ECS::EntityID, const CsgCutterComponent& cutter){
+            if(!resolved)
+                return;
+
+            CsgResolvedClipCutter resolvedCutter;
+            const CsgClipCutterResolveResult resolveResult = ResolveReceiverClipCutter(
+                shapeRegistry,
+                cutter,
+                receiverBounds,
+                transform,
+                resolvedCutter
+            );
+            if(resolveResult == CsgClipCutterResolveResult::Skipped)
+                return;
+            NWB_ASSERT(resolveResult == CsgClipCutterResolveResult::Ready);
+
+            if(!handler(resolvedCutter))
+                resolved = false;
+        }
+    );
+    return resolved;
 }
 
 
@@ -238,38 +418,25 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
 )const{
     outInfo = CsgReceiverClipDrawInfo{};
 
-    bool resolved = true;
-    receiverLookup.forEachReceiverCutter(
+    return __hidden_csg_resources::ForEachReceiverClipCutter(
+        csgShapeRegistry(),
+        receiverLookup,
         entity,
-        [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
-            static_cast<void>(cutterEntity);
-            if(!resolved || cutter.operation != CsgOperation::Subtract)
-                return;
-            if(!__hidden_csg_resources::CsgCutterIntersectsReceiver(csgShapeRegistry(), cutter, receiverBounds, transform))
-                return;
-
-            CsgShapeTypeInfo shapeType;
-            if(!csgShapeRegistry().findShapeType(cutter.shapeType, shapeType)){
-                resolved = false;
-                return;
-            }
-            const u8* parameterBytes = nullptr;
-            usize parameterByteSize = 0u;
-            if(!ECSRenderCsgDetail::ResolveCsgCutterParameterBytes(shapeType, cutter, parameterBytes, parameterByteSize))
-                return;
-            if(shapeType.desc.shaderModule){
+        receiverBounds,
+        transform,
+        [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
+            if(resolvedCutter.shapeType.desc.shaderModule){
                 if(!outInfo.evaluatorVariant)
-                    outInfo.evaluatorVariant = shapeType.desc.shaderModule;
-                else if(outInfo.evaluatorVariant != shapeType.desc.shaderModule){
-                    resolved = false;
-                    return;
+                    outInfo.evaluatorVariant = resolvedCutter.shapeType.desc.shaderModule;
+                else if(outInfo.evaluatorVariant != resolvedCutter.shapeType.desc.shaderModule){
+                    return false;
                 }
             }
             if(outInfo.cutterCount < Limit<u32>::s_Max)
                 ++outInfo.cutterCount;
+            return true;
         }
     );
-    return resolved;
 }
 
 bool RendererCsgSystem::appendCsgReceiverClipData(
@@ -288,36 +455,32 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         return false;
 
     SIMDMatrix worldToReceiver;
-    if(!ECSRenderCsgDetail::BuildCsgReceiverWorldToLocal(transform, worldToReceiver))
+    if(!__hidden_csg_resources::BuildCsgReceiverWorldToLocal(transform, worldToReceiver))
         return false;
 
     StoreFloat(worldToReceiver, &outRange.worldToReceiver);
     outRange.localBounds = receiverBounds;
     outRange.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
-    bool appendFailed = false;
-    receiverLookup.forEachReceiverCutter(
+    const bool appended = __hidden_csg_resources::ForEachReceiverClipCutter(
+        csgShapeRegistry(),
+        receiverLookup,
         entity,
-        [&](const Core::ECS::EntityID cutterEntity, const CsgCutterComponent& cutter){
-            static_cast<void>(cutterEntity);
-            if(appendFailed)
-                return;
-            if(!__hidden_csg_resources::CsgCutterIntersectsReceiver(csgShapeRegistry(), cutter, receiverBounds, transform))
-                return;
-
+        receiverBounds,
+        transform,
+        [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             CsgCutterGpuData cutterGpuData;
-            if(!ECSRenderCsgDetail::BuildCsgCutterGpuData(csgShapeRegistry(), cutter, cutterGpuData))
-                return;
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){
-                appendFailed = true;
-                return;
+                return false;
             }
+            __hidden_csg_resources::BuildResolvedClipCutterGpuData(resolvedCutter, cutterGpuData);
 
             csgFrameData.cutters.push_back(cutterGpuData);
             ++outRange.cutterCount;
+            return true;
         }
     );
 
-    return !appendFailed && outRange.cutterCount > 0u;
+    return appended && outRange.cutterCount > 0u;
 }
 
 

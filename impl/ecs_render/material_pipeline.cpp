@@ -101,6 +101,54 @@ namespace __hidden_material_pipeline{
     );
 }
 
+struct MaterialPipelineCsgBindingLayouts{
+    const Core::BindingLayoutHandle& clip;
+    const Core::BindingLayoutHandle& receiverSurfaceMask;
+    const Core::BindingLayoutHandle& intervalSample;
+    const Core::BindingLayoutHandle& avboitEmpty;
+};
+
+template<typename PipelineDesc>
+[[nodiscard]] bool AddCsgGraphicsBindingLayouts(
+    PipelineDesc& pipelineDesc,
+    const MaterialPipelineCsgBindingUse& csgBindingUse,
+    const MaterialPipelineCsgBindingLayouts& bindingLayouts
+){
+    if(!csgBindingUse.clip)
+        return true;
+    if(!bindingLayouts.clip)
+        return false;
+    if(csgBindingUse.receiverSurfaceMask && !bindingLayouts.receiverSurfaceMask)
+        return false;
+    if(csgBindingUse.intervalSample && !bindingLayouts.intervalSample)
+        return false;
+
+    pipelineDesc.addBindingLayout(bindingLayouts.clip);
+    if(csgBindingUse.receiverSurfaceMask)
+        pipelineDesc.addBindingLayout(bindingLayouts.receiverSurfaceMask);
+    if(csgBindingUse.intervalSample)
+        pipelineDesc.addBindingLayout(bindingLayouts.intervalSample);
+    return true;
+}
+
+[[nodiscard]] bool AddCsgComputeBindingLayouts(
+    Core::ComputePipelineDesc& pipelineDesc,
+    const MaterialPipelineCsgBindingUse& csgBindingUse,
+    const MaterialPipelineCsgBindingLayouts& bindingLayouts
+){
+    if(!csgBindingUse.clip)
+        return true;
+    if(!bindingLayouts.clip)
+        return false;
+    if(csgBindingUse.avboitClip){
+        if(!bindingLayouts.avboitEmpty)
+            return false;
+        pipelineDesc.addBindingLayout(bindingLayouts.avboitEmpty);
+    }
+    pipelineDesc.addBindingLayout(bindingLayouts.clip);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -163,16 +211,10 @@ bool RendererMaterialSystem::createRendererPipeline(
     const AStringView shaderVariant(materialInfo.shaderVariant.data(), materialInfo.shaderVariant.size());
     Core::GraphicsString csgShaderVariant(arena());
     Core::GraphicsString avboitCsgShaderVariant(arena());
-    const bool csgClipPipeline = ECSRenderMaterialShaderVariants::CsgClipPipeline(pipelineKey);
-    const bool avboitCsgClipPipeline = ECSRenderMaterialShaderVariants::AvboitCsgClipPipeline(pipelineKey);
-    const bool csgReceiverSurfaceMaskPipeline =
-        csgClipPipeline
-        && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(pass)
-    ;
-    const bool csgIntervalSamplePipeline =
-        csgClipPipeline
-        && MaterialPipelinePassUsesRendererCsgIntervalSample(pass)
-    ;
+    const MaterialPipelineCsgBindingUse csgBindingUse =
+        MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
+    const bool csgClipPipeline = csgBindingUse.clip;
+    const bool avboitCsgClipPipeline = csgBindingUse.avboitClip;
     ACompactString csgProjectEvaluatorModuleInclude;
     Core::GraphicsString csgProjectEvaluatorModuleAssignment(arena());
     AStringView materialProjectEvaluatorModuleAssignmentToAdd;
@@ -294,6 +336,12 @@ bool RendererMaterialSystem::createRendererPipeline(
 
     auto* device = graphics().getDevice();
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
+    const __hidden_material_pipeline::MaterialPipelineCsgBindingLayouts csgBindingLayouts{
+        csgState().m_clipBindingLayout,
+        csgState().m_receiverSurfaceBindingLayout,
+        csgState().m_intervalSampleBindingLayout,
+        avboitState().m_emptyBindingLayout
+    };
 
     auto tryBuildMeshPipeline = [&]() -> bool{
         if(!createMeshShaderResources())
@@ -334,19 +382,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         default:
             break;
         }
-        if(csgClipPipeline){
-            if(!csgState().m_clipBindingLayout)
-                return false;
-            if(csgReceiverSurfaceMaskPipeline && !csgState().m_receiverSurfaceBindingLayout)
-                return false;
-            if(csgIntervalSamplePipeline && !csgState().m_intervalSampleBindingLayout)
-                return false;
-            pipelineDesc.addBindingLayout(csgState().m_clipBindingLayout);
-            if(csgReceiverSurfaceMaskPipeline)
-                pipelineDesc.addBindingLayout(csgState().m_receiverSurfaceBindingLayout);
-            if(csgIntervalSamplePipeline)
-                pipelineDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
-        }
+        if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
+            return false;
 
         resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
@@ -392,13 +429,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(drawState().m_computeBindingLayout);
-        if(csgClipPipeline){
-            if(!csgState().m_clipBindingLayout)
-                return false;
-            if(avboitCsgClipPipeline)
-                computeDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
-            computeDesc.addBindingLayout(csgState().m_clipBindingLayout);
-        }
+        if(!__hidden_material_pipeline::AddCsgComputeBindingLayouts(computeDesc, csgBindingUse, csgBindingLayouts))
+            return false;
         resources.computePipeline = device->createComputePipeline(computeDesc);
         if(!resources.computePipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.c_str()));
@@ -428,19 +460,8 @@ bool RendererMaterialSystem::createRendererPipeline(
             emulationDesc.addBindingLayout(drawState().m_emulationViewBindingLayout);
             break;
         }
-        if(csgClipPipeline){
-            if(!csgState().m_clipBindingLayout)
-                return false;
-            if(csgReceiverSurfaceMaskPipeline && !csgState().m_receiverSurfaceBindingLayout)
-                return false;
-            if(csgIntervalSamplePipeline && !csgState().m_intervalSampleBindingLayout)
-                return false;
-            emulationDesc.addBindingLayout(csgState().m_clipBindingLayout);
-            if(csgReceiverSurfaceMaskPipeline)
-                emulationDesc.addBindingLayout(csgState().m_receiverSurfaceBindingLayout);
-            if(csgIntervalSamplePipeline)
-                emulationDesc.addBindingLayout(csgState().m_intervalSampleBindingLayout);
-        }
+        if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(emulationDesc, csgBindingUse, csgBindingLayouts))
+            return false;
         resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.c_str()));

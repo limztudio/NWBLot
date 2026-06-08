@@ -197,8 +197,6 @@ static void ApplyCutterTransform(
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
     cutter.receiverGroup = receiverGroup;
-    cutter.operation = NWB::Impl::CsgOperation::Subtract;
-    cutter.active = true;
     AssignCsgCutterTransform(cutter, LoadFloat(center), QuaternionIdentity());
 
     switch(shapeSlot){

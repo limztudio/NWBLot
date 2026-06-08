@@ -19,16 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CsgOperation{
-    enum Enum : u8{
-        Subtract = 0,
-    };
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct CsgReceiverComponent{
     Name receiverGroup = NAME_NONE;
 
@@ -69,7 +59,6 @@ struct CsgCutterComponent{
     Name receiverGroup = NAME_NONE;
 
     Name shapeType = NAME_NONE;
-    CsgOperation::Enum operation = CsgOperation::Subtract;
 
     Float34 worldToShape;
     Float34 shapeToWorld;
@@ -77,7 +66,6 @@ struct CsgCutterComponent{
     ParameterByteVector parameterBytes;
 
     bool active = true;
-    bool previewVisible = false;
 
     explicit CsgCutterComponent(Core::Alloc::GlobalArena& arena)
         : worldToShape(CsgIdentityTransform())

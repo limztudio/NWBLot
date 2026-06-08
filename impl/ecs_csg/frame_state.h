@@ -116,7 +116,6 @@ public:
         CsgReceiverPass::Enum receiverPass,
         CsgReceiverDrawState& outState
     )const;
-    [[nodiscard]] bool resolveReceiverCutterRange(Core::ECS::EntityID entity, CsgFrameCutterRange& outRange)const;
     template<typename CutterHandler>
     void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const{
         CsgFrameCutterRange range;
@@ -138,6 +137,7 @@ private:
     Core::ECS::World& m_world;
     CutterRangeMap m_cutterRanges;
     CutterRefVector m_cutterRefs;
+    [[nodiscard]] bool resolveReceiverCutterRange(Core::ECS::EntityID entity, CsgFrameCutterRange& outRange)const;
 };
 
 

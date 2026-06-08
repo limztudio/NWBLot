@@ -47,7 +47,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/material_shader_variants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_view_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_capacity_private.h"
-    "${CMAKE_CURRENT_LIST_DIR}/renderer_csg_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_csg_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_constants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_draw_types.h"

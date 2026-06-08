@@ -115,6 +115,37 @@ struct MaterialPipelineKey{
     MaterialPipelineCsgMode::Enum csgMode = MaterialPipelineCsgMode::None;
     Name csgEvaluatorVariant = NAME_NONE;
 };
+
+struct MaterialPipelineCsgBindingUse{
+    bool clip = false;
+    bool avboitClip = false;
+    bool receiverSurfaceMask = false;
+    bool intervalSample = false;
+};
+
+[[nodiscard]] inline MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(
+    const MaterialPipelineKey& pipelineKey,
+    const MaterialPipelinePass::Enum pass
+){
+    MaterialPipelineCsgBindingUse result;
+    result.clip =
+        pipelineKey.csgMode != MaterialPipelineCsgMode::None
+        && MaterialPipelinePassUsesRendererCsgShaderVariant(pass)
+    ;
+    result.avboitClip =
+        result.clip
+        && MaterialPipelinePassUsesRendererAvboit(pass)
+    ;
+    result.receiverSurfaceMask =
+        result.clip
+        && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(pass)
+    ;
+    result.intervalSample =
+        result.clip
+        && MaterialPipelinePassUsesRendererCsgIntervalSample(pass)
+    ;
+    return result;
+}
 struct MaterialPipelineKeyHasher{
     usize operator()(const MaterialPipelineKey& key)const;
 };

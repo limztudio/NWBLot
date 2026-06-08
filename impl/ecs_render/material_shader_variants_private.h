@@ -34,7 +34,7 @@ inline constexpr AStringView s_CsgIntervalSampleEnabledDefineAssignment = "NWB_C
 inline constexpr AStringView s_CsgIntervalSampleSetDefineName = "NWB_CSG_INTERVAL_SAMPLE_SET";
 inline constexpr AStringView s_CsgAvboitIntervalSampleSetDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_SET=3";
 inline constexpr AStringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
-inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 5u;
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 4u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,20 +48,6 @@ struct ShaderVariantDefineAssignment{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] inline bool CsgClipPipeline(const MaterialPipelineKey& pipelineKey){
-    if(pipelineKey.csgMode == MaterialPipelineCsgMode::None)
-        return false;
-
-    return MaterialPipelinePassUsesRendererCsgShaderVariant(pipelineKey.pass);
-}
-
-[[nodiscard]] inline bool AvboitCsgClipPipeline(const MaterialPipelineKey& pipelineKey){
-    if(!CsgClipPipeline(pipelineKey))
-        return false;
-
-    return MaterialPipelinePassUsesRendererAvboit(pipelineKey.pass);
-}
 
 [[nodiscard]] inline AStringView VariantSegmentDefineName(const AStringView segment){
     const usize equalPos = segment.find('=');
@@ -169,26 +155,6 @@ struct ShaderVariantDefineAssignment{
     }
     return true;
 }
-
-[[nodiscard]] inline bool BuildCsgClipShaderVariantName(const AStringView baseVariant, Core::GraphicsString& outVariant){
-    const ShaderVariantDefineAssignment defineAssignments[] = {
-        { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment },
-    };
-    return BuildCsgClipShaderVariantName(baseVariant, defineAssignments, 1u, outVariant);
-}
-
-[[nodiscard]] inline bool BuildAvboitCsgClipShaderVariantName(const AStringView baseVariant, Core::GraphicsString& outVariant){
-    const ShaderVariantDefineAssignment defineAssignments[] = {
-        { s_CsgClipSetDefineName, s_CsgAvboitClipSetDefineAssignment },
-        { s_CsgIntervalSampleSetDefineName, s_CsgAvboitIntervalSampleSetDefineAssignment },
-        { s_CsgEnabledDefineName, s_CsgEnabledDefineAssignment },
-    };
-    return BuildCsgClipShaderVariantName(baseVariant, defineAssignments, 3u, outVariant);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 

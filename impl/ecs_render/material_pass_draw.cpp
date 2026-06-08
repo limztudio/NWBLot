@@ -15,6 +15,83 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_material_pass_draw{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MaterialPassCsgBindingSets{
+    const Core::BindingSetHandle& clip;
+    const Core::BindingSetHandle& receiverSurfaceMask;
+    const Core::BindingSetHandle& intervalSample;
+};
+
+[[nodiscard]] static bool CsgResourcesReadyForPipelineKey(
+    const MaterialPipelineKey& pipelineKey,
+    const MaterialPipelinePass::Enum pass,
+    const MaterialPassCsgBindingSets& bindingSets,
+    const bool requireIntervalSample
+){
+    const MaterialPipelineCsgBindingUse csgBindingUse = MaterialPipelineResolveCsgBindingUse(pipelineKey, pass);
+    if(csgBindingUse.clip && !bindingSets.clip)
+        return false;
+    if(csgBindingUse.receiverSurfaceMask && !bindingSets.receiverSurfaceMask)
+        return false;
+    if(requireIntervalSample && csgBindingUse.intervalSample && !bindingSets.intervalSample)
+        return false;
+    return true;
+}
+
+static void AssertCsgBindingSetsReady(
+    const MaterialPipelineCsgBindingUse& csgBindingUse,
+    const MaterialPassCsgBindingSets& bindingSets
+){
+    NWB_ASSERT(!csgBindingUse.clip || bindingSets.clip);
+    NWB_ASSERT(!csgBindingUse.receiverSurfaceMask || bindingSets.receiverSurfaceMask);
+    NWB_ASSERT(!csgBindingUse.intervalSample || bindingSets.intervalSample);
+}
+
+static void SetCsgBindingSetResourceStates(
+    RendererCsgSystem& csgSystem,
+    Core::CommandList& commandList,
+    const MaterialPipelineCsgBindingUse& csgBindingUse,
+    const MaterialPassCsgBindingSets& bindingSets
+){
+    if(!csgBindingUse.clip)
+        return;
+
+    csgSystem.setCsgClipBufferStates(commandList);
+    if(csgBindingUse.receiverSurfaceMask)
+        commandList.setResourceStatesForBindingSet(bindingSets.receiverSurfaceMask.get());
+    if(csgBindingUse.intervalSample)
+        commandList.setResourceStatesForBindingSet(bindingSets.intervalSample.get());
+}
+
+template<typename GraphicsState>
+static void AddCsgGraphicsBindingSets(
+    GraphicsState& graphicsState,
+    const MaterialPipelineCsgBindingUse& csgBindingUse,
+    const MaterialPassCsgBindingSets& bindingSets
+){
+    if(csgBindingUse.clip)
+        graphicsState.addBindingSet(bindingSets.clip.get());
+    if(csgBindingUse.receiverSurfaceMask)
+        graphicsState.addBindingSet(bindingSets.receiverSurfaceMask.get());
+    if(csgBindingUse.intervalSample)
+        graphicsState.addBindingSet(bindingSets.intervalSample.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererMaterialSystem::setMaterialPassCommonBufferStates(
     Core::CommandList& commandList,
     const MeshResources& mesh
@@ -43,6 +120,11 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(const MaterialPassDr
 }
 
 bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems){
+    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
     for(const MaterialPassDrawItem& drawItem : drawItems){
         MeshResources* mesh = nullptr;
         MaterialPipelineResources* pipelineResources = nullptr;
@@ -54,20 +136,12 @@ bool RendererMaterialSystem::meshMaterialPassDrawResourcesReady(const MaterialPa
             return false;
         }
 
-        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        const bool readsCsgIntervalSample =
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgIntervalSample(drawItem.pipelineKey.pass)
-        ;
-        if(csgClipDraw && !csgState().m_clipBindingSet)
-            return false;
-        if(readsCsgIntervalSample && !csgState().m_intervalSampleBindingSet)
-            return false;
-        if(
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
-            && !csgState().m_receiverSurfaceBindingSet
-        )
+        if(!__hidden_material_pass_draw::CsgResourcesReadyForPipelineKey(
+            drawItem.pipelineKey,
+            drawItem.pipelineKey.pass,
+            csgBindingSets,
+            true
+        ))
             return false;
     }
     return true;
@@ -79,6 +153,11 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Materia
     if(!drawState().m_emulationViewBindingSet)
         return false;
 
+    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
     for(const MaterialPassDrawItem& drawItem : drawItems){
         MeshResources* mesh = nullptr;
         MaterialPipelineResources* pipelineResources = nullptr;
@@ -96,20 +175,12 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(const Materia
             return false;
         }
 
-        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        const bool readsCsgIntervalSample =
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgIntervalSample(drawItem.pipelineKey.pass)
-        ;
-        if(csgClipDraw && !csgState().m_clipBindingSet)
-            return false;
-        if(readsCsgIntervalSample && !csgState().m_intervalSampleBindingSet)
-            return false;
-        if(
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
-            && !csgState().m_receiverSurfaceBindingSet
-        )
+        if(!__hidden_material_pass_draw::CsgResourcesReadyForPipelineKey(
+            drawItem.pipelineKey,
+            drawItem.pipelineKey.pass,
+            csgBindingSets,
+            true
+        ))
             return false;
     }
     return true;
@@ -123,6 +194,11 @@ bool RendererMaterialSystem::prepareMaterialPassDrawResources(const MaterialPass
 
 bool RendererMaterialSystem::prepareMeshMaterialPassDrawResources(const MaterialPassDrawItemVector& drawItems){
     bool ready = true;
+    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
@@ -136,14 +212,12 @@ bool RendererMaterialSystem::prepareMeshMaterialPassDrawResources(const Material
             return;
         }
 
-        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(csgClipDraw && !csgState().m_clipBindingSet)
-            ready = false;
-        if(
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
-            && !csgState().m_receiverSurfaceBindingSet
-        )
+        if(!__hidden_material_pass_draw::CsgResourcesReadyForPipelineKey(
+            drawItem.pipelineKey,
+            drawItem.pipelineKey.pass,
+            csgBindingSets,
+            false
+        ))
             ready = false;
     });
     return ready;
@@ -156,6 +230,11 @@ bool RendererMaterialSystem::prepareComputeMaterialPassDrawResources(const Mater
         return false;
 
     bool ready = true;
+    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
@@ -170,14 +249,12 @@ bool RendererMaterialSystem::prepareComputeMaterialPassDrawResources(const Mater
             return;
         }
 
-        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        if(csgClipDraw && !csgState().m_clipBindingSet)
-            ready = false;
-        if(
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(drawItem.pipelineKey.pass)
-            && !csgState().m_receiverSurfaceBindingSet
-        )
+        if(!__hidden_material_pass_draw::CsgResourcesReadyForPipelineKey(
+            drawItem.pipelineKey,
+            drawItem.pipelineKey.pass,
+            csgBindingSets,
+            false
+        ))
             ready = false;
     });
     return ready;
@@ -259,32 +336,27 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
+    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
         NWB_ASSERT(pipelineResources.meshletPipeline);
-        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        const bool writesCsgReceiverSurfaceMask =
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(context.pass)
-        ;
-        const bool readsCsgIntervalSample =
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgIntervalSample(context.pass)
-        ;
+        const MaterialPipelineCsgBindingUse csgBindingUse =
+            MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
         const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
         NWB_ASSERT(mesh.meshBindingSet);
-        NWB_ASSERT(!csgClipDraw || csgState().m_clipBindingSet);
-        NWB_ASSERT(!writesCsgReceiverSurfaceMask || csgState().m_receiverSurfaceBindingSet);
-        NWB_ASSERT(!readsCsgIntervalSample || csgState().m_intervalSampleBindingSet);
+        __hidden_material_pass_draw::AssertCsgBindingSetsReady(csgBindingUse, csgBindingSets);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
-        if(csgClipDraw){
-            m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
-            if(writesCsgReceiverSurfaceMask)
-                context.commandList.setResourceStatesForBindingSet(csgState().m_receiverSurfaceBindingSet.get());
-            if(readsCsgIntervalSample)
-                context.commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
-        }
+        __hidden_material_pass_draw::SetCsgBindingSetResourceStates(
+            m_renderer.csgSystem(),
+            context.commandList,
+            csgBindingUse,
+            csgBindingSets
+        );
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -293,14 +365,9 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         meshletState.addBindingSet(mesh.meshBindingSet.get());
         if(context.passBindingSet)
             meshletState.addBindingSet(context.passBindingSet);
-        else if(csgClipDraw && usesAvboit)
+        else if(csgBindingUse.clip && usesAvboit)
             meshletState.addBindingSet(nullptr);
-        if(csgClipDraw)
-            meshletState.addBindingSet(csgState().m_clipBindingSet.get());
-        if(writesCsgReceiverSurfaceMask)
-            meshletState.addBindingSet(csgState().m_receiverSurfaceBindingSet.get());
-        if(readsCsgIntervalSample)
-            meshletState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
+        __hidden_material_pass_draw::AddCsgGraphicsBindingSets(meshletState, csgBindingUse, csgBindingSets);
 
         context.commandList.setMeshletState(meshletState);
 
@@ -323,42 +390,37 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     NWB_ASSERT(drawState().m_emulationViewBindingSet);
 
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(context.pass);
+    const __hidden_material_pass_draw::MaterialPassCsgBindingSets csgBindingSets{
+        csgState().m_clipBindingSet,
+        csgState().m_receiverSurfaceBindingSet,
+        csgState().m_intervalSampleBindingSet
+    };
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         NWB_ASSERT(materialPassDrawResourcesReady(mesh));
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(pipelineResources.emulationPipeline);
-        const bool csgClipDraw = drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None;
-        const bool writesCsgReceiverSurfaceMask =
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgReceiverSurfaceMask(context.pass)
-        ;
-        const bool readsCsgIntervalSample =
-            csgClipDraw
-            && MaterialPipelinePassUsesRendererCsgIntervalSample(context.pass)
-        ;
+        const MaterialPipelineCsgBindingUse csgBindingUse =
+            MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
         NWB_ASSERT(mesh.computeBindingSet);
         NWB_ASSERT(mesh.emulationVertexBuffer);
-        NWB_ASSERT(!csgClipDraw || csgState().m_clipBindingSet);
-        NWB_ASSERT(!writesCsgReceiverSurfaceMask || csgState().m_receiverSurfaceBindingSet);
-        NWB_ASSERT(!readsCsgIntervalSample || csgState().m_intervalSampleBindingSet);
+        __hidden_material_pass_draw::AssertCsgBindingSetsReady(csgBindingUse, csgBindingSets);
 
         setMaterialPassCommonBufferStates(context.commandList, mesh);
-        if(csgClipDraw){
-            m_renderer.csgSystem().setCsgClipBufferStates(context.commandList);
-            if(writesCsgReceiverSurfaceMask)
-                context.commandList.setResourceStatesForBindingSet(csgState().m_receiverSurfaceBindingSet.get());
-            if(readsCsgIntervalSample)
-                context.commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
-        }
+        __hidden_material_pass_draw::SetCsgBindingSetResourceStates(
+            m_renderer.csgSystem(),
+            context.commandList,
+            csgBindingUse,
+            csgBindingSets
+        );
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 
         Core::ComputeState computeState;
         computeState.setPipeline(pipelineResources.computePipeline.get());
         computeState.addBindingSet(mesh.computeBindingSet.get());
-        if(csgClipDraw && usesAvboit)
+        if(csgBindingUse.clip && usesAvboit)
             computeState.addBindingSet(nullptr);
-        if(csgClipDraw)
-            computeState.addBindingSet(csgState().m_clipBindingSet.get());
+        if(csgBindingUse.clip)
+            computeState.addBindingSet(csgBindingSets.clip.get());
 
         context.commandList.setComputeState(computeState);
 
@@ -389,24 +451,14 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
                 .setOffset(0)
         );
         if(usesAvboit){
-            graphicsState.addBindingSet(csgClipDraw ? drawState().m_emulationViewBindingSet.get() : nullptr);
+            graphicsState.addBindingSet(csgBindingUse.clip ? drawState().m_emulationViewBindingSet.get() : nullptr);
             graphicsState.addBindingSet(context.passBindingSet);
-            if(csgClipDraw)
-                graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
-            if(writesCsgReceiverSurfaceMask)
-                graphicsState.addBindingSet(csgState().m_receiverSurfaceBindingSet.get());
-            if(readsCsgIntervalSample)
-                graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
+            __hidden_material_pass_draw::AddCsgGraphicsBindingSets(graphicsState, csgBindingUse, csgBindingSets);
         }
         else{
             graphicsState.addBindingSet(drawState().m_emulationViewBindingSet.get());
-            if(csgClipDraw){
-                graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
-                if(writesCsgReceiverSurfaceMask)
-                    graphicsState.addBindingSet(csgState().m_receiverSurfaceBindingSet.get());
-                if(readsCsgIntervalSample)
-                    graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
-            }
+            if(csgBindingUse.clip)
+                __hidden_material_pass_draw::AddCsgGraphicsBindingSets(graphicsState, csgBindingUse, csgBindingSets);
             else if(context.passBindingSet)
                 graphicsState.addBindingSet(context.passBindingSet);
         }

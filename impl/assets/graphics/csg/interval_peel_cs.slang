@@ -81,11 +81,9 @@ void nwbCsgBuildPixelRay(const uint2 pixel, out float3 outRayBegin, out float3 o
     outRayEnd = nwbCsgClipToWorldPosition(float4(ndc, 1.0, 1.0));
 }
 
-uint nwbCsgPackIntervalId(const uint receiverIndex, const uint cutterIndex, const uint operation){
-    const uint receiverBits = (receiverIndex + 1u) & 0x3ffu;
-    const uint operationBits = operation & 0x3u;
-    const uint cutterBits = (cutterIndex + 1u) & 0xfffffu;
-    return (operationBits << 30u) | (receiverBits << 20u) | cutterBits;
+uint nwbCsgPackIntervalId(const uint receiverIndex){
+    const uint receiverBits = (receiverIndex + 1u) & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
+    return receiverBits;
 }
 
 NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
@@ -192,8 +190,6 @@ bool nwbCsgFindCutterIntervalOnRay(
 
     const NwbCsgReceiverRange receiverRange = g_NwbCsgReceiverRanges[receiverIndex];
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
-    if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
-        return false;
 
     const float3 rayVector = rayEnd - rayBegin;
     float beginT;
@@ -238,7 +234,7 @@ bool nwbCsgFindCutterIntervalOnRay(
                 outEntry.backDepth = max(frontDepth, backDepth);
                 const float3 viewFacingFallback = normalize(rayBegin - rayEnd);
                 outEntry.backCapNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback);
-                outEntry.id = nwbCsgPackIntervalId(receiverIndex, cutterIndex, cutter.operation);
+                outEntry.id = nwbCsgPackIntervalId(receiverIndex);
                 return outEntry.backDepth >= outEntry.frontDepth && outEntry.id != 0u;
             }
         }

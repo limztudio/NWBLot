@@ -57,9 +57,9 @@ struct CsgReceiverRangeGpuData{
 
 struct CsgCutterGpuData{
     u32 shapeType = 0u;
-    u32 operation = 0u;
     f32 worldToShapeScaleBound = 1.f;
-    f32 padding0 = 0.f;
+    u32 padding0 = 0u;
+    u32 padding1 = 0u;
     Float34 worldToShape = MakeIdentityCsgMatrix();
     Float4 parameter0 = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);

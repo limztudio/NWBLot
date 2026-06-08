@@ -72,9 +72,7 @@ static void TestCsgCutterComponent(TestContext& context){
     NWB_CSG_TEST_CHECK(context, cutterEntity.hasComponent<NWB::Impl::CsgCutterComponent>());
     NWB_CSG_TEST_CHECK(context, cutter.receiverGroup == NAME_NONE);
     NWB_CSG_TEST_CHECK(context, cutter.shapeType == NAME_NONE);
-    NWB_CSG_TEST_CHECK(context, cutter.operation == NWB::Impl::CsgOperation::Subtract);
     NWB_CSG_TEST_CHECK(context, cutter.active);
-    NWB_CSG_TEST_CHECK(context, !cutter.previewVisible);
     NWB_CSG_TEST_CHECK(context, cutter.parameterBytes.empty());
 
     NWB_CSG_TEST_CHECK(context, cutter.worldToShape._11 == 1.0f);

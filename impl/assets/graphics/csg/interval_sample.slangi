@@ -55,12 +55,8 @@ struct NwbCsgIntervalCapPixel{
 
 
 uint nwbCsgIntervalIdReceiverIndex(const uint id){
-    const uint receiverBits = (id >> 20u) & 0x3ffu;
+    const uint receiverBits = id & NWB_CSG_RECEIVER_SURFACE_MASK_RECEIVER_MASK;
     return receiverBits == 0u ? 0xffffffffu : receiverBits - 1u;
-}
-
-uint nwbCsgIntervalIdOperation(const uint id){
-    return (id >> 30u) & 0x3u;
 }
 
 uint nwbCsgReceiverSurfaceLayerCount(){
@@ -391,8 +387,6 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCapAtPixels(
         if(id == 0u)
             continue;
         const uint receiverIndex = nwbCsgIntervalIdReceiverIndex(id);
-        if(nwbCsgIntervalIdOperation(id) != NWB_CSG_OPERATION_SUBTRACT)
-            continue;
 
         const float2 intervalDepth = g_NwbCsgSampleIntervalDepth.Load(texel);
         const float frontDepth = min(intervalDepth.x, intervalDepth.y);
@@ -443,8 +437,6 @@ bool nwbCsgReceiverIntervalPixelDiscardAtPixels(
         if(id == 0u)
             continue;
         if(nwbCsgIntervalIdReceiverIndex(id) != receiverIndex)
-            continue;
-        if(nwbCsgIntervalIdOperation(id) != NWB_CSG_OPERATION_SUBTRACT)
             continue;
 
         const float2 intervalDepth = g_NwbCsgSampleIntervalDepth.Load(texel);

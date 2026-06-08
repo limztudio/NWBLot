@@ -89,8 +89,6 @@ static void ApplyTransparentCsgRotation(
     auto cutterEntity = world.createEntity();
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
-    cutter.operation = NWB::Impl::CsgOperation::Subtract;
-    cutter.active = true;
     cutter.shapeType = Name("engine/csg/plane");
 
     NWB::Impl::CsgPlaneShapeParameters parameters;

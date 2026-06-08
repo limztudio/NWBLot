@@ -247,8 +247,6 @@ private:
 #else
         cutter.shapeType = Name("engine/csg/capsule");
 #endif
-        cutter.operation = NWB::Impl::CsgOperation::Subtract;
-        cutter.active = true;
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
         NWB::Impl::CsgSphereShapeParameters parameters;

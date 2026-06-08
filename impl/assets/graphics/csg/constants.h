@@ -9,10 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_CSG_SHAPE_INVALID 0u
-
-#define NWB_CSG_OPERATION_SUBTRACT 0u
-
 #define NWB_CSG_MESHLET_CLASS_UNAFFECTED 0u
 #define NWB_CSG_MESHLET_CLASS_INTERSECTING 1u
 #define NWB_CSG_MESHLET_CLASS_FULLY_REMOVED 2u

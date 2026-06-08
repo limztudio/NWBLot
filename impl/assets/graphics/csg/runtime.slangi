@@ -16,9 +16,9 @@
 
 struct NwbCsgCutter{
     uint shapeType;
-    uint operation;
     float worldToShapeScaleBound;
-    float padding0;
+    uint padding0;
+    uint padding1;
     float4 worldToShapeRow0;
     float4 worldToShapeRow1;
     float4 worldToShapeRow2;
@@ -259,8 +259,6 @@ bool nwbCsgReceiverPixelDiscardWithWorldTolerance(
     const float safeWorldDistanceTolerance = max(worldDistanceTolerance, 0.0);
     for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
         const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
-        if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
-            continue;
 
         const float shapeDistanceTolerance = safeWorldDistanceTolerance * cutter.worldToShapeScaleBound;
         if(nwbCsgEvaluateDistance(worldPosition, cutter) <= shapeDistanceTolerance)
@@ -275,8 +273,6 @@ uint nwbCsgClassifyMeshlet(const float3 center, const float radius){
     bool intersectsAny = false;
     for(uint cutterIndex = 0u; cutterIndex < receiverRange.cutterCount; ++cutterIndex){
         const NwbCsgCutter cutter = g_NwbCsgCutters[receiverRange.firstCutter + cutterIndex];
-        if(cutter.operation != NWB_CSG_OPERATION_SUBTRACT)
-            continue;
 
         const float distance = nwbCsgEvaluateDistance(center, cutter);
         const float radiusShape = radius * cutter.worldToShapeScaleBound;

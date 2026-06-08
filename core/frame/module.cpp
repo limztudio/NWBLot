@@ -99,6 +99,11 @@ bool Frame::render(){
     return true;
 }
 
+const tchar* Frame::windowTitleOrDefault()const{
+    const tchar* title = m_graphics.getWindowTitle();
+    return title && title[0] != 0 ? title : NWB_TEXT("NWB");
+}
+
 const tchar* Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus);
 

@@ -803,6 +803,11 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
+const tchar* NWB::QueryProjectWindowTitle(){
+    return NWB_TEXT("NWB Skinned Cone Benchmark");
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -90,6 +90,7 @@ public:
 
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
+const tchar* QueryProjectWindowTitle();
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
 bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld);

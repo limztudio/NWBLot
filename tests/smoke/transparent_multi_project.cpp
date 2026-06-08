@@ -318,6 +318,15 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
+const tchar* NWB::QueryProjectWindowTitle(){
+#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+    return NWB_TEXT("NWB Transparent CSG Smoke");
+#else
+    return NWB_TEXT("NWB Transparent Multi Smoke");
+#endif
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

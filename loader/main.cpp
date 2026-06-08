@@ -197,7 +197,14 @@ static int RunProjectRuntime(const __hidden_loader::LoaderOptions& options, void
             return -1;
         }
 
+        const tchar* projectWindowTitle = NWB::QueryProjectWindowTitle();
+        if(!projectWindowTitle || projectWindowTitle[0] == 0){
+            NWB_LOGGER_FATAL(NWB_TEXT("Invalid project window title"));
+            return -1;
+        }
+
         NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
+        frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
         const Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory();
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))

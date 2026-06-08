@@ -1,7 +1,7 @@
 find_package(Python3 COMPONENTS Interpreter)
 
 if(Python3_Interpreter_FOUND)
-    function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY)
+    function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
         if(TARGET nwb_logserver)
             set(_nwb_smoke_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
         else()
@@ -15,6 +15,7 @@ if(Python3_Interpreter_FOUND)
                 "--executable" "${EXECUTABLE_PATH}"
                 "--working-directory" "${WORKING_DIRECTORY}"
                 "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}"
+                "--window-title" "${WINDOW_TITLE}"
                 ${_nwb_smoke_logserver_args}
                 ${ARGN}
         )
@@ -54,6 +55,7 @@ if(Python3_Interpreter_FOUND)
             testbed_window_capture.bmp
             "$<TARGET_FILE:testbed>"
             "${NWB_OUTPUT_ROOT}"
+            "NWB Testbed"
         )
     endif()
 
@@ -115,6 +117,7 @@ if(Python3_Interpreter_FOUND)
             transparent_multi_capture.bmp
             "$<TARGET_FILE:nwb_transparent_multi_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
+            "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
         )
 
@@ -123,6 +126,7 @@ if(Python3_Interpreter_FOUND)
             transparent_csg_capture_early.bmp
             "$<TARGET_FILE:nwb_transparent_csg_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
+            "NWB Transparent CSG Smoke"
             "--expect-transparent-multi"
             "--expect-transparent-csg"
             "--settle-seconds" "0.75"
@@ -135,6 +139,7 @@ if(Python3_Interpreter_FOUND)
             transparent_csg_capture_mid.bmp
             "$<TARGET_FILE:nwb_transparent_csg_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
+            "NWB Transparent CSG Smoke"
             "--expect-transparent-multi"
             "--expect-transparent-csg"
             "--settle-seconds" "2.0"
@@ -147,6 +152,7 @@ if(Python3_Interpreter_FOUND)
             transparent_csg_capture_late.bmp
             "$<TARGET_FILE:nwb_transparent_csg_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
+            "NWB Transparent CSG Smoke"
             "--expect-transparent-multi"
             "--expect-transparent-csg"
             "--settle-seconds" "3.25"
@@ -205,6 +211,7 @@ if(Python3_Interpreter_FOUND)
             csg_visible_capture.bmp
             "$<TARGET_FILE:nwb_csg_visible_smoke>"
             "${_nwb_csg_visible_runtime_root}"
+            "NWB CSG Visible Smoke"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -228,6 +235,7 @@ if(Python3_Interpreter_FOUND)
             csg_visible_compute_emulation_capture.bmp
             "$<TARGET_FILE:nwb_csg_visible_compute_emulation_smoke>"
             "${_nwb_csg_visible_runtime_root}"
+            "NWB CSG Visible Compute Emulation Smoke"
             "--expect-log-message" "selected CS + PS by compiling its mesh shader for compute emulation"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -288,6 +296,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_visible_capture_early.bmp
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Skinned CSG Smoke"
             "--settle-seconds" "0.75"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -298,6 +307,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_visible_capture.bmp
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Skinned CSG Smoke"
             "--settle-seconds" "2.0"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -308,6 +318,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_visible_capture_late.bmp
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Skinned CSG Smoke"
             "--settle-seconds" "3.25"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -333,6 +344,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_sphere_visible_capture_early.bmp
             "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Skinned Sphere CSG Smoke"
             "--settle-seconds" "0.75"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -343,6 +355,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_sphere_visible_capture_mid.bmp
             "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Skinned Sphere CSG Smoke"
             "--settle-seconds" "2.0"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -353,6 +366,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_sphere_visible_capture_late.bmp
             "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Skinned Sphere CSG Smoke"
             "--settle-seconds" "3.25"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -379,6 +393,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_transparent_sphere_visible_capture_early.bmp
             "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Transparent Skinned Sphere CSG Smoke"
             "--settle-seconds" "0.75"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -389,6 +404,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_transparent_sphere_visible_capture_mid.bmp
             "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Transparent Skinned Sphere CSG Smoke"
             "--settle-seconds" "2.0"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
@@ -399,6 +415,7 @@ if(Python3_Interpreter_FOUND)
             csg_skinned_transparent_sphere_visible_capture_late.bmp
             "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
+            "NWB Transparent Skinned Sphere CSG Smoke"
             "--settle-seconds" "3.25"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"

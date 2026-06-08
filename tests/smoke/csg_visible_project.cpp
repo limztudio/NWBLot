@@ -423,6 +423,15 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
+const tchar* NWB::QueryProjectWindowTitle(){
+#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION)
+    return NWB_TEXT("NWB CSG Visible Compute Emulation Smoke");
+#else
+    return NWB_TEXT("NWB CSG Visible Smoke");
+#endif
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

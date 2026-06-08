@@ -383,6 +383,19 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
+const tchar* NWB::QueryProjectWindowTitle(){
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return NWB_TEXT("NWB Transparent Skinned Sphere CSG Smoke");
+#elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+    return NWB_TEXT("NWB Transparent Skinned CSG Smoke");
+#elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
+    return NWB_TEXT("NWB Skinned Sphere CSG Smoke");
+#else
+    return NWB_TEXT("NWB Skinned CSG Smoke");
+#endif
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

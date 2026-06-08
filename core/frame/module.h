@@ -84,6 +84,7 @@ public:
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
+    [[nodiscard]] const tchar* windowTitleOrDefault()const;
     [[nodiscard]] inline bool quitRequested()const{ return m_quitRequested; }
     [[nodiscard]] const tchar* syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 

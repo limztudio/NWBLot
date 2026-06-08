@@ -481,7 +481,7 @@ bool Frame::init(){
     FrameDetail::EnableProcessDpiAwareness();
 
     const tchar* ClassName = NWB_TEXT("NWB_FRAME");
-    const tchar* AppName = NWB_TEXT("NWBLot");
+    const tchar* AppName = windowTitleOrDefault();
     constexpr DWORD StyleEx = 0;
     constexpr DWORD Style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
     auto& frameData = data<Common::WinFrame>();

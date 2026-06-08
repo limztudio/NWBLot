@@ -1437,7 +1437,7 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, default=Path.cwd(), help="Working directory for launched processes.")
     parser.add_argument("--output", type=Path, required=True, help="Screenshot output path. The script writes a 24-bit BMP.")
     parser.add_argument("--window-handle", type=parse_int, help="Capture an existing native window handle instead of launching testbed.")
-    parser.add_argument("--window-title", default="NWBLoader", help="Fallback title used when the window does not publish a PID.")
+    parser.add_argument("--window-title", default="NWBLot", help="Fallback title used when the window does not publish a PID.")
     parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")

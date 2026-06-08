@@ -377,7 +377,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData){
 
 
 bool InitX11Frame(Frame& frame){
-    constexpr const tchar* AppName = NWB_TEXT("NWBLoader");
+    constexpr const tchar* AppName = NWB_TEXT("NWBLot");
     constexpr long EventMask =
         ExposureMask
         | FocusChangeMask

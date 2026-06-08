@@ -886,7 +886,7 @@ static void ProcessKeyRepeat(WaylandContext& context){
 
 
 bool InitWaylandFrame(Frame& frame){
-    constexpr const char* AppName = "NWBLoader";
+    constexpr const char* AppName = "NWBLot";
 
     auto& frameData = frame.data<Common::LinuxFrame>();
 

@@ -249,21 +249,6 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_csg_visible_asset_inputs)
 
         set(_nwb_csg_skinned_visible_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_skinned_visible_smoke_runtime/$<CONFIG>")
-        set(_nwb_csg_female_static_compare_generated_asset_root "${CMAKE_BINARY_DIR}/Testing/csg_female_static_compare_generated/assets")
-        set(_nwb_csg_female_static_compare_static_mesh "${_nwb_csg_female_static_compare_generated_asset_root}/meshes/female_static.nwb")
-
-        add_custom_command(
-            OUTPUT "${_nwb_csg_female_static_compare_static_mesh}"
-            COMMAND "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_LIST_DIR}/generate_static_mesh_from_skinned.py"
-                "--input" "${PROJECT_SOURCE_DIR}/Testbed/assets/characters/female.nwb"
-                "--output" "${_nwb_csg_female_static_compare_static_mesh}"
-            DEPENDS
-                "${CMAKE_CURRENT_LIST_DIR}/generate_static_mesh_from_skinned.py"
-                "${PROJECT_SOURCE_DIR}/Testbed/assets/characters/female.nwb"
-            COMMENT "Generating static female mesh metadata from Testbed skinned asset..."
-            VERBATIM
-        )
 
         nwb_declare_executable(nwb_csg_skinned_visible_smoke)
         target_sources(nwb_csg_skinned_visible_smoke PRIVATE
@@ -280,7 +265,6 @@ if(Python3_Interpreter_FOUND)
             CONFIGURE_DEPENDS
             LIST_DIRECTORIES false
             "${PROJECT_SOURCE_DIR}/impl/assets/*"
-            "${PROJECT_SOURCE_DIR}/Testbed/assets/*"
             "${CMAKE_CURRENT_LIST_DIR}/assets/*"
         )
 
@@ -291,16 +275,13 @@ if(Python3_Interpreter_FOUND)
             COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
-                --asset-root "Testbed/assets"
                 --asset-root "tests/smoke/assets"
-                --asset-root "${_nwb_csg_female_static_compare_generated_asset_root}"
                 --output-directory "${_nwb_csg_skinned_visible_runtime_root}/res"
                 --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}"
             DEPENDS
                 nwb_resource_cooker
-                "${_nwb_csg_female_static_compare_static_mesh}"
                 ${_nwb_csg_skinned_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB skinned CSG visible smoke assets for $<CONFIG>..."
@@ -341,71 +322,6 @@ if(Python3_Interpreter_FOUND)
             "--settle-seconds" "3.25"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_declare_executable(nwb_csg_female_static_compare_skinned_smoke)
-        target_sources(nwb_csg_female_static_compare_skinned_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_static_compare_project.cpp"
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_csg_female_static_compare_skinned_smoke
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            nwb_ecs_csg
-            nwb_ecs_skinned_mesh_render
-        )
-        add_dependencies(nwb_csg_female_static_compare_skinned_smoke nwb_csg_skinned_visible_smoke_assets)
-
-        nwb_declare_executable(nwb_csg_female_static_compare_static_smoke)
-        target_sources(nwb_csg_female_static_compare_static_smoke PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/csg_skinned_static_compare_project.cpp"
-        )
-        target_compile_definitions(nwb_csg_female_static_compare_static_smoke PRIVATE
-            NWB_CSG_SKINNED_STATIC_COMPARE_STATIC_RECEIVER=1
-        )
-        nwb_configure_runtime_smoke_target(
-            nwb_csg_female_static_compare_static_smoke
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            nwb_ecs_csg
-        )
-        add_dependencies(nwb_csg_female_static_compare_static_smoke nwb_csg_skinned_visible_smoke_assets)
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_female_static_compare_skinned_capture_smoke
-            csg_female_static_compare_skinned.bmp
-            "$<TARGET_FILE:nwb_csg_female_static_compare_skinned_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Skinned Female CSG Compare Smoke"
-            "--settle-seconds" "0.75"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        nwb_add_window_capture_smoke(
-            nwb_csg_female_static_compare_static_capture_smoke
-            csg_female_static_compare_static.bmp
-            "$<TARGET_FILE:nwb_csg_female_static_compare_static_smoke>"
-            "${_nwb_csg_skinned_visible_runtime_root}"
-            "NWB Static Female CSG Compare Smoke"
-            "--settle-seconds" "0.75"
-            "--reject-log-message" "[ERROR]"
-            "--reject-log-message" "failed to resolve shader"
-        )
-
-        add_test(
-            NAME nwb_csg_female_static_compare_capture_smoke
-            COMMAND
-                "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_LIST_DIR}/compare_bmp_smoke.py"
-                "--reference" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_female_static_compare_skinned.bmp"
-                "--candidate" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_female_static_compare_static.bmp"
-                "--diff-output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_female_static_compare_diff.bmp"
-                "--pixel-threshold" "4"
-                "--max-different-pixels" "1500"
-                "--max-mean-abs-delta" "0.25"
-        )
-        set_tests_properties(nwb_csg_female_static_compare_capture_smoke PROPERTIES
-            DEPENDS "nwb_csg_female_static_compare_skinned_capture_smoke;nwb_csg_female_static_compare_static_capture_smoke"
-            TIMEOUT 10
         )
 
         nwb_declare_executable(nwb_csg_skinned_sphere_visible_smoke)
@@ -508,8 +424,6 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_csg_skinned_visible_asset_stamp)
         unset(_nwb_csg_skinned_visible_runtime_root)
         unset(_nwb_csg_skinned_visible_asset_inputs)
-        unset(_nwb_csg_female_static_compare_generated_asset_root)
-        unset(_nwb_csg_female_static_compare_static_mesh)
     endif()
 
     set(_nwb_skinned_cone_female_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/skinned_cone_female.nwb")

@@ -8,10 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "asset.h"
+#include "cook.h"
 #include "binary_payload.h"
 
+#include <core/assets/paths.h>
 #include <core/common/log.h>
+#include <core/metascript/parser.h>
 #include <global/binary.h>
 
 
@@ -142,6 +144,377 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
             NWB_TEXT("skinned mesh objects")
         )
     ;
+}
+
+namespace __hidden_model_cook{
+
+using namespace Core::Metascript;
+
+static constexpr AStringView s_SkeletonsField = "skeletons";
+static constexpr AStringView s_StaticMeshesField = "static_meshes";
+static constexpr AStringView s_SkinnedMeshesField = "skinned_meshes";
+static constexpr AStringView s_NameField = "name";
+static constexpr AStringView s_SkeletonField = "skeleton";
+static constexpr AStringView s_MeshField = "mesh";
+static constexpr AStringView s_SkinField = "skin";
+static constexpr AStringView s_MaterialField = "material";
+static constexpr AStringView s_ParentObjectField = "parent_object";
+static constexpr AStringView s_ParentJointField = "parent_joint";
+static constexpr AStringView s_TransformField = "transform";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool ValidateModelAssetFields(const Path& nwbFilePath, const Value& asset){
+    return Core::Assets::ValidateMetadataAssetFields(
+        nwbFilePath,
+        asset,
+        "Model meta",
+        { s_SkeletonsField, s_StaticMeshesField, s_SkinnedMeshesField }
+    );
+}
+
+[[nodiscard]] bool ValidateModelObjectFields(
+    const Path& nwbFilePath,
+    const Value& object,
+    const AStringView objectKind,
+    const InitializerList<AStringView> allowedFields
+){
+    return Core::Assets::ValidateMetadataAssetFields(
+        nwbFilePath,
+        object,
+        objectKind,
+        allowedFields
+    );
+}
+
+[[nodiscard]] bool ReadStringField(
+    const Path& nwbFilePath,
+    const Value& object,
+    const AStringView objectKind,
+    const AStringView fieldName,
+    const bool required,
+    Name& outName
+){
+    outName = NAME_NONE;
+
+    const Value* fieldValue = object.findField(fieldName);
+    if(!fieldValue){
+        if(!required)
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    if(!fieldValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const MStringView text = fieldValue->asString();
+    outName = Name(AStringView(text.data(), text.size()));
+    if(required && !outName){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    return true;
+}
+
+template<typename AssetT>
+[[nodiscard]] bool ReadAssetRefField(
+    const Path& nwbFilePath,
+    const Value& object,
+    const AStringView objectKind,
+    const AStringView fieldName,
+    const bool required,
+    Core::Assets::AssetRef<AssetT>& outRef
+){
+    Name assetName = NAME_NONE;
+    if(!ReadStringField(nwbFilePath, object, objectKind, fieldName, required, assetName))
+        return false;
+
+    outRef = {};
+    outRef.virtualPath = assetName;
+    return !required || outRef.valid();
+}
+
+[[nodiscard]] bool ReadFloatValue(
+    const Path& nwbFilePath,
+    const Value& value,
+    const AStringView objectKind,
+    const AStringView fieldName,
+    f32& outValue
+){
+    outValue = 0.0f;
+    if(!value.isNumeric()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain only numeric matrix values")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const f64 numericValue = value.toDouble();
+    if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains a non-finite or out-of-range matrix value")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    outValue = static_cast<f32>(numericValue);
+    return true;
+}
+
+[[nodiscard]] bool ReadTransformField(
+    const Path& nwbFilePath,
+    const Value& object,
+    const AStringView objectKind,
+    SkeletonJointMatrix& outTransform
+){
+    outTransform = MakeIdentityModelMatrix();
+
+    const Value* fieldValue = object.findField(s_TransformField);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 3x4 affine matrix")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(s_TransformField)
+        );
+        return false;
+    }
+
+    const auto& rows = fieldValue->asList();
+    if(rows.size() != 3u && rows.size() != 4u){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must have 3 or 4 rows")
+            , StringConvert(objectKind)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(s_TransformField)
+        );
+        return false;
+    }
+
+    for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+        const Value& row = rows[rowIndex];
+        if(!row.isList() || row.asList().size() != 4u){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' row {} must have 4 numeric values")
+                , StringConvert(objectKind)
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(s_TransformField)
+                , rowIndex
+            );
+            return false;
+        }
+
+        f32 rowValues[4] = {};
+        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
+            if(!ReadFloatValue(nwbFilePath, row.asList()[columnIndex], objectKind, s_TransformField, rowValues[columnIndex]))
+                return false;
+        }
+        outTransform.rows[rowIndex] = Float4(rowValues[0], rowValues[1], rowValues[2], rowValues[3]);
+    }
+
+    return true;
+}
+
+template<typename ObjectVectorT, typename ParseObjectFn>
+[[nodiscard]] bool ParseObjectList(
+    const Path& nwbFilePath,
+    const Value& asset,
+    const AStringView fieldName,
+    const AStringView objectKind,
+    ObjectVectorT& outObjects,
+    ParseObjectFn&& parseObject
+){
+    outObjects.clear();
+
+    const Value* fieldValue = asset.findField(fieldName);
+    if(!fieldValue)
+        return true;
+    if(!fieldValue->isList()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a list")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const auto& list = fieldValue->asList();
+    outObjects.reserve(list.size());
+    for(usize i = 0u; i < list.size(); ++i){
+        const Value& objectValue = list[i];
+        if(!objectValue.isMap()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': item {} must be a map")
+                , StringConvert(objectKind)
+                , PathToString<tchar>(nwbFilePath)
+                , i
+            );
+            return false;
+        }
+
+        typename ObjectVectorT::value_type object{};
+        if(!parseObject(objectValue, object))
+            return false;
+        outObjects.push_back(object);
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue, ModelSkeletonObject& outObject){
+    static constexpr AStringView s_ObjectKind = "Model skeleton object";
+    if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_NameField, s_SkeletonField, s_TransformField }))
+        return false;
+
+    return ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_NameField, true, outObject.name)
+        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeleton)
+        && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
+    ;
+}
+
+[[nodiscard]] bool ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelStaticMeshObject& outObject){
+    static constexpr AStringView s_ObjectKind = "Model static mesh object";
+    if(!ValidateModelObjectFields(
+        nwbFilePath,
+        objectValue,
+        s_ObjectKind,
+        { s_NameField, s_MeshField, s_MaterialField, s_ParentObjectField, s_ParentJointField, s_TransformField }
+    ))
+        return false;
+
+    return ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_NameField, true, outObject.name)
+        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
+        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
+        && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_ParentObjectField, false, outObject.parentObject)
+        && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_ParentJointField, false, outObject.parentJoint)
+        && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
+    ;
+}
+
+[[nodiscard]] bool ParseSkinnedMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelSkinnedMeshObject& outObject){
+    static constexpr AStringView s_ObjectKind = "Model skinned mesh object";
+    if(!ValidateModelObjectFields(
+        nwbFilePath,
+        objectValue,
+        s_ObjectKind,
+        { s_NameField, s_MeshField, s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }
+    ))
+        return false;
+
+    return ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_NameField, true, outObject.name)
+        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
+        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true, outObject.skin)
+        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
+        && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeletonObject)
+        && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+bool ParseModelCookMetadata(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    ModelCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    using namespace __hidden_model_cook;
+
+    outEntry = ModelCookEntry(outEntry.skeletonObjects.get_allocator().arena());
+
+    const Core::Metascript::Value& asset = doc.asset();
+    if(!asset.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
+
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
+        assetRoot,
+        virtualRoot,
+        nwbFilePath,
+        outEntry.virtualPath,
+        scratchArena
+    ))
+        return false;
+    if(!ValidateModelAssetFields(nwbFilePath, asset))
+        return false;
+
+    if(
+        !ParseObjectList(
+            nwbFilePath,
+            asset,
+            s_SkeletonsField,
+            AStringView("Model skeleton object"),
+            outEntry.skeletonObjects,
+            [&](const Core::Metascript::Value& objectValue, ModelSkeletonObject& outObject){
+                return ParseSkeletonObject(nwbFilePath, objectValue, outObject);
+            }
+        )
+        || !ParseObjectList(
+            nwbFilePath,
+            asset,
+            s_StaticMeshesField,
+            AStringView("Model static mesh object"),
+            outEntry.staticMeshObjects,
+            [&](const Core::Metascript::Value& objectValue, ModelStaticMeshObject& outObject){
+                return ParseStaticMeshObject(nwbFilePath, objectValue, outObject);
+            }
+        )
+        || !ParseObjectList(
+            nwbFilePath,
+            asset,
+            s_SkinnedMeshesField,
+            AStringView("Model skinned mesh object"),
+            outEntry.skinnedMeshObjects,
+            [&](const Core::Metascript::Value& objectValue, ModelSkinnedMeshObject& outObject){
+                return ParseSkinnedMeshObject(nwbFilePath, objectValue, outObject);
+            }
+        )
+    )
+        return false;
+
+    Model testModel(outEntry.skeletonObjects.get_allocator().arena(), outEntry.virtualPath);
+    testModel.setObjects(
+        Model::SkeletonObjectVector(outEntry.skeletonObjects),
+        Model::StaticMeshObjectVector(outEntry.staticMeshObjects),
+        Model::SkinnedMeshObjectVector(outEntry.skinnedMeshObjects)
+    );
+    return testModel.validatePayload();
+}
+
+bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel){
+    outModel = Model(modelEntry.skeletonObjects.get_allocator().arena(), modelEntry.virtualPath);
+    outModel.setObjects(
+        Move(modelEntry.skeletonObjects),
+        Move(modelEntry.staticMeshObjects),
+        Move(modelEntry.skinnedMeshObjects)
+    );
+    return outModel.validatePayload();
 }
 
 

@@ -171,6 +171,8 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         preparedPlan.plannedFileCount
     ))
         return false;
+    if(!AssetsGraphicsCookDetail::AddPlannedFileCount(static_cast<u64>(parsedMetadata.modelEntries.size()), preparedPlan.plannedFileCount))
+        return false;
     if(!AssetsGraphicsCookDetail::ValidateMaterials(
         shaderCook,
         preparedPlan.preparedEntries,

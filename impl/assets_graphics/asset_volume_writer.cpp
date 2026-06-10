@@ -13,6 +13,7 @@
 #include "cook_paths.h"
 #include "shader_volume_writer.h"
 
+#include <impl/assets_model/cook.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_mesh/cook.h>
 
@@ -330,6 +331,17 @@ bool WriteGraphicsVolume(
             true,
             [](SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
                 return BuildSkinnedMeshAsset(meshEntry, outMesh);
+            }
+        ))
+            return false;
+        if(!__hidden_asset_volume_writer::AppendBuiltAssetsToVolume<Model, ModelAssetCodec>(
+            NWB_TEXT("model"),
+            parsedMetadata.modelEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            true,
+            [](ModelCookEntry& modelEntry, Model& outModel){
+                return BuildModelAsset(modelEntry, outModel);
             }
         ))
             return false;

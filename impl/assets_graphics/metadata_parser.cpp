@@ -101,6 +101,7 @@ bool ParseAssetMetadata(
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.meshEntries.reserve(nwbFiles.size());
     outMetadata.skinnedMeshEntries.reserve(nwbFiles.size());
+    outMetadata.modelEntries.reserve(nwbFiles.size());
     outMetadata.csgShapeEntries.reserve(nwbFiles.size());
 
     HashSet<
@@ -232,6 +233,23 @@ bool ParseAssetMetadata(
             continue;
         }
 
+        if(assetType == Model::AssetTypeName()){
+            ModelCookEntry modelEntry(cookArena);
+            if(!ParseModelCookMetadata(
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                discoveredNwbFile.filePath,
+                doc,
+                modelEntry,
+                scratchArena
+            ))
+                return false;
+
+            if(!AppendUniquePropertyAssetEntry(modelEntry, seenPropertyAssetPathHashes, outMetadata.modelEntries))
+                return false;
+            continue;
+        }
+
         if(assetType == Mesh::AssetTypeName()){
             MeshCookEntry meshEntry(cookArena);
             if(!ParseMeshCookMetadata(
@@ -284,6 +302,8 @@ bool ParseAssetMetadata(
         if(!outMetadata.meshEntries.empty())
             return true;
         if(!outMetadata.skinnedMeshEntries.empty())
+            return true;
+        if(!outMetadata.modelEntries.empty())
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: no graphics asset metadata found in asset roots"));

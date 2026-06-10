@@ -61,28 +61,22 @@ using MeshPayloadValidation::FiniteVector;
 }
 
 [[nodiscard]] inline bool ValidAffineJointMatrix(const SIMDMatrix matrix){
-    const SIMDVector column0 = matrix.v[0];
-    const SIMDVector column1 = matrix.v[1];
-    const SIMDVector column2 = matrix.v[2];
-    const SIMDVector column3 = matrix.v[3];
-    const SIMDVector affineW = VectorSet(
-        VectorGetW(column0),
-        VectorGetW(column1),
-        VectorGetW(column2),
-        VectorGetW(column3)
-    );
+    const SIMDVector row0 = matrix.v[0];
+    const SIMDVector row1 = matrix.v[1];
+    const SIMDVector row2 = matrix.v[2];
+    const SIMDVector row3 = matrix.v[3];
     if(
-        !FiniteVector(column0, 0xFu)
-        || !FiniteVector(column1, 0xFu)
-        || !FiniteVector(column2, 0xFu)
-        || !FiniteVector(column3, 0xFu)
-        || !Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
+        !FiniteVector(row0, 0xFu)
+        || !FiniteVector(row1, 0xFu)
+        || !FiniteVector(row2, 0xFu)
+        || !FiniteVector(row3, 0xFu)
+        || !Vector4NearEqual(row3, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     )
         return false;
 
     const f32 determinant = VectorGetX(Vector3Dot(
-        VectorSetW(column0, 0.0f),
-        Vector3Cross(VectorSetW(column1, 0.0f), VectorSetW(column2, 0.0f))
+        VectorSetW(row0, 0.0f),
+        Vector3Cross(VectorSetW(row1, 0.0f), VectorSetW(row2, 0.0f))
     ));
     return IsFinite(determinant) && Abs(determinant) > s_Epsilon;
 }

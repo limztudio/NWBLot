@@ -267,8 +267,8 @@ static bool ParseInverseBindMatrices(
     outMatrices.reserve(matrixList.size());
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
         const Core::Metascript::Value& matrixValue = matrixList[matrixIndex];
-        if(!matrixValue.isList() || matrixValue.asList().size() != 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] must contain four columns")
+        if(!matrixValue.isList() || matrixValue.asList().size() != 3u){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] must contain three affine rows")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex
             );
@@ -276,14 +276,14 @@ static bool ParseInverseBindMatrices(
         }
 
         SkeletonJointMatrix matrix{};
-        const auto& columns = matrixValue.asList();
+        const auto& rows = matrixValue.asList();
         const ScratchString label = MakeIndexedLabel(scratchArena, "inverse_bind_matrices", matrixIndex);
-        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-            alignas(16) f32 column[4] = {};
-            const ScratchString columnLabel = MakeIndexedLabel(scratchArena, label, columnIndex);
-            if(!ParseMetadataF32Tuple(nwbFilePath, columns[columnIndex], s_SkinnedMeshMetaKind, columnLabel, column, scratchArena))
+        for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+            alignas(16) f32 row[4] = {};
+            const ScratchString rowLabel = MakeIndexedLabel(scratchArena, label, rowIndex);
+            if(!ParseMetadataF32Tuple(nwbFilePath, rows[rowIndex], s_SkinnedMeshMetaKind, rowLabel, row, scratchArena))
                 return false;
-            matrix.rows[columnIndex] = Float4(column[0u], column[1u], column[2u], column[3u]);
+            matrix.rows[rowIndex] = Float4(row[0u], row[1u], row[2u], row[3u]);
         }
 
         if(!SkinnedMeshValidation::ValidAffineJointMatrix(LoadFloat(matrix))){

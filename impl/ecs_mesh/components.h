@@ -7,6 +7,7 @@
 
 #include "../global.h"
 
+#include <core/ecs/entity_id.h>
 #include <core/assets/ref.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 
@@ -22,6 +23,7 @@ NWB_IMPL_BEGIN
 
 class Mesh;
 class SkinnedMesh;
+class Skin;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +47,20 @@ struct SkinnedMeshComponent{
 
 static_assert(IsStandardLayout_V<SkinnedMeshComponent>, "SkinnedMeshComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<SkinnedMeshComponent>, "SkinnedMeshComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SkinnedMeshBindingComponent{
+    Core::Assets::AssetRef<Mesh> mesh;
+    Core::Assets::AssetRef<Skin> skin;
+    Core::ECS::EntityID skeletonEntity = Core::ECS::ENTITY_ID_INVALID;
+    RuntimeMeshHandle runtimeMesh;
+};
+
+static_assert(IsStandardLayout_V<SkinnedMeshBindingComponent>, "SkinnedMeshBindingComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<SkinnedMeshBindingComponent>, "SkinnedMeshBindingComponent must stay cheap to move in dense ECS storage");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

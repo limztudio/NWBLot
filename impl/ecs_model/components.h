@@ -7,6 +7,7 @@
 
 #include "../global.h"
 
+#include <core/ecs/entity_id.h>
 #include <core/assets/ref.h>
 
 
@@ -31,6 +32,56 @@ struct ModelComponent{
 
 static_assert(IsStandardLayout_V<ModelComponent>, "ModelComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<ModelComponent>, "ModelComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ModelObjectKind{
+    enum Enum : u32{
+        Skeleton,
+        StaticMesh,
+        SkinnedMesh,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ModelRuntimeComponent{
+    Name model = NAME_NONE;
+    u32 objectCount = 0u;
+};
+
+static_assert(IsStandardLayout_V<ModelRuntimeComponent>, "ModelRuntimeComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelRuntimeComponent>, "ModelRuntimeComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ModelObjectComponent{
+    Core::ECS::EntityID owner = Core::ECS::ENTITY_ID_INVALID;
+    Name model = NAME_NONE;
+    Name object = NAME_NONE;
+    u32 kind = ModelObjectKind::StaticMesh;
+};
+
+static_assert(IsStandardLayout_V<ModelObjectComponent>, "ModelObjectComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelObjectComponent>, "ModelObjectComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ModelStaticMeshAttachmentComponent{
+    Name parentObject = NAME_NONE;
+    Name parentJoint = NAME_NONE;
+};
+
+static_assert(IsStandardLayout_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay cheap to move in dense ECS storage");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

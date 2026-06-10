@@ -341,7 +341,9 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
 
 static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
     NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
-    joint.rows[3] = Float4(x, y, z, 1.0f);
+    joint.rows[0].w = x;
+    joint.rows[1].w = y;
+    joint.rows[2].w = z;
     return joint;
 }
 
@@ -523,10 +525,10 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkeletonSkinningMode::LinearBlend);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedJoints.size() == 2u);
     if(resolvedJoints.size() == 2u){
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[3].x, 1.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[3].y, 0.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[3].x, 1.0f));
-        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[3].y, 2.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[0].w, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[1].w, 0.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[0].w, 1.0f));
+        NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[1].w, 2.0f));
     }
 
     pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
@@ -574,7 +576,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
         NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, jointMatrices.size() == 1u);
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[3].x, 0.75f));
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[0].w, 0.75f));
     joints.joints[0u] = MakeIdentityJointMatrix();
 
     NWB::Impl::SkinnedMeshRuntimeMeshInstance dualQuaternionInstance = MakeTriangleInstance();
@@ -614,7 +616,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
 
     NWB::Impl::SkinnedMeshRuntimeMeshInstance nonAffineJoint = instance;
     joints.joints[0u] = MakeIdentityJointMatrix();
-    joints.joints[0u].rows[3].w = 0.0f;
+    joints.joints[0u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(nonAffineJoint, &joints, skinInfluences, jointMatrices)

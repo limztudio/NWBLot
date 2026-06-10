@@ -48,43 +48,25 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] inline SIMDVector TransformJointColumn(const SIMDMatrix& matrix, const SIMDVector column){
-    SIMDVector result = VectorMultiply(VectorSplatX(column), matrix.v[0]);
-    result = VectorMultiplyAdd(VectorSplatY(column), matrix.v[1], result);
-    result = VectorMultiplyAdd(VectorSplatZ(column), matrix.v[2], result);
-    return VectorMultiplyAdd(VectorSplatW(column), matrix.v[3], result);
-}
-
 [[nodiscard]] inline SIMDMatrix MultiplyJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
-    SIMDMatrix result{};
-    result.v[0] = TransformJointColumn(lhs, rhs.v[0]);
-    result.v[1] = TransformJointColumn(lhs, rhs.v[1]);
-    result.v[2] = TransformJointColumn(lhs, rhs.v[2]);
-    result.v[3] = TransformJointColumn(lhs, rhs.v[3]);
-    return result;
+    return MatrixMultiply(lhs, rhs);
 }
 
 [[nodiscard]] inline bool IsAffineJointMatrix(const SIMDMatrix& matrix){
-    const SIMDVector affineW = VectorSet(
-        VectorGetW(matrix.v[0]),
-        VectorGetW(matrix.v[1]),
-        VectorGetW(matrix.v[2]),
-        VectorGetW(matrix.v[3])
-    );
     return
         FiniteVector(matrix.v[0], 0xFu)
         && FiniteVector(matrix.v[1], 0xFu)
         && FiniteVector(matrix.v[2], 0xFu)
         && FiniteVector(matrix.v[3], 0xFu)
-        && Vector4NearEqual(affineW, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
+        && Vector4NearEqual(matrix.v[3], s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
     ;
 }
 
 [[nodiscard]] inline f32 JointLinearDeterminant(const SIMDMatrix& matrix){
-    const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
-    const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
-    const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
-    return VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
+    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
+    return VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
 }
 
 [[nodiscard]] inline bool IsInvertibleAffineJointMatrix(const SIMDMatrix& matrix){
@@ -159,13 +141,13 @@ template<typename JointMatrixVector>
 }
 
 [[nodiscard]] inline bool TryBuildJointNormalMatrix(const SIMDMatrix& matrix, SIMDMatrix& outNormalMatrix){
-    const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
-    const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
-    const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
-    const SIMDVector cross12 = Vector3Cross(column1, column2);
-    const SIMDVector cross20 = Vector3Cross(column2, column0);
-    const SIMDVector cross01 = Vector3Cross(column0, column1);
-    const f32 determinant = VectorGetX(Vector3Dot(column0, cross12));
+    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
+    const SIMDVector cross12 = Vector3Cross(row1, row2);
+    const SIMDVector cross20 = Vector3Cross(row2, row0);
+    const SIMDVector cross01 = Vector3Cross(row0, row1);
+    const f32 determinant = VectorGetX(Vector3Dot(row0, cross12));
     if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
         return false;
 
@@ -193,16 +175,16 @@ template<typename JointMatrixVector>
     if(!IsAffineJointMatrix(matrix))
         return false;
 
-    const SIMDVector column0 = VectorSetW(matrix.v[0], 0.0f);
-    const SIMDVector column1 = VectorSetW(matrix.v[1], 0.0f);
-    const SIMDVector column2 = VectorSetW(matrix.v[2], 0.0f);
-    const f32 length0 = VectorGetX(Vector3LengthSq(column0));
-    const f32 length1 = VectorGetX(Vector3LengthSq(column1));
-    const f32 length2 = VectorGetX(Vector3LengthSq(column2));
-    const f32 dot01 = VectorGetX(Vector3Dot(column0, column1));
-    const f32 dot02 = VectorGetX(Vector3Dot(column0, column2));
-    const f32 dot12 = VectorGetX(Vector3Dot(column1, column2));
-    const f32 determinant = VectorGetX(Vector3Dot(column0, Vector3Cross(column1, column2)));
+    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
+    const f32 length0 = VectorGetX(Vector3LengthSq(row0));
+    const f32 length1 = VectorGetX(Vector3LengthSq(row1));
+    const f32 length2 = VectorGetX(Vector3LengthSq(row2));
+    const f32 dot01 = VectorGetX(Vector3Dot(row0, row1));
+    const f32 dot02 = VectorGetX(Vector3Dot(row0, row2));
+    const f32 dot12 = VectorGetX(Vector3Dot(row1, row2));
+    const f32 determinant = VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
     return
         IsFinite(length0)
         && IsFinite(length1)
@@ -236,7 +218,12 @@ template<typename JointMatrixVector>
     if(!TryBuildJointRotationQuaternion(matrix, outReal))
         return false;
 
-    const SIMDVector translation = VectorSetW(matrix.v[3], 0.0f);
+    const SIMDVector translation = VectorSet(
+        VectorGetW(matrix.v[0]),
+        VectorGetW(matrix.v[1]),
+        VectorGetW(matrix.v[2]),
+        0.0f
+    );
     outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
     return FiniteVector(outDual, 0xFu);
 }

@@ -392,7 +392,7 @@ static void TestSkinnedMeshValidationFailures(TestContext& context){
     });
 
     CheckInvalidSkinnedMesh(context, [](SkinnedMeshPayloadEdit& edit){
-        edit.inverseBindMatrices[0u].rows[3].w = 0.0f;
+        edit.inverseBindMatrices[0u].rows[0] = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     });
 
     CheckInvalidSkinnedMesh(context, [](SkinnedMeshPayloadEdit& edit){

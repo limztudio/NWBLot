@@ -16,10 +16,9 @@ struct NwbSkinnedMeshSkinInfluence{
 };
 
 struct NwbSkinnedMeshJointMatrix{
-    float4 column0;
-    float4 column1;
-    float4 column2;
-    float4 column3;
+    float4 row0;
+    float4 row1;
+    float4 row2;
 };
 
 [[vk::binding(NWB_SKINNED_MESH_BINDING_REST_POSITION, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshRestPositions;
@@ -66,28 +65,28 @@ uint nwbSkinnedMeshSkinningMode(){
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){
     const NwbSkinnedMeshJointMatrix jointMatrix = g_NwbSkinnedMeshJointPalette[jointId];
     return float4x4(
-        jointMatrix.column0,
-        jointMatrix.column1,
-        jointMatrix.column2,
-        jointMatrix.column3
+        jointMatrix.row0,
+        jointMatrix.row1,
+        jointMatrix.row2,
+        float4(0.0, 0.0, 0.0, 1.0)
     );
 }
 
 bool nwbSkinnedMeshTransformJointNormal(const float3x3 jointMatrix, const float3 normal, out float3 transformedNormal){
     transformedNormal = normal;
 
-    const float3 column0 = jointMatrix[0];
-    const float3 column1 = jointMatrix[1];
-    const float3 column2 = jointMatrix[2];
-    const float determinant = dot(column0, cross(column1, column2));
+    const float3 row0 = jointMatrix[0];
+    const float3 row1 = jointMatrix[1];
+    const float3 row2 = jointMatrix[2];
+    const float determinant = dot(row0, cross(row1, row2));
     if(!nwbFiniteFloat(determinant) || abs(determinant) <= NWB_SKINNED_MESH_EPSILON)
         return false;
 
     const float inverseDeterminant = 1.0 / determinant;
     const float3x3 normalMatrix = float3x3(
-        cross(column1, column2) * inverseDeterminant,
-        cross(column2, column0) * inverseDeterminant,
-        cross(column0, column1) * inverseDeterminant
+        cross(row1, row2) * inverseDeterminant,
+        cross(row2, row0) * inverseDeterminant,
+        cross(row0, row1) * inverseDeterminant
     );
     transformedNormal = mul(normalMatrix, normal);
     return nwbFiniteFloat3(transformedNormal);
@@ -172,8 +171,8 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
             continue;
 
         const NwbSkinnedMeshJointMatrix jointPayload = g_NwbSkinnedMeshJointPalette[jointId];
-        float4 real = jointPayload.column0;
-        float4 dual = jointPayload.column1;
+        float4 real = jointPayload.row0;
+        float4 dual = jointPayload.row1;
         if(!nwbFiniteFloat4(real) || !nwbFiniteFloat4(dual))
             return false;
 

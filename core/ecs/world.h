@@ -60,6 +60,7 @@ public:
 
 public:
     Entity createEntity();
+    void destroyEntity(EntityID entityId);
     usize entityCount()const{ return m_entityManager.count(); }
 
 
@@ -87,6 +88,48 @@ public:
     [[nodiscard]] u64 componentMutationVersion()const{
         const auto* pool = getPool<T>();
         return pool ? pool->mutationVersion() : 0u;
+    }
+
+
+public:
+    template<typename T, typename... Args>
+    T& addComponent(EntityID entityId, Args&&... args){
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        auto* pool = assurePool<T>();
+        if(T* existing = pool->tryGet(entityId))
+            return *existing;
+
+        T& component = pool->add(entityId, Forward<Args>(args)...);
+        addEntityComponentType(entityId, ComponentType<T>(), *pool);
+        return component;
+    }
+
+    template<typename T>
+    void removeComponent(EntityID entityId){
+        if(!m_entityManager.alive(entityId))
+            return;
+
+        auto* pool = getPool<T>();
+        if(pool && pool->remove(entityId))
+            removeEntityComponentType(entityId, ComponentType<T>());
+    }
+
+    template<typename T>
+    T& getComponent(EntityID entityId){
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        return requirePool<T>().get(entityId);
+    }
+
+    template<typename T>
+    const T& getComponent(EntityID entityId)const{
+        NWB_ASSERT(m_entityManager.alive(entityId));
+        return requirePool<T>().get(entityId);
+    }
+
+    template<typename T>
+    bool hasComponent(EntityID entityId)const{
+        auto* pool = getPool<T>();
+        return pool ? pool->has(entityId) : false;
     }
 
 
@@ -158,48 +201,7 @@ public:
 
 
 private:
-    void destroyEntity(EntityID entityId);
     bool alive(EntityID entityId)const{ return m_entityManager.alive(entityId); }
-
-    template<typename T, typename... Args>
-    T& addComponent(EntityID entityId, Args&&... args){
-        NWB_ASSERT(m_entityManager.alive(entityId));
-        auto* pool = assurePool<T>();
-        if(T* existing = pool->tryGet(entityId))
-            return *existing;
-
-        T& component = pool->add(entityId, Forward<Args>(args)...);
-        addEntityComponentType(entityId, ComponentType<T>(), *pool);
-        return component;
-    }
-
-    template<typename T>
-    void removeComponent(EntityID entityId){
-        if(!m_entityManager.alive(entityId))
-            return;
-
-        auto* pool = getPool<T>();
-        if(pool && pool->remove(entityId))
-            removeEntityComponentType(entityId, ComponentType<T>());
-    }
-
-    template<typename T>
-    T& getComponent(EntityID entityId){
-        NWB_ASSERT(m_entityManager.alive(entityId));
-        return requirePool<T>().get(entityId);
-    }
-
-    template<typename T>
-    const T& getComponent(EntityID entityId)const{
-        NWB_ASSERT(m_entityManager.alive(entityId));
-        return requirePool<T>().get(entityId);
-    }
-
-    template<typename T>
-    bool hasComponent(EntityID entityId)const{
-        auto* pool = getPool<T>();
-        return pool ? pool->has(entityId) : false;
-    }
 
     template<typename T>
     ComponentPool<T>* getPool(){

@@ -220,7 +220,9 @@ static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){
 
 static NWB::Impl::SkeletonJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
     NWB::Impl::SkeletonJointMatrix matrix = NWB::Impl::MakeIdentitySkeletonJointMatrix();
-    matrix.rows[3] = Float4(tx, ty, tz, 1.0f);
+    matrix.rows[0].w = tx;
+    matrix.rows[1].w = ty;
+    matrix.rows[2].w = tz;
     return matrix;
 }
 
@@ -600,7 +602,7 @@ static void CheckSkinnedMeshPayload(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skinStream().size() == 4u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skeletonJointCount() == expectedSkeletonJointCount);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.inverseBindMatrices().size() == expectedInverseBindMatrixCount);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.inverseBindMatrices()[expectedInverseBindMatrixIndex].rows[3].x == -0.25f);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.inverseBindMatrices()[expectedInverseBindMatrixIndex].rows[0].w == -0.25f);
 }
 
 static void TestMeshCodecRoundTrip(TestContext& context){

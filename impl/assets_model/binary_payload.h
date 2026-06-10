@@ -6,6 +6,7 @@
 
 
 #include "../global.h"
+#include <impl/assets_skeleton/joint_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +39,7 @@ static_assert(IsTriviallyCopyable_V<ModelHeaderBinary>, "ModelHeaderBinary must 
 struct ModelSkeletonObjectBinary{
     NameHash nameHash = {};
     NameHash skeletonNameHash = {};
-    Float44 transform = {};
+    SkeletonJointMatrix transform = {};
 };
 static_assert(IsStandardLayout_V<ModelSkeletonObjectBinary>, "ModelSkeletonObjectBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<ModelSkeletonObjectBinary>, "ModelSkeletonObjectBinary must stay binary-serializable");
@@ -48,7 +49,7 @@ struct ModelStaticMeshObjectBinary{
     NameHash meshNameHash = {};
     NameHash parentObjectNameHash = {};
     NameHash parentJointNameHash = {};
-    Float44 transform = {};
+    SkeletonJointMatrix transform = {};
 };
 static_assert(IsStandardLayout_V<ModelStaticMeshObjectBinary>, "ModelStaticMeshObjectBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<ModelStaticMeshObjectBinary>, "ModelStaticMeshObjectBinary must stay binary-serializable");
@@ -58,7 +59,7 @@ struct ModelSkinnedMeshObjectBinary{
     NameHash meshNameHash = {};
     NameHash skinNameHash = {};
     NameHash skeletonObjectNameHash = {};
-    Float44 transform = {};
+    SkeletonJointMatrix transform = {};
 };
 static_assert(IsStandardLayout_V<ModelSkinnedMeshObjectBinary>, "ModelSkinnedMeshObjectBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<ModelSkinnedMeshObjectBinary>, "ModelSkinnedMeshObjectBinary must stay binary-serializable");

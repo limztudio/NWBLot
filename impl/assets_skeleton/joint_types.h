@@ -18,8 +18,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stored vectors are joint matrix columns; Float44 provides the aligned 4x4 payload layout.
-using SkeletonJointMatrix = Float44;
+// Stored vectors are affine matrix rows; the implicit fourth row is (0, 0, 0, 1).
+using SkeletonJointMatrix = Float34;
 static_assert(IsStandardLayout_V<SkeletonJointMatrix>, "SkeletonJointMatrix must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<SkeletonJointMatrix>, "SkeletonJointMatrix must stay GPU-uploadable");
 static_assert(sizeof(SkeletonJointMatrix) == sizeof(f32) * NWB_SKINNED_MESH_JOINT_MATRIX_FLOAT_COUNT, "SkeletonJointMatrix GPU layout drifted");
@@ -30,7 +30,6 @@ static_assert(alignof(SkeletonJointMatrix) >= alignof(Float4), "SkeletonJointMat
     matrix.rows[0] = Float4(1.0f, 0.0f, 0.0f, 0.0f);
     matrix.rows[1] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     matrix.rows[2] = Float4(0.0f, 0.0f, 1.0f, 0.0f);
-    matrix.rows[3] = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     return matrix;
 }
 

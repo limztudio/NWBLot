@@ -8,7 +8,15 @@ Updated: 2026-05-31
 - Start files with the project banner style:
   - `// limztudio@gmail.com`
   - A long `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` separator line.
-- Use `#pragma once` in headers.
+- Use `#pragma once` in C++-only headers.
+- Exception: headers shared across C++ and shader preprocessing must not use `#pragma once`.
+  - Use an explicit include-guard shape instead:
+  - `#ifndef NWB_<MODULE>_<HEADER>_H`
+  - `#define NWB_<MODULE>_<HEADER>_H`
+  - header contents
+  - `#endif`
+  - `#undef NWB_<MODULE>_<HEADER>_H`
+  - In these shared guard-`#undef` headers, canonical public macros should be `#undef`-ed immediately before their `#define`, while intentional override macros should stay under their local `#ifndef`.
 - Separate major file sections with the long slash separator and optional section comments.
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
 - Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.

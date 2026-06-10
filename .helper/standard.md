@@ -15,8 +15,7 @@ Updated: 2026-05-31
   - `#define NWB_<MODULE>_<HEADER>_H`
   - header contents
   - `#endif`
-  - `#undef NWB_<MODULE>_<HEADER>_H`
-  - In these shared guard-`#undef` headers, canonical public macros should be `#undef`-ed immediately before their `#define`, while intentional override macros should stay under their local `#ifndef`.
+  - Do not `#undef` the include guard or the public macros declared by the header.
 - Separate major file sections with the long slash separator and optional section comments.
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
 - Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.

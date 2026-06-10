@@ -27,9 +27,8 @@ namespace __hidden_command_line{
 
 
 struct OptionPresence{
-    bool input = false;
     bool output = false;
-    bool meshClass = false;
+    bool assetType = false;
     bool mesh = false;
     bool normalMode = false;
     bool defaultColor = false;
@@ -172,13 +171,13 @@ bool ConfigurePromptsAfterLoad(
     const UtilityVector<MeshInstance>& visibleInstances,
     bool& prompted
 ){
-    if(!presence.meshClass && !options.acceptDefaults){
-        AString meshClass;
+    if(!presence.assetType && !options.acceptDefaults){
+        AString assetType;
         AString prompt = "Asset type (";
-        prompt += MeshClassOptionsText();
+        prompt += OutputAssetTypeOptionsText();
         prompt += ")";
-        PromptString(prompt, options.meshClass, meshClass, prompted);
-        options.meshClass = meshClass;
+        PromptString(prompt, options.assetType, assetType, prompted);
+        options.assetType = assetType;
     }
 
     if(!presence.mesh && !options.acceptDefaults){
@@ -228,6 +227,35 @@ bool ConfigurePromptsAfterLoad(
     return true;
 }
 
+bool SelectedMeshesUseSkinning(
+    const UtilityVector<MeshInstance>& instances,
+    const UtilityVector<usize>& selection,
+    bool& outUsesSkinning
+){
+    outUsesSkinning = false;
+    bool sawStatic = false;
+    bool sawSkinned = false;
+    for(const usize instanceIndex : selection){
+        if(instanceIndex >= instances.size()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
+            return false;
+        }
+
+        const MeshInstance& instance = instances[instanceIndex];
+        const bool hasSkin = instance.mesh && instance.mesh->skin_deformers.count != 0u;
+        sawSkinned = sawSkinned || hasSkin;
+        sawStatic = sawStatic || !hasSkin;
+    }
+
+    if(sawStatic && sawSkinned){
+        NWB_LOGGER_WARNING(NWB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
+        return false;
+    }
+
+    outUsesSkinning = sawSkinned;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -247,7 +275,8 @@ int Run(int argc, char** argv, bool& prompted){
 
     std::string inputPath(options.inputPath.data(), options.inputPath.size());
     std::string outputPathText(options.outputPath.data(), options.outputPath.size());
-    std::string meshClass(options.meshClass.data(), options.meshClass.size());
+    std::string assetType(options.assetType.data(), options.assetType.size());
+    std::string virtualRoot(options.virtualRoot.data(), options.virtualRoot.size());
     std::string meshSelector(options.meshSelector.data(), options.meshSelector.size());
     std::string normalMode(options.normalMode.data(), options.normalMode.size());
     std::string defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
@@ -255,12 +284,13 @@ int Run(int argc, char** argv, bool& prompted){
     bool local = false;
     bool ignoreColors = false;
 
-    CLI::Option* inputOption = app.add_option("input", inputPath, "Input FBX file path");
-    CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB mesh metadata path");
-    std::string meshClassDescription = "Output asset type: ";
-    const AString meshClassOptions = MeshClassOptionsText();
-    meshClassDescription.append(meshClassOptions.data(), meshClassOptions.size());
-    CLI::Option* meshClassOption = app.add_option("--asset-type", meshClass, meshClassDescription);
+    app.add_option("input", inputPath, "Input FBX file path");
+    CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB asset metadata path");
+    std::string assetTypeDescription = "Output asset type: ";
+    const AString assetTypeOptions = OutputAssetTypeOptionsText();
+    assetTypeDescription.append(assetTypeOptions.data(), assetTypeOptions.size());
+    CLI::Option* assetTypeOption = app.add_option("--asset-type", assetType, assetTypeDescription);
+    app.add_option("--virtual-root", virtualRoot, "Virtual asset root used when output path is outside an assets directory");
     CLI::Option* meshOption = app.add_option("-m,--mesh", meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* normalModeOption = app.add_option(
         "--normal-mode",
@@ -292,7 +322,8 @@ int Run(int argc, char** argv, bool& prompted){
 
     options.inputPath.assign(inputPath.data(), inputPath.size());
     options.outputPath.assign(outputPathText.data(), outputPathText.size());
-    options.meshClass.assign(meshClass.data(), meshClass.size());
+    options.assetType.assign(assetType.data(), assetType.size());
+    options.virtualRoot.assign(virtualRoot.data(), virtualRoot.size());
     options.meshSelector.assign(meshSelector.data(), meshSelector.size());
     options.normalMode.assign(normalMode.data(), normalMode.size());
     options.defaultColorText.assign(defaultColorText.data(), defaultColorText.size());
@@ -300,9 +331,8 @@ int Run(int argc, char** argv, bool& prompted){
     options.bakeTransforms = !local;
     options.importColors = !ignoreColors;
 
-    presence.input = inputOption->count() > 0u;
     presence.output = outputOption->count() > 0u;
-    presence.meshClass = meshClassOption->count() > 0u;
+    presence.assetType = assetTypeOption->count() > 0u;
     presence.mesh = meshOption->count() > 0u;
     presence.normalMode = normalModeOption->count() > 0u;
     presence.scale = scaleOption->count() > 0u;
@@ -359,7 +389,7 @@ int Run(int argc, char** argv, bool& prompted){
     if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
         return 1;
 
-    if(!ValidateMeshClassText(options.meshClass))
+    if(!ValidateAssetTypeText(options.assetType))
         return 1;
     if(!ValidateNormalModeText(options.normalMode))
         return 1;
@@ -374,6 +404,17 @@ int Run(int argc, char** argv, bool& prompted){
     if(!SelectMeshInstances(instances, options.meshSelector, selection))
         return 1;
 
+    OutputAssetType::Enum assetTypeValue = OutputAssetType::Mesh;
+    if(!ParseAssetTypeText(options.assetType, assetTypeValue)){
+        NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
+        return 1;
+    }
+    bool wantsSkinning = false;
+    if(assetTypeValue == OutputAssetType::Model){
+        if(!__hidden_command_line::SelectedMeshesUseSkinning(instances, selection, wantsSkinning))
+            return 1;
+    }
+
     const Path outputPath = PathFromUtf8(options.outputPath);
     if(outputPath.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
@@ -383,8 +424,9 @@ int Run(int argc, char** argv, bool& prompted){
         return 1;
 
     SourceMeshStreams mesh;
-    u32 skeletonJointCount = 0u;
-    UtilityVector<MeshJointMatrix> inverseBindMatrices;
+    UtilityVector<ufbx_node*> skeletonJoints;
+    UtilityVector<JointMatrix> skeletonBindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
     bool sawVertexColors = false;
     bool sawVertexUvs = false;
     SourceTangentReport tangentReport;
@@ -392,9 +434,11 @@ int Run(int argc, char** argv, bool& prompted){
         instances,
         selection,
         options,
+        wantsSkinning,
         defaultColor,
         mesh,
-        skeletonJointCount,
+        skeletonJoints,
+        skeletonBindPoseMatrices,
         inverseBindMatrices,
         sawVertexColors,
         sawVertexUvs,
@@ -402,12 +446,14 @@ int Run(int argc, char** argv, bool& prompted){
     ))
         return 1;
 
-    if(!WriteNwbMesh(
+    if(!WriteNwbAsset(
         outputPath,
         mesh,
-        skeletonJointCount,
-        inverseBindMatrices,
-        options.meshClass
+        options.assetType,
+        options.virtualRoot,
+        skeletonJoints,
+        skeletonBindPoseMatrices,
+        inverseBindMatrices
     ))
         return 1;
 
@@ -418,11 +464,13 @@ int Run(int argc, char** argv, bool& prompted){
         << "  normals: " << mesh.normals.size() << "\n"
         << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
         << "  triangles: " << (mesh.indices.size() / 3u) << "\n"
-        << "  asset_type: mesh\n"
+        << "  asset_type: " << options.assetType << "\n"
         << "  normal_mode: " << options.normalMode << "\n"
         << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
     report << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+    if(!skeletonJoints.empty())
+        report << "  skeleton_joints: " << skeletonJoints.size() << "\n";
     if(tangentReport.mode == SourceTangentMode::GeneratedFallback){
         report
             << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"

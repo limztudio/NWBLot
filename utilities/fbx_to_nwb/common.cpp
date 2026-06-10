@@ -5,9 +5,6 @@
 #include "module.h"
 
 #include <core/common/log.h>
-#include <core/mesh/classification.h>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -71,50 +68,61 @@ AString ToLower(AString value){
     return value;
 }
 
-AString NormalizeMeshClassText(AString value){
+static AString NormalizeAssetTypeText(AString value){
     return ToLower(Trim(Move(value)));
 }
 
-AStringView MeshClassText(const u32 meshClass){
-    return NWB::Core::Mesh::MeshClassText(meshClass);
+static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
+    switch(assetType){
+    case OutputAssetType::Mesh:
+        return "mesh";
+    case OutputAssetType::Model:
+        return "model";
+    default:
+        return {};
+    }
 }
 
-AString MeshClassOptionsText(){
-    return AString("mesh");
+AString OutputAssetTypeOptionsText(){
+    AString text;
+    text += OutputAssetTypeText(OutputAssetType::Mesh);
+    text += " or ";
+    text += OutputAssetTypeText(OutputAssetType::Model);
+    return text;
 }
 
-AString MeshClassErrorText(){
+AString OutputAssetTypeErrorText(){
     AString message = "Asset type must be ";
-    message += MeshClassOptionsText();
+    message += OutputAssetTypeOptionsText();
     return message;
 }
 
-bool ParseNormalizedMeshClassText(const AStringView value, u32& outMeshClass){
-    if(value == "mesh"){
-        outMeshClass = NWB::Core::Mesh::MeshClass::Static;
+static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
+    if(value == OutputAssetTypeText(OutputAssetType::Mesh)){
+        outAssetType = OutputAssetType::Mesh;
+        return true;
+    }
+    if(value == OutputAssetTypeText(OutputAssetType::Model)){
+        outAssetType = OutputAssetType::Model;
         return true;
     }
 
-    outMeshClass = NWB::Core::Mesh::MeshClass::Invalid;
+    outAssetType = OutputAssetType::Mesh;
     return false;
 }
 
-bool ParseMeshClassText(const AString& value, u32& outMeshClass){
-    const AString normalized = NormalizeMeshClassText(value);
-    return ParseNormalizedMeshClassText(normalized, outMeshClass);
+bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType){
+    const AString normalized = NormalizeAssetTypeText(value);
+    return ParseNormalizedAssetTypeText(normalized, outAssetType);
 }
 
-bool MeshClassUsesSkinning(const u32 meshClass){
-    return NWB::Core::Mesh::MeshClassUsesSkinning(meshClass);
-}
-
-bool ValidateMeshClassText(AString& inOutValue){
-    inOutValue = NormalizeMeshClassText(Move(inOutValue));
-    u32 meshClass = NWB::Core::Mesh::MeshClass::Invalid;
-    if(ParseNormalizedMeshClassText(inOutValue, meshClass))
+bool ValidateAssetTypeText(AString& inOutValue){
+    inOutValue = NormalizeAssetTypeText(Move(inOutValue));
+    OutputAssetType::Enum assetType = OutputAssetType::Mesh;
+    if(ParseNormalizedAssetTypeText(inOutValue, assetType))
         return true;
 
-    NWB_LOGGER_WARNING(StringConvert(MeshClassErrorText()));
+    NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
     return false;
 }
 
@@ -122,7 +130,7 @@ static AString NormalizeNormalModeText(AString value){
     return ToLower(Trim(Move(value)));
 }
 
-AStringView NormalModeText(const NormalMode::Enum normalMode){
+static AStringView NormalModeText(const NormalMode::Enum normalMode){
     switch(normalMode){
     case NormalMode::Imported:
         return "imported";
@@ -151,7 +159,7 @@ AString NormalModeErrorText(){
     return message;
 }
 
-bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
+static bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
     if(value == NormalModeText(NormalMode::Imported)){
         outNormalMode = NormalMode::Imported;
         return true;

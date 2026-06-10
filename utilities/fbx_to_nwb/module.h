@@ -29,12 +29,12 @@ static_assert(sizeof(MeshSkinInfluence) == sizeof(u16) * 4u + sizeof(f32) * 4u);
 static_assert(alignof(MeshSkinInfluence) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<MeshSkinInfluence>);
 
-struct MeshJointMatrix{
-    Vec4 columns[4];
+struct JointMatrix{
+    Vec4 rows[3];
 };
-static_assert(sizeof(MeshJointMatrix) == sizeof(f32) * 16u);
-static_assert(alignof(MeshJointMatrix) == alignof(f32));
-static_assert(IsTriviallyCopyable_V<MeshJointMatrix>);
+static_assert(sizeof(JointMatrix) == sizeof(f32) * 12u);
+static_assert(alignof(JointMatrix) == alignof(f32));
+static_assert(IsTriviallyCopyable_V<JointMatrix>);
 
 static constexpr u32 s_MissingSourceStreamIndex = Limit<u32>::s_Max;
 
@@ -79,6 +79,13 @@ namespace SourceTangentMode{
     };
 };
 
+namespace OutputAssetType{
+    enum Enum : u8{
+        Mesh,
+        Model
+    };
+};
+
 struct SourceTangentReport{
     SourceTangentMode::Enum mode = SourceTangentMode::Imported;
     u32 degenerateUvTriangleCount = 0u;
@@ -94,7 +101,8 @@ static constexpr f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
 struct ImportOptions{
     AString inputPath;
     AString outputPath;
-    AString meshClass = "mesh";
+    AString assetType = "mesh";
+    AString virtualRoot = "project";
     AString meshSelector = "all";
     AString normalMode = "imported";
     AString defaultColorText = "1,1,1,1";
@@ -139,19 +147,13 @@ struct SceneHandle{
 AString Trim(AString value);
 AString UnquotePath(AString value);
 AString ToLower(AString value);
-AString NormalizeMeshClassText(AString value);
-AStringView MeshClassText(u32 meshClass);
-AString MeshClassOptionsText();
-AString MeshClassErrorText();
-bool ParseMeshClassText(const AString& value, u32& outMeshClass);
-bool ParseNormalizedMeshClassText(AStringView value, u32& outMeshClass);
-bool MeshClassUsesSkinning(u32 meshClass);
-bool ValidateMeshClassText(AString& inOutValue);
-AStringView NormalModeText(NormalMode::Enum normalMode);
+AString OutputAssetTypeOptionsText();
+AString OutputAssetTypeErrorText();
+bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType);
+bool ValidateAssetTypeText(AString& inOutValue);
 AString NormalModeOptionsText();
 AString NormalModeErrorText();
 bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode);
-bool ParseNormalizedNormalModeText(AStringView value, NormalMode::Enum& outNormalMode);
 bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
 bool ParseColorText(const AString& text, Vec4& outColor);
@@ -172,21 +174,25 @@ bool BuildMesh(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
+    bool wantsSkinning,
     const Vec4& defaultColor,
     SourceMeshStreams& outMesh,
-    u32& outSkeletonJointCount,
-    UtilityVector<MeshJointMatrix>& outInverseBindMatrices,
+    UtilityVector<ufbx_node*>& outSkeletonJoints,
+    UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,
+    UtilityVector<JointMatrix>& outInverseBindMatrices,
     bool& outSawVertexColors,
     bool& outSawVertexUvs,
     SourceTangentReport& outTangentReport
 );
 
-bool WriteNwbMesh(
+bool WriteNwbAsset(
     const Path& outputPath,
     const SourceMeshStreams& mesh,
-    const u32 skeletonJointCount,
-    const UtilityVector<MeshJointMatrix>& inverseBindMatrices,
-    const AString& meshClassText
+    const AString& assetTypeText,
+    const AString& virtualRoot,
+    const UtilityVector<ufbx_node*>& skeletonJoints,
+    const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
+    const UtilityVector<JointMatrix>& inverseBindMatrices
 );
 
 int Run(int argc, char** argv, bool& prompted);

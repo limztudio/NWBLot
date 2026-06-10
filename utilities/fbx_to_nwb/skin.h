@@ -25,7 +25,8 @@ namespace FbxSkinDetail{
 
 struct ExportContext{
     UtilityVector<ufbx_node*> joints;
-    UtilityVector<MeshJointMatrix> inverseBindMatrices;
+    UtilityVector<JointMatrix> bindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
     HashMap<ufbx_node*, u16> jointLookup;
 };
 

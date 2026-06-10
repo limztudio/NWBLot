@@ -39,42 +39,36 @@ bool FiniteUfbxMatrix(const ufbx_matrix& matrix){
     return true;
 }
 
-MeshJointMatrix ToMeshJointMatrix(const ufbx_matrix& matrix){
-    MeshJointMatrix result{};
-    result.columns[0] = Vec4{
+JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
+    JointMatrix result{};
+    result.rows[0] = Vec4{
         static_cast<f32>(matrix.m00),
-        static_cast<f32>(matrix.m10),
-        static_cast<f32>(matrix.m20),
-        0.0f,
-    };
-    result.columns[1] = Vec4{
         static_cast<f32>(matrix.m01),
-        static_cast<f32>(matrix.m11),
-        static_cast<f32>(matrix.m21),
-        0.0f,
-    };
-    result.columns[2] = Vec4{
         static_cast<f32>(matrix.m02),
-        static_cast<f32>(matrix.m12),
-        static_cast<f32>(matrix.m22),
-        0.0f,
-    };
-    result.columns[3] = Vec4{
         static_cast<f32>(matrix.m03),
+    };
+    result.rows[1] = Vec4{
+        static_cast<f32>(matrix.m10),
+        static_cast<f32>(matrix.m11),
+        static_cast<f32>(matrix.m12),
         static_cast<f32>(matrix.m13),
+    };
+    result.rows[2] = Vec4{
+        static_cast<f32>(matrix.m20),
+        static_cast<f32>(matrix.m21),
+        static_cast<f32>(matrix.m22),
         static_cast<f32>(matrix.m23),
-        1.0f,
     };
     return result;
 }
 
-bool NearlyEqualJointMatrix(const MeshJointMatrix& lhs, const MeshJointMatrix& rhs){
+bool NearlyEqualJointMatrix(const JointMatrix& lhs, const JointMatrix& rhs){
     static constexpr f32 s_Epsilon = 0.0001f;
-    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-        const Vec4& lhsColumn = lhs.columns[columnIndex];
-        const Vec4& rhsColumn = rhs.columns[columnIndex];
+    for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+        const Vec4& lhsRow = lhs.rows[rowIndex];
+        const Vec4& rhsRow = rhs.rows[rowIndex];
         for(usize componentIndex = 0u; componentIndex < 4u; ++componentIndex){
-            if(Abs(lhsColumn.raw[componentIndex] - rhsColumn.raw[componentIndex]) > s_Epsilon)
+            if(Abs(lhsRow.raw[componentIndex] - rhsRow.raw[componentIndex]) > s_Epsilon)
                 return false;
         }
     }
@@ -126,11 +120,17 @@ bool FindOrAddJoint(
         return false;
     }
 
-    const MeshJointMatrix convertedMatrix = ToMeshJointMatrix(inverseBind);
+    const JointMatrix convertedMatrix = ToJointMatrix(inverseBind);
+    const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
+    if(!FiniteUfbxMatrix(bindPose)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
+        return false;
+    }
+    const JointMatrix convertedBindPose = ToJointMatrix(bindPose);
     auto foundJoint = context.jointLookup.find(cluster->bone_node);
     if(foundJoint != context.jointLookup.end()){
         const usize jointIndex = static_cast<usize>(foundJoint.value());
-        if(jointIndex >= context.inverseBindMatrices.size()){
+        if(jointIndex >= context.inverseBindMatrices.size() || jointIndex >= context.bindPoseMatrices.size()){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: internal skeleton joint lookup is out of range"));
             return false;
         }
@@ -152,6 +152,7 @@ bool FindOrAddJoint(
 
     outJoint = static_cast<u16>(context.joints.size());
     context.joints.push_back(cluster->bone_node);
+    context.bindPoseMatrices.push_back(convertedBindPose);
     context.inverseBindMatrices.push_back(convertedMatrix);
     context.jointLookup.emplace(cluster->bone_node, outJoint);
     return true;
@@ -184,6 +185,7 @@ bool BuildClusterJointMap(
 
     const usize reservedJointCount = context.joints.size() + skin->clusters.count;
     context.joints.reserve(reservedJointCount);
+    context.bindPoseMatrices.reserve(reservedJointCount);
     context.inverseBindMatrices.reserve(reservedJointCount);
     context.jointLookup.reserve(reservedJointCount);
     outClusterJoints.reserve(skin->clusters.count);

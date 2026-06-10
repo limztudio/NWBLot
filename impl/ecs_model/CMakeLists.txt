@@ -9,6 +9,7 @@ target_link_libraries(nwb_ecs_model PUBLIC
     nwb_ecs
     nwb_assets_model
     nwb_ecs_mesh
+    nwb_ecs_render
     nwb_ecs_scene
     nwb_ecs_skeleton
 )

@@ -47,6 +47,7 @@ static_assert(IsTriviallyCopyable_V<ModelSkeletonObjectBinary>, "ModelSkeletonOb
 struct ModelStaticMeshObjectBinary{
     NameHash nameHash = {};
     NameHash meshNameHash = {};
+    NameHash materialNameHash = {};
     NameHash parentObjectNameHash = {};
     NameHash parentJointNameHash = {};
     SkeletonJointMatrix transform = {};
@@ -58,6 +59,7 @@ struct ModelSkinnedMeshObjectBinary{
     NameHash nameHash = {};
     NameHash meshNameHash = {};
     NameHash skinNameHash = {};
+    NameHash materialNameHash = {};
     NameHash skeletonObjectNameHash = {};
     SkeletonJointMatrix transform = {};
 };

@@ -142,6 +142,10 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} is incomplete"), i);
             return false;
         }
+        if(object.material.name() && !object.material.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has invalid material reference"), i);
+            return false;
+        }
         if(!__hidden_model_runtime::ModelObjectNameUnique(
             m_skeletonObjects,
             m_staticMeshObjects,
@@ -168,6 +172,10 @@ bool Model::validatePayload()const{
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
         if(!object.name || !object.mesh.valid() || !object.skin.valid() || !object.skeletonObject){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
+            return false;
+        }
+        if(object.material.name() && !object.material.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has invalid material reference"), i);
             return false;
         }
         if(!__hidden_model_runtime::ModelObjectNameUnique(
@@ -253,6 +261,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         ModelStaticMeshObject object;
         object.name = Name(objectBinary.nameHash);
         object.mesh.virtualPath = Name(objectBinary.meshNameHash);
+        object.material.virtualPath = Name(objectBinary.materialNameHash);
         object.parentObject = Name(objectBinary.parentObjectNameHash);
         object.parentJoint = Name(objectBinary.parentJointNameHash);
         object.transform = objectBinary.transform;
@@ -265,6 +274,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         object.name = Name(objectBinary.nameHash);
         object.mesh.virtualPath = Name(objectBinary.meshNameHash);
         object.skin.virtualPath = Name(objectBinary.skinNameHash);
+        object.material.virtualPath = Name(objectBinary.materialNameHash);
         object.skeletonObject = Name(objectBinary.skeletonObjectNameHash);
         object.transform = objectBinary.transform;
         m_skinnedMeshObjects.push_back(object);

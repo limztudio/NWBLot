@@ -87,6 +87,7 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         ModelBinaryPayload::ModelStaticMeshObjectBinary objectBinary;
         objectBinary.nameHash = object.name.hash();
         objectBinary.meshNameHash = object.mesh.name().hash();
+        objectBinary.materialNameHash = object.material.name().hash();
         objectBinary.parentObjectNameHash = object.parentObject.hash();
         objectBinary.parentJointNameHash = object.parentJoint.hash();
         objectBinary.transform = object.transform;
@@ -99,6 +100,7 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
         objectBinary.nameHash = object.name.hash();
         objectBinary.meshNameHash = object.mesh.name().hash();
         objectBinary.skinNameHash = object.skin.name().hash();
+        objectBinary.materialNameHash = object.material.name().hash();
         objectBinary.skeletonObjectNameHash = object.skeletonObject.hash();
         objectBinary.transform = object.transform;
         skinnedMeshObjectBinaries.push_back(objectBinary);

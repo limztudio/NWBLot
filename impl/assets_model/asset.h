@@ -7,6 +7,7 @@
 
 #include "../global.h"
 
+#include <impl/assets_material/asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/skin_asset.h>
 #include <impl/assets_skeleton/asset.h>
@@ -41,6 +42,7 @@ struct ModelSkeletonObject{
 struct ModelStaticMeshObject{
     Name name = NAME_NONE;
     Core::Assets::AssetRef<Mesh> mesh;
+    Core::Assets::AssetRef<Material> material;
     Name parentObject = NAME_NONE;
     Name parentJoint = NAME_NONE;
     SkeletonJointMatrix transform = MakeIdentityModelMatrix();
@@ -50,6 +52,7 @@ struct ModelSkinnedMeshObject{
     Name name = NAME_NONE;
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Skin> skin;
+    Core::Assets::AssetRef<Material> material;
     Name skeletonObject = NAME_NONE;
     SkeletonJointMatrix transform = MakeIdentityModelMatrix();
 };

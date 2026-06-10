@@ -11,6 +11,7 @@
 #include <impl/assets_model/asset.h>
 #include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_mesh/components.h>
+#include <impl/ecs_render/components.h>
 #include <impl/ecs_scene/components.h>
 #include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
@@ -60,6 +61,15 @@ void TagObject(
     objectComponent.model = model;
     objectComponent.object = object;
     objectComponent.kind = kind;
+}
+
+template<typename MaterialRefT>
+void ApplyOptionalRenderer(Core::ECS::Entity& entity, const MaterialRefT& material){
+    if(!material.valid())
+        return;
+
+    auto& renderer = entity.addComponent<RendererComponent>();
+    renderer.material = material;
 }
 
 bool LoadSkeleton(
@@ -295,6 +305,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         ModelObjectKind::StaticMesh
     );
     __hidden_model_system::ApplyObjectTransform(entity, object.transform);
+    __hidden_model_system::ApplyOptionalRenderer(entity, object.material);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -361,6 +372,7 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
         ModelObjectKind::SkinnedMesh
     );
     __hidden_model_system::ApplyObjectTransform(entity, object.transform);
+    __hidden_model_system::ApplyOptionalRenderer(entity, object.material);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.mesh = object.mesh;

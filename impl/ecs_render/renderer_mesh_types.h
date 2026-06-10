@@ -9,7 +9,7 @@
 
 #include <core/graphics/api.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
-#include <impl/ecs_mesh_runtime/mesh.h>
+#include <impl/ecs_mesh/runtime/mesh.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

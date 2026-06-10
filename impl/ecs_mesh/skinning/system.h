@@ -10,8 +10,9 @@
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
-#include <impl/ecs_mesh_runtime/mesh.h>
-#include <impl/ecs_skinned_mesh/components.h>
+#include <impl/ecs_mesh/runtime/mesh.h>
+#include <impl/ecs_mesh/components.h>
+#include <impl/ecs_skeleton/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +60,7 @@ private:
         u32 meshletCount = 0;
         u32 skinCount = 0;
         u32 jointCount = 0;
-        u32 skinningMode = SkinnedMeshSkinningMode::LinearBlend;
+        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
         u32 attributeCount = 0;
         u32 padding1 = 0;
         u32 padding2 = 0;
@@ -99,7 +100,7 @@ private:
 
     struct RuntimePayloadViews{
         const SkinnedMeshSkinInfluenceGpu* skinInfluences = nullptr;
-        const SkinnedMeshJointMatrix* jointPalette = nullptr;
+        const SkeletonJointMatrix* jointPalette = nullptr;
         usize skinInfluenceCount = 0;
         usize jointPaletteCount = 0;
 
@@ -140,13 +141,13 @@ private:
     [[nodiscard]] bool dispatchRuntimeMesh(
         Core::CommandList& commandList,
         SkinnedMeshRuntimeMeshInstance& instance,
-        const SkinnedMeshJointPaletteComponent* jointPalette,
-        const SkinnedMeshSkeletonPoseComponent* skeletonPose
+        const SkeletonJointPaletteComponent* jointPalette,
+        const SkeletonPoseComponent* skeletonPose
     );
     [[nodiscard]] bool prepareRuntimeMeshResources(
         SkinnedMeshRuntimeMeshInstance& instance,
-        const SkinnedMeshJointPaletteComponent* jointPalette,
-        const SkinnedMeshSkeletonPoseComponent* skeletonPose
+        const SkeletonJointPaletteComponent* jointPalette,
+        const SkeletonPoseComponent* skeletonPose
     );
     [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance);
     [[nodiscard]] bool dispatchMeshletBounds(

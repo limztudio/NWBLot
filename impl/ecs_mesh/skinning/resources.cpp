@@ -11,7 +11,7 @@
 #include <core/common/log.h>
 #include <core/graphics/module.h>
 #include <impl/assets/graphics/skinned_mesh/binding_slots.h>
-#include <impl/ecs_mesh_runtime/buffer_upload.h>
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

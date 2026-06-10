@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include "../../global.h"
 
 #include <core/alloc/general.h>
 

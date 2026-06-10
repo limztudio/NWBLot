@@ -7,7 +7,7 @@
 
 #include "../global.h"
 
-#include <impl/skinned_mesh/joint_types.h>
+#include <impl/assets_skeleton/joint_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ struct JointBinary{
     NameHash nameHash = {};
     u32 parentIndex = 0u;
     u32 padding0 = 0u;
-    SkinnedMeshJointMatrix localBindPose = {};
+    SkeletonJointMatrix localBindPose = {};
 };
 static_assert(IsStandardLayout_V<JointBinary>, "Skeleton joint must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<JointBinary>, "Skeleton joint must stay binary-serializable");

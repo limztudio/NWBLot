@@ -86,7 +86,7 @@ struct SkinnedMeshCookEntry{
     Core::Assets::AssetVector<Half4U> colors;
     Core::Assets::AssetVector<SkinInfluence4> skin;
     u32 skeletonJointCount = 0u;
-    Core::Assets::AssetVector<SkinnedMeshJointMatrix> inverseBindMatrices;
+    Core::Assets::AssetVector<SkeletonJointMatrix> inverseBindMatrices;
     Core::Assets::AssetVector<MeshVertexRef> vertexRefs;
     Core::Assets::AssetVector<MeshletDesc> meshlets;
     Core::Assets::AssetVector<MeshletBounds> meshletBounds;

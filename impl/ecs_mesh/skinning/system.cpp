@@ -10,7 +10,7 @@
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
 #include <impl/ecs_render/components.h>
-#include <impl/ecs_skinned_mesh/runtime_helpers.h>
+#include <impl/ecs_skeleton/runtime_helpers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,8 +30,8 @@ namespace __hidden_system{
 
 static bool HasPotentialSkinnedMeshWork(
     const SkinnedMeshRuntimeMeshInstance& instance,
-    const SkinnedMeshJointPaletteComponent* jointPalette,
-    const SkinnedMeshSkeletonPoseComponent* skeletonPose
+    const SkeletonJointPaletteComponent* jointPalette,
+    const SkeletonPoseComponent* skeletonPose
 ){
     if((instance.dirtyFlags & (RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
         return true;
@@ -40,7 +40,7 @@ static bool HasPotentialSkinnedMeshWork(
         !instance.skin.empty()
         && (
             (jointPalette && !jointPalette->joints.empty())
-            || SkinnedMeshRuntime::HasSkeletonPose(skeletonPose)
+            || SkeletonRuntime::HasSkeletonPose(skeletonPose)
         )
     ;
 }
@@ -83,8 +83,8 @@ SkinnedMeshSystem::SkinnedMeshSystem(
 {
     writeAccess<SkinnedMeshComponent>();
     readAccess<RendererComponent>();
-    readAccess<SkinnedMeshJointPaletteComponent>();
-    readAccess<SkinnedMeshSkeletonPoseComponent>();
+    readAccess<SkeletonJointPaletteComponent>();
+    readAccess<SkeletonPoseComponent>();
 
     m_runtimeMeshRegistry.registerRuntimeMeshProvider(*this);
 }
@@ -120,8 +120,8 @@ bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
                 return;
 #endif
 
-            const SkinnedMeshJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkinnedMeshJointPaletteComponent>(entity);
-            const SkinnedMeshSkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkinnedMeshSkeletonPoseComponent>(entity);
+            const SkeletonJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkeletonJointPaletteComponent>(entity);
+            const SkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkeletonPoseComponent>(entity);
             ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
         }
     );
@@ -241,8 +241,8 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
                 return;
 #endif
 
-            const SkinnedMeshJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkinnedMeshJointPaletteComponent>(entity);
-            const SkinnedMeshSkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkinnedMeshSkeletonPoseComponent>(entity);
+            const SkeletonJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkeletonJointPaletteComponent>(entity);
+            const SkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkeletonPoseComponent>(entity);
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
             const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
             if(!__hidden_system::HasPotentialSkinnedMeshWork(

@@ -1,5 +1,5 @@
-nwb_declare_static_library(nwb_ecs_skinned_mesh_render)
-target_sources(nwb_ecs_skinned_mesh_render PRIVATE
+nwb_declare_static_library(nwb_ecs_mesh_skinning)
+target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_source.cpp"
@@ -15,12 +15,12 @@ target_sources(nwb_ecs_skinned_mesh_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing_names.h"
 )
-target_link_libraries(nwb_ecs_skinned_mesh_render PUBLIC
-    nwb_ecs_skinned_mesh
-    nwb_ecs_mesh_runtime
+target_link_libraries(nwb_ecs_mesh_skinning PUBLIC
+    nwb_ecs_mesh
+    nwb_ecs_skeleton
     nwb_graphics
 )
-target_link_libraries(nwb_ecs_skinned_mesh_render PRIVATE
+target_link_libraries(nwb_ecs_mesh_skinning PRIVATE
     nwb_assets_mesh
     nwb_assets_shader_loader
     nwb_ecs_render_components

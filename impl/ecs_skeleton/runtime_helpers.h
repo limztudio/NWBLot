@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace SkinnedMeshRuntime{
+namespace SkeletonRuntime{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool HasSkeletonPose(const SkinnedMeshSkeletonPoseComponent* pose){
+[[nodiscard]] inline bool HasSkeletonPose(const SkeletonPoseComponent* pose){
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
@@ -114,15 +114,15 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 
 template<typename JointMatrixVector>
 [[nodiscard]] inline bool BuildJointPaletteFromSkeletonPose(
-    const SkinnedMeshSkeletonPoseComponent& pose,
+    const SkeletonPoseComponent& pose,
     JointMatrixVector& outJointPalette,
     u32& outSkinningMode){
     outJointPalette.clear();
-    outSkinningMode = SkinnedMeshSkinningMode::LinearBlend;
+    outSkinningMode = SkeletonSkinningMode::LinearBlend;
 
     if(!HasSkeletonPose(&pose))
         return true;
-    if(!ValidSkinnedMeshSkinningMode(pose.skinningMode))
+    if(!ValidSkeletonSkinningMode(pose.skinningMode))
         return false;
 
     const usize jointCount = pose.localJoints.size();
@@ -140,7 +140,7 @@ template<typename JointMatrixVector>
         if(!IsInvertibleAffineJointMatrix(jointMatrix))
             return false;
 
-        if(parentJoint != s_SkinnedMeshSkeletonRootParent){
+        if(parentJoint != s_SkeletonRootParent){
             if(parentJoint >= jointIndex)
                 return false;
 
@@ -149,7 +149,7 @@ template<typename JointMatrixVector>
                 return false;
         }
 
-        SkinnedMeshJointMatrix storedJointMatrix{};
+        SkeletonJointMatrix storedJointMatrix{};
         StoreFloat(jointMatrix, &storedJointMatrix);
         outJointPalette.push_back(storedJointMatrix);
     }

@@ -30,7 +30,7 @@ public:
 
 public:
     using InfluenceVector = Core::Assets::AssetVector<SkinInfluence4>;
-    using InverseBindMatrixVector = Core::Assets::AssetVector<SkinnedMeshJointMatrix>;
+    using InverseBindMatrixVector = Core::Assets::AssetVector<SkeletonJointMatrix>;
 
 
 public:

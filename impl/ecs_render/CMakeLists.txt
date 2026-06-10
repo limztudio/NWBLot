@@ -74,7 +74,6 @@ target_link_libraries(nwb_ecs_render PUBLIC
     nwb_ecs_render_components
     nwb_ecs
     nwb_ecs_mesh
-    nwb_ecs_mesh_runtime
     nwb_graphics
     nwb_assets_material
 )

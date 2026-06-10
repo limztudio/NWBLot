@@ -242,7 +242,7 @@ static bool ParseInverseBindMatrices(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const u32 skeletonJointCount,
-    Core::Assets::AssetVector<SkinnedMeshJointMatrix>& outMatrices,
+    Core::Assets::AssetVector<SkeletonJointMatrix>& outMatrices,
     Core::Alloc::ScratchArena& scratchArena
 ){
     outMatrices.clear();
@@ -275,7 +275,7 @@ static bool ParseInverseBindMatrices(
             return false;
         }
 
-        SkinnedMeshJointMatrix matrix{};
+        SkeletonJointMatrix matrix{};
         const auto& columns = matrixValue.asList();
         const ScratchString label = MakeIndexedLabel(scratchArena, "inverse_bind_matrices", matrixIndex);
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){

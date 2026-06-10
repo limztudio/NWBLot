@@ -24,8 +24,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SkinnedMeshJointMatrix MakeIdentityModelMatrix(){
-    return MakeIdentitySkinnedMeshJointMatrix();
+[[nodiscard]] inline SkeletonJointMatrix MakeIdentityModelMatrix(){
+    return MakeIdentitySkeletonJointMatrix();
 }
 
 
@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
 struct ModelSkeletonObject{
     Name name = NAME_NONE;
     Core::Assets::AssetRef<Skeleton> skeleton;
-    SkinnedMeshJointMatrix transform = MakeIdentityModelMatrix();
+    SkeletonJointMatrix transform = MakeIdentityModelMatrix();
 };
 
 struct ModelStaticMeshObject{
@@ -43,7 +43,7 @@ struct ModelStaticMeshObject{
     Core::Assets::AssetRef<Mesh> mesh;
     Name parentObject = NAME_NONE;
     Name parentJoint = NAME_NONE;
-    SkinnedMeshJointMatrix transform = MakeIdentityModelMatrix();
+    SkeletonJointMatrix transform = MakeIdentityModelMatrix();
 };
 
 struct ModelSkinnedMeshObject{
@@ -51,7 +51,7 @@ struct ModelSkinnedMeshObject{
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Skin> skin;
     Name skeletonObject = NAME_NONE;
-    SkinnedMeshJointMatrix transform = MakeIdentityModelMatrix();
+    SkeletonJointMatrix transform = MakeIdentityModelMatrix();
 };
 
 

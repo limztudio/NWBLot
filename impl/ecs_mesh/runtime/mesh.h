@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include "../../global.h"
 
 #include <core/alloc/general.h>
 #include <core/assets/ref.h>
@@ -23,6 +23,38 @@ NWB_IMPL_BEGIN
 
 
 class Mesh;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RuntimeMeshDirtyFlag{
+    enum Enum : u8{
+        None = 0,
+        TopologyDirty = 1u << 0u,
+        AttributesDirty = 1u << 1u,
+        SkinnedMeshInputDirty = 1u << 2u,
+        GpuUploadDirty = 1u << 3u,
+        MeshletBoundsDirty = 1u << 4u,
+        All = TopologyDirty | AttributesDirty | SkinnedMeshInputDirty | GpuUploadDirty | MeshletBoundsDirty,
+    };
+};
+using RuntimeMeshDirtyFlags = u8;
+
+struct RuntimeMeshHandle{
+    u64 value = 0;
+
+    [[nodiscard]] bool valid()const{ return value != 0u; }
+    [[nodiscard]] explicit operator bool()const{ return valid(); }
+    void reset(){ value = 0; }
+};
+
+[[nodiscard]] inline bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+    return lhs.value == rhs.value;
+}
+[[nodiscard]] inline bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+    return !(lhs == rhs);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

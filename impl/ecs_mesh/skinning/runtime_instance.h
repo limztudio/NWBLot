@@ -9,8 +9,9 @@
 #include <core/mesh/classification.h>
 #include <impl/assets_mesh/payload_types.h>
 #include <impl/assets_mesh/skinned_types.h>
-#include <impl/ecs_mesh_runtime/mesh.h>
-#include <impl/ecs_skinned_mesh/components.h>
+#include <impl/ecs_mesh/runtime/mesh.h>
+#include <impl/ecs_mesh/components.h>
+#include <impl/ecs_skeleton/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +28,7 @@ struct SkinnedMeshRuntimeMeshInstance{
     using Float2Vector = Vector<Float2U, Core::Alloc::GlobalArena>;
     using Half4Vector = Vector<Half4U, Core::Alloc::GlobalArena>;
     using SkinVector = Vector<SkinInfluence4, Core::Alloc::GlobalArena>;
-    using JointVector = Vector<SkinnedMeshJointMatrix, Core::Alloc::GlobalArena>;
+    using JointVector = Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>;
     using MeshletVector = Vector<MeshletDesc, Core::Alloc::GlobalArena>;
     using MeshletBoundsVector = Vector<MeshletBounds, Core::Alloc::GlobalArena>;
     using MeshletRefDeltaVector = Vector<u8, Core::Alloc::GlobalArena>;

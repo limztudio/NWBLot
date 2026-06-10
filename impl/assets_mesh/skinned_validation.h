@@ -88,14 +88,14 @@ using MeshPayloadValidation::FiniteVector;
 }
 
 [[nodiscard]] inline bool ValidInverseBindMatrices(
-    const Core::Assets::AssetVector<SkinnedMeshJointMatrix>& inverseBindMatrices,
+    const Core::Assets::AssetVector<SkeletonJointMatrix>& inverseBindMatrices,
     const u32 skeletonJointCount){
     if(inverseBindMatrices.empty())
         return true;
     if(skeletonJointCount == 0u || inverseBindMatrices.size() != skeletonJointCount)
         return false;
 
-    for(const SkinnedMeshJointMatrix& matrix : inverseBindMatrices){
+    for(const SkeletonJointMatrix& matrix : inverseBindMatrices){
         if(!ValidAffineJointMatrix(LoadFloat(matrix)))
             return false;
     }

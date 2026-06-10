@@ -218,8 +218,8 @@ static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){
     };
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
-    NWB::Impl::SkinnedMeshJointMatrix matrix = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
+    NWB::Impl::SkeletonJointMatrix matrix = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     matrix.rows[3] = Float4(tx, ty, tz, 1.0f);
     return matrix;
 }
@@ -298,7 +298,7 @@ using TestPositionStream = NWB::Core::Assets::AssetVector<Float3U>;
 using TestHalf4Stream = NWB::Core::Assets::AssetVector<Half4U>;
 using TestUv0Stream = NWB::Core::Assets::AssetVector<Float2U>;
 using TestSkinStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkinInfluence4>;
-using TestInverseBindMatrixStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkinnedMeshJointMatrix>;
+using TestInverseBindMatrixStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkeletonJointMatrix>;
 using TestMeshletStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>;
 using TestMeshletBoundsStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletBounds>;
 using TestMeshletRefDeltaStream = NWB::Core::Assets::AssetVector<u8>;
@@ -359,7 +359,7 @@ static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
     auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
     skin.assign(positions.size(), MakeRootSkin());
 
-    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkinnedMeshJointMatrix>(testArena);
+    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkeletonJointMatrix>(testArena);
     inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
 
     auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
@@ -429,7 +429,7 @@ static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
     auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
     skin.assign(positions.size(), MakeRootSkin());
 
-    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkinnedMeshJointMatrix>(testArena);
+    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkeletonJointMatrix>(testArena);
     inverseBindMatrices.push_back(MakeJointMatrix(0.0f, 0.0f, 0.0f));
 
     auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);

@@ -8,7 +8,6 @@
 #include "../global.h"
 
 #include <core/assets/ref.h>
-#include <impl/ecs_mesh/runtime/mesh.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,31 +19,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Mesh;
-class SkinnedMesh;
+class Model;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct MeshComponent{
-    Core::Assets::AssetRef<Mesh> mesh;
+struct ModelComponent{
+    Core::Assets::AssetRef<Model> model;
 };
 
-static_assert(IsStandardLayout_V<MeshComponent>, "MeshComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<MeshComponent>, "MeshComponent must stay cheap to move in dense ECS storage");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkinnedMeshComponent{
-    Core::Assets::AssetRef<SkinnedMesh> skinnedMesh;
-    RuntimeMeshHandle runtimeMesh;
-};
-
-static_assert(IsStandardLayout_V<SkinnedMeshComponent>, "SkinnedMeshComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<SkinnedMeshComponent>, "SkinnedMeshComponent must stay cheap to move in dense ECS storage");
+static_assert(IsStandardLayout_V<ModelComponent>, "ModelComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelComponent>, "ModelComponent must stay cheap to move in dense ECS storage");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,4 +40,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

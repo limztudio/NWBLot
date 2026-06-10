@@ -15,8 +15,8 @@ target_link_libraries(testbed PRIVATE
     nwb_loader
     nwb_ecs_scene
     nwb_ecs_mesh
-    nwb_ecs_skinned_mesh
-    nwb_ecs_skinned_mesh_render
+    nwb_ecs_skeleton
+    nwb_ecs_mesh_skinning
     nwb_ecs_render
     nwb_ecs_ui
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"

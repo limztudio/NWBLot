@@ -26,7 +26,7 @@ target_sources(nwb_assets_mesh PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
 )
-target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_skeleton nwb_mesh nwb_skinned_mesh_types)
+target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_skeleton nwb_mesh nwb_assets_skeleton_types)
 
 if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_mesh_cook)
@@ -75,6 +75,6 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_build.inl"
         "${CMAKE_CURRENT_LIST_DIR}/cook_source.inl"
     )
-    target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_skinned_mesh_types)
+    target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_assets_skeleton_types)
     target_compile_definitions(nwb_assets_mesh_cook PRIVATE NWB_COOK=1)
 endif()

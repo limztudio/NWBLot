@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_skinned_mesh_render/resource_names.h>
-#include <impl/ecs_skinned_mesh_render/skin_payload.h>
+#include <impl/ecs_mesh/skinning/resource_names.h>
+#include <impl/ecs_mesh/skinning/skin_payload.h>
 
 #include <tests/capturing_logger.h>
 #include <tests/ecs_test_world.h>
@@ -13,7 +13,8 @@
 #include <core/common/module.h>
 #include <core/ecs/module.h>
 #include <core/mesh/classification.h>
-#include <impl/ecs_skinned_mesh/components.h>
+#include <impl/ecs_mesh/components.h>
+#include <impl/ecs_skeleton/components.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
@@ -338,42 +339,42 @@ static void TestMaterialTypedByteRangeDeduplicatesContent(TestContext& context){
 #endif
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
-    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
+    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     joint.rows[3] = Float4(x, y, z, 1.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeZHalfTurnJointMatrix(){
-    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeZHalfTurnJointMatrix(){
+    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeXHalfTurnJointMatrix(){
-    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeXHalfTurnJointMatrix(){
+    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
     joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeYHalfTurnJointMatrix(){
-    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeYHalfTurnJointMatrix(){
+    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeZQuarterTurnJointMatrix(){
-    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeZQuarterTurnJointMatrix(){
+    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     joint.rows[0] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     joint.rows[1] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeNonUniformScaleJointMatrix(){
-    NWB::Impl::SkinnedMeshJointMatrix joint = NWB::Impl::MakeIdentitySkinnedMeshJointMatrix();
+static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
+    NWB::Impl::SkeletonJointMatrix joint = NWB::Impl::MakeIdentitySkeletonJointMatrix();
     joint.rows[0] = Float4(2.0f, 0.0f, 0.0f, 0.0f);
     return joint;
 }
@@ -452,13 +453,13 @@ static NWB::Impl::SkinnedMeshRuntimeMeshInstance MakeTriangleInstance(){
     return instance;
 }
 
-static NWB::Impl::SkinnedMeshJointMatrix MakeIdentityJointMatrix(){
+static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 
 static void CheckJointRotationQuaternion(
     TestContext& context,
-    const NWB::Impl::SkinnedMeshJointMatrix& joint,
+    const NWB::Impl::SkeletonJointMatrix& joint,
     const f32 x,
     const f32 y,
     const f32 z,
@@ -466,7 +467,7 @@ static void CheckJointRotationQuaternion(
     SIMDVector quaternion = QuaternionIdentity();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedMeshRuntime::TryBuildJointRotationQuaternion(
+        NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
             LoadFloat(joint),
             quaternion
         )
@@ -489,18 +490,18 @@ static void TestJointRotationQuaternionBuildsColumnVectorRotations(TestContext& 
     SIMDVector quaternion = QuaternionIdentity();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedMeshRuntime::TryBuildJointRotationQuaternion(
+        !NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
             LoadFloat(MakeNonUniformScaleJointMatrix()),
             quaternion
         )
     );
 }
 
-static NWB::Impl::SkinnedMeshSkeletonPoseComponent MakeTwoJointSkeletonPose(
-    const NWB::Impl::SkinnedMeshJointMatrix& rootJoint,
-    const NWB::Impl::SkinnedMeshJointMatrix& childJoint){
-    NWB::Impl::SkinnedMeshSkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
-    pose.parentJoints.push_back(NWB::Impl::s_SkinnedMeshSkeletonRootParent);
+static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
+    const NWB::Impl::SkeletonJointMatrix& rootJoint,
+    const NWB::Impl::SkeletonJointMatrix& childJoint){
+    NWB::Impl::SkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
+    pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(rootJoint);
     pose.localJoints.push_back(childJoint);
@@ -508,18 +509,18 @@ static NWB::Impl::SkinnedMeshSkeletonPoseComponent MakeTwoJointSkeletonPose(
 }
 
 static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
-    NWB::Impl::SkinnedMeshSkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
+    NWB::Impl::SkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
         MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
         MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)
     );
 
-    Vector<NWB::Impl::SkinnedMeshJointMatrix> resolvedJoints;
-    u32 skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
+    Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
+    u32 skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        NWB::Impl::SkeletonRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkinnedMeshSkinningMode::LinearBlend);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkeletonSkinningMode::LinearBlend);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedJoints.size() == 2u);
     if(resolvedJoints.size() == 2u){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[0u].rows[3].x, 1.0f));
@@ -528,23 +529,23 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
         NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(resolvedJoints[1u].rows[3].y, 2.0f));
     }
 
-    pose.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
+    pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        NWB::Impl::SkeletonRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
-    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion);
+    NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkeletonSkinningMode::DualQuaternion);
 
     pose.parentJoints[1u] = 1u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        !NWB::Impl::SkeletonRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
     pose.parentJoints[1u] = 0u;
     pose.parentJoints.pop_back();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
+        !NWB::Impl::SkeletonRuntime::BuildJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
 }
 static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& context){
@@ -552,11 +553,11 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;
 
-    NWB::Impl::SkinnedMeshJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
+    NWB::Impl::SkeletonJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
     joints.joints.push_back(MakeIdentityJointMatrix());
 
     Vector<NWB::Impl::SkinnedMeshSkinInfluenceGpu> skinInfluences;
-    Vector<NWB::Impl::SkinnedMeshJointMatrix> jointMatrices;
+    Vector<NWB::Impl::SkeletonJointMatrix> jointMatrices;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(instance, &joints, skinInfluences, jointMatrices)
@@ -579,7 +580,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
     NWB::Impl::SkinnedMeshRuntimeMeshInstance dualQuaternionInstance = MakeTriangleInstance();
     AssignSingleJointSkin(dualQuaternionInstance, 0u);
     dualQuaternionInstance.handle.value = instance.handle.value;
-    joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
+    joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeTranslationJointMatrix(2.0f, 4.0f, 6.0f);
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
@@ -594,7 +595,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].y, 2.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].z, 3.0f));
     NWB_ECS_GRAPHICS_TEST_CHECK(context, NearlyEqual(jointMatrices[0u].rows[1].w, 0.0f));
-    joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::LinearBlend;
+    joints.skinningMode = NWB::Impl::SkeletonSkinningMode::LinearBlend;
     joints.joints[0u] = MakeIdentityJointMatrix();
 
 #if defined(NWB_FINAL)
@@ -605,7 +606,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
     outsidePalette.skeletonJointCount = 2u;
     outsidePalette.inverseBindMatrices.clear();
-    joints.joints.resize(1u, NWB::Impl::MakeIdentitySkinnedMeshJointMatrix());
+    joints.joints.resize(1u, NWB::Impl::MakeIdentitySkeletonJointMatrix());
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
         !NWB::Impl::SkinnedMeshSkinPayload::BuildSkinPayload(outsidePalette, &joints, skinInfluences, jointMatrices)
@@ -621,7 +622,7 @@ static void TestSkinnedMeshSkinPayloadValidatesSkeletonAndPalette(TestContext& c
 
     NWB::Impl::SkinnedMeshRuntimeMeshInstance scaledDualQuaternionJoint = instance;
     scaledDualQuaternionJoint.inverseBindMatrices.clear();
-    joints.skinningMode = NWB::Impl::SkinnedMeshSkinningMode::DualQuaternion;
+    joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     joints.joints[0u] = MakeNonUniformScaleJointMatrix();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,

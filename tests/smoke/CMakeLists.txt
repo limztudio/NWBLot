@@ -258,7 +258,7 @@ if(Python3_Interpreter_FOUND)
             nwb_csg_skinned_visible_smoke
             "${_nwb_csg_skinned_visible_runtime_root}"
             nwb_ecs_csg
-            nwb_ecs_skinned_mesh_render
+            nwb_ecs_mesh_skinning
         )
 
         file(GLOB_RECURSE _nwb_csg_skinned_visible_asset_inputs
@@ -335,7 +335,7 @@ if(Python3_Interpreter_FOUND)
             nwb_csg_skinned_sphere_visible_smoke
             "${_nwb_csg_skinned_visible_runtime_root}"
             nwb_ecs_csg
-            nwb_ecs_skinned_mesh_render
+            nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_csg_skinned_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
@@ -384,7 +384,7 @@ if(Python3_Interpreter_FOUND)
             nwb_csg_skinned_transparent_sphere_visible_smoke
             "${_nwb_csg_skinned_visible_runtime_root}"
             nwb_ecs_csg
-            nwb_ecs_skinned_mesh_render
+            nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_csg_skinned_transparent_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
 
@@ -443,7 +443,7 @@ if(Python3_Interpreter_FOUND)
         nwb_configure_runtime_smoke_target(
             nwb_skinned_cone_benchmark
             "${_nwb_skinned_cone_runtime_root}"
-            nwb_ecs_skinned_mesh_render
+            nwb_ecs_mesh_skinning
         )
 
         file(GLOB_RECURSE _nwb_skinned_cone_asset_inputs

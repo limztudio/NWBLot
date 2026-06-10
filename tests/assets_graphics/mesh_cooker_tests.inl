@@ -310,7 +310,7 @@ struct SkinnedMeshPayloadEdit{
     NWB::Core::Assets::AssetVector<Float2U> uv0;
     NWB::Core::Assets::AssetVector<Half4U> colors;
     NWB::Core::Assets::AssetVector<NWB::Impl::SkinInfluence4> skin;
-    NWB::Core::Assets::AssetVector<NWB::Impl::SkinnedMeshJointMatrix> inverseBindMatrices;
+    NWB::Core::Assets::AssetVector<NWB::Impl::SkeletonJointMatrix> inverseBindMatrices;
     NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc> meshlets;
     NWB::Core::Assets::AssetVector<NWB::Impl::MeshletBounds> meshletBounds;
     NWB::Core::Assets::AssetVector<u8> meshletPositionRefDeltas;

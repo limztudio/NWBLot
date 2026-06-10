@@ -16,8 +16,8 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material_instance.h>
-#include <impl/ecs_skinned_mesh/runtime_helpers.h>
-#include <impl/ecs_skinned_mesh_render/module.h>
+#include <impl/ecs_skeleton/runtime_helpers.h>
+#include <impl/ecs_mesh/skinning/module.h>
 
 #include "csg_smoke_helpers.h"
 
@@ -152,7 +152,7 @@ private:
         m_world.owner().reset();
     }
 
-    void initializeRestPose(NWB::Impl::SkinnedMeshSkeletonPoseComponent& pose){
+    void initializeRestPose(NWB::Impl::SkeletonPoseComponent& pose){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::SkinnedMesh::AssetTypeName(), Name(s_SkinnedMeshPath), loadedAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skinned receiver rest pose"));
@@ -164,13 +164,13 @@ private:
         }
 
         const auto* mesh = static_cast<const NWB::Impl::SkinnedMesh*>(loadedAsset.get());
-        pose.parentJoints.resize(mesh->skeletonJointCount(), NWB::Impl::s_SkinnedMeshSkeletonRootParent);
+        pose.parentJoints.resize(mesh->skeletonJointCount(), NWB::Impl::s_SkeletonRootParent);
         pose.localJoints.clear();
         pose.localJoints.reserve(mesh->inverseBindMatrices().size());
-        for(const NWB::Impl::SkinnedMeshJointMatrix& inverseBind : mesh->inverseBindMatrices()){
+        for(const NWB::Impl::SkeletonJointMatrix& inverseBind : mesh->inverseBindMatrices()){
             SIMDVector determinant = VectorZero();
             const SIMDMatrix bindJoint = MatrixInverse(&determinant, LoadFloat(inverseBind));
-            NWB::Impl::SkinnedMeshJointMatrix storedBind{};
+            NWB::Impl::SkeletonJointMatrix storedBind{};
             StoreFloat(bindJoint, &storedBind);
             pose.localJoints.push_back(storedBind);
         }
@@ -193,7 +193,7 @@ private:
 
         auto& skinnedMesh = entity.addComponent<NWB::Impl::SkinnedMeshComponent>();
         skinnedMesh.skinnedMesh = mesh;
-        auto& pose = entity.addComponent<NWB::Impl::SkinnedMeshSkeletonPoseComponent>(m_context.objectArena);
+        auto& pose = entity.addComponent<NWB::Impl::SkeletonPoseComponent>(m_context.objectArena);
         initializeRestPose(pose);
 
         auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();

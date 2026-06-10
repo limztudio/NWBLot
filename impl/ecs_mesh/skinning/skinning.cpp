@@ -11,7 +11,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/module.h>
-#include <impl/ecs_mesh_runtime/buffer_upload.h>
+#include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,8 +90,8 @@ static void SetSkinnedBufferStates(
 
 struct RuntimeSkinPayloadScratch{
     Vector<SkinnedMeshSkinInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
-    Vector<SkinnedMeshJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
-    u32 resolvedSkinningMode = SkinnedMeshSkinningMode::LinearBlend;
+    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
+    u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
 
     explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
         : skinInfluences(scratchArena)
@@ -105,14 +105,14 @@ struct RuntimeSkinPayloadScratch{
 
 static bool BuildRuntimeSkinPayload(
     SkinnedMeshRuntimeMeshInstance& instance,
-    const SkinnedMeshJointPaletteComponent* jointPalette,
-    const SkinnedMeshSkeletonPoseComponent* skeletonPose,
+    const SkeletonJointPaletteComponent* jointPalette,
+    const SkeletonPoseComponent* skeletonPose,
     RuntimeSkinPayloadScratch& payload
 ){
-    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkinnedMeshSkinningMode::LinearBlend;
-    if(SkinnedMeshRuntime::HasSkeletonPose(skeletonPose)){
-        Vector<SkinnedMeshJointMatrix, Core::Alloc::ScratchArena> poseJoints{ payload.skinInfluences.get_allocator().arena() };
-        if(!SkinnedMeshRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, payload.resolvedSkinningMode)){
+    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
+    if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
+        Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints{ payload.skinInfluences.get_allocator().arena() };
+        if(!SkeletonRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, payload.resolvedSkinningMode)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
@@ -145,8 +145,8 @@ static bool BuildRuntimeSkinPayload(
 
 bool SkinnedMeshSystem::prepareRuntimeMeshResources(
     SkinnedMeshRuntimeMeshInstance& instance,
-    const SkinnedMeshJointPaletteComponent* jointPalette,
-    const SkinnedMeshSkeletonPoseComponent* skeletonPose
+    const SkeletonJointPaletteComponent* jointPalette,
+    const SkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena scratchArena;
     __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
@@ -189,8 +189,8 @@ bool SkinnedMeshSystem::prepareRuntimeMeshResources(
 bool SkinnedMeshSystem::dispatchRuntimeMesh(
     Core::CommandList& commandList,
     SkinnedMeshRuntimeMeshInstance& instance,
-    const SkinnedMeshJointPaletteComponent* jointPalette,
-    const SkinnedMeshSkeletonPoseComponent* skeletonPose
+    const SkeletonJointPaletteComponent* jointPalette,
+    const SkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena scratchArena;
     __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
@@ -256,7 +256,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     usize jointPaletteBytes = 0;
     if(!__hidden_skinning::BufferPayloadBytes(
         payload.jointMatrices.size(),
-        sizeof(SkinnedMeshJointMatrix),
+        sizeof(SkeletonJointMatrix),
         jointPaletteBytes,
         NWB_TEXT("joint palette")
     ))

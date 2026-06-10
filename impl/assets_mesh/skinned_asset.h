@@ -54,7 +54,7 @@ public:
         Core::Assets::AssetVector<Float2U>&& uv0,
         Core::Assets::AssetVector<Half4U>&& colors,
         Core::Assets::AssetVector<SkinInfluence4>&& skin,
-        Core::Assets::AssetVector<SkinnedMeshJointMatrix>&& inverseBindMatrices,
+        Core::Assets::AssetVector<SkeletonJointMatrix>&& inverseBindMatrices,
         Core::Assets::AssetVector<MeshletDesc>&& meshlets,
         Core::Assets::AssetVector<MeshletBounds>&& meshletBounds,
         Core::Assets::AssetVector<u8>&& meshletPositionRefDeltas,
@@ -82,14 +82,14 @@ public:
     [[nodiscard]] u32 meshClass()const{ return m_meshClass; }
     [[nodiscard]] const Core::Assets::AssetVector<SkinInfluence4>& skinStream()const{ return m_skin; }
     [[nodiscard]] u32 skeletonJointCount()const{ return m_skeletonJointCount; }
-    [[nodiscard]] const Core::Assets::AssetVector<SkinnedMeshJointMatrix>& inverseBindMatrices()const{
+    [[nodiscard]] const Core::Assets::AssetVector<SkeletonJointMatrix>& inverseBindMatrices()const{
         return m_inverseBindMatrices;
     }
 private:
     u32 m_meshClass = Core::Mesh::MeshClass::Invalid;
     Core::Assets::AssetVector<SkinInfluence4> m_skin;
     u32 m_skeletonJointCount = 0;
-    Core::Assets::AssetVector<SkinnedMeshJointMatrix> m_inverseBindMatrices;
+    Core::Assets::AssetVector<SkeletonJointMatrix> m_inverseBindMatrices;
 };
 
 

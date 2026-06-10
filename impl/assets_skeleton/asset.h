@@ -7,7 +7,7 @@
 
 #include "../global.h"
 
-#include <impl/skinned_mesh/joint_types.h>
+#include <impl/assets_skeleton/joint_types.h>
 
 #include <core/assets/module.h>
 
@@ -22,12 +22,6 @@ NWB_IMPL_BEGIN
 
 
 inline constexpr u32 s_SkeletonInvalidJointIndex = Limit<u32>::s_Max;
-
-using SkeletonJointMatrix = SkinnedMeshJointMatrix;
-
-[[nodiscard]] inline SkeletonJointMatrix MakeIdentitySkeletonJointMatrix(){
-    return MakeIdentitySkinnedMeshJointMatrix();
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../global.h"
+
+#include <core/alloc/general.h>
+#include <impl/assets/graphics/skinned_mesh/constants.h>
+#include <impl/assets_skeleton/joint_types.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace SkeletonSkinningMode{
+    enum Enum : u32{
+        LinearBlend = NWB_SKINNED_MESH_SKINNING_MODE_LINEAR_BLEND,
+        DualQuaternion = NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION,
+    };
+};
+
+[[nodiscard]] inline bool ValidSkeletonSkinningMode(const u32 mode){
+    return mode == SkeletonSkinningMode::LinearBlend || mode == SkeletonSkinningMode::DualQuaternion;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct SkeletonJointPaletteComponent{
+    using JointVector = Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>;
+
+    JointVector joints;
+    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+
+    explicit SkeletonJointPaletteComponent(Core::Alloc::GlobalArena& arena)
+        : joints(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_SkeletonRootParent = Limit<u32>::s_Max;
+
+struct SkeletonPoseComponent{
+    using ParentJointVector = Vector<u32, Core::Alloc::GlobalArena>;
+    using JointVector = Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>;
+
+    ParentJointVector parentJoints;
+    JointVector localJoints;
+    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+
+    explicit SkeletonPoseComponent(Core::Alloc::GlobalArena& arena)
+        : parentJoints(arena)
+        , localJoints(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

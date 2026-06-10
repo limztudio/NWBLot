@@ -14,9 +14,9 @@
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/timing_names.h>
-#include <impl/ecs_skinned_mesh/runtime_helpers.h>
-#include <impl/ecs_skinned_mesh_render/module.h>
-#include <impl/ecs_skinned_mesh_render/timing_names.h>
+#include <impl/ecs_skeleton/runtime_helpers.h>
+#include <impl/ecs_mesh/skinning/module.h>
+#include <impl/ecs_mesh/skinning/timing_names.h>
 
 #include <cstdlib>
 
@@ -237,8 +237,8 @@ static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const Be
     summary.rasterSamples += accum.rasterSamples;
 }
 
-[[nodiscard]] static NWB::Impl::SkinnedMeshJointMatrix BuildAnimatedJointMatrix(
-    const NWB::Impl::SkinnedMeshJointMatrix& bindJoint,
+[[nodiscard]] static NWB::Impl::SkeletonJointMatrix BuildAnimatedJointMatrix(
+    const NWB::Impl::SkeletonJointMatrix& bindJoint,
     const u32 jointIndex,
     const u32 characterIndex,
     const f32 timeSeconds,
@@ -271,11 +271,11 @@ static void AccumulateBenchmarkSummary(BenchmarkTimingSummary& summary, const Be
         angle * (0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
         secondary * (rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter)
     );
-    matrix = NWB::Impl::SkinnedMeshRuntime::MultiplyJointMatrices(LoadFloat(bindJoint), matrix);
-    if(!NWB::Impl::SkinnedMeshRuntime::IsInvertibleAffineJointMatrix(matrix))
+    matrix = NWB::Impl::SkeletonRuntime::MultiplyJointMatrices(LoadFloat(bindJoint), matrix);
+    if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(matrix))
         return bindJoint;
 
-    NWB::Impl::SkinnedMeshJointMatrix stored{};
+    NWB::Impl::SkeletonJointMatrix stored{};
     StoreFloat(matrix, &stored);
     return stored;
 }
@@ -441,23 +441,23 @@ private:
 
         m_bindJoints.clear();
         m_bindJoints.reserve(mesh->inverseBindMatrices().size());
-        for(const NWB::Impl::SkinnedMeshJointMatrix& inverseBind : mesh->inverseBindMatrices()){
+        for(const NWB::Impl::SkeletonJointMatrix& inverseBind : mesh->inverseBindMatrices()){
             SIMDVector determinant = VectorZero();
             const SIMDMatrix bindJoint = MatrixInverse(&determinant, LoadFloat(inverseBind));
-            if(!NWB::Impl::SkinnedMeshRuntime::IsInvertibleAffineJointMatrix(bindJoint)){
+            if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(bindJoint)){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh inverse bind matrix produced an invalid bind pose"));
                 return false;
             }
 
-            NWB::Impl::SkinnedMeshJointMatrix storedBind{};
+            NWB::Impl::SkeletonJointMatrix storedBind{};
             StoreFloat(bindJoint, &storedBind);
             m_bindJoints.push_back(storedBind);
         }
         return !m_bindJoints.empty();
     }
 
-    void initializePose(NWB::Impl::SkinnedMeshSkeletonPoseComponent& pose)const{
-        pose.parentJoints.resize(m_bindJoints.size(), NWB::Impl::s_SkinnedMeshSkeletonRootParent);
+    void initializePose(NWB::Impl::SkeletonPoseComponent& pose)const{
+        pose.parentJoints.resize(m_bindJoints.size(), NWB::Impl::s_SkeletonRootParent);
         pose.localJoints.clear();
         pose.localJoints.reserve(m_bindJoints.size());
         for(usize jointIndex = 0u; jointIndex < m_bindJoints.size(); ++jointIndex)
@@ -638,7 +638,7 @@ private:
     void animatePoses(){
         const f32 timeSeconds = static_cast<f32>(m_totalTimeSeconds);
         for(usize entityIndex = 0u; entityIndex < m_entities.size(); ++entityIndex){
-            auto* pose = m_world->tryGetComponent<NWB::Impl::SkinnedMeshSkeletonPoseComponent>(m_entities[entityIndex]);
+            auto* pose = m_world->tryGetComponent<NWB::Impl::SkeletonPoseComponent>(m_entities[entityIndex]);
             if(!pose)
                 continue;
 
@@ -712,7 +712,7 @@ public:
             auto& skinnedMesh = entity.addComponent<NWB::Impl::SkinnedMeshComponent>();
             skinnedMesh.skinnedMesh = mesh;
 
-            auto& pose = entity.addComponent<NWB::Impl::SkinnedMeshSkeletonPoseComponent>(m_context.objectArena);
+            auto& pose = entity.addComponent<NWB::Impl::SkeletonPoseComponent>(m_context.objectArena);
             initializePose(pose);
 
             auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
@@ -775,7 +775,7 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     BenchmarkRuntimeMeshProvider m_runtimeMeshProvider;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_entities;
-    Vector<NWB::Impl::SkinnedMeshJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
+    Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
     NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     BenchmarkAccumulation m_accumulations[s_BenchmarkCaseCount] = {};
     f64 m_totalTimeSeconds = 0.0;

@@ -6,7 +6,7 @@
 
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
-#include <impl/ecs_skinned_mesh_render/module.h>
+#include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/module.h>

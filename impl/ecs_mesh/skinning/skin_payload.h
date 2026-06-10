@@ -9,7 +9,7 @@
 
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/skinned_validation.h>
-#include <impl/ecs_skinned_mesh/runtime_helpers.h>
+#include <impl/ecs_skeleton/runtime_helpers.h>
 #include <core/common/log.h>
 
 
@@ -57,7 +57,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
 
     if(instance.skin.empty() || sourceJoints.empty())
         return true;
-    if(!ValidSkinnedMeshSkinningMode(skinningMode)){
+    if(!ValidSkeletonSkinningMode(skinningMode)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skinning mode {} is invalid")
             , instance.handle.value
             , skinningMode
@@ -103,7 +103,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
 
     const usize skinCount = instance.skin.size();
     const usize jointCount = sourceJoints.size();
-    const bool useDualQuaternionPayload = skinningMode == SkinnedMeshSkinningMode::DualQuaternion;
+    const bool useDualQuaternionPayload = skinningMode == SkeletonSkinningMode::DualQuaternion;
     const bool hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
     outJointPalette.reserve(jointCount);
 
@@ -125,7 +125,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         ;
         SIMDMatrix jointMatrix;
         if(
-            !SkinnedMeshRuntime::ResolveSkinningJointMatrix(
+            !SkeletonRuntime::ResolveSkinningJointMatrix(
                 poseJoint,
                 hasInverseBindMatrices,
                 inverseBind,
@@ -141,20 +141,20 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         if(useDualQuaternionPayload){
             SIMDVector real = QuaternionIdentity();
             SIMDVector dual = VectorZero();
-            if(!SkinnedMeshRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual)){
+            if(!SkeletonRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual)){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
                     , instance.handle.value
                     , jointIndex
                 );
                 return false;
             }
-            SkinnedMeshJointMatrix storedJointMatrix{};
+            SkeletonJointMatrix storedJointMatrix{};
             StoreFloat(real, &storedJointMatrix.rows[0]);
             StoreFloat(dual, &storedJointMatrix.rows[1]);
             outJointPalette.push_back(storedJointMatrix);
         }
         else{
-            SkinnedMeshJointMatrix storedJointMatrix{};
+            SkeletonJointMatrix storedJointMatrix{};
             StoreFloat(jointMatrix, &storedJointMatrix);
             outJointPalette.push_back(storedJointMatrix);
         }
@@ -216,7 +216,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
 template<typename SkinInfluenceVector, typename JointPaletteVector>
 [[nodiscard]] bool BuildSkinPayload(
     const SkinnedMeshRuntimeMeshInstance& instance,
-    const SkinnedMeshJointPaletteComponent* jointPalette,
+    const SkeletonJointPaletteComponent* jointPalette,
     SkinInfluenceVector& outSkinInfluences,
     JointPaletteVector& outJointPalette){
     outSkinInfluences.clear();

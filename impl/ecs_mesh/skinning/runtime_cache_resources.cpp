@@ -35,8 +35,8 @@ using MeshPayloadValidation::CountFitsU32;
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const SkinnedMeshRuntimeMeshInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
-    if(instance.source.name())
-        sourceText = StringConvert(arena, instance.source.name().c_str());
+    if(instance.sourceName)
+        sourceText = StringConvert(arena, instance.sourceName.c_str());
     else
         sourceText.assign(NWB_TEXT("<unnamed>"));
 
@@ -204,7 +204,7 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveRawViews = false
 ){
     const Name bufferName = DeriveRuntimeResourceName(
-        instance.source.name(),
+        instance.sourceName,
         instance.entity.id,
         instance.editRevision,
         suffix

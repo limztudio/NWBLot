@@ -50,6 +50,18 @@ static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::E
     return renderer && renderer->visible;
 }
 
+static void ResolveSkeletonComponents(
+    Core::ECS::World& world,
+    const Core::ECS::EntityID fallbackEntity,
+    const Core::ECS::EntityID skeletonEntity,
+    const SkeletonJointPaletteComponent*& outJointPalette,
+    const SkeletonPoseComponent*& outSkeletonPose
+){
+    const Core::ECS::EntityID resolvedEntity = skeletonEntity.valid() ? skeletonEntity : fallbackEntity;
+    outJointPalette = world.tryGetComponent<SkeletonJointPaletteComponent>(resolvedEntity);
+    outSkeletonPose = world.tryGetComponent<SkeletonPoseComponent>(resolvedEntity);
+}
+
 static constexpr bool s_RuntimeSkinnedMeshletFrustumCullingEnabled = true;
 static constexpr bool s_RuntimeSkinnedMeshletConeCullingEnabled = false; // Runtime deformations can make meshlet cones unsafe; benchmarks override through a test provider only.
 
@@ -82,6 +94,7 @@ SkinnedMeshSystem::SkinnedMeshSystem(
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {
     writeAccess<SkinnedMeshComponent>();
+    writeAccess<SkinnedMeshBindingComponent>();
     readAccess<RendererComponent>();
     readAccess<SkeletonJointPaletteComponent>();
     readAccess<SkeletonPoseComponent>();
@@ -125,6 +138,27 @@ bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
             ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
         }
     );
+    m_world.view<SkinnedMeshBindingComponent>().each(
+        [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
+            if(!ready)
+                return;
+            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())
+                return;
+
+            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+            if(!instance)
+                return;
+#if defined(NWB_DEBUG)
+            if(!instance->valid())
+                return;
+#endif
+
+            const SkeletonJointPaletteComponent* jointPalette = nullptr;
+            const SkeletonPoseComponent* skeletonPose = nullptr;
+            __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
+            ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
+        }
+    );
 
     return ready;
 }
@@ -134,11 +168,15 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity))
         return false;
 
-    const SkinnedMeshComponent* renderer = m_world.tryGetComponent<SkinnedMeshComponent>(entity);
-    if(!renderer || !renderer->runtimeMesh.valid())
+    RuntimeMeshHandle runtimeMesh;
+    if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+        runtimeMesh = binding->runtimeMesh;
+    else if(const SkinnedMeshComponent* renderer = m_world.tryGetComponent<SkinnedMeshComponent>(entity))
+        runtimeMesh = renderer->runtimeMesh;
+    if(!runtimeMesh.valid())
         return false;
 
-    const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer->runtimeMesh);
+    const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(runtimeMesh);
     if(!instance || instance->entity != entity)
         return false;
     if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
@@ -152,7 +190,7 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
 
     outMesh.entity = entity;
     outMesh.meshKey = DeriveRuntimeResourceName(
-        instance->source.name(),
+        instance->sourceName,
         instance->handle.value,
         instance->editRevision,
         "skinned_draw"
@@ -184,10 +222,7 @@ bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 versi
     if(!meshKey)
         return false;
 
-    bool found = false;
-    m_world.view<SkinnedMeshComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedMeshComponent& component){
-            static_cast<void>(component);
+    auto testEntity = [&](Core::ECS::EntityID entity, bool& found){
             if(found)
                 return;
 
@@ -196,6 +231,19 @@ bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 versi
                 return;
 
             found = desc.meshKey == meshKey && desc.version == version;
+    };
+
+    bool found = false;
+    m_world.view<SkinnedMeshComponent>().each(
+        [&](Core::ECS::EntityID entity, SkinnedMeshComponent& component){
+            static_cast<void>(component);
+            testEntity(entity, found);
+        }
+    );
+    m_world.view<SkinnedMeshBindingComponent>().each(
+        [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
+            static_cast<void>(component);
+            testEntity(entity, found);
         }
     );
     return found;
@@ -243,6 +291,36 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
 
             const SkeletonJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkeletonJointPaletteComponent>(entity);
             const SkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkeletonPoseComponent>(entity);
+            const auto foundResources = m_runtimeResources.find(instance->handle.value);
+            const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
+            if(!__hidden_system::HasPotentialSkinnedMeshWork(
+                *instance,
+                jointPalette,
+                skeletonPose
+            ) && !hadSkinningResources)
+                return;
+            if(!ensureCommandList())
+                return;
+            if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose))
+                submittedWork = true;
+        }
+    );
+    m_world.view<SkinnedMeshBindingComponent>().each(
+        [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
+            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())
+                return;
+
+            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+            if(!instance)
+                return;
+#if defined(NWB_DEBUG)
+            if(!instance->valid())
+                return;
+#endif
+
+            const SkeletonJointPaletteComponent* jointPalette = nullptr;
+            const SkeletonPoseComponent* skeletonPose = nullptr;
+            __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
             const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
             if(!__hidden_system::HasPotentialSkinnedMeshWork(

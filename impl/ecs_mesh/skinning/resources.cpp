@@ -128,8 +128,8 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
 
     auto* device = m_graphics.getDevice();
     if(hasActiveSkin){
-        const Name skinBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "skinned_mesh_skin");
-        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.source.name(), instance.handle.value, instance.editRevision, "skinned_mesh_joints");
+        const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "skinned_mesh_skin");
+        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "skinned_mesh_joints");
         if(!skinBufferName || !jointPaletteBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to derive skinned mesh buffer names for runtime mesh '{}'"), instance.handle.value);
             return false;

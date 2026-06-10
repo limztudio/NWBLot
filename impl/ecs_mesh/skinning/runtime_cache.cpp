@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
+#include <impl/assets_mesh/asset.h>
+#include <impl/assets_mesh/skin_asset.h>
 #include <impl/assets_mesh/skinned_asset.h>
 
 
@@ -58,10 +60,22 @@ static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const SkinnedMesh* SkinnedMeshRuntimeMeshCache::SkinnedMeshSource::mesh()const{
+const SkinnedMesh* SkinnedMeshRuntimeMeshCache::SkinnedMeshSource::skinnedMesh()const{
     if(!asset || asset->assetType() != SkinnedMesh::AssetTypeName())
         return nullptr;
     return checked_cast<const SkinnedMesh*>(asset.get());
+}
+
+const Mesh* SkinnedMeshRuntimeMeshCache::SkinnedMeshSource::mesh()const{
+    if(!asset || asset->assetType() != Mesh::AssetTypeName())
+        return nullptr;
+    return checked_cast<const Mesh*>(asset.get());
+}
+
+const Skin* SkinnedMeshRuntimeMeshCache::SkinnedMeshSource::skin()const{
+    if(!skinAsset || skinAsset->assetType() != Skin::AssetTypeName())
+        return nullptr;
+    return checked_cast<const Skin*>(skinAsset.get());
 }
 
 
@@ -77,7 +91,8 @@ SkinnedMeshRuntimeMeshCache::SkinnedMeshRuntimeMeshCache(Core::Alloc::GlobalAren
 
 void SkinnedMeshRuntimeMeshCache::prepareResources(Core::ECS::World& world){
     auto skinnedMeshView = world.view<SkinnedMeshComponent>();
-    const usize rendererCandidateCount = skinnedMeshView.candidateCount();
+    auto skinnedMeshBindingView = world.view<SkinnedMeshBindingComponent>();
+    const usize rendererCandidateCount = skinnedMeshView.candidateCount() + skinnedMeshBindingView.candidateCount();
     if(rendererCandidateCount == 0u){
         clear();
         return;
@@ -94,20 +109,26 @@ void SkinnedMeshRuntimeMeshCache::prepareResources(Core::ECS::World& world){
                 component.runtimeMesh.reset();
         }
     );
+    skinnedMeshBindingView.each(
+        [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
+            if(!ensureRuntimeMesh(entity, component))
+                component.runtimeMesh.reset();
+        }
+    );
 
     if(!pruneStaleInstances)
         return;
 
     for(auto it = m_instances.begin(); it != m_instances.end();){
         const Core::ECS::EntityID entity = it->first;
-        if(world.tryGetComponent<SkinnedMeshComponent>(entity)){
+        if(world.tryGetComponent<SkinnedMeshComponent>(entity) || world.tryGetComponent<SkinnedMeshBindingComponent>(entity)){
             ++it;
             continue;
         }
 
         const SkinnedMeshRuntimeMeshInstance& instance = it.value();
         m_handleToEntity.erase(instance.handle.value);
-        releaseSource(instance.source.name());
+        releaseSource(instance.sourceName);
         it = m_instances.erase(it);
     }
 }
@@ -184,7 +205,7 @@ void SkinnedMeshRuntimeMeshCache::releaseRuntimeMesh(const Core::ECS::EntityID e
 
     const SkinnedMeshRuntimeMeshInstance& instance = foundInstance.value();
     m_handleToEntity.erase(instance.handle.value);
-    releaseSource(instance.source.name());
+    releaseSource(instance.sourceName);
     m_instances.erase(foundInstance);
 }
 

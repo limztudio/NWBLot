@@ -267,23 +267,47 @@ static bool ParseInverseBindMatrices(
     outMatrices.reserve(matrixList.size());
     for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
         const Core::Metascript::Value& matrixValue = matrixList[matrixIndex];
-        if(!matrixValue.isList() || matrixValue.asList().size() != 3u){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] must contain three affine rows")
+        if(!matrixValue.isList() || (matrixValue.asList().size() != 3u && matrixValue.asList().size() != 4u)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] must contain three affine rows, or legacy four-row affine data")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex
             );
             return false;
         }
 
-        SkeletonJointMatrix matrix{};
         const auto& rows = matrixValue.asList();
         const ScratchString label = MakeIndexedLabel(scratchArena, "inverse_bind_matrices", matrixIndex);
-        for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-            alignas(16) f32 row[4] = {};
+        alignas(16) f32 parsedRows[4u][4u] = {};
+        const usize rowCount = rows.size();
+        for(usize rowIndex = 0u; rowIndex < rowCount; ++rowIndex){
             const ScratchString rowLabel = MakeIndexedLabel(scratchArena, label, rowIndex);
-            if(!ParseMetadataF32Tuple(nwbFilePath, rows[rowIndex], s_SkinnedMeshMetaKind, rowLabel, row, scratchArena))
+            if(!ParseMetadataF32Tuple(nwbFilePath, rows[rowIndex], s_SkinnedMeshMetaKind, rowLabel, parsedRows[rowIndex], scratchArena))
                 return false;
-            matrix.rows[rowIndex] = Float4(row[0u], row[1u], row[2u], row[3u]);
+        }
+
+        SkeletonJointMatrix matrix{};
+        if(rowCount == 4u){
+            if(
+                !IsFinite(parsedRows[0u][3u]) || !IsFinite(parsedRows[1u][3u]) || !IsFinite(parsedRows[2u][3u]) || !IsFinite(parsedRows[3u][3u])
+                || Abs(parsedRows[0u][3u]) > SkinnedMeshValidation::s_Epsilon
+                || Abs(parsedRows[1u][3u]) > SkinnedMeshValidation::s_Epsilon
+                || Abs(parsedRows[2u][3u]) > SkinnedMeshValidation::s_Epsilon
+                || Abs(parsedRows[3u][3u] - 1.0f) > SkinnedMeshValidation::s_Epsilon
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] legacy fourth column is not affine identity")
+                    , PathToString<tchar>(nwbFilePath)
+                    , matrixIndex
+                );
+                return false;
+            }
+
+            matrix.rows[0u] = Float4(parsedRows[0u][0u], parsedRows[1u][0u], parsedRows[2u][0u], parsedRows[3u][0u]);
+            matrix.rows[1u] = Float4(parsedRows[0u][1u], parsedRows[1u][1u], parsedRows[2u][1u], parsedRows[3u][1u]);
+            matrix.rows[2u] = Float4(parsedRows[0u][2u], parsedRows[1u][2u], parsedRows[2u][2u], parsedRows[3u][2u]);
+        }
+        else{
+            for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex)
+                matrix.rows[rowIndex] = Float4(parsedRows[rowIndex][0u], parsedRows[rowIndex][1u], parsedRows[rowIndex][2u], parsedRows[rowIndex][3u]);
         }
 
         if(!SkinnedMeshValidation::ValidAffineJointMatrix(LoadFloat(matrix))){

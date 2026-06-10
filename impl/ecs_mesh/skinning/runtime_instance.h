@@ -38,7 +38,7 @@ struct SkinnedMeshRuntimeMeshInstance{
 
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     RuntimeMeshHandle handle;
-    Core::Assets::AssetRef<SkinnedMesh> source;
+    Name sourceName = NAME_NONE;
     u32 meshClass = Core::Mesh::MeshClass::Skinned;
     PositionVector restPositions;
     Half4Vector restNormals;
@@ -97,7 +97,7 @@ struct SkinnedMeshRuntimeMeshInstance{
         return
             entity.valid()
             && handle.valid()
-            && source.valid()
+            && sourceName
             && Core::Mesh::MeshClassUsesSkinning(meshClass)
             && !restPositions.empty()
             && !restNormals.empty()

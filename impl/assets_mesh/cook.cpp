@@ -12,7 +12,7 @@
 
 #include "binary_payload_io.h"
 #include "binary_payload.h"
-#include "meshlet_ref_encoding.h"
+#include "meshlet_ref_codec.h"
 #include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
@@ -62,30 +62,46 @@ static bool ValidateMeshAssetFields(
 
 static bool ParseMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
+    const Name& virtualPath,
     MeshCookEntry& outEntry,
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
 
-    const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh meta '{}': asset is not a map"), PathToString<tchar>(discoveredFile.filePath));
         return false;
     }
 
+    outEntry.virtualPath = virtualPath;
+    if(!outEntry.virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh meta '{}': virtual path must not be empty"), PathToString<tchar>(discoveredFile.filePath));
+        return false;
+    }
+    if(!ValidateMeshAssetFields(discoveredFile, asset))
+        return false;
+    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, threadPool, scratchArena);
+}
+
+static bool ParseMeshMeta(
+    const DiscoveredNwbFile& discoveredFile,
+    const Core::Metascript::Document& doc,
+    MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    Name virtualPath = NAME_NONE;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
         discoveredFile.assetRoot,
         discoveredFile.virtualRoot,
         discoveredFile.filePath,
-        outEntry.virtualPath,
+        virtualPath,
         scratchArena
     ))
         return false;
-    if(!ValidateMeshAssetFields(discoveredFile, asset))
-        return false;
-    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, threadPool, scratchArena);
+    return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, outEntry, threadPool, scratchArena);
 }
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
@@ -136,6 +152,19 @@ bool ParseMeshCookMetadata(
     if(!__hidden_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
     return __hidden_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
+}
+
+bool ParseMeshCookMetadata(
+    const Name virtualPath,
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    __hidden_cook::DiscoveredNwbFile discoveredFile;
+    discoveredFile.filePath = nwbFilePath;
+    return __hidden_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, threadPool, scratchArena);
 }
 
 bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){

@@ -492,25 +492,27 @@ template<usize ComponentCount>
 
 
 bool ParseSkinCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
+    const Name virtualPath,
     const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
     SkinCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_skin_cook;
+    (void)scratchArena;
 
     outEntry = SkinCookEntry(outEntry.influences.get_allocator().arena());
 
-    const Value& asset = doc.asset();
     if(!asset.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
+    outEntry.virtualPath = virtualPath;
+    if(!outEntry.virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': virtual path must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
+    }
     if(!ValidateSkinAssetFields(nwbFilePath, asset))
         return false;
     if(
@@ -527,6 +529,20 @@ bool ParseSkinCookMetadata(
     testSkin.setSkeleton(outEntry.skeleton);
     testSkin.setPayload(Skin::InfluenceVector(outEntry.influences), Skin::InverseBindMatrixVector(outEntry.inverseBindMatrices));
     return testSkin.validatePayload();
+}
+
+bool ParseSkinCookMetadata(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    SkinCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    Name virtualPath = NAME_NONE;
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
+        return false;
+    return ParseSkinCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
 }
 
 bool BuildSkinAsset(SkinCookEntry& skinEntry, Skin& outSkin){

@@ -153,7 +153,6 @@ using namespace Core::Metascript;
 static constexpr AStringView s_SkeletonsField = "skeletons";
 static constexpr AStringView s_StaticMeshesField = "static_meshes";
 static constexpr AStringView s_SkinnedMeshesField = "skinned_meshes";
-static constexpr AStringView s_NameField = "name";
 static constexpr AStringView s_SkeletonField = "skeleton";
 static constexpr AStringView s_MeshField = "mesh";
 static constexpr AStringView s_SkinField = "skin";
@@ -336,7 +335,7 @@ template<typename AssetT>
 }
 
 template<typename ObjectVectorT, typename ParseObjectFn>
-[[nodiscard]] bool ParseObjectList(
+[[nodiscard]] bool ParseObjectMap(
     const Path& nwbFilePath,
     const Value& asset,
     const AStringView fieldName,
@@ -349,28 +348,26 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     const Value* fieldValue = asset.findField(fieldName);
     if(!fieldValue)
         return true;
-    if(!fieldValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a list")
+    if(!fieldValue->isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a map")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
         return false;
     }
 
-    const auto& list = fieldValue->asList();
-    outObjects.reserve(list.size());
-    for(usize i = 0u; i < list.size(); ++i){
-        const Value& objectValue = list[i];
-        if(!objectValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': item {} must be a map")
+    const auto& map = fieldValue->asMap();
+    outObjects.reserve(map.size());
+    for(const auto& [objectName, objectValue] : map){
+        typename ObjectVectorT::value_type object{};
+        object.name = Name(AStringView(objectName.data(), objectName.size()));
+        if(!object.name){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name must not be empty")
                 , StringConvert(objectKind)
                 , PathToString<tchar>(nwbFilePath)
-                , i
             );
             return false;
         }
-
-        typename ObjectVectorT::value_type object{};
         if(!parseObject(objectValue, object))
             return false;
         outObjects.push_back(object);
@@ -381,27 +378,49 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 
 [[nodiscard]] bool ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue, ModelSkeletonObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model skeleton object";
-    if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_NameField, s_SkeletonField, s_TransformField }))
+    if(objectValue.isString()){
+        outObject.skeleton.virtualPath = Name(AStringView(objectValue.asString().data(), objectValue.asString().size()));
+        return outObject.skeleton.valid();
+    }
+
+    if(!objectValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be an asset reference or map")
+            , StringConvert(s_ObjectKind)
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_SkeletonField, s_TransformField }))
         return false;
 
-    return ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_NameField, true, outObject.name)
-        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeleton)
+    return ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeleton)
         && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
     ;
 }
 
 [[nodiscard]] bool ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelStaticMeshObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model static mesh object";
+    if(objectValue.isString()){
+        outObject.mesh.virtualPath = Name(AStringView(objectValue.asString().data(), objectValue.asString().size()));
+        return outObject.mesh.valid();
+    }
+
+    if(!objectValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be an asset reference or map")
+            , StringConvert(s_ObjectKind)
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
     if(!ValidateModelObjectFields(
         nwbFilePath,
         objectValue,
         s_ObjectKind,
-        { s_NameField, s_MeshField, s_MaterialField, s_ParentObjectField, s_ParentJointField, s_TransformField }
+        { s_MeshField, s_MaterialField, s_ParentObjectField, s_ParentJointField, s_TransformField }
     ))
         return false;
 
-    return ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_NameField, true, outObject.name)
-        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
+    return ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
         && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
         && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_ParentObjectField, false, outObject.parentObject)
         && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_ParentJointField, false, outObject.parentJoint)
@@ -411,21 +430,73 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 
 [[nodiscard]] bool ParseSkinnedMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelSkinnedMeshObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model skinned mesh object";
+    if(!objectValue.isMap()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map")
+            , StringConvert(s_ObjectKind)
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
     if(!ValidateModelObjectFields(
         nwbFilePath,
         objectValue,
         s_ObjectKind,
-        { s_NameField, s_MeshField, s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }
+        { s_MeshField, s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }
     ))
         return false;
 
-    return ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_NameField, true, outObject.name)
-        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
+    return ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
         && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true, outObject.skin)
         && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
         && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeletonObject)
         && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
     ;
+}
+
+[[nodiscard]] bool SkeletonObjectNameExists(const ModelCookEntry& entry, const Name skeletonObjectName){
+    for(const ModelSkeletonObject& skeletonObject : entry.skeletonObjects){
+        if(skeletonObject.name == skeletonObjectName)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool NormalizeSkinnedMeshSkeletonObject(
+    const Path& nwbFilePath,
+    const ModelCookEntry& entry,
+    ModelSkinnedMeshObject& object
+){
+    if(SkeletonObjectNameExists(entry, object.skeletonObject))
+        return true;
+
+    ModelSkeletonObject const* matchedSkeletonObject = nullptr;
+    for(const ModelSkeletonObject& skeletonObject : entry.skeletonObjects){
+        if(!skeletonObject.skeleton.valid() || skeletonObject.skeleton.name() != object.skeletonObject)
+            continue;
+        if(matchedSkeletonObject){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': skinned mesh '{}' skeleton '{}' matches multiple skeleton objects")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(object.name.c_str())
+                , StringConvert(object.skeletonObject.c_str())
+            );
+            return false;
+        }
+        matchedSkeletonObject = &skeletonObject;
+    }
+
+    if(!matchedSkeletonObject)
+        return true;
+
+    object.skeletonObject = matchedSkeletonObject->name;
+    return true;
+}
+
+[[nodiscard]] bool NormalizeSkinnedMeshSkeletonObjects(const Path& nwbFilePath, ModelCookEntry& entry){
+    for(ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
+        if(!NormalizeSkinnedMeshSkeletonObject(nwbFilePath, entry, object))
+            return false;
+    }
+    return true;
 }
 
 
@@ -436,36 +507,32 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 
 
 bool ParseModelCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
+    const Name virtualPath,
     const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
     ModelCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_model_cook;
+    (void)scratchArena;
 
     outEntry = ModelCookEntry(outEntry.skeletonObjects.get_allocator().arena());
 
-    const Core::Metascript::Value& asset = doc.asset();
     if(!asset.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
-        assetRoot,
-        virtualRoot,
-        nwbFilePath,
-        outEntry.virtualPath,
-        scratchArena
-    ))
+    outEntry.virtualPath = virtualPath;
+    if(!outEntry.virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': virtual path must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
+    }
     if(!ValidateModelAssetFields(nwbFilePath, asset))
         return false;
 
     if(
-        !ParseObjectList(
+        !ParseObjectMap(
             nwbFilePath,
             asset,
             s_SkeletonsField,
@@ -475,7 +542,7 @@ bool ParseModelCookMetadata(
                 return ParseSkeletonObject(nwbFilePath, objectValue, outObject);
             }
         )
-        || !ParseObjectList(
+        || !ParseObjectMap(
             nwbFilePath,
             asset,
             s_StaticMeshesField,
@@ -485,7 +552,7 @@ bool ParseModelCookMetadata(
                 return ParseStaticMeshObject(nwbFilePath, objectValue, outObject);
             }
         )
-        || !ParseObjectList(
+        || !ParseObjectMap(
             nwbFilePath,
             asset,
             s_SkinnedMeshesField,
@@ -498,6 +565,9 @@ bool ParseModelCookMetadata(
     )
         return false;
 
+    if(!NormalizeSkinnedMeshSkeletonObjects(nwbFilePath, outEntry))
+        return false;
+
     Model testModel(outEntry.skeletonObjects.get_allocator().arena(), outEntry.virtualPath);
     testModel.setObjects(
         Model::SkeletonObjectVector(outEntry.skeletonObjects),
@@ -505,6 +575,20 @@ bool ParseModelCookMetadata(
         Model::SkinnedMeshObjectVector(outEntry.skinnedMeshObjects)
     );
     return testModel.validatePayload();
+}
+
+bool ParseModelCookMetadata(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    ModelCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    Name virtualPath = NAME_NONE;
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
+        return false;
+    return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
 }
 
 bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel){

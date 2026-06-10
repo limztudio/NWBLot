@@ -83,6 +83,14 @@ struct MeshCookEntry{
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 );
+[[nodiscard]] bool ParseMeshCookMetadata(
+    Name virtualPath,
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    MeshCookEntry& outEntry,
+    Core::Alloc::ThreadPool& threadPool,
+    Core::Alloc::ScratchArena& scratchArena
+);
 
 [[nodiscard]] bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh);
 

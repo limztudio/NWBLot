@@ -14,7 +14,7 @@ target_sources(nwb_assets_mesh PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_payload_packing.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_decode.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_encode.h"
-    "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_encoding.h"
+    "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_codec.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_range_validation.inl"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_validation.inl"
     "${CMAKE_CURRENT_LIST_DIR}/payload_validation.h"
@@ -49,7 +49,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_payload_packing.h"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_decode.h"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_encode.h"
-        "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_encoding.h"
+        "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_codec.h"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_range_validation.inl"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_ref_validation.inl"
         "${CMAKE_CURRENT_LIST_DIR}/payload_validation.h"
@@ -77,5 +77,13 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/cook_source.inl"
     )
     target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_assets_skeleton_types)
+    target_link_libraries(nwb_assets_mesh_cook PRIVATE nwb_assets_volume_cook)
     target_compile_definitions(nwb_assets_mesh_cook PRIVATE NWB_COOK=1)
+
+    nwb_declare_static_library(nwb_assets_mesh_volume_entries)
+    target_sources(nwb_assets_mesh_volume_entries PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/volume_entries.cpp"
+    )
+    target_link_libraries(nwb_assets_mesh_volume_entries PRIVATE nwb_assets_mesh_cook nwb_assets_volume_cook)
+    target_compile_definitions(nwb_assets_mesh_volume_entries PRIVATE NWB_COOK=1)
 endif()

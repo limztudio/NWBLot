@@ -270,25 +270,27 @@ static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
 
 
 bool ParseSkeletonCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
+    const Name virtualPath,
     const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
+    const Core::Metascript::Value& asset,
     SkeletonCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_skeleton_cook;
+    (void)scratchArena;
 
     outEntry = SkeletonCookEntry(outEntry.joints.get_allocator().arena());
 
-    const Value& asset = doc.asset();
     if(!asset.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
+    outEntry.virtualPath = virtualPath;
+    if(!outEntry.virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': virtual path must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
+    }
     if(!ValidateSkeletonAssetFields(nwbFilePath, asset))
         return false;
 
@@ -325,6 +327,20 @@ bool ParseSkeletonCookMetadata(
         return false;
     testSkeleton.setJoints(Move(testJoints));
     return testSkeleton.validatePayload();
+}
+
+bool ParseSkeletonCookMetadata(
+    const Path& assetRoot,
+    const AStringView virtualRoot,
+    const Path& nwbFilePath,
+    const Core::Metascript::Document& doc,
+    SkeletonCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    Name virtualPath = NAME_NONE;
+    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
+        return false;
+    return ParseSkeletonCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
 }
 
 bool BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Skeleton& outSkeleton){

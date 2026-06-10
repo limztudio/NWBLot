@@ -20,7 +20,7 @@
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_render/material_typed_private.h>
 #include <impl/ecs_render/material_instance.h>
-#include <impl/assets_mesh/meshlet_ref_encoding.h>
+#include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skinned_asset.h>
 #include <impl/assets_mesh/asset.h>

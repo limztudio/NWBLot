@@ -81,8 +81,11 @@ namespace SourceTangentMode{
 
 namespace OutputAssetType{
     enum Enum : u8{
+        Bunch,
         Mesh,
-        Model
+        Model,
+        Skeleton,
+        Skin
     };
 };
 
@@ -101,7 +104,7 @@ static constexpr f64 s_DefaultTriangleAreaLengthSquaredEpsilon = 1.0e-20;
 struct ImportOptions{
     AString inputPath;
     AString outputPath;
-    AString assetType = "mesh";
+    AString assetType = "bunch";
     AString virtualRoot = "project";
     AString meshSelector = "all";
     AString normalMode = "imported";
@@ -113,6 +116,7 @@ struct ImportOptions{
     bool bakeTransforms = true;
     bool importColors = true;
     bool flipWinding = false;
+    bool separateAssets = false;
     bool forceOverwrite = false;
     bool acceptDefaults = false;
     bool listMeshes = false;
@@ -190,6 +194,7 @@ bool WriteNwbAsset(
     const SourceMeshStreams& mesh,
     const AString& assetTypeText,
     const AString& virtualRoot,
+    bool separateAssets,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
     const UtilityVector<JointMatrix>& inverseBindMatrices

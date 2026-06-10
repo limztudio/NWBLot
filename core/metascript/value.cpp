@@ -61,6 +61,12 @@ Value::Value(MStringView val, MetaArena& arena)
     m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
+Value Value::Reference(MStringView val, MetaArena& arena){
+    Value out(arena);
+    out.setReference(val);
+    return out;
+}
+
 Value::~Value(){
     destroy();
 }
@@ -350,6 +356,11 @@ MStringView Value::asString()const{
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
+MStringView Value::asReference()const{
+    NWB_ASSERT(m_type == ValueType::Reference);
+    return MStringView(m_data.m_string->data(), m_data.m_string->size());
+}
+
 MString Value::copyString()const{
     if(!isString())
         return MString(m_arena);
@@ -393,6 +404,12 @@ void Value::setDouble(f64 val){
 void Value::setString(MStringView val){
     destroy();
     m_type = ValueType::String;
+    m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
+}
+
+void Value::setReference(MStringView val){
+    destroy();
+    m_type = ValueType::Reference;
     m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
@@ -494,6 +511,7 @@ void Value::destroy(){
 
     switch(m_type){
     case ValueType::String:
+    case ValueType::Reference:
         DestroyArenaObject(m_arena, m_data.m_string);
         break;
     case ValueType::List:
@@ -522,6 +540,9 @@ void Value::copyFrom(const Value& other){
         m_data.m_double = other.m_data.m_double;
         break;
     case ValueType::String:
+        m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), m_arena);
+        break;
+    case ValueType::Reference:
         m_data.m_string = NewArenaObject<StringType>(m_arena, other.m_data.m_string->data(), other.m_data.m_string->size(), m_arena);
         break;
     case ValueType::List:{

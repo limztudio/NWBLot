@@ -1,0 +1,320 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "material_validation.h"
+#include "shader_cook_plan.h"
+#include "shader_volume_writer.h"
+
+#include <impl/assets_csg/cook.h>
+#include <impl/assets_material/cook.h>
+#include <impl/assets_shader/asset.h>
+#include <impl/assets_volume/cook_extension.h>
+#include <impl/assets_volume/cook_paths.h>
+
+#include <core/assets/paths.h>
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_volume_prepare{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr Name s_GraphicsVolumeMetadataExtensionName("assets_graphics/volume_metadata");
+
+using MaterialBindEntryVector = ShaderCook::CookVector<MaterialBindEntry>;
+using CsgShapeEntryVector = ShaderCook::CookVector<AssetsCsgCook::CsgShapeCookEntry>;
+
+struct GraphicsVolumeMetadata{
+    MaterialBindEntryVector materialBindEntries;
+    CsgShapeEntryVector csgShapeEntries;
+    AssetsVolumeCookDetail::PreparedShaderPlan preparedPlan;
+    HashSet<
+        AssetsVolumeCookDetail::PreparedShaderKey,
+        AssetsVolumeCookDetail::PreparedShaderKeyHasher,
+        EqualTo<AssetsVolumeCookDetail::PreparedShaderKey>,
+        ShaderCook::CookArena
+    > seenShaderIdentityKeys;
+
+    explicit GraphicsVolumeMetadata(ShaderCook::CookArena& arena)
+        : materialBindEntries(arena)
+        , csgShapeEntries(arena)
+        , preparedPlan(arena)
+        , seenShaderIdentityKeys(
+            0,
+            AssetsVolumeCookDetail::PreparedShaderKeyHasher(),
+            EqualTo<AssetsVolumeCookDetail::PreparedShaderKey>(),
+            arena
+        )
+    {}
+};
+
+static GraphicsVolumeMetadata& GraphicsMetadata(AssetsVolumeCookDetail::ParsedAssetMetadata& metadata){
+    return AssetsVolumeCookDetail::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(
+        metadata,
+        s_GraphicsVolumeMetadataExtensionName,
+        metadata.arena
+    );
+}
+
+static bool AppendUniqueShaderEntry(
+    ShaderCook::ShaderEntry& shaderEntry,
+    const Path& nwbFilePath,
+    GraphicsVolumeMetadata& graphicsMetadata,
+    AssetsVolumeCookDetail::ShaderEntryVector& outShaderEntries
+){
+    if(shaderEntry.name.empty())
+        return true;
+
+    const AssetsVolumeCookDetail::PreparedShaderKey shaderIdentityKey{
+        ToName(shaderEntry.name),
+        ToName(shaderEntry.archiveStage.view())
+    };
+    if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate shader identity '{}' for stage '{}' from meta '{}'")
+            , StringConvert(shaderEntry.name)
+            , StringConvert(shaderEntry.archiveStage.c_str())
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    outShaderEntries.push_back(Move(shaderEntry));
+    return true;
+}
+
+static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocumentMetadata(
+    AssetsVolumeCookDetail::AssetVolumeDocumentMetadataParseContext& context
+){
+    using namespace AssetsVolumeCookDetail;
+
+    if(context.assetType == Shader::AssetTypeName()){
+        GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
+        ShaderCook::ShaderEntry shaderEntry(context.cookArena);
+        if(!context.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))
+            return AssetVolumeMetadataParseResult::Error;
+
+        if(!Core::Assets::BuildDerivedAssetVirtualPath(
+            context.discoveredNwbFile.assetRoot,
+            context.discoveredNwbFile.virtualRoot.view(),
+            Path(shaderEntry.source),
+            shaderEntry.name
+        ))
+            return AssetVolumeMetadataParseResult::Error;
+
+        if(!AppendUniqueShaderEntry(shaderEntry, context.discoveredNwbFile.filePath, graphicsMetadata, context.parsedMetadata.shaderEntries))
+            return AssetVolumeMetadataParseResult::Error;
+        return AssetVolumeMetadataParseResult::Parsed;
+    }
+
+    if(context.assetType == s_IncludeAssetTypeName){
+        ShaderCook::IncludeEntry includeEntry(context.cookArena);
+        if(!context.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, includeEntry, context.scratchArena))
+            return AssetVolumeMetadataParseResult::Error;
+
+        if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
+            ErrorCode errorCode;
+            const Path absSource = AbsolutePath(Path(includeEntry.source), errorCode).lexically_normal();
+            if(errorCode){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve include metadata source '{}' from '{}': {}")
+                    , StringConvert(includeEntry.source)
+                    , PathToString<tchar>(context.discoveredNwbFile.filePath)
+                    , StringConvert(errorCode.message())
+                );
+                return AssetVolumeMetadataParseResult::Error;
+            }
+
+            ScratchString key = PathToString(context.scratchArena, absSource);
+            CanonicalizeTextInPlace(key);
+            CookString cookKey(key, context.cookArena);
+            if(!context.parsedMetadata.includeMetadata.emplace(Move(cookKey), Move(includeEntry)).second){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate include metadata for source '{}'")
+                    , PathToString<tchar>(absSource)
+                );
+                return AssetVolumeMetadataParseResult::Error;
+            }
+        }
+
+        return AssetVolumeMetadataParseResult::Parsed;
+    }
+
+    if(context.assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
+        GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
+        AssetsCsgCook::CsgShapeCookEntry csgShapeEntry(context.cookArena);
+        if(!AssetsCsgCook::ParseCsgShapeCookMetadata(
+            context.cookArena,
+            context.discoveredNwbFile.filePath,
+            context.doc,
+            csgShapeEntry,
+            context.scratchArena
+        ))
+            return AssetVolumeMetadataParseResult::Error;
+
+        graphicsMetadata.csgShapeEntries.push_back(Move(csgShapeEntry));
+        return AssetVolumeMetadataParseResult::Parsed;
+    }
+
+    return AssetVolumeMetadataParseResult::Unsupported;
+}
+
+static bool ParseMaterialBindFiles(AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
+    using namespace AssetsVolumeCookDetail;
+
+    DiscoveredBindFileVector bindFiles{ context.arena };
+    if(!DiscoverFilesWithExtension(
+        context.resolvedPaths.assetRoots,
+        MaterialBindNames::SourceExtensionText(),
+        bindFiles,
+        context.scratchArena
+    ))
+        return false;
+
+    graphicsMetadata.materialBindEntries.reserve(bindFiles.size());
+    for(const DiscoveredNwbFile& discoveredBindFile : bindFiles){
+        MaterialBindEntry bindEntry(context.arena);
+        if(!ParseMaterialBindSource(discoveredBindFile.filePath, bindEntry, context.scratchArena))
+            return false;
+
+        if(!Core::Assets::BuildDerivedAssetVirtualPath(
+            discoveredBindFile.assetRoot,
+            discoveredBindFile.virtualRoot.view(),
+            discoveredBindFile.filePath,
+            bindEntry.virtualPath
+        ))
+            return false;
+
+        graphicsMetadata.materialBindEntries.push_back(Move(bindEntry));
+    }
+
+    return true;
+}
+
+static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
+    using namespace AssetsVolumeCookDetail;
+
+    GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
+    if(!ParseMaterialBindFiles(context, graphicsMetadata))
+        return false;
+    if(!AssetsCsgCook::AssignCsgShapeCookIds(graphicsMetadata.csgShapeEntries))
+        return false;
+
+    auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
+    if(context.parsedMetadata.shaderEntries.empty() && !materialEntries.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: material assets require at least one shader entry"));
+        return false;
+    }
+
+    if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
+        return false;
+
+    Path materialBindIncludeRoot;
+    if(!EmitMaterialBindIncludes(
+        context.arena,
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        graphicsMetadata.materialBindEntries,
+        materialBindIncludeRoot,
+        context.scratchArena
+    ))
+        return false;
+
+    Path csgShapeIncludeRoot;
+    if(!AssetsCsgCook::EmitCsgShapeModuleIncludes(
+        context.resolvedPaths.cacheDirectory,
+        context.configurationSafeName,
+        graphicsMetadata.csgShapeEntries,
+        csgShapeIncludeRoot,
+        context.scratchArena
+    ))
+        return false;
+
+    if(!PrepareShaderEntriesForCook(
+        context.arena,
+        context.shaderCook,
+        context.resolvedPaths,
+        materialBindIncludeRoot,
+        csgShapeIncludeRoot,
+        context.parsedMetadata.includeMetadata,
+        context.parsedMetadata.shaderEntries,
+        materialEntries,
+        graphicsMetadata.preparedPlan,
+        context.scratchArena
+    ))
+        return false;
+
+    if(!ValidateMaterials(
+        context.shaderCook,
+        graphicsMetadata.preparedPlan.preparedEntries,
+        materialEntries,
+        context.scratchArena
+    ))
+        return false;
+    if(!AddPlannedFileCount(graphicsMetadata.preparedPlan.plannedFileCount, context.plannedFileCount))
+        return false;
+
+    context.externalWriters.emplace_back([&context](
+        Core::Filesystem::VolumeSession& volumeSession,
+        VirtualPathHashSet& seenVirtualPathHashes,
+        ScratchArena& writeScratchArena
+    ){
+        return AppendPreparedShadersToVolume(
+            context.arena,
+            context.shaderCook,
+            context.resolvedPaths.cacheDirectory,
+            context.configurationSafeName,
+            GraphicsMetadata(context.parsedMetadata).preparedPlan.preparedEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            writeScratchArena
+        );
+    });
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
+AssetsVolumeCookDetail::AssetVolumeMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(
+    &ParseGraphicsDocumentMetadata,
+    nullptr
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

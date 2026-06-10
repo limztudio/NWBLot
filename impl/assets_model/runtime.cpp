@@ -73,21 +73,6 @@ template<typename ObjectT>
     return true;
 }
 
-[[nodiscard]] bool ModelObjectNameUnique(
-    const Model::SkeletonObjectVector& skeletonObjects,
-    const Model::StaticMeshObjectVector& staticMeshObjects,
-    const Model::SkinnedMeshObjectVector& skinnedMeshObjects,
-    const Name name,
-    const usize skipSkeletonObjectCount,
-    const usize skipStaticMeshObjectCount,
-    const usize skipSkinnedMeshObjectCount
-){
-    return NameUniqueInSpan(skeletonObjects.data(), Min(skipSkeletonObjectCount, skeletonObjects.size()), name)
-        && NameUniqueInSpan(staticMeshObjects.data(), Min(skipStaticMeshObjectCount, staticMeshObjects.size()), name)
-        && NameUniqueInSpan(skinnedMeshObjects.data(), Min(skipSkinnedMeshObjectCount, skinnedMeshObjects.size()), name)
-    ;
-}
-
 [[nodiscard]] bool ModelSkeletonObjectExists(const Model::SkeletonObjectVector& skeletonObjects, const Name name){
     for(const ModelSkeletonObject& object : skeletonObjects){
         if(object.name == name)
@@ -122,15 +107,7 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} is incomplete"), i);
             return false;
         }
-        if(!__hidden_model_runtime::ModelObjectNameUnique(
-            m_skeletonObjects,
-            m_staticMeshObjects,
-            m_skinnedMeshObjects,
-            object.name,
-            i,
-            0u,
-            0u
-        )){
+        if(!__hidden_model_runtime::NameUniqueInSpan(m_skeletonObjects.data(), i, object.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: duplicate object name in skeleton object {}"), i);
             return false;
         }
@@ -146,15 +123,7 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has invalid material reference"), i);
             return false;
         }
-        if(!__hidden_model_runtime::ModelObjectNameUnique(
-            m_skeletonObjects,
-            m_staticMeshObjects,
-            m_skinnedMeshObjects,
-            object.name,
-            m_skeletonObjects.size(),
-            i,
-            0u
-        )){
+        if(!__hidden_model_runtime::NameUniqueInSpan(m_staticMeshObjects.data(), i, object.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: duplicate object name in static mesh object {}"), i);
             return false;
         }
@@ -178,15 +147,7 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} has invalid material reference"), i);
             return false;
         }
-        if(!__hidden_model_runtime::ModelObjectNameUnique(
-            m_skeletonObjects,
-            m_staticMeshObjects,
-            m_skinnedMeshObjects,
-            object.name,
-            m_skeletonObjects.size(),
-            m_staticMeshObjects.size(),
-            i
-        )){
+        if(!__hidden_model_runtime::NameUniqueInSpan(m_skinnedMeshObjects.data(), i, object.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: duplicate object name in skinned mesh object {}"), i);
             return false;
         }

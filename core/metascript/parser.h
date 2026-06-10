@@ -33,6 +33,22 @@ public:
     using ErrorList = MVector<ParseError>;
     using VariableMap = MStringMap<Value>;
 
+    struct Declaration{
+        MString type;
+        MString variable;
+
+        explicit Declaration(MetaArena& arena)
+            : type(arena)
+            , variable(arena)
+        {}
+
+        Declaration(MStringView inType, MStringView inVariable, MetaArena& arena)
+            : type(inType.data(), inType.size(), arena)
+            , variable(inVariable.data(), inVariable.size(), arena)
+        {}
+    };
+    using DeclarationList = MVector<Declaration>;
+
 
 public:
     explicit Document(MetaArena& arena);
@@ -49,6 +65,7 @@ public:
     [[nodiscard]] Value& asset();
 
     [[nodiscard]] const Value* findVariable(MStringView name)const;
+    [[nodiscard]] const DeclarationList& declarations()const{ return m_declarations; }
 
     [[nodiscard]] bool hasErrors()const{ return !m_errors.empty(); }
     [[nodiscard]] const ErrorList& errors()const{ return m_errors; }
@@ -59,6 +76,7 @@ private:
     MString m_assetType;
     MString m_assetVariable;
     VariableMap m_variables;
+    DeclarationList m_declarations;
     ErrorList m_errors;
 };
 

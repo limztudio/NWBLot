@@ -1,0 +1,537 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "shader_stage_key.h"
+
+#include <impl/assets_shader/cook.h>
+
+#include <core/assets/module.h>
+#include <core/filesystem/module.h>
+
+#include <core/common/log.h>
+#include <core/metascript/parser.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace AssetsVolumeCookDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using CookString = ShaderCook::CookString;
+template<typename T>
+using CookVector = ShaderCook::CookVector<T>;
+template<typename T, typename V>
+using CookMap = ShaderCook::CookMap<T, V>;
+template<typename T>
+using CookHashSet = ShaderCook::CookHashSet<T>;
+using ScratchArena = Core::Alloc::ScratchArena;
+using ScratchString = AString<ScratchArena>;
+using CookEntryPathHashSet = CookHashSet<NameHash>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct CookEntryParseContext{
+    ShaderCook::CookArena& cookArena;
+    ShaderCook& shaderCook;
+    Core::Alloc::ThreadPool& threadPool;
+    ScratchArena& scratchArena;
+    CookEntryPathHashSet& seenVirtualPathHashes;
+};
+
+struct CookEntryWriteContext{
+    Core::Filesystem::VolumeSession& volumeSession;
+    CookEntryPathHashSet& seenVirtualPathHashes;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ICookEntryBucket : NoCopy{
+public:
+    virtual ~ICookEntryBucket() = default;
+
+public:
+    [[nodiscard]] virtual const Name& assetType()const noexcept = 0;
+    [[nodiscard]] virtual const tchar* assetKindText()const noexcept = 0;
+    [[nodiscard]] virtual usize size()const noexcept = 0;
+    [[nodiscard]] virtual bool empty()const noexcept = 0;
+
+public:
+    virtual void reserve(usize entryCount) = 0;
+    virtual bool parseDocument(
+        const Path& assetRoot,
+        AStringView virtualRoot,
+        const Path& nwbFilePath,
+        const Core::Metascript::Document& doc,
+        CookEntryParseContext& context
+    ) = 0;
+    virtual bool parseValue(
+        Name virtualPath,
+        const Path& nwbFilePath,
+        const Core::Metascript::Value& asset,
+        CookEntryParseContext& context
+    ) = 0;
+    virtual bool writeVolume(CookEntryWriteContext& context) = 0;
+};
+
+template<typename EntryT>
+class CookEntryBucketTyped : public ICookEntryBucket{
+public:
+    [[nodiscard]] virtual CookVector<EntryT>& entries()noexcept = 0;
+    [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept = 0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace CookEntryRegistryDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool RegisterParsedVirtualPath(
+    const tchar* assetKind,
+    const Name& virtualPath,
+    CookEntryPathHashSet& inOutSeenVirtualPathHashes
+){
+    if(!virtualPath)
+        return true;
+
+    const NameHash pathHash = virtualPath.hash();
+    if(inOutSeenVirtualPathHashes.insert(pathHash).second)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate property asset virtual path '{}' for {}")
+        , StringConvert(virtualPath.c_str())
+        , assetKind
+    );
+    return false;
+}
+
+[[nodiscard]] inline bool RegisterVolumeVirtualPath(
+    const tchar* assetKind,
+    const Name& virtualPath,
+    CookEntryPathHashSet& inOutSeenVirtualPathHashes
+){
+    if(!virtualPath){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: invalid {} virtual path"), assetKind);
+        return false;
+    }
+
+    const NameHash virtualPathHash = virtualPath.hash();
+    if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate {} virtual path '{}'")
+        , assetKind
+        , StringConvert(virtualPath.c_str())
+    );
+    return false;
+}
+
+[[nodiscard]] inline bool PushSerializedAssetToVolume(
+    const tchar* assetKind,
+    const Name& virtualPath,
+    const Core::Assets::IAsset& asset,
+    const Core::Assets::IAssetCodec& codec,
+    Core::Filesystem::VolumeSession& volumeSession,
+    Core::Assets::AssetBytes& scratchBinary
+){
+    scratchBinary.clear();
+    if(!codec.serialize(asset, scratchBinary)){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize {} '{}'")
+            , assetKind
+            , StringConvert(virtualPath.c_str())
+        );
+        return false;
+    }
+
+    if(volumeSession.pushDataDeferred(virtualPath, scratchBinary))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push {} '{}'")
+        , assetKind
+        , StringConvert(virtualPath.c_str())
+    );
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename EntryT, typename AssetT, typename CodecT>
+class CookEntryBucket final : public CookEntryBucketTyped<EntryT>{
+public:
+    using DocumentParseFunction = bool (*)(
+        const Path& assetRoot,
+        AStringView virtualRoot,
+        const Path& nwbFilePath,
+        const Core::Metascript::Document& doc,
+        EntryT& outEntry,
+        CookEntryParseContext& context
+    );
+    using ValueParseFunction = bool (*)(
+        Name virtualPath,
+        const Path& nwbFilePath,
+        const Core::Metascript::Value& asset,
+        EntryT& outEntry,
+        CookEntryParseContext& context
+    );
+    using BuildAssetFunction = bool (*)(EntryT& entry, AssetT& outAsset);
+
+public:
+    CookEntryBucket(
+        ShaderCook::CookArena& arena,
+        const Name& assetType,
+        const tchar* assetKindText,
+        DocumentParseFunction parseDocument,
+        ValueParseFunction parseValue,
+        BuildAssetFunction buildAsset,
+        const bool logBuildFailure
+    )
+        : m_entries(arena)
+        , m_assetType(assetType)
+        , m_assetKindText(assetKindText)
+        , m_parseDocument(parseDocument)
+        , m_parseValue(parseValue)
+        , m_buildAsset(buildAsset)
+        , m_logBuildFailure(logBuildFailure)
+    {}
+
+public:
+    [[nodiscard]] virtual const Name& assetType()const noexcept override{ return m_assetType; }
+    [[nodiscard]] virtual const tchar* assetKindText()const noexcept override{ return m_assetKindText; }
+    [[nodiscard]] virtual usize size()const noexcept override{ return m_entries.size(); }
+    [[nodiscard]] virtual bool empty()const noexcept override{ return m_entries.empty(); }
+    [[nodiscard]] virtual CookVector<EntryT>& entries()noexcept override{ return m_entries; }
+    [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
+
+public:
+    virtual void reserve(const usize entryCount) override{
+        m_entries.reserve(entryCount);
+    }
+
+    virtual bool parseDocument(
+        const Path& assetRoot,
+        const AStringView virtualRoot,
+        const Path& nwbFilePath,
+        const Core::Metascript::Document& doc,
+        CookEntryParseContext& context
+    ) override{
+        if(!m_parseDocument){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: asset type '{}' cannot be parsed from document '{}'")
+                , StringConvert(m_assetType.c_str())
+                , PathToString<tchar>(nwbFilePath)
+            );
+            return false;
+        }
+
+        EntryT entry(context.cookArena);
+        if(!m_parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, entry, context))
+            return false;
+
+        return appendParsedEntry(Move(entry), context);
+    }
+
+    virtual bool parseValue(
+        const Name virtualPath,
+        const Path& nwbFilePath,
+        const Core::Metascript::Value& asset,
+        CookEntryParseContext& context
+    ) override{
+        if(!m_parseValue){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
+                , StringConvert(m_assetType.c_str())
+                , PathToString<tchar>(nwbFilePath)
+            );
+            return false;
+        }
+
+        EntryT entry(context.cookArena);
+        if(!m_parseValue(virtualPath, nwbFilePath, asset, entry, context))
+            return false;
+
+        return appendParsedEntry(Move(entry), context);
+    }
+
+    virtual bool writeVolume(CookEntryWriteContext& context) override{
+        CodecT codec;
+        Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
+        Core::Assets::AssetBytes assetBinary{assetArena};
+
+        for(EntryT& entry : m_entries){
+            if(!CookEntryRegistryDetail::RegisterVolumeVirtualPath(
+                m_assetKindText,
+                entry.virtualPath,
+                context.seenVirtualPathHashes
+            ))
+                return false;
+
+            AssetT asset(assetArena);
+            if(!m_buildAsset(entry, asset)){
+                if(m_logBuildFailure){
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to build {} '{}'")
+                        , m_assetKindText
+                        , StringConvert(entry.virtualPath.c_str())
+                    );
+                }
+                return false;
+            }
+
+            if(!CookEntryRegistryDetail::PushSerializedAssetToVolume(
+                m_assetKindText,
+                entry.virtualPath,
+                asset,
+                codec,
+                context.volumeSession,
+                assetBinary
+            ))
+                return false;
+        }
+
+        return true;
+    }
+
+private:
+    bool appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
+        if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(
+            m_assetKindText,
+            entry.virtualPath,
+            context.seenVirtualPathHashes
+        ))
+            return false;
+
+        m_entries.push_back(Move(entry));
+        return true;
+    }
+
+private:
+    CookVector<EntryT> m_entries;
+    Name m_assetType = NAME_NONE;
+    const tchar* m_assetKindText = NWB_TEXT("asset");
+    DocumentParseFunction m_parseDocument = nullptr;
+    ValueParseFunction m_parseValue = nullptr;
+    BuildAssetFunction m_buildAsset = nullptr;
+    bool m_logBuildFailure = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class CookEntryRegistry : NoCopy{
+private:
+    using BucketPtr = UniquePtr<ICookEntryBucket>;
+    using BucketVector = CookVector<BucketPtr>;
+    using BucketLookup = CookMap<Name, ICookEntryBucket*>;
+
+public:
+    explicit CookEntryRegistry(ShaderCook::CookArena& arena)
+        : m_arena(arena)
+        , m_buckets(arena)
+        , m_lookup(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    {}
+
+public:
+    template<typename EntryT, typename AssetT, typename CodecT>
+    bool registerType(
+        const Name& assetType,
+        const tchar* assetKindText,
+        typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
+        typename CookEntryBucket<EntryT, AssetT, CodecT>::ValueParseFunction parseValue,
+        typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
+        const bool logBuildFailure = true
+    ){
+        if(!assetType){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: tried to register an unnamed cook entry type"));
+            return false;
+        }
+        if(!buildAsset){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: cook entry type '{}' has no build function")
+                , StringConvert(assetType.c_str())
+            );
+            return false;
+        }
+
+        auto bucket = MakeUnique<CookEntryBucket<EntryT, AssetT, CodecT>>(
+            m_arena,
+            assetType,
+            assetKindText,
+            parseDocument,
+            parseValue,
+            buildAsset,
+            logBuildFailure
+        );
+        ICookEntryBucket* bucketPtr = bucket.get();
+        if(!m_lookup.emplace(assetType, bucketPtr).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate cook entry type registration '{}'")
+                , StringConvert(assetType.c_str())
+            );
+            return false;
+        }
+
+        m_buckets.push_back(Move(bucket));
+        return true;
+    }
+
+    [[nodiscard]] ICookEntryBucket* find(const Name& assetType)const{
+        const auto found = m_lookup.find(assetType);
+        return found == m_lookup.end() ? nullptr : found.value();
+    }
+
+    [[nodiscard]] bool has(const Name& assetType)const{
+        return find(assetType) != nullptr;
+    }
+
+    template<typename EntryT>
+    [[nodiscard]] CookVector<EntryT>& entries(const Name& assetType)const{
+        ICookEntryBucket* bucket = find(assetType);
+        NWB_ASSERT(bucket != nullptr);
+        return static_cast<CookEntryBucketTyped<EntryT>*>(bucket)->entries();
+    }
+
+    void reserveEntries(const usize entryCount){
+        for(BucketPtr& bucket : m_buckets)
+            bucket->reserve(entryCount);
+    }
+
+    [[nodiscard]] bool parseDocument(
+        const Name& assetType,
+        const Path& assetRoot,
+        const AStringView virtualRoot,
+        const Path& nwbFilePath,
+        const Core::Metascript::Document& doc,
+        CookEntryParseContext& context
+    ){
+        ICookEntryBucket* bucket = find(assetType);
+        if(bucket)
+            return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
+
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: unsupported asset type '{}' in meta '{}'")
+            , StringConvert(assetType.c_str())
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    [[nodiscard]] bool parseValue(
+        const Name& assetType,
+        const Name virtualPath,
+        const Path& nwbFilePath,
+        const Core::Metascript::Value& asset,
+        CookEntryParseContext& context
+    ){
+        ICookEntryBucket* bucket = find(assetType);
+        if(bucket)
+            return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
+
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: unsupported asset type '{}' in asset_bunch from meta '{}'")
+            , StringConvert(assetType.c_str())
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+
+    [[nodiscard]] bool writeAll(CookEntryWriteContext& context){
+        for(BucketPtr& bucket : m_buckets){
+            if(!bucket->writeVolume(context))
+                return false;
+        }
+        return true;
+    }
+
+    [[nodiscard]] u64 entryCount()const{
+        u64 count = 0;
+        for(const BucketPtr& bucket : m_buckets){
+            const u64 bucketSize = static_cast<u64>(bucket->size());
+            if(count > Limit<u64>::s_Max - bucketSize)
+                return Limit<u64>::s_Max;
+            count += bucketSize;
+        }
+        return count;
+    }
+
+    [[nodiscard]] bool empty()const{
+        for(const BucketPtr& bucket : m_buckets){
+            if(!bucket->empty())
+                return false;
+        }
+        return true;
+    }
+
+private:
+    ShaderCook::CookArena& m_arena;
+    BucketVector m_buckets;
+    BucketLookup m_lookup;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool RegisterDefaultCookEntryTypes(CookEntryRegistry& registry);
+
+using CookEntryRegistrationFunction = bool (*)(CookEntryRegistry& registry);
+
+class CookEntryAutoRegistrar final{
+public:
+    explicit CookEntryAutoRegistrar(CookEntryRegistrationFunction function);
+};
+
+[[nodiscard]] bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -68,6 +68,12 @@ static void CheckStringValue(TestContext& context, const Value* value, MStringVi
         NWB_METASCRIPT_TEST_CHECK(context, value->asString() == expected);
 }
 
+static void CheckReferenceListElement(TestContext& context, const Value& value, MStringView expected){
+    NWB_METASCRIPT_TEST_CHECK(context, value.isReference());
+    if(value.isReference())
+        NWB_METASCRIPT_TEST_CHECK(context, value.asReference() == expected);
+}
+
 static void CheckStringListElement(TestContext& context, const Value& value, const AString& expected){
     NWB_METASCRIPT_TEST_CHECK(context, value.isString());
     if(value.isString())
@@ -396,6 +402,63 @@ static void TestBindStyleStructDuplicateRejections(TestContext& context){
     CheckImplicitMaterialBindParseFailsWithMessage(context, existingInstanceSource, LiteralView("duplicate struct instance declaration"));
 }
 
+static void TestGenericDeclarationsAndReferences(TestContext& context){
+    DestinationArena arena;
+    Document document(arena.arena);
+    const AString source =
+        "model model;\n"
+        "model.mesh = \"project/body/mesh\";\n"
+        "\n"
+        "mesh mesh;\n"
+        "mesh.indices = [0, 1, 2];\n"
+        "\n"
+        "asset_bunch bunch = [\n"
+        "    model,\n"
+        "    mesh,\n"
+        "];\n"
+    ;
+
+    const bool parsed = document.parse(ViewOf(source));
+    NWB_METASCRIPT_TEST_CHECK(context, parsed);
+    if(!parsed)
+        return;
+
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations().size() == 3u);
+    if(document.declarations().size() != 3u)
+        return;
+
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[0u].type == LiteralView("model"));
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[0u].variable == LiteralView("model"));
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[1u].type == LiteralView("mesh"));
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[1u].variable == LiteralView("mesh"));
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[2u].type == LiteralView("asset_bunch"));
+    NWB_METASCRIPT_TEST_CHECK(context, document.declarations()[2u].variable == LiteralView("bunch"));
+
+    const Value* bunch = document.findVariable(LiteralView("bunch"));
+    NWB_METASCRIPT_TEST_CHECK(context, bunch != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, bunch && bunch->isList());
+    if(!bunch || !bunch->isList() || bunch->asList().size() != 2u)
+        return;
+
+    CheckReferenceListElement(context, bunch->asList()[0u], LiteralView("model"));
+    CheckReferenceListElement(context, bunch->asList()[1u], LiteralView("mesh"));
+
+    const Value* modelValue = document.findVariable(LiteralView("model"));
+    NWB_METASCRIPT_TEST_CHECK(context, modelValue != nullptr);
+    if(modelValue)
+        CheckStringField(context, *modelValue, LiteralView("mesh"), LiteralView("project/body/mesh"));
+
+    const Value* meshValue = document.findVariable(LiteralView("mesh"));
+    NWB_METASCRIPT_TEST_CHECK(context, meshValue != nullptr);
+    if(!meshValue)
+        return;
+
+    const Value* indices = FindField(*meshValue, LiteralView("indices"));
+    NWB_METASCRIPT_TEST_CHECK(context, indices != nullptr);
+    NWB_METASCRIPT_TEST_CHECK(context, indices && indices->isList());
+    NWB_METASCRIPT_TEST_CHECK(context, indices && indices->isList() && indices->asList().size() == 3u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -424,6 +487,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("metascript", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestExponentDoubleLiterals(context);
     __hidden_tests::TestBindStyleStructDeclarations(context);
     __hidden_tests::TestBindStyleStructDuplicateRejections(context);
+    __hidden_tests::TestGenericDeclarationsAndReferences(context);
 })
 
 

@@ -12,6 +12,8 @@
 
 #include "csg_shader_variants.h"
 
+#include <core/graphics/shader_archive.h>
+
 #include <core/common/log.h>
 
 
@@ -30,7 +32,7 @@ namespace __hidden_shader_volume_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace AssetsGraphicsCookDetail;
+using namespace AssetsVolumeCookDetail;
 
 struct VariantCachePaths{
     Path bytecodePath;
@@ -83,7 +85,7 @@ static CacheReadStatus::Enum TryReadCachedSourceChecksum(
         return CacheReadStatus::Hit;
 
     if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to read checksum cache '{}' for entry '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to read checksum cache '{}' for entry '{}': {}")
             , PathToString<tchar>(sourceChecksumPath)
             , StringConvert(entry.name)
             , StringConvert(errorCode.message())
@@ -104,7 +106,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
         return CacheReadStatus::Hit;
 
     if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to read bytecode cache '{}' for entry '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to read bytecode cache '{}' for entry '{}': {}")
             , PathToString<tchar>(bytecodePath)
             , StringConvert(entry.name)
             , StringConvert(errorCode.message())
@@ -115,6 +117,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
     outBytecode.clear();
     return CacheReadStatus::Miss;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -169,7 +172,7 @@ static bool GetVariantBytecode(
         scratchArena
     );
     if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: define count overflow for entry '{}'"), StringConvert(entry.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: define count overflow for entry '{}'"), StringConvert(entry.name));
         return false;
     }
 
@@ -182,7 +185,7 @@ static bool GetVariantBytecode(
 
     Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has too many merged defines for shader compilation")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: entry '{}' has too many merged defines for shader compilation")
             , StringConvert(entry.name)
         );
         return false;
@@ -196,7 +199,7 @@ static bool GetVariantBytecode(
 
     errorCode.clear();
     if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to create cache directory '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to create cache directory '{}': {}")
             , PathToString<tchar>(cachePaths.bytecodePath.parent_path())
             , StringConvert(errorCode.message())
         );
@@ -229,6 +232,59 @@ static bool GetVariantBytecode(
 }
 
 
+static bool ReserveShaderIndexRecords(
+    const PreparedShaderVector& preparedEntries,
+    Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords,
+    usize& outShaderRecordCount
+){
+    outShaderRecordCount = 0u;
+
+    u64 shaderRecordCount = 0;
+    for(const PreparedShaderEntry& preparedEntry : preparedEntries){
+        if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader record count overflow"));
+            return false;
+        }
+        shaderRecordCount += preparedEntry.variantCount;
+    }
+    if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader record count exceeds container capacity"));
+        return false;
+    }
+
+    outShaderIndexRecords.clear();
+    outShaderRecordCount = static_cast<usize>(shaderRecordCount);
+    outShaderIndexRecords.reserve(outShaderRecordCount);
+    return true;
+}
+
+static bool PushShaderIndexToVolume(
+    ShaderCook::CookArena& cookArena,
+    const Core::GraphicsVector<Core::ShaderArchive::Record>& shaderIndexRecords,
+    Core::Filesystem::VolumeSession& volumeSession,
+    VirtualPathHashSet& inOutSeenVirtualPathHashes
+){
+    const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
+    if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate shader archive index virtual path '{}'"),
+            StringConvert(shaderIndexVirtualPath.c_str())
+        );
+        return false;
+    }
+
+    Core::GraphicsBytes indexBinary{cookArena};
+    if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary)){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize shader index"));
+        return false;
+    }
+    if(volumeSession.pushDataDeferred(shaderIndexVirtualPath, indexBinary))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push shader index"));
+    return false;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -238,7 +294,7 @@ static bool GetVariantBytecode(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCookDetail{
+namespace AssetsVolumeCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -252,13 +308,16 @@ bool AppendPreparedShadersToVolume(
     PreparedShaderVector& preparedEntries,
     Core::Filesystem::VolumeSession& volumeSession,
     VirtualPathHashSet& inOutSeenVirtualPathHashes,
-    const usize shaderRecordCount,
-    Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords,
     ScratchArena& scratchArena
 ){
+    Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{cookArena};
+    usize shaderRecordCount = 0u;
+    if(!__hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords, shaderRecordCount))
+        return false;
+
     Core::GraphicsBytes cookedBytecode{cookArena};
     ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
-    outShaderIndexRecords.clear();
+    shaderIndexRecords.clear();
 
     for(PreparedShaderEntry& preparedEntry : preparedEntries){
         ShaderCook::ShaderEntry& entry = preparedEntry.entry;
@@ -344,16 +403,16 @@ bool AppendPreparedShadersToVolume(
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = ComputeFnv64Bytes(cookedBytecode.data(), cookedBytecode.size());
             record.virtualPathHash = virtualPathHash;
-            if(outShaderIndexRecords.size() >= shaderRecordCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count exceeded prepared capacity"));
+            if(shaderIndexRecords.size() >= shaderRecordCount){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader record count exceeded prepared capacity"));
                 return false;
             }
-            outShaderIndexRecords.push_back(Move(record));
+            shaderIndexRecords.push_back(Move(record));
             return true;
         };
 
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations, scratchArena)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: variant combination count exceeds runtime limits for entry '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: variant combination count exceeds runtime limits for entry '{}'")
                 , StringConvert(entry.name)
             );
             return false;
@@ -385,11 +444,16 @@ bool AppendPreparedShadersToVolume(
         }
     }
 
-    if(outShaderIndexRecords.size() != shaderRecordCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader record count mismatch after cook"));
+    if(shaderIndexRecords.size() != shaderRecordCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader record count mismatch after cook"));
         return false;
     }
-    return true;
+    return __hidden_shader_volume_writer::PushShaderIndexToVolume(
+        cookArena,
+        shaderIndexRecords,
+        volumeSession,
+        inOutSeenVirtualPathHashes
+    );
 }
 
 

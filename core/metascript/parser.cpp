@@ -65,13 +65,20 @@ template<usize N>
 
 class Parser{
 public:
-    Parser(MStringView source, MetaArena& arena, MVector<ParseError>& errors, MStringMap<Value>& variables)
+    Parser(
+        MStringView source,
+        MetaArena& arena,
+        MVector<ParseError>& errors,
+        MStringMap<Value>& variables,
+        Document::DeclarationList& declarations
+    )
         : m_lexer(source)
         , m_arena(arena)
         , m_scratchArena(4096)
         , m_declaredStructs(m_scratchArena)
         , m_errors(errors)
         , m_variables(variables)
+        , m_declarations(declarations)
     {
         advance();
     }
@@ -80,9 +87,9 @@ public:
 public:
     bool parseInto(MString& outAssetType, MString& outAssetVariable){
         try{
-            if(!parseDeclaration(outAssetType, outAssetVariable))
+            if(!parseStatements())
                 return false;
-            return parseStatements(outAssetVariable);
+            return finalizeExplicitDeclaration(outAssetType, outAssetVariable);
         }
         catch(const GeneralException& e){
             error(
@@ -103,7 +110,7 @@ public:
         try{
             if(!declareImplicitAsset(outAssetType, outAssetVariable, assetType, assetVariable))
                 return false;
-            return parseStatements(outAssetVariable);
+            return parseStatements();
         }
         catch(const GeneralException& e){
             error(
@@ -122,9 +129,7 @@ private:
     using ScratchString = BasicString<MChar, Alloc::ScratchArena>;
 
 
-    bool parseStatements(const MString& assetVariable){
-        m_declaredAssetVariable = MStringView(assetVariable.data(), assetVariable.size());
-
+    bool parseStatements(){
         while(m_current.type != TokenType::EndOfFile){
             if(!parseStatement())
                 return false;
@@ -133,26 +138,69 @@ private:
         return m_errors.empty();
     }
 
-    bool parseDeclaration(MString& outAssetType, MString& outAssetVariable){
-        if(m_current.type != TokenType::Identifier){
-            errorExpected("expected asset type name");
+    bool finalizeExplicitDeclaration(MString& outAssetType, MString& outAssetVariable){
+        if(m_declarations.empty()){
+            error(1u, 1u, "expected declaration");
             return false;
         }
-        outAssetType.assign(m_current.text.data(), m_current.text.size());
+
+        const Document::Declaration& declaration = m_declarations.front();
+        outAssetType.assign(declaration.type.data(), declaration.type.size());
+        outAssetVariable.assign(declaration.variable.data(), declaration.variable.size());
+        if(m_declaredAssetVariable.empty())
+            m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
+        return true;
+    }
+
+    bool parseDeclaration(const MStringView typeName, const u32 typeLine, const u32 typeColumn){
+        const MStringView variableName = m_current.text;
+        const u32 variableLine = m_current.line;
+        const u32 variableColumn = m_current.column;
         advance();
 
-        if(m_current.type != TokenType::Identifier){
-            errorExpected("expected variable name after type name");
-            return false;
+        Value initialValue(m_arena);
+        if(m_current.type == TokenType::Equal){
+            advance();
+            initialValue = parseExpression();
+            if(!m_errors.empty())
+                return false;
         }
-        outAssetVariable.assign(m_current.text.data(), m_current.text.size());
-        advance();
 
         if(!expect(TokenType::Semicolon, "expected ';' after declaration"))
             return false;
 
-        MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
-        m_variables.emplace(Move(key), Value(m_arena));
+        return declareVariable(typeName, variableName, Move(initialValue), typeLine, typeColumn, variableLine, variableColumn);
+    }
+
+    bool declareVariable(
+        const MStringView typeName,
+        const MStringView variableName,
+        Value&& initialValue,
+        const u32 typeLine,
+        const u32 typeColumn,
+        const u32 variableLine,
+        const u32 variableColumn
+    ){
+        if(typeName.empty()){
+            error(typeLine, typeColumn, "type name must not be empty");
+            return false;
+        }
+        if(variableName.empty()){
+            error(variableLine, variableColumn, "variable name must not be empty");
+            return false;
+        }
+        if(m_variables.find(variableName) != m_variables.end()){
+            error(variableLine, variableColumn, "duplicate variable declaration");
+            return false;
+        }
+
+        MString key(variableName.data(), variableName.size(), m_arena);
+        m_variables.emplace(Move(key), Move(initialValue));
+        m_declarations.emplace_back(typeName, variableName, m_arena);
+        if(m_declaredAssetVariable.empty()){
+            const Document::Declaration& declaration = m_declarations.back();
+            m_declaredAssetVariable = MStringView(declaration.variable.data(), declaration.variable.size());
+        }
         return true;
     }
 
@@ -169,9 +217,11 @@ private:
 
         outAssetType.assign(assetType.data(), assetType.size());
         outAssetVariable.assign(assetVariable.data(), assetVariable.size());
+        m_declaredAssetVariable = MStringView(outAssetVariable.data(), outAssetVariable.size());
 
         MString key(outAssetVariable.data(), outAssetVariable.size(), m_arena);
         m_variables.emplace(Move(key), Value(m_arena));
+        m_declarations.emplace_back(assetType, assetVariable, m_arena);
         return true;
     }
 
@@ -202,8 +252,7 @@ private:
             if(isDeclaredStruct(firstName))
                 return parseStructInstanceDeclaration(firstName);
 
-            error(firstLine, firstColumn, "re-declaration is not allowed; only one asset declaration permitted");
-            return false;
+            return parseDeclaration(firstName, firstLine, firstColumn);
         }
 
         ScratchPath path{m_scratchArena};
@@ -565,7 +614,7 @@ private:
                 advance();
             }
 
-            return resolveRead(path);
+            return makeReference(path);
         }
         case TokenType::LeftBracket:
             return parseListLiteral(TokenType::RightBracket);
@@ -738,8 +787,8 @@ private:
         NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
-        if(rootName != m_declaredAssetVariable){
-            error(errorLine, errorColumn, "assignments must target the declared asset variable");
+        if(!isDeclaredVariable(rootName)){
+            error(errorLine, errorColumn, "assignments must target a declared variable");
             return nullptr;
         }
 
@@ -773,8 +822,8 @@ private:
     Value resolveRead(const ScratchPath& path){
         NWB_ASSERT(!path.empty());
 
-        if(path[0] != m_declaredAssetVariable){
-            error("references must target the declared asset variable");
+        if(!isDeclaredVariable(path[0])){
+            error("references must target a declared variable");
             return Value(m_arena);
         }
 
@@ -800,6 +849,24 @@ private:
         return *current;
     }
 
+    Value makeReference(const ScratchPath& path){
+        NWB_ASSERT(!path.empty());
+
+        if(!isDeclaredVariable(path[0])){
+            error("references must target a declared variable");
+            return Value(m_arena);
+        }
+
+        MString text(m_arena);
+        for(usize i = 0u; i < path.size(); ++i){
+            if(i != 0u)
+                text.push_back('.');
+            text.append(path[i].data(), path[i].size());
+        }
+
+        return Value::Reference(MStringView(text.data(), text.size()), m_arena);
+    }
+
     [[nodiscard]] bool isNameInList(const ScratchNameList& names, MStringView name)const{
         for(const MStringView currentName : names){
             if(currentName == name)
@@ -810,6 +877,14 @@ private:
 
     [[nodiscard]] bool isDeclaredStruct(MStringView name)const{
         return isNameInList(m_declaredStructs, name);
+    }
+
+    [[nodiscard]] bool isDeclaredVariable(MStringView name)const{
+        for(const Document::Declaration& declaration : m_declarations){
+            if(MStringView(declaration.variable.data(), declaration.variable.size()) == name)
+                return true;
+        }
+        return false;
     }
 
     [[nodiscard]] Value* declaredAssetRoot(const u32 line, const u32 column){
@@ -1095,6 +1170,7 @@ private:
     ScratchNameList m_declaredStructs;
     MVector<ParseError>& m_errors;
     MStringMap<Value>& m_variables;
+    Document::DeclarationList& m_declarations;
     MStringView m_declaredAssetVariable;
 
     Token m_current;
@@ -1116,6 +1192,7 @@ Document::Document(MetaArena& arena)
     , m_assetType(arena)
     , m_assetVariable(arena)
     , m_variables(0, MStringHash(), MStringEqual(), arena)
+    , m_declarations(arena)
     , m_errors(arena)
 {}
 
@@ -1125,8 +1202,9 @@ bool Document::parse(MStringView source){
     m_assetType.clear();
     m_assetVariable.clear();
     m_variables.clear();
+    m_declarations.clear();
 
-    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables);
+    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables, m_declarations);
     return parser.parseInto(m_assetType, m_assetVariable);
 }
 
@@ -1135,8 +1213,9 @@ bool Document::parseWithImplicitAsset(MStringView source, MStringView assetType,
     m_assetType.clear();
     m_assetVariable.clear();
     m_variables.clear();
+    m_declarations.clear();
 
-    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables);
+    __hidden_metascript_parser::Parser parser(source, m_arena, m_errors, m_variables, m_declarations);
     return parser.parseWithImplicitAsset(m_assetType, m_assetVariable, assetType, assetVariable);
 }
 
@@ -1145,6 +1224,7 @@ bool Document::parse(IMetaReader& reader){
     m_assetType.clear();
     m_assetVariable.clear();
     m_variables.clear();
+    m_declarations.clear();
 
     try{
         constexpr usize chunkSize = 4096;

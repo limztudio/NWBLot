@@ -23,6 +23,7 @@ namespace ValueType{
         Integer,
         Double,
         String,
+        Reference,
         List,
         Map,
     };
@@ -44,6 +45,7 @@ public:
     Value(i64 val, MetaArena& arena);
     Value(f64 val, MetaArena& arena);
     Value(MStringView val, MetaArena& arena);
+    [[nodiscard]] static Value Reference(MStringView val, MetaArena& arena);
     ~Value();
     Value(const Value& other);
     Value(Value&& other)noexcept;
@@ -67,6 +69,7 @@ public:
     [[nodiscard]] bool isInteger()const{ return m_type == ValueType::Integer; }
     [[nodiscard]] bool isDouble()const{ return m_type == ValueType::Double; }
     [[nodiscard]] bool isString()const{ return m_type == ValueType::String; }
+    [[nodiscard]] bool isReference()const{ return m_type == ValueType::Reference; }
     [[nodiscard]] bool isList()const{ return m_type == ValueType::List; }
     [[nodiscard]] bool isMap()const{ return m_type == ValueType::Map; }
     [[nodiscard]] bool isNumeric()const{ return m_type == ValueType::Integer || m_type == ValueType::Double; }
@@ -75,6 +78,7 @@ public:
     [[nodiscard]] f64 asDouble()const;
     [[nodiscard]] f64 toDouble()const;
     [[nodiscard]] MStringView asString()const;
+    [[nodiscard]] MStringView asReference()const;
     [[nodiscard]] const ListType& asList()const;
     [[nodiscard]] ListType& asList();
     [[nodiscard]] const MapType& asMap()const;
@@ -83,6 +87,7 @@ public:
     void setInteger(i64 val);
     void setDouble(f64 val);
     void setString(MStringView val);
+    void setReference(MStringView val);
     void makeList();
     void makeMap();
 

@@ -74,10 +74,16 @@ static AString NormalizeAssetTypeText(AString value){
 
 static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
     switch(assetType){
+    case OutputAssetType::Bunch:
+        return "bunch";
     case OutputAssetType::Mesh:
         return "mesh";
     case OutputAssetType::Model:
         return "model";
+    case OutputAssetType::Skeleton:
+        return "skeleton";
+    case OutputAssetType::Skin:
+        return "skin";
     default:
         return {};
     }
@@ -85,9 +91,15 @@ static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
 
 AString OutputAssetTypeOptionsText(){
     AString text;
+    text += OutputAssetTypeText(OutputAssetType::Bunch);
+    text += ", ";
     text += OutputAssetTypeText(OutputAssetType::Mesh);
-    text += " or ";
+    text += ", ";
     text += OutputAssetTypeText(OutputAssetType::Model);
+    text += ", ";
+    text += OutputAssetTypeText(OutputAssetType::Skeleton);
+    text += ", or ";
+    text += OutputAssetTypeText(OutputAssetType::Skin);
     return text;
 }
 
@@ -98,6 +110,10 @@ AString OutputAssetTypeErrorText(){
 }
 
 static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
+    if(value == OutputAssetTypeText(OutputAssetType::Bunch) || value == "asset_bunch" || value == "asset-bunch"){
+        outAssetType = OutputAssetType::Bunch;
+        return true;
+    }
     if(value == OutputAssetTypeText(OutputAssetType::Mesh)){
         outAssetType = OutputAssetType::Mesh;
         return true;
@@ -106,8 +122,16 @@ static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetTyp
         outAssetType = OutputAssetType::Model;
         return true;
     }
+    if(value == OutputAssetTypeText(OutputAssetType::Skeleton)){
+        outAssetType = OutputAssetType::Skeleton;
+        return true;
+    }
+    if(value == OutputAssetTypeText(OutputAssetType::Skin)){
+        outAssetType = OutputAssetType::Skin;
+        return true;
+    }
 
-    outAssetType = OutputAssetType::Mesh;
+    outAssetType = OutputAssetType::Bunch;
     return false;
 }
 
@@ -119,8 +143,10 @@ bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetTyp
 bool ValidateAssetTypeText(AString& inOutValue){
     inOutValue = NormalizeAssetTypeText(Move(inOutValue));
     OutputAssetType::Enum assetType = OutputAssetType::Mesh;
-    if(ParseNormalizedAssetTypeText(inOutValue, assetType))
+    if(ParseNormalizedAssetTypeText(inOutValue, assetType)){
+        inOutValue = AString(OutputAssetTypeText(assetType));
         return true;
+    }
 
     NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
     return false;

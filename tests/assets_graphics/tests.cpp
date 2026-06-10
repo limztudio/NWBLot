@@ -4,9 +4,9 @@
 
 #include <impl/assets_mesh/skinned_asset.h>
 #include <impl/assets_mesh/asset.h>
-#include <impl/assets_mesh/meshlet_ref_encoding.h>
+#include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
-#include <impl/assets_graphics/cooker.h>
+#include <impl/assets_volume/cooker.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/cook.h>
@@ -1036,7 +1036,7 @@ static bool CookPreparedGraphicsAssetRoots(
     if(!options.configuration.assign("tests") || !options.assetType.assign("graphics"))
         return false;
 
-    NWB::Impl::GraphicsAssetCooker cooker(testArena.arena);
+    NWB::Impl::AssetVolumeCooker cooker(testArena.arena);
     return cooker.cook(options);
 }
 

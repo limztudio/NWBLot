@@ -5,7 +5,7 @@
 #include "skinned_asset.h"
 
 #include "binary_payload_io.h"
-#include "meshlet_ref_encoding.h"
+#include "meshlet_ref_codec.h"
 #include "meshlet_payload_packing.h"
 #include "payload_validation.h"
 #include "skinned_binary_payload.h"

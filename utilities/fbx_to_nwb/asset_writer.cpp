@@ -89,14 +89,14 @@ void WriteSkinWeights(Stream& out, const MeshSkinInfluence& skin){
 }
 
 template<typename Stream>
-void WriteJointMatrix(Stream& out, const JointMatrix& matrix){
+void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView indent = ""){
     out << "[\n";
     for(const Vec4& row : matrix.rows){
-        out << "        ";
+        out << indent << "    ";
         WriteVec4(out, row);
         out << ",\n";
     }
-    out << "    ]";
+    out << indent << "]";
 }
 
 bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName, const AStringView context){
@@ -280,6 +280,62 @@ bool BuildPositionAlignedSkinnedMesh(
     return true;
 }
 
+template<typename Stream>
+void WriteMeshAssetBody(Stream& file, const SourceMeshStreams& mesh, const AStringView variableName = "asset", const AStringView indent = ""){
+    file << variableName << ".positions = [\n";
+    for(const Vec3& position : mesh.positions){
+        file << indent << "    ";
+        WriteVec3(file, position);
+        file << ",\n";
+    }
+    file << indent << "];\n\n";
+
+    file << variableName << ".normals = [\n";
+    for(const Vec3& normal : mesh.normals){
+        file << indent << "    ";
+        WriteVec3(file, normal);
+        file << ",\n";
+    }
+    file << indent << "];\n\n";
+
+    file << variableName << ".tangents = [\n";
+    for(const Vec4& tangent : mesh.tangents){
+        file << indent << "    ";
+        WriteVec4(file, tangent);
+        file << ",\n";
+    }
+    file << indent << "];\n\n";
+
+    file << variableName << ".uv0 = [\n";
+    for(const Vec2& uv0 : mesh.uv0){
+        file << indent << "    ";
+        WriteVec2(file, uv0);
+        file << ",\n";
+    }
+    file << indent << "];\n\n";
+
+    file << variableName << ".colors = [\n";
+    for(const Vec4& color : mesh.colors){
+        file << indent << "    ";
+        WriteVec4(file, color);
+        file << ",\n";
+    }
+    file << indent << "];\n\n";
+
+    file << variableName << ".vertex_refs = [\n";
+    for(const SourceVertexRef& ref : mesh.vertexRefs){
+        file << indent << "    ";
+        WriteVertexRef(file, ref);
+        file << ",\n";
+    }
+    file << indent << "];\n\n";
+
+    file << variableName << ".indices = [\n";
+    for(usize i = 0u; i < mesh.indices.size(); i += 3u)
+        file << indent << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << "],\n";
+    file << indent << "];\n";
+}
+
 bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     if(!ValidatePlainMeshAsset(mesh))
         return false;
@@ -294,59 +350,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     file.precision(9);
 
     file << "mesh asset;\n\n";
-
-    file << "asset.positions = [\n";
-    for(const Vec3& position : mesh.positions){
-        file << "    ";
-        WriteVec3(file, position);
-        file << ",\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.normals = [\n";
-    for(const Vec3& normal : mesh.normals){
-        file << "    ";
-        WriteVec3(file, normal);
-        file << ",\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.tangents = [\n";
-    for(const Vec4& tangent : mesh.tangents){
-        file << "    ";
-        WriteVec4(file, tangent);
-        file << ",\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.uv0 = [\n";
-    for(const Vec2& uv0 : mesh.uv0){
-        file << "    ";
-        WriteVec2(file, uv0);
-        file << ",\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.colors = [\n";
-    for(const Vec4& color : mesh.colors){
-        file << "    ";
-        WriteVec4(file, color);
-        file << ",\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.vertex_refs = [\n";
-    for(const SourceVertexRef& ref : mesh.vertexRefs){
-        file << "    ";
-        WriteVertexRef(file, ref);
-        file << ",\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.indices = [\n";
-    for(usize i = 0u; i < mesh.indices.size(); i += 3u)
-        file << "    [" << mesh.indices[i + 0u] << ", " << mesh.indices[i + 1u] << ", " << mesh.indices[i + 2u] << "],\n";
-    file << "];\n";
+    WriteMeshAssetBody(file, mesh);
 
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
@@ -412,6 +416,33 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     return virtualPath;
 }
 
+template<typename Stream>
+void WriteReferenceValue(Stream& file, const AStringView value, const bool quote){
+    if(quote)
+        file << "\"" << EscapeMetadataString(value) << "\"";
+    else
+        file << value;
+}
+
+template<typename Stream>
+void WriteSkeletonAssetBody(
+    Stream& file,
+    const AStringView variableName,
+    const UtilityVector<ufbx_node*>& joints,
+    const UtilityVector<JointMatrix>& bindPoseMatrices
+){
+    file << variableName << ".joints = [\n";
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        file << "    {\n";
+        file << "        \"name\": \"" << EscapeMetadataString(NodeName(joints[jointIndex], jointIndex)) << "\",\n";
+        file << "        \"local_bind_pose\": ";
+        WriteJointMatrix(file, bindPoseMatrices[jointIndex], "        ");
+        file << ",\n";
+        file << "    },\n";
+    }
+    file << "];\n";
+}
+
 bool WriteSkeletonAsset(
     const Path& outputPath,
     const UtilityVector<ufbx_node*>& joints,
@@ -428,22 +459,49 @@ bool WriteSkeletonAsset(
     file.precision(9);
 
     file << "skeleton asset;\n\n";
-    file << "asset.joints = [\n";
-    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
-        file << "    {\n";
-        file << "        \"name\": \"" << EscapeMetadataString(NodeName(joints[jointIndex], jointIndex)) << "\",\n";
-        file << "        \"local_bind_pose\": ";
-        WriteJointMatrix(file, bindPoseMatrices[jointIndex]);
-        file << ",\n";
-        file << "    },\n";
-    }
-    file << "];\n";
+    WriteSkeletonAssetBody(file, "asset", joints, bindPoseMatrices);
 
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
+}
+
+template<typename Stream>
+void WriteSkinAssetBody(
+    Stream& file,
+    const AStringView variableName,
+    const AString& meshName,
+    const AString& skeletonName,
+    const UtilityVector<MeshSkinInfluence>& influences,
+    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    const bool quoteReferences = true
+){
+    file << variableName << ".mesh = ";
+    WriteReferenceValue(file, meshName, quoteReferences);
+    file << ";\n";
+    file << variableName << ".skeleton = ";
+    WriteReferenceValue(file, skeletonName, quoteReferences);
+    file << ";\n\n";
+
+    file << variableName << ".influences = [\n";
+    for(const MeshSkinInfluence& influence : influences){
+        file << "    { \"joints\": ";
+        WriteSkinJoints(file, influence);
+        file << ", \"weights\": ";
+        WriteSkinWeights(file, influence);
+        file << " },\n";
+    }
+    file << "];\n\n";
+
+    file << variableName << ".inverse_bind_matrices = [\n";
+    for(const JointMatrix& matrix : inverseBindMatrices){
+        file << "    ";
+        WriteJointMatrix(file, matrix, "    ");
+        file << ",\n";
+    }
+    file << "];\n";
 }
 
 bool WriteSkinAsset(
@@ -468,32 +526,96 @@ bool WriteSkinAsset(
     file.precision(9);
 
     file << "skin asset;\n\n";
-    file << "asset.mesh = \"" << EscapeMetadataString(meshName) << "\";\n";
-    file << "asset.skeleton = \"" << EscapeMetadataString(skeletonName) << "\";\n\n";
-
-    file << "asset.influences = [\n";
-    for(const MeshSkinInfluence& influence : influences){
-        file << "    { \"joints\": ";
-        WriteSkinJoints(file, influence);
-        file << ", \"weights\": ";
-        WriteSkinWeights(file, influence);
-        file << " },\n";
-    }
-    file << "];\n\n";
-
-    file << "asset.inverse_bind_matrices = [\n";
-    for(const JointMatrix& matrix : inverseBindMatrices){
-        file << "    ";
-        WriteJointMatrix(file, matrix);
-        file << ",\n";
-    }
-    file << "];\n";
+    WriteSkinAssetBody(file, "asset", meshName, skeletonName, influences, inverseBindMatrices);
 
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
+}
+
+template<typename Stream>
+void WriteModelAssetBody(
+    Stream& file,
+    const AStringView variableName,
+    const AString& meshName,
+    const AString* skinName,
+    const AString* skeletonName,
+    const AStringView skinnedMeshSkeletonName = "skeleton",
+    const bool quoteAssetReferences = true,
+    const bool quoteSkinnedMeshSkeletonReference = true
+){
+    if(skeletonName){
+        file << variableName << ".skeletons = {\n";
+        file << "    \"base\": ";
+        WriteReferenceValue(file, *skeletonName, quoteAssetReferences);
+        file << ",\n";
+        file << "};\n\n";
+
+        file << variableName << ".skinned_meshes = {\n";
+        file << "    \"base\": {\n";
+        file << "        \"mesh\": ";
+        WriteReferenceValue(file, meshName, quoteAssetReferences);
+        file << ",\n";
+        file << "        \"skin\": ";
+        WriteReferenceValue(file, *skinName, quoteAssetReferences);
+        file << ",\n";
+        file << "        \"skeleton\": ";
+        WriteReferenceValue(file, skinnedMeshSkeletonName, quoteSkinnedMeshSkeletonReference);
+        file << ",\n";
+        file << "    },\n";
+        file << "};\n";
+    }
+    else{
+        file << variableName << ".static_meshes = {\n";
+        file << "    \"base\": ";
+        WriteReferenceValue(file, meshName, quoteAssetReferences);
+        file << ",\n";
+        file << "};\n";
+    }
+}
+
+template<typename Stream>
+void WriteSkinnedMeshWrapperBody(
+    Stream& file,
+    const AStringView variableName,
+    const AString& meshName,
+    const AString& skinName,
+    const AString& skeletonName,
+    const bool quoteReferences
+){
+    file << variableName << ".mesh = ";
+    WriteReferenceValue(file, meshName, quoteReferences);
+    file << ";\n";
+    file << variableName << ".skin = ";
+    WriteReferenceValue(file, skinName, quoteReferences);
+    file << ";\n";
+    file << variableName << ".skeleton = ";
+    WriteReferenceValue(file, skeletonName, quoteReferences);
+    file << ";\n";
+}
+
+template<typename Stream>
+void WriteModelAssetBodyWithSkinnedMeshWrapper(
+    Stream& file,
+    const AStringView variableName,
+    const AString& skeletonName,
+    const AString& skinnedMeshWrapperName,
+    const bool quoteAssetReferences,
+    const bool quoteSkinnedMeshReference
+){
+    file << variableName << ".skeletons = {\n";
+    file << "    \"base\": ";
+    WriteReferenceValue(file, skeletonName, quoteAssetReferences);
+    file << ",\n";
+    file << "};\n\n";
+
+    file << variableName << ".skinned_meshes = {\n";
+    file << "    \"base\": ";
+    WriteReferenceValue(file, skinnedMeshWrapperName, quoteSkinnedMeshReference);
+    file << ",\n";
+    file << "};\n";
 }
 
 bool WriteModelAsset(
@@ -513,24 +635,76 @@ bool WriteModelAsset(
     file.precision(9);
 
     file << "model asset;\n\n";
-    if(skeletonName){
-        file << "asset.skeletons = [\n";
-        file << "    { \"name\": \"skeleton\", \"skeleton\": \"" << EscapeMetadataString(*skeletonName) << "\" },\n";
-        file << "];\n\n";
-
-        file << "asset.skinned_meshes = [\n";
-        file << "    { \"name\": \"mesh\", \"mesh\": \"" << EscapeMetadataString(meshName) << "\", \"skin\": \""
-            << EscapeMetadataString(*skinName) << "\", \"skeleton\": \"skeleton\" },\n";
-        file << "];\n";
-    }
-    else{
-        file << "asset.static_meshes = [\n";
-        file << "    { \"name\": \"mesh\", \"mesh\": \"" << EscapeMetadataString(meshName) << "\" },\n";
-        file << "];\n";
-    }
+    WriteModelAssetBody(file, "asset", meshName, skinName, skeletonName);
 
     if(!file){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
+        return false;
+    }
+    return true;
+}
+
+bool WriteAssetBunch(
+    const Path& outputPath,
+    const SourceMeshStreams& mesh,
+    const AString* skinName,
+    const AString* skeletonName,
+    const UtilityVector<ufbx_node*>& skeletonJoints,
+    const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
+    const UtilityVector<MeshSkinInfluence>* skinInfluences,
+    const UtilityVector<JointMatrix>& inverseBindMatrices
+){
+    if(!EnsureOutputDirectory(outputPath, "asset bunch"))
+        return false;
+
+    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!file){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed to open output file '{}'"), PathToString<tchar>(outputPath));
+        return false;
+    }
+    file.precision(9);
+
+    file << "mesh mesh;\n\n";
+    WriteMeshAssetBody(file, mesh, "mesh");
+
+    if(skinName && skeletonName && skinInfluences){
+        file << "\n\n";
+        file << "skeleton skeleton;\n\n";
+        WriteSkeletonAssetBody(file, "skeleton", skeletonJoints, skeletonBindPoseMatrices);
+
+        file << "\n\n";
+        file << "skin skin;\n\n";
+        WriteSkinAssetBody(file, "skin", "mesh", "skeleton", *skinInfluences, inverseBindMatrices, false);
+    }
+
+    const bool skinnedBunch = skinName && skeletonName && skinInfluences;
+    if(skinnedBunch){
+        file << "\n\n";
+        file << "skinned_mesh mesh_wrapper;\n\n";
+        WriteSkinnedMeshWrapperBody(file, "mesh_wrapper", "mesh", "skin", "skeleton", false);
+    }
+
+    file << "\n\n";
+    file << "model model;\n\n";
+    if(skinnedBunch){
+        WriteModelAssetBodyWithSkinnedMeshWrapper(file, "model", "skeleton", "mesh_wrapper", false, false);
+    }
+    else{
+        WriteModelAssetBody(file, "model", "mesh", nullptr, nullptr, "skeleton", false, false);
+    }
+
+    file << "\n\n";
+    file << "asset_bunch bunch = [\n";
+    file << "    mesh,\n";
+    if(skinName && skeletonName && skinInfluences){
+        file << "    skeleton,\n";
+        file << "    skin,\n";
+    }
+    file << "    model,\n";
+    file << "];\n";
+
+    if(!file){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -551,6 +725,7 @@ bool WriteNwbAsset(
     const SourceMeshStreams& mesh,
     const AString& assetTypeText,
     const AString& virtualRoot,
+    const bool separateAssets,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
     const UtilityVector<JointMatrix>& inverseBindMatrices
@@ -558,6 +733,11 @@ bool WriteNwbAsset(
     OutputAssetType::Enum assetType = OutputAssetType::Mesh;
     if(!ParseAssetTypeText(assetTypeText, assetType)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), StringConvert(OutputAssetTypeErrorText()));
+        return false;
+    }
+
+    if(separateAssets && assetType != OutputAssetType::Bunch){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: --separate-assets is only valid with asset type 'bunch'"));
         return false;
     }
 
@@ -575,7 +755,32 @@ bool WriteNwbAsset(
     const AString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
     const AString meshName = virtualBase + "/mesh";
 
+    if(assetType == OutputAssetType::Model){
+        if(skinnedModel){
+            const AString skeletonName = virtualBase + "/skeleton";
+            const AString skinName = virtualBase + "/skin";
+            return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, &skinName, &skeletonName);
+        }
+        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, nullptr, nullptr);
+    }
+
     if(!skinnedModel){
+        if(assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: requested asset type requires a skinned source mesh"));
+            return false;
+        }
+        if(assetType == OutputAssetType::Bunch && !separateAssets)
+            return __hidden_asset_writer::WriteAssetBunch(
+                outputPath,
+                mesh,
+                nullptr,
+                nullptr,
+                skeletonJoints,
+                skeletonBindPoseMatrices,
+                nullptr,
+                inverseBindMatrices
+            );
+
         if(!__hidden_asset_writer::WriteMeshAsset(meshPath, mesh))
             return false;
         return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, nullptr, nullptr);
@@ -593,6 +798,23 @@ bool WriteNwbAsset(
     const Path skinPath = packageDirectory / "skin.nwb";
     const AString skeletonName = virtualBase + "/skeleton";
     const AString skinName = virtualBase + "/skin";
+
+    if(assetType == OutputAssetType::Skeleton)
+        return __hidden_asset_writer::WriteSkeletonAsset(outputPath, skeletonJoints, skeletonBindPoseMatrices);
+    if(assetType == OutputAssetType::Skin)
+        return __hidden_asset_writer::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, inverseBindMatrices);
+    if(assetType == OutputAssetType::Bunch && !separateAssets)
+        return __hidden_asset_writer::WriteAssetBunch(
+            outputPath,
+            splitMesh,
+            &skinName,
+            &skeletonName,
+            skeletonJoints,
+            skeletonBindPoseMatrices,
+            &positionSkin,
+            inverseBindMatrices
+        );
+
     return __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
         && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonJoints, skeletonBindPoseMatrices)
         && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, inverseBindMatrices)

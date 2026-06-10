@@ -14,7 +14,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_types.h"
+#include <impl/assets_volume/cook_types.h>
+#include <impl/assets_material/cook.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,13 +27,48 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCookDetail{
+namespace AssetsVolumeCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
+struct PreparedShaderEntry{
+    ShaderCook::ShaderEntry entry;
+    Path sourcePath;
+    ShaderCook::CookVector<Path> includeDirectories;
+    ShaderCook::CookVector<Path> dependencies;
+    u64 dependencyChecksum = 0;
+    u64 variantCount = 0;
+    CookString materialTypedBindingInterfacePath;
+    Name materialTypedBindingInterface = NAME_NONE;
+    bool usesMaterialTypedBinding = false;
+    bool supportsCsgClipVariant = false;
+    bool supportsAvboitCsgClipVariant = false;
+
+    explicit PreparedShaderEntry(ShaderCook::CookArena& arena)
+        : entry(arena)
+        , includeDirectories(arena)
+        , dependencies(arena)
+        , materialTypedBindingInterfacePath(arena)
+    {}
+};
+
+using PreparedShaderVector = Vector<PreparedShaderEntry, ShaderCook::CookArena>;
+
+struct PreparedShaderPlan{
+    PreparedShaderVector preparedEntries;
+    u64 plannedFileCount = 0;
+
+    explicit PreparedShaderPlan(ShaderCook::CookArena& arena)
+        : preparedEntries(arena)
+    {}
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool PrepareShaderEntriesForCook(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
@@ -41,7 +77,7 @@ namespace AssetsGraphicsCookDetail{
     const Path& csgShapeIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
-    const MaterialCookEntryVector& materialEntries,
+    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
     PreparedShaderPlan& outPreparedPlan,
     ScratchArena& scratchArena
 );

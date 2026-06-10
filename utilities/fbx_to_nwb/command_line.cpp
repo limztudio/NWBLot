@@ -38,6 +38,7 @@ struct OptionPresence{
     bool local = false;
     bool ignoreColors = false;
     bool flipWinding = false;
+    bool separateAssets = false;
 };
 
 
@@ -256,6 +257,17 @@ bool SelectedMeshesUseSkinning(
     return true;
 }
 
+bool AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType){
+    return assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin;
+}
+
+bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
+    return assetType == OutputAssetType::Bunch
+        || assetType == OutputAssetType::Model
+        || AssetTypeRequiresSkinning(assetType)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -309,6 +321,7 @@ int Run(int argc, char** argv, bool& prompted){
     CLI::Option* localOption = app.add_flag("--local", local, "Do not bake node transforms into mesh");
     CLI::Option* ignoreColorsOption = app.add_flag("--ignore-colors", ignoreColors, "Use the default color instead of FBX vertex colors");
     CLI::Option* flipWindingOption = app.add_flag("--flip-winding", options.flipWinding, "Swap the second and third index of every triangle");
+    CLI::Option* separateAssetsOption = app.add_flag("--separate-assets", options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
     app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
@@ -342,6 +355,7 @@ int Run(int argc, char** argv, bool& prompted){
     presence.local = localOption->count() > 0u;
     presence.ignoreColors = ignoreColorsOption->count() > 0u;
     presence.flipWinding = flipWindingOption->count() > 0u;
+    presence.separateAssets = separateAssetsOption->count() > 0u;
 
     if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
         return 1;
@@ -409,10 +423,16 @@ int Run(int argc, char** argv, bool& prompted){
         NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
         return 1;
     }
+    bool usesSkinning = false;
     bool wantsSkinning = false;
-    if(assetTypeValue == OutputAssetType::Model){
+    if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
         if(!__hidden_command_line::SelectedMeshesUseSkinning(instances, selection, wantsSkinning))
             return 1;
+        usesSkinning = wantsSkinning;
+    }
+    if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning){
+        NWB_LOGGER_WARNING(NWB_TEXT("Selected source mesh is not skinned; requested asset type requires skinning."));
+        return 1;
     }
 
     const Path outputPath = PathFromUtf8(options.outputPath);
@@ -451,6 +471,7 @@ int Run(int argc, char** argv, bool& prompted){
         mesh,
         options.assetType,
         options.virtualRoot,
+        options.separateAssets,
         skeletonJoints,
         skeletonBindPoseMatrices,
         inverseBindMatrices
@@ -468,6 +489,8 @@ int Run(int argc, char** argv, bool& prompted){
         << "  normal_mode: " << options.normalMode << "\n"
         << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
+    if(assetTypeValue == OutputAssetType::Bunch)
+        report << "  asset_layout: " << (options.separateAssets ? "separate" : "bunch") << "\n";
     report << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
     if(!skeletonJoints.empty())
         report << "  skeleton_joints: " << skeletonJoints.size() << "\n";

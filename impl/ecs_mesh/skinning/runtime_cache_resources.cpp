@@ -8,7 +8,7 @@
 
 #include <core/common/log.h>
 #include <core/graphics/module.h>
-#include <impl/assets_mesh/meshlet_ref_encoding.h>
+#include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/payload_validation.h>
 #include <impl/assets_mesh/skinned_validation.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>

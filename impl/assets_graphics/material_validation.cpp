@@ -30,7 +30,7 @@ namespace __hidden_material_validation{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace AssetsGraphicsCookDetail;
+using namespace AssetsVolumeCookDetail;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,7 +66,7 @@ static bool ValidateMaterialVariant(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCookDetail{
+namespace AssetsVolumeCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +75,7 @@ namespace AssetsGraphicsCookDetail{
 bool ValidateMaterials(
     ShaderCook& shaderCook,
     const PreparedShaderVector& preparedEntries,
-    const MaterialCookEntryVector& materialEntries,
+    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
 ){
     HashMap<
@@ -97,7 +97,7 @@ bool ValidateMaterials(
             ToName(preparedEntry.entry.archiveStage.view())
         };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: duplicate prepared shader key '{}' stage '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate prepared shader key '{}' stage '{}'")
                 , StringConvert(preparedEntry.entry.name)
                 , StringConvert(preparedEntry.entry.archiveStage.c_str())
             );

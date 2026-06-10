@@ -54,6 +54,13 @@ struct SkinCookEntry{
     SkinCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 );
+[[nodiscard]] bool ParseSkinCookMetadata(
+    Name virtualPath,
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    SkinCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+);
 [[nodiscard]] bool BuildSkinAsset(SkinCookEntry& skinEntry, Skin& outSkin);
 
 

@@ -14,7 +14,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_types.h"
+#include <impl/assets_volume/cook_types.h>
+#include <impl/assets_material/cook.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,9 +34,9 @@ namespace AssetsGraphicsCsgShaderVariants{
 
 
 using ShaderStageKeySet = HashSet<
-    AssetsGraphicsCookDetail::ShaderStageKey,
-    AssetsGraphicsCookDetail::ShaderStageKeyHasher,
-    EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>,
+    AssetsVolumeCookDetail::ShaderStageKey,
+    AssetsVolumeCookDetail::ShaderStageKeyHasher,
+    EqualTo<AssetsVolumeCookDetail::ShaderStageKey>,
     Core::Alloc::ScratchArena
 >;
 

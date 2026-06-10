@@ -54,6 +54,13 @@ struct ModelCookEntry{
     ModelCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 );
+[[nodiscard]] bool ParseModelCookMetadata(
+    Name virtualPath,
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    ModelCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+);
 
 [[nodiscard]] bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel);
 

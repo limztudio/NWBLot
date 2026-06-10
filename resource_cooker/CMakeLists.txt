@@ -14,6 +14,11 @@ target_link_libraries(nwb_resource_cooker PRIVATE
     nwb::tbb
     nwb_metascript
     nwb_graphics
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_volume_cook>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material_volume_entry>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton_volume_entry>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh_volume_entries>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_model_volume_entry>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics_cook>"
     nwb::cli11_headers
 )

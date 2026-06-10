@@ -56,6 +56,13 @@ struct SkeletonCookEntry{
     SkeletonCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 );
+[[nodiscard]] bool ParseSkeletonCookMetadata(
+    Name virtualPath,
+    const Path& nwbFilePath,
+    const Core::Metascript::Value& asset,
+    SkeletonCookEntry& outEntry,
+    Core::Alloc::ScratchArena& scratchArena
+);
 [[nodiscard]] bool BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Skeleton& outSkeleton);
 
 

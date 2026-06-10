@@ -10,8 +10,9 @@
 
 #include "shader_cook_plan.h"
 
-#include "cook_paths.h"
 #include "csg_shader_variants.h"
+
+#include <impl/assets_volume/cook_paths.h>
 
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
@@ -34,7 +35,7 @@ namespace __hidden_shader_cook_plan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace AssetsGraphicsCookDetail;
+using namespace AssetsVolumeCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 
@@ -48,7 +49,7 @@ static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entr
     if(entry.defineValues.find(defineNameKey) == entry.defineValues.end())
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: shader '{}' uses reserved implicit define '{}' as a variant define")
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: shader '{}' uses reserved implicit define '{}' as a variant define")
         , StringConvert(entry.name)
         , StringConvert(defineName)
     );
@@ -91,14 +92,14 @@ static bool CountShaderVariants(const ShaderCook::ShaderEntry& entry, u64& outVa
     for(const auto& [defineName, defineEntry] : entry.defineValues){
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: entry '{}' has define '{}' with no values")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: entry '{}' has define '{}' with no values")
                 , StringConvert(entry.name)
                 , StringConvert(defineName)
             );
             return false;
         }
         if(outVariantCount > Limit<u64>::s_Max / valueCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: variant count overflow for entry '{}'"), StringConvert(entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: variant count overflow for entry '{}'"), StringConvert(entry.name));
             return false;
         }
         outVariantCount *= valueCount;
@@ -134,7 +135,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query CSG evaluator module include '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to query CSG evaluator module include '{}': {}")
                 , PathToString<tchar>(includePath)
                 , StringConvert(errorCode.message())
             );
@@ -150,7 +151,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to query CSG evaluator module include '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to query CSG evaluator module include '{}': {}")
                 , PathToString<tchar>(candidate)
                 , StringConvert(errorCode.message())
             );
@@ -158,7 +159,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
         }
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
     return false;
 }
 
@@ -191,7 +192,7 @@ static bool AppendUniqueDependency(
     ErrorCode errorCode;
     Path absoluteDependency = AbsolutePath(dependency, errorCode).lexically_normal();
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to resolve CSG evaluator module dependency '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to resolve CSG evaluator module dependency '{}': {}")
             , PathToString<tchar>(dependency)
             , StringConvert(errorCode.message())
         );
@@ -218,7 +219,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
     for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
         const AStringView includeName = UnquoteProjectEvaluatorModuleInclude(AStringView(defineValue));
         if(includeName.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: CSG evaluator module define value '{}' must be a quoted include path")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: CSG evaluator module define value '{}' must be a quoted include path")
                 , StringConvert(defineValue)
             );
             return false;
@@ -250,21 +251,8 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetsGraphicsCookDetail{
+namespace AssetsVolumeCookDetail{
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
-    if(inOutPlannedFileCount > Limit<u64>::s_Max - additionalFileCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: planned file count overflow"));
-        return false;
-    }
-
-    inOutPlannedFileCount += additionalFileCount;
-    return true;
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -277,7 +265,7 @@ bool PrepareShaderEntriesForCook(
     const Path& csgShapeIncludeRoot,
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
-    const MaterialCookEntryVector& materialEntries,
+    const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
     PreparedShaderPlan& outPreparedPlan,
     ScratchArena& scratchArena
 ){
@@ -285,7 +273,7 @@ bool PrepareShaderEntriesForCook(
 
     outPreparedPlan.preparedEntries.clear();
     if(inOutShaderEntries.size() > Limit<usize>::s_Max / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: prepared shader entry reserve count overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: prepared shader entry reserve count overflows"));
         return false;
     }
     outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
@@ -305,6 +293,27 @@ bool PrepareShaderEntriesForCook(
     };
     AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, materialClipShaderKeys);
     AssetsGraphicsCsgShaderVariants::CollectAvboitClipShaderKeys(materialEntries, avboitClipShaderKeys);
+
+    ShaderCook::CookVector<Path> implicitIncludeRoots(cookArena);
+    usize implicitIncludeRootCount = 0u;
+    if(!materialBindIncludeRoot.empty())
+        ++implicitIncludeRootCount;
+    if(!csgShapeIncludeRoot.empty()){
+        ++implicitIncludeRootCount;
+        if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: implicit shader include root count overflows"));
+            return false;
+        }
+        implicitIncludeRootCount += resolvedPaths.assetRoots.size();
+    }
+    implicitIncludeRoots.reserve(implicitIncludeRootCount);
+    if(!materialBindIncludeRoot.empty())
+        implicitIncludeRoots.push_back(materialBindIncludeRoot);
+    if(!csgShapeIncludeRoot.empty()){
+        implicitIncludeRoots.push_back(csgShapeIncludeRoot);
+        for(const Path& assetRoot : resolvedPaths.assetRoots)
+            implicitIncludeRoots.push_back(assetRoot);
+    }
 
     for(ShaderCook::ShaderEntry& entry : inOutShaderEntries){
         PreparedShaderEntry preparedEntry(cookArena);
@@ -367,8 +376,7 @@ bool PrepareShaderEntriesForCook(
         if(!BuildIncludeDirectories(
             resolvedPaths.repoRoot,
             resolvedPaths.assetRoots,
-            materialBindIncludeRoot,
-            csgShapeIncludeRoot,
+            implicitIncludeRoots,
             preparedEntry.entry,
             preparedEntry.includeDirectories,
             scratchArena
@@ -454,7 +462,7 @@ bool PrepareShaderEntriesForCook(
         const PreparedShaderEntry& meshShaderEntry = outPreparedPlan.preparedEntries.back();
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         if(!__hidden_shader_cook_plan::BuildMeshComputeShadowEntry(meshShaderEntry.entry, meshComputeShadowEntry.entry)){
-            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsAssetCooker: failed to build mesh-compute shadow entry for '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to build mesh-compute shadow entry for '{}'")
                 , StringConvert(meshShaderEntry.entry.name)
             );
             return false;

@@ -13,7 +13,12 @@ target_sources(nwb_assets_graphics_tests PRIVATE
 )
 target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1)
 target_link_libraries(nwb_assets_graphics_tests PRIVATE
-    nwb_assets_graphics_cook
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_volume_cook>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material_volume_entry>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton_volume_entry>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh_volume_entries>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_model_volume_entry>"
+    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_graphics_cook>"
     nwb_common
     nwb_alloc
 )

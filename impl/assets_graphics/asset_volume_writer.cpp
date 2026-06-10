@@ -16,6 +16,8 @@
 #include <impl/assets_model/cook.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_mesh/cook.h>
+#include <impl/assets_mesh/skin_cook.h>
+#include <impl/assets_skeleton/cook.h>
 
 #include <core/assets/module.h>
 #include <core/filesystem/module.h>
@@ -331,6 +333,28 @@ bool WriteGraphicsVolume(
             true,
             [](SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
                 return BuildSkinnedMeshAsset(meshEntry, outMesh);
+            }
+        ))
+            return false;
+        if(!__hidden_asset_volume_writer::AppendBuiltAssetsToVolume<Skeleton, SkeletonAssetCodec>(
+            NWB_TEXT("skeleton"),
+            parsedMetadata.skeletonEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            true,
+            [](const SkeletonCookEntry& skeletonEntry, Skeleton& outSkeleton){
+                return BuildSkeletonAsset(skeletonEntry, outSkeleton);
+            }
+        ))
+            return false;
+        if(!__hidden_asset_volume_writer::AppendBuiltAssetsToVolume<Skin, SkinAssetCodec>(
+            NWB_TEXT("skin"),
+            parsedMetadata.skinEntries,
+            volumeSession,
+            seenVirtualPathHashes,
+            true,
+            [](SkinCookEntry& skinEntry, Skin& outSkin){
+                return BuildSkinAsset(skinEntry, outSkin);
             }
         ))
             return false;

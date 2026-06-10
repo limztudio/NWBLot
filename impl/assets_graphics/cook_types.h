@@ -19,7 +19,9 @@
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_model/cook.h>
 #include <impl/assets_mesh/cook.h>
+#include <impl/assets_mesh/skin_cook.h>
 #include <impl/assets_material/cook.h>
+#include <impl/assets_skeleton/cook.h>
 #include <impl/assets_shader/cook.h>
 
 #include <core/alloc/scratch.h>
@@ -57,6 +59,8 @@ using PreparedShaderKey = ShaderStageKey;
 using PreparedShaderKeyHasher = ShaderStageKeyHasher;
 using MeshCookEntryVector = CookVector<MeshCookEntry>;
 using SkinnedMeshCookEntryVector = CookVector<SkinnedMeshCookEntry>;
+using SkinCookEntryVector = CookVector<SkinCookEntry>;
+using SkeletonCookEntryVector = CookVector<SkeletonCookEntry>;
 using ModelCookEntryVector = CookVector<ModelCookEntry>;
 using MaterialCookEntryVector = CookVector<MaterialCookEntry>;
 using MaterialBindEntryVector = CookVector<MaterialBindEntry>;
@@ -122,6 +126,8 @@ struct ParsedAssetMetadata{
     MaterialBindEntryVector materialBindEntries;
     MeshCookEntryVector meshEntries;
     SkinnedMeshCookEntryVector skinnedMeshEntries;
+    SkinCookEntryVector skinEntries;
+    SkeletonCookEntryVector skeletonEntries;
     ModelCookEntryVector modelEntries;
     MaterialCookEntryVector materialEntries;
     AssetsCsgCook::CsgShapeCookEntryVector csgShapeEntries;
@@ -132,6 +138,8 @@ struct ParsedAssetMetadata{
         , materialBindEntries(arena)
         , meshEntries(arena)
         , skinnedMeshEntries(arena)
+        , skinEntries(arena)
+        , skeletonEntries(arena)
         , modelEntries(arena)
         , materialEntries(arena)
         , csgShapeEntries(arena)

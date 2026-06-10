@@ -18,6 +18,8 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/joint_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_matrix.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     )

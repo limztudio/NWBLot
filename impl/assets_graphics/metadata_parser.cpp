@@ -101,6 +101,8 @@ bool ParseAssetMetadata(
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.meshEntries.reserve(nwbFiles.size());
     outMetadata.skinnedMeshEntries.reserve(nwbFiles.size());
+    outMetadata.skinEntries.reserve(nwbFiles.size());
+    outMetadata.skeletonEntries.reserve(nwbFiles.size());
     outMetadata.modelEntries.reserve(nwbFiles.size());
     outMetadata.csgShapeEntries.reserve(nwbFiles.size());
 
@@ -233,6 +235,40 @@ bool ParseAssetMetadata(
             continue;
         }
 
+        if(assetType == Skin::AssetTypeName()){
+            SkinCookEntry skinEntry(cookArena);
+            if(!ParseSkinCookMetadata(
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                discoveredNwbFile.filePath,
+                doc,
+                skinEntry,
+                scratchArena
+            ))
+                return false;
+
+            if(!AppendUniquePropertyAssetEntry(skinEntry, seenPropertyAssetPathHashes, outMetadata.skinEntries))
+                return false;
+            continue;
+        }
+
+        if(assetType == Skeleton::AssetTypeName()){
+            SkeletonCookEntry skeletonEntry(cookArena);
+            if(!ParseSkeletonCookMetadata(
+                discoveredNwbFile.assetRoot,
+                discoveredNwbFile.virtualRoot.view(),
+                discoveredNwbFile.filePath,
+                doc,
+                skeletonEntry,
+                scratchArena
+            ))
+                return false;
+
+            if(!AppendUniquePropertyAssetEntry(skeletonEntry, seenPropertyAssetPathHashes, outMetadata.skeletonEntries))
+                return false;
+            continue;
+        }
+
         if(assetType == Model::AssetTypeName()){
             ModelCookEntry modelEntry(cookArena);
             if(!ParseModelCookMetadata(
@@ -302,6 +338,10 @@ bool ParseAssetMetadata(
         if(!outMetadata.meshEntries.empty())
             return true;
         if(!outMetadata.skinnedMeshEntries.empty())
+            return true;
+        if(!outMetadata.skinEntries.empty())
+            return true;
+        if(!outMetadata.skeletonEntries.empty())
             return true;
         if(!outMetadata.modelEntries.empty())
             return true;

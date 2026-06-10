@@ -38,6 +38,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/skin_asset.h"
+        "${CMAKE_CURRENT_LIST_DIR}/skin_cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/skin_binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/skinned_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/skinned_binary_payload.h"

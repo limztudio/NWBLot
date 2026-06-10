@@ -223,42 +223,6 @@ static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStrea
     return true;
 }
 
-[[nodiscard]] static bool ReorderSkinnedMeshStreamsByMeshletTraversal(
-    SkinnedMeshCookEntry& entry,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    MeshCookCommonStreamReorder reorder(entry.positions.get_allocator().arena(), scratchArena);
-    Core::Assets::AssetVector<SkinInfluence4> reorderedSkin(entry.positions.get_allocator().arena());
-    ScratchVector<u32> skinRemap(scratchArena);
-    PrepareCommonMeshStreamReorder(entry, reorder);
-    PrepareMeshStreamReorder(entry.skin, reorderedSkin, skinRemap);
-
-    if(!RemapMeshletPositionRefs(
-        entry,
-        s_SkinnedMeshMetaKind,
-        reorder,
-        [&](MeshletPositionStreamRef& ref){
-            return RemapMeshStreamRef(
-                entry.virtualPath,
-                s_SkinnedMeshMetaKind,
-                NWB_TEXT("skin"),
-                entry.skin,
-                skinRemap,
-                reorderedSkin,
-                ref.skin
-            );
-        }
-    ))
-        return false;
-
-    if(!RemapMeshletAttributeRefs(entry, s_SkinnedMeshMetaKind, reorder))
-        return false;
-
-    CommitCommonMeshStreamReorder(entry, reorder);
-    entry.skin = Move(reorderedSkin);
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

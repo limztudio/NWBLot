@@ -80,7 +80,7 @@ AStringView MeshClassText(const u32 meshClass){
 }
 
 AString MeshClassOptionsText(){
-    return AString("mesh or skinned_mesh");
+    return AString("mesh");
 }
 
 AString MeshClassErrorText(){
@@ -92,10 +92,6 @@ AString MeshClassErrorText(){
 bool ParseNormalizedMeshClassText(const AStringView value, u32& outMeshClass){
     if(value == "mesh"){
         outMeshClass = NWB::Core::Mesh::MeshClass::Static;
-        return true;
-    }
-    if(value == "skinned_mesh"){
-        outMeshClass = NWB::Core::Mesh::MeshClass::Skinned;
         return true;
     }
 
@@ -110,16 +106,6 @@ bool ParseMeshClassText(const AString& value, u32& outMeshClass){
 
 bool MeshClassUsesSkinning(const u32 meshClass){
     return NWB::Core::Mesh::MeshClassUsesSkinning(meshClass);
-}
-
-bool IsNormalizedSkinnedMeshClass(const AStringView value){
-    u32 meshClass = NWB::Core::Mesh::MeshClass::Invalid;
-    return ParseNormalizedMeshClassText(value, meshClass) && MeshClassUsesSkinning(meshClass);
-}
-
-bool IsSkinnedMeshClass(const AString& value){
-    const AString normalized = NormalizeMeshClassText(value);
-    return IsNormalizedSkinnedMeshClass(normalized);
 }
 
 bool ValidateMeshClassText(AString& inOutValue){

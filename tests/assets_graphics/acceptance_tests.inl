@@ -25,29 +25,6 @@ static bool CookAndLoadSmokeMesh(
     return LoadCookedMesh(context, testArena, outputDirectory, assetName, outLoadedAsset);
 }
 
-static bool CookAndLoadSmokeSkinnedMesh(
-    TestContext& context,
-    TestArena& testArena,
-    const char* assetFilename,
-    const AStringView caseName,
-    const Name assetName,
-    Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
-){
-    Path outputDirectory;
-    const bool cooked = CookSmokeSkinnedMeshMeta(
-        assetFilename,
-        caseName,
-        testArena,
-        outRoot,
-        outputDirectory
-    );
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
-    if(!cooked)
-        return false;
-    return LoadCookedSkinnedMesh(context, testArena, outputDirectory, assetName, outLoadedAsset);
-}
-
 struct MeshletAcceptanceVertexKey{
     u32 position = NWB::Impl::s_MeshMissingStreamIndex;
     u32 normal = NWB::Impl::s_MeshMissingStreamIndex;
@@ -357,31 +334,6 @@ static void RunSmokeMeshAcceptance(
     static_cast<void>(RemoveAllIfExists(root, errorCode));
 }
 
-template<typename CallbackT>
-static void RunSmokeSkinnedMeshAcceptance(
-    TestContext& context,
-    const char* assetFilename,
-    const AStringView caseName,
-    const Name assetName,
-    CallbackT&& callback
-){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(CookAndLoadSmokeSkinnedMesh(context, testArena, assetFilename, caseName, assetName, root, loadedAsset)){
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::SkinnedMesh::AssetTypeName());
-        const NWB::Impl::SkinnedMesh& loadedMesh = static_cast<const NWB::Impl::SkinnedMesh&>(*loadedAsset);
-        Forward<CallbackT>(callback)(loadedMesh);
-    }
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
-
-    ErrorCode errorCode;
-    static_cast<void>(RemoveAllIfExists(root, errorCode));
-}
-
 static void TestMeshAcceptanceHardEdgeCubeZippedRefs(TestContext& context){
     RunSmokeMeshAcceptance(
         context,
@@ -603,34 +555,6 @@ static void TestMeshAcceptanceTwoSidedPlane(TestContext& context){
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalPositionRefCount(loadedMesh) == 3u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalAttributeRefCount(loadedMesh) == 6u);
             NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
-        }
-    );
-}
-
-static void TestSkinnedMeshAcceptanceBendingStrip(TestContext& context){
-    RunSmokeSkinnedMeshAcceptance(
-        context,
-        "skinned_bending_strip.nwb",
-        "skinned_bending_strip",
-        Name("project/characters/skinned_bending_strip"),
-        [&context](const NWB::Impl::SkinnedMesh& loadedMesh){
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 4u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skinStream().size() == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skeletonJointCount() == 2u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestMeshletLogicalPositionRefCount(loadedMesh) == 6u);
-
-            const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
-            const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
-            NWB::Impl::MeshletPositionStreamRef positionRef1;
-            NWB::Impl::MeshletPositionStreamRef positionRef3;
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestDecodeMeshletPositionRef(loadedMesh, meshlet, localRefs[1u].localDeformedPosition, positionRef1));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, TestDecodeMeshletPositionRef(loadedMesh, meshlet, localRefs[3u].localDeformedPosition, positionRef3));
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, positionRef1.position == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, positionRef1.skin == 0u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, positionRef3.position == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, positionRef3.skin == 1u);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, localRefs[1u].localDeformedPosition != localRefs[3u].localDeformedPosition);
-            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, localRefs[2u].localDeformedPosition != localRefs[5u].localDeformedPosition);
         }
     );
 }

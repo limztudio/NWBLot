@@ -100,7 +100,6 @@ bool ParseAssetMetadata(
     outMetadata.materialBindEntries.reserve(bindFiles.size());
     outMetadata.materialEntries.reserve(nwbFiles.size());
     outMetadata.meshEntries.reserve(nwbFiles.size());
-    outMetadata.skinnedMeshEntries.reserve(nwbFiles.size());
     outMetadata.skinEntries.reserve(nwbFiles.size());
     outMetadata.skeletonEntries.reserve(nwbFiles.size());
     outMetadata.modelEntries.reserve(nwbFiles.size());
@@ -217,24 +216,6 @@ bool ParseAssetMetadata(
             continue;
         }
 
-        if(assetType == SkinnedMesh::AssetTypeName()){
-            SkinnedMeshCookEntry meshEntry(cookArena);
-            if(!ParseSkinnedMeshCookMetadata(
-                discoveredNwbFile.assetRoot,
-                discoveredNwbFile.virtualRoot.view(),
-                discoveredNwbFile.filePath,
-                doc,
-                meshEntry,
-                threadPool,
-                scratchArena
-            ))
-                return false;
-
-            if(!AppendUniquePropertyAssetEntry(meshEntry, seenPropertyAssetPathHashes, outMetadata.skinnedMeshEntries))
-                return false;
-            continue;
-        }
-
         if(assetType == Skin::AssetTypeName()){
             SkinCookEntry skinEntry(cookArena);
             if(!ParseSkinCookMetadata(
@@ -336,8 +317,6 @@ bool ParseAssetMetadata(
             return false;
         }
         if(!outMetadata.meshEntries.empty())
-            return true;
-        if(!outMetadata.skinnedMeshEntries.empty())
             return true;
         if(!outMetadata.skinEntries.empty())
             return true;

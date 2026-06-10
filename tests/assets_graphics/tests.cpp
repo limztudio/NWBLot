@@ -150,68 +150,6 @@ static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
 
 )"
 
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS R"(asset.vertex_refs = [
-    [0, 0, 0, 0, 0, 0],
-    [1, 1, 1, 1, 0, 1],
-    [2, 2, 2, 2, 0, 2],
-];
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_NORMAL_VERTEX_REFS R"(asset.vertex_refs = [
-    [0, 4294967295, 0, 0, 0, 0],
-    [1, 4294967295, 1, 1, 0, 1],
-    [2, 4294967295, 2, 2, 0, 2],
-];
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS R"(asset.vertex_refs = [
-    [0, 0, 4294967295, 0, 0, 0],
-    [1, 1, 4294967295, 1, 0, 1],
-    [2, 2, 4294967295, 2, 0, 2],
-];
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN R"(asset.skeleton_joint_count = 1;
-
-asset.skin = {
-    "joints0": [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-    ],
-    "weights0": [
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-    ],
-};
-
-asset.inverse_bind_matrices = [
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-    ],
-];
-
-)"
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS \
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS \
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS \
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS \
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0 \
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS \
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
-
-#define NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX \
-    "skinned_mesh asset;\n\n" \
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS
-
 #define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
     [0.0, 0.0, 1.0],
     [0.0, 0.0, 1.0],
@@ -266,9 +204,6 @@ static constexpr AStringView s_TriangleTangentField = NWB_ASSETS_GRAPHICS_TEST_T
 static constexpr AStringView s_TriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS;
 static constexpr AStringView s_TriangleMissingNormalVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_NORMAL_VERTEX_REFS;
 static constexpr AStringView s_TriangleMissingTangentVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_MISSING_TANGENT_VERTEX_REFS;
-static constexpr AStringView s_SkinnedTriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS;
-static constexpr AStringView s_SkinnedTriangleMissingNormalVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_NORMAL_VERTEX_REFS;
-static constexpr AStringView s_SkinnedTriangleMissingTangentVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS;
 
 static constexpr AStringView s_EmptyNormalListField = R"(asset.normals = [];
 
@@ -319,14 +254,6 @@ static AString BuildMeshTriangleMeta(
     const AStringView vertexRefsField
 ){
     return BuildTriangleMeta("mesh asset;\n\n", normalField, tangentField, vertexRefsField, "");
-}
-
-static AString BuildSkinnedTriangleMeta(
-    const AStringView normalField,
-    const AStringView tangentField,
-    const AStringView vertexRefsField
-){
-    return BuildTriangleMeta("skinned_mesh asset;\n\n", normalField, tangentField, vertexRefsField, NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN);
 }
 #endif
 
@@ -1019,160 +946,8 @@ static constexpr AStringView s_MismatchedMeshMeta =
 #endif
 
 
-static constexpr AStringView s_MinimalSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
-static constexpr AStringView s_NativeCharacterMockSkinnedMeshMeta = R"(skinned_mesh asset;
-
-asset.positions = [
-    [-0.5, -0.5, 0.0],
-    [ 0.5, -0.5, 0.0],
-    [ 0.5,  0.5, 0.0],
-    [-0.5,  0.5, 0.0],
-];
-
-)" NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
-    NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
-    R"(asset.uv0 = [
-    [0.0, 0.0],
-    [1.0, 0.0],
-    [1.0, 1.0],
-    [0.0, 1.0],
-];
-
-asset.colors = [
-    [1.0, 0.0, 0.0, 1.0],
-    [0.0, 1.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0, 1.0],
-    [1.0, 1.0, 1.0, 0.5],
-];
-
-asset.vertex_refs = [
-    [0, 0, 0, 0, 0, 0],
-    [1, 1, 1, 1, 1, 1],
-    [2, 2, 2, 2, 2, 2],
-    [3, 3, 3, 3, 3, 3],
-];
-
-asset.indices = [
-    [0, 1, 2],
-    [0, 2, 3],
-];
-
-asset.skeleton_joint_count = 2;
-
-asset.inverse_bind_matrices = [
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-    ],
-    [
-        [1.0, 0.0, 0.0, -0.25],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-    ],
-];
-
-asset.skin = {
-    "joints0": [
-        [0, 0, 0, 0],
-        [0, 1, 0, 0],
-        [1, 0, 0, 0],
-        [1, 0, 0, 0],
-    ],
-    "weights0": [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.75, 0.25, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-    ],
-};
-)";
-
-static constexpr AStringView s_NonnormalizedSkinSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
-    R"(asset.skeleton_joint_count = 2;
-
-asset.skin = {
-    "joints0": [
-        [0, 0, 0, 0],
-        [0, 1, 0, 0],
-        [0, 1, 0, 0],
-    ],
-    "weights0": [
-        [2.0, 0.0, 0.0, 0.0],
-        [3.0, 1.0, 0.0, 0.0],
-        [0.0, 4.0, 0.0, 0.0],
-    ],
-};
-
-asset.inverse_bind_matrices = [
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-    ],
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-    ],
-];
-)";
-
-static constexpr AStringView s_SkinnedOnlySkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
-    NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN;
-
-#if defined(NWB_FINAL)
-static constexpr AStringView s_MismatchedSkinnedMeshMeta =
-    "skinned_mesh asset;\n\n"
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
-    R"(asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-)" NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
-    NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-
-static constexpr AStringView s_MismatchedSkinSkinnedMeshMeta =
-    NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
-    R"(asset.skin = {
-    "joints0": [
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-        [0, 0, 0, 0],
-    ],
-    "weights0": [
-        [1.0, 0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0, 0.0],
-    ],
-};
-)";
-
-static constexpr AStringView s_SourceImportSkinnedMeshMeta = R"(skinned_mesh asset;
-
-asset.source = {
-    "format": "external",
-    "path": "mesh.bin",
-};
-)";
-#endif
-
-
-
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS
 #undef NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS
-#undef NWB_ASSETS_GRAPHICS_TEST_ROOT_SKIN
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_PREFIX
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_MESH_TRIANGLE_STREAMS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_TANGENT_VERTEX_REFS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_MISSING_NORMAL_VERTEX_REFS
-#undef NWB_ASSETS_GRAPHICS_TEST_SKINNED_TRIANGLE_VERTEX_REFS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_COLORS
 #undef NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_UV0
@@ -1309,17 +1084,6 @@ static bool CookSingleMinimalAssetMeta(
     );
 }
 
-static bool CookSingleSkinnedMeshMeta(
-    const AStringView metaText,
-    const AStringView caseName,
-    TestArena& testArena,
-    Path& outRoot,
-    Path& outOutputDirectory
-){
-    static constexpr MinimalAssetCookInfo s_CookInfo{ "characters", "minimal_skinned_mesh.nwb" };
-    return CookSingleMinimalAssetMeta(metaText, caseName, s_CookInfo, testArena, outRoot, outOutputDirectory);
-}
-
 static bool CookSingleMeshMeta(
     const AStringView metaText,
     const AStringView caseName,
@@ -1369,16 +1133,6 @@ static bool CookSmokeMeshMeta(
     Path& outOutputDirectory
 ){
     return CookSmokeAssetMeta("meshes", assetFilename, caseName, testArena, outRoot, outOutputDirectory);
-}
-
-static bool CookSmokeSkinnedMeshMeta(
-    const char* assetFilename,
-    const AStringView caseName,
-    TestArena& testArena,
-    Path& outRoot,
-    Path& outOutputDirectory
-){
-    return CookSmokeAssetMeta("characters", assetFilename, caseName, testArena, outRoot, outOutputDirectory);
 }
 
 static bool CookMinimalMeshWithMaterialBind(
@@ -1626,20 +1380,6 @@ static bool LoadCookedAsset(
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
-static bool LoadCookedMinimalSkinnedMesh(
-    TestContext& context,
-    TestArena& testArena,
-    const Path& outputDirectory,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
-    return LoadCookedAsset<NWB::Impl::SkinnedMeshAssetCodec>(
-        context,
-        testArena,
-        outputDirectory,
-        Name("project/characters/minimal_skinned_mesh"),
-        outLoadedAsset
-    );
-}
-
 static bool LoadCookedMinimalMesh(
     TestContext& context,
     TestArena& testArena,
@@ -1661,21 +1401,6 @@ static bool LoadCookedMesh(
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
     return LoadCookedAsset<NWB::Impl::MeshAssetCodec>(
-        context,
-        testArena,
-        outputDirectory,
-        assetName,
-        outLoadedAsset
-    );
-}
-
-static bool LoadCookedSkinnedMesh(
-    TestContext& context,
-    TestArena& testArena,
-    const Path& outputDirectory,
-    const Name assetName,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
-    return LoadCookedAsset<NWB::Impl::SkinnedMeshAssetCodec>(
         context,
         testArena,
         outputDirectory,
@@ -1786,16 +1511,10 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMeshAcceptanceUvSeamQuad(context);
     __hidden_tests::TestMeshAcceptanceMirroredUvQuad(context);
     __hidden_tests::TestMeshAcceptanceTwoSidedPlane(context);
-    __hidden_tests::TestSkinnedMeshAcceptanceBendingStrip(context);
     __hidden_tests::TestMeshAcceptanceLargeManyMeshlets(context);
     __hidden_tests::TestMeshAcceptanceQualityBuilderChecks(context);
     __hidden_tests::TestMaterialBindDiscoveryValidation(context);
     __hidden_tests::TestMeshCookerValidationFailures(context);
-    __hidden_tests::TestSkinnedMeshCookerMinimalAsset(context);
-    __hidden_tests::TestSkinnedMeshCookerNativeCharacterMock(context);
-    __hidden_tests::TestSkinnedMeshCookerNormalizesSkinWeights(context);
-    __hidden_tests::TestSkinnedMeshCookerSkinnedClass(context);
-    __hidden_tests::TestSkinnedMeshCookerValidationFailures(context);
     __hidden_tests::TestSkinnedMeshValidationFailures(context);
     __hidden_tests::TestMeshClassPolicyHelpers(context);
     __hidden_tests::TestFormatBlockDimensions(context);

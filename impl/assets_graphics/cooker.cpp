@@ -166,11 +166,6 @@ bool GraphicsAssetCooker::cookGraphicsAssets(const GraphicsCookEnvironment& envi
         return false;
     if(!AssetsGraphicsCookDetail::AddPlannedFileCount(static_cast<u64>(parsedMetadata.meshEntries.size()), preparedPlan.plannedFileCount))
         return false;
-    if(!AssetsGraphicsCookDetail::AddPlannedFileCount(
-        static_cast<u64>(parsedMetadata.skinnedMeshEntries.size()),
-        preparedPlan.plannedFileCount
-    ))
-        return false;
     if(!AssetsGraphicsCookDetail::AddPlannedFileCount(static_cast<u64>(parsedMetadata.skinEntries.size()), preparedPlan.plannedFileCount))
         return false;
     if(!AssetsGraphicsCookDetail::AddPlannedFileCount(static_cast<u64>(parsedMetadata.skeletonEntries.size()), preparedPlan.plannedFileCount))

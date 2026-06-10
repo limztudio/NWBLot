@@ -42,10 +42,6 @@ static bool CookAndLoadMinimalAssetByKind(
     CookSingleMetaFn cookSingleMeta = nullptr;
     LoadCookedAssetFn loadCookedAsset = nullptr;
     switch(assetKind){
-    case MinimalAssetKind::SkinnedMesh:
-        cookSingleMeta = CookSingleSkinnedMeshMeta;
-        loadCookedAsset = LoadCookedMinimalSkinnedMesh;
-        break;
     case MinimalAssetKind::Mesh:
         cookSingleMeta = CookSingleMeshMeta;
         loadCookedAsset = LoadCookedMinimalMesh;
@@ -99,20 +95,6 @@ static void CheckMinimalRuntimeMeshletPayload(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, meshlet.encoding == 0u);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletBounds()[0u].sphere.w > 0.0f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
-}
-
-static void CheckMinimalSkinnedMeshDefaults(
-    TestContext& context,
-    const NWB::Core::Assets::IAsset& loadedAsset){
-    const NWB::Impl::SkinnedMesh& loadedMesh = static_cast<const NWB::Impl::SkinnedMesh&>(loadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
-    CheckMinimalRuntimeMeshletPayload(context, loadedMesh);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Skinned);
-    const Float4U color0 = LoadHalf4U(loadedMesh.colorStream()[0]);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.x == 1.f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, color0.w == 1.f);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skinStream().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skeletonJointCount() == 1u);
 }
 
 template<typename AssetT, typename CheckLoadedAssetFn>

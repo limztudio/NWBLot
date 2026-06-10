@@ -418,7 +418,7 @@ int Run(int argc, char** argv, bool& prompted){
         << "  normals: " << mesh.normals.size() << "\n"
         << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"
         << "  triangles: " << (mesh.indices.size() / 3u) << "\n"
-        << "  asset_type: " << (IsNormalizedSkinnedMeshClass(options.meshClass) ? "skinned_mesh" : "mesh") << "\n"
+        << "  asset_type: mesh\n"
         << "  normal_mode: " << options.normalMode << "\n"
         << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
         << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
@@ -428,8 +428,6 @@ int Run(int argc, char** argv, bool& prompted){
             << "  tangent_fallback_vertices: " << tangentReport.fallbackTangentVertexCount << "\n"
             << "  tangent_degenerate_uv_triangles: " << tangentReport.degenerateUvTriangleCount << "\n";
     }
-    if(IsNormalizedSkinnedMeshClass(options.meshClass))
-        report << "  skeleton joints: " << skeletonJointCount << "\n";
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
     return 0;

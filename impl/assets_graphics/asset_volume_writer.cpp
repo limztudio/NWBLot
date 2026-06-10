@@ -325,17 +325,6 @@ bool WriteGraphicsVolume(
             }
         ))
             return false;
-        if(!__hidden_asset_volume_writer::AppendBuiltAssetsToVolume<SkinnedMesh, SkinnedMeshAssetCodec>(
-            NWB_TEXT("skinned mesh"),
-            parsedMetadata.skinnedMeshEntries,
-            volumeSession,
-            seenVirtualPathHashes,
-            true,
-            [](SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
-                return BuildSkinnedMeshAsset(meshEntry, outMesh);
-            }
-        ))
-            return false;
         if(!__hidden_asset_volume_writer::AppendBuiltAssetsToVolume<Skeleton, SkeletonAssetCodec>(
             NWB_TEXT("skeleton"),
             parsedMetadata.skeletonEntries,

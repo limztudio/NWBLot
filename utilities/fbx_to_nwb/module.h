@@ -146,8 +146,6 @@ AString MeshClassErrorText();
 bool ParseMeshClassText(const AString& value, u32& outMeshClass);
 bool ParseNormalizedMeshClassText(AStringView value, u32& outMeshClass);
 bool MeshClassUsesSkinning(u32 meshClass);
-bool IsNormalizedSkinnedMeshClass(AStringView value);
-bool IsSkinnedMeshClass(const AString& value);
 bool ValidateMeshClassText(AString& inOutValue);
 AStringView NormalModeText(NormalMode::Enum normalMode);
 AString NormalModeOptionsText();

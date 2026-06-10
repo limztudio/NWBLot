@@ -194,6 +194,10 @@ bool WriteNwbMesh(
         return false;
     }
     const bool writeSkinnedMesh = MeshClassUsesSkinning(meshClass);
+    if(writeSkinnedMesh){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: skinned mesh output moved to the model/skeleton/skin asset path"));
+        return false;
+    }
     if(!__hidden_mesh_writer::ValidateSourceMesh(mesh, writeSkinnedMesh))
         return false;
     if(writeSkinnedMesh){
@@ -230,7 +234,7 @@ bool WriteNwbMesh(
     }
     file.precision(9);
 
-    file << (writeSkinnedMesh ? "skinned_mesh asset;\n\n" : "mesh asset;\n\n");
+    file << "mesh asset;\n\n";
 
     file << "asset.positions = [\n";
     for(const Vec3& position : mesh.positions){

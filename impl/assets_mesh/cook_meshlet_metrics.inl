@@ -22,26 +22,11 @@ template<typename CookEntryT>
     ;
 }
 
-[[nodiscard]] static usize EstimateMeshletSkinBytes(const SkinnedMeshCookEntry& entry){
-    return MeshletCookVectorBytes(entry.skin)
-        + MeshletCookVectorBytes(entry.inverseBindMatrices)
-    ;
-}
-
 [[nodiscard]] static usize EstimateMeshletSourceBytes(
     const Core::Assets::AssetVector<u32>& indices,
     const MeshCookEntry& entry
 ){
     return EstimateCommonMeshletSourceBytes(indices, entry);
-}
-
-[[nodiscard]] static usize EstimateMeshletSourceBytes(
-    const Core::Assets::AssetVector<u32>& indices,
-    const SkinnedMeshCookEntry& entry
-){
-    return EstimateCommonMeshletSourceBytes(indices, entry)
-        + EstimateMeshletSkinBytes(entry)
-    ;
 }
 
 template<typename CookEntryT>
@@ -62,12 +47,6 @@ template<typename CookEntryT>
 
 [[nodiscard]] static usize EstimateMeshletRuntimeBytes(const MeshCookEntry& entry){
     return EstimateCommonMeshletRuntimeBytes(entry);
-}
-
-[[nodiscard]] static usize EstimateMeshletRuntimeBytes(const SkinnedMeshCookEntry& entry){
-    return EstimateCommonMeshletRuntimeBytes(entry)
-        + EstimateMeshletSkinBytes(entry)
-    ;
 }
 
 template<typename CookEntryT>

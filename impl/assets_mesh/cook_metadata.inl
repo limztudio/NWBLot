@@ -92,7 +92,6 @@ namespace MetadataU32ValueFailure{
 };
 
 static constexpr const tchar* s_MeshMetaKind = NWB_TEXT("Mesh");
-static constexpr const tchar* s_SkinnedMeshMetaKind = NWB_TEXT("SkinnedMesh mesh");
 
 static const Core::Metascript::Value* FindRequiredMetadataListField(
     const Path& nwbFilePath,

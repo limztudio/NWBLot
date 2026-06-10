@@ -294,8 +294,7 @@ using LoadCookedAssetFn = bool(*)(TestContext&, TestArena&, const Path&, UniqueP
 
 namespace MinimalAssetKind{
     enum Enum : u8{
-        SkinnedMesh = 0u,
-        Mesh = 1u,
+        Mesh = 0u,
     };
 };
 

@@ -58,7 +58,6 @@ using VirtualPathHashSet = ShaderCook::CookHashSet<NameHash>;
 using PreparedShaderKey = ShaderStageKey;
 using PreparedShaderKeyHasher = ShaderStageKeyHasher;
 using MeshCookEntryVector = CookVector<MeshCookEntry>;
-using SkinnedMeshCookEntryVector = CookVector<SkinnedMeshCookEntry>;
 using SkinCookEntryVector = CookVector<SkinCookEntry>;
 using SkeletonCookEntryVector = CookVector<SkeletonCookEntry>;
 using ModelCookEntryVector = CookVector<ModelCookEntry>;
@@ -125,7 +124,6 @@ struct ParsedAssetMetadata{
     ShaderEntryVector shaderEntries;
     MaterialBindEntryVector materialBindEntries;
     MeshCookEntryVector meshEntries;
-    SkinnedMeshCookEntryVector skinnedMeshEntries;
     SkinCookEntryVector skinEntries;
     SkeletonCookEntryVector skeletonEntries;
     ModelCookEntryVector modelEntries;
@@ -137,7 +135,6 @@ struct ParsedAssetMetadata{
         , shaderEntries(arena)
         , materialBindEntries(arena)
         , meshEntries(arena)
-        , skinnedMeshEntries(arena)
         , skinEntries(arena)
         , skeletonEntries(arena)
         , modelEntries(arena)

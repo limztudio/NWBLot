@@ -10,7 +10,6 @@
 
 #include "cook.h"
 
-#include "skinned_validation.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
 #include "meshlet_ref_encoding.h"
@@ -49,14 +48,6 @@ static bool ParseSourceMeshMeta(
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 );
-static bool ParseSourceSkinnedMeshMeta(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset,
-    SkinnedMeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
-    Core::Alloc::ScratchArena& scratchArena
-);
-
 static bool ValidateMeshAssetFields(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset
@@ -66,29 +57,6 @@ static bool ValidateMeshAssetFields(
         asset,
         "Mesh meta",
         { "positions", "normals", "tangents", "uv0", "colors", "vertex_refs", "indices" }
-    );
-}
-
-static bool ValidateSkinnedMeshAssetFields(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Value& asset
-){
-    return Core::Assets::ValidateMetadataAssetFields(
-        discoveredFile.filePath,
-        asset,
-        "SkinnedMesh mesh meta",
-        {
-            "positions",
-            "normals",
-            "tangents",
-            "uv0",
-            "colors",
-            "vertex_refs",
-            "indices",
-            "skin",
-            "skeleton_joint_count",
-            "inverse_bind_matrices",
-        }
     );
 }
 
@@ -144,248 +112,7 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
     return outMesh.validatePayload();
 }
 
-template<usize ComponentCount>
-static bool ParseU16Tuple(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& value,
-    const AStringView label,
-    u16 (&outValues)[ComponentCount],
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' must be a {}-component integer list")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-            , ComponentCount
-        );
-        return false;
-    }
-
-    const auto& list = value.asList();
-    for(usize i = 0; i < ComponentCount; ++i){
-        u32 parsed = 0u;
-        const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(list[i], parsed);
-        if(failure != MetadataU32ValueFailure::None){
-            const ScratchString componentLabel = MakeIndexedLabel(scratchArena, label, i);
-            LogMetadataU32ValueFailure(nwbFilePath, s_SkinnedMeshMetaKind, componentLabel, failure);
-            return false;
-        }
-        if(parsed > Limit<u16>::s_Max){
-            const ScratchString componentLabel = MakeIndexedLabel(scratchArena, label, i);
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' contains a value that exceeds u16")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(componentLabel)
-            );
-            return false;
-        }
-        outValues[i] = static_cast<u16>(parsed);
-    }
-    return true;
-}
-
-static bool NormalizeSkinInfluenceWeights(
-    const Path& nwbFilePath,
-    const AStringView label,
-    SkinInfluence4& influence
-){
-    const SIMDVector weights = VectorSet(
-        influence.weight[0u],
-        influence.weight[1u],
-        influence.weight[2u],
-        influence.weight[3u]
-    );
-    if(!SkinnedMeshValidation::FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights must be finite and non-negative")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-
-    const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
-    if(!IsFinite(weightSum) || weightSum <= SkinnedMeshValidation::s_Epsilon){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights must contain a positive total")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-
-    const f32 inverseWeightSum = 1.0f / weightSum;
-    const SIMDVector normalizedWeights = VectorScale(weights, inverseWeightSum);
-    influence.weight[0u] = VectorGetX(normalizedWeights);
-    influence.weight[1u] = VectorGetY(normalizedWeights);
-    influence.weight[2u] = VectorGetZ(normalizedWeights);
-    influence.weight[3u] = VectorGetW(normalizedWeights);
-
-    if(!SkinnedMeshValidation::ValidSkinInfluenceWeights(normalizedWeights)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': '{}' weights failed normalization")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(label)
-        );
-        return false;
-    }
-    return true;
-}
-
-static bool ParseSkeletonJointCount(const Path& nwbFilePath, const Core::Metascript::Value& asset, u32& outJointCount){
-    outJointCount = 0u;
-
-    const Core::Metascript::Value* jointCount = FindField(asset, "skeleton_joint_count");
-    if(!jointCount)
-        return true;
-
-    return ParseMetadataU32Value(nwbFilePath, *jointCount, s_SkinnedMeshMetaKind, "skeleton_joint_count", outJointCount);
-}
-
-static bool ParseInverseBindMatrices(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const u32 skeletonJointCount,
-    Core::Assets::AssetVector<SkeletonJointMatrix>& outMatrices,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    outMatrices.clear();
-
-    const Core::Metascript::Value* matrices = FindField(asset, "inverse_bind_matrices");
-    if(!matrices)
-        return true;
-    if(!matrices->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': 'inverse_bind_matrices' must be a list")
-            , PathToString<tchar>(nwbFilePath)
-        );
-        return false;
-    }
-    if(skeletonJointCount == 0u || matrices->asList().size() != skeletonJointCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse bind matrix count must match skeleton_joint_count")
-            , PathToString<tchar>(nwbFilePath)
-        );
-        return false;
-    }
-
-    const auto& matrixList = matrices->asList();
-    outMatrices.reserve(matrixList.size());
-    for(usize matrixIndex = 0u; matrixIndex < matrixList.size(); ++matrixIndex){
-        const Core::Metascript::Value& matrixValue = matrixList[matrixIndex];
-        if(!matrixValue.isList() || (matrixValue.asList().size() != 3u && matrixValue.asList().size() != 4u)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] must contain three affine rows, or legacy four-row affine data")
-                , PathToString<tchar>(nwbFilePath)
-                , matrixIndex
-            );
-            return false;
-        }
-
-        const auto& rows = matrixValue.asList();
-        const ScratchString label = MakeIndexedLabel(scratchArena, "inverse_bind_matrices", matrixIndex);
-        alignas(16) f32 parsedRows[4u][4u] = {};
-        const usize rowCount = rows.size();
-        for(usize rowIndex = 0u; rowIndex < rowCount; ++rowIndex){
-            const ScratchString rowLabel = MakeIndexedLabel(scratchArena, label, rowIndex);
-            if(!ParseMetadataF32Tuple(nwbFilePath, rows[rowIndex], s_SkinnedMeshMetaKind, rowLabel, parsedRows[rowIndex], scratchArena))
-                return false;
-        }
-
-        SkeletonJointMatrix matrix{};
-        if(rowCount == 4u){
-            if(
-                !IsFinite(parsedRows[0u][3u]) || !IsFinite(parsedRows[1u][3u]) || !IsFinite(parsedRows[2u][3u]) || !IsFinite(parsedRows[3u][3u])
-                || Abs(parsedRows[0u][3u]) > SkinnedMeshValidation::s_Epsilon
-                || Abs(parsedRows[1u][3u]) > SkinnedMeshValidation::s_Epsilon
-                || Abs(parsedRows[2u][3u]) > SkinnedMeshValidation::s_Epsilon
-                || Abs(parsedRows[3u][3u] - 1.0f) > SkinnedMeshValidation::s_Epsilon
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] legacy fourth column is not affine identity")
-                    , PathToString<tchar>(nwbFilePath)
-                    , matrixIndex
-                );
-                return false;
-            }
-
-            matrix.rows[0u] = Float4(parsedRows[0u][0u], parsedRows[1u][0u], parsedRows[2u][0u], parsedRows[3u][0u]);
-            matrix.rows[1u] = Float4(parsedRows[0u][1u], parsedRows[1u][1u], parsedRows[2u][1u], parsedRows[3u][1u]);
-            matrix.rows[2u] = Float4(parsedRows[0u][2u], parsedRows[1u][2u], parsedRows[2u][2u], parsedRows[3u][2u]);
-        }
-        else{
-            for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex)
-                matrix.rows[rowIndex] = Float4(parsedRows[rowIndex][0u], parsedRows[rowIndex][1u], parsedRows[rowIndex][2u], parsedRows[rowIndex][3u]);
-        }
-
-        if(!SkinnedMeshValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
-                , PathToString<tchar>(nwbFilePath)
-                , matrixIndex
-            );
-            return false;
-        }
-        outMatrices.push_back(matrix);
-    }
-    return true;
-}
-
 #include "cook_source.inl"
-
-static bool ParseSkinnedMeshMeta(
-    const DiscoveredNwbFile& discoveredFile,
-    const Core::Metascript::Document& doc,
-    SkinnedMeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    outEntry = SkinnedMeshCookEntry(outEntry.positions.get_allocator().arena());
-
-    const Core::Metascript::Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMesh mesh meta '{}': asset is not a map")
-            , PathToString<tchar>(discoveredFile.filePath)
-        );
-        return false;
-    }
-
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        outEntry.virtualPath,
-        scratchArena
-    ))
-        return false;
-
-    if(!ValidateSkinnedMeshAssetFields(discoveredFile, asset))
-        return false;
-    outEntry.meshClass = Core::Mesh::MeshClass::Skinned;
-    return ParseSourceSkinnedMeshMeta(discoveredFile, asset, outEntry, threadPool, scratchArena);
-}
-
-static bool BuildSkinnedMeshAsset(SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
-    Core::Alloc::ScratchArena scratchArena;
-    if(!ReorderSkinnedMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
-        return false;
-    if(!EncodeMeshletRefs(meshEntry, true, s_SkinnedMeshMetaKind))
-        return false;
-
-    outMesh = SkinnedMesh(meshEntry.positions.get_allocator().arena(), meshEntry.virtualPath);
-
-    outMesh.setMeshClass(meshEntry.meshClass);
-    outMesh.setSkeletonJointCount(meshEntry.skeletonJointCount);
-    outMesh.setPayload(
-        Move(meshEntry.positions),
-        Move(meshEntry.normals),
-        Move(meshEntry.tangents),
-        Move(meshEntry.uv0),
-        Move(meshEntry.colors),
-        Move(meshEntry.skin),
-        Move(meshEntry.inverseBindMatrices),
-        Move(meshEntry.meshlets),
-        Move(meshEntry.meshletBounds),
-        Move(meshEntry.meshletPositionRefDeltas),
-        Move(meshEntry.meshletAttributeRefDeltas),
-        Move(meshEntry.meshletLocalVertexRefs),
-        Move(meshEntry.meshletPrimitiveIndices)
-    );
-    return outMesh.validatePayload();
-}
-
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -411,27 +138,8 @@ bool ParseMeshCookMetadata(
     return __hidden_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
 }
 
-bool ParseSkinnedMeshCookMetadata(
-    const Path& assetRoot,
-    const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    const Core::Metascript::Document& doc,
-    SkinnedMeshCookEntry& outEntry,
-    Core::Alloc::ThreadPool& threadPool,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    __hidden_cook::DiscoveredNwbFile discoveredFile;
-    if(!__hidden_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
-        return false;
-    return __hidden_cook::ParseSkinnedMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
-}
-
 bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
     return __hidden_cook::BuildMeshAsset(meshEntry, outMesh);
-}
-
-bool BuildSkinnedMeshAsset(SkinnedMeshCookEntry& meshEntry, SkinnedMesh& outMesh){
-    return __hidden_cook::BuildSkinnedMeshAsset(meshEntry, outMesh);
 }
 
 

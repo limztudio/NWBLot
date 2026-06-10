@@ -55,8 +55,9 @@ private:
     void clearModelRuntime(Core::ECS::EntityID entity);
     [[nodiscard]] bool expandModel(Core::ECS::EntityID owner, const Model& model, ModelRuntimeComponent& runtime);
     [[nodiscard]] bool spawnSkeletonObject(Core::ECS::EntityID owner, const ModelSkeletonObject& object);
-    void spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
+    [[nodiscard]] bool spawnStaticMeshObject(Core::ECS::EntityID owner, const ModelStaticMeshObject& object);
     [[nodiscard]] bool spawnSkinnedMeshObject(Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object);
+    void updateStaticMeshAttachments();
     [[nodiscard]] Core::ECS::EntityID findSpawnedObject(Core::ECS::EntityID owner, Name objectName)const;
 
 
@@ -65,6 +66,7 @@ private:
     Core::ECS::World& m_world;
     Core::Assets::AssetManager& m_assetManager;
     Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena> m_scratchEntities;
+    Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
 };
 
 

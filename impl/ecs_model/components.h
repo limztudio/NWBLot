@@ -9,6 +9,7 @@
 
 #include <core/ecs/entity_id.h>
 #include <core/assets/ref.h>
+#include <impl/assets_skeleton/joint_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +22,7 @@ NWB_IMPL_BEGIN
 
 
 class Model;
+class Skeleton;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,9 +77,23 @@ static_assert(IsTriviallyCopyable_V<ModelObjectComponent>, "ModelObjectComponent
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ModelSkeletonComponent{
+    Core::Assets::AssetRef<Skeleton> skeleton;
+};
+
+static_assert(IsStandardLayout_V<ModelSkeletonComponent>, "ModelSkeletonComponent must stay layout-stable for ECS storage");
+static_assert(IsTriviallyCopyable_V<ModelSkeletonComponent>, "ModelSkeletonComponent must stay cheap to move in dense ECS storage");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct ModelStaticMeshAttachmentComponent{
     Name parentObject = NAME_NONE;
     Name parentJoint = NAME_NONE;
+    Core::ECS::EntityID parentEntity = Core::ECS::ENTITY_ID_INVALID;
+    u32 parentJointIndex = Limit<u32>::s_Max;
+    SkeletonJointMatrix localTransform = MakeIdentitySkeletonJointMatrix();
 };
 
 static_assert(IsStandardLayout_V<ModelStaticMeshAttachmentComponent>, "ModelStaticMeshAttachmentComponent must stay layout-stable for ECS storage");

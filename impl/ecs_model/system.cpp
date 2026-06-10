@@ -13,6 +13,7 @@
 #include <impl/ecs_mesh/components.h>
 #include <impl/ecs_scene/components.h>
 #include <impl/ecs_skeleton/components.h>
+#include <impl/ecs_skeleton/runtime_helpers.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,9 +31,7 @@ namespace __hidden_model_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ApplyObjectTransform(Core::ECS::Entity& entity, const SkeletonJointMatrix& matrix){
-    auto& transform = entity.addComponent<Scene::TransformComponent>();
-
+void ApplyObjectTransform(Scene::TransformComponent& transform, const SkeletonJointMatrix& matrix){
     SIMDVector scale;
     SIMDVector rotation;
     SIMDVector translation;
@@ -42,6 +41,11 @@ void ApplyObjectTransform(Core::ECS::Entity& entity, const SkeletonJointMatrix& 
     StoreFloat(VectorSetW(translation, 0.0f), &transform.position);
     StoreFloat(rotation, &transform.rotation);
     StoreFloat(VectorSetW(scale, 0.0f), &transform.scale);
+}
+
+void ApplyObjectTransform(Core::ECS::Entity& entity, const SkeletonJointMatrix& matrix){
+    auto& transform = entity.addComponent<Scene::TransformComponent>();
+    ApplyObjectTransform(transform, matrix);
 }
 
 void TagObject(
@@ -85,6 +89,15 @@ bool LoadSkeleton(
     return outSkeleton != nullptr;
 }
 
+[[nodiscard]] u32 FindSkeletonJointIndex(const Skeleton& skeleton, const Name jointName){
+    const Skeleton::JointVector& joints = skeleton.joints();
+    for(usize i = 0u; i < joints.size(); ++i){
+        if(joints[i].name == jointName)
+            return static_cast<u32>(i);
+    }
+    return Limit<u32>::s_Max;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -104,10 +117,12 @@ ModelSystem::ModelSystem(
     , m_world(world)
     , m_assetManager(assetManager)
     , m_scratchEntities(arena)
+    , m_scratchJoints(arena)
 {
     readAccess<ModelComponent>();
     writeAccess<ModelRuntimeComponent>();
     writeAccess<ModelObjectComponent>();
+    writeAccess<ModelSkeletonComponent>();
     writeAccess<ModelStaticMeshAttachmentComponent>();
     writeAccess<MeshComponent>();
     writeAccess<SkinnedMeshBindingComponent>();
@@ -127,6 +142,8 @@ void ModelSystem::update(Core::ECS::World& world, const f32 delta){
             ensureModelRuntime(entity, component);
         }
     );
+
+    updateStaticMeshAttachments();
 }
 
 void ModelSystem::clearInvalidSpawnedObjects(){
@@ -221,8 +238,10 @@ bool ModelSystem::expandModel(
             complete = false;
     }
     for(const ModelStaticMeshObject& object : model.staticMeshObjects()){
-        spawnStaticMeshObject(owner, object);
-        ++runtime.objectCount;
+        if(spawnStaticMeshObject(owner, object))
+            ++runtime.objectCount;
+        else
+            complete = false;
     }
     for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects()){
         if(spawnSkinnedMeshObject(owner, object))
@@ -260,10 +279,13 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
         pose.localJoints.push_back(joint.localBindPose);
     }
 
+    auto& skeletonComponent = entity.addComponent<ModelSkeletonComponent>();
+    skeletonComponent.skeleton = object.skeleton;
+
     return true;
 }
 
-void ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
+bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const ModelStaticMeshObject& object){
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(
         entity,
@@ -280,6 +302,45 @@ void ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     auto& attachment = entity.addComponent<ModelStaticMeshAttachmentComponent>();
     attachment.parentObject = object.parentObject;
     attachment.parentJoint = object.parentJoint;
+    attachment.localTransform = object.transform;
+
+    if(object.parentObject){
+        attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
+        if(!attachment.parentEntity.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing parent object '{}'")
+                , StringConvert(object.name.c_str())
+                , StringConvert(object.parentObject.c_str())
+            );
+            return false;
+        }
+    }
+
+    if(object.parentJoint){
+        const ModelSkeletonComponent* skeletonComponent = m_world.tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity);
+        if(!skeletonComponent){
+            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets joint '{}' on a non-skeleton object")
+                , StringConvert(object.name.c_str())
+                , StringConvert(object.parentJoint.c_str())
+            );
+            return false;
+        }
+
+        UniquePtr<Core::Assets::IAsset> loadedAsset;
+        const Skeleton* skeleton = nullptr;
+        if(!__hidden_model_system::LoadSkeleton(m_assetManager, skeletonComponent->skeleton, loadedAsset, skeleton))
+            return false;
+
+        attachment.parentJointIndex = __hidden_model_system::FindSkeletonJointIndex(*skeleton, object.parentJoint);
+        if(attachment.parentJointIndex == Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing joint '{}'")
+                , StringConvert(object.name.c_str())
+                , StringConvert(object.parentJoint.c_str())
+            );
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const ModelSkinnedMeshObject& object){
@@ -306,6 +367,33 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     binding.skin = object.skin;
     binding.skeletonEntity = skeletonEntity;
     return true;
+}
+
+void ModelSystem::updateStaticMeshAttachments(){
+    m_world.view<ModelStaticMeshAttachmentComponent, Scene::TransformComponent>().each(
+        [&](const Core::ECS::EntityID entity, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
+            static_cast<void>(entity);
+            if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max)
+                return;
+
+            const SkeletonPoseComponent* pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
+            if(!pose)
+                return;
+
+            u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+            if(!SkeletonRuntime::BuildJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
+                return;
+            if(attachment.parentJointIndex >= m_scratchJoints.size())
+                return;
+
+            SkeletonJointMatrix worldTransform{};
+            StoreFloat(
+                MatrixMultiply(LoadFloat(m_scratchJoints[attachment.parentJointIndex]), LoadFloat(attachment.localTransform)),
+                &worldTransform
+            );
+            __hidden_model_system::ApplyObjectTransform(transform, worldTransform);
+        }
+    );
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const{

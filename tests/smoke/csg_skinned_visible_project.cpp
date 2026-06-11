@@ -49,7 +49,7 @@ static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible
 static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
 static constexpr Name s_ModelMeshObject("mesh");
-static constexpr f32 s_CameraDistance = 3.25f;
+static constexpr f32 s_CameraDistance = 1.75f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.54f;

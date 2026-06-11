@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <algorithm>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -226,6 +228,141 @@ bool ValidateSplitSkinSource(
     return true;
 }
 
+struct SkeletonOutputData{
+    UtilityVector<ufbx_node*> joints;
+    UtilityVector<JointMatrix> bindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
+    UtilityVector<u16> oldToNewJointIndices;
+};
+
+AString SkeletonSortName(const ufbx_node* node, const usize fallbackIndex){
+    AString name;
+    if(node && node->name.data && node->name.length != 0u)
+        name.assign(node->name.data, node->name.length);
+    if(!name.empty())
+        return name;
+
+    AStringStream out;
+    out << "joint_" << fallbackIndex;
+    return out.str();
+}
+
+bool BuildSkeletonOutputData(
+    const UtilityVector<ufbx_node*>& joints,
+    const UtilityVector<JointMatrix>& bindPoseMatrices,
+    const UtilityVector<JointMatrix>& inverseBindMatrices,
+    SkeletonOutputData& outData
+){
+    outData = {};
+
+    if(joints.size() != bindPoseMatrices.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match bind-pose matrix count"));
+        return false;
+    }
+    if(!inverseBindMatrices.empty() && inverseBindMatrices.size() != joints.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match inverse bind matrix count"));
+        return false;
+    }
+    if(joints.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than 65536 joints"));
+        return false;
+    }
+
+    HashMap<ufbx_node*, usize> sourceJointLookup;
+    sourceJointLookup.reserve(joints.size());
+    UtilityVector<AString> sortNames;
+    sortNames.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        ufbx_node* joint = joints[jointIndex];
+        if(!joint){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
+            return false;
+        }
+        if(sourceJointLookup.find(joint) != sourceJointLookup.end()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
+            return false;
+        }
+        sourceJointLookup.emplace(joint, jointIndex);
+        sortNames.push_back(SkeletonSortName(joint, jointIndex));
+    }
+
+    UtilityVector<u32> parentIndices;
+    parentIndices.resize(joints.size(), s_MissingSourceStreamIndex);
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        const ufbx_node* parent = joints[jointIndex]->parent;
+        if(!parent)
+            continue;
+
+        const auto foundParent = sourceJointLookup.find(const_cast<ufbx_node*>(parent));
+        if(foundParent != sourceJointLookup.end())
+            parentIndices[jointIndex] = static_cast<u32>(foundParent.value());
+    }
+
+    UtilityVector<u32> parentDepths;
+    parentDepths.resize(joints.size(), 0u);
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
+        u32 depth = 0u;
+        u32 parentIndex = parentIndices[jointIndex];
+        for(usize guard = 0u; parentIndex != s_MissingSourceStreamIndex; ++guard){
+            if(guard >= joints.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton hierarchy contains a cycle"));
+                return false;
+            }
+            ++depth;
+            parentIndex = parentIndices[parentIndex];
+        }
+        parentDepths[jointIndex] = depth;
+    }
+
+    UtilityVector<usize> sortedJointIndices;
+    sortedJointIndices.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
+        sortedJointIndices.push_back(jointIndex);
+    std::stable_sort(
+        sortedJointIndices.begin(),
+        sortedJointIndices.end(),
+        [&parentDepths, &sortNames](const usize lhs, const usize rhs){
+            if(parentDepths[lhs] != parentDepths[rhs])
+                return parentDepths[lhs] < parentDepths[rhs];
+            if(sortNames[lhs] != sortNames[rhs])
+                return sortNames[lhs] < sortNames[rhs];
+            return lhs < rhs;
+        }
+    );
+
+    outData.oldToNewJointIndices.resize(joints.size(), 0u);
+    outData.joints.reserve(joints.size());
+    outData.bindPoseMatrices.reserve(bindPoseMatrices.size());
+    outData.inverseBindMatrices.reserve(inverseBindMatrices.size());
+
+    for(const usize oldJointIndex : sortedJointIndices){
+        outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
+        outData.joints.push_back(joints[oldJointIndex]);
+        outData.bindPoseMatrices.push_back(bindPoseMatrices[oldJointIndex]);
+        if(!inverseBindMatrices.empty())
+            outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
+    }
+
+    return true;
+}
+
+bool RemapSkinInfluences(
+    UtilityVector<MeshSkinInfluence>& inOutInfluences,
+    const UtilityVector<u16>& oldToNewJointIndices
+){
+    for(MeshSkinInfluence& influence : inOutInfluences){
+        for(u32 slot = 0u; slot < 4u; ++slot){
+            const u16 oldJointIndex = influence.joint[slot];
+            if(oldJointIndex >= oldToNewJointIndices.size()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: skin influence references out-of-range joint {}"), oldJointIndex);
+                return false;
+            }
+            influence.joint[slot] = oldToNewJointIndices[oldJointIndex];
+        }
+    }
+    return true;
+}
+
 u64 PositionSkinKey(const u32 position, const u32 skin){
     return (static_cast<u64>(position) << 32u) | static_cast<u64>(skin);
 }
@@ -405,6 +542,18 @@ AString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, Utility
     return name;
 }
 
+UtilityVector<AString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& joints){
+    UtilityVector<AString> usedNames;
+    usedNames.reserve(joints.size());
+
+    UtilityVector<AString> names;
+    names.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
+        names.push_back(UniqueNodeName(joints[jointIndex], jointIndex, usedNames));
+
+    return names;
+}
+
 AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     virtualRoot = Trim(Move(virtualRoot));
     if(virtualRoot.empty())
@@ -455,11 +604,22 @@ void WriteSkeletonAssetBody(
     const UtilityVector<JointMatrix>& bindPoseMatrices
 ){
     file << variableName << ".joints = [\n";
-    UtilityVector<AString> usedJointNames;
-    usedJointNames.reserve(joints.size());
+    const UtilityVector<AString> jointNames = BuildUniqueJointNames(joints);
+
+    HashMap<ufbx_node*, usize> jointLookup;
+    jointLookup.reserve(joints.size());
+    for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
+        jointLookup.emplace(joints[jointIndex], jointIndex);
+
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         file << "    {\n";
-        file << "        \"name\": \"" << EscapeMetadataString(UniqueNodeName(joints[jointIndex], jointIndex, usedJointNames)) << "\",\n";
+        file << "        \"name\": \"" << EscapeMetadataString(jointNames[jointIndex]) << "\",\n";
+        if(joints[jointIndex] && joints[jointIndex]->parent){
+            const auto foundParent = jointLookup.find(joints[jointIndex]->parent);
+            if(foundParent != jointLookup.end()){
+                file << "        \"parent\": \"" << EscapeMetadataString(jointNames[foundParent.value()]) << "\",\n";
+            }
+        }
         file << "        \"local_bind_pose\": ";
         WriteJointMatrix(file, bindPoseMatrices[jointIndex], "        ");
         file << ",\n";
@@ -814,9 +974,20 @@ bool WriteNwbAsset(
     if(!__hidden_asset_writer::ValidateSplitSkinSource(mesh, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
         return false;
 
+    __hidden_asset_writer::SkeletonOutputData skeletonOutput;
+    if(!__hidden_asset_writer::BuildSkeletonOutputData(
+        skeletonJoints,
+        skeletonBindPoseMatrices,
+        inverseBindMatrices,
+        skeletonOutput
+    ))
+        return false;
+
     SourceMeshStreams splitMesh;
     UtilityVector<MeshSkinInfluence> positionSkin;
     if(!__hidden_asset_writer::BuildPositionAlignedSkinnedMesh(mesh, splitMesh, positionSkin))
+        return false;
+    if(!__hidden_asset_writer::RemapSkinInfluences(positionSkin, skeletonOutput.oldToNewJointIndices))
         return false;
 
     const Path skeletonPath = packageDirectory / "skeleton.nwb";
@@ -825,24 +996,24 @@ bool WriteNwbAsset(
     const AString skinName = virtualBase + "/skin";
 
     if(assetType == OutputAssetType::Skeleton)
-        return __hidden_asset_writer::WriteSkeletonAsset(outputPath, skeletonJoints, skeletonBindPoseMatrices);
+        return __hidden_asset_writer::WriteSkeletonAsset(outputPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices);
     if(assetType == OutputAssetType::Skin)
-        return __hidden_asset_writer::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, inverseBindMatrices);
+        return __hidden_asset_writer::WriteSkinAsset(outputPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices);
     if(assetType == OutputAssetType::Bunch && !separateAssets)
         return __hidden_asset_writer::WriteAssetBunch(
             outputPath,
             splitMesh,
             &skinName,
             &skeletonName,
-            skeletonJoints,
-            skeletonBindPoseMatrices,
+            skeletonOutput.joints,
+            skeletonOutput.bindPoseMatrices,
             &positionSkin,
-            inverseBindMatrices
+            skeletonOutput.inverseBindMatrices
         );
 
     return __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
-        && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonJoints, skeletonBindPoseMatrices)
-        && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, inverseBindMatrices)
+        && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices)
+        && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices)
         && __hidden_asset_writer::WriteModelAsset(outputPath, meshName, &skinName, &skeletonName)
     ;
 }

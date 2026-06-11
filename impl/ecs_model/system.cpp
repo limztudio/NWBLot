@@ -153,19 +153,6 @@ bool LoadSkeleton(
     return outSkeleton != nullptr;
 }
 
-[[nodiscard]] u32 FindSkeletonJointIndex(const Skeleton& skeleton, const Name jointName){
-    const Skeleton::JointVector& joints = skeleton.joints();
-    for(usize i = 0u; i < joints.size(); ++i){
-        if(joints[i].name == jointName)
-            return static_cast<u32>(i);
-    }
-    return Limit<u32>::s_Max;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -433,8 +420,8 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
             if(!__hidden_model_system::LoadSkeleton(m_assetManager, skeletonComponent->skeleton, loadedAsset, skeleton))
                 return false;
 
-            attachment.parentJointIndex = __hidden_model_system::FindSkeletonJointIndex(*skeleton, object.parentJoint);
-            if(attachment.parentJointIndex == Limit<u32>::s_Max){
+            attachment.parentJointIndex = skeleton->findJointIndex(object.parentJoint);
+            if(attachment.parentJointIndex == s_SkeletonInvalidJointIndex){
                 NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing joint '{}' on skeleton object '{}'")
                     , StringConvert(object.name.c_str())
                     , StringConvert(object.parentJoint.c_str())

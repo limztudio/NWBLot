@@ -76,11 +76,17 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     if(!skeleton.validatePayload())
         return false;
 
+    Core::Assets::AssetVector<NameHash> jointNameHashes(outBinary.get_allocator().arena());
+    jointNameHashes.resize(skeleton.joints().size());
+    for(const auto& jointLookup : skeleton.jointIndices())
+        jointNameHashes[jointLookup.second] = jointLookup.first.hash();
+
     Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(outBinary.get_allocator().arena());
     jointBinaries.reserve(skeleton.joints().size());
-    for(const SkeletonJoint& joint : skeleton.joints()){
+    for(usize jointIndex = 0u; jointIndex < skeleton.joints().size(); ++jointIndex){
+        const SkeletonJoint& joint = skeleton.joints()[jointIndex];
         SkeletonBinaryPayload::JointBinary jointBinary;
-        jointBinary.nameHash = joint.name.hash();
+        jointBinary.nameHash = jointNameHashes[jointIndex];
         jointBinary.parentIndex = joint.parentIndex;
         jointBinary.localBindPose = joint.localBindPose;
         jointBinaries.push_back(jointBinary);
@@ -238,18 +244,32 @@ static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
     return false;
 }
 
-[[nodiscard]] bool BuildSkeletonJointPayload(const SkeletonCookEntry& skeletonEntry, Skeleton::JointVector& outJoints){
+[[nodiscard]] bool BuildSkeletonJointPayload(
+    const SkeletonCookEntry& skeletonEntry,
+    Skeleton::JointVector& outJoints,
+    Skeleton::JointIndexMap& outJointIndices
+){
     outJoints.clear();
+    outJointIndices.clear();
     outJoints.reserve(skeletonEntry.joints.size());
 
     for(usize jointIndex = 0u; jointIndex < skeletonEntry.joints.size(); ++jointIndex){
         const SkeletonCookJoint& cookJoint = skeletonEntry.joints[jointIndex];
 
         SkeletonJoint joint;
-        joint.name = cookJoint.name;
         joint.localBindPose = cookJoint.localBindPose;
         if(!ResolveParentIndex(skeletonEntry, jointIndex, cookJoint.parent, joint.parentIndex)){
             outJoints.clear();
+            outJointIndices.clear();
+            return false;
+        }
+        if(!outJointIndices.emplace(cookJoint.name, static_cast<u32>(outJoints.size())).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': duplicate joint name '{}'")
+                , StringConvert(skeletonEntry.virtualPath.c_str())
+                , StringConvert(cookJoint.name.c_str())
+            );
+            outJoints.clear();
+            outJointIndices.clear();
             return false;
         }
 
@@ -323,9 +343,15 @@ bool ParseSkeletonCookMetadata(
 
     Skeleton testSkeleton(outEntry.joints.get_allocator().arena(), outEntry.virtualPath);
     Skeleton::JointVector testJoints(outEntry.joints.get_allocator().arena());
-    if(!BuildSkeletonJointPayload(outEntry, testJoints))
+    Skeleton::JointIndexMap testJointIndices(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        outEntry.joints.get_allocator().arena()
+    );
+    if(!BuildSkeletonJointPayload(outEntry, testJoints, testJointIndices))
         return false;
-    testSkeleton.setJoints(Move(testJoints));
+    testSkeleton.setJoints(Move(testJoints), Move(testJointIndices));
     return testSkeleton.validatePayload();
 }
 
@@ -347,10 +373,16 @@ bool BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Skeleton& outSke
     outSkeleton = Skeleton(skeletonEntry.joints.get_allocator().arena(), skeletonEntry.virtualPath);
 
     Skeleton::JointVector joints(skeletonEntry.joints.get_allocator().arena());
-    if(!__hidden_skeleton_cook::BuildSkeletonJointPayload(skeletonEntry, joints))
+    Skeleton::JointIndexMap jointIndices(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        skeletonEntry.joints.get_allocator().arena()
+    );
+    if(!__hidden_skeleton_cook::BuildSkeletonJointPayload(skeletonEntry, joints, jointIndices))
         return false;
 
-    outSkeleton.setJoints(Move(joints));
+    outSkeleton.setJoints(Move(joints), Move(jointIndices));
     return outSkeleton.validatePayload();
 }
 

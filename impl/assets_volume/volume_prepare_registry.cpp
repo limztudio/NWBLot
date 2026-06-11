@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_extension.h"
+#include "volume_prepare_registry.h"
 
 #include <core/common/log.h>
 
@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_asset_volume_cook_extension{
+namespace __hidden_asset_volume_prepare_registry{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,9 +76,9 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
     if(function == nullptr)
         return;
 
-    auto& queue = __hidden_asset_volume_cook_extension::QueryAutoPrepareQueue();
+    auto& queue = __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue();
     ScopedLock lock(queue.mutex);
-    if(!__hidden_asset_volume_cook_extension::ContainsPrepareFunction(queue.functions, function))
+    if(!__hidden_asset_volume_prepare_registry::ContainsPrepareFunction(queue.functions, function))
         queue.functions.push_back(function);
 }
 
@@ -86,7 +86,7 @@ bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& contex
     Core::Alloc::ScratchArena scratchArena;
     Vector<AssetVolumePrepareFunction, Core::Alloc::ScratchArena> functions{scratchArena};
     {
-        auto& queue = __hidden_asset_volume_cook_extension::QueryAutoPrepareQueue();
+        auto& queue = __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue();
         ScopedLock lock(queue.mutex);
         AssignTriviallyCopyableVector(functions, queue.functions);
     }

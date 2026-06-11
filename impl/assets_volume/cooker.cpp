@@ -11,8 +11,8 @@
 #include "cooker.h"
 
 #include "asset_volume_writer.h"
-#include "cook_extension.h"
 #include "cook_paths.h"
+#include "volume_prepare_registry.h"
 
 #include <core/assets/auto_registration.h>
 #include <core/assets/cook_metadata.h>

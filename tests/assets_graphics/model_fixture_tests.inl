@@ -138,6 +138,17 @@ static const NWB::Impl::ModelSkinnedMeshObject* FindSkinnedModelObject(
     return nullptr;
 }
 
+static const NWB::Impl::ModelStaticMeshObject* FindStaticModelObject(
+    const NWB::Impl::Model& model,
+    const Name objectName
+){
+    for(const NWB::Impl::ModelStaticMeshObject& object : model.staticMeshObjects()){
+        if(object.name == objectName)
+            return &object;
+    }
+    return nullptr;
+}
+
 static bool LoadCookedModel(
     TestContext& context,
     TestArena& testArena,
@@ -212,6 +223,90 @@ static void TestModelBunchLocalReferencesAndWrapperExpansion(TestContext& contex
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail->mesh.name() == expectedMesh);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail->skin.name() == expectedSkin);
         NWB_ASSETS_GRAPHICS_TEST_CHECK(context, detail->skeletonObject == Name("rig"));
+    }
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
+}
+
+static AString BuildStaticAttachmentModelBunchFixture(){
+    AString meta;
+    meta.reserve(4096u);
+    AppendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AppendTestMeta(meta, s_ModelFixtureSkeletonMeta);
+    AppendTestMeta(meta, R"(model model;
+
+model.skeletons = {
+    "rig": skeleton,
+};
+
+model.static_meshes = {
+    "tool": {
+        "mesh": mesh,
+        "parent_object": "rig",
+        "parent_joint": "hand",
+        "transform": [
+            [1, 0, 0, 0.5],
+            [0, 1, 0, 0.125],
+            [0, 0, 1, -0.25],
+        ],
+    },
+};
+
+asset_bunch bunch = [
+    mesh,
+    skeleton,
+    model,
+];
+)");
+    return meta;
+}
+
+static void TestModelBunchStaticMeshAttachmentToNamedJoint(TestContext& context){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root;
+    Path outputDirectory;
+    const AString meta = BuildStaticAttachmentModelBunchFixture();
+    const bool cooked = CookSingleGraphicsMeta(
+        AStringView(meta.data(), meta.size()),
+        "model_bunch_static_attachment",
+        "characters",
+        "model_attachment_fixture.nwb",
+        testArena,
+        root,
+        outputDirectory
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, cooked);
+    if(!cooked)
+        return;
+
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    if(!LoadCookedModel(
+        context,
+        testArena,
+        outputDirectory,
+        Name("project/characters/model_attachment_fixture/model"),
+        loadedAsset
+    ))
+        return;
+
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedAsset->assetType() == NWB::Impl::Model::AssetTypeName());
+    const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skeletonObjects().size() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.staticMeshObjects().size() == 1u);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, model.skinnedMeshObjects().empty());
+
+    const NWB::Impl::ModelStaticMeshObject* tool = FindStaticModelObject(model, Name("tool"));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool != nullptr);
+    if(tool){
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->mesh.name() == Name("project/characters/model_attachment_fixture/mesh"));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !tool->material.valid());
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->parentObject == Name("rig"));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->parentJoint == Name("hand"));
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->transform._14 == 0.5f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->transform._24 == 0.125f);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, tool->transform._34 == -0.25f);
     }
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 0u);
 }

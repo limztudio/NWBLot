@@ -1503,6 +1503,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestProjectCookEntryDocumentCook(context);
     __hidden_tests::TestProjectCookEntryAssetBunchCook(context);
     __hidden_tests::TestModelBunchLocalReferencesAndWrapperExpansion(context);
+    __hidden_tests::TestModelBunchStaticMeshAttachmentToNamedJoint(context);
     __hidden_tests::TestModelBunchRejectsDuplicateLocalReference(context);
     __hidden_tests::TestModelBunchRejectsMissingLocalReference(context);
     __hidden_tests::TestMeshCookerTypedStreams(context);

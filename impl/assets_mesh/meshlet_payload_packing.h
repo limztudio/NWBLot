@@ -136,28 +136,33 @@ namespace MeshletRefDeltaWidth{
     return static_cast<u32>(Saturate(value) * 255.0f);
 }
 
+[[nodiscard]] inline SIMDVector FoldMeshletConeOctAxis(SIMDVector axis){
+    if(VectorGetZ(axis) >= 0.0f)
+        return axis;
+
+    const SIMDVector absXY = VectorAndInt(VectorAbs(axis), s_SIMDMaskXY);
+    const SIMDVector foldedMagnitude = VectorSubtract(s_SIMDOne, VectorSwizzle<1, 0, 2, 3>(absXY));
+    const SIMDVector foldedSign = VectorSelect(
+        s_SIMDNegativeOne,
+        s_SIMDOne,
+        VectorGreaterOrEqual(axis, VectorZero())
+    );
+    const SIMDVector foldedXY = VectorMultiply(foldedMagnitude, foldedSign);
+    return VectorSelect(axis, foldedXY, s_SIMDMaskXY);
+}
+
 [[nodiscard]] inline u32 PackMeshletConeOct16(const SIMDVector axis){
-    f32 x = VectorGetX(axis);
-    f32 y = VectorGetY(axis);
-    f32 z = VectorGetZ(axis);
-    const f32 length = Abs(x) + Abs(y) + Abs(z);
+    SIMDVector octAxis = VectorSetW(axis, 0.0f);
+    const SIMDVector lengthVector = VectorSum(VectorAbs(octAxis));
+    const f32 length = VectorGetX(lengthVector);
     if(!IsFinite(length) || length <= s_MeshletConeAxisLengthEpsilon)
         return s_MeshletConeAxisFallback;
 
-    const f32 invLength = 1.0f / length;
-    x *= invLength;
-    y *= invLength;
-    z *= invLength;
-    if(z < 0.0f){
-        const f32 foldedX = (1.0f - Abs(y)) * (x < 0.0f ? -1.0f : 1.0f);
-        const f32 foldedY = (1.0f - Abs(x)) * (y < 0.0f ? -1.0f : 1.0f);
-        x = foldedX;
-        y = foldedY;
-    }
+    octAxis = FoldMeshletConeOctAxis(VectorMultiply(octAxis, VectorReciprocal(lengthVector)));
 
     return
-        (PackMeshletConeUnorm8(x * 0.5f + 0.5f) << s_MeshletConeAxisXShift)
-        | (PackMeshletConeUnorm8(y * 0.5f + 0.5f) << s_MeshletConeAxisYShift)
+        (PackMeshletConeUnorm8(VectorGetX(octAxis) * 0.5f + 0.5f) << s_MeshletConeAxisXShift)
+        | (PackMeshletConeUnorm8(VectorGetY(octAxis) * 0.5f + 0.5f) << s_MeshletConeAxisYShift)
     ;
 }
 
@@ -166,17 +171,14 @@ namespace MeshletRefDeltaWidth{
 }
 
 [[nodiscard]] inline SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked){
-    f32 x = UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * 2.0f - 1.0f;
-    f32 y = UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * 2.0f - 1.0f;
-    f32 z = 1.0f - Abs(x) - Abs(y);
-    if(z < 0.0f){
-        const f32 foldedX = (1.0f - Abs(y)) * (x < 0.0f ? -1.0f : 1.0f);
-        const f32 foldedY = (1.0f - Abs(x)) * (y < 0.0f ? -1.0f : 1.0f);
-        x = foldedX;
-        y = foldedY;
-    }
-
-    const SIMDVector axis = VectorSet(x, y, z, 0.0f);
+    SIMDVector axis = VectorSet(
+        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * 2.0f - 1.0f,
+        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * 2.0f - 1.0f,
+        0.0f,
+        0.0f
+    );
+    axis = VectorSelect(axis, VectorSubtract(s_SIMDOne, VectorSum(VectorAbs(axis))), s_SIMDMaskZ);
+    axis = FoldMeshletConeOctAxis(axis);
     return Vector3NormalizeOr(
         axis,
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f),

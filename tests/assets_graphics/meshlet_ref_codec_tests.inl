@@ -116,6 +116,31 @@ static void TestMeshletRefEncodingRoundTrip(TestContext& context){
     }
 }
 
+static void TestMeshletConeOctPackingRoundTrip(TestContext& context){
+    const u32 centeredPacked =
+        (128u << NWB::Impl::s_MeshletConeAxisXShift)
+        | (128u << NWB::Impl::s_MeshletConeAxisYShift);
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::PackMeshletConeOct16(VectorSet(0.0f, 0.0f, 1.0f, 0.0f)) == centeredPacked
+    );
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(
+        context,
+        NWB::Impl::PackMeshletConeOct16(VectorZero()) == NWB::Impl::s_MeshletConeAxisFallback
+    );
+
+    const SIMDVector axes[] = {
+        Vector3Normalize(VectorSet(0.25f, -0.50f, -0.75f, 0.0f)),
+        Vector3Normalize(VectorSet(-0.60f, 0.35f, -0.45f, 0.0f)),
+        Vector3Normalize(VectorSet(0.35f, 0.40f, 0.85f, 0.0f)),
+    };
+    for(const SIMDVector axis : axes){
+        const u32 packed = NWB::Impl::PackMeshletConeOct16(axis);
+        const SIMDVector unpacked = NWB::Impl::UnpackMeshletConeOct16Axis(packed);
+        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, VectorGetX(Vector3Dot(axis, unpacked)) > 0.999f);
+        if(VectorGetZ(axis) < 0.0f)
+            NWB_ASSETS_GRAPHICS_TEST_CHECK(context, VectorGetZ(unpacked) < 0.0f);
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -1485,6 +1485,7 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMeshCodecRoundTrip(context);
     __hidden_tests::TestMeshletRefEncodingWidthRules(context);
     __hidden_tests::TestMeshletRefEncodingRoundTrip(context);
+    __hidden_tests::TestMeshletConeOctPackingRoundTrip(context);
     __hidden_tests::TestShaderArchiveVariantLookupIsExact(context);
     __hidden_tests::TestSpirvEntryPointLookup(context);
     __hidden_tests::TestShaderMetadataRejectsDefaultVariantAlias(context);

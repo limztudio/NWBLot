@@ -69,21 +69,22 @@ static_assert(
 ){
     const SIMDVector uvDelta1 = VectorSubtract(uv1, uv0);
     const SIMDVector uvDelta2 = VectorSubtract(uv2, uv0);
-    const f32 du1 = VectorGetX(uvDelta1);
-    const f32 dv1 = VectorGetY(uvDelta1);
-    const f32 du2 = VectorGetX(uvDelta2);
-    const f32 dv2 = VectorGetY(uvDelta2);
-    const f32 determinant = (du1 * dv2) - (dv1 * du2);
+    const SIMDVector determinantVector = Vector2Cross(uvDelta1, uvDelta2);
+    const f32 determinant = VectorGetX(determinantVector);
     if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
         return false;
 
-    const f32 inverseDeterminant = 1.0f / determinant;
-    outTangent = VectorScale(
-        VectorSubtract(VectorScale(edge01, dv2), VectorScale(edge02, dv1)),
+    const SIMDVector du1 = VectorSplatX(uvDelta1);
+    const SIMDVector dv1 = VectorSplatY(uvDelta1);
+    const SIMDVector du2 = VectorSplatX(uvDelta2);
+    const SIMDVector dv2 = VectorSplatY(uvDelta2);
+    const SIMDVector inverseDeterminant = VectorReciprocal(determinantVector);
+    outTangent = VectorMultiply(
+        VectorSubtract(VectorMultiply(edge01, dv2), VectorMultiply(edge02, dv1)),
         inverseDeterminant
     );
-    outBitangent = VectorScale(
-        VectorSubtract(VectorScale(edge02, du1), VectorScale(edge01, du2)),
+    outBitangent = VectorMultiply(
+        VectorSubtract(VectorMultiply(edge02, du1), VectorMultiply(edge01, du2)),
         inverseDeterminant
     );
     return FrameValidDirection(outTangent) && FrameValidDirection(outBitangent);

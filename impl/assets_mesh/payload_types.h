@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "skinned_types.h"
+#include "skin_types.h"
 
 #include <impl/assets/graphics/mesh/meshlet_constants.h>
 

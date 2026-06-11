@@ -10,7 +10,7 @@
 
 #include "skin_cook.h"
 #include "skin_binary_payload.h"
-#include "skinned_validation.h"
+#include "skin_validation.h"
 
 #include <impl/assets_skeleton/cook_matrix.h>
 
@@ -309,7 +309,7 @@ template<usize ComponentCount>
         influence.weight[2u],
         influence.weight[3u]
     );
-    if(!SkinnedMeshValidation::FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
+    if(!SkinValidation::FiniteVector(weights, 0xFu) || !Vector4GreaterOrEqual(weights, VectorZero())){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
@@ -318,7 +318,7 @@ template<usize ComponentCount>
     }
 
     const f32 weightSum = VectorGetX(Vector4Dot(weights, s_SIMDOne));
-    if(!IsFinite(weightSum) || weightSum <= SkinnedMeshValidation::s_Epsilon){
+    if(!IsFinite(weightSum) || weightSum <= SkinValidation::s_Epsilon){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
@@ -332,7 +332,7 @@ template<usize ComponentCount>
     influence.weight[2u] = VectorGetZ(normalizedWeights);
     influence.weight[3u] = VectorGetW(normalizedWeights);
 
-    return SkinnedMeshValidation::ValidSkinInfluenceWeights(normalizedWeights);
+    return SkinValidation::ValidSkinInfluenceWeights(normalizedWeights);
 }
 
 [[nodiscard]] bool ParseSkinInfluence(
@@ -435,7 +435,7 @@ template<usize ComponentCount>
         ))
             return false;
 
-        if(!SkinnedMeshValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
+        if(!SkinValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex

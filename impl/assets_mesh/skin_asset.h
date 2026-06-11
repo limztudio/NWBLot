@@ -6,7 +6,7 @@
 
 
 #include "asset.h"
-#include "skinned_types.h"
+#include "skin_types.h"
 
 #include <impl/assets_skeleton/asset.h>
 

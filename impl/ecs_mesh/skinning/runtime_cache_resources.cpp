@@ -10,7 +10,7 @@
 #include <core/graphics/module.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/payload_validation.h>
-#include <impl/assets_mesh/skinned_validation.h>
+#include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
@@ -97,7 +97,7 @@ using MeshPayloadValidation::CountFitsU32;
         );
         return false;
     }
-    if(!SkinnedMeshValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
+    if(!SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' inverse bind matrices are invalid")
             , TStringView(sourceText)
         );
@@ -114,8 +114,8 @@ using MeshPayloadValidation::CountFitsU32;
         );
         u32 failedJoint = 0u;
         if(
-            SkinnedMeshValidation::ValidSkinInfluenceWeights(weights)
-            && SkinnedMeshValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount, failedJoint)
+            SkinValidation::ValidSkinInfluenceWeights(weights)
+            && SkinValidation::SkinInfluenceFitsSkeleton(skin, instance.skeletonJointCount, failedJoint)
         )
             continue;
 

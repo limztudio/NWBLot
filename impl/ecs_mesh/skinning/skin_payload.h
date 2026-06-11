@@ -8,7 +8,7 @@
 #include "runtime_instance.h"
 
 #include <impl/assets/graphics/skinned_mesh/constants.h>
-#include <impl/assets_mesh/skinned_validation.h>
+#include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 #include <core/common/log.h>
 
@@ -78,7 +78,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         );
         return false;
     }
-    if(!SkinnedMeshValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
+    if(!SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' inverse bind matrices are invalid")
             , instance.handle.value
         );
@@ -170,7 +170,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
             sourceSkin.weight[2u],
             sourceSkin.weight[3u]
         );
-        if(!SkinnedMeshValidation::ValidSkinInfluenceWeights(weights)){
+        if(!SkinValidation::ValidSkinInfluenceWeights(weights)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' vertex {} has invalid skin weights")
                 , instance.handle.value
                 , vertexIndex
@@ -180,7 +180,7 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
 
         u32 failedSkeletonJoint = 0u;
         if(
-            !SkinnedMeshValidation::SkinInfluenceFitsSkeleton(
+            !SkinValidation::SkinInfluenceFitsSkeleton(
                 sourceSkin,
                 instance.skeletonJointCount,
                 failedSkeletonJoint

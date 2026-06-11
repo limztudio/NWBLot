@@ -259,15 +259,6 @@ static bool FindMaterialBinaryTypedLayoutOffsets(
 
 #endif
 
-using TestPositionStream = NWB::Core::Assets::AssetVector<Float3U>;
-using TestHalf4Stream = NWB::Core::Assets::AssetVector<Half4U>;
-using TestUv0Stream = NWB::Core::Assets::AssetVector<Float2U>;
-using TestMeshletStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>;
-using TestMeshletBoundsStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletBounds>;
-using TestMeshletRefDeltaStream = NWB::Core::Assets::AssetVector<u8>;
-using TestMeshletLocalVertexRefStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletLocalVertexRef>;
-using TestMeshletPrimitiveIndexStream = NWB::Core::Assets::AssetVector<u8>;
-
 static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     NWB::Impl::Mesh mesh(testArena.arena, Name("tests/meshes/minimal_mesh"));
 

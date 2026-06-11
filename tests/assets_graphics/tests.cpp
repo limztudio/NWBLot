@@ -65,14 +65,6 @@ static NWB::Core::Assets::AssetVector<T> MakeAssetVector(TestArena& testArena){
     return NWB::Core::Assets::AssetVector<T>(testArena.arena);
 }
 
-template<typename SourceVector>
-static auto MakeAssetVectorFrom(TestArena& testArena, const SourceVector& source){
-    using ValueType = typename SourceVector::value_type;
-    auto output = MakeAssetVector<ValueType>(testArena);
-    output.insert(output.end(), source.begin(), source.end());
-    return output;
-}
-
 static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena){
     return NWB::Core::Assets::AssetBytes(testArena.arena);
 }

@@ -1,14 +1,11 @@
 nwb_declare_static_library(nwb_assets_mesh)
 target_sources(nwb_assets_mesh PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/skinned_runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skin_runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skin_asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/skin_binary_payload.h"
-    "${CMAKE_CURRENT_LIST_DIR}/skinned_asset.h"
-    "${CMAKE_CURRENT_LIST_DIR}/skinned_binary_payload.h"
-    "${CMAKE_CURRENT_LIST_DIR}/skinned_types.h"
-    "${CMAKE_CURRENT_LIST_DIR}/skinned_validation.h"
+    "${CMAKE_CURRENT_LIST_DIR}/skin_types.h"
+    "${CMAKE_CURRENT_LIST_DIR}/skin_validation.h"
     "${CMAKE_CURRENT_LIST_DIR}/geometry_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/payload_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/meshlet_payload_packing.h"
@@ -31,19 +28,15 @@ target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_skeleton nwb_
 if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_mesh_cook)
     target_sources(nwb_assets_mesh_cook PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/skinned_runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/skin_runtime.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/skinned_cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/skin_cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/skin_asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/skin_cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/skin_binary_payload.h"
-        "${CMAKE_CURRENT_LIST_DIR}/skinned_asset.h"
-        "${CMAKE_CURRENT_LIST_DIR}/skinned_binary_payload.h"
-        "${CMAKE_CURRENT_LIST_DIR}/skinned_types.h"
-        "${CMAKE_CURRENT_LIST_DIR}/skinned_validation.h"
+        "${CMAKE_CURRENT_LIST_DIR}/skin_types.h"
+        "${CMAKE_CURRENT_LIST_DIR}/skin_validation.h"
         "${CMAKE_CURRENT_LIST_DIR}/geometry_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/payload_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/meshlet_payload_packing.h"

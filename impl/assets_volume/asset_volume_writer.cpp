@@ -78,6 +78,44 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
     return true;
 }
 
+class AssetVolumeCookedAssetWriter final : public Core::Assets::ICookedAssetWriter{
+public:
+    AssetVolumeCookedAssetWriter(Core::Assets::AssetArena& arena, Core::Filesystem::VolumeSession& volumeSession)
+        : m_volumeSession(volumeSession)
+        , m_scratchBinary(arena)
+    {}
+
+public:
+    virtual bool writeCookedAsset(
+        const tchar* assetKind,
+        const Name& virtualPath,
+        const Core::Assets::IAsset& asset,
+        const Core::Assets::IAssetCodec& codec
+    ) override{
+        m_scratchBinary.clear();
+        if(!codec.serialize(asset, m_scratchBinary)){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize {} '{}'")
+                , assetKind
+                , StringConvert(virtualPath.c_str())
+            );
+            return false;
+        }
+
+        if(m_volumeSession.pushDataDeferred(virtualPath, m_scratchBinary))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push {} '{}'")
+            , assetKind
+            , StringConvert(virtualPath.c_str())
+        );
+        return false;
+    }
+
+private:
+    Core::Filesystem::VolumeSession& m_volumeSession;
+    Core::Assets::AssetBytes m_scratchBinary;
+};
+
 };
 
 
@@ -147,8 +185,9 @@ bool WriteAssetVolume(
                 return false;
         }
 
-        CookEntryWriteContext cookEntryWriteContext{
-            volumeSession,
+        __hidden_asset_volume_writer::AssetVolumeCookedAssetWriter cookedAssetWriter(arena, volumeSession);
+        Core::Assets::CookEntryWriteContext cookEntryWriteContext{
+            cookedAssetWriter,
             seenVirtualPathHashes
         };
         if(!parsedMetadata.entryRegistry.writeAll(cookEntryWriteContext))

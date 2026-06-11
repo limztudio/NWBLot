@@ -11,7 +11,7 @@
 #include "cook.h"
 #include "skin_cook.h"
 
-#include <impl/assets_volume/cook_entry_registry.h>
+#include <core/assets/cook_entry_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +35,7 @@ static bool ParseMeshDocument(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseMeshCookMetadata(
         assetRoot,
@@ -53,7 +53,7 @@ static bool ParseMeshValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseMeshCookMetadata(
         virtualPath,
@@ -79,7 +79,7 @@ static bool ParseSkinDocument(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     SkinCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkinCookMetadata(
         assetRoot,
@@ -96,7 +96,7 @@ static bool ParseSkinValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     SkinCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkinCookMetadata(
         virtualPath,
@@ -115,7 +115,7 @@ static bool BuildSkinCookedAsset(SkinCookEntry& entry, Skin& outAsset){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool RegisterMeshCookEntries(AssetsVolumeCookDetail::CookEntryRegistry& registry){
+static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<MeshCookEntry, Mesh, MeshAssetCodec>(
         Mesh::AssetTypeName(),
         NWB_TEXT("mesh"),
@@ -137,7 +137,7 @@ static bool RegisterMeshCookEntries(AssetsVolumeCookDetail::CookEntryRegistry& r
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsVolumeCookDetail::CookEntryAutoRegistrar s_MeshCookEntryRegistrar(&RegisterMeshCookEntries);
+Core::Assets::CookEntryAutoRegistrar s_MeshCookEntryRegistrar(&RegisterMeshCookEntries);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

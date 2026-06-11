@@ -10,7 +10,7 @@
 
 #include "cook.h"
 
-#include <impl/assets_volume/cook_entry_registry.h>
+#include <core/assets/cook_entry_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ static bool ParseModelDocument(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     ModelCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseModelCookMetadata(
         assetRoot,
@@ -51,7 +51,7 @@ static bool ParseModelValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     ModelCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseModelCookMetadata(
         virtualPath,
@@ -66,7 +66,7 @@ static bool BuildModelCookedAsset(ModelCookEntry& entry, Model& outAsset){
     return BuildModelAsset(entry, outAsset);
 }
 
-static bool RegisterModelCookEntry(AssetsVolumeCookDetail::CookEntryRegistry& registry){
+static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<ModelCookEntry, Model, ModelAssetCodec>(
         Model::AssetTypeName(),
         NWB_TEXT("model"),
@@ -80,7 +80,7 @@ static bool RegisterModelCookEntry(AssetsVolumeCookDetail::CookEntryRegistry& re
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsVolumeCookDetail::CookEntryAutoRegistrar s_ModelCookEntryRegistrar(&RegisterModelCookEntry);
+Core::Assets::CookEntryAutoRegistrar s_ModelCookEntryRegistrar(&RegisterModelCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

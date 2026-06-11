@@ -14,7 +14,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook_entry_registry.h"
+#include "../global.h"
+
+#include <core/assets/cook_entry_registry.h>
 
 #include <core/alloc/arena_object.h>
 #include <core/alloc/scratch.h>
@@ -39,8 +41,18 @@ inline constexpr Name s_IncludeAssetTypeName("include");
 inline constexpr AStringView s_AssetVolumeName = "graphics";
 inline constexpr AStringView s_AssetVolumeCookerLogPrefix = "AssetVolumeCooker";
 
-using ScratchArena = Core::Alloc::ScratchArena;
-using ScratchString = AString<ScratchArena>;
+using CookArena = Core::Assets::CookArena;
+using CookString = Core::Assets::CookString;
+template<typename T>
+using CookVector = Core::Assets::CookVector<T>;
+template<typename T, typename V>
+using CookMap = Core::Assets::CookMap<T, V>;
+template<typename T>
+using CookHashSet = Core::Assets::CookHashSet<T>;
+using ScratchArena = Core::Assets::ScratchArena;
+using ScratchString = Core::Assets::ScratchString;
+using CookEntryParseContext = Core::Assets::CookEntryParseContext;
+using CookEntryPathHashSet = Core::Assets::CookEntryPathHashSet;
 using StagedVolumePaths = StagedDirectoryPaths;
 using VirtualPathHashSet = CookEntryPathHashSet;
 using ParsedMetadataExtensionMap = CookMap<Name, void*>;
@@ -79,7 +91,7 @@ using DiscoveredBindFileVector = CookVector<DiscoveredNwbFile>;
 
 struct ParsedAssetMetadata{
     CookArena& arena;
-    CookEntryRegistry entryRegistry;
+    Core::Assets::CookEntryRegistry entryRegistry;
     ParsedMetadataExtensionMap extensions;
 
     explicit ParsedAssetMetadata(CookArena& arena)

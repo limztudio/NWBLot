@@ -10,7 +10,7 @@
 
 #include "cook.h"
 
-#include <impl/assets_volume/cook_entry_registry.h>
+#include <core/assets/cook_entry_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ static bool ParseMaterialDocument(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MaterialCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseMaterialCookMetadata(
         assetRoot,
@@ -50,7 +50,7 @@ static bool BuildMaterialCookedAsset(MaterialCookEntry& entry, Material& outAsse
     return BuildMaterialAsset(entry, outAsset);
 }
 
-static bool RegisterMaterialCookEntry(AssetsVolumeCookDetail::CookEntryRegistry& registry){
+static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<MaterialCookEntry, Material, MaterialAssetCodec>(
         Material::AssetTypeName(),
         NWB_TEXT("material"),
@@ -65,7 +65,7 @@ static bool RegisterMaterialCookEntry(AssetsVolumeCookDetail::CookEntryRegistry&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsVolumeCookDetail::CookEntryAutoRegistrar s_MaterialCookEntryRegistrar(&RegisterMaterialCookEntry);
+Core::Assets::CookEntryAutoRegistrar s_MaterialCookEntryRegistrar(&RegisterMaterialCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

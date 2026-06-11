@@ -14,3 +14,13 @@ target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/manager.h"
 )
 target_link_libraries(nwb_assets PUBLIC nwb_common)
+
+if(NWB_BUILD_RESOURCE_COOKER)
+    nwb_declare_static_library(nwb_assets_cook)
+    target_sources(nwb_assets_cook PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.h"
+    )
+    target_link_libraries(nwb_assets_cook PUBLIC nwb_assets nwb_metascript nwb_filesystem)
+    target_compile_definitions(nwb_assets_cook PRIVATE NWB_COOK=1)
+endif()

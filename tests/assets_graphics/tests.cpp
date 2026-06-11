@@ -8,7 +8,7 @@
 #include <impl/assets_model/asset.h>
 #include <impl/assets_bunch/cook.h>
 #include <impl/assets_volume/cooker.h>
-#include <impl/assets_volume/cook_entry_registry.h>
+#include <core/assets/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/cook.h>

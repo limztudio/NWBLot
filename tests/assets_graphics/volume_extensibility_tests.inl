@@ -52,7 +52,7 @@ struct ProjectProbeCookEntry{
     Name virtualPath = NAME_NONE;
     u32 marker = 0u;
 
-    explicit ProjectProbeCookEntry(NWB::Impl::ShaderCook::CookArena&){
+    explicit ProjectProbeCookEntry(NWB::Core::Assets::CookArena&){
     }
 };
 
@@ -65,7 +65,7 @@ static bool ParseProjectProbeDocument(
     const Path& nwbFilePath,
     const NWB::Core::Metascript::Document&,
     ProjectProbeCookEntry& outEntry,
-    NWB::Impl::AssetsVolumeCookDetail::CookEntryParseContext& context
+    NWB::Core::Assets::CookEntryParseContext& context
 ){
     outEntry = ProjectProbeCookEntry(context.cookArena);
     outEntry.marker = s_ProjectProbeDocumentMarker;
@@ -83,7 +83,7 @@ static bool ParseProjectProbeValue(
     const Path&,
     const NWB::Core::Metascript::Value&,
     ProjectProbeCookEntry& outEntry,
-    NWB::Impl::AssetsVolumeCookDetail::CookEntryParseContext& context
+    NWB::Core::Assets::CookEntryParseContext& context
 ){
     outEntry = ProjectProbeCookEntry(context.cookArena);
     outEntry.virtualPath = virtualPath;
@@ -97,7 +97,7 @@ static bool BuildProjectProbeAsset(ProjectProbeCookEntry& entry, ProjectProbeAss
     return true;
 }
 
-static bool RegisterProjectProbeCookEntry(NWB::Impl::AssetsVolumeCookDetail::CookEntryRegistry& registry){
+static bool RegisterProjectProbeCookEntry(NWB::Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<ProjectProbeCookEntry, ProjectProbeAsset, ProjectProbeAssetCodec>(
         ProjectProbeAsset::AssetTypeName(),
         NWB_TEXT("project probe asset"),
@@ -107,7 +107,7 @@ static bool RegisterProjectProbeCookEntry(NWB::Impl::AssetsVolumeCookDetail::Coo
     );
 }
 
-static NWB::Impl::AssetsVolumeCookDetail::CookEntryAutoRegistrar s_ProjectProbeCookEntryRegistrar(
+static NWB::Core::Assets::CookEntryAutoRegistrar s_ProjectProbeCookEntryRegistrar(
     &RegisterProjectProbeCookEntry
 );
 
@@ -136,12 +136,11 @@ static bool LoadProjectProbeAsset(
 }
 
 static void TestProjectCookEntryAutoRegistration(TestContext& context){
-    NWB::Impl::ShaderCook::CookArena arena("ProjectCookEntryAutoRegistrationTest");
-    NWB::Impl::AssetsVolumeCookDetail::CookEntryRegistry registry(arena);
+    NWB::Core::Assets::CookArena arena("ProjectCookEntryAutoRegistrationTest");
+    NWB::Core::Assets::CookEntryRegistry registry(arena);
 
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::AssetsVolumeCookDetail::RegisterDefaultCookEntryTypes(registry));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !registry.has(ProjectProbeAsset::AssetTypeName()));
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Impl::AssetsVolumeCookDetail::RegisterAutoCollectedCookEntryTypes(registry));
+    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, NWB::Core::Assets::RegisterAutoCollectedCookEntryTypes(registry));
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, registry.has(ProjectProbeAsset::AssetTypeName()));
 }
 

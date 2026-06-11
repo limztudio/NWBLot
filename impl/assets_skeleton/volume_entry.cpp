@@ -10,7 +10,7 @@
 
 #include "cook.h"
 
-#include <impl/assets_volume/cook_entry_registry.h>
+#include <core/assets/cook_entry_registry.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ static bool ParseSkeletonDocument(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     SkeletonCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkeletonCookMetadata(
         assetRoot,
@@ -51,7 +51,7 @@ static bool ParseSkeletonValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     SkeletonCookEntry& outEntry,
-    AssetsVolumeCookDetail::CookEntryParseContext& context
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkeletonCookMetadata(
         virtualPath,
@@ -66,7 +66,7 @@ static bool BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Skeleton& outAsse
     return BuildSkeletonAsset(entry, outAsset);
 }
 
-static bool RegisterSkeletonCookEntry(AssetsVolumeCookDetail::CookEntryRegistry& registry){
+static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
         Skeleton::AssetTypeName(),
         NWB_TEXT("skeleton"),
@@ -80,7 +80,7 @@ static bool RegisterSkeletonCookEntry(AssetsVolumeCookDetail::CookEntryRegistry&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AssetsVolumeCookDetail::CookEntryAutoRegistrar s_SkeletonCookEntryRegistrar(&RegisterSkeletonCookEntry);
+Core::Assets::CookEntryAutoRegistrar s_SkeletonCookEntryRegistrar(&RegisterSkeletonCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

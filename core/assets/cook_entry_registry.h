@@ -14,10 +14,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../global.h"
+#include "module.h"
 
 #include <core/alloc/scratch.h>
-#include <core/assets/module.h>
 #include <core/filesystem/module.h>
 
 #include <core/common/log.h>
@@ -27,13 +26,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace AssetsVolumeCookDetail{
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +48,12 @@ using CookEntryPathHashSet = CookHashSet<NameHash>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ICookedAssetWriter;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct CookEntryParseContext{
     CookArena& cookArena;
     Core::Alloc::ThreadPool& threadPool;
@@ -63,8 +62,25 @@ struct CookEntryParseContext{
 };
 
 struct CookEntryWriteContext{
-    Core::Filesystem::VolumeSession& volumeSession;
+    ICookedAssetWriter& writer;
     CookEntryPathHashSet& seenVirtualPathHashes;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ICookedAssetWriter{
+public:
+    virtual ~ICookedAssetWriter() = default;
+
+public:
+    virtual bool writeCookedAsset(
+        const tchar* assetKind,
+        const Name& virtualPath,
+        const IAsset& asset,
+        const IAssetCodec& codec
+    ) = 0;
 };
 
 
@@ -96,7 +112,7 @@ public:
         const Core::Metascript::Value& asset,
         CookEntryParseContext& context
     ) = 0;
-    virtual bool writeVolume(CookEntryWriteContext& context) = 0;
+    virtual bool writeCookedAssets(CookEntryWriteContext& context) = 0;
 };
 
 template<typename EntryT>
@@ -128,20 +144,20 @@ namespace CookEntryRegistryDetail{
     if(inOutSeenVirtualPathHashes.insert(pathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate property asset virtual path '{}' for {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}")
         , StringConvert(virtualPath.c_str())
         , assetKind
     );
     return false;
 }
 
-[[nodiscard]] inline bool RegisterVolumeVirtualPath(
+[[nodiscard]] inline bool RegisterCookedVirtualPath(
     const tchar* assetKind,
     const Name& virtualPath,
     CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: invalid {} virtual path"), assetKind);
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
         return false;
     }
 
@@ -149,43 +165,12 @@ namespace CookEntryRegistryDetail{
     if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate {} virtual path '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'")
         , assetKind
         , StringConvert(virtualPath.c_str())
     );
     return false;
 }
-
-[[nodiscard]] inline bool PushSerializedAssetToVolume(
-    const tchar* assetKind,
-    const Name& virtualPath,
-    const Core::Assets::IAsset& asset,
-    const Core::Assets::IAssetCodec& codec,
-    Core::Filesystem::VolumeSession& volumeSession,
-    Core::Assets::AssetBytes& scratchBinary
-){
-    scratchBinary.clear();
-    if(!codec.serialize(asset, scratchBinary)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize {} '{}'")
-            , assetKind
-            , StringConvert(virtualPath.c_str())
-        );
-        return false;
-    }
-
-    if(volumeSession.pushDataDeferred(virtualPath, scratchBinary))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to push {} '{}'")
-        , assetKind
-        , StringConvert(virtualPath.c_str())
-    );
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 
@@ -253,7 +238,7 @@ public:
         CookEntryParseContext& context
     ) override{
         if(!m_parseDocument){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: asset type '{}' cannot be parsed from document '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'")
                 , StringConvert(m_assetType.c_str())
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -274,7 +259,7 @@ public:
         CookEntryParseContext& context
     ) override{
         if(!m_parseValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
                 , StringConvert(m_assetType.c_str())
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -288,13 +273,12 @@ public:
         return appendParsedEntry(Move(entry), context);
     }
 
-    virtual bool writeVolume(CookEntryWriteContext& context) override{
+    virtual bool writeCookedAssets(CookEntryWriteContext& context) override{
         CodecT codec;
         Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
-        Core::Assets::AssetBytes assetBinary{assetArena};
 
         for(EntryT& entry : m_entries){
-            if(!CookEntryRegistryDetail::RegisterVolumeVirtualPath(
+            if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(
                 m_assetKindText,
                 entry.virtualPath,
                 context.seenVirtualPathHashes
@@ -304,7 +288,7 @@ public:
             AssetT asset(assetArena);
             if(!m_buildAsset(entry, asset)){
                 if(m_logBuildFailure){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to build {} '{}'")
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
                         , m_assetKindText
                         , StringConvert(entry.virtualPath.c_str())
                     );
@@ -312,13 +296,11 @@ public:
                 return false;
             }
 
-            if(!CookEntryRegistryDetail::PushSerializedAssetToVolume(
+            if(!context.writer.writeCookedAsset(
                 m_assetKindText,
                 entry.virtualPath,
                 asset,
-                codec,
-                context.volumeSession,
-                assetBinary
+                codec
             ))
                 return false;
         }
@@ -377,11 +359,11 @@ public:
         const bool logBuildFailure = true
     ){
         if(!assetType){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: tried to register an unnamed cook entry type"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook entry type"));
             return false;
         }
         if(!buildAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: cook entry type '{}' has no build function")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function")
                 , StringConvert(assetType.c_str())
             );
             return false;
@@ -398,7 +380,7 @@ public:
         );
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate cook entry type registration '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
                 , StringConvert(assetType.c_str())
             );
             return false;
@@ -441,7 +423,7 @@ public:
         if(bucket)
             return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: unsupported asset type '{}' in meta '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
             , StringConvert(assetType.c_str())
             , PathToString<tchar>(nwbFilePath)
         );
@@ -459,7 +441,7 @@ public:
         if(bucket)
             return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: unsupported asset type '{}' in asset_bunch from meta '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'")
             , StringConvert(assetType.c_str())
             , PathToString<tchar>(nwbFilePath)
         );
@@ -468,7 +450,7 @@ public:
 
     [[nodiscard]] bool writeAll(CookEntryWriteContext& context){
         for(BucketPtr& bucket : m_buckets){
-            if(!bucket->writeVolume(context))
+            if(!bucket->writeCookedAssets(context))
                 return false;
         }
         return true;
@@ -503,8 +485,6 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RegisterDefaultCookEntryTypes(CookEntryRegistry& registry);
-
 using CookEntryRegistrationFunction = bool (*)(CookEntryRegistry& registry);
 
 class CookEntryAutoRegistrar final{
@@ -518,13 +498,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -534,3 +508,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

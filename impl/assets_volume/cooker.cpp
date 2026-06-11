@@ -99,9 +99,7 @@ bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& enviro
         return false;
 
     AssetsVolumeCookDetail::ParsedAssetMetadata parsedMetadata(m_arena);
-    if(!AssetsVolumeCookDetail::RegisterDefaultCookEntryTypes(parsedMetadata.entryRegistry))
-        return false;
-    if(!AssetsVolumeCookDetail::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
+    if(!Core::Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
         return false;
     if(!AssetsVolumeMetadataParser::ParseAssetMetadata(
         m_arena,

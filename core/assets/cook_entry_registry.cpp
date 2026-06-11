@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_IMPL_BEGIN
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,12 +27,12 @@ namespace __hidden_cook_entry_registry{
 
 
 struct AutoRegistrationQueue{
-    AssetsVolumeCookDetail::CookArena arena;
+    CookArena arena;
     Futex mutex;
-    AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::CookEntryRegistrationFunction> functions;
+    CookVector<CookEntryRegistrationFunction> functions;
 
     AutoRegistrationQueue()
-        : arena("NWB::AssetsVolumeCookDetail::CookEntryAutoRegistrationQueue")
+        : arena("NWB::Core::Assets::CookEntryAutoRegistrationQueue")
         , functions(arena)
     {}
 };
@@ -43,10 +43,10 @@ AutoRegistrationQueue& QueryAutoRegistrationQueue(){
 }
 
 static bool ContainsRegistrationFunction(
-    const AssetsVolumeCookDetail::CookVector<AssetsVolumeCookDetail::CookEntryRegistrationFunction>& functions,
-    const AssetsVolumeCookDetail::CookEntryRegistrationFunction function
+    const CookVector<CookEntryRegistrationFunction>& functions,
+    const CookEntryRegistrationFunction function
 ){
-    for(const AssetsVolumeCookDetail::CookEntryRegistrationFunction current : functions){
+    for(const CookEntryRegistrationFunction current : functions){
         if(current == function)
             return true;
     }
@@ -62,17 +62,6 @@ static bool ContainsRegistrationFunction(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace AssetsVolumeCookDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool RegisterDefaultCookEntryTypes(CookEntryRegistry& registry){
-    (void)registry;
-    return true;
-}
 
 CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFunction function){
     if(function == nullptr)
@@ -99,7 +88,7 @@ bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
         if(function(registry))
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to register auto-collected cook entry type"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type"));
         return false;
     }
 
@@ -110,13 +99,7 @@ bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_IMPL_END
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,3 +109,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

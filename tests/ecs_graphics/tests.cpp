@@ -22,7 +22,7 @@
 #include <impl/ecs_render/material_instance.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
-#include <impl/assets_mesh/skinned_asset.h>
+#include <impl/assets_mesh/skinned_types.h>
 #include <impl/assets_mesh/asset.h>
 
 #include <core/common/log.h>

@@ -185,27 +185,12 @@ static void TestVolumeSessionAcceptsScratchBytes(TestContext& context){
     static_cast<void>(RemoveAllIfExists(root, errorCode));
 }
 
-static NWB::Impl::SkinInfluence4 MakeRootSkin(){
-    NWB::Impl::SkinInfluence4 skin;
-    skin.joint[0] = 0u;
-    skin.weight[0] = 1.f;
-    return skin;
-}
-
 static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){
     return NWB::Impl::MeshletBounds{
         Float4U(0.0f, 0.0f, 0.0f, 1.0f),
         NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f),
         0u,
     };
-}
-
-static NWB::Impl::SkeletonJointMatrix MakeJointMatrix(const f32 tx, const f32 ty, const f32 tz){
-    NWB::Impl::SkeletonJointMatrix matrix = NWB::Impl::MakeIdentitySkeletonJointMatrix();
-    matrix.rows[0].w = tx;
-    matrix.rows[1].w = ty;
-    matrix.rows[2].w = tz;
-    return matrix;
 }
 
 #if defined(NWB_FINAL)
@@ -216,10 +201,6 @@ static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offs
 
     NWB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
     return true;
-}
-
-static usize SkinnedMeshHeaderCountOffset(const usize countIndex){
-    return (sizeof(u32) * 2u) + (sizeof(u64) * countIndex);
 }
 
 static bool FindMaterialBinaryTypedLayoutOffsets(
@@ -281,182 +262,11 @@ static bool FindMaterialBinaryTypedLayoutOffsets(
 using TestPositionStream = NWB::Core::Assets::AssetVector<Float3U>;
 using TestHalf4Stream = NWB::Core::Assets::AssetVector<Half4U>;
 using TestUv0Stream = NWB::Core::Assets::AssetVector<Float2U>;
-using TestSkinStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkinInfluence4>;
-using TestInverseBindMatrixStream = NWB::Core::Assets::AssetVector<NWB::Impl::SkeletonJointMatrix>;
 using TestMeshletStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>;
 using TestMeshletBoundsStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletBounds>;
 using TestMeshletRefDeltaStream = NWB::Core::Assets::AssetVector<u8>;
 using TestMeshletLocalVertexRefStream = NWB::Core::Assets::AssetVector<NWB::Impl::MeshletLocalVertexRef>;
 using TestMeshletPrimitiveIndexStream = NWB::Core::Assets::AssetVector<u8>;
-
-static void SetSkinnedMeshPayload(
-    NWB::Impl::SkinnedMesh& mesh,
-    const u32 meshClass,
-    const u32 skeletonJointCount,
-    TestPositionStream& positions,
-    TestHalf4Stream& normals,
-    TestHalf4Stream& tangents,
-    TestUv0Stream& uv0,
-    TestHalf4Stream& colors,
-    TestSkinStream& skin,
-    TestInverseBindMatrixStream& inverseBindMatrices,
-    TestMeshletStream& meshlets,
-    TestMeshletBoundsStream& meshletBounds,
-    TestMeshletRefDeltaStream& meshletPositionRefDeltas,
-    TestMeshletRefDeltaStream& meshletAttributeRefDeltas,
-    TestMeshletLocalVertexRefStream& meshletLocalVertexRefs,
-    TestMeshletPrimitiveIndexStream& meshletPrimitiveIndices
-){
-    mesh.setMeshClass(meshClass);
-    mesh.setSkeletonJointCount(skeletonJointCount);
-    mesh.setPayload(
-        Move(positions), Move(normals), Move(tangents), Move(uv0), Move(colors), Move(skin), Move(inverseBindMatrices),
-        Move(meshlets), Move(meshletBounds), Move(meshletPositionRefDeltas), Move(meshletAttributeRefDeltas),
-        Move(meshletLocalVertexRefs), Move(meshletPrimitiveIndices)
-    );
-}
-
-static NWB::Impl::SkinnedMesh BuildValidSkinnedMesh(TestArena& testArena){
-    NWB::Impl::SkinnedMesh mesh(testArena.arena, Name("tests/characters/proxy_skinned_mesh"));
-
-    auto positions = MakeAssetVector<Float3U>(testArena);
-    positions.push_back(Float3U(-0.5f, -0.5f, 0.0f));
-    positions.push_back(Float3U(0.5f, -0.5f, 0.0f));
-    positions.push_back(Float3U(0.5f, 0.5f, 0.0f));
-    positions.push_back(Float3U(-0.5f, 0.5f, 0.0f));
-
-    auto normals = MakeAssetVector<Half4U>(testArena);
-    normals.assign(positions.size(), MakeHalf4U(0.0f, 0.0f, 1.0f, 0.0f));
-
-    auto tangents = MakeAssetVector<Half4U>(testArena);
-    tangents.assign(positions.size(), MakeHalf4U(1.0f, 0.0f, 0.0f, 1.0f));
-
-    auto uv0 = MakeAssetVector<Float2U>(testArena);
-    uv0.push_back(Float2U(0.0f, 0.0f));
-    uv0.push_back(Float2U(1.0f, 0.0f));
-    uv0.push_back(Float2U(1.0f, 1.0f));
-    uv0.push_back(Float2U(0.0f, 1.0f));
-
-    auto colors = MakeAssetVector<Half4U>(testArena);
-    colors.assign(positions.size(), MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f));
-
-    auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
-    skin.assign(positions.size(), MakeRootSkin());
-
-    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkeletonJointMatrix>(testArena);
-    inverseBindMatrices.push_back(MakeJointMatrix(-0.25f, 0.0f, 0.0f));
-
-    auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
-    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(4u, 2u, 4u, 4u) });
-    meshlets.back().skinBase = 0u;
-    auto meshletBounds = MakeAssetVector<NWB::Impl::MeshletBounds>(testArena);
-    meshletBounds.push_back(MakeTestMeshletBounds());
-
-    auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
-    auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
-    auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
-    NWB::Tests::AppendSequentialMeshletRefs(
-        positions.size(),
-        meshletPositionStreamRefs,
-        meshletAttributeStreamRefs,
-        meshletLocalVertexRefs
-    );
-
-    auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
-    for(const u32 index : MakeQuadTriangleIndices())
-        meshletPrimitiveIndices.push_back(static_cast<u8>(index));
-
-    auto meshletPositionRefDeltas = MakeAssetVector<u8>(testArena);
-    auto meshletAttributeRefDeltas = MakeAssetVector<u8>(testArena);
-    const bool meshletRefsEncoded = EncodeTestMeshletRefs(
-        meshlets,
-        meshletPositionStreamRefs,
-        meshletAttributeStreamRefs,
-        meshletPositionRefDeltas,
-        meshletAttributeRefDeltas,
-        true
-    );
-    NWB_ASSERT(meshletRefsEncoded);
-    static_cast<void>(meshletRefsEncoded);
-
-    SetSkinnedMeshPayload(
-        mesh, NWB::Core::Mesh::MeshClass::Skinned, 1u,
-        positions, normals, tangents, uv0, colors, skin, inverseBindMatrices,
-        meshlets, meshletBounds, meshletPositionRefDeltas, meshletAttributeRefDeltas, meshletLocalVertexRefs,
-        meshletPrimitiveIndices
-    );
-    return mesh;
-}
-
-static NWB::Impl::SkinnedMesh BuildMinimalSkinnedMesh(TestArena& testArena){
-    NWB::Impl::SkinnedMesh mesh(testArena.arena, Name("tests/characters/minimal_skinned_mesh"));
-
-    auto positions = MakeAssetVector<Float3U>(testArena);
-    positions.push_back(Float3U(-0.5f, -0.5f, 0.0f));
-    positions.push_back(Float3U(0.5f, -0.5f, 0.0f));
-    positions.push_back(Float3U(0.0f, 0.5f, 0.0f));
-
-    auto normals = MakeAssetVector<Half4U>(testArena);
-    normals.assign(positions.size(), MakeHalf4U(0.0f, 0.0f, 1.0f, 0.0f));
-
-    auto tangents = MakeAssetVector<Half4U>(testArena);
-    tangents.assign(positions.size(), MakeHalf4U(1.0f, 0.0f, 0.0f, 1.0f));
-
-    auto uv0 = MakeAssetVector<Float2U>(testArena);
-    uv0.push_back(Float2U(0.0f, 0.0f));
-    uv0.push_back(Float2U(1.0f, 0.0f));
-    uv0.push_back(Float2U(0.5f, 1.0f));
-
-    auto colors = MakeAssetVector<Half4U>(testArena);
-    colors.assign(positions.size(), MakeHalf4U(1.0f, 1.0f, 1.0f, 1.0f));
-
-    auto skin = MakeAssetVector<NWB::Impl::SkinInfluence4>(testArena);
-    skin.assign(positions.size(), MakeRootSkin());
-
-    auto inverseBindMatrices = MakeAssetVector<NWB::Impl::SkeletonJointMatrix>(testArena);
-    inverseBindMatrices.push_back(MakeJointMatrix(0.0f, 0.0f, 0.0f));
-
-    auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
-    meshlets.push_back(NWB::Impl::MeshletDesc{ 0u, 0u, 0u, 0u, NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u) });
-    meshlets.back().skinBase = 0u;
-    auto meshletBounds = MakeAssetVector<NWB::Impl::MeshletBounds>(testArena);
-    meshletBounds.push_back(MakeTestMeshletBounds());
-
-    auto meshletPositionStreamRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
-    auto meshletAttributeStreamRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
-    auto meshletLocalVertexRefs = MakeAssetVector<NWB::Impl::MeshletLocalVertexRef>(testArena);
-    NWB::Tests::AppendSequentialMeshletRefs(
-        positions.size(),
-        meshletPositionStreamRefs,
-        meshletAttributeStreamRefs,
-        meshletLocalVertexRefs
-    );
-
-    auto meshletPrimitiveIndices = MakeAssetVector<u8>(testArena);
-    for(const u32 index : MakeTriangleIndices())
-        meshletPrimitiveIndices.push_back(static_cast<u8>(index));
-
-    auto meshletPositionRefDeltas = MakeAssetVector<u8>(testArena);
-    auto meshletAttributeRefDeltas = MakeAssetVector<u8>(testArena);
-    const bool meshletRefsEncoded = EncodeTestMeshletRefs(
-        meshlets,
-        meshletPositionStreamRefs,
-        meshletAttributeStreamRefs,
-        meshletPositionRefDeltas,
-        meshletAttributeRefDeltas,
-        true
-    );
-    NWB_ASSERT(meshletRefsEncoded);
-    static_cast<void>(meshletRefsEncoded);
-
-    SetSkinnedMeshPayload(
-        mesh, NWB::Core::Mesh::MeshClass::Skinned, 1u,
-        positions, normals, tangents, uv0, colors, skin, inverseBindMatrices,
-        meshlets, meshletBounds, meshletPositionRefDeltas, meshletAttributeRefDeltas, meshletLocalVertexRefs,
-        meshletPrimitiveIndices
-    );
-    return mesh;
-}
 
 static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     NWB::Impl::Mesh mesh(testArena.arena, Name("tests/meshes/minimal_mesh"));
@@ -572,21 +382,6 @@ static void CheckCodecRejectsBinary(
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, !loadedAsset);
 }
 
-static void CheckSkinnedMeshPayload(
-    TestContext& context,
-    const NWB::Impl::SkinnedMesh& loadedMesh,
-    const u32 expectedSkeletonJointCount,
-    const u32 expectedInverseBindMatrixCount,
-    const u32 expectedInverseBindMatrixIndex){
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Skinned);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 4u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 6u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skinStream().size() == 4u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skeletonJointCount() == expectedSkeletonJointCount);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.inverseBindMatrices().size() == expectedInverseBindMatrixCount);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.inverseBindMatrices()[expectedInverseBindMatrixIndex].rows[0].w == -0.25f);
-}
-
 static void TestMeshCodecRoundTrip(TestContext& context){
     TestArena testArena;
     NWB::Impl::Mesh mesh = BuildMinimalMesh(testArena);
@@ -600,94 +395,6 @@ static void TestMeshCodecRoundTrip(TestContext& context){
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedMesh.normalStream()[1]).z == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, LoadHalf4U(loadedMesh.colorStream()[1]).y == 1.f);
     NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices()[2] == 2u);
-}
-
-static void TestSkinnedMeshCodecRoundTrip(TestContext& context){
-    TestArena testArena;
-    NWB::Impl::SkinnedMesh mesh = BuildValidSkinnedMesh(testArena);
-
-    NWB::Impl::SkinnedMeshAssetCodec codec;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::SkinnedMesh& loadedMesh = CheckCodecRoundTrip(context, testArena, mesh, codec, loadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.virtualPath() == mesh.virtualPath());
-    CheckSkinnedMeshPayload(context, loadedMesh, 1u, 1u, 0u);
-}
-
-static void TestMinimalSkinnedMeshCodecRoundTrip(TestContext& context){
-    TestArena testArena;
-    NWB::Impl::SkinnedMesh mesh = BuildMinimalSkinnedMesh(testArena);
-
-    NWB::Impl::SkinnedMeshAssetCodec codec;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    const NWB::Impl::SkinnedMesh& loadedMesh = CheckCodecRoundTrip(context, testArena, mesh, codec, loadedAsset);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.positionStream().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshletPrimitiveIndices().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.meshClass() == NWB::Core::Mesh::MeshClass::Skinned);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skinStream().size() == 3u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, loadedMesh.skeletonJointCount() == 1u);
-}
-
-static void TestSkinnedMeshCodecRejectsMalformedCounts(TestContext& context){
-#if defined(NWB_FINAL)
-    TestArena testArena;
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    NWB::Impl::SkinnedMesh mesh = BuildMinimalSkinnedMesh(testArena);
-    NWB::Impl::SkinnedMeshAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(mesh, binary));
-
-    const usize skeletonJointCountOffset = SkinnedMeshHeaderCountOffset(6u);
-    const u64 invalidJointCount = static_cast<u64>(Limit<u32>::s_Max) + 1ull;
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(binary, skeletonJointCountOffset, invalidJointCount));
-
-    CheckCodecRejectsBinary(context, testArena, codec, mesh.virtualPath(), binary);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 1u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("mesh payload is incomplete")));
-#else
-    static_cast<void>(context);
-#endif
-}
-
-static void TestSkinnedMeshCodecRejectsMalformedDependentCounts(TestContext& context){
-#if defined(NWB_FINAL)
-    TestArena testArena;
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    NWB::Impl::SkinnedMesh mesh = BuildValidSkinnedMesh(testArena);
-    NWB::Impl::SkinnedMeshAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, codec.serialize(mesh, binary));
-
-    {
-        NWB::Core::Assets::AssetBytes malformed = binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(
-            malformed,
-            SkinnedMeshHeaderCountOffset(5u),
-            0ull
-        ));
-
-        CheckCodecRejectsBinary(context, testArena, codec, mesh.virtualPath(), malformed);
-    }
-
-    {
-        NWB::Core::Assets::AssetBytes malformed = binary;
-        NWB_ASSETS_GRAPHICS_TEST_CHECK(context, OverwritePOD(
-            malformed,
-            SkinnedMeshHeaderCountOffset(7u),
-            0ull
-        ));
-
-        CheckCodecRejectsBinary(context, testArena, codec, mesh.virtualPath(), malformed);
-    }
-
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.errorCount() == 2u);
-    NWB_ASSETS_GRAPHICS_TEST_CHECK(context, logger.sawErrorContaining(NWB_TEXT("mesh payload is incomplete")));
-#else
-    static_cast<void>(context);
-#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

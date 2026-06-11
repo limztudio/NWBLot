@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_mesh/skinned_asset.h>
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
@@ -1492,10 +1491,6 @@ static bool FindShaderArchiveSourceChecksum(
 NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& context){
     __hidden_tests::TestVolumeSessionAcceptsScratchBytes(context);
     __hidden_tests::TestMeshCodecRoundTrip(context);
-    __hidden_tests::TestSkinnedMeshCodecRoundTrip(context);
-    __hidden_tests::TestMinimalSkinnedMeshCodecRoundTrip(context);
-    __hidden_tests::TestSkinnedMeshCodecRejectsMalformedCounts(context);
-    __hidden_tests::TestSkinnedMeshCodecRejectsMalformedDependentCounts(context);
     __hidden_tests::TestMeshletRefEncodingWidthRules(context);
     __hidden_tests::TestMeshletRefEncodingRoundTrip(context);
     __hidden_tests::TestShaderArchiveVariantLookupIsExact(context);
@@ -1529,7 +1524,6 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMeshAcceptanceQualityBuilderChecks(context);
     __hidden_tests::TestMaterialBindDiscoveryValidation(context);
     __hidden_tests::TestMeshCookerValidationFailures(context);
-    __hidden_tests::TestSkinnedMeshValidationFailures(context);
     __hidden_tests::TestMeshClassPolicyHelpers(context);
     __hidden_tests::TestFormatBlockDimensions(context);
 })

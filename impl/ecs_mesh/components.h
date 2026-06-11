@@ -22,7 +22,6 @@ NWB_IMPL_BEGIN
 
 
 class Mesh;
-class SkinnedMesh;
 class Skin;
 
 
@@ -35,18 +34,6 @@ struct MeshComponent{
 
 static_assert(IsStandardLayout_V<MeshComponent>, "MeshComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<MeshComponent>, "MeshComponent must stay cheap to move in dense ECS storage");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct SkinnedMeshComponent{
-    Core::Assets::AssetRef<SkinnedMesh> skinnedMesh;
-    RuntimeMeshHandle runtimeMesh;
-};
-
-static_assert(IsStandardLayout_V<SkinnedMeshComponent>, "SkinnedMeshComponent must stay layout-stable for ECS storage");
-static_assert(IsTriviallyCopyable_V<SkinnedMeshComponent>, "SkinnedMeshComponent must stay cheap to move in dense ECS storage");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

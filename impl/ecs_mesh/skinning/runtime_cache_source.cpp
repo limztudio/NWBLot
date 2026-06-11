@@ -11,7 +11,6 @@
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_asset.h>
-#include <impl/assets_mesh/skinned_asset.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -267,83 +266,6 @@ template<typename MeshT, typename SkinStreamT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkinnedMeshRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshComponent& component){
-    const Name sourceName = component.skinnedMesh.name();
-    if(!sourceName){
-        releaseRuntimeMesh(entity);
-        component.runtimeMesh.reset();
-        return false;
-    }
-
-    const auto foundInstance = m_instances.find(entity);
-    if(foundInstance != m_instances.end()){
-        SkinnedMeshRuntimeMeshInstance& instance = foundInstance.value();
-        if(instance.sourceName == sourceName){
-            component.runtimeMesh = instance.handle;
-            if((instance.dirtyFlags & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u){
-                if(!uploadRuntimeMeshBuffers(instance)){
-                    releaseRuntimeMesh(entity);
-                    component.runtimeMesh.reset();
-                    return false;
-                }
-                instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-                    instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags
-                );
-            }
-            return instance.valid();
-        }
-
-        releaseRuntimeMesh(entity);
-        component.runtimeMesh.reset();
-    }
-
-    SkinnedMeshSource* source = nullptr;
-    if(!ensureSourceLoaded(component.skinnedMesh, source))
-        return false;
-    const SkinnedMesh* mesh = source ? source->skinnedMesh() : nullptr;
-    if(!mesh)
-        return false;
-
-    SkinnedMeshRuntimeMeshInstance instance(m_arena);
-    instance.entity = entity;
-    instance.handle = allocateHandle();
-    if(!instance.handle.valid()){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-    instance.sourceName = sourceName;
-    instance.meshClass = mesh->meshClass();
-    instance.uv0 = mesh->uv0Stream();
-    instance.colors = mesh->colorStream();
-    instance.skin = mesh->skinStream();
-    instance.skeletonJointCount = mesh->skeletonJointCount();
-    instance.inverseBindMatrices = mesh->inverseBindMatrices();
-    instance.meshletBounds = mesh->meshletBounds();
-    instance.meshletLocalVertexRefs = mesh->meshletLocalVertexRefs();
-    instance.meshletPrimitiveIndices = mesh->meshletPrimitiveIndices();
-    instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
-    if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(*mesh, mesh->skinStream(), true, instance)){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-
-    if(!uploadRuntimeMeshBuffers(instance)){
-        eraseUnusedSource(sourceName);
-        return false;
-    }
-    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags
-    );
-
-    ++source->referenceCount;
-    const RuntimeMeshHandle handle = instance.handle;
-    auto result = m_instances.try_emplace(entity, Move(instance));
-    auto it = result.first;
-    m_handleToEntity.emplace(handle.value, entity);
-    component.runtimeMesh = handle;
-    return it.value().valid();
-}
-
 bool SkinnedMeshRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
     const Name sourceName = __hidden_runtime_cache_source::BuildBindingSourceName(component.mesh.name(), component.skin.name());
     if(!sourceName){
@@ -422,45 +344,6 @@ bool SkinnedMeshRuntimeMeshCache::ensureRuntimeMesh(Core::ECS::EntityID entity, 
     return it.value().valid();
 }
 
-bool SkinnedMeshRuntimeMeshCache::ensureSourceLoaded(const Core::Assets::AssetRef<SkinnedMesh>& sourceAsset, SkinnedMeshSource*& outSource){
-    outSource = nullptr;
-
-    const Name sourceName = sourceAsset.name();
-    if(!sourceName){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: skinned mesh renderer source asset is empty"));
-        return false;
-    }
-
-    const auto foundSource = m_sources.find(sourceName);
-    if(foundSource != m_sources.end()){
-        outSource = &foundSource.value();
-        return outSource->skinnedMesh() != nullptr;
-    }
-
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(SkinnedMesh::AssetTypeName(), sourceName, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: failed to load skinned mesh '{}'")
-            , StringConvert(sourceName.c_str())
-        );
-        return false;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != SkinnedMesh::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: asset '{}' is not skinned mesh")
-            , StringConvert(sourceName.c_str())
-        );
-        return false;
-    }
-
-    SkinnedMeshSource source;
-    source.sourceName = sourceName;
-    source.asset = Move(loadedAsset);
-
-    auto result = m_sources.try_emplace(sourceName, Move(source));
-    auto it = result.first;
-    outSource = &it.value();
-    return outSource->skinnedMesh() != nullptr;
-}
-
 bool SkinnedMeshRuntimeMeshCache::ensureSourceLoaded(
     const Core::Assets::AssetRef<Mesh>& meshAsset,
     const Core::Assets::AssetRef<Skin>& skinAsset,
@@ -519,7 +402,7 @@ bool SkinnedMeshRuntimeMeshCache::ensureSourceLoaded(
 
     SkinnedMeshSource source;
     source.sourceName = sourceName;
-    source.asset = Move(loadedMeshAsset);
+    source.meshAsset = Move(loadedMeshAsset);
     source.skinAsset = Move(loadedSkinAsset);
 
     auto result = m_sources.try_emplace(sourceName, Move(source));

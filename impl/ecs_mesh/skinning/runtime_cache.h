@@ -76,11 +76,10 @@ class SkinnedMeshRuntimeMeshCache final : NoCopy{
 private:
     struct SkinnedMeshSource{
         Name sourceName = NAME_NONE;
-        UniquePtr<Core::Assets::IAsset> asset;
+        UniquePtr<Core::Assets::IAsset> meshAsset;
         UniquePtr<Core::Assets::IAsset> skinAsset;
         u32 referenceCount = 0;
 
-        [[nodiscard]] const SkinnedMesh* skinnedMesh()const;
         [[nodiscard]] const Mesh* mesh()const;
         [[nodiscard]] const Skin* skin()const;
     };
@@ -101,12 +100,7 @@ public:
     [[nodiscard]] bool bumpEditRevision(RuntimeMeshHandle handle, RuntimeMeshDirtyFlags dirtyFlags);
 
 private:
-    [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshComponent& component);
     [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component);
-    [[nodiscard]] bool ensureSourceLoaded(
-        const Core::Assets::AssetRef<SkinnedMesh>& sourceAsset,
-        SkinnedMeshSource*& outSource
-    );
     [[nodiscard]] bool ensureSourceLoaded(
         const Core::Assets::AssetRef<Mesh>& meshAsset,
         const Core::Assets::AssetRef<Skin>& skinAsset,

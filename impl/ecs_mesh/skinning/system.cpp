@@ -93,7 +93,6 @@ SkinnedMeshSystem::SkinnedMeshSystem(
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {
-    writeAccess<SkinnedMeshComponent>();
     writeAccess<SkinnedMeshBindingComponent>();
     readAccess<RendererComponent>();
     readAccess<SkeletonJointPaletteComponent>();
@@ -118,26 +117,6 @@ bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
     pruneRuntimeResources();
 
     bool ready = true;
-    m_world.view<SkinnedMeshComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedMeshComponent& renderer){
-            if(!ready)
-                return;
-            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !renderer.runtimeMesh.valid())
-                return;
-
-            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer.runtimeMesh);
-            if(!instance)
-                return;
-#if defined(NWB_DEBUG)
-            if(!instance->valid())
-                return;
-#endif
-
-            const SkeletonJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkeletonJointPaletteComponent>(entity);
-            const SkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkeletonPoseComponent>(entity);
-            ready = prepareRuntimeMeshResources(*instance, jointPalette, skeletonPose);
-        }
-    );
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
             if(!ready)
@@ -171,8 +150,6 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     RuntimeMeshHandle runtimeMesh;
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
-    else if(const SkinnedMeshComponent* renderer = m_world.tryGetComponent<SkinnedMeshComponent>(entity))
-        runtimeMesh = renderer->runtimeMesh;
     if(!runtimeMesh.valid())
         return false;
 
@@ -234,12 +211,6 @@ bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 versi
     };
 
     bool found = false;
-    m_world.view<SkinnedMeshComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedMeshComponent& component){
-            static_cast<void>(component);
-            testEntity(entity, found);
-        }
-    );
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
             static_cast<void>(component);
@@ -276,35 +247,6 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
-    m_world.view<SkinnedMeshComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedMeshComponent& renderer){
-            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !renderer.runtimeMesh.valid())
-                return;
-
-            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(renderer.runtimeMesh);
-            if(!instance)
-                return;
-#if defined(NWB_DEBUG)
-            if(!instance->valid())
-                return;
-#endif
-
-            const SkeletonJointPaletteComponent* jointPalette = m_world.tryGetComponent<SkeletonJointPaletteComponent>(entity);
-            const SkeletonPoseComponent* skeletonPose = m_world.tryGetComponent<SkeletonPoseComponent>(entity);
-            const auto foundResources = m_runtimeResources.find(instance->handle.value);
-            const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
-            if(!__hidden_system::HasPotentialSkinnedMeshWork(
-                *instance,
-                jointPalette,
-                skeletonPose
-            ) && !hadSkinningResources)
-                return;
-            if(!ensureCommandList())
-                return;
-            if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose))
-                submittedWork = true;
-        }
-    );
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
             if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())

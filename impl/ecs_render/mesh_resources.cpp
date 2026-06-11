@@ -321,6 +321,22 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     return true;
 }
 
+bool RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh){
+    outMesh = nullptr;
+
+    const Name meshPath = meshAsset.name();
+    if(!meshPath)
+        return false;
+
+    const auto foundMesh = meshState().m_meshes.find(meshPath);
+    if(foundMesh == meshState().m_meshes.end())
+        return false;
+
+    outMesh = &foundMesh.value();
+    NWB_ASSERT(outMesh->valid());
+    return true;
+}
+
 bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
     outMesh = nullptr;
 
@@ -385,6 +401,24 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     auto it = result.first;
 
     outMesh = &it.value();
+    NWB_ASSERT(outMesh->valid());
+    return true;
+}
+
+bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
+    outMesh = nullptr;
+    if(!desc.valid())
+        return false;
+
+    const auto foundMesh = meshState().m_meshes.find(desc.meshKey);
+    if(foundMesh == meshState().m_meshes.end())
+        return false;
+
+    MeshResources& mesh = foundMesh.value();
+    if(!mesh.runtimeMesh || mesh.runtimeMeshVersion != desc.version)
+        return false;
+
+    outMesh = &mesh;
     NWB_ASSERT(outMesh->valid());
     return true;
 }

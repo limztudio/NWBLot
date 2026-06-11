@@ -511,6 +511,31 @@ bool RendererMaterialSystem::createRendererPipeline(
     return true;
 }
 
+bool RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources){
+    outResources = nullptr;
+
+    const auto foundPipeline = materialState().m_pipelines.find(pipelineKey);
+    if(foundPipeline == materialState().m_pipelines.end())
+        return false;
+
+    MaterialPipelineResources& resources = foundPipeline.value();
+    switch(resources.renderPath){
+    case RenderPath::MeshShader:
+        if(!resources.meshletPipeline)
+            return false;
+        break;
+    case RenderPath::ComputeEmulation:
+        if(!resources.computePipeline || !resources.emulationPipeline)
+            return false;
+        break;
+    default:
+        return false;
+    }
+
+    outResources = &resources;
+    return true;
+}
+
 void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){
     auto [it, inserted] = materialState().m_loggedMaterialPaths.try_emplace(materialKey, renderPath);
     if(!inserted){

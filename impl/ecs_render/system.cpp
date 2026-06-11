@@ -128,7 +128,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     ))
         return false;
 
-    if(m_materialSystem.hasTransparentRenderers())
+    if(m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::CreateMissing))
         return m_avboitSystem.prepareAvboitPassResources(deferredTargets, m_preparedCsgFrameState);
 
     return true;
@@ -206,7 +206,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 #if defined(NWB_DEBUG)
             materialTypedRanges,
 #endif
-            materialTypedBytes
+            materialTypedBytes,
+            RendererResourceLookupMode::PreparedOnly
         );
     }
 
@@ -279,7 +280,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers();
+    const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
     if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
         m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
         m_avboitState.m_targetsNeedClear = hasTransparentRenderers;

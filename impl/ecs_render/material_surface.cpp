@@ -163,10 +163,29 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     return true;
 }
 
-bool RendererMaterialSystem::hasTransparentRenderers(){
+bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
+    outInfo = nullptr;
+
+    const Name materialPath = materialAsset.name();
+    if(!materialPath)
+        return false;
+
+    const auto foundInfo = materialState().m_surfaceInfos.find(materialPath);
+    if(foundInfo == materialState().m_surfaceInfos.end())
+        return false;
+
+    outInfo = &foundInfo.value();
+    return true;
+}
+
+bool RendererMaterialSystem::hasTransparentRenderers(const RendererResourceLookupMode::Enum lookupMode){
     auto materialIsTransparent = [&](const Core::Assets::AssetRef<Material>& material) -> bool{
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!createMaterialSurfaceInfo(material, materialInfo))
+        const bool materialInfoReady = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? createMaterialSurfaceInfo(material, materialInfo)
+            : findMaterialSurfaceInfo(material, materialInfo)
+        ;
+        if(!materialInfoReady)
             return false;
         NWB_ASSERT(materialInfo);
         return materialInfo->transparent;

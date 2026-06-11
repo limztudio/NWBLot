@@ -17,6 +17,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace RendererResourceLookupMode{
+    enum Enum : u8{
+        CreateMissing,
+        PreparedOnly,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererMaterialSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererMaterialSystem(RendererSystem& renderer);
@@ -29,8 +40,10 @@ public:
         MaterialTypedByteVector& outMutableDefaultTypedBytes
     );
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
+    [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);
-    [[nodiscard]] bool hasTransparentRenderers();
+    [[nodiscard]] bool findRendererPipeline(const MaterialPipelineKey& pipelineKey, MaterialPipelineResources*& outResources);
+    [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool createMeshShaderResources();
     [[nodiscard]] bool createComputeEmulationResources();
@@ -62,7 +75,8 @@ public:
 #if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-        MaterialTypedByteDataVector& materialTypedBytes
+        MaterialTypedByteDataVector& materialTypedBytes,
+        RendererResourceLookupMode::Enum lookupMode
     );
     [[nodiscard]] static bool findMaterialInstanceOverrideField(
         Core::ECS::EntityID entity,

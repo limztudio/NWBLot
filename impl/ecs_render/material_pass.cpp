@@ -107,7 +107,8 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes
+        materialTypedBytes,
+        RendererResourceLookupMode::CreateMissing
     );
     if(drawItems.empty())
         return true;
@@ -170,7 +171,8 @@ void RendererMaterialSystem::renderMaterialPass(
 #if defined(NWB_DEBUG)
         materialTypedRanges,
 #endif
-        materialTypedBytes
+        materialTypedBytes,
+        RendererResourceLookupMode::PreparedOnly
     );
     if(drawItems.empty())
         return;
@@ -219,7 +221,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-    MaterialTypedByteDataVector& materialTypedBytes
+    MaterialTypedByteDataVector& materialTypedBytes,
+    const RendererResourceLookupMode::Enum lookupMode
 ){
     if(!framebuffer)
         return;
@@ -334,7 +337,11 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!createMaterialSurfaceInfo(material, materialInfo))
+        const bool materialInfoReady = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? createMaterialSurfaceInfo(material, materialInfo)
+            : findMaterialSurfaceInfo(material, materialInfo)
+        ;
+        if(!materialInfoReady)
             return false;
         NWB_ASSERT(materialInfo);
         if(materialInfo->transparent != transparent)
@@ -369,7 +376,11 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         }
 
         MaterialPipelineResources* pipelineResources = nullptr;
-        if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
+        const bool pipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources)
+            : findRendererPipeline(pipelineKey, pipelineResources)
+        ;
+        if(!pipelineReady)
             return false;
         NWB_ASSERT(pipelineResources);
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
@@ -380,7 +391,11 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;
         if(csgReceiverSurfaceActive){
             csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
-            if(!createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources))
+            const bool csgReceiverSurfacePipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
+                ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources)
+                : findRendererPipeline(csgReceiverSurfacePipelineKey, csgReceiverSurfacePipelineResources)
+            ;
+            if(!csgReceiverSurfacePipelineReady)
                 return false;
             NWB_ASSERT(csgReceiverSurfacePipelineResources);
             csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
@@ -490,11 +505,21 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         MeshResources* mesh = nullptr;
         if(resolvedMesh.runtime){
-            if(!m_renderer.meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
+            const bool meshReady = lookupMode == RendererResourceLookupMode::CreateMissing
+                ? m_renderer.meshSystem().createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+                : m_renderer.meshSystem().findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
+            ;
+            if(!meshReady)
                 continue;
         }
-        else if(!m_renderer.meshSystem().createMeshResources(resolvedMesh.mesh, mesh))
-            continue;
+        else{
+            const bool meshReady = lookupMode == RendererResourceLookupMode::CreateMissing
+                ? m_renderer.meshSystem().createMeshResources(resolvedMesh.mesh, mesh)
+                : m_renderer.meshSystem().findMeshResources(resolvedMesh.mesh, mesh)
+            ;
+            if(!meshReady)
+                continue;
+        }
 
         NWB_ASSERT(mesh);
         CsgReceiverDrawState csgReceiverState;

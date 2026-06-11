@@ -6,6 +6,7 @@
 #include "binary_payload.h"
 
 #include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
 #include <global/binary.h>
 
@@ -30,39 +31,6 @@ UniquePtr<Core::Assets::IAssetCodec> CreateModelAssetCodec(){
 }
 Core::Assets::AssetCodecAutoRegistrar s_ModelAssetCodecAutoRegistrar(&CreateModelAssetCodec);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ValueContainer>
-[[nodiscard]] bool ReadVector(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    ValueContainer& outValues,
-    const tchar* failureContext,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
-    }
-    return false;
-}
-
-[[nodiscard]] bool ReadComplete(const Core::Assets::AssetBytes& binary, const usize cursor, const tchar* failureContext){
-    if(cursor == binary.size())
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
-    return false;
-}
 
 template<typename ObjectT>
 [[nodiscard]] bool NameUniqueInSpan(const ObjectT* objects, const usize count, const Name name){
@@ -231,7 +199,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Assets::AssetVector<ModelBinaryPayload::ModelStaticMeshObjectBinary> staticMeshObjectBinaries(m_staticMeshObjects.get_allocator().arena());
     Core::Assets::AssetVector<ModelBinaryPayload::ModelSkinnedMeshObjectBinary> skinnedMeshObjectBinaries(m_skinnedMeshObjects.get_allocator().arena());
 
-    if(!__hidden_model_runtime::ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
         header.skeletonObjectCount,
@@ -240,7 +208,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_TEXT("skeleton objects")
     ))
         return false;
-    if(!__hidden_model_runtime::ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
         header.staticMeshObjectCount,
@@ -249,7 +217,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_TEXT("static mesh objects")
     ))
         return false;
-    if(!__hidden_model_runtime::ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
         header.skinnedMeshObjectCount,
@@ -292,7 +260,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         m_skinnedMeshObjects.push_back(object);
     }
 
-    return __hidden_model_runtime::ReadComplete(binary, cursor, NWB_TEXT("Model::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary"))
         && validatePayload()
     ;
 }

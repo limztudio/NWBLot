@@ -6,6 +6,7 @@
 #include "skin_binary_payload.h"
 
 #include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
 #include <global/binary.h>
 
@@ -29,43 +30,6 @@ UniquePtr<Core::Assets::IAssetCodec> CreateSkinAssetCodec(){
     return MakeUnique<SkinAssetCodec>();
 }
 Core::Assets::AssetCodecAutoRegistrar s_SkinAssetCodecAutoRegistrar(&CreateSkinAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ValueContainer>
-[[nodiscard]] bool ReadVector(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    ValueContainer& outValues,
-    const tchar* failureContext,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
-    }
-    return false;
-}
-
-[[nodiscard]] bool ReadComplete(const Core::Assets::AssetBytes& binary, const usize cursor, const tchar* failureContext){
-    if(cursor == binary.size())
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -118,7 +82,7 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     m_mesh.virtualPath = Name(header.meshNameHash);
     m_skeleton.virtualPath = Name(header.skeletonNameHash);
 
-    if(!__hidden_skin_runtime::ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
         header.influenceCount,
@@ -127,7 +91,7 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_TEXT("influences")
     ))
         return false;
-    if(!__hidden_skin_runtime::ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
         header.inverseBindMatrixCount,
@@ -137,7 +101,7 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     ))
         return false;
 
-    return __hidden_skin_runtime::ReadComplete(binary, cursor, NWB_TEXT("Skin::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skin::loadBinary"))
         && validatePayload()
     ;
 }

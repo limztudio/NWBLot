@@ -7,6 +7,7 @@ target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/auto_registration.h"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
+    "${CMAKE_CURRENT_LIST_DIR}/binary_payload_io.h"
     "${CMAKE_CURRENT_LIST_DIR}/cooker.h"
     "${CMAKE_CURRENT_LIST_DIR}/paths.h"
     "${CMAKE_CURRENT_LIST_DIR}/ref.h"

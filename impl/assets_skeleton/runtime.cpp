@@ -6,6 +6,7 @@
 #include "binary_payload.h"
 
 #include <core/assets/auto_registration.h>
+#include <core/assets/binary_payload_io.h>
 #include <core/common/log.h>
 #include <global/binary.h>
 
@@ -29,43 +30,6 @@ UniquePtr<Core::Assets::IAssetCodec> CreateSkeletonAssetCodec(){
     return MakeUnique<SkeletonAssetCodec>();
 }
 Core::Assets::AssetCodecAutoRegistrar s_SkeletonAssetCodecAutoRegistrar(&CreateSkeletonAssetCodec);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ValueContainer>
-[[nodiscard]] bool ReadVector(
-    const Core::Assets::AssetBytes& binary,
-    usize& inOutCursor,
-    const u64 count,
-    ValueContainer& outValues,
-    const tchar* failureContext,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
-    }
-    return false;
-}
-
-[[nodiscard]] bool ReadComplete(const Core::Assets::AssetBytes& binary, const usize cursor, const tchar* failureContext){
-    if(cursor == binary.size())
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -252,7 +216,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(m_joints.get_allocator().arena());
-    if(!__hidden_skeleton_runtime::ReadVector(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
         header.jointCount,
@@ -277,7 +241,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     rebuildHierarchy();
 
-    return __hidden_skeleton_runtime::ReadComplete(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
         && validatePayload()
     ;
 }

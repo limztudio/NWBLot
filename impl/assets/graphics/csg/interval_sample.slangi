@@ -511,50 +511,43 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 }
 #endif
 
+void nwbCsgSampleNearestIntervalCapNeighborhood(
+    inout NwbCsgIntervalCapPixel result,
+    const uint2 outputPixel,
+    const bool sampleReceiverNeighbors
+){
+    [unroll]
+    for(int offsetY = -1; offsetY <= 1; ++offsetY){
+        [unroll]
+        for(int offsetX = -1; offsetX <= 1; ++offsetX){
+            if(offsetX == 0 && offsetY == 0)
+                continue;
+
+            const int2 neighborPixel = int2(outputPixel) + int2(offsetX, offsetY);
+            if(!nwbCsgIntervalSamplePixelInFrame(neighborPixel))
+                continue;
+
+            const uint2 receiverPixel = sampleReceiverNeighbors ? uint2(neighborPixel) : outputPixel;
+            const uint2 intervalPixel = sampleReceiverNeighbors ? outputPixel : uint2(neighborPixel);
+            nwbCsgSelectNearestIntervalCap(
+                result,
+                nwbCsgSampleNearestIntervalCapAtPixels(outputPixel, receiverPixel, intervalPixel)
+            );
+        }
+    }
+}
+
 NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
     const uint2 pixel = uint2(rasterPosition.xy);
     NwbCsgIntervalCapPixel result = nwbCsgSampleNearestIntervalCapAtPixels(pixel, pixel, pixel);
     if(result.visible)
         return result;
 
-    [unroll]
-    for(int offsetY = -1; offsetY <= 1; ++offsetY){
-        [unroll]
-        for(int offsetX = -1; offsetX <= 1; ++offsetX){
-            if(offsetX == 0 && offsetY == 0)
-                continue;
-
-            const int2 receiverPixel = int2(pixel) + int2(offsetX, offsetY);
-            if(!nwbCsgIntervalSamplePixelInFrame(receiverPixel))
-                continue;
-
-            nwbCsgSelectNearestIntervalCap(
-                result,
-                nwbCsgSampleNearestIntervalCapAtPixels(pixel, uint2(receiverPixel), pixel)
-            );
-        }
-    }
+    nwbCsgSampleNearestIntervalCapNeighborhood(result, pixel, true);
     if(result.visible)
         return result;
 
-    [unroll]
-    for(int offsetY = -1; offsetY <= 1; ++offsetY){
-        [unroll]
-        for(int offsetX = -1; offsetX <= 1; ++offsetX){
-            if(offsetX == 0 && offsetY == 0)
-                continue;
-
-            const int2 intervalPixel = int2(pixel) + int2(offsetX, offsetY);
-            if(!nwbCsgIntervalSamplePixelInFrame(intervalPixel))
-                continue;
-
-            nwbCsgSelectNearestIntervalCap(
-                result,
-                nwbCsgSampleNearestIntervalCapAtPixels(pixel, pixel, uint2(intervalPixel))
-            );
-        }
-    }
-
+    nwbCsgSampleNearestIntervalCapNeighborhood(result, pixel, false);
     return result;
 }
 

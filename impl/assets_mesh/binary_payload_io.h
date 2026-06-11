@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/assets/module.h>
+#include <core/assets/binary_payload_io.h>
 #include <global/binary.h>
 #include <core/common/log.h>
 
@@ -34,18 +34,7 @@ template<typename ValueContainer>
     const tchar* failureContext,
     const tchar* label
 ){
-    const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
-    }
-
-    return false;
+    return Core::Assets::ReadVectorPayload(binary, inOutCursor, count, outValues, failureContext, label);
 }
 
 
@@ -75,12 +64,7 @@ template<typename Header>
     const usize cursor,
     const tchar* failureContext
 ){
-    if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
-        return false;
-    }
-
-    return true;
+    return Core::Assets::ReadCompletePayload(binary, cursor, failureContext);
 }
 
 template<typename HeaderT>
@@ -213,18 +197,7 @@ template<typename ValueContainer>
     const tchar* failureContext,
     const tchar* label
 ){
-    const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
-    }
-
-    return false;
+    return Core::Assets::AppendVectorPayload(outBinary, values, failureContext, label);
 }
 
 template<typename MeshT>

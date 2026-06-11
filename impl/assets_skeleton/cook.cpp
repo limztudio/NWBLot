@@ -12,6 +12,7 @@
 #include "binary_payload.h"
 #include "cook_matrix.h"
 
+#include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
@@ -22,42 +23,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_skeleton_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ValueContainer>
-[[nodiscard]] bool AppendVector(
-    Core::Assets::AssetBytes& outBinary,
-    const ValueContainer& values,
-    const tchar* failureContext,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = AppendBinaryVectorPayload(outBinary, values);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
-    }
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +63,7 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     SkeletonBinaryPayload::HeaderBinary header;
     header.jointCount = static_cast<u64>(jointBinaries.size());
     AppendPOD(outBinary, header);
-    return __hidden_skeleton_cook::AppendVector(
+    return Core::Assets::AppendVectorPayload(
         outBinary,
         jointBinaries,
         NWB_TEXT("SkeletonAssetCodec::serialize"),

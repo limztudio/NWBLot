@@ -11,6 +11,7 @@
 #include "cook.h"
 #include "binary_payload.h"
 
+#include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
@@ -21,38 +22,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_model_cook{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ValueContainer>
-[[nodiscard]] bool AppendVector(
-    Core::Assets::AssetBytes& outBinary,
-    const ValueContainer& values,
-    const tchar* failureContext,
-    const tchar* label
-){
-    const BinaryVectorPayloadFailure::Enum failure = AppendBinaryVectorPayload(outBinary, values);
-    if(failure == BinaryVectorPayloadFailure::None)
-        return true;
-
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
-    }
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
-    }
-    return false;
-}
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,19 +94,19 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     header.skinnedMeshObjectCount = static_cast<u64>(skinnedMeshObjectBinaries.size());
     AppendPOD(outBinary, header);
 
-    return __hidden_model_cook::AppendVector(
+    return Core::Assets::AppendVectorPayload(
         outBinary,
         skeletonObjectBinaries,
         NWB_TEXT("ModelAssetCodec::serialize"),
         NWB_TEXT("skeleton objects")
     )
-        && __hidden_model_cook::AppendVector(
+        && Core::Assets::AppendVectorPayload(
             outBinary,
             staticMeshObjectBinaries,
             NWB_TEXT("ModelAssetCodec::serialize"),
             NWB_TEXT("static mesh objects")
         )
-        && __hidden_model_cook::AppendVector(
+        && Core::Assets::AppendVectorPayload(
             outBinary,
             skinnedMeshObjectBinaries,
             NWB_TEXT("ModelAssetCodec::serialize"),

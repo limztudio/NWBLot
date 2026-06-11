@@ -226,7 +226,7 @@ public:
     [[nodiscard]] virtual const CookVector<EntryT>& entries()const noexcept override{ return m_entries; }
 
 public:
-    virtual void reserve(const usize entryCount) override{
+    virtual void reserve(const usize entryCount)override{
         m_entries.reserve(entryCount);
     }
 
@@ -236,7 +236,7 @@ public:
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
         CookEntryParseContext& context
-    ) override{
+    )override{
         if(!m_parseDocument){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'")
                 , StringConvert(m_assetType.c_str())
@@ -257,7 +257,7 @@ public:
         const Path& nwbFilePath,
         const Core::Metascript::Value& asset,
         CookEntryParseContext& context
-    ) override{
+    )override{
         if(!m_parseValue){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
                 , StringConvert(m_assetType.c_str())
@@ -273,7 +273,7 @@ public:
         return appendParsedEntry(Move(entry), context);
     }
 
-    virtual bool writeCookedAssets(CookEntryWriteContext& context) override{
+    virtual bool writeCookedAssets(CookEntryWriteContext& context)override{
         CodecT codec;
         Core::Assets::AssetArena& assetArena = m_entries.get_allocator().arena();
 

@@ -91,7 +91,7 @@ public:
         const Name& virtualPath,
         const Core::Assets::IAsset& asset,
         const Core::Assets::IAssetCodec& codec
-    ) override{
+    )override{
         m_scratchBinary.clear();
         if(!codec.serialize(asset, m_scratchBinary)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: failed to serialize {} '{}'")

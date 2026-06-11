@@ -44,50 +44,12 @@ struct AssetVolumePrepareContext{
 
 using AssetVolumePrepareFunction = bool (*)(AssetVolumePrepareContext& context);
 
-enum class AssetVolumeMetadataParseResult : u8{
-    Unsupported,
-    Parsed,
-    Error
-};
-
-struct AssetVolumeDocumentMetadataParseContext{
-    CookArena& cookArena;
-    const DiscoveredNwbFile& discoveredNwbFile;
-    Name assetType = NAME_NONE;
-    const Core::Metascript::Document& doc;
-    ParsedAssetMetadata& parsedMetadata;
-    ScratchArena& scratchArena;
-};
-
-struct AssetVolumeValueMetadataParseContext{
-    CookArena& cookArena;
-    const DiscoveredNwbFile& discoveredNwbFile;
-    Name assetType = NAME_NONE;
-    Name virtualPath = NAME_NONE;
-    const Core::Metascript::Value& value;
-    ParsedAssetMetadata& parsedMetadata;
-    ScratchArena& scratchArena;
-};
-
-using AssetVolumeDocumentMetadataParseFunction = AssetVolumeMetadataParseResult (*)(AssetVolumeDocumentMetadataParseContext& context);
-using AssetVolumeValueMetadataParseFunction = AssetVolumeMetadataParseResult (*)(AssetVolumeValueMetadataParseContext& context);
-
 class AssetVolumePrepareAutoRegistrar final{
 public:
     explicit AssetVolumePrepareAutoRegistrar(AssetVolumePrepareFunction function);
 };
 
-class AssetVolumeMetadataParserAutoRegistrar final{
-public:
-    AssetVolumeMetadataParserAutoRegistrar(
-        AssetVolumeDocumentMetadataParseFunction documentFunction,
-        AssetVolumeValueMetadataParseFunction valueFunction
-    );
-};
-
 [[nodiscard]] bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context);
-[[nodiscard]] AssetVolumeMetadataParseResult TryAutoCollectedDocumentMetadataParsers(AssetVolumeDocumentMetadataParseContext& context);
-[[nodiscard]] AssetVolumeMetadataParseResult TryAutoCollectedValueMetadataParsers(AssetVolumeValueMetadataParseContext& context);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

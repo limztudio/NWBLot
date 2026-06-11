@@ -34,7 +34,7 @@ namespace __hidden_shader_cook_plan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace AssetsVolumeCookDetail;
+using namespace AssetsGraphicsCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
@@ -555,7 +555,7 @@ bool PrepareShaderEntriesForCook(
             return false;
         if(preparedEntry.supportsAvboitCsgClipVariant && !AssetsGraphicsCsgShaderVariants::AddClipVariantCount(preparedEntry.entry, baseVariantCount, preparedEntry.variantCount))
             return false;
-        if(!AssetsVolumeCookDetail::AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
+        if(!Core::Assets::AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
         const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.entry.emitMeshComputeShadow;
@@ -584,7 +584,7 @@ bool PrepareShaderEntriesForCook(
         meshComputeShadowEntry.materialTypedBindingInterface = meshShaderEntry.materialTypedBindingInterface;
         meshComputeShadowEntry.usesMaterialTypedBinding = meshShaderEntry.usesMaterialTypedBinding;
 
-        if(!AssetsVolumeCookDetail::AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
+        if(!Core::Assets::AddPlannedFileCount(meshComputeShadowEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
         outPreparedPlan.preparedEntries.push_back(Move(meshComputeShadowEntry));

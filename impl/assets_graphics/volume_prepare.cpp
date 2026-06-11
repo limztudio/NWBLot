@@ -17,8 +17,8 @@
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets_volume/cook_extension.h>
-#include <impl/assets_volume/cook_paths.h>
 
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -39,6 +39,7 @@ namespace __hidden_assets_graphics_volume_prepare{
 
 
 inline constexpr Name s_GraphicsVolumeMetadataExtensionName("assets_graphics/volume_metadata");
+inline constexpr Name s_IncludeAssetTypeName("include");
 
 using MaterialBindEntryVector = ShaderCook::CookVector<MaterialBindEntry>;
 using CsgShapeEntryVector = ShaderCook::CookVector<AssetsCsgCook::CsgShapeCookEntry>;
@@ -73,8 +74,8 @@ struct GraphicsVolumeMetadata{
     {}
 };
 
-static GraphicsVolumeMetadata& GraphicsMetadata(AssetsVolumeCookDetail::ParsedAssetMetadata& metadata){
-    return AssetsVolumeCookDetail::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(
+static GraphicsVolumeMetadata& GraphicsMetadata(Core::Assets::ParsedAssetMetadata& metadata){
+    return Core::Assets::RequireParsedMetadataExtension<GraphicsVolumeMetadata>(
         metadata,
         s_GraphicsVolumeMetadataExtensionName,
         metadata.arena
@@ -107,16 +108,16 @@ static bool AppendUniqueShaderEntry(
     return true;
 }
 
-static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocumentMetadata(
-    AssetsVolumeCookDetail::AssetVolumeDocumentMetadataParseContext& context
+static Core::Assets::AssetMetadataParseResult ParseGraphicsDocumentMetadata(
+    Core::Assets::AssetDocumentMetadataParseContext& context
 ){
-    using namespace AssetsVolumeCookDetail;
+    using namespace Core::Assets;
 
     if(context.assetType == Shader::AssetTypeName()){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         ShaderCook::ShaderEntry shaderEntry(context.cookArena);
         if(!graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))
-            return AssetVolumeMetadataParseResult::Error;
+            return AssetMetadataParseResult::Error;
 
         if(!Core::Assets::BuildDerivedAssetVirtualPath(
             context.discoveredNwbFile.assetRoot,
@@ -124,18 +125,18 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
             Path(shaderEntry.source),
             shaderEntry.name
         ))
-            return AssetVolumeMetadataParseResult::Error;
+            return AssetMetadataParseResult::Error;
 
         if(!AppendUniqueShaderEntry(shaderEntry, context.discoveredNwbFile.filePath, graphicsMetadata, graphicsMetadata.shaderEntries))
-            return AssetVolumeMetadataParseResult::Error;
-        return AssetVolumeMetadataParseResult::Parsed;
+            return AssetMetadataParseResult::Error;
+        return AssetMetadataParseResult::Parsed;
     }
 
     if(context.assetType == s_IncludeAssetTypeName){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         ShaderCook::IncludeEntry includeEntry(context.cookArena);
         if(!graphicsMetadata.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, includeEntry, context.scratchArena))
-            return AssetVolumeMetadataParseResult::Error;
+            return AssetMetadataParseResult::Error;
 
         if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
             ErrorCode errorCode;
@@ -146,7 +147,7 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
                     , PathToString<tchar>(context.discoveredNwbFile.filePath)
                     , StringConvert(errorCode.message())
                 );
-                return AssetVolumeMetadataParseResult::Error;
+                return AssetMetadataParseResult::Error;
             }
 
             ScratchString key = PathToString(context.scratchArena, absSource);
@@ -156,11 +157,11 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: duplicate include metadata for source '{}'")
                     , PathToString<tchar>(absSource)
                 );
-                return AssetVolumeMetadataParseResult::Error;
+                return AssetMetadataParseResult::Error;
             }
         }
 
-        return AssetVolumeMetadataParseResult::Parsed;
+        return AssetMetadataParseResult::Parsed;
     }
 
     if(context.assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
@@ -173,20 +174,18 @@ static AssetsVolumeCookDetail::AssetVolumeMetadataParseResult ParseGraphicsDocum
             csgShapeEntry,
             context.scratchArena
         ))
-            return AssetVolumeMetadataParseResult::Error;
+            return AssetMetadataParseResult::Error;
 
         graphicsMetadata.csgShapeEntries.push_back(Move(csgShapeEntry));
-        return AssetVolumeMetadataParseResult::Parsed;
+        return AssetMetadataParseResult::Parsed;
     }
 
-    return AssetVolumeMetadataParseResult::Unsupported;
+    return AssetMetadataParseResult::Unsupported;
 }
 
 static bool ParseMaterialBindFiles(AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
-    using namespace AssetsVolumeCookDetail;
-
-    DiscoveredBindFileVector bindFiles{ context.arena };
-    if(!DiscoverFilesWithExtension(
+    Core::Assets::DiscoveredBindFileVector bindFiles{ context.arena };
+    if(!Core::Assets::DiscoverFilesWithExtension(
         context.resolvedPaths.assetRoots,
         MaterialBindNames::SourceExtensionText(),
         bindFiles,
@@ -195,7 +194,7 @@ static bool ParseMaterialBindFiles(AssetsVolumeCookDetail::AssetVolumePrepareCon
         return false;
 
     graphicsMetadata.materialBindEntries.reserve(bindFiles.size());
-    for(const DiscoveredNwbFile& discoveredBindFile : bindFiles){
+    for(const Core::Assets::DiscoveredNwbFile& discoveredBindFile : bindFiles){
         MaterialBindEntry bindEntry(context.arena);
         if(!ParseMaterialBindSource(discoveredBindFile.filePath, bindEntry, context.scratchArena))
             return false;
@@ -215,8 +214,6 @@ static bool ParseMaterialBindFiles(AssetsVolumeCookDetail::AssetVolumePrepareCon
 }
 
 static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
-    using namespace AssetsVolumeCookDetail;
-
     GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
     if(!ParseMaterialBindFiles(context, graphicsMetadata))
         return false;
@@ -274,13 +271,13 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
         context.scratchArena
     ))
         return false;
-    if(!AddPlannedFileCount(graphicsMetadata.preparedPlan.plannedFileCount, context.plannedFileCount))
+    if(!Core::Assets::AddPlannedFileCount(graphicsMetadata.preparedPlan.plannedFileCount, context.plannedFileCount))
         return false;
 
     context.externalWriters.emplace_back([&context](
         Core::Filesystem::VolumeSession& volumeSession,
-        VirtualPathHashSet& seenVirtualPathHashes,
-        ScratchArena& writeScratchArena
+        Core::Assets::CookEntryPathHashSet& seenVirtualPathHashes,
+        Core::Assets::ScratchArena& writeScratchArena
     ){
         return AssetsGraphicsCookDetail::AppendPreparedShadersToVolume(
             context.arena,
@@ -301,7 +298,7 @@ static bool PrepareGraphicsVolumeAssets(AssetsVolumeCookDetail::AssetVolumePrepa
 
 
 AssetsVolumeCookDetail::AssetVolumePrepareAutoRegistrar s_PrepareGraphicsVolumeAssetsRegistrar(&PrepareGraphicsVolumeAssets);
-AssetsVolumeCookDetail::AssetVolumeMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(
+Core::Assets::AssetMetadataParserAutoRegistrar s_GraphicsVolumeMetadataParserRegistrar(
     &ParseGraphicsDocumentMetadata,
     nullptr
 );

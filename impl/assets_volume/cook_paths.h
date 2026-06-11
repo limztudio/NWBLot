@@ -15,7 +15,6 @@
 
 
 #include "cook_types.h"
-#include "cooker.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,22 +38,6 @@ namespace AssetsVolumeCookDetail{
     AStringView configurationSafeName,
     ScratchArena& scratchArena
 );
-[[nodiscard]] bool ResolveCookPaths(
-    const AssetVolumeCookEnvironment& environment,
-    ResolvedCookPaths& outPaths,
-    ScratchArena& scratchArena
-);
-[[nodiscard]] bool DiscoverFilesWithExtension(
-    const CookVector<Path>& assetRoots,
-    AStringView expectedExtension,
-    DiscoveredNwbFileVector& outFiles,
-    ScratchArena& scratchArena
-);
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 

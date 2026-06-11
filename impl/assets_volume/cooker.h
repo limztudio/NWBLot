@@ -28,22 +28,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AssetVolumeCookEnvironment{
-    using AssetRootVector = Vector<Path, Core::Alloc::GlobalArena>;
-
-    ACompactString configuration;
-    Path repoRoot;
-    AssetRootVector assetRoots;
-    Path outputDirectory;
-    Path cacheDirectory;
-    Core::Alloc::ThreadPool& threadPool;
-
-    AssetVolumeCookEnvironment(Core::Alloc::GlobalArena& arena, Core::Alloc::ThreadPool& threadPool)
-        : assetRoots(arena)
-        , threadPool(threadPool)
-    {}
-};
-
 struct AssetVolumeCookResult{
     ACompactString volumeName;
     u64 fileCount = 0;
@@ -61,7 +45,7 @@ public:
 
 
 private:
-    bool cookAssetVolume(const AssetVolumeCookEnvironment& environment, AssetVolumeCookResult& outResult);
+    bool cookAssetVolume(const Core::Assets::AssetCookOptions& options, AssetVolumeCookResult& outResult);
 };
 
 

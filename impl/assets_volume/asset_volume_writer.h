@@ -32,12 +32,6 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetVolumeExternalWriter = Function<bool(Core::Filesystem::VolumeSession&, VirtualPathHashSet&, ScratchArena&)>;
-using AssetVolumeExternalWriterVector = CookVector<AssetVolumeExternalWriter>;
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] bool WriteAssetVolume(
     Core::Alloc::GlobalArena& arena,
     const ResolvedCookPaths& resolvedPaths,

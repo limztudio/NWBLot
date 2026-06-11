@@ -20,6 +20,10 @@ if(NWB_BUILD_RESOURCE_COOKER)
     target_sources(nwb_assets_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.h"
     )
     target_link_libraries(nwb_assets_cook PUBLIC nwb_assets nwb_metascript nwb_filesystem)
     target_compile_definitions(nwb_assets_cook PRIVATE NWB_COOK=1)

@@ -10,6 +10,7 @@
 
 #include "cook.h"
 
+#include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 
@@ -31,6 +32,7 @@ namespace __hidden_assets_bunch_cook{
 
 using namespace AssetsBunchCook;
 namespace Metascript = Core::Metascript;
+inline constexpr Name s_AssetBunchTypeName("asset_bunch");
 using ScratchString = AString<ScratchArena>;
 using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena>;
 
@@ -50,6 +52,18 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     return Metascript::MStringView(declaration.variable.data(), declaration.variable.size());
 }
 
+[[nodiscard]] static bool IsAssetBunchType(const AStringView typeName){
+    return ToName(typeName) == s_AssetBunchTypeName;
+}
+
+[[nodiscard]] static bool HasAssetBunchDeclaration(const Core::Metascript::Document& doc){
+    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
+        if(IsAssetBunchType(DeclarationType(declaration)))
+            return true;
+    }
+    return false;
+}
+
 [[nodiscard]] static const Metascript::Document::Declaration* FindBunchItemDeclaration(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
@@ -66,7 +80,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 
     const AStringView itemReference(item.asReference().data(), item.asReference().size());
     for(const Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(AssetsBunchCook::IsAssetBunchType(DeclarationType(declaration)))
+        if(IsAssetBunchType(DeclarationType(declaration)))
             continue;
         if(DeclarationVariable(declaration) == itemReference)
             return &declaration;
@@ -297,6 +311,39 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     return true;
 }
 
+static Core::Assets::AssetBunchExpandResult ExpandAssetBunchForAssetCook(Core::Assets::AssetBunchExpandContext& context){
+    if(!HasAssetBunchDeclaration(context.doc))
+        return Core::Assets::AssetBunchExpandResult::Unsupported;
+
+    ExpandedAssetVector expandedAssets(context.scratchArena);
+    if(!ExpandAssetBunch(
+        context.assetRoot,
+        context.virtualRoot,
+        context.nwbFilePath,
+        context.doc,
+        expandedAssets,
+        context.scratchArena
+    ))
+        return Core::Assets::AssetBunchExpandResult::Error;
+
+    context.outAssets.reserve(expandedAssets.size());
+    for(const ExpandedAsset& expandedAsset : expandedAssets){
+        context.outAssets.push_back(Core::Assets::ExpandedAssetMetadata{
+            expandedAsset.assetType,
+            expandedAsset.virtualPath,
+            expandedAsset.value
+        });
+    }
+
+    return Core::Assets::AssetBunchExpandResult::Parsed;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Core::Assets::AssetBunchExpanderAutoRegistrar s_AssetBunchExpanderRegistrar(&ExpandAssetBunchForAssetCook);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -312,32 +359,6 @@ namespace AssetsBunchCook{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool IsAssetBunchType(const AStringView typeName){
-    return ToName(typeName) == s_AssetTypeName;
-}
-
-usize AssetBunchDeclarationCount(const Core::Metascript::Document& doc){
-    using namespace __hidden_assets_bunch_cook;
-
-    usize count = 0u;
-    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(IsAssetBunchType(DeclarationType(declaration)))
-            ++count;
-    }
-    return count;
-}
-
-usize NonAssetBunchDeclarationCount(const Core::Metascript::Document& doc){
-    using namespace __hidden_assets_bunch_cook;
-
-    usize count = 0u;
-    for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(!IsAssetBunchType(DeclarationType(declaration)))
-            ++count;
-    }
-    return count;
-}
 
 bool ExpandAssetBunch(
     const Path& assetRoot,

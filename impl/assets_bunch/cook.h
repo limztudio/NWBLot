@@ -35,8 +35,6 @@ namespace AssetsBunchCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_AssetTypeName("asset_bunch");
-
 using ScratchArena = Core::Alloc::ScratchArena;
 
 struct ExpandedAsset{
@@ -50,10 +48,6 @@ using ExpandedAssetVector = Vector<ExpandedAsset, ScratchArena>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] bool IsAssetBunchType(AStringView typeName);
-[[nodiscard]] usize AssetBunchDeclarationCount(const Core::Metascript::Document& doc);
-[[nodiscard]] usize NonAssetBunchDeclarationCount(const Core::Metascript::Document& doc);
 
 [[nodiscard]] bool ExpandAssetBunch(
     const Path& assetRoot,

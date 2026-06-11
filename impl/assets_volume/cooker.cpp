@@ -13,9 +13,10 @@
 #include "asset_volume_writer.h"
 #include "cook_extension.h"
 #include "cook_paths.h"
-#include "metadata_parser.h"
 
 #include <core/assets/auto_registration.h>
+#include <core/assets/cook_metadata.h>
+#include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
 
 #include <core/common/log.h>
@@ -52,17 +53,8 @@ Core::Assets::AssetCookerAutoRegistrar s_AssetVolumeCookerAutoRegistrar(&CreateA
 
 
 bool AssetVolumeCooker::cook(const Core::Assets::AssetCookOptions& options){
-    AssetVolumeCookEnvironment environment(m_arena, options.services.threadPool);
-    environment.configuration = options.configuration;
-    environment.repoRoot = options.repoRoot.empty() ? Path(".") : Path(options.repoRoot.c_str());
-    environment.assetRoots.reserve(options.assetRoots.size());
-    for(const Core::Assets::AssetString& assetRoot : options.assetRoots)
-        environment.assetRoots.push_back(Path(assetRoot.c_str()));
-    environment.outputDirectory = Path(options.outputDirectory.c_str());
-    environment.cacheDirectory = options.cacheDirectory.empty() ? Path() : Path(options.cacheDirectory.c_str());
-
     AssetVolumeCookResult result;
-    if(!cookAssetVolume(environment, result))
+    if(!cookAssetVolume(options, result))
         return false;
 
     NWB_LOGGER_ESSENTIAL_INFO(
@@ -71,7 +63,7 @@ bool AssetVolumeCooker::cook(const Core::Assets::AssetCookOptions& options){
         StringConvert(result.volumeName.c_str()),
         result.fileCount,
         result.segmentCount,
-        PathToString<tchar>(environment.outputDirectory)
+        StringConvert(options.outputDirectory)
     );
 
     return true;
@@ -80,17 +72,17 @@ bool AssetVolumeCooker::cook(const Core::Assets::AssetCookOptions& options){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& environment, AssetVolumeCookResult& outResult){
+bool AssetVolumeCooker::cookAssetVolume(const Core::Assets::AssetCookOptions& options, AssetVolumeCookResult& outResult){
     outResult = {};
 
     Core::Alloc::ScratchArena scratchArena;
 
-    AssetsVolumeCookDetail::ResolvedCookPaths resolvedPaths(m_arena);
-    if(!AssetsVolumeCookDetail::ResolveCookPaths(environment, resolvedPaths, scratchArena))
+    Core::Assets::ResolvedCookPaths resolvedPaths(m_arena);
+    if(!Core::Assets::ResolveCookPaths(options, resolvedPaths, scratchArena))
         return false;
 
-    AssetsVolumeCookDetail::DiscoveredNwbFileVector nwbFiles{ m_arena };
-    if(!AssetsVolumeCookDetail::DiscoverFilesWithExtension(
+    Core::Assets::DiscoveredNwbFileVector nwbFiles{ m_arena };
+    if(!Core::Assets::DiscoverFilesWithExtension(
         resolvedPaths.assetRoots,
         Core::Assets::s_NwbExtension,
         nwbFiles,
@@ -98,19 +90,19 @@ bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& enviro
     ))
         return false;
 
-    AssetsVolumeCookDetail::ParsedAssetMetadata parsedMetadata(m_arena);
+    Core::Assets::ParsedAssetMetadata parsedMetadata(m_arena);
     if(!Core::Assets::RegisterAutoCollectedCookEntryTypes(parsedMetadata.entryRegistry))
         return false;
-    if(!AssetsVolumeMetadataParser::ParseAssetMetadata(
+    if(!Core::Assets::ParseAssetMetadata(
         m_arena,
         nwbFiles,
         parsedMetadata,
-        environment.threadPool,
+        options.services.threadPool,
         scratchArena
     ))
         return false;
 
-    AssetsVolumeCookDetail::CookString configurationSafeName = BuildCanonicalSafeCacheName(m_arena, environment.configuration.view());
+    Core::Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(m_arena, options.configuration.view());
     if(configurationSafeName.empty())
         configurationSafeName = "default";
 
@@ -127,7 +119,7 @@ bool AssetVolumeCooker::cookAssetVolume(const AssetVolumeCookEnvironment& enviro
     };
     if(!AssetsVolumeCookDetail::RegisterAutoCollectedAssetVolumePreparers(prepareContext))
         return false;
-    if(!AssetsVolumeCookDetail::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
+    if(!Core::Assets::AddPlannedFileCount(parsedMetadata.entryRegistry.entryCount(), plannedFileCount))
         return false;
 
     AssetsVolumeCookDetail::AssetVolumeWriteResult volumeResult;

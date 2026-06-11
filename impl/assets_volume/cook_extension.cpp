@@ -39,29 +39,8 @@ struct AutoPrepareQueue{
     {}
 };
 
-struct AutoMetadataParser{
-    AssetsVolumeCookDetail::AssetVolumeDocumentMetadataParseFunction documentFunction = nullptr;
-    AssetsVolumeCookDetail::AssetVolumeValueMetadataParseFunction valueFunction = nullptr;
-};
-
-struct AutoMetadataParserQueue{
-    AssetsVolumeCookDetail::CookArena arena;
-    Futex mutex;
-    AssetsVolumeCookDetail::CookVector<AutoMetadataParser> parsers;
-
-    AutoMetadataParserQueue()
-        : arena("NWB::AssetsVolumeCookDetail::AssetVolumeMetadataParserQueue")
-        , parsers(arena)
-    {}
-};
-
 AutoPrepareQueue& QueryAutoPrepareQueue(){
     static AutoPrepareQueue queue;
-    return queue;
-}
-
-AutoMetadataParserQueue& QueryAutoMetadataParserQueue(){
-    static AutoMetadataParserQueue queue;
     return queue;
 }
 
@@ -71,19 +50,6 @@ static bool ContainsPrepareFunction(
 ){
     for(const AssetsVolumeCookDetail::AssetVolumePrepareFunction current : functions){
         if(current == function)
-            return true;
-    }
-
-    return false;
-}
-
-static bool ContainsMetadataParser(
-    const AssetsVolumeCookDetail::CookVector<AutoMetadataParser>& parsers,
-    const AssetsVolumeCookDetail::AssetVolumeDocumentMetadataParseFunction documentFunction,
-    const AssetsVolumeCookDetail::AssetVolumeValueMetadataParseFunction valueFunction
-){
-    for(const AutoMetadataParser& current : parsers){
-        if(current.documentFunction == documentFunction && current.valueFunction == valueFunction)
             return true;
     }
 
@@ -106,20 +72,6 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
-    if(inOutPlannedFileCount > Limit<u64>::s_Max - additionalFileCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: planned file count overflow"));
-        return false;
-    }
-
-    inOutPlannedFileCount += additionalFileCount;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolumePrepareFunction function){
     if(function == nullptr)
         return;
@@ -128,23 +80,6 @@ AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolu
     ScopedLock lock(queue.mutex);
     if(!__hidden_asset_volume_cook_extension::ContainsPrepareFunction(queue.functions, function))
         queue.functions.push_back(function);
-}
-
-AssetVolumeMetadataParserAutoRegistrar::AssetVolumeMetadataParserAutoRegistrar(
-    const AssetVolumeDocumentMetadataParseFunction documentFunction,
-    const AssetVolumeValueMetadataParseFunction valueFunction
-){
-    if(documentFunction == nullptr && valueFunction == nullptr)
-        return;
-
-    auto& queue = __hidden_asset_volume_cook_extension::QueryAutoMetadataParserQueue();
-    ScopedLock lock(queue.mutex);
-    if(!__hidden_asset_volume_cook_extension::ContainsMetadataParser(queue.parsers, documentFunction, valueFunction)){
-        queue.parsers.push_back(__hidden_asset_volume_cook_extension::AutoMetadataParser{
-            documentFunction,
-            valueFunction
-        });
-    }
 }
 
 bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){
@@ -167,50 +102,6 @@ bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& contex
     }
 
     return true;
-}
-
-AssetVolumeMetadataParseResult TryAutoCollectedDocumentMetadataParsers(AssetVolumeDocumentMetadataParseContext& context){
-    Core::Alloc::ScratchArena scratchArena;
-    Vector<__hidden_asset_volume_cook_extension::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
-    {
-        auto& queue = __hidden_asset_volume_cook_extension::QueryAutoMetadataParserQueue();
-        ScopedLock lock(queue.mutex);
-        AssignTriviallyCopyableVector(parsers, queue.parsers);
-    }
-
-    for(const __hidden_asset_volume_cook_extension::AutoMetadataParser& parser : parsers){
-        if(parser.documentFunction == nullptr)
-            continue;
-
-        const AssetVolumeMetadataParseResult result = parser.documentFunction(context);
-        if(result == AssetVolumeMetadataParseResult::Unsupported)
-            continue;
-        return result;
-    }
-
-    return AssetVolumeMetadataParseResult::Unsupported;
-}
-
-AssetVolumeMetadataParseResult TryAutoCollectedValueMetadataParsers(AssetVolumeValueMetadataParseContext& context){
-    Core::Alloc::ScratchArena scratchArena;
-    Vector<__hidden_asset_volume_cook_extension::AutoMetadataParser, Core::Alloc::ScratchArena> parsers{scratchArena};
-    {
-        auto& queue = __hidden_asset_volume_cook_extension::QueryAutoMetadataParserQueue();
-        ScopedLock lock(queue.mutex);
-        AssignTriviallyCopyableVector(parsers, queue.parsers);
-    }
-
-    for(const __hidden_asset_volume_cook_extension::AutoMetadataParser& parser : parsers){
-        if(parser.valueFunction == nullptr)
-            continue;
-
-        const AssetVolumeMetadataParseResult result = parser.valueFunction(context);
-        if(result == AssetVolumeMetadataParseResult::Unsupported)
-            continue;
-        return result;
-    }
-
-    return AssetVolumeMetadataParseResult::Unsupported;
 }
 
 

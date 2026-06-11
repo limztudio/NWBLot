@@ -16,7 +16,8 @@
 
 #include "shader_stage_key.h"
 
-#include <impl/assets_volume/cook_types.h>
+#include <core/assets/cook_metadata.h>
+#include <core/assets/cook_paths.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_shader/cook.h>
 
@@ -36,14 +37,15 @@ namespace AssetsGraphicsCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CookString = AssetsVolumeCookDetail::CookString;
+using CookString = Core::Assets::CookString;
 template<typename T>
-using CookVector = AssetsVolumeCookDetail::CookVector<T>;
+using CookVector = Core::Assets::CookVector<T>;
 template<typename T, typename V>
-using CookMap = AssetsVolumeCookDetail::CookMap<T, V>;
-using ResolvedCookPaths = AssetsVolumeCookDetail::ResolvedCookPaths;
-using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
-using VirtualPathHashSet = AssetsVolumeCookDetail::VirtualPathHashSet;
+using CookMap = Core::Assets::CookMap<T, V>;
+using ResolvedCookPaths = Core::Assets::ResolvedCookPaths;
+using ScratchArena = Core::Assets::ScratchArena;
+using ScratchString = Core::Assets::ScratchString;
+using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
 using IncludeMetadataMap = CookMap<CookString, ShaderCook::IncludeEntry>;
 using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
 using PreparedShaderKey = ShaderStageKey;

@@ -372,15 +372,18 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources))
             return false;
         NWB_ASSERT(pipelineResources);
+        const RenderPath::Enum renderPath = pipelineResources->renderPath;
 
         const bool csgReceiverSurfaceActive = csgClipActive && pass == MaterialPipelinePass::Opaque;
         MaterialPipelineKey csgReceiverSurfacePipelineKey = pipelineKey;
         MaterialPipelineResources* csgReceiverSurfacePipelineResources = nullptr;
+        RenderPath::Enum csgReceiverSurfaceRenderPath = RenderPath::MeshShader;
         if(csgReceiverSurfaceActive){
             csgReceiverSurfacePipelineKey.pass = MaterialPipelinePass::CsgReceiverSurface;
             if(!createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources))
                 return false;
             NWB_ASSERT(csgReceiverSurfacePipelineResources);
+            csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
         }
 
         auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
@@ -457,13 +460,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
 
         MaterialPassDrawItems& targetDrawItems = csgClipActive ? drawItems.csg : drawItems.regular;
-        appendDrawItemForRenderPath(pipelineResources->renderPath, drawItem, targetDrawItems);
+        appendDrawItemForRenderPath(renderPath, drawItem, targetDrawItems);
 
         if(csgReceiverSurfaceActive){
             MaterialPassDrawItem csgReceiverSurfaceDrawItem = drawItem;
             csgReceiverSurfaceDrawItem.pipelineKey = csgReceiverSurfacePipelineKey;
             appendDrawItemForRenderPath(
-                csgReceiverSurfacePipelineResources->renderPath,
+                csgReceiverSurfaceRenderPath,
                 csgReceiverSurfaceDrawItem,
                 drawItems.csgReceiverSurface
             );

@@ -73,10 +73,6 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return IsFinite(determinant) && Abs(determinant) > s_JointDeterminantEpsilon;
 }
 
-[[nodiscard]] inline const SIMDMatrix& ToSimdJointMatrix(const SIMDMatrix& matrix){
-    return matrix;
-}
-
 [[nodiscard]] inline SIMDMatrix ToSimdJointMatrix(const SkeletonJointMatrix& matrix){
     return LoadFloat(matrix);
 }
@@ -99,7 +95,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 }
 
 template<typename JointMatrixVector>
-[[nodiscard]] inline bool BuildSimdJointPaletteFromSkeletonPose(
+[[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
     const SkeletonPoseComponent& pose,
     JointMatrixVector& outJointPalette,
     u32& outSkinningMode){
@@ -130,35 +126,18 @@ template<typename JointMatrixVector>
             if(parentJoint >= jointIndex)
                 return false;
 
-            jointMatrix = MultiplyJointMatrices(outJointPalette[parentJoint], jointMatrix);
+            const SIMDMatrix parentJointMatrix = LoadFloat(outJointPalette[parentJoint]);
+            jointMatrix = MultiplyJointMatrices(parentJointMatrix, jointMatrix);
             if(!IsInvertibleAffineJointMatrix(jointMatrix))
                 return false;
         }
 
-        outJointPalette.push_back(jointMatrix);
-    }
-
-    outSkinningMode = pose.skinningMode;
-    return true;
-}
-
-template<typename SimdJointMatrixVector, typename JointMatrixVector>
-[[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
-    const SkeletonPoseComponent& pose,
-    SimdJointMatrixVector& scratchSimdJointPalette,
-    JointMatrixVector& outJointPalette,
-    u32& outSkinningMode){
-    if(!BuildSimdJointPaletteFromSkeletonPose(pose, scratchSimdJointPalette, outSkinningMode))
-        return false;
-
-    outJointPalette.clear();
-    outJointPalette.reserve(scratchSimdJointPalette.size());
-    for(const SIMDMatrix& jointMatrix : scratchSimdJointPalette){
         SkeletonJointMatrix storedJointMatrix{};
         StoreFloat(jointMatrix, &storedJointMatrix);
         outJointPalette.push_back(storedJointMatrix);
     }
 
+    outSkinningMode = pose.skinningMode;
     return true;
 }
 

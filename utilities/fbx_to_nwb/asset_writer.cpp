@@ -6,8 +6,6 @@
 
 #include <core/common/log.h>
 
-#include <algorithm>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -99,6 +97,58 @@ void WriteJointMatrix(Stream& out, const JointMatrix& matrix, const AStringView 
         out << ",\n";
     }
     out << indent << "]";
+}
+
+SIMDMatrix LoadJointMatrix(const JointMatrix& matrix){
+    SIMDMatrix result{};
+    result.v[0] = LoadFloat(matrix.rows[0u]);
+    result.v[1] = LoadFloat(matrix.rows[1u]);
+    result.v[2] = LoadFloat(matrix.rows[2u]);
+    result.v[3] = s_SIMDIdentityR3;
+    return result;
+}
+
+JointMatrix StoreJointMatrix(const SIMDMatrix& matrix){
+    JointMatrix result{};
+    StoreFloat(matrix.v[0u], &result.rows[0u]);
+    StoreFloat(matrix.v[1u], &result.rows[1u]);
+    StoreFloat(matrix.v[2u], &result.rows[2u]);
+    return result;
+}
+
+bool InvertJointMatrix(const JointMatrix& matrix, SIMDMatrix& outInverse){
+    const SIMDMatrix source = LoadJointMatrix(matrix);
+    SIMDVector determinant;
+    outInverse = MatrixInverse(&determinant, source);
+
+    const f32 scalarDeterminant = VectorGetX(determinant);
+    return IsFinite(scalarDeterminant)
+        && Abs(scalarDeterminant) > 0.000000000001f
+        && !MatrixIsNaN(outInverse)
+        && !MatrixIsInfinite(outInverse)
+    ;
+}
+
+bool BuildLocalBindPoseMatrix(
+    const JointMatrix& globalBindPose,
+    const JointMatrix* parentGlobalBindPose,
+    JointMatrix& outLocalBindPose
+){
+    if(!parentGlobalBindPose){
+        outLocalBindPose = globalBindPose;
+        return true;
+    }
+
+    SIMDMatrix parentInverse;
+    if(!InvertJointMatrix(*parentGlobalBindPose, parentInverse))
+        return false;
+
+    const SIMDMatrix localBindPose = MatrixMultiply(parentInverse, LoadJointMatrix(globalBindPose));
+    if(MatrixIsNaN(localBindPose) || MatrixIsInfinite(localBindPose))
+        return false;
+
+    outLocalBindPose = StoreJointMatrix(localBindPose);
+    return true;
 }
 
 bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName, const AStringView context){
@@ -318,7 +368,7 @@ bool BuildSkeletonOutputData(
     sortedJointIndices.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex)
         sortedJointIndices.push_back(jointIndex);
-    std::stable_sort(
+    Sort(
         sortedJointIndices.begin(),
         sortedJointIndices.end(),
         [&parentDepths, &sortNames](const usize lhs, const usize rhs){
@@ -336,9 +386,20 @@ bool BuildSkeletonOutputData(
     outData.inverseBindMatrices.reserve(inverseBindMatrices.size());
 
     for(const usize oldJointIndex : sortedJointIndices){
+        const u32 parentIndex = parentIndices[oldJointIndex];
+        const JointMatrix* parentGlobalBindPose = parentIndex != s_MissingSourceStreamIndex
+            ? &bindPoseMatrices[parentIndex]
+            : nullptr
+        ;
+        JointMatrix localBindPose;
+        if(!BuildLocalBindPoseMatrix(bindPoseMatrices[oldJointIndex], parentGlobalBindPose, localBindPose)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), StringConvert(sortNames[oldJointIndex]));
+            return false;
+        }
+
         outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);
-        outData.bindPoseMatrices.push_back(bindPoseMatrices[oldJointIndex]);
+        outData.bindPoseMatrices.push_back(localBindPose);
         if(!inverseBindMatrices.empty())
             outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
     }

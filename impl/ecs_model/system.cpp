@@ -541,12 +541,13 @@ void ModelSystem::updateStaticMeshAttachments(){
                 return;
 
             u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-            if(!SkeletonRuntime::BuildSimdJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
+            if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
                 return;
+
             if(attachment.parentJointIndex >= m_scratchJoints.size())
                 return;
 
-            const SIMDMatrix& jointMatrix = m_scratchJoints[attachment.parentJointIndex];
+            const SIMDMatrix jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
             __hidden_model_system::ApplyObjectTransform(
                 transform,
                 __hidden_model_system::MakeStaticAttachmentWorldTransform(

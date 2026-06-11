@@ -91,7 +91,7 @@ static void SetSkinnedBufferStates(
 struct RuntimeSkinPayloadScratch{
     Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
-    Vector<SIMDMatrix, Core::Alloc::ScratchArena> poseJoints;
+    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints;
     u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
 
     explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
@@ -113,7 +113,7 @@ static bool BuildRuntimeSkinPayload(
 ){
     payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
     if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
-        if(!SkeletonRuntime::BuildSimdJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
+        if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }

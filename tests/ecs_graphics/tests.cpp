@@ -517,11 +517,10 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
     );
 
     Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
-    Vector<SIMDMatrix> simdResolvedJoints;
     u32 skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, simdResolvedJoints, resolvedJoints, skinningMode)
+        NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkeletonSkinningMode::LinearBlend);
     NWB_ECS_GRAPHICS_TEST_CHECK(context, resolvedJoints.size() == 2u);
@@ -535,20 +534,20 @@ static void TestSkeletonPoseBuildsHierarchicalPalette(TestContext& context){
     pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, simdResolvedJoints, resolvedJoints, skinningMode)
+        NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
     NWB_ECS_GRAPHICS_TEST_CHECK(context, skinningMode == NWB::Impl::SkeletonSkinningMode::DualQuaternion);
 
     pose.parentJoints[1u] = 1u;
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, simdResolvedJoints, resolvedJoints, skinningMode)
+        !NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
     pose.parentJoints[1u] = 0u;
     pose.parentJoints.pop_back();
     NWB_ECS_GRAPHICS_TEST_CHECK(
         context,
-        !NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, simdResolvedJoints, resolvedJoints, skinningMode)
+        !NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode)
     );
 }
 static void TestMeshSkinningPayloadValidatesSkeletonAndPalette(TestContext& context){

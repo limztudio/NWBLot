@@ -7,11 +7,13 @@
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_volume/cooker.h>
+#include <impl/assets_volume/cook_entry_registry.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/cook.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
+#include <core/assets/paths.h>
 #include <tests/capturing_logger.h>
 #include <tests/meshlet_ref_test_data.h>
 #include <tests/test_context.h>
@@ -1479,6 +1481,8 @@ static bool FindShaderArchiveSourceChecksum(
 #include "material_tests.inl"
 #include "material_cook_tests.inl"
 
+#include "volume_extensibility_tests.inl"
+
 #include "mesh_cooker_tests.inl"
 
 NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& context){
@@ -1504,6 +1508,9 @@ NWB_DEFINE_TEST_ENTRY_POINT("assets graphics", [](NWB::Tests::TestContext& conte
     __hidden_tests::TestMaterialBindCookIntegration(context);
     __hidden_tests::TestMaterialRejectsMissingInterfaceCookIntegration(context);
     __hidden_tests::TestMaterialBindDependencyInvalidation(context);
+    __hidden_tests::TestProjectCookEntryAutoRegistration(context);
+    __hidden_tests::TestProjectCookEntryDocumentCook(context);
+    __hidden_tests::TestProjectCookEntryAssetBunchCook(context);
     __hidden_tests::TestMeshCookerTypedStreams(context);
     __hidden_tests::TestMeshCookerDefaultColors(context);
     __hidden_tests::TestMeshAcceptanceHardEdgeCubeZippedRefs(context);

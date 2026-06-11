@@ -33,14 +33,13 @@ bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     }
 
     const Core::Assets::AssetBytes& bytecode = static_cast<const Shader&>(asset).bytecode();
-    if(!ShaderBinaryPayload::IsValidBytecodeSize(bytecode.size())){
+    switch(ShaderBinaryPayload::ValidateBytecode(bytecode)){
+    case ShaderBinaryPayload::BytecodeValidationFailure::None:
+        break;
+    case ShaderBinaryPayload::BytecodeValidationFailure::InvalidSize:
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid bytecode size"));
         return false;
-    }
-
-    usize cursor = 0;
-    u32 magic = 0;
-    if(!ReadPOD(bytecode, cursor, magic) || magic != ShaderBinaryPayload::s_SpvMagic){
+    case ShaderBinaryPayload::BytecodeValidationFailure::InvalidMagic:
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V magic"));
         return false;
     }

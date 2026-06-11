@@ -45,13 +45,13 @@ bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!ShaderBinaryPayload::IsValidBytecodeSize(binary.size())){
+    switch(ShaderBinaryPayload::ValidateBytecode(binary)){
+    case ShaderBinaryPayload::BytecodeValidationFailure::None:
+        break;
+    case ShaderBinaryPayload::BytecodeValidationFailure::InvalidSize:
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid bytecode size"));
         return false;
-    }
-    usize cursor = 0;
-    u32 magic = 0;
-    if(!ReadPOD(binary, cursor, magic) || magic != ShaderBinaryPayload::s_SpvMagic){
+    case ShaderBinaryPayload::BytecodeValidationFailure::InvalidMagic:
         NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid SPIR-V magic"));
         return false;
     }

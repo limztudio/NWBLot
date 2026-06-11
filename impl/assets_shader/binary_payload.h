@@ -7,6 +7,8 @@
 
 #include "../global.h"
 
+#include <global/binary.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,8 +28,27 @@ namespace ShaderBinaryPayload{
 inline constexpr u32 s_SpvMagic = 0x07230203u;
 inline constexpr usize s_SpvWordBytes = sizeof(u32);
 
+enum class BytecodeValidationFailure : u8{
+    None,
+    InvalidSize,
+    InvalidMagic,
+};
+
 [[nodiscard]] inline bool IsValidBytecodeSize(const usize byteSize){
     return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
+}
+
+template<typename BinaryContainer>
+[[nodiscard]] inline BytecodeValidationFailure ValidateBytecode(const BinaryContainer& binary){
+    if(!IsValidBytecodeSize(binary.size()))
+        return BytecodeValidationFailure::InvalidSize;
+
+    usize cursor = 0u;
+    u32 magic = 0u;
+    if(!ReadPOD(binary, cursor, magic) || magic != s_SpvMagic)
+        return BytecodeValidationFailure::InvalidMagic;
+
+    return BytecodeValidationFailure::None;
 }
 
 

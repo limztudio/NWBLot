@@ -9,7 +9,6 @@
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
-#include <impl/ecs_render/components.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 
 
@@ -43,11 +42,6 @@ static bool HasPotentialSkinningWork(
             || SkeletonRuntime::HasSkeletonPose(skeletonPose)
         )
     ;
-}
-
-static bool RuntimeMeshRenderVisible(Core::ECS::World& world, const Core::ECS::EntityID entity){
-    const RendererComponent* renderer = world.tryGetComponent<RendererComponent>(entity);
-    return renderer && renderer->visible;
 }
 
 static void ResolveSkeletonComponents(
@@ -94,7 +88,6 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
 {
     writeAccess<SkinnedMeshBindingComponent>();
-    readAccess<RendererComponent>();
     readAccess<SkeletonJointPaletteComponent>();
     readAccess<SkeletonPoseComponent>();
 
@@ -121,7 +114,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
             if(!ready)
                 return;
-            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())
+            if(!binding.runtimeMesh.valid())
                 return;
 
             MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
@@ -141,9 +134,6 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
 
 bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
     outMesh = RuntimeMeshDesc{};
-    if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity))
-        return false;
-
     RuntimeMeshHandle runtimeMesh;
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
@@ -239,7 +229,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
-            if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())
+            if(!binding.runtimeMesh.valid())
                 return;
 
             MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);

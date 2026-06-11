@@ -23,6 +23,5 @@ target_link_libraries(nwb_ecs_mesh_skinning PUBLIC
 target_link_libraries(nwb_ecs_mesh_skinning PRIVATE
     nwb_assets_mesh
     nwb_assets_shader_loader
-    nwb_ecs_render_components
 )
 

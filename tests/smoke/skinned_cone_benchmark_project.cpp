@@ -8,10 +8,12 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
+#include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
-#include <impl/assets_mesh/skinned_asset.h>
+#include <impl/assets_skeleton/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
+#include <impl/ecs_model/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/timing_names.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
@@ -30,7 +32,7 @@ namespace __hidden_skinned_cone_benchmark{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using BenchmarkMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedMesh>;
+using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 namespace RendererTiming = NWB::Impl::RendererGpuTimingScope;
@@ -113,9 +115,10 @@ static constexpr f32 s_FarCameraDistance = 5.6f;
 static constexpr f32 s_CameraHeight = 1.1f;
 static constexpr u32 s_AnimatedJointModulo = 16u;
 static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
-static constexpr AStringView s_BenchmarkSkinnedMeshPath = "project/characters/skinned_cone_female";
+static constexpr AStringView s_BenchmarkModelPath = "project/characters/body/model";
 static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/smoke/skinned_cone_benchmark/materials/solid";
 static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNED_CONE_STATIC_PREVIEW";
+static constexpr Name s_ModelBaseObject("base");
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
     { BenchmarkMode::NoCulling, BenchmarkView::Front },
@@ -377,6 +380,11 @@ private:
             context.assetManager,
             context.shaderPathResolver
         );
+        auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
+            *world,
+            context.assetManager
+        );
+        static_cast<void>(modelSystem);
         auto& skinnedMeshSystem = world->addSystem<NWB::Impl::SkinnedMeshSystem>(
             *world,
             context.graphics,
@@ -423,45 +431,58 @@ private:
     }
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::SkinnedMesh::AssetTypeName(), Name(s_BenchmarkSkinnedMeshPath), loadedAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to load benchmark skinned mesh"));
+        UniquePtr<NWB::Core::Assets::IAsset> loadedModelAsset;
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_BenchmarkModelPath), loadedModelAsset)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to load benchmark model"));
             return false;
         }
-        if(!loadedAsset || loadedAsset->assetType() != NWB::Impl::SkinnedMesh::AssetTypeName()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh loaded with an unexpected asset type"));
-            return false;
-        }
-
-        const auto* mesh = static_cast<const NWB::Impl::SkinnedMesh*>(loadedAsset.get());
-        if(mesh->skeletonJointCount() == 0u || mesh->inverseBindMatrices().size() != mesh->skeletonJointCount()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh has invalid skeleton bind data"));
+        if(!loadedModelAsset || loadedModelAsset->assetType() != NWB::Impl::Model::AssetTypeName()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark model loaded with an unexpected asset type"));
             return false;
         }
 
+        const auto* model = static_cast<const NWB::Impl::Model*>(loadedModelAsset.get());
+        const NWB::Impl::ModelSkeletonObject* skeletonObject = nullptr;
+        for(const NWB::Impl::ModelSkeletonObject& object : model->skeletonObjects()){
+            if(object.name == s_ModelBaseObject){
+                skeletonObject = &object;
+                break;
+            }
+        }
+        if(!skeletonObject && !model->skeletonObjects().empty())
+            skeletonObject = &model->skeletonObjects().front();
+        if(!skeletonObject || !skeletonObject->skeleton.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark model has no skeleton object"));
+            return false;
+        }
+
+        UniquePtr<NWB::Core::Assets::IAsset> loadedSkeletonAsset;
+        const Name skeletonPath = skeletonObject->skeleton.name();
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonPath, loadedSkeletonAsset)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to load benchmark skeleton"));
+            return false;
+        }
+        if(!loadedSkeletonAsset || loadedSkeletonAsset->assetType() != NWB::Impl::Skeleton::AssetTypeName()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark skeleton loaded with an unexpected asset type"));
+            return false;
+        }
+
+        const auto* skeleton = static_cast<const NWB::Impl::Skeleton*>(loadedSkeletonAsset.get());
+        if(skeleton->joints().empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark skeleton has no joints"));
+            return false;
+        }
         m_bindJoints.clear();
-        m_bindJoints.reserve(mesh->inverseBindMatrices().size());
-        for(const NWB::Impl::SkeletonJointMatrix& inverseBind : mesh->inverseBindMatrices()){
-            SIMDVector determinant = VectorZero();
-            const SIMDMatrix bindJoint = MatrixInverse(&determinant, LoadFloat(inverseBind));
-            if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(bindJoint)){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh inverse bind matrix produced an invalid bind pose"));
+        m_bindJoints.reserve(skeleton->joints().size());
+        for(const NWB::Impl::SkeletonJoint& joint : skeleton->joints()){
+            if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(LoadFloat(joint.localBindPose))){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark skeleton contains an invalid bind pose"));
                 return false;
             }
 
-            NWB::Impl::SkeletonJointMatrix storedBind{};
-            StoreFloat(bindJoint, &storedBind);
-            m_bindJoints.push_back(storedBind);
+            m_bindJoints.push_back(joint.localBindPose);
         }
         return !m_bindJoints.empty();
-    }
-
-    void initializePose(NWB::Impl::SkeletonPoseComponent& pose)const{
-        pose.parentJoints.resize(m_bindJoints.size(), NWB::Impl::s_SkeletonRootParent);
-        pose.localJoints.clear();
-        pose.localJoints.reserve(m_bindJoints.size());
-        for(usize jointIndex = 0u; jointIndex < m_bindJoints.size(); ++jointIndex)
-            pose.localJoints.push_back(m_bindJoints[jointIndex]);
     }
 
     void configureCamera(const BenchmarkView::Enum view){
@@ -653,6 +674,23 @@ private:
         }
     }
 
+    [[nodiscard]] NWB::Core::ECS::EntityID findSpawnedModelObject(
+        const NWB::Core::ECS::EntityID owner,
+        const Name objectName,
+        const NWB::Impl::ModelObjectKind::Enum objectKind
+    )const{
+        NWB::Core::ECS::EntityID result = NWB::Core::ECS::ENTITY_ID_INVALID;
+        m_world->view<NWB::Impl::ModelObjectComponent>().each(
+            [&](const NWB::Core::ECS::EntityID entity, NWB::Impl::ModelObjectComponent& object){
+                if(result.valid())
+                    return;
+                if(object.owner == owner && object.object == objectName && object.kind == objectKind)
+                    result = entity;
+            }
+        );
+        return result;
+    }
+
 
 public:
     explicit SkinnedConeBenchmarkProject(NWB::ProjectRuntimeContext& context)
@@ -696,12 +734,14 @@ public:
             s_DefaultDirectionalLightIntensity
         );
 
-        BenchmarkMeshRef mesh;
-        mesh.virtualPath = Name(s_BenchmarkSkinnedMeshPath);
+        BenchmarkModelRef model;
+        model.virtualPath = Name(s_BenchmarkModelPath);
         BenchmarkMaterialRef material;
         material.virtualPath = Name(s_SkinnedBenchmarkMaterialPath);
         const u32 characterCount = m_staticPreview ? 1u : s_CharacterCount;
         m_entities.reserve(characterCount);
+        Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> modelOwners(m_context.objectArena);
+        modelOwners.reserve(characterCount);
 
         for(u32 characterIndex = 0u; characterIndex < characterCount; ++characterIndex){
             auto entity = m_world->createEntity();
@@ -709,15 +749,28 @@ public:
             transform.position = Float4(m_staticPreview ? 0.0f : (static_cast<f32>(characterIndex) - 1.0f) * 1.15f, 0.0f, 0.0f, 0.0f);
             transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 
-            auto& skinnedMesh = entity.addComponent<NWB::Impl::SkinnedMeshComponent>();
-            skinnedMesh.skinnedMesh = mesh;
-
-            auto& pose = entity.addComponent<NWB::Impl::SkeletonPoseComponent>(m_context.objectArena);
-            initializePose(pose);
+            auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
+            modelComponent.model = model;
 
             auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
             renderer.material = material;
-            m_entities.push_back(entity.id());
+            modelOwners.push_back(entity.id());
+        }
+
+        m_world->tick(0.0f);
+        for(const NWB::Core::ECS::EntityID owner : modelOwners){
+            const NWB::Core::ECS::EntityID skeletonEntity = findSpawnedModelObject(
+                owner,
+                s_ModelBaseObject,
+                NWB::Impl::ModelObjectKind::Skeleton
+            );
+            if(!skeletonEntity.valid()){
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to find spawned benchmark skeleton object"));
+                requestQuit();
+                return true;
+            }
+
+            m_entities.push_back(skeletonEntity);
         }
 
         if(m_staticPreview){

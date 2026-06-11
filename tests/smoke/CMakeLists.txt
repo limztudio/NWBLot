@@ -431,9 +431,9 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_csg_skinned_visible_asset_inputs)
     endif()
 
-    set(_nwb_skinned_cone_female_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/skinned_cone_female.nwb")
+    set(_nwb_skinned_cone_model_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/body.nwb")
 
-    if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinned_cone_female_nwb}")
+    if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinned_cone_model_nwb}")
         set(_nwb_skinned_cone_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_runtime/$<CONFIG>")
         if(TARGET nwb_logserver)
             set(_nwb_skinned_cone_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
@@ -448,6 +448,7 @@ if(Python3_Interpreter_FOUND)
         nwb_configure_runtime_smoke_target(
             nwb_skinned_cone_benchmark
             "${_nwb_skinned_cone_runtime_root}"
+            nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
 
@@ -472,7 +473,7 @@ if(Python3_Interpreter_FOUND)
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinned_cone_asset_stamp}"
             DEPENDS
                 nwb_resource_cooker
-                "${_nwb_skinned_cone_female_nwb}"
+                "${_nwb_skinned_cone_model_nwb}"
                 ${_nwb_skinned_cone_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB skinned cone benchmark assets for $<CONFIG>..."
@@ -501,12 +502,12 @@ if(Python3_Interpreter_FOUND)
         )
 
         unset(_nwb_skinned_cone_asset_stamp)
-        unset(_nwb_skinned_cone_female_nwb)
+        unset(_nwb_skinned_cone_model_nwb)
         unset(_nwb_skinned_cone_runtime_root)
         unset(_nwb_skinned_cone_asset_inputs)
         unset(_nwb_skinned_cone_logserver_args)
     else()
-        message(STATUS "Skipping skinned cone culling benchmark; missing tests/smoke/assets/characters/skinned_cone_female.nwb.")
+        message(STATUS "Skipping skinned cone culling benchmark; missing tests/smoke/assets/characters/body.nwb.")
     endif()
-    unset(_nwb_skinned_cone_female_nwb)
+    unset(_nwb_skinned_cone_model_nwb)
 endif()

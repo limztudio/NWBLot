@@ -81,19 +81,20 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 }
 
 [[nodiscard]] static bool BuildItemVirtualPath(
-    const Name baseVirtualPath,
+    const AStringView baseVirtualPath,
     const AStringView variableName,
+    ScratchString& outVirtualPathText,
     Name& outVirtualPath,
-    ScratchArena& scratchArena
+    ScratchArena&
 ){
     outVirtualPath = NAME_NONE;
+    outVirtualPathText.clear();
 
-    ScratchString virtualPath(scratchArena);
-    virtualPath += baseVirtualPath.c_str();
-    virtualPath += '/';
-    virtualPath.append(variableName.data(), variableName.size());
+    outVirtualPathText.append(baseVirtualPath.data(), baseVirtualPath.size());
+    outVirtualPathText += '/';
+    outVirtualPathText.append(variableName.data(), variableName.size());
 
-    outVirtualPath = Name(AStringView(virtualPath.data(), virtualPath.size()));
+    outVirtualPath = Name(AStringView(outVirtualPathText.data(), outVirtualPathText.size()));
     return outVirtualPath != NAME_NONE;
 }
 
@@ -117,7 +118,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReferenceValue(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    const Name baseVirtualPath,
+    const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
@@ -128,7 +129,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReferenceList(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    const Name baseVirtualPath,
+    const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
@@ -157,7 +158,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReferenceMap(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    const Name baseVirtualPath,
+    const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
@@ -184,7 +185,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
 [[nodiscard]] static bool ResolveAssetReference(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    const Name baseVirtualPath,
+    const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
@@ -234,8 +235,9 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         return resolved;
     }
 
+    ScratchString virtualPathText(scratchArena);
     Name virtualPath = NAME_NONE;
-    if(!BuildItemVirtualPath(baseVirtualPath, DeclarationVariable(*declaration), virtualPath, scratchArena)){
+    if(!BuildItemVirtualPath(baseVirtualPath, DeclarationVariable(*declaration), virtualPathText, virtualPath, scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(AStringView(reference.data(), reference.size()))
@@ -243,14 +245,14 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
         return false;
     }
 
-    outValue.setString(Metascript::MStringView(virtualPath.c_str(), NWB_STRLEN(virtualPath.c_str())));
+    outValue.setString(Metascript::MStringView(virtualPathText.data(), virtualPathText.size()));
     return true;
 }
 
 [[nodiscard]] static bool ResolveAssetReferenceValue(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    const Name baseVirtualPath,
+    const AStringView baseVirtualPath,
     const ScratchNameHashSet& assetVariableHashes,
     ScratchNameHashSet& resolvingVariableHashes,
     const Metascript::Value& source,
@@ -384,8 +386,8 @@ bool ExpandAssetBunch(
         return false;
     }
 
-    Name baseVirtualPath = NAME_NONE;
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, baseVirtualPath, scratchArena))
+    ScratchString baseVirtualPathText(scratchArena);
+    if(!Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, baseVirtualPathText))
         return false;
 
     ScratchNameHashSet usedVariables(
@@ -434,7 +436,7 @@ bool ExpandAssetBunch(
         if(!ResolveAssetReferenceValue(
             nwbFilePath,
             doc,
-            baseVirtualPath,
+            AStringView(baseVirtualPathText.data(), baseVirtualPathText.size()),
             usedVariables,
             resolvingVariableHashes,
             *assetValue,
@@ -443,8 +445,15 @@ bool ExpandAssetBunch(
         ))
             return false;
 
+        ScratchString virtualPathText(scratchArena);
         Name virtualPath = NAME_NONE;
-        if(!BuildItemVirtualPath(baseVirtualPath, variableName, virtualPath, scratchArena)){
+        if(!BuildItemVirtualPath(
+            AStringView(baseVirtualPathText.data(), baseVirtualPathText.size()),
+            variableName,
+            virtualPathText,
+            virtualPath,
+            scratchArena
+        )){
             NWB_LOGGER_ERROR(NWB_TEXT("Asset bunch '{}': failed to build virtual path for variable '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(variableName)

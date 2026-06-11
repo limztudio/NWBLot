@@ -573,13 +573,13 @@ void WriteModelAssetBody(
 ){
     if(skeletonName){
         file << variableName << ".skeletons = {\n";
-        file << "    \"base\": ";
+        file << "    \"skeleton\": ";
         WriteReferenceValue(file, *skeletonName, quoteAssetReferences);
         file << ",\n";
         file << "};\n\n";
 
         file << variableName << ".skinned_meshes = {\n";
-        file << "    \"base\": {\n";
+        file << "    \"mesh\": {\n";
         file << "        \"mesh\": ";
         WriteReferenceValue(file, meshName, quoteAssetReferences);
         file << ",\n";
@@ -631,13 +631,13 @@ void WriteModelAssetBodyWithSkinnedMeshWrapper(
     const bool quoteSkinnedMeshReference
 ){
     file << variableName << ".skeletons = {\n";
-    file << "    \"base\": ";
+    file << "    \"skeleton\": ";
     WriteReferenceValue(file, skeletonName, quoteAssetReferences);
     file << ",\n";
     file << "};\n\n";
 
     file << variableName << ".skinned_meshes = {\n";
-    file << "    \"base\": ";
+    file << "    \"mesh\": ";
     WriteReferenceValue(file, skinnedMeshWrapperName, quoteSkinnedMeshReference);
     file << ",\n";
     file << "};\n";

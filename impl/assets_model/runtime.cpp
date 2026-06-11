@@ -81,6 +81,38 @@ template<typename ObjectT>
     return false;
 }
 
+[[nodiscard]] bool ModelStaticMeshObjectExists(const Model::StaticMeshObjectVector& staticMeshObjects, const Name name){
+    for(const ModelStaticMeshObject& object : staticMeshObjects){
+        if(object.name == name)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool ModelSkinnedMeshObjectExists(const Model::SkinnedMeshObjectVector& skinnedMeshObjects, const Name name){
+    for(const ModelSkinnedMeshObject& object : skinnedMeshObjects){
+        if(object.name == name)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool ModelObjectNameIsUnique(
+    const Model::SkeletonObjectVector& skeletonObjects,
+    const Model::StaticMeshObjectVector& staticMeshObjects,
+    const Model::SkinnedMeshObjectVector& skinnedMeshObjects,
+    const Name name
+){
+    u32 count = 0u;
+    for(const ModelSkeletonObject& object : skeletonObjects)
+        count += object.name == name ? 1u : 0u;
+    for(const ModelStaticMeshObject& object : staticMeshObjects)
+        count += object.name == name ? 1u : 0u;
+    for(const ModelSkinnedMeshObject& object : skinnedMeshObjects)
+        count += object.name == name ? 1u : 0u;
+    return count == 1u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -111,6 +143,10 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: duplicate object name in skeleton object {}"), i);
             return false;
         }
+        if(!__hidden_model_runtime::ModelObjectNameIsUnique(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects, object.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skeleton object {} name is duplicated in the model"), i);
+            return false;
+        }
     }
 
     for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
@@ -127,12 +163,23 @@ bool Model::validatePayload()const{
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: duplicate object name in static mesh object {}"), i);
             return false;
         }
+        if(!__hidden_model_runtime::ModelObjectNameIsUnique(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects, object.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} name is duplicated in the model"), i);
+            return false;
+        }
         if(!object.parentObject && object.parentJoint){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} has joint parent without object parent"), i);
             return false;
         }
-        if(object.parentJoint && !__hidden_model_runtime::ModelSkeletonObjectExists(m_skeletonObjects, object.parentObject)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} targets a missing skeleton object parent"), i);
+        if(object.parentObject && !__hidden_model_runtime::ModelSkeletonObjectExists(m_skeletonObjects, object.parentObject)){
+            if(__hidden_model_runtime::ModelStaticMeshObjectExists(m_staticMeshObjects, object.parentObject)
+                || __hidden_model_runtime::ModelSkinnedMeshObjectExists(m_skinnedMeshObjects, object.parentObject)
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} parent_object must reference a skeleton object"), i);
+            }
+            else{
+                NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: static mesh object {} targets a missing skeleton object parent"), i);
+            }
             return false;
         }
     }
@@ -149,6 +196,10 @@ bool Model::validatePayload()const{
         }
         if(!__hidden_model_runtime::NameUniqueInSpan(m_skinnedMeshObjects.data(), i, object.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: duplicate object name in skinned mesh object {}"), i);
+            return false;
+        }
+        if(!__hidden_model_runtime::ModelObjectNameIsUnique(m_skeletonObjects, m_staticMeshObjects, m_skinnedMeshObjects, object.name)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} name is duplicated in the model"), i);
             return false;
         }
         if(!__hidden_model_runtime::ModelSkeletonObjectExists(m_skeletonObjects, object.skeletonObject)){

@@ -118,7 +118,7 @@ static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
 static constexpr AStringView s_BenchmarkModelPath = "project/characters/body/model";
 static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/smoke/skinned_cone_benchmark/materials/solid";
 static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNED_CONE_STATIC_PREVIEW";
-static constexpr Name s_ModelBaseObject("base");
+static constexpr Name s_ModelSkeletonObject("skeleton");
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
     { BenchmarkMode::NoCulling, BenchmarkView::Front },
@@ -444,7 +444,7 @@ private:
         const auto* model = static_cast<const NWB::Impl::Model*>(loadedModelAsset.get());
         const NWB::Impl::ModelSkeletonObject* skeletonObject = nullptr;
         for(const NWB::Impl::ModelSkeletonObject& object : model->skeletonObjects()){
-            if(object.name == s_ModelBaseObject){
+            if(object.name == s_ModelSkeletonObject){
                 skeletonObject = &object;
                 break;
             }
@@ -761,7 +761,7 @@ public:
         for(const NWB::Core::ECS::EntityID owner : modelOwners){
             const NWB::Core::ECS::EntityID skeletonEntity = findSpawnedModelObject(
                 owner,
-                s_ModelBaseObject,
+                s_ModelSkeletonObject,
                 NWB::Impl::ModelObjectKind::Skeleton
             );
             if(!skeletonEntity.valid()){

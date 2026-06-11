@@ -43,6 +43,8 @@ struct ModelStaticMeshObject{
     Name name = NAME_NONE;
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Material> material;
+    // Static attachment order: model owner * parent_object skeleton transform * parent_joint pose * transform.
+    // If parent_joint is empty, the joint pose term is omitted. If parent_object is empty, the model owner is used.
     Name parentObject = NAME_NONE;
     Name parentJoint = NAME_NONE;
     SkeletonJointMatrix transform = MakeIdentityModelMatrix();

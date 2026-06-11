@@ -48,7 +48,7 @@ static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible
 #endif
 static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
-static constexpr Name s_ModelBaseObject("base");
+static constexpr Name s_ModelMeshObject("mesh");
 static constexpr f32 s_CameraDistance = 3.25f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
@@ -215,7 +215,7 @@ private:
     [[nodiscard]] bool installCsgReceiverOnSpawnedModelObject(){
         m_receiverObject = findSpawnedModelObject(
             m_receiver,
-            s_ModelBaseObject,
+            s_ModelMeshObject,
             NWB::Impl::ModelObjectKind::SkinnedMesh
         );
         if(!m_receiverObject.valid()){

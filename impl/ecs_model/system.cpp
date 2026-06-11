@@ -548,9 +548,7 @@ void ModelSystem::updateStaticMeshAttachments(){
             if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode))
                 return;
 
-            if(attachment.parentJointIndex >= m_scratchJoints.size())
-                return;
-
+            NWB_ASSERT(attachment.parentJointIndex < m_scratchJoints.size());
             const SIMDMatrix jointMatrix = LoadFloat(m_scratchJoints[attachment.parentJointIndex]);
             __hidden_model_system::ApplyObjectTransform(
                 transform,

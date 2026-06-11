@@ -41,6 +41,8 @@ if(Python3_Interpreter_FOUND)
             nwb_ecs_render
             ${ARGN}
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
+            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"
+            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_model>"
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material>"
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
         )
@@ -258,6 +260,7 @@ if(Python3_Interpreter_FOUND)
             nwb_csg_skinned_visible_smoke
             "${_nwb_csg_skinned_visible_runtime_root}"
             nwb_ecs_csg
+            nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
 
@@ -335,6 +338,7 @@ if(Python3_Interpreter_FOUND)
             nwb_csg_skinned_sphere_visible_smoke
             "${_nwb_csg_skinned_visible_runtime_root}"
             nwb_ecs_csg
+            nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_csg_skinned_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)
@@ -384,6 +388,7 @@ if(Python3_Interpreter_FOUND)
             nwb_csg_skinned_transparent_sphere_visible_smoke
             "${_nwb_csg_skinned_visible_runtime_root}"
             nwb_ecs_csg
+            nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_csg_skinned_transparent_sphere_visible_smoke nwb_csg_skinned_visible_smoke_assets)

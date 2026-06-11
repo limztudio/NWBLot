@@ -44,6 +44,33 @@ void ApplyObjectTransform(Scene::TransformComponent& transform, const SkeletonJo
     StoreFloat(VectorSetW(scale, 0.0f), &transform.scale);
 }
 
+SIMDMatrix LoadTransformComponentMatrix(const Scene::TransformComponent& transform){
+    return MatrixAffineTransformation(
+        LoadFloat(transform.scale),
+        VectorZero(),
+        LoadFloat(transform.rotation),
+        LoadFloat(transform.position)
+    );
+}
+
+SkeletonJointMatrix MakeWorldTransform(
+    const Scene::TransformComponent* parentTransform,
+    const SkeletonJointMatrix& localTransform
+){
+    if(!parentTransform)
+        return localTransform;
+
+    SkeletonJointMatrix worldTransform{};
+    StoreFloat(
+        MatrixMultiply(
+            LoadTransformComponentMatrix(*parentTransform),
+            LoadFloat(localTransform)
+        ),
+        &worldTransform
+    );
+    return worldTransform;
+}
+
 void ApplyObjectTransform(Core::ECS::Entity& entity, const SkeletonJointMatrix& matrix){
     auto& transform = entity.addComponent<Scene::TransformComponent>();
     ApplyObjectTransform(transform, matrix);
@@ -54,22 +81,45 @@ void TagObject(
     const Core::ECS::EntityID owner,
     const Name model,
     const Name object,
+    const SkeletonJointMatrix& localTransform,
     const ModelObjectKind::Enum kind
 ){
     auto& objectComponent = entity.addComponent<ModelObjectComponent>();
     objectComponent.owner = owner;
     objectComponent.model = model;
     objectComponent.object = object;
+    objectComponent.localTransform = localTransform;
     objectComponent.kind = kind;
 }
 
 template<typename MaterialRefT>
-void ApplyOptionalRenderer(Core::ECS::Entity& entity, const MaterialRefT& material){
-    if(!material.valid())
+void ApplyRenderer(Core::ECS::World& world, Core::Alloc::GlobalArena& arena, Core::ECS::Entity& entity, const Core::ECS::EntityID owner, const MaterialRefT& material){
+    Core::Assets::AssetRef<Material> resolvedMaterial = material;
+    bool visible = true;
+    if(const RendererComponent* ownerRenderer = world.tryGetComponent<RendererComponent>(owner)){
+        visible = ownerRenderer->visible;
+        if(!resolvedMaterial.valid())
+            resolvedMaterial = ownerRenderer->material;
+    }
+    if(!resolvedMaterial.valid())
         return;
 
     auto& renderer = entity.addComponent<RendererComponent>();
-    renderer.material = material;
+    renderer.material = resolvedMaterial;
+    renderer.visible = visible;
+
+    const MaterialInstanceComponent* ownerMaterialInstance = world.tryGetComponent<MaterialInstanceComponent>(owner);
+    if(!ownerMaterialInstance)
+        return;
+
+    const Name materialInterface = ownerMaterialInstance->materialInterface;
+    const u64 revision = ownerMaterialInstance->revision;
+    MaterialInstanceComponent::ParameterVector overrides(arena);
+    overrides.assign(ownerMaterialInstance->overrides.begin(), ownerMaterialInstance->overrides.end());
+
+    auto& materialInstance = entity.addComponent<MaterialInstanceComponent>(arena, materialInterface);
+    materialInstance.revision = revision;
+    materialInstance.overrides = Move(overrides);
 }
 
 bool LoadSkeleton(
@@ -136,6 +186,10 @@ ModelSystem::ModelSystem(
     writeAccess<ModelStaticMeshAttachmentComponent>();
     writeAccess<MeshComponent>();
     writeAccess<SkinnedMeshBindingComponent>();
+    readAccess<RendererComponent>();
+    writeAccess<RendererComponent>();
+    readAccess<MaterialInstanceComponent>();
+    writeAccess<MaterialInstanceComponent>();
     writeAccess<Scene::TransformComponent>();
     writeAccess<SkeletonPoseComponent>();
 }
@@ -153,6 +207,7 @@ void ModelSystem::update(Core::ECS::World& world, const f32 delta){
         }
     );
 
+    updateModelObjectTransforms();
     updateStaticMeshAttachments();
 }
 
@@ -275,9 +330,16 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
         owner,
         m_world.getComponent<ModelRuntimeComponent>(owner).model,
         object.name,
+        object.transform,
         ModelObjectKind::Skeleton
     );
-    __hidden_model_system::ApplyObjectTransform(entity, object.transform);
+    __hidden_model_system::ApplyObjectTransform(
+        entity,
+        __hidden_model_system::MakeWorldTransform(
+            m_world.tryGetComponent<Scene::TransformComponent>(owner),
+            object.transform
+        )
+    );
 
     auto& pose = entity.addComponent<SkeletonPoseComponent>(m_arena);
     pose.parentJoints.clear();
@@ -302,10 +364,17 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         owner,
         m_world.getComponent<ModelRuntimeComponent>(owner).model,
         object.name,
+        object.transform,
         ModelObjectKind::StaticMesh
     );
-    __hidden_model_system::ApplyObjectTransform(entity, object.transform);
-    __hidden_model_system::ApplyOptionalRenderer(entity, object.material);
+    __hidden_model_system::ApplyObjectTransform(
+        entity,
+        __hidden_model_system::MakeWorldTransform(
+            m_world.tryGetComponent<Scene::TransformComponent>(owner),
+            object.transform
+        )
+    );
+    __hidden_model_system::ApplyRenderer(m_world, m_arena, entity, owner, object.material);
 
     auto& mesh = entity.addComponent<MeshComponent>();
     mesh.mesh = object.mesh;
@@ -369,10 +438,17 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
         owner,
         m_world.getComponent<ModelRuntimeComponent>(owner).model,
         object.name,
+        object.transform,
         ModelObjectKind::SkinnedMesh
     );
-    __hidden_model_system::ApplyObjectTransform(entity, object.transform);
-    __hidden_model_system::ApplyOptionalRenderer(entity, object.material);
+    __hidden_model_system::ApplyObjectTransform(
+        entity,
+        __hidden_model_system::MakeWorldTransform(
+            m_world.tryGetComponent<Scene::TransformComponent>(owner),
+            object.transform
+        )
+    );
+    __hidden_model_system::ApplyRenderer(m_world, m_arena, entity, owner, object.material);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
     binding.mesh = object.mesh;
@@ -381,12 +457,47 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     return true;
 }
 
-void ModelSystem::updateStaticMeshAttachments(){
-    m_world.view<ModelStaticMeshAttachmentComponent, Scene::TransformComponent>().each(
-        [&](const Core::ECS::EntityID entity, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
+void ModelSystem::updateModelObjectTransforms(){
+    m_world.view<ModelObjectComponent, Scene::TransformComponent>().each(
+        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, Scene::TransformComponent& transform){
             static_cast<void>(entity);
-            if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max)
+            if(object.kind == ModelObjectKind::StaticMesh)
                 return;
+
+            __hidden_model_system::ApplyObjectTransform(
+                transform,
+                __hidden_model_system::MakeWorldTransform(
+                    m_world.tryGetComponent<Scene::TransformComponent>(object.owner),
+                    object.localTransform
+                )
+            );
+        }
+    );
+}
+
+void ModelSystem::updateStaticMeshAttachments(){
+    m_world.view<ModelObjectComponent, ModelStaticMeshAttachmentComponent, Scene::TransformComponent>().each(
+        [&](const Core::ECS::EntityID entity, ModelObjectComponent& object, ModelStaticMeshAttachmentComponent& attachment, Scene::TransformComponent& transform){
+            static_cast<void>(entity);
+
+            const Scene::TransformComponent* ownerTransform = m_world.tryGetComponent<Scene::TransformComponent>(object.owner);
+            const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid()
+                ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity)
+                : ownerTransform;
+            const SIMDMatrix parentMatrix = parentTransform
+                ? __hidden_model_system::LoadTransformComponentMatrix(*parentTransform)
+                : MatrixIdentity();
+            const SIMDMatrix objectWorldTransform = MatrixMultiply(
+                parentMatrix,
+                LoadFloat(attachment.localTransform)
+            );
+
+            if(!attachment.parentEntity.valid() || attachment.parentJointIndex == Limit<u32>::s_Max){
+                SkeletonJointMatrix storedWorldTransform{};
+                StoreFloat(objectWorldTransform, &storedWorldTransform);
+                __hidden_model_system::ApplyObjectTransform(transform, storedWorldTransform);
+                return;
+            }
 
             const SkeletonPoseComponent* pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
             if(!pose)
@@ -398,12 +509,15 @@ void ModelSystem::updateStaticMeshAttachments(){
             if(attachment.parentJointIndex >= m_scratchJoints.size())
                 return;
 
-            SkeletonJointMatrix worldTransform{};
+            SkeletonJointMatrix storedWorldTransform{};
             StoreFloat(
-                MatrixMultiply(LoadFloat(m_scratchJoints[attachment.parentJointIndex]), LoadFloat(attachment.localTransform)),
-                &worldTransform
+                MatrixMultiply(
+                    parentMatrix,
+                    MatrixMultiply(LoadFloat(m_scratchJoints[attachment.parentJointIndex]), LoadFloat(attachment.localTransform))
+                ),
+                &storedWorldTransform
             );
-            __hidden_model_system::ApplyObjectTransform(transform, worldTransform);
+            __hidden_model_system::ApplyObjectTransform(transform, storedWorldTransform);
         }
     );
 }

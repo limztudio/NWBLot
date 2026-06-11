@@ -67,6 +67,7 @@ struct ModelObjectComponent{
     Core::ECS::EntityID owner = Core::ECS::ENTITY_ID_INVALID;
     Name model = NAME_NONE;
     Name object = NAME_NONE;
+    SkeletonJointMatrix localTransform = MakeIdentitySkeletonJointMatrix();
     u32 kind = ModelObjectKind::StaticMesh;
 };
 

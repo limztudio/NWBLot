@@ -9,14 +9,14 @@
 #include <core/ecs/module.h>
 #include <core/graphics/module.h>
 #include <core/mesh/frame_math.h>
-#include <impl/assets_mesh/skinned_asset.h>
+#include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
+#include <impl/ecs_model/module.h>
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_render/material_instance.h>
-#include <impl/ecs_skeleton/runtime_helpers.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include "csg_smoke_helpers.h"
@@ -31,7 +31,7 @@ namespace __hidden_csg_skinned_visible_smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using SmokeSkinnedMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::SkinnedMesh>;
+using SmokeModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using SmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
@@ -40,7 +40,7 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_SkinnedMeshPath = "project/characters/skinned_cone_female";
+static constexpr AStringView s_ModelPath = "project/characters/body/model";
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
 static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/transparent_multi/materials/shared";
 #else
@@ -48,6 +48,7 @@ static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible
 #endif
 static constexpr AStringView s_SmokeBxdfSurfaceMaterialInterface = "project/shaders/smoke_bxdf_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
+static constexpr Name s_ModelBaseObject("base");
 static constexpr f32 s_CameraDistance = 3.25f;
 static constexpr f32 s_CameraHeight = 0.92f;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.62f;
@@ -119,6 +120,11 @@ private:
             context.assetManager,
             context.shaderPathResolver
         );
+        auto& modelSystem = world->addSystem<NWB::Impl::ModelSystem>(
+            *world,
+            context.assetManager
+        );
+        static_cast<void>(modelSystem);
         auto& skinnedMeshSystem = world->addSystem<NWB::Impl::SkinnedMeshSystem>(
             *world,
             context.graphics,
@@ -152,37 +158,15 @@ private:
         m_world.owner().reset();
     }
 
-    void initializeRestPose(NWB::Impl::SkeletonPoseComponent& pose){
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::SkinnedMesh::AssetTypeName(), Name(s_SkinnedMeshPath), loadedAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skinned receiver rest pose"));
-            return;
-        }
-        if(!loadedAsset || loadedAsset->assetType() != NWB::Impl::SkinnedMesh::AssetTypeName()){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: receiver asset loaded with an unexpected type"));
-            return;
-        }
-
-        const auto* mesh = static_cast<const NWB::Impl::SkinnedMesh*>(loadedAsset.get());
-        pose.parentJoints.resize(mesh->skeletonJointCount(), NWB::Impl::s_SkeletonRootParent);
-        pose.localJoints.clear();
-        pose.localJoints.reserve(mesh->inverseBindMatrices().size());
-        for(const NWB::Impl::SkeletonJointMatrix& inverseBind : mesh->inverseBindMatrices()){
-            SIMDVector determinant = VectorZero();
-            const SIMDMatrix bindJoint = MatrixInverse(&determinant, LoadFloat(inverseBind));
-            NWB::Impl::SkeletonJointMatrix storedBind{};
-            StoreFloat(bindJoint, &storedBind);
-            pose.localJoints.push_back(storedBind);
-        }
-    }
-
     NWB::Core::ECS::EntityID createSkinnedReceiverInstance(
         const Float4 position,
         const Float4 colorTint,
         const bool enableCsg
     ){
-        SmokeSkinnedMeshRef mesh;
-        mesh.virtualPath = Name(s_SkinnedMeshPath);
+        static_cast<void>(enableCsg);
+
+        SmokeModelRef model;
+        model.virtualPath = Name(s_ModelPath);
         SmokeMaterialRef material;
         material.virtualPath = Name(s_ReceiverMaterialPath);
 
@@ -191,10 +175,8 @@ private:
         transform.position = position;
         transform.scale = Float4(1.0f, 1.0f, 1.0f, 0.0f);
 
-        auto& skinnedMesh = entity.addComponent<NWB::Impl::SkinnedMeshComponent>();
-        skinnedMesh.skinnedMesh = mesh;
-        auto& pose = entity.addComponent<NWB::Impl::SkeletonPoseComponent>(m_context.objectArena);
-        initializeRestPose(pose);
+        auto& modelComponent = entity.addComponent<NWB::Impl::ModelComponent>();
+        modelComponent.model = model;
 
         auto& renderer = entity.addComponent<NWB::Impl::RendererComponent>();
         renderer.material = material;
@@ -210,19 +192,47 @@ private:
         ))
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
 
-        if(enableCsg){
-            auto& receiver = entity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
-            receiver.receiverGroup = s_ReceiverGroup;
-#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-            receiver.affectOpaquePass = false;
-            receiver.affectTransparentPass = true;
-#else
-            receiver.affectOpaquePass = true;
-            receiver.affectTransparentPass = false;
-#endif
+        return entity.id();
+    }
+
+    NWB::Core::ECS::EntityID findSpawnedModelObject(
+        const NWB::Core::ECS::EntityID owner,
+        const Name objectName,
+        const u32 objectKind
+    )const{
+        NWB::Core::ECS::EntityID result = NWB::Core::ECS::ENTITY_ID_INVALID;
+        m_world->view<NWB::Impl::ModelObjectComponent>().each(
+            [&](const NWB::Core::ECS::EntityID entity, NWB::Impl::ModelObjectComponent& object){
+                if(result.valid())
+                    return;
+                if(object.owner == owner && object.object == objectName && object.kind == objectKind)
+                    result = entity;
+            }
+        );
+        return result;
+    }
+
+    [[nodiscard]] bool installCsgReceiverOnSpawnedModelObject(){
+        m_receiverObject = findSpawnedModelObject(
+            m_receiver,
+            s_ModelBaseObject,
+            NWB::Impl::ModelObjectKind::SkinnedMesh
+        );
+        if(!m_receiverObject.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
+            return false;
         }
 
-        return entity.id();
+        auto& receiver = m_world->addComponent<NWB::Impl::SkinnedCsgMeshComponent>(m_receiverObject);
+        receiver.receiverGroup = s_ReceiverGroup;
+#if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
+        receiver.affectOpaquePass = false;
+        receiver.affectTransparentPass = true;
+#else
+        receiver.affectOpaquePass = true;
+        receiver.affectTransparentPass = false;
+#endif
+        return true;
     }
 
     void createReceiver(){
@@ -321,14 +331,19 @@ public:
         );
 
         createReceiver();
+        m_world->tick(0.0f);
+        const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
         createCutter();
+        m_world->tick(0.0f);
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()
                 && m_plainReceiver.valid()
                 && m_receiver.valid()
+                && m_receiverObject.valid()
                 && m_cutter.valid(),
             NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
         );
+        NWB_FATAL_ASSERT_MSG(receiverReady, NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object"));
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
@@ -364,6 +379,7 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Core::ECS::EntityID m_plainReceiver = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_receiver = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_receiverObject = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_cutter = NWB::Core::ECS::ENTITY_ID_INVALID;
     f32 m_animationTime = s_InitialAnimationTime;
 };

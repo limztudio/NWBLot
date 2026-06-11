@@ -382,6 +382,29 @@ AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     return out.str();
 }
 
+bool NameUsed(const UtilityVector<AString>& names, const AString& name){
+    for(const AString& usedName : names){
+        if(usedName == name)
+            return true;
+    }
+    return false;
+}
+
+AString UniqueNodeName(const ufbx_node* node, const usize fallbackIndex, UtilityVector<AString>& usedNames){
+    const AString baseName = NodeName(node, fallbackIndex);
+    AString name = baseName;
+
+    u32 suffix = 1u;
+    while(NameUsed(usedNames, name)){
+        AStringStream out;
+        out << baseName << "_" << suffix++;
+        name = out.str();
+    }
+
+    usedNames.push_back(name);
+    return name;
+}
+
 AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     virtualRoot = Trim(Move(virtualRoot));
     if(virtualRoot.empty())
@@ -432,9 +455,11 @@ void WriteSkeletonAssetBody(
     const UtilityVector<JointMatrix>& bindPoseMatrices
 ){
     file << variableName << ".joints = [\n";
+    UtilityVector<AString> usedJointNames;
+    usedJointNames.reserve(joints.size());
     for(usize jointIndex = 0u; jointIndex < joints.size(); ++jointIndex){
         file << "    {\n";
-        file << "        \"name\": \"" << EscapeMetadataString(NodeName(joints[jointIndex], jointIndex)) << "\",\n";
+        file << "        \"name\": \"" << EscapeMetadataString(UniqueNodeName(joints[jointIndex], jointIndex, usedJointNames)) << "\",\n";
         file << "        \"local_bind_pose\": ";
         WriteJointMatrix(file, bindPoseMatrices[jointIndex], "        ");
         file << ",\n";

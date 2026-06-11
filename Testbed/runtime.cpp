@@ -41,7 +41,7 @@ static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
 static constexpr AStringView s_FemaleModelPath = "project/characters/female/model";
-static constexpr AStringView s_SkinnedMeshMaterialPath = "project/materials/mat_skinned_uv";
+static constexpr AStringView s_ModelMaterialPath = "project/materials/mat_skinned_uv";
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -184,7 +184,7 @@ static void ApplyFlyCameraInputToMainCamera(
     TestbedModelRef model;
     model.virtualPath = Name(s_FemaleModelPath);
     TestbedMaterialRef material;
-    material.virtualPath = Name(s_SkinnedMeshMaterialPath);
+    material.virtualPath = Name(s_ModelMaterialPath);
 
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
@@ -224,10 +224,10 @@ void ProjectTestbed::verifyRendererSystemOrDie(NWB::Core::ECS::World& world){
         rendererSystem,
         NWB_TEXT("ProjectTestbed initialization failed: renderer system is missing in initial world")
     );
-    auto* skinnedMeshSystem = world.getSystem<NWB::Impl::SkinnedMeshSystem>();
+    auto* meshSkinningSystem = world.getSystem<NWB::Impl::MeshSkinningSystem>();
     NWB_FATAL_ASSERT_MSG(
-        skinnedMeshSystem,
-        NWB_TEXT("ProjectTestbed initialization failed: skinned mesh system is missing in initial world")
+        meshSkinningSystem,
+        NWB_TEXT("ProjectTestbed initialization failed: mesh skinning system is missing in initial world")
     );
     auto* modelSystem = world.getSystem<NWB::Impl::ModelSystem>();
     NWB_FATAL_ASSERT_MSG(
@@ -246,7 +246,7 @@ void ProjectTestbed::drawUiControls(){
 
     ImGui::TextUnformatted("Renderer: mesh shader path with compute emulation fallback");
     ImGui::Separator();
-    ImGui::TextUnformatted("Character: female skinned mesh");
+    ImGui::TextUnformatted("Character: female model");
     ImGui::End();
 }
 

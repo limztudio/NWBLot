@@ -125,7 +125,7 @@ private:
             context.assetManager
         );
         static_cast<void>(modelSystem);
-        auto& skinnedMeshSystem = world->addSystem<NWB::Impl::SkinnedMeshSystem>(
+        auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(
             *world,
             context.graphics,
             context.assetManager,
@@ -133,7 +133,7 @@ private:
             context.shaderPathResolver
         );
 
-        context.graphics.addRenderPassToBack(skinnedMeshSystem);
+        context.graphics.addRenderPassToBack(meshSkinningSystem);
         context.graphics.addRenderPassToBack(rendererSystem);
         return MakeNotNullUnique(Move(world));
     }
@@ -142,9 +142,9 @@ private:
         if(!m_world.owner())
             return;
 
-        auto* skinnedMeshSystem = m_world->getSystem<NWB::Impl::SkinnedMeshSystem>();
-        if(skinnedMeshSystem)
-            m_context.graphics.removeRenderPass(*skinnedMeshSystem);
+        auto* meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
+        if(meshSkinningSystem)
+            m_context.graphics.removeRenderPass(*meshSkinningSystem);
 
         auto* rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
         if(rendererSystem)

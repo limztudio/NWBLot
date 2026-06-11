@@ -76,15 +76,15 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: model system was not created"));
         return false;
     }
-    auto& skinnedMeshSystem = world->addSystem<NWB::Impl::SkinnedMeshSystem>(
+    auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(
         *world,
         context.graphics,
         context.assetManager,
         meshSystem,
         context.shaderPathResolver
     );
-    if(!world->getSystem<NWB::Impl::SkinnedMeshSystem>()){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: skinned mesh system was not created"));
+    if(!world->getSystem<NWB::Impl::MeshSkinningSystem>()){
+        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: mesh skinning system was not created"));
         return false;
     }
     auto& uiSystem = world->addSystem<NWB::Impl::UiSystem>(
@@ -98,7 +98,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: core UI system was not created"));
         return false;
     }
-    context.graphics.addRenderPassToBack(skinnedMeshSystem);
+    context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiSystem);
 
@@ -120,9 +120,9 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    auto* skinnedMeshSystem = world->getSystem<NWB::Impl::SkinnedMeshSystem>();
-    if(!skinnedMeshSystem){
-        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: skinned mesh system is null"));
+    auto* meshSkinningSystem = world->getSystem<NWB::Impl::MeshSkinningSystem>();
+    if(!meshSkinningSystem){
+        NWB_LOGGER_FATAL(NWB_TEXT("DestroyInitialProjectWorld failed: mesh skinning system is null"));
         return;
     }
 
@@ -144,7 +144,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         return;
     }
 
-    context.graphics.removeRenderPass(*skinnedMeshSystem);
+    context.graphics.removeRenderPass(*meshSkinningSystem);
     context.graphics.removeRenderPass(*rendererSystem);
     context.graphics.removeRenderPass(*uiSystem);
 

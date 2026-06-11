@@ -33,8 +33,8 @@
   - `nwb_frame`, `nwb_loader`, `nwb_logserver`, `nwb_resource_cooker`, and `testbed` are configured through the CMake build options and platform dependencies.
   - Full Linux configure: `cmake --preset linux-clang-x64`.
   - Debug test verification: `cmake --build --preset linux-clang-dbg`, then `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg --output-on-failure`.
-  - fin skinned-cone benchmark verification: configure with `cmake --preset linux-clang-x64`, build `nwb_skinned_cone_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinned_cone_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinned_cone_culling_benchmark --output-on-failure`.
-  - The skinned-cone benchmark CTest entry is `fin`-only and is configured only when `tests/smoke/assets/characters/skinned_cone_female.nwb` is present.
+  - fin skinning-culling benchmark verification: configure with `cmake --preset linux-clang-x64`, build `nwb_skinning_culling_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinning_culling_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinning_culling_benchmark --output-on-failure`.
+  - The skinning-culling benchmark CTest entry is `fin`-only and is configured only when `tests/smoke/assets/characters/body.nwb` is present.
   - The benchmark CTest is a smoke/regression check. It records GPU timing metrics in the log and allows a small tolerance for near-equal no-culling and culling render times.
   - Project code should request a clean shutdown through `ProjectRuntimeContext::requestQuit`; do not call platform-specific quit APIs such as `PostQuitMessage` from project or smoke-test code.
   - When `requestQuit` is raised during project update, the frame loop exits without submitting another graphics frame.

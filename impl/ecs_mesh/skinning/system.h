@@ -43,20 +43,20 @@ NWB_IMPL_BEGIN
 
 
 class Shader;
-struct SkinnedMeshRuntimeMeshInstance;
-struct SkinnedMeshSkinInfluenceGpu;
+struct MeshSkinningRuntimeInstance;
+struct MeshSkinningInfluenceGpu;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SkinnedMeshSystem final
+class MeshSkinningSystem final
     : public Core::ECS::ISystem
     , public Core::IRenderPass
     , public IRuntimeMeshProvider
 {
 private:
-    struct SkinnedMeshPushConstants{
+    struct MeshSkinningPushConstants{
         u32 meshletCount = 0;
         u32 skinCount = 0;
         u32 jointCount = 0;
@@ -66,12 +66,12 @@ private:
         u32 padding2 = 0;
         u32 padding3 = 0;
     };
-    static_assert(sizeof(SkinnedMeshPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "SkinnedMesh push constants layout must match the shader ABI");
-    static_assert(offsetof(SkinnedMeshPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "SkinnedMesh meshlet-count push offset drifted");
-    static_assert(offsetof(SkinnedMeshPushConstants, skinCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKIN_COUNT, "SkinnedMesh skin-count push offset drifted");
-    static_assert(offsetof(SkinnedMeshPushConstants, jointCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_JOINT_COUNT, "SkinnedMesh joint-count push offset drifted");
-    static_assert(offsetof(SkinnedMeshPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "SkinnedMesh skinning-mode push offset drifted");
-    static_assert(offsetof(SkinnedMeshPushConstants, attributeCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT, "SkinnedMesh attribute-count push offset drifted");
+    static_assert(sizeof(MeshSkinningPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning push constants layout must match the shader ABI");
+    static_assert(offsetof(MeshSkinningPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "MeshSkinning meshlet-count push offset drifted");
+    static_assert(offsetof(MeshSkinningPushConstants, skinCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKIN_COUNT, "MeshSkinning skin-count push offset drifted");
+    static_assert(offsetof(MeshSkinningPushConstants, jointCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_JOINT_COUNT, "MeshSkinning joint-count push offset drifted");
+    static_assert(offsetof(MeshSkinningPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "MeshSkinning skinning-mode push offset drifted");
+    static_assert(offsetof(MeshSkinningPushConstants, attributeCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT, "MeshSkinning attribute-count push offset drifted");
 
     struct MeshletBoundsPushConstants{
         u32 meshletCount = 0;
@@ -79,8 +79,8 @@ private:
         u32 padding1 = 0;
         u32 padding2 = 0;
     };
-    static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "SkinnedMesh bounds push constants layout must match the shader ABI");
-    static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "SkinnedMesh bounds meshlet-count push offset drifted");
+    static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
+    static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
 
     struct RuntimeResources{
         RuntimeMeshHandle handle;
@@ -99,7 +99,7 @@ private:
     };
 
     struct RuntimePayloadViews{
-        const SkinnedMeshSkinInfluenceGpu* skinInfluences = nullptr;
+        const MeshSkinningInfluenceGpu* skinInfluences = nullptr;
         const SkeletonJointMatrix* jointPalette = nullptr;
         usize skinInfluenceCount = 0;
         usize jointPaletteCount = 0;
@@ -115,7 +115,7 @@ public:
 
 
 public:
-    SkinnedMeshSystem(
+    MeshSkinningSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
         Core::Graphics& graphics,
@@ -123,7 +123,7 @@ public:
         IRuntimeMeshRegistry& runtimeMeshRegistry,
         ShaderPathResolveCallback shaderPathResolver
     );
-    virtual ~SkinnedMeshSystem()override;
+    virtual ~MeshSkinningSystem()override;
 
 
 public:
@@ -140,23 +140,23 @@ private:
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool dispatchRuntimeMesh(
         Core::CommandList& commandList,
-        SkinnedMeshRuntimeMeshInstance& instance,
+        MeshSkinningRuntimeInstance& instance,
         const SkeletonJointPaletteComponent* jointPalette,
         const SkeletonPoseComponent* skeletonPose
     );
     [[nodiscard]] bool prepareRuntimeMeshResources(
-        SkinnedMeshRuntimeMeshInstance& instance,
+        MeshSkinningRuntimeInstance& instance,
         const SkeletonJointPaletteComponent* jointPalette,
         const SkeletonPoseComponent* skeletonPose
     );
-    [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance);
+    [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] bool dispatchMeshletBounds(
         Core::CommandList& commandList,
-        SkinnedMeshRuntimeMeshInstance& instance,
+        MeshSkinningRuntimeInstance& instance,
         const RuntimeResources& resources
     );
     [[nodiscard]] bool ensureRuntimeResources(
-        SkinnedMeshRuntimeMeshInstance& instance,
+        MeshSkinningRuntimeInstance& instance,
         const RuntimePayloadViews& payloadViews,
         RuntimeResources*& outResources,
         bool& outResourcesRebuilt
@@ -171,7 +171,7 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     IRuntimeMeshRegistry& m_runtimeMeshRegistry;
     ShaderPathResolveCallback m_shaderPathResolver;
-    SkinnedMeshRuntimeMeshCache m_runtimeMeshCache;
+    MeshSkinningRuntimeCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
     Core::BindingLayoutHandle m_skinningBindingLayout;

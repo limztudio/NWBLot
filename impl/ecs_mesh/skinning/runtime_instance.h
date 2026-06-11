@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SkinnedMeshRuntimeMeshInstance{
+struct MeshSkinningRuntimeInstance{
     using PositionVector = Vector<Float3U, Core::Alloc::GlobalArena>;
     using Float2Vector = Vector<Float2U, Core::Alloc::GlobalArena>;
     using Half4Vector = Vector<Half4U, Core::Alloc::GlobalArena>;
@@ -76,7 +76,7 @@ struct SkinnedMeshRuntimeMeshInstance{
     u32 editRevision = 0;
     RuntimeMeshDirtyFlags dirtyFlags = RuntimeMeshDirtyFlag::All;
 
-    explicit SkinnedMeshRuntimeMeshInstance(Core::Alloc::GlobalArena& arena)
+    explicit MeshSkinningRuntimeInstance(Core::Alloc::GlobalArena& arena)
         : restPositions(arena)
         , restNormals(arena)
         , restTangents(arena)

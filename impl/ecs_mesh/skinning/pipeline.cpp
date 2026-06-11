@@ -29,7 +29,7 @@ namespace __hidden_pipeline{
 static bool LoadComputeShader(
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
-    SkinnedMeshSystem::ShaderPathResolveCallback& shaderPathResolver,
+    MeshSkinningSystem::ShaderPathResolveCallback& shaderPathResolver,
     Core::ShaderHandle& shader,
     const Name& shaderName,
     const Name& debugName
@@ -43,7 +43,7 @@ static bool LoadComputeShader(
         graphics,
         assetManager,
         shaderPathResolver,
-        NWB_TEXT("SkinnedMeshSystem")
+        NWB_TEXT("MeshSkinningSystem")
     );
 }
 
@@ -76,7 +76,7 @@ static bool CreateComputePipeline(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkinnedMeshSystem::ensureSkinningPipeline(){
+bool MeshSkinningSystem::ensureSkinningPipeline(){
     auto* device = m_graphics.getDevice();
 
     if(!m_skinningBindingLayout){
@@ -94,11 +94,11 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SkinnedMeshPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshSkinningPushConstants)));
 
         m_skinningBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_skinningBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skinning binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning binding layout"));
             return false;
         }
     }
@@ -109,7 +109,7 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
         m_shaderPathResolver,
         m_skinningComputeShader,
         AssetsGraphicsSkinnedMesh::s_SkinningComputeShaderName,
-        Name("ECSSkinnedMeshRender_SkinnedMeshCS")
+        Name("ECSMeshSkinning_SkinningCS")
     ))
         return false;
 
@@ -121,11 +121,11 @@ bool SkinnedMeshSystem::ensureSkinningPipeline(){
     ))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skinning compute pipeline"));
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning compute pipeline"));
     return false;
 }
 
-bool SkinnedMeshSystem::ensureBoundsPipeline(){
+bool MeshSkinningSystem::ensureBoundsPipeline(){
     auto* device = m_graphics.getDevice();
 
     if(!m_boundsBindingLayout){
@@ -141,7 +141,7 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
 
         m_boundsBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!m_boundsBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create bounds binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding layout"));
             return false;
         }
     }
@@ -152,7 +152,7 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
         m_shaderPathResolver,
         m_boundsComputeShader,
         AssetsGraphicsSkinnedMesh::s_MeshletBoundsComputeShaderName,
-        Name("ECSSkinnedMeshRender_MeshletBoundsCS")
+        Name("ECSMeshSkinning_MeshletBoundsCS")
     ))
         return false;
 
@@ -164,7 +164,7 @@ bool SkinnedMeshSystem::ensureBoundsPipeline(){
     ))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create bounds compute pipeline"));
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds compute pipeline"));
     return false;
 }
 

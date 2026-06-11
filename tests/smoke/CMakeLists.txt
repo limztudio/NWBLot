@@ -431,83 +431,83 @@ if(Python3_Interpreter_FOUND)
         unset(_nwb_csg_skinned_visible_asset_inputs)
     endif()
 
-    set(_nwb_skinned_cone_model_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/body.nwb")
+    set(_nwb_skinning_culling_model_nwb "${PROJECT_SOURCE_DIR}/tests/smoke/assets/characters/body.nwb")
 
-    if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinned_cone_model_nwb}")
-        set(_nwb_skinned_cone_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinned_cone_benchmark_runtime/$<CONFIG>")
+    if(TARGET nwb_loader AND TARGET nwb_resource_cooker AND EXISTS "${_nwb_skinning_culling_model_nwb}")
+        set(_nwb_skinning_culling_runtime_root "${CMAKE_BINARY_DIR}/Testing/skinning_culling_benchmark_runtime/$<CONFIG>")
         if(TARGET nwb_logserver)
-            set(_nwb_skinned_cone_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+            set(_nwb_skinning_culling_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
         else()
-            set(_nwb_skinned_cone_logserver_args "--no-logserver")
+            set(_nwb_skinning_culling_logserver_args "--no-logserver")
         endif()
 
-        nwb_declare_executable(nwb_skinned_cone_benchmark)
-        target_sources(nwb_skinned_cone_benchmark PRIVATE
-            "${CMAKE_CURRENT_LIST_DIR}/skinned_cone_benchmark_project.cpp"
+        nwb_declare_executable(nwb_skinning_culling_benchmark)
+        target_sources(nwb_skinning_culling_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/skinning_culling_benchmark_project.cpp"
         )
         nwb_configure_runtime_smoke_target(
-            nwb_skinned_cone_benchmark
-            "${_nwb_skinned_cone_runtime_root}"
+            nwb_skinning_culling_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
             nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
 
-        file(GLOB_RECURSE _nwb_skinned_cone_asset_inputs
+        file(GLOB_RECURSE _nwb_skinning_culling_asset_inputs
             CONFIGURE_DEPENDS
             LIST_DIRECTORIES false
             "${PROJECT_SOURCE_DIR}/impl/assets/*"
             "${CMAKE_CURRENT_LIST_DIR}/assets/*"
         )
 
-        set(_nwb_skinned_cone_asset_stamp "${_nwb_skinned_cone_runtime_root}/res/.nwb_skinned_cone_benchmark_assets_$<CONFIG>.stamp")
+        set(_nwb_skinning_culling_asset_stamp "${_nwb_skinning_culling_runtime_root}/res/.nwb_skinning_culling_benchmark_assets_$<CONFIG>.stamp")
         add_custom_command(
-            OUTPUT "${_nwb_skinned_cone_asset_stamp}"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinned_cone_runtime_root}/res"
+            OUTPUT "${_nwb_skinning_culling_asset_stamp}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_skinning_culling_runtime_root}/res"
             COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
                 --asset-root "tests/smoke/assets"
-                --output-directory "${_nwb_skinned_cone_runtime_root}/res"
+                --output-directory "${_nwb_skinning_culling_runtime_root}/res"
                 --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/shader_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
                 --configuration "$<CONFIG>"
-            COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinned_cone_asset_stamp}"
+            COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}"
             DEPENDS
                 nwb_resource_cooker
-                "${_nwb_skinned_cone_model_nwb}"
-                ${_nwb_skinned_cone_asset_inputs}
+                "${_nwb_skinning_culling_model_nwb}"
+                ${_nwb_skinning_culling_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
-            COMMENT "Cooking NWB skinned cone benchmark assets for $<CONFIG>..."
+            COMMENT "Cooking NWB Skinning Culling Benchmark assets for $<CONFIG>..."
             VERBATIM
             USES_TERMINAL
         )
-        add_custom_target(nwb_skinned_cone_benchmark_assets DEPENDS "${_nwb_skinned_cone_asset_stamp}")
-        add_dependencies(nwb_skinned_cone_benchmark nwb_skinned_cone_benchmark_assets)
+        add_custom_target(nwb_skinning_culling_benchmark_assets DEPENDS "${_nwb_skinning_culling_asset_stamp}")
+        add_dependencies(nwb_skinning_culling_benchmark nwb_skinning_culling_benchmark_assets)
 
         add_test(
-            NAME nwb_skinned_cone_culling_benchmark
+            NAME nwb_skinning_culling_benchmark
             CONFIGURATIONS fin
             COMMAND
                 "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_LIST_DIR}/runtime_log_smoke.py"
-                "--executable" "$<TARGET_FILE:nwb_skinned_cone_benchmark>"
-                "--working-directory" "${_nwb_skinned_cone_runtime_root}"
+                "--executable" "$<TARGET_FILE:nwb_skinning_culling_benchmark>"
+                "--working-directory" "${_nwb_skinning_culling_runtime_root}"
                 "--timeout" "240"
-                ${_nwb_skinned_cone_logserver_args}
-                "--expect-log-message" "SkinnedConeBenchmark: culling benchmark passed"
+                ${_nwb_skinning_culling_logserver_args}
+                "--expect-log-message" "SkinningCullingBenchmark: culling benchmark passed"
         )
-        set_tests_properties(nwb_skinned_cone_culling_benchmark PROPERTIES
+        set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
             TIMEOUT 300
         )
 
-        unset(_nwb_skinned_cone_asset_stamp)
-        unset(_nwb_skinned_cone_model_nwb)
-        unset(_nwb_skinned_cone_runtime_root)
-        unset(_nwb_skinned_cone_asset_inputs)
-        unset(_nwb_skinned_cone_logserver_args)
+        unset(_nwb_skinning_culling_asset_stamp)
+        unset(_nwb_skinning_culling_model_nwb)
+        unset(_nwb_skinning_culling_runtime_root)
+        unset(_nwb_skinning_culling_asset_inputs)
+        unset(_nwb_skinning_culling_logserver_args)
     else()
-        message(STATUS "Skipping skinned cone culling benchmark; missing tests/smoke/assets/characters/body.nwb.")
+        message(STATUS "Skipping skinning culling benchmark; missing tests/smoke/assets/characters/body.nwb.")
     endif()
-    unset(_nwb_skinned_cone_model_nwb)
+    unset(_nwb_skinning_culling_model_nwb)
 endif()

@@ -33,7 +33,7 @@ using MeshPayloadValidation::CountFitsU32;
 
 #include <impl/assets_mesh/meshlet_ref_range_validation.inl>
 
-[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const SkinnedMeshRuntimeMeshInstance& instance){
+[[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
     if(instance.sourceName)
         sourceText = StringConvert(arena, instance.sourceName.c_str());
@@ -41,7 +41,7 @@ using MeshPayloadValidation::CountFitsU32;
         sourceText.assign(NWB_TEXT("<unnamed>"));
 
     if(!Core::Mesh::MeshClassUsesSkinning(instance.meshClass)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' has invalid mesh class")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class")
             , TStringView(sourceText)
         );
         return false;
@@ -63,7 +63,7 @@ using MeshPayloadValidation::CountFitsU32;
         || instance.meshletAttributeRefCount == 0u
         || instance.attributeSkins.size() != instance.meshletAttributeRefCount
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' has incomplete split mesh payload")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload")
             , TStringView(sourceText)
         );
         return false;
@@ -79,26 +79,26 @@ using MeshPayloadValidation::CountFitsU32;
         || !CountFitsU32(instance.meshletLocalVertexRefs.size())
         || !CountFitsU32(instance.meshletPrimitiveIndices.size())
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' exceeds u32 payload limits")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits")
             , TStringView(sourceText)
         );
         return false;
     }
     if(instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' has skin but no skeleton joint count")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has skin but no skeleton joint count")
             , TStringView(sourceText)
         );
         return false;
     }
     if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
             , TStringView(sourceText)
             , instance.skeletonJointCount
         );
         return false;
     }
     if(!SkinValidation::ValidInverseBindMatrices(instance.inverseBindMatrices, instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' inverse bind matrices are invalid")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
             , TStringView(sourceText)
         );
         return false;
@@ -119,7 +119,7 @@ using MeshPayloadValidation::CountFitsU32;
         )
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' skin influence {} is invalid")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skin influence {} is invalid")
             , TStringView(sourceText)
             , skinIndex
         );
@@ -144,7 +144,7 @@ using MeshPayloadValidation::CountFitsU32;
             )
                 continue;
 
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' meshlet {} position ref {} is out of range")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range")
                 , TStringView(sourceText)
                 , meshletIndex
                 , localPositionIndex
@@ -175,7 +175,7 @@ using MeshPayloadValidation::CountFitsU32;
                 continue;
             }
 
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range")
                 , TStringView(sourceText)
                 , meshletIndex
                 , localAttributeIndex
@@ -184,7 +184,7 @@ using MeshPayloadValidation::CountFitsU32;
         }
     }
     if(logicalAttributeRefIndex != instance.attributeSkins.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: runtime mesh '{}' has mismatched attribute skin payload")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload")
             , TStringView(sourceText)
         );
         return false;
@@ -196,7 +196,7 @@ using MeshPayloadValidation::CountFitsU32;
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] Core::BufferHandle SetupRuntimeBuffer(
     Core::Graphics& graphics,
-    const SkinnedMeshRuntimeMeshInstance& instance,
+    const MeshSkinningRuntimeInstance& instance,
     const AStringView suffix,
     const PayloadVector& payload,
     const bool canHaveUavs,
@@ -210,7 +210,7 @@ template<typename PayloadT, typename PayloadVector>
         suffix
     );
     if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: failed to derive {} buffer name for runtime mesh '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
             , label
             , instance.handle.value
         );
@@ -229,15 +229,15 @@ template<typename PayloadT, typename PayloadVector>
     case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return buffer;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: {} payload is empty"), label);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return {};
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return {};
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshRuntimeMeshCache: failed to create {} buffer for runtime mesh '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'")
         , label
         , instance.handle.value
     );
@@ -247,7 +247,7 @@ template<typename PayloadT, typename PayloadVector>
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] bool AssignRuntimeBuffer(
     Core::Graphics& graphics,
-    SkinnedMeshRuntimeMeshInstance& instance,
+    MeshSkinningRuntimeInstance& instance,
     Core::BufferHandle& outBuffer,
     const AStringView suffix,
     const PayloadVector& payload,
@@ -277,7 +277,7 @@ template<typename PayloadT, typename PayloadVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkinnedMeshRuntimeMeshCache::uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMeshInstance& instance){
+bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance){
     if(!__hidden_runtime_cache_resources::ValidateRuntimeMeshUploadPayload(m_arena, instance))
         return false;
 

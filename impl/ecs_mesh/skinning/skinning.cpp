@@ -33,12 +33,12 @@ static bool BufferPayloadBytes(const usize count, const usize stride, usize& out
     if(RuntimeMeshBufferUpload::PayloadByteCount(count, stride, outBytes))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: {} payload byte size overflows"), label);
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
     return false;
 }
 
 static bool ResolveRestBufferBytes(
-    const SkinnedMeshRuntimeMeshInstance& instance,
+    const MeshSkinningRuntimeInstance& instance,
     usize& outPositionBytes,
     usize& outNormalBytes,
     usize& outTangentBytes
@@ -70,7 +70,7 @@ static bool ResolveRestBufferBytes(
 
 static void SetRestBufferStates(
     Core::CommandList& commandList,
-    SkinnedMeshRuntimeMeshInstance& instance,
+    MeshSkinningRuntimeInstance& instance,
     const Core::ResourceStates::Mask state
 ){
     commandList.setBufferState(instance.restPositionBuffer.get(), state);
@@ -80,7 +80,7 @@ static void SetRestBufferStates(
 
 static void SetSkinnedBufferStates(
     Core::CommandList& commandList,
-    SkinnedMeshRuntimeMeshInstance& instance,
+    MeshSkinningRuntimeInstance& instance,
     const Core::ResourceStates::Mask state
 ){
     commandList.setBufferState(instance.skinnedPositionBuffer.get(), state);
@@ -89,7 +89,7 @@ static void SetSkinnedBufferStates(
 }
 
 struct RuntimeSkinPayloadScratch{
-    Vector<SkinnedMeshSkinInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
+    Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
     u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
 
@@ -104,7 +104,7 @@ struct RuntimeSkinPayloadScratch{
 };
 
 static bool BuildRuntimeSkinPayload(
-    SkinnedMeshRuntimeMeshInstance& instance,
+    MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose,
     RuntimeSkinPayloadScratch& payload
@@ -113,10 +113,10 @@ static bool BuildRuntimeSkinPayload(
     if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
         Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints{ payload.skinInfluences.get_allocator().arena() };
         if(!SkeletonRuntime::BuildJointPaletteFromSkeletonPose(*skeletonPose, poseJoints, payload.resolvedSkinningMode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
-        return SkinnedMeshSkinPayload::BuildSkinPayloadFromJointMatrices(
+        return MeshSkinningPayload::BuildSkinPayloadFromJointMatrices(
             instance,
             poseJoints,
             payload.resolvedSkinningMode,
@@ -125,7 +125,7 @@ static bool BuildRuntimeSkinPayload(
         );
     }
 
-    return SkinnedMeshSkinPayload::BuildSkinPayload(
+    return MeshSkinningPayload::BuildSkinPayload(
         instance,
         jointPalette,
         payload.skinInfluences,
@@ -143,8 +143,8 @@ static bool BuildRuntimeSkinPayload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkinnedMeshSystem::prepareRuntimeMeshResources(
-    SkinnedMeshRuntimeMeshInstance& instance,
+bool MeshSkinningSystem::prepareRuntimeMeshResources(
+    MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose
 ){
@@ -162,7 +162,7 @@ bool SkinnedMeshSystem::prepareRuntimeMeshResources(
         payloadViews.jointPaletteCount = payload.jointMatrices.size();
     }
 
-    const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinnedMeshInputDirty) != 0u;
+    const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
     const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
     const auto foundRuntimeResources = m_runtimeResources.find(instance.handle.value);
     const bool hadSkinningResources = foundRuntimeResources != m_runtimeResources.end() && foundRuntimeResources.value().usesSkinning();
@@ -186,9 +186,9 @@ bool SkinnedMeshSystem::prepareRuntimeMeshResources(
     );
 }
 
-bool SkinnedMeshSystem::dispatchRuntimeMesh(
+bool MeshSkinningSystem::dispatchRuntimeMesh(
     Core::CommandList& commandList,
-    SkinnedMeshRuntimeMeshInstance& instance,
+    MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose
 ){
@@ -199,7 +199,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
 
     const bool hasActiveSkin = payload.hasActiveSkin();
 
-    const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinnedMeshInputDirty) != 0u;
+    const bool skinnedMeshInputDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
     const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
     const auto foundRuntimeResources = m_runtimeResources.find(instance.handle.value);
     const bool hadSkinningResources = foundRuntimeResources != m_runtimeResources.end() && foundRuntimeResources.value().usesSkinning();
@@ -248,7 +248,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
         }
 
         instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-            instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
+            instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
         );
         return true;
     }
@@ -289,7 +289,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     computeState.addBindingSet(resources->skinningBindingSet.get());
     commandList.setComputeState(computeState);
 
-    SkinnedMeshPushConstants pushConstants;
+    MeshSkinningPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
     pushConstants.skinCount = static_cast<u32>(payload.skinInfluences.size());
     pushConstants.jointCount = static_cast<u32>(payload.jointMatrices.size());
@@ -297,7 +297,7 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
     pushConstants.attributeCount = instance.meshletAttributeRefCount;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::s_Skinning, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }
@@ -316,12 +316,12 @@ bool SkinnedMeshSystem::dispatchRuntimeMesh(
         return false;
 
     instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
+        instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
     );
     return true;
 }
 
-bool SkinnedMeshSystem::copyRestToSkinned(Core::CommandList& commandList, SkinnedMeshRuntimeMeshInstance& instance){
+bool MeshSkinningSystem::copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance){
     usize positionBytes = 0;
     usize normalBytes = 0;
     usize tangentBytes = 0;
@@ -356,9 +356,9 @@ bool SkinnedMeshSystem::copyRestToSkinned(Core::CommandList& commandList, Skinne
     return true;
 }
 
-bool SkinnedMeshSystem::dispatchMeshletBounds(
+bool MeshSkinningSystem::dispatchMeshletBounds(
     Core::CommandList& commandList,
-    SkinnedMeshRuntimeMeshInstance& instance,
+    MeshSkinningRuntimeInstance& instance,
     const RuntimeResources& resources
 ){
     commandList.setBufferState(instance.skinnedPositionBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -378,7 +378,7 @@ bool SkinnedMeshSystem::dispatchMeshletBounds(
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), SkinnedMeshGpuTimingScope::s_MeshletBounds, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }

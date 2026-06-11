@@ -28,12 +28,12 @@ namespace __hidden_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool HasPotentialSkinnedMeshWork(
-    const SkinnedMeshRuntimeMeshInstance& instance,
+static bool HasPotentialSkinningWork(
+    const MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose
 ){
-    if((instance.dirtyFlags & (RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
+    if((instance.dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
         return true;
 
     return
@@ -62,8 +62,8 @@ static void ResolveSkeletonComponents(
     outSkeletonPose = world.tryGetComponent<SkeletonPoseComponent>(resolvedEntity);
 }
 
-static constexpr bool s_RuntimeSkinnedMeshletFrustumCullingEnabled = true;
-static constexpr bool s_RuntimeSkinnedMeshletConeCullingEnabled = false; // Runtime deformations can make meshlet cones unsafe; benchmarks override through a test provider only.
+static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
+static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Runtime deformations can make meshlet cones unsafe; benchmarks override through a test provider only.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +75,7 @@ static constexpr bool s_RuntimeSkinnedMeshletConeCullingEnabled = false; // Runt
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SkinnedMeshSystem::SkinnedMeshSystem(
+MeshSkinningSystem::MeshSkinningSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::Graphics& graphics,
@@ -101,16 +101,16 @@ SkinnedMeshSystem::SkinnedMeshSystem(
     m_runtimeMeshRegistry.registerRuntimeMeshProvider(*this);
 }
 
-SkinnedMeshSystem::~SkinnedMeshSystem(){
+MeshSkinningSystem::~MeshSkinningSystem(){
     m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
 }
 
-void SkinnedMeshSystem::update(Core::ECS::World& world, const f32 delta){
+void MeshSkinningSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
 }
 
-bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
+bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
     m_runtimeMeshCache.prepareResources(m_world);
@@ -124,7 +124,7 @@ bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
             if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())
                 return;
 
-            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+            MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
             if(!instance)
                 return;
 #if defined(NWB_DEBUG)
@@ -142,7 +142,7 @@ bool SkinnedMeshSystem::prepareResources(Core::Framebuffer* framebuffer){
     return ready;
 }
 
-bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
+bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
     outMesh = RuntimeMeshDesc{};
     if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity))
         return false;
@@ -153,10 +153,10 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     if(!runtimeMesh.valid())
         return false;
 
-    const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(runtimeMesh);
+    const MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(runtimeMesh);
     if(!instance || instance->entity != entity)
         return false;
-    if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinnedMeshInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
+    if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
         return false;
 #if defined(NWB_DEBUG)
     if(!instance->valid())
@@ -186,8 +186,8 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
     outMesh.localBounds = instance->localBounds;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
     outMesh.version = instance->editRevision;
-    outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinnedMeshletFrustumCullingEnabled;
-    outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinnedMeshletConeCullingEnabled;
+    outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled;
+    outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled;
 #if defined(NWB_DEBUG)
     return outMesh.valid();
 #else
@@ -195,7 +195,7 @@ bool SkinnedMeshSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Run
 #endif
 }
 
-bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 version){
+bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 version){
     if(!meshKey)
         return false;
 
@@ -220,7 +220,7 @@ bool SkinnedMeshSystem::containsRuntimeMesh(const Name& meshKey, const u64 versi
     return found;
 }
 
-void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
+void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
     auto* device = m_graphics.getDevice();
@@ -237,7 +237,7 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
 
         commandList = device->createCommandList();
         if(!commandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create command list"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create command list"));
             commandListFailed = true;
             return false;
         }
@@ -252,7 +252,7 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
             if(!__hidden_system::RuntimeMeshRenderVisible(m_world, entity) || !binding.runtimeMesh.valid())
                 return;
 
-            SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+            MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
             if(!instance)
                 return;
 #if defined(NWB_DEBUG)
@@ -265,7 +265,7 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
             __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
             const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
-            if(!__hidden_system::HasPotentialSkinnedMeshWork(
+            if(!__hidden_system::HasPotentialSkinningWork(
                 *instance,
                 jointPalette,
                 skeletonPose
@@ -289,13 +289,13 @@ void SkinnedMeshSystem::render(Core::Framebuffer* framebuffer){
     }
 }
 
-void SkinnedMeshSystem::pruneRuntimeResources(){
+void MeshSkinningSystem::pruneRuntimeResources(){
     if(m_runtimeResources.empty())
         return;
 
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
         const RuntimeResources& resources = it.value();
-        const SkinnedMeshRuntimeMeshInstance* instance = m_runtimeMeshCache.findInstance(resources.handle);
+        const MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(resources.handle);
         if(instance && instance->valid() && instance->editRevision == resources.editRevision){
             ++it;
             continue;
@@ -305,7 +305,7 @@ void SkinnedMeshSystem::pruneRuntimeResources(){
     }
 }
 
-void SkinnedMeshSystem::invalidateResources(){
+void MeshSkinningSystem::invalidateResources(){
     m_runtimeResources.clear();
     m_runtimeMeshCache.clear();
 

@@ -33,10 +33,10 @@ namespace RuntimeMeshDirtyFlag{
         None = 0,
         TopologyDirty = 1u << 0u,
         AttributesDirty = 1u << 1u,
-        SkinnedMeshInputDirty = 1u << 2u,
+        SkinningInputDirty = 1u << 2u,
         GpuUploadDirty = 1u << 3u,
         MeshletBoundsDirty = 1u << 4u,
-        All = TopologyDirty | AttributesDirty | SkinnedMeshInputDirty | GpuUploadDirty | MeshletBoundsDirty,
+        All = TopologyDirty | AttributesDirty | SkinningInputDirty | GpuUploadDirty | MeshletBoundsDirty,
     };
 };
 using RuntimeMeshDirtyFlags = u8;

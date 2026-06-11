@@ -72,7 +72,7 @@ def run(args):
             if needle not in log_text:
                 raise SmokeFailure(f"missing log message '{needle}'\n{log_text[-4000:]}")
 
-        benchmark_lines = [line for line in log_text.splitlines() if "SkinnedConeBenchmark:" in line]
+        benchmark_lines = [line for line in log_text.splitlines() if "SkinningCullingBenchmark:" in line]
         write_status("\n".join(benchmark_lines[-32:]) if benchmark_lines else "runtime completed")
         return 0
     finally:

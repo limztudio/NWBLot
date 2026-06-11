@@ -26,7 +26,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_skinned_cone_benchmark{
+namespace __hidden_skinning_culling_benchmark{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,7 +36,7 @@ using BenchmarkModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
 using BenchmarkMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 namespace RendererTiming = NWB::Impl::RendererGpuTimingScope;
-namespace SkinnedTiming = NWB::Impl::SkinnedMeshGpuTimingScope;
+namespace SkinnedTiming = NWB::Impl::MeshSkinningGpuTimingScope;
 
 namespace BenchmarkMode{
     enum Enum : u8{
@@ -116,8 +116,8 @@ static constexpr f32 s_CameraHeight = 1.1f;
 static constexpr u32 s_AnimatedJointModulo = 16u;
 static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
 static constexpr AStringView s_BenchmarkModelPath = "project/characters/body/model";
-static constexpr AStringView s_SkinnedBenchmarkMaterialPath = "project/smoke/skinned_cone_benchmark/materials/solid";
-static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNED_CONE_STATIC_PREVIEW";
+static constexpr AStringView s_SkinningBenchmarkMaterialPath = "project/smoke/skinning_culling_benchmark/materials/solid";
+static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
@@ -296,26 +296,26 @@ public:
 
 
 public:
-    bool install(NWB::Impl::MeshSystem& meshSystem, NWB::Impl::SkinnedMeshSystem& skinnedMeshSystem){
+    bool install(NWB::Impl::MeshSystem& meshSystem, NWB::Impl::MeshSkinningSystem& meshSkinningSystem){
         if(m_registered)
             return true;
 
         m_meshSystem = &meshSystem;
-        m_skinnedMeshSystem = &skinnedMeshSystem;
-        m_meshSystem->unregisterRuntimeMeshProvider(*m_skinnedMeshSystem);
+        m_meshSkinningSystem = &meshSkinningSystem;
+        m_meshSystem->unregisterRuntimeMeshProvider(*m_meshSkinningSystem);
         m_meshSystem->registerRuntimeMeshProvider(*this);
         m_registered = true;
         return true;
     }
 
     void uninstall(){
-        if(!m_registered || !m_meshSystem || !m_skinnedMeshSystem)
+        if(!m_registered || !m_meshSystem || !m_meshSkinningSystem)
             return;
 
         m_meshSystem->unregisterRuntimeMeshProvider(*this);
-        m_meshSystem->registerRuntimeMeshProvider(*m_skinnedMeshSystem);
+        m_meshSystem->registerRuntimeMeshProvider(*m_meshSkinningSystem);
         m_meshSystem = nullptr;
-        m_skinnedMeshSystem = nullptr;
+        m_meshSkinningSystem = nullptr;
         m_registered = false;
     }
 
@@ -324,7 +324,7 @@ public:
     }
 
     virtual bool resolveRuntimeMesh(const NWB::Core::ECS::EntityID entity, NWB::Impl::RuntimeMeshDesc& outMesh)override{
-        if(!m_skinnedMeshSystem || !m_skinnedMeshSystem->resolveRuntimeMesh(entity, outMesh))
+        if(!m_meshSkinningSystem || !m_meshSkinningSystem->resolveRuntimeMesh(entity, outMesh))
             return false;
 
         switch(m_mode){
@@ -345,13 +345,13 @@ public:
     }
 
     virtual bool containsRuntimeMesh(const Name& meshKey, const u64 version)override{
-        return m_skinnedMeshSystem && m_skinnedMeshSystem->containsRuntimeMesh(meshKey, version);
+        return m_meshSkinningSystem && m_meshSkinningSystem->containsRuntimeMesh(meshKey, version);
     }
 
 
 private:
     NWB::Impl::MeshSystem* m_meshSystem = nullptr;
-    NWB::Impl::SkinnedMeshSystem* m_skinnedMeshSystem = nullptr;
+    NWB::Impl::MeshSkinningSystem* m_meshSkinningSystem = nullptr;
     BenchmarkMode::Enum m_mode = BenchmarkMode::FrustumCone;
     bool m_registered = false;
 };
@@ -360,17 +360,17 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SkinnedConeBenchmarkProject final : public NWB::IProjectEntryCallbacks{
+class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
         if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("SkinnedConeBenchmark: ECS world allocation failed"));
-            throw RuntimeException("SkinnedConeBenchmark initialization failed");
+            NWB_LOGGER_FATAL(NWB_TEXT("SkinningCullingBenchmark: ECS world allocation failed"));
+            throw RuntimeException("SkinningCullingBenchmark initialization failed");
         }
         if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("SkinnedConeBenchmark: shader path resolver callback is null"));
-            throw RuntimeException("SkinnedConeBenchmark initialization failed");
+            NWB_LOGGER_FATAL(NWB_TEXT("SkinningCullingBenchmark: shader path resolver callback is null"));
+            throw RuntimeException("SkinningCullingBenchmark initialization failed");
         }
 
         auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
@@ -385,7 +385,7 @@ private:
             context.assetManager
         );
         static_cast<void>(modelSystem);
-        auto& skinnedMeshSystem = world->addSystem<NWB::Impl::SkinnedMeshSystem>(
+        auto& meshSkinningSystem = world->addSystem<NWB::Impl::MeshSkinningSystem>(
             *world,
             context.graphics,
             context.assetManager,
@@ -394,7 +394,7 @@ private:
         );
         context.graphics.gpuTiming().setEnabled(true);
 
-        context.graphics.addRenderPassToBack(skinnedMeshSystem);
+        context.graphics.addRenderPassToBack(meshSkinningSystem);
         context.graphics.addRenderPassToBack(rendererSystem);
         return MakeNotNullUnique(Move(world));
     }
@@ -405,9 +405,9 @@ private:
 
         m_runtimeMeshProvider.uninstall();
 
-        auto* skinnedMeshSystem = m_world->getSystem<NWB::Impl::SkinnedMeshSystem>();
-        if(skinnedMeshSystem)
-            m_context.graphics.removeRenderPass(*skinnedMeshSystem);
+        auto* meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
+        if(meshSkinningSystem)
+            m_context.graphics.removeRenderPass(*meshSkinningSystem);
 
         auto* rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
         if(rendererSystem)
@@ -433,11 +433,11 @@ private:
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedModelAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_BenchmarkModelPath), loadedModelAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to load benchmark model"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
             return false;
         }
         if(!loadedModelAsset || loadedModelAsset->assetType() != NWB::Impl::Model::AssetTypeName()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark model loaded with an unexpected asset type"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model loaded with an unexpected asset type"));
             return false;
         }
 
@@ -452,31 +452,31 @@ private:
         if(!skeletonObject && !model->skeletonObjects().empty())
             skeletonObject = &model->skeletonObjects().front();
         if(!skeletonObject || !skeletonObject->skeleton.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark model has no skeleton object"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model has no skeleton object"));
             return false;
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedSkeletonAsset;
         const Name skeletonPath = skeletonObject->skeleton.name();
         if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonPath, loadedSkeletonAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to load benchmark skeleton"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
             return false;
         }
         if(!loadedSkeletonAsset || loadedSkeletonAsset->assetType() != NWB::Impl::Skeleton::AssetTypeName()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark skeleton loaded with an unexpected asset type"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton loaded with an unexpected asset type"));
             return false;
         }
 
         const auto* skeleton = static_cast<const NWB::Impl::Skeleton*>(loadedSkeletonAsset.get());
         if(skeleton->joints().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark skeleton has no joints"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has no joints"));
             return false;
         }
         m_bindJoints.clear();
         m_bindJoints.reserve(skeleton->joints().size());
         for(const NWB::Impl::SkeletonJoint& joint : skeleton->joints()){
             if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(LoadFloat(joint.localBindPose))){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark skeleton contains an invalid bind pose"));
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton contains an invalid bind pose"));
                 return false;
             }
 
@@ -515,7 +515,7 @@ private:
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         m_runtimeMeshProvider.setMode(benchmarkCase.mode);
         configureCamera(benchmarkCase.view);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: begin repeat={}/{} mode={} view={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}")
             , m_repeatIndex + 1u
             , s_BenchmarkRepeatCount
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
@@ -526,7 +526,7 @@ private:
     void finishCase(){
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         const BenchmarkAccumulation& accum = m_accumulations[m_caseIndex];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: result repeat={}/{} mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} mesh_samples={} raster_samples={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: result repeat={}/{} mode={} view={} frames={} cpu_ms={} skinning_gpu_ms={} bounds_gpu_ms={} mesh_dispatch_gpu_ms={} raster_gpu_ms={} skinning_samples={} bounds_samples={} mesh_samples={} raster_samples={}")
             , m_repeatIndex + 1u
             , s_BenchmarkRepeatCount
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
@@ -585,7 +585,7 @@ private:
         ;
         const f64 speedup = cullingFaster ? noCullingAverage / frustumConeRenderAverage : 0.0;
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling comparison repeats={} no_culling_render_frame_gpu_ms={} with_culling_render_frame_gpu_ms={} with_culling_total_frame_gpu_ms={} with_culling_bounds_frame_gpu_ms={} tolerance_ms={} speedup={} result={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: culling comparison repeats={} no_culling_render_frame_gpu_ms={} with_culling_render_frame_gpu_ms={} with_culling_total_frame_gpu_ms={} with_culling_bounds_frame_gpu_ms={} tolerance_ms={} speedup={} result={}")
             , s_BenchmarkRepeatCount
             , noCullingAverage
             , frustumConeRenderAverage
@@ -596,18 +596,18 @@ private:
             , StringConvert(cullingAcceptable ? (cullingFaster ? "pass" : "pass_tolerance") : "fail")
         );
         if(cullingAcceptable){
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: culling benchmark passed"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: culling benchmark passed"));
         }
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: culling benchmark failed; with-culling render timing exceeded no-culling render timing beyond tolerance"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: culling benchmark failed; with-culling render timing exceeded no-culling render timing beyond tolerance"));
         }
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: policy default=dynamic_frustum_cone measured_frustum_only_gpu_ms={} measured_frustum_cone_gpu_ms={} recommendation={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: policy default=dynamic_frustum_cone measured_frustum_only_gpu_ms={} measured_frustum_cone_gpu_ms={} recommendation={}")
             , frustumOnlyAverage
             , frustumConeAverage
             , StringConvert((frustumConeAverage > 0.0 && (frustumOnlyAverage == 0.0 || frustumConeAverage <= frustumOnlyAverage)) ? "dynamic_frustum_cone" : "dynamic_frustum")
         );
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: completed"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: completed"));
     }
 
     void collectPreviousFrame(const f32 delta){
@@ -693,7 +693,7 @@ private:
 
 
 public:
-    explicit SkinnedConeBenchmarkProject(NWB::ProjectRuntimeContext& context)
+    explicit SkinningCullingBenchmarkProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(createWorldOrDie(context))
         , m_entities(context.objectArena)
@@ -701,7 +701,7 @@ public:
         , m_staticPreview(StaticPreviewEnabled())
     {}
 
-    virtual ~SkinnedConeBenchmarkProject()override{
+    virtual ~SkinningCullingBenchmarkProject()override{
         destroyWorld();
     }
 
@@ -709,14 +709,14 @@ public:
 public:
     virtual bool onStartup()override{
         if(!loadSkeletonBindJoints()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: benchmark mesh has no skeleton joints"));
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
             return true;
         }
         auto* meshSystem = m_world->getSystem<NWB::Impl::MeshSystem>();
-        auto* skinnedMeshSystem = m_world->getSystem<NWB::Impl::SkinnedMeshSystem>();
-        if(!meshSystem || !skinnedMeshSystem || !m_runtimeMeshProvider.install(*meshSystem, *skinnedMeshSystem)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to install benchmark runtime mesh provider"));
+        auto* meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
+        if(!meshSystem || !meshSkinningSystem || !m_runtimeMeshProvider.install(*meshSystem, *meshSkinningSystem)){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to install benchmark runtime mesh provider"));
             requestQuit();
             return true;
         }
@@ -737,7 +737,7 @@ public:
         BenchmarkModelRef model;
         model.virtualPath = Name(s_BenchmarkModelPath);
         BenchmarkMaterialRef material;
-        material.virtualPath = Name(s_SkinnedBenchmarkMaterialPath);
+        material.virtualPath = Name(s_SkinningBenchmarkMaterialPath);
         const u32 characterCount = m_staticPreview ? 1u : s_CharacterCount;
         m_entities.reserve(characterCount);
         Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> modelOwners(m_context.objectArena);
@@ -765,7 +765,7 @@ public:
                 NWB::Impl::ModelObjectKind::Skeleton
             );
             if(!skeletonEntity.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("SkinnedConeBenchmark: failed to find spawned benchmark skeleton object"));
+                NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
                 requestQuit();
                 return true;
             }
@@ -776,18 +776,18 @@ public:
         if(m_staticPreview){
             m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
             configureCamera(BenchmarkView::Front);
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: static preview enabled; close the window manually when done"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
         }
         else{
             configureCase();
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedConeBenchmark: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -857,7 +857,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-    return NWB_TEXT("NWB Skinned Cone Benchmark");
+    return NWB_TEXT("NWB Skinning Culling Benchmark");
 }
 
 
@@ -865,7 +865,7 @@ const tchar* NWB::QueryProjectWindowTitle(){
 
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<__hidden_skinned_cone_benchmark::SkinnedConeBenchmarkProject>(context);
+    return MakeUnique<__hidden_skinning_culling_benchmark::SkinningCullingBenchmarkProject>(context);
 }
 
 

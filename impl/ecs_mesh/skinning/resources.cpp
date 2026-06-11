@@ -38,7 +38,7 @@ static Core::BufferHandle SetupStructuredBuffer(
     const tchar* label
 ){
     if(!RuntimeMeshBufferUpload::PayloadByteCountFits<PayloadT>(count)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return {};
     }
 
@@ -60,8 +60,8 @@ static Core::BufferHandle SetupStructuredBuffer(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SkinnedMeshSystem::ensureRuntimeResources(
-    SkinnedMeshRuntimeMeshInstance& instance,
+bool MeshSkinningSystem::ensureRuntimeResources(
+    MeshSkinningRuntimeInstance& instance,
     const RuntimePayloadViews& payloadViews,
     RuntimeResources*& outResources,
     bool& outResourcesRebuilt
@@ -70,7 +70,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     outResourcesRebuilt = false;
 #if defined(NWB_DEBUG)
     if((payloadViews.skinInfluenceCount == 0u) != (payloadViews.jointPaletteCount == 0u)){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' has mismatched skin influence/joint payloads"), instance.handle.value);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has mismatched skin influence/joint payloads"), instance.handle.value);
         return false;
     }
 #endif
@@ -79,7 +79,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
 #if defined(NWB_DEBUG)
     if(!payloadViews.skinInfluences || !payloadViews.jointPalette){
         if(hasActiveSkin){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' has null active skinned mesh payloads"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has null active skinning payloads"), instance.handle.value);
             return false;
         }
     }
@@ -88,7 +88,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         payloadViews.skinInfluenceCount > static_cast<usize>(Limit<u32>::s_Max)
         || payloadViews.jointPaletteCount > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: runtime mesh '{}' skinned mesh payload exceeds u32 limits"), instance.handle.value);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skinning payload exceeds u32 limits"), instance.handle.value);
         return false;
     }
 #endif
@@ -128,10 +128,10 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
 
     auto* device = m_graphics.getDevice();
     if(hasActiveSkin){
-        const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "skinned_mesh_skin");
-        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "skinned_mesh_joints");
+        const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
+        const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
         if(!skinBufferName || !jointPaletteBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to derive skinned mesh buffer names for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
 
@@ -144,7 +144,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         )
         ;
         if(!rebuilt.skinBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
 
@@ -157,7 +157,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         )
         ;
         if(!rebuilt.jointPaletteBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
 
@@ -176,7 +176,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
         skinningBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, rebuilt.jointPaletteBuffer.get()));
         rebuilt.skinningBindingSet = device->createBindingSet(skinningBindingSetDesc, m_skinningBindingLayout);
         if(!rebuilt.skinningBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create skinning binding set for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning binding set for runtime mesh '{}'"), instance.handle.value);
             return false;
         }
     }
@@ -190,7 +190,7 @@ bool SkinnedMeshSystem::ensureRuntimeResources(
     boundsBindingSetDesc.addItem(Core::BindingSetItem::RawBuffer_UAV(NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS, instance.meshletBoundsBuffer.get()));
     rebuilt.boundsBindingSet = device->createBindingSet(boundsBindingSetDesc, m_boundsBindingLayout);
     if(!rebuilt.boundsBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinnedMeshSystem: failed to create bounds binding set for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding set for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
 

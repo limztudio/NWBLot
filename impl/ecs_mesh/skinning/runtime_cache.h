@@ -72,9 +72,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SkinnedMeshRuntimeMeshCache final : NoCopy{
+class MeshSkinningRuntimeCache final : NoCopy{
 private:
-    struct SkinnedMeshSource{
+    struct MeshSkinningSource{
         Name sourceName = NAME_NONE;
         UniquePtr<Core::Assets::IAsset> meshAsset;
         UniquePtr<Core::Assets::IAsset> skinAsset;
@@ -86,7 +86,7 @@ private:
 
 
 public:
-    SkinnedMeshRuntimeMeshCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager);
+    MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::Graphics& graphics, Core::Assets::AssetManager& assetManager);
 
 
 public:
@@ -94,8 +94,8 @@ public:
     void clear();
 
     [[nodiscard]] RuntimeMeshHandle handleForEntity(Core::ECS::EntityID entity)const;
-    [[nodiscard]] SkinnedMeshRuntimeMeshInstance* findInstance(RuntimeMeshHandle handle);
-    [[nodiscard]] const SkinnedMeshRuntimeMeshInstance* findInstance(RuntimeMeshHandle handle)const;
+    [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle);
+    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)const;
     [[nodiscard]] u32 editRevision(RuntimeMeshHandle handle)const;
     [[nodiscard]] bool bumpEditRevision(RuntimeMeshHandle handle, RuntimeMeshDirtyFlags dirtyFlags);
 
@@ -104,16 +104,16 @@ private:
     [[nodiscard]] bool ensureSourceLoaded(
         const Core::Assets::AssetRef<Mesh>& meshAsset,
         const Core::Assets::AssetRef<Skin>& skinAsset,
-        SkinnedMeshSource*& outSource
+        MeshSkinningSource*& outSource
     );
-    [[nodiscard]] bool uploadRuntimeMeshBuffers(SkinnedMeshRuntimeMeshInstance& instance);
+    [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] RuntimeMeshHandle allocateHandle();
     void releaseRuntimeMesh(Core::ECS::EntityID entity);
     void releaseSource(const Name& sourceName);
     void eraseUnusedSource(const Name& sourceName);
     [[nodiscard]] Core::ECS::EntityID entityForHandle(RuntimeMeshHandle handle)const;
-    [[nodiscard]] SkinnedMeshRuntimeMeshInstance* findInstanceByEntity(Core::ECS::EntityID entity);
-    [[nodiscard]] const SkinnedMeshRuntimeMeshInstance* findInstanceByEntity(Core::ECS::EntityID entity)const;
+    [[nodiscard]] MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity);
+    [[nodiscard]] const MeshSkinningRuntimeInstance* findInstanceByEntity(Core::ECS::EntityID entity)const;
 
 
 private:
@@ -121,8 +121,8 @@ private:
     Core::Graphics& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
 
-    HashMap<Name, SkinnedMeshSource, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_sources;
-    HashMap<Core::ECS::EntityID, SkinnedMeshRuntimeMeshInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instances;
+    HashMap<Name, MeshSkinningSource, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_sources;
+    HashMap<Core::ECS::EntityID, MeshSkinningRuntimeInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instances;
     HashMap<u64, Core::ECS::EntityID, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_handleToEntity;
     u64 m_nextHandleValue = 1u;
 };

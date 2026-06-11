@@ -285,11 +285,19 @@ template<typename Container, typename ValueContainer>
         outValues.reserve(valueCount);
 
     usize cursor = inOutOffset;
-    for(usize i = 0u; i < valueCount; ++i){
-        ValueType value = {};
-        NWB_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
-        cursor += sizeof(ValueType);
-        outValues.push_back(value);
+    if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
+        outValues.resize(valueCount);
+        if(byteCount > 0u)
+            NWB_MEMCPY(outValues.data(), byteCount, binary.data() + cursor, byteCount);
+        cursor += byteCount;
+    }
+    else{
+        for(usize i = 0u; i < valueCount; ++i){
+            ValueType value = {};
+            NWB_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
+            cursor += sizeof(ValueType);
+            outValues.push_back(value);
+        }
     }
 
     inOutOffset = cursor;

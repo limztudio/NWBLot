@@ -190,6 +190,12 @@ static void TestBinaryVectorPayloadRoundTrip(TestContext& context){
     NWB_GLOBAL_TEST_CHECK(context, ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed) == BinaryVectorPayloadFailure::None);
     NWB_GLOBAL_TEST_CHECK(context, cursor == binary.size());
     NWB_GLOBAL_TEST_CHECK(context, parsed == source);
+
+    cursor = 0u;
+    parsed.push_back(7u);
+    NWB_GLOBAL_TEST_CHECK(context, ReadBinaryVectorPayload(binary, cursor, 0u, parsed) == BinaryVectorPayloadFailure::None);
+    NWB_GLOBAL_TEST_CHECK(context, cursor == 0u);
+    NWB_GLOBAL_TEST_CHECK(context, parsed.empty());
 }
 
 static void TestFixedVectorBinaryPayloadRoundTrip(TestContext& context){
